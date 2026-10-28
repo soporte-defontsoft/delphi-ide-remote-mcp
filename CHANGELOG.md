@@ -225,6 +225,14 @@ the MCP `initialize` response (`serverInfo.version`).
   the default, and a style the project loads at run time is only checked by
   `delphi_styles lint` against its folder. A form with a `StyleBook` is not
   judged, because its styles are stored in binary.
+- **A long text cut short in an answer no longer splits a character.** The
+  first part of git's output, of the vault's instructions, of a symbol's
+  declaration, of a refused file name, of the form helper's output, of the
+  lines an edit quotes and of the files a test leaves was cut by hand, in
+  twelve places, and only the last one kept an emoji's two halves together:
+  in the others, a character beyond U+FFFF right at the limit left half of
+  it in the answer. They all cut through one helper now, the twin of the one
+  that already cut the end of a text.
 - **The designer's note on how the IDE stores a value no longer repeats it.**
   When the IDE stores a property differently from what was given, the answer
   carries the values in `value`, `storedAs` and `storedIn`, exactly as the form

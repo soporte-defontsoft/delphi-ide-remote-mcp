@@ -1079,6 +1079,7 @@ uses
   Lsp.Client,
   Lsp.FormRender, // LoQueNoCargaElIde: el lector del IDE juzga lo que la tabla no (LintDeForm)
   Lsp.Styles, // NotaDeLookupsSinEstilo: los StyleLookup contra los estilos que el form ve (LintDeForm)
+  Lsp.Listas, // PrincipioDeTexto: EL corte de un texto por la cabeza, sin partir un par
   System.Win.Registry, // EscribeClaveDelIde: la puerta del registro del IDE
   Lsp.BuildRunner,     // RunCaptured: reg.exe, la copia de una clave
   Lsp.ProcessLaunch;   // EnComillas: los argumentos de esa linea
@@ -3933,7 +3934,7 @@ begin
   begin
     V.Free;
     Exit(MsgFmt(SR_PATCH_EDITS_JSON_FMT,
-      [Length(AEditsJson), Copy(AEditsJson.Trim, 1, 60)]));
+      [Length(AEditsJson), PrincipioDeTexto(AEditsJson.Trim, 60)]));
   end;
   Arr := TJSONArray(V);
   // El cerrojo de escritura para la tanda ENTERA: la rama de bloque escribia
@@ -5044,7 +5045,7 @@ begin
           if TRegEx.IsMatch(NoComment, PATRON_NO_IDENT_ANTES + 'end$', [roIgnoreCase]) then
             Exit(MsgText(SR_EDIT_BLOQUE_TERMINA_END_SIN));
           Exit(MsgFmt(SR_EDIT_ULTIMA_LINEA_BLOQUE_RUTINA_FMT,
-            [Copy(LastLine, 1, 80)]));
+            [PrincipioDeTexto(LastLine, 80)]));
         end;
         // UNA rutina por INSERT: con dos, la primera se declaraba (o se
         // cualificaba) y la segunda entraba tal cual - una global sin declarar
@@ -5146,7 +5147,7 @@ begin
         var MF := TRegEx.Match(FirmaCodigo,
           '^(class\s+)?(' + PatronPalabraDeRutina + ')\s+(' + PATRON_IDENT + ')\s*([.(;:])?', [roIgnoreCase]);
         if not MF.Success then
-          Exit(MsgFmt(SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT, [Copy(Firma, 1, 80)]));
+          Exit(MsgFmt(SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT, [PrincipioDeTexto(Firma, 80)]));
         if (MF.Groups[1].Value <> '') and (A.Insert = 'rutina-global') then
           Exit(MsgFmt(SR_EDIT_RUTINA_GLOBAL_DE_CLASE_FMT, [SinMayusculas(MF.Groups[2].Value)]));
         if GrupoDe(MF, 4) = '.' then // un grupo opcional (Lsp.Regex)
@@ -5179,7 +5180,7 @@ begin
             Break;
         end;
         if not FirmaCerrada then
-          Exit(MsgFmt(SR_EDIT_FIRMA_NO_CIERRA_FMT, [Copy(Firma, 1, 80)]));
+          Exit(MsgFmt(SR_EDIT_FIRMA_NO_CIERRA_FMT, [PrincipioDeTexto(Firma, 80)]));
         var FirmaLineas := TArray<string>.Create();
         for I := IFirmaIni to IFirmaFin do
           if I = IFirmaFin then
@@ -5742,10 +5743,10 @@ begin
         end;
         if DeclNota <> '' then
           Exit(MsgFmt(SK_EDIT_INSERT_METODO_SOLO_IMPL_FMT,
-            [A.ClassName_, DeclNota, Copy(FirmaCual, 1, 70), R2]) + NotaCabecera);
+            [A.ClassName_, DeclNota, PrincipioDeTexto(FirmaCual, 70), R2]) + NotaCabecera);
         Exit(MsgFmt(SK_EDIT_INSERT_METODO_DOS_MITADES_FMT,
           [A.ClassName_, IfThen(NotaPublished <> '', #10'  ' + NotaPublished, ''),
-           DeclLinea.Trim, R1, Copy(FirmaCual, 1, 70), R2]));
+           DeclLinea.Trim, R1, PrincipioDeTexto(FirmaCual, 70), R2]));
       end;
 
       // ---------- DELETE LINE ----------

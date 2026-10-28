@@ -461,9 +461,7 @@ begin
       Cabe := Min(TOPE_POR_FICHERO, Quedan);
       if Length(Texto) > Cabe then
       begin
-        if Texto[Cabe].IsHighSurrogate then
-          Dec(Cabe); // el par entero o nada
-        Texto := Copy(Texto, 1, Cabe);
+        Texto := PrincipioDeTexto(Texto, Cabe); // el par entero o nada
         O.AddPair('truncated', TJSONBool.Create(True));
         ARecortado := True;
       end;

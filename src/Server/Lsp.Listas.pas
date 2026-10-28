@@ -161,6 +161,12 @@ function ColaDeSalida(const ATexto: string; AMaxLineas: Integer;
   texto tal cual si caben), sin partir un par sustituto: el final de la linea
   mas nueva de una cola, y el del informe que guarda delphi_report. }
 function FinalDeTexto(const ATexto: string; AMax: Integer): string;
+{ ...y los AMax PRIMEROS (tal cual si caben), sin partir un par sustituto: si
+  el caracter AMax es la primera mitad de uno, va sin el par entero. Sin
+  marca: quien corta dice como (unos '...', "truncated"). Se cortaba a mano,
+  una vez con la guarda y once sin ella (V106 de la 1.23.1): un emoji en el
+  tope dejaba medio caracter en la respuesta. }
+function PrincipioDeTexto(const ATexto: string; AMax: Integer): string;
 
 implementation
 
@@ -460,6 +466,20 @@ begin
   if (AMax > 0) and ATexto[P].IsLowSurrogate then
     Inc(P); // no partir un par UTF-16
   Result := '...' + Copy(ATexto, P, MaxInt);
+end;
+
+function PrincipioDeTexto(const ATexto: string; AMax: Integer): string;
+var
+  N: Integer;
+begin
+  if Length(ATexto) <= AMax then
+    Exit(ATexto);
+  N := AMax;
+  if N < 0 then
+    N := 0;
+  if (N > 0) and ATexto[N].IsHighSurrogate then
+    Dec(N); // no partir un par UTF-16
+  Result := Copy(ATexto, 1, N);
 end;
 
 function ColaDeSalida(const ATexto: string; AMaxLineas: Integer;

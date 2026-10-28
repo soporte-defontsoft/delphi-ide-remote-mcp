@@ -1220,6 +1220,20 @@ REGLAS = [
      'ni siquiera tiene estas formas: busca \'<\' + la etiqueta que le piden. Lsp.Docs lee el '
      'HTML de la ayuda, no XML de proyecto; la completion mira el texto <error> de un detalle '
      'del motor'),
+    # un texto cortado por la CABEZA a un tope (V106 de la 1.23.1): once sitios cortaban a mano sin la
+    # guarda del par sustituto (un emoji en el tope dejaba medio caracter en la respuesta) y uno con
+    # ella. Gramatica PROPIA y declarada (no hay juez de "esto es texto"): un Copy(X, 1, N) o un
+    # X.Substring(0, N) a un tope que es una cifra de dos o mas o una CONSTANTE; un tope calculado (una
+    # posicion) no es un corte de texto y no se mira. Las casas cortan lo que es ASCII por construccion
+    # (un hash, un sello, un nombre ya saneado) o lo que va a un registro, no a una respuesta
+    ('cortar un texto por la cabeza a mano',
+     r"\bCopy\(\s*[\w.]+\s*,\s*1\s*,\s*(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*\)|"
+     r"\.Substring\(\s*0\s*,\s*(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*\)",
+     [('Lsp.DesignerMetaGen.pas', 'HuellaDeCarpetas'),      # un hash en hexadecimal
+      ('Lsp.RemoteRun.pas', 'EnsureNodeCurrentNucleo'),     # el SHA-256 en hexadecimal de un nombre
+      ('Lsp.Identidad.pas', 'SanitizeAgent'),               # el nombre ya saneado a ASCII
+      ('Lsp.LogSink.pas', 'ClaveDeBloque')],                # un sello de fecha
+     'PrincipioDeTexto (Lsp.Listas), el gemelo de FinalDeTexto: el corte que no parte un par sustituto'),
     # una LINEA de elemento -la sangria, el elemento, el salto- fuera de su compositor (V97 de la
     # 1.23.1): se componia a mano en seis sitios de cuatro unidades con tres saltos (sLineBreak, CRLF,
     # AppendLine), y dos <Key> de la plantilla iban sin el escritor del elemento. Tres formas: una
@@ -1488,6 +1502,7 @@ PLANTADO = {
     'un ItemGroup de despliegue compuesto a mano': "  B := '    <ItemGroup ' + XmlAtributo('Condition', C) + '>';",
     'una DCCReference compuesta a mano': "  R := '        <DCCReference ' + XmlAtributo('Include', I) + '/>';",
     'una linea de elemento XML a mano': "  R := R + '            ' + XmlElemento('Form', N) + CRLF;",
+    'cortar un texto por la cabeza a mano': "  Msg := Copy(Salida.Trim, 1, 300);",
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",

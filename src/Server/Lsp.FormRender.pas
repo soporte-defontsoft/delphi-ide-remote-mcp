@@ -298,7 +298,8 @@ uses
   Lsp.Codificacion, // EncKindOf
   Lsp.Discovery,    // DiscoverRadStudio: el Delphi del servidor
   Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante
-  Lsp.Rutas;        // RutaDesde: EL resolutor de una ruta leida de un fichero
+  Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
+  Lsp.Listas;
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
@@ -1098,7 +1099,7 @@ begin
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_TIEMPO_FMT, [Nombre, RENDER_TIEMPO_MS div 1000])
   else
     Result.Fallo := FalloDelAyudante(MsgFmt(SF_DESIGNER_RENDER_SIN_RESPUESTA_FMT,
-      [Codigo, Copy(Salida.Trim, 1, 300)]));
+      [Codigo, PrincipioDeTexto(Salida.Trim, 300)]));
 end;
 
 function PeticionDeRender(const APath, AFramework: string): TPeticionRender;

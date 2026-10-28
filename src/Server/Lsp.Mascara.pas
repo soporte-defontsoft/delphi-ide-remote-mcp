@@ -361,8 +361,18 @@ begin
   Result := string.Join(#10, Lineas);
 end;
 
-// la linea es una cita que CitaDeLinea compuso en esta llamada (con su
-// sangria delante y, si va en un texto CRLF, su CR detras)
+// LA clave de una linea citada: sin su sangria delante ni, si va en un texto
+// CRLF, su CR detras. La de quien la apunta (CitaDeLinea, ContenidoTalCual) y
+// la de quien la busca (EsCitaHecha): eran dos copias, y CitaDeLinea apuntaba
+// la cita sin ella (V106 de la 1.23.1: una que acababa en CR se enmascaraba)
+function ClaveDeCita(const ALinea: string): string;
+begin
+  Result := ALinea.TrimLeft;
+  if Result.EndsWith(#13) then
+    Result := Result.Substring(0, Result.Length - 1);
+end;
+
+// la linea es una cita que CitaDeLinea compuso en esta llamada
 function EsCitaHecha(const ALinea: string): Boolean;
 var
   L: string;
@@ -370,27 +380,23 @@ begin
   Result := False;
   if TCitasHechas = '' then
     Exit;
-  L := ALinea.TrimLeft;
-  if L.EndsWith(#13) then
-    L := L.Substring(0, L.Length - 1);
+  L := ClaveDeCita(ALinea);
   Result := (L <> '') and (Pos(#0 + L + #0, #0 + TCitasHechas) > 0);
 end;
 
 function CitaDeLinea(N: Integer; const ATexto: string): string;
 begin
   Result := IntToStr(N) + '|' + ATexto;
-  TCitasHechas := TCitasHechas + Result + #0;
+  TCitasHechas := TCitasHechas + ClaveDeCita(Result) + #0;
 end;
 
 function ContenidoTalCual(const ATexto: string): string;
 begin
   Result := ATexto;
-  // cada linea como la mira EsCitaHecha: sin su sangria ni su CR
+  // cada linea por la clave con que la busca EsCitaHecha
   for var L in ATexto.Split([#10]) do
   begin
-    var S := L.TrimLeft;
-    if S.EndsWith(#13) then
-      S := S.Substring(0, S.Length - 1);
+    var S := ClaveDeCita(L);
     if S <> '' then
       TCitasHechas := TCitasHechas + S + #0;
   end;

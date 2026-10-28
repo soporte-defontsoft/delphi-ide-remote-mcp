@@ -43,6 +43,10 @@ uses
 const
   { La carpeta y el binario del nodo de escritorio en el target. }
   NODE_PROJECT = 'McpDesktopNode';
+  { ...y el nombre de su sello en esa carpeta (el SHA-256 del binario que se
+    subio): lo baja la comprobacion y lo sube la subida (V106 de la 1.23.1:
+    eran dos literales) }
+  NODE_SELLO = 'node.ver';
 
 { La clave con la que el nodo reconoce que le llama ESTE servidor. Vive en
   un solo sitio para que los dos proyectos no se desincronicen. }
@@ -954,7 +958,7 @@ begin
   CrearCarpeta(TmpDir);
   // el sello del target: ausente = nodo de antes de los sellos (o ninguno)
   RemotoSha := '';
-  if FetchFromTarget(AProfile, NODE_PROJECT, 'node.ver', TmpDir, VerFile) = '' then
+  if FetchFromTarget(AProfile, NODE_PROJECT, NODE_SELLO, TmpDir, VerFile) = '' then
   try
     RemotoSha := LeeTexto(VerFile, [ltTemporal]).Trim;
     BorraFichero(VerFile, ltTemporal);
@@ -970,8 +974,8 @@ begin
       Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
     VerLocal := TPath.Combine(TmpDir, 'node-' + LocalSha.Substring(0, 12) + '.ver');
     EscribeTexto(VerLocal, LocalSha, ltTemporal, ekUtf8);
-    Rc := Paclient(Pc, Format('"--put=%s,%s,0,node.ver"',
-      [VerLocal, NODE_PROJECT]), AProfile, Output);
+    Rc := Paclient(Pc, Format('"--put=%s,%s,0,%s"',
+      [VerLocal, NODE_PROJECT, NODE_SELLO]), AProfile, Output);
     BorraFichero(VerLocal, ltTemporal);
     if Rc <> 0 then
       Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));

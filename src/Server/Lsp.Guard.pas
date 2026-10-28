@@ -1141,7 +1141,8 @@ uses
   Lsp.Lugares,
   Lsp.Mascara,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
-  MCPServer.Logger; // el aviso de un dia de la papelera que se queda
+  MCPServer.Logger, // el aviso de un dia de la papelera que se queda
+  Lsp.Listas;
 
 var
   // los dias de la papelera que ya dijeron en el log que se quedan: UNA vez
@@ -3060,7 +3061,7 @@ begin
     // mas de 255 no es un nombre de Windows: SYS-009 INTERNAL al escribir
     // (octava revision)
     if Length(Name) > 255 then
-      Exit(MsgFmt(SR_GUARD_NOMBRE_LARGO_FMT, [Length(Name), Copy(Name, 1, 40)]));
+      Exit(MsgFmt(SR_GUARD_NOMBRE_LARGO_FMT, [Length(Name), PrincipioDeTexto(Name, 40)]));
     if Name.Trim([' ']).TrimRight([' ', '.']) <> Name then
     begin
       var Sugerido := Name.Trim([' ']).TrimRight([' ', '.']);

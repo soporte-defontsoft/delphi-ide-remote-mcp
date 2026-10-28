@@ -60,7 +60,8 @@ uses
   Lsp.Patch,   // LeeTexto: la puerta de leer, con el vault como lugar
   Lsp.Texts,
   Mcp.Vault.Seed,
-  Lsp.Settings;
+  Lsp.Settings,
+  Lsp.Listas;
 
 const
   INSTRUCTIONS_FILE = 'VAULT-INSTRUCTIONS.md';
@@ -134,7 +135,7 @@ begin
     if Result <> '' then
     begin
       if Length(Result) > MAX_INSTRUCTIONS then
-        Result := Copy(Result, 1, MAX_INSTRUCTIONS) + sLineBreak +
+        Result := PrincipioDeTexto(Result, MAX_INSTRUCTIONS) + sLineBreak +
           MsgText(SN_VAULT_CONTINUA_READ_SIN_PATH);
       Exit;
     end;

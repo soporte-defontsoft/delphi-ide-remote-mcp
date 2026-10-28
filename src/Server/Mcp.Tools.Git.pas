@@ -146,7 +146,8 @@ uses
   Lsp.Args,
   Lsp.Lugares,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.Listas;
 
 // la tool git va por delante de sus compositores
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
@@ -2311,7 +2312,7 @@ begin
   if GitCommandIsQuery(Cmd, Params.Action, Params.Name, Params.Message) then
     Output := PaginaDeSalidaGit(Output, Params.Offset)
   else if Length(Output) > TOPE_SALIDA_GIT then
-    Output := Copy(Output, 1, TOPE_SALIDA_GIT) + #10 + MsgText(SF_GIT_TRUNCATED);
+    Output := PrincipioDeTexto(Output, TOPE_SALIDA_GIT) + #10 + MsgText(SF_GIT_TRUNCATED);
   // Un git que dice que no (exit<>0) es un fallo: salia como exito y el
   // agente no lo distinguia de uno que funciono (revision 27-sep-2026). Su
   // salida va detras, que es la que explica que paso. (diff --quiet, que

@@ -73,6 +73,8 @@ type
     [Test] procedure LaFilaDeUnaTandaDejaElDiscoComoEsta;
     [Test] procedure LasCitasDeUnJsonVanComoEstan;
     [Test] procedure LosControlesSonAnomaliasPorSiMismos;
+    [Test]
+    procedure UnaCitaConSuCrVaComoEsta;
   end;
 
   { LA clave de una carpeta (Lsp.Casa.ClaveDeCarpeta): la misma carpeta
@@ -1399,6 +1401,20 @@ begin
   Assert.IsFalse(TieneComodin('C:\p*\UFicha.pas'));
   Assert.AreEqual('C:\p', CarpetaDelComodin('C:\p\*.pas'));
   Assert.AreEqual('C:\p', CarpetaDelComodin('C:\p\*\'), 'la barra final no cuenta');
+end;
+
+{ V106 de la 1.23.1: la clave de una cita es UNA - sin su sangria ni su CR -
+  para quien la apunta y para quien la busca. CitaDeLinea la apuntaba tal cual
+  y la busqueda le quita el CR a la linea: una cita de un texto que acaba en CR
+  salia enmascarada }
+procedure TBarridoDeUnidadesTests.UnaCitaConSuCrVaComoEsta;
+var
+  S, Cita: string;
+begin
+  OlvidaSalidaHecha; // nada de otra prueba de este hilo
+  Cita := CitaDeLinea(5, 'X := ''' + Letra + ':\cr'';'#13);
+  S := MaskDriveText('delphi_edit', '[EDIT-099 INVALID_PARAM] x'#13#10'  ' + Cita + #10);
+  Assert.Contains(S, Letra + ':\cr', 'la cita del disco, tal cual: ' + S);
 end;
 
 initialization

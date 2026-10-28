@@ -34,6 +34,8 @@ type
     [Test] procedure LosCaracteresAcotan;
     [Test] procedure UnaLineaEnormeVaSuFinalYSeDice;
     [Test] procedure ElFinalNoParteUnPar;
+    [Test]
+    procedure ElPrincipioNoParteUnPar;
   end;
 
 implementation
@@ -250,6 +252,20 @@ begin
   // los 3 ultimos empezarian por la segunda mitad del emoji: va sin ella
   Assert.AreEqual('...cd', FinalDeTexto('ab'#$D83D#$DE00'cd', 3));
   Assert.AreEqual('...'#$D83D#$DE00'cd', FinalDeTexto('ab'#$D83D#$DE00'cd', 4));
+end;
+
+{ V106 de la 1.23.1: el corte por la cabeza, el gemelo de FinalDeTexto: once
+  sitios cortaban a mano sin la guarda y un emoji en el tope dejaba medio
+  caracter en la respuesta }
+procedure TColaDeSalidaTests.ElPrincipioNoParteUnPar;
+begin
+  Assert.AreEqual('abc', PrincipioDeTexto('abc', 5), 'cabe: tal cual');
+  Assert.AreEqual('ab', PrincipioDeTexto('abc', 2));
+  // los 3 primeros acabarian en la primera mitad del emoji: va sin el
+  Assert.AreEqual('ab', PrincipioDeTexto('ab'#$D83D#$DE00'cd', 3));
+  Assert.AreEqual('ab'#$D83D#$DE00, PrincipioDeTexto('ab'#$D83D#$DE00'cd', 4));
+  Assert.AreEqual('', PrincipioDeTexto('abc', 0), 'nada');
+  Assert.AreEqual('', PrincipioDeTexto(#$D83D#$DE00'x', 1), 'ni la mitad de uno');
 end;
 
 initialization

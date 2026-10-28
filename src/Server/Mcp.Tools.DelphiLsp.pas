@@ -784,7 +784,7 @@ begin
     if Decl.EndsWith(';') then
       Decl := Decl.Substring(0, Decl.Length - 1);
     if Decl.Length > 110 then
-      Decl := Decl.Substring(0, 110) + '...';
+      Decl := PrincipioDeTexto(Decl, 110) + '...';
     Result := Format('%s @%d', [Decl, SymLine1(ANode)]);
   end
   else
