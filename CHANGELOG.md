@@ -444,6 +444,18 @@ the MCP `initialize` response (`serverInfo.version`).
   renderers: its 64-bit build wrote floating-point values with 17 decimals,
   the IDE with 18 (measured on the styles of the RAD Studio Samples); its
   binary output (`build`) is the same byte for byte.
+- **`delphi_styles lint` reports a color written with fewer than 8 hex
+  digits.** FMX loads `xFF7DFC6` without an error, takes the missing digit
+  as 0 and gets `x0FF7DFC6`: an alpha of `0F`, a control almost
+  transparent. A theme of a real project carried one in a style for
+  read-only fields and only the preview showed it; the lint said clean. It
+  now lists each one in `colorsWithoutAlpha` (`STYLE-061`) with its file,
+  line, style and property, and with `loadedAs`, what FMX's own writer
+  stores for it; `clean` is false. Only that is reported from the writer:
+  on three real themes it rewrites about 190 properties per file, all of
+  them harmless (defaults, colors by name, `TabOrder`). The hint `STYLE-058`
+  adds to a color now says the same: the missing digits are taken as 0, so
+  the alpha is 00 or nearly so.
 - **Refusals that pointed the wrong way now name the way through.**
   `EDIT-019` (a range that takes the whole file) told whoever brought content
   only how to delete; it now says how to replace (leave the last line out of

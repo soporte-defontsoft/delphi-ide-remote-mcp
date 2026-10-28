@@ -254,6 +254,31 @@ function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray
   00, invisible. }
 function ComoLoEscribeFmxDeTexto(const ATexto, AEnc: string; out AEscrito: string): Boolean;
 
+type
+  { Un color de un .style escrito con menos de 8 cifras: su linea (1-based,
+    como la numera delphi_read), el estilo de nivel superior que lo contiene,
+    la propiedad, el valor escrito y como lo carga FMX (lo que guarda su
+    escritor; '' si no lo guarda: el valor que ya da su clase) }
+  TColorSinAlfa = record
+    Linea: Integer;
+    Estilo, Prop, Valor, ComoLoCarga: string;
+  end;
+
+{ Los colores del .style de texto AFichero escritos con menos de 8 cifras
+  (xF7DFC6, xFF7DFC6): FMX los carga sin error tomando las cifras que faltan
+  como 0 por la izquierda, y el alfa queda en 00 o casi - invisible o casi.
+  delphi_styles lint no lo veia: xFF7DFC6 por xFFF7DFC6 en un tema real, que
+  solo enseno la vista previa (V152 de la 1.23.1, medido). Cuantas cifras
+  lleva un color es gramatica propia (el escritor del IDE escribe siempre 8,
+  o un nombre); como lo carga FMX lo dice su escritor
+  (ComoLoEscribeFmxDeTexto), y solo se dice si el lo guarda de otra forma.
+  Lo demas que reescribe no se dice: en tres temas reales, ~190 propiedades
+  por fichero, todo benigno (defectos, colores con nombre, TabOrder). Los
+  objetos del fichero y los del escrito van en el mismo orden (medido: 558 de
+  558); si no cuadran, no se empareja nada. False si no hay escritor, no
+  contesto o no cuadran: no se sabe. }
+function ColoresSinAlfa(const AFichero: string; out AColores: TArray<TColorSinAlfa>): Boolean;
+
 { StyleNames of the Windows platform default style, extracted once through the
   helper and cached under LOCALAPPDATA. Empty when the helper is missing.
   Ya como claves (ClaveDeEstilo). }
@@ -1139,6 +1164,86 @@ begin
         Escrito := LeeTexto(Salida, [ltTemporal]);
     end);
   AEscrito := Escrito;
+end;
+
+function ColoresSinAlfa(const AFichero: string; out AColores: TArray<TColorSinAlfa>): Boolean;
+var
+  Doc, DocE: TStyleDoc;
+  Escrito: string;
+  Objs, ObjsE: TList<TStyleObj>;
+
+  procedure Aplana(O: TStyleObj; L: TList<TStyleObj>);
+  begin
+    L.Add(O);
+    for var K in O.Children do
+      Aplana(K, L);
+  end;
+
+  // el estilo de nivel superior que contiene a O; '' en el contenedor
+  function EstiloDe(O: TStyleObj): string;
+  begin
+    while (O <> nil) and (O.Depth > 1) do
+      O := O.Parent;
+    if (O <> nil) and (O.Depth = 1) then
+      Result := O.StyleName
+    else
+      Result := '';
+  end;
+
+begin
+  AColores := [];
+  Result := False;
+  Doc := nil;
+  DocE := nil;
+  Objs := TList<TStyleObj>.Create;
+  ObjsE := TList<TStyleObj>.Create;
+  try
+    // por EL abridor: unas lineas que el parser del IDE lee de otra forma
+    // (DSGN-160) no se emparejan con las del escritor
+    try
+      if TStyleDoc.Lee(AFichero, Doc) <> '' then
+        Exit;
+    except
+      Exit; // uno que no se deja leer: no se sabe
+    end;
+    if (Doc.Root = nil) or
+       not ComoLoEscribeFmxDeTexto(Doc.TextoDe(Doc.Lines), Doc.Encoding, Escrito) then
+      Exit;
+    DocE := TStyleDoc.DeTexto(Escrito);
+    if DocE.Root = nil then
+      Exit;
+    Aplana(Doc.Root, Objs);
+    Aplana(DocE.Root, ObjsE);
+    if Objs.Count <> ObjsE.Count then
+      Exit;
+    Result := True;
+    for var I := 0 to Objs.Count - 1 do
+    begin
+      var De, A: Integer;
+      for var Rg in Doc.Propiedades(Objs[I], De, A) do
+      begin
+        var Esta: Boolean;
+        var Valor := Doc.ValorDe(Objs[I], Rg.Prop, Esta).Trim;
+        if not TRegEx.IsMatch(Valor, '^x[0-9A-Fa-f]{1,7}$') then
+          Continue;
+        var ComoLoCarga := DocE.ValorDe(ObjsE[I], Rg.Prop, Esta).Trim;
+        if Esta and SameText(ComoLoCarga, Valor) then
+          Continue;
+        var C: TColorSinAlfa;
+        C.Linea := Rg.Ini + 1;
+        C.Estilo := EstiloDe(Objs[I]);
+        C.Prop := Rg.Prop;
+        C.Valor := Valor;
+        C.ComoLoCarga := IfThen(Esta, ComoLoCarga, '');
+        AColores := AColores + [C];
+      end;
+    end;
+  finally
+    DocE.Free;
+    Doc.Free;
+    ObjsE.Free;
+    Objs.Free;
+  end;
 end;
 
 function StyleConverterExe: string;

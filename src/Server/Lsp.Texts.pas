@@ -3999,29 +3999,28 @@ const
 
   SD_STYLES =
     'FMX STYLES of a project, by StyleName: the text .style files (what the ' +
-    'Bitmap Style Designer exports and a style pipeline keeps as source of ' +
-    'truth). command=view lists the styles of a file (StyleName, class, ' +
+    'Bitmap Style Designer exports). command=view lists the styles of a file (StyleName, class, ' +
     'lines, parts); get shows one whole; set changes or adds ONE property of ' +
     'a style or of a part inside it (child=background/text), written as ' +
-    'FMX''s own writer (the IDE''s) stores it and in its place among the ' +
-    'object''s properties - STYLE-058 says when that is not the value given, ' +
-    'STYLE-059 when it is the class''s own value and not stored -, refused if FMX would ignore it when it loads the ' +
+    'FMX''s own writer (the IDE''s) stores it, in its place (STYLE-058: ' +
+    'stored otherwise; STYLE-059: the class''s own value, not stored), ' +
+    'refused if FMX would ignore it when it loads the ' +
     'style or could not load the style with it; clone copies a style under ' +
     'a new StyleName - the way to ' +
-    'add a variant; delete removes a whole style by StyleName (the copy in ' +
-    '__delphi-patch is the way back); lint checks the whole thing: ' +
+    'add a variant; delete removes a whole style by StyleName; lint: ' +
     'duplicated StyleNames, ' +
     'StyleLookup values in the project''s .fmx/.pas that NO style defines ' +
-    '(the platform default style counts; a form that may take its styles from ' +
-    'a StyleBook it does not read, or a frame, goes apart, in formsWithAStyleBook), design ' +
+    '(the platform default style counts; a form or frame that may take its ' +
+    'styles from a StyleBook not read here goes apart: formsWithAStyleBook), design ' +
     'tokens missing in a theme ' +
     'of a *Tokens.ini, .rc entries whose file is missing, what FMX ignores ' +
     'when it loads them (a property the class does not publish, a value it ' +
-    'cannot read) and what it cannot load at all; build converts ' +
+    'cannot read), what it cannot load at all, and colors with fewer than ' +
+    '8 hex digits (FMX loads them transparent); build converts ' +
     'every text .style of the folder to .bin.style (the form an app embeds: ' +
     'embedded TEXT loads but does not resolve StyleLookup) and compiles the ' +
     'folder''s .rc to .res with brcc32. Binary styles are never edited. ' +
-    'Edits keep encoding and leave a __delphi-patch copy.';
+    'Edits keep encoding and leave a __delphi-patch copy (the way back).';
 
   SP_STYLES_PATH =
     'The text .style file (view/get/set/clone) or the styles FOLDER ' +
@@ -4134,8 +4133,9 @@ const
     '%2:s: written its way, which is the value FMX loads.%3:s';
   { %3:s de STYLE-058 cuando el valor es un color (x...) }
   SF_STYLES_COLOR_8_CIFRAS =
-    ' A color takes its 8 hex digits, AARRGGBB: with fewer, the alpha that is ' +
-    'missing is 00 and the color is invisible.';
+    ' A color takes its 8 hex digits, AARRGGBB: with fewer, FMX takes the ' +
+    'missing ones as 0 from the left, so the alpha is 00 or nearly so and ' +
+    'the color invisible or nearly.';
   { %0:s: la propiedad; %1:s: el valor; %2:s: '' o SF_STYLES_NO_GUARDADA_QUITADA }
   SN_STYLES_NO_GUARDADA_FMT =
     '[STYLE-059] With %0:s = %1:s the object ends with the value its class ' +
@@ -4245,6 +4245,17 @@ const
     'cannot read, a class it does not know - with everything inside it. The ' +
     'app does not see them and build leaves them out of the .bin.style: fix ' +
     'them in the text .style.';
+  { %d: cuantos. Los colores de un .style escritos con menos de 8 cifras: FMX
+    los carga sin error y el alfa queda en 00 o casi. delphi_styles lint no
+    lo veia: xFF7DFC6 por xFFF7DFC6 en un tema real, que solo enseno la vista
+    previa (V152 de la 1.23.1, medido; Lsp.Styles.ColoresSinAlfa) }
+  SN_STYLES_COLORES_SIN_ALFA_FMT =
+    '[STYLE-061] colorsWithoutAlpha: %d color(s) written with fewer than 8 ' +
+    'hex digits. FMX loads them without an error, taking the missing digits ' +
+    'as 0 from the left, so the alpha is 00 or nearly so and the color ' +
+    'invisible or nearly. loadedAs is what FMX''s own writer (the IDE''s) ' +
+    'stores for it (empty: the class''s own value, which it does not store). ' +
+    'Write all 8 digits, AARRGGBB - xFF for an opaque color: xFFF7DFC6.';
   { Lo que FMX ni siquiera puede CARGAR: su lector lanza y el estilo entero se
     pierde. Un TextSettings.FontColor = $FFFF0000 (EReadError: Invalid property
     value) pasaba set y lint, y solo build lo negaba (Hermes, test completo de
@@ -10672,15 +10683,11 @@ const
     'branch with delphi_edit.';
 
   // Descripciones que estaban en linea en Mcp.Tools.Styles.pas (paso 3d, 27-sep-2026)
+  { lo que hace cada uno lo dice la descripcion: aqui se repetia entero, y
+    el presupuesto de tools/list no da para dos copias (V152 de la 1.23.1) }
   SP_STYLE_COMMAND =
-    'view (styles of a .style file: StyleName, class, lines) | get (one ' +
-    'style, whole text) | set (one property of a style or of one of its ' +
-    'parts) | clone (a new style copied from an existing one) | delete ' +
-    '(remove a whole style by StyleName; the __delphi-patch copy is the ' +
-    'way back) | lint (duplicated StyleNames, StyleLookup values of the ' +
-    'project''s .fmx that no style defines, design tokens missing in a ' +
-    'theme, .rc entries without file, what FMX ignores) | build (every text .style of the ' +
-    'folder -> .bin.style, then the .rc -> .res with brcc32)';
+    'view | get | set | clone | delete | lint | build - what each one does, ' +
+    'in the tool''s description';
 
   SP_STYLE_PROJECT =
     'lint: the project .dproj (or a folder) whose .fmx/.pas files are ' +
@@ -10702,8 +10709,7 @@ const
   SP_STYLE_VALUE =
     'set: the value as a .style file writes it: xFFF6ECDB (colors ' +
     'AARRGGBB), 44.000000000000000000 (floats), True/False, ''text'' ' +
-    '(strings quoted), Center (enums). FMX''s own writer has the last word ' +
-    '(STYLE-058 / STYLE-059)';
+    '(strings quoted), Center (enums)';
 
   SP_STYLE_NAME =
     'clone: the StyleName of the new style';

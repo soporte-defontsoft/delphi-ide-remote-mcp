@@ -574,10 +574,11 @@ var
   Names, Defaults: TDictionary<string, string>;
   Seen: TDictionary<string, Integer>;
   Ret, Issue: TJSONObject;
-  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas, NoCargan, ConStyleBookF: TJSONArray;
+  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas, NoCargan, ConStyleBookF, SinAlfa: TJSONArray;
+  Colores: TArray<TColorSinAlfa>;
   Ignorado: TArray<string>;
   NoCarga: string;
-  CarganTodos: Boolean;
+  CarganTodos, ConAlfaTodos: Boolean;
   NIgnorados, NFormas: Integer;
   M: TMatch;
   Lines: TArray<string>;
@@ -622,6 +623,7 @@ begin
   PorFmx := TJSONArray.Create;
   NoCargan := TJSONArray.Create;
   Formas := TJSONArray.Create;
+  SinAlfa := TJSONArray.Create;
   NIgnorados := 0;
   NFormas := 0;
   try
@@ -886,6 +888,22 @@ begin
         PorFmx.AddElement(Issue);
         Inc(NIgnorados, Length(Ignorado));
       end;
+    // un color de menos de 8 cifras: FMX lo carga sin error, casi
+    // transparente, y ni su lector ni lo de arriba lo veian; como lo carga, su
+    // escritor (Lsp.Styles.ColoresSinAlfa, V152 de la 1.23.1)
+    for F in Files do
+      if ColoresSinAlfa(F, Colores) then
+        for var C in Colores do
+        begin
+          Issue := TJSONObject.Create;
+          Issue.AddPair('file', TPath.GetFileName(F));
+          Issue.AddPair('line', TJSONNumber.Create(C.Linea));
+          Issue.AddPair('style', C.Estilo);
+          Issue.AddPair('prop', C.Prop);
+          Issue.AddPair('value', C.Valor);
+          Issue.AddPair('loadedAs', C.ComoLoCarga);
+          SinAlfa.AddElement(Issue);
+        end;
     Ret.AddPair('stylesDir', MaskDriveText('', Dir));
     Ret.AddPair('projectDir', MaskDriveText('', ProjDir));
     Ret.AddPair('styleFiles', TJSONNumber.Create(Length(Files)));
@@ -910,6 +928,15 @@ begin
     begin
       Ret.AddPair('fmxCannotLoad', NoCargan);
       Ret.AddPair('fmxCannotLoadNote', MsgText(SN_STYLES_FMX_NO_CARGA));
+    end;
+    // sale solo si lo hay, como fmxCannotLoad
+    ConAlfaTodos := SinAlfa.Count = 0;
+    if ConAlfaTodos then
+      SinAlfa.Free
+    else
+    begin
+      Ret.AddPair('colorsWithoutAlpha', SinAlfa);
+      Ret.AddPair('colorsWithoutAlphaNote', MsgFmt(SN_STYLES_COLORES_SIN_ALFA_FMT, [SinAlfa.Count]));
     end;
     // los que no tienen la forma del IDE: salen solo si los hay
     if NFormas > 0 then
@@ -936,7 +963,7 @@ begin
     // clean = sin hallazgos; ok es "la llamada fue bien" (novena revision)
     Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
       (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0) and (PorFmx.Count = 0) and
-      CarganTodos and (NFormas = 0)));
+      CarganTodos and ConAlfaTodos and (NFormas = 0)));
     if Length(PlatformDefaultStyleNames) = 0 then
       Ret.AddPair('note', MsgText(SN_STYLES_NO_DEFAULTS))
     else

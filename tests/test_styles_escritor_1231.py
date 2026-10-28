@@ -18,6 +18,17 @@ flotantes con 17 decimales y el IDE con 18 (medido con los .style de los Samples
   S6 0.4 en una propiedad Single (Opacity): el escritor guarda 0.400000005960464500, el valor que
      FMX carga, y STYLE-058 lo dice (medido: el IDE escribe igual un Single)
 
+V152: delphi_styles lint no veia un color de menos de 8 cifras. xFF7DFC6 por xFFF7DFC6 en un tema
+real (el editrostyle de un proyecto): FMX lo carga x0FF7DFC6, alfa 0F, casi transparente, y solo la
+vista previa lo enseno (informe de fable-opencode, 28-oct). Cuantas cifras: gramatica propia; como lo
+carga FMX: su escritor. Medido antes: en tres temas reales el escritor reescribe ~190 propiedades por
+fichero (defectos, colores con nombre, TabOrder, orden de un set), todo benigno: no se dice todo lo
+que reescribe, solo esto. Rojas contra 42f24cd:
+  S7 lint de un .style con xFF7DFC6 y x000000: colorsWithoutAlpha los dice con su linea y como los
+     carga FMX (x0FF7DFC6), STYLE-061, y clean es false
+  S8 (control) el mismo fichero con 8 cifras y un color con nombre: sin colorsWithoutAlpha
+  S9 (control de V141) set de xFF7DFC6: se escribe x0FF7DFC6 y STYLE-058 lo dice
+
 Uso:  python tests/test_styles_escritor_1231.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -94,7 +105,37 @@ try:
     r = pon('Fill.Color', 'xFF102030')
     check('S5 (control) un color de 8 cifras: sin STYLE-058',
           'Fill.Color = xFF102030' in lee() and not mc.es(r, 'SN_STYLES_GUARDADA_COMO_FMT'), (r[:400], lee()))
+
+    # V152: el lint y los colores de menos de 8 cifras
+    def lint():
+        r = srv.call('delphi_styles', {'command': 'lint', 'path': ST}, 180)
+        return r, mc.como_json(r)
+
+    SIN_ALFA = ORIGINAL.replace("    Fill.Color = xFFFFFFFF\r\n",
+                                "    Fill.Color = xFF7DFC6\r\n    Stroke.Color = x000000\r\n")
+    escribe(SIN_ALFA)
+    r, j = lint()
+    colores = j.get('colorsWithoutAlpha') or []
+    linea7 = SIN_ALFA.split('\r\n').index('    Fill.Color = xFF7DFC6') + 1
+    c7 = [c for c in colores if c.get('value') == 'xFF7DFC6']
+    c6 = [c for c in colores if c.get('value') == 'x000000']
+    check('S7 lint: el color de 7 cifras sale, con su linea, su estilo y como lo carga FMX (x0FF7DFC6)',
+          len(c7) == 1 and c7[0].get('line') == linea7 and c7[0].get('prop') == 'Fill.Color' and
+          c7[0].get('style') == 'cardstyle' and c7[0].get('loadedAs') == 'x0FF7DFC6', r[:900])
+    check('S7 ...y el de 6 cifras, con lo que guarda el escritor (no x000000)',
+          len(c6) == 1 and c6[0].get('loadedAs') not in ('x000000', None), r[:900])
+    check('S7 ...con su nota STYLE-061, y clean es false',
+          mc.es(r, 'SN_STYLES_COLORES_SIN_ALFA_FMT') and j.get('clean') is False, r[:900])
+    escribe(ORIGINAL.replace("    Fill.Color = xFFFFFFFF\r\n",
+                             "    Fill.Color = xFFF7DFC6\r\n    Stroke.Color = claBlack\r\n"))
+    r, j = lint()
+    check('S8 (control) 8 cifras y un color con nombre: sin colorsWithoutAlpha',
+          'colorsWithoutAlpha' not in j and not mc.es(r, 'SN_STYLES_COLORES_SIN_ALFA_FMT'), r[:600])
+    escribe()
+    r = pon('Fill.Color', 'xFF7DFC6')
+    check('S9 (V141) set de un color de 7 cifras: se escribe x0FF7DFC6 y STYLE-058 lo dice',
+          'Fill.Color = x0FF7DFC6' in lee() and mc.es(r, 'SN_STYLES_GUARDADA_COMO_FMT'), (r[:400], lee()))
 finally:
     srv.cierra()
     mc.borra(BASE)
-mc.fin('styles set y el escritor de FMX 1.23.1 (V141)')
+mc.fin('styles set, lint y el escritor de FMX 1.23.1 (V141, V152)')
