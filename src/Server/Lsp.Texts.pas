@@ -1316,10 +1316,16 @@ const
     'the range with delphi_read and copy the number of the last line ' +
     'that goes.';
 
+  { V146 de la 1.23.1: a quien TRAIA contenido (un form entero en lugar del
+    recien creado) solo le decia como borrar; lo que acabo haciendo el agente
+    (anclar la ultima linea que se queda) no lo decia nadie }
   SR_RANGE_WHOLE_FMT =
     '[EDIT-019 DENIED] That range (1-%d) takes the WHOLE file. This tool ' +
-    'does not empty files, just as it does not rewrite them whole. If ' +
-    'what you want is to remove it, delphi_delete sends it to the trash ' +
+    'does not empty files, just as it does not rewrite them whole. To ' +
+    'REPLACE what is in it, leave at least one line out of the range - the ' +
+    'last one (in a form, the root''s closing end) - and give in new what ' +
+    'goes before it; or anchor that last line and give it back in new with ' +
+    'what follows. To remove the file, delphi_delete sends it to the trash ' +
     'and it can be recovered.';
 
   SR_RANGE_WITH_BLOCK =
@@ -4341,8 +4347,9 @@ const
     'reference, a file of the scope it cannot read, a hit in a .dfm/.fmx ' +
     '(form bindings break), a hit inside a ' +
     'string literal (FindComponent/RTTI/StyleLookup by name), a symbol ' +
-    'defined outside the workspace (RTL/components) or a collision with ' +
-    'the new name = applicable=false with the reasons, and apply writes ' +
+    'defined outside the workspace (RTL/components) or the new name already ' +
+    'in the code of the files it writes (a unit it does not write is not ' +
+    'looked at) = applicable=false with the reasons, and apply writes ' +
     'nothing. It renames CODE only: a mention in a comment keeps the old ' +
     'name (on an occurrence''s line too) and is reported as a warning for ' +
     'you to look at. Rebuild afterwards.';
@@ -4446,10 +4453,13 @@ const
     'would leave them pointing to a name that no longer exists, and the ' +
     'compiler does not warn.';
 
+  { V132a de la 1.23.1: mira el nombre nuevo SOLO en los ficheros que
+    escribe, y lo decia como si mirase todo el proyecto }
   SR_RENAME_COLLISION_FMT =
     '[RENAME-021 DENIED] The new name "%s" already appears %d times in ' +
-    'the code of the affected files (comments and strings do not count): ' +
-    'possible collision or homonym.';
+    'the code of the files this rename writes (comments and strings do not ' +
+    'count): possible collision or homonym. Only those files are looked at: ' +
+    'a unit it does not write that uses both names is not.';
 
   SN_RENAME_DESIGNER_HIT_FMT =
     '[RENAME-005] %d occurrences in %s';
@@ -8973,6 +8983,12 @@ const
   SR_GIT_NO_VA_CON_COMANDO_FMT =
     '[GIT-038 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
     'be ignored). Nothing was done: %s takes %s.';
+  { detras de GIT-038 cuando branch trae lo de crear una rama: branch solo
+    lista, y Hermes tropezo tres veces antes de dar con switch (V133 de la
+    1.23.1) }
+  SF_GIT_RAMA_NUEVA =
+    ' A NEW branch is command=switch create=true branch=<name> (it creates ' +
+    'the branch and moves to it); command=branch only lists them.';
 
   SR_GIT_UNKNOWN_COMMAND_FMT =
     '[GIT-034 INVALID_PARAM] Unknown command "%s". Allowed: status | ' +
@@ -10395,7 +10411,9 @@ const
   SD_LSP_COMPLETION =
     'Code completion candidates at a 0-based line:character position ' +
     '(official DelphiLSP engine). Returns at most 50 items ' +
-    '(label/kind/detail) plus the total count.';
+    '(label/kind/detail) plus the total count. With trigger=".", a ' +
+    'column that falls on the identifier before the dot is moved right ' +
+    'after the dot, and LSP-027 says so.';
 
   // Descripciones que estaban en linea en Mcp.Tools.DelphiPatch.pas (paso 3d, 27-sep-2026)
   { el path de delphi_read: lee cualquier texto con su codificacion real (solo
@@ -12235,6 +12253,12 @@ const
     '[MOVE-014] COPIED'#10 +
     '  from: %s'#10 +
     '  to:   %s';
+  { %0:s: el destino; %1:s: la carpeta que quiza se queria. dest es la ruta
+    FINAL: un fichero con extension a un dest sin ella crea un fichero con
+    ese nombre, y el agente esperaba una carpeta (V139 de la 1.23.1) }
+  SN_MOVE_DESTINO_SIN_EXTENSION_FMT =
+    '[MOVE-025] dest is the final path, so the file is now %0:s, with no ' +
+    'extension. If you meant a folder, dest=%1:s.';
 
   // MOVE-015, MOVE-016 y MOVE-018 (la cabecera "unit X;" reescrita, o no) se
   // retiraron en la 1.23 (V19): un move o una copia no reescriben el fichero

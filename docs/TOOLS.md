@@ -101,7 +101,7 @@ Type/signature information for the identifier at a 0-based line:character positi
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Code completion candidates at a 0-based line:character position (official DelphiLSP engine). Returns at most 50 items (label/kind/detail) plus the total count.
+Code completion candidates at a 0-based line:character position (official DelphiLSP engine). Returns at most 50 items (label/kind/detail) plus the total count. With trigger=".", a column that falls on the identifier before the dot is moved right after the dot, and LSP-027 says so.
 
 *Access: read-only OK.*
 
@@ -680,7 +680,7 @@ What this server's RAD Studio has INSTALLED to program with: the component/desig
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-SEMANTIC RENAME of a Delphi symbol: point at the identifier (path + 0-based line/character, like delphi_definition) and give newname. mode=preview (default, never writes) lists every CONFIRMED occurrence (each re-resolved against the same definition), the files touched and whether the rename is APPLICABLE; mode=apply does the same and, when applicable, WRITES it through the changeset engine (all files or none, fingerprints, a backup of each in __delphi-patch) and answers with the commit. Strict on purpose, in both modes: one unverified reference, a file of the scope it cannot read, a hit in a .dfm/.fmx (form bindings break), a hit inside a string literal (FindComponent/RTTI/StyleLookup by name), a symbol defined outside the workspace (RTL/components) or a collision with the new name = applicable=false with the reasons, and apply writes nothing. It renames CODE only: a mention in a comment keeps the old name (on an occurrence's line too) and is reported as a warning for you to look at. Rebuild afterwards.
+SEMANTIC RENAME of a Delphi symbol: point at the identifier (path + 0-based line/character, like delphi_definition) and give newname. mode=preview (default, never writes) lists every CONFIRMED occurrence (each re-resolved against the same definition), the files touched and whether the rename is APPLICABLE; mode=apply does the same and, when applicable, WRITES it through the changeset engine (all files or none, fingerprints, a backup of each in __delphi-patch) and answers with the commit. Strict on purpose, in both modes: one unverified reference, a file of the scope it cannot read, a hit in a .dfm/.fmx (form bindings break), a hit inside a string literal (FindComponent/RTTI/StyleLookup by name), a symbol defined outside the workspace (RTL/components) or the new name already in the code of the files it writes (a unit it does not write is not looked at) = applicable=false with the reasons, and apply writes nothing. It renames CODE only: a mention in a comment keeps the old name (on an occurrence's line too) and is reported as a warning for you to look at. Rebuild afterwards.
 
 *Access: mixed (`mode` preview read-only; every other mode read-write, refused to a read-only credential).*
 

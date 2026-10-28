@@ -140,6 +140,11 @@ check('mencion en literal de cadena bloquea', j.get('applicable') is False and a
 # 4. collision: rename Doble -> Existente (word already there)
 j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'Existente'}))
 check('colision con nombre existente bloquea', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_COLLISION_FMT') for b in j.get('blockers', [])), str(j)[:300])
+# ...y dice lo que mira: solo los ficheros que escribe (V132a de la 1.23.1: lo decia como si mirase
+# todo el proyecto, y una unidad que no escribe y usa los dos nombres no se mira)
+_col = mc.catalogo()['SR_RENAME_COLLISION_FMT']
+check('...y dice que solo mira los ficheros que escribe (V132a)',
+      any(_col[_col.index('times in '):] in b for b in j.get('blockers', [])), str(j.get('blockers'))[:400])
 
 # 5. designer hit: a dfm mentioning the identifier
 DFM = os.path.join(PRJ, 'UCalc.dfm')

@@ -433,6 +433,19 @@ the MCP `initialize` response (`serverInfo.version`).
   renderers: its 64-bit build wrote floating-point values with 17 decimals,
   the IDE with 18 (measured on the styles of the RAD Studio Samples); its
   binary output (`build`) is the same byte for byte.
+- **Refusals that pointed the wrong way now name the way through.**
+  `EDIT-019` (a range that takes the whole file) told whoever brought content
+  only how to delete; it now says how to replace (leave the last line out of
+  the range, or anchor it). `GIT-038` for `command=branch` with `create` or
+  `name` says that a new branch is `command=switch create=true branch=<name>`.
+  `RENAME-021` and `delphi_rename_symbol`'s description say that the new name
+  is looked for only in the files the rename writes. `delphi_completion`'s
+  description says that a column on the identifier before a `.` is moved
+  after it (`LSP-027`). `delphi_move` of a file to a `dest` with no extension
+  says that `dest` is the final path and which `dest` makes a folder
+  (`MOVE-025`). A virtual drive this server does not serve (`CFG-006`) now
+  also names the same path under a served drive when the session can read it
+  there (`READ-011`).
 
 ### Changed
 

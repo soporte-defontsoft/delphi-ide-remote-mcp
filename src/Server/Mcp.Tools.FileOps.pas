@@ -1213,6 +1213,12 @@ begin
       Result := Result + IfThen(Result <> '', #10) + MsgFmt(SK_MOVE_COPIADO_FMT, [P.Origen, P.Destino])
     else
       Result := Result + IfThen(Result <> '', #10) + MsgFmt(SK_MOVE_MOVIDO_FMT, [P.Origen, P.Destino]);
+  // un fichero con extension que llega a un dest sin ella: dest es la ruta
+  // final, y quien lo pide solia querer una carpeta (V139 de la 1.23.1)
+  if (Length(Pasos) = 1) and (ExtractFileExt(Pasos[0].Origen) <> '') and
+     (ExtractFileExt(Pasos[0].Destino) = '') and TFile.Exists(Pasos[0].Destino) then
+    Result := Result + #10 + MsgFmt(SN_MOVE_DESTINO_SIN_EXTENSION_FMT,
+      [Pasos[0].Destino, TPath.Combine(Pasos[0].Destino, ExtractFileName(Pasos[0].Origen))]);
   if Length(NoSeguidos) > 0 then
     Result := Result + #10 + MsgFmt(SN_COPY_LINKS_NOT_FOLLOWED_FMT,
       [Length(NoSeguidos), string.Join(', ', NoSeguidos)]);

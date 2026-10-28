@@ -1615,7 +1615,10 @@ begin
     var Muestra := Cmd;
     if ModoGit <> Cmd then
       Muestra := Cmd + ' action=' + Copy(ModoGit, Length(Cmd) + 2, MaxInt);
-    Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, Muestra, Muestra, ONinguno(SuyosGit)]) + VaConGit);
+    // ...y si era crear una rama, como se crea (V133 de la 1.23.1)
+    Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [SobraGit, Muestra, Muestra, ONinguno(SuyosGit)]) + VaConGit +
+      IfThen((Cmd = 'branch') and (Params.Create or (Params.Name <> '') or (Params.Branch <> '')),
+        MsgText(SF_GIT_RAMA_NUEVA), ''));
   end;
   // offset, solo con una CONSULTA: branch y tag listan (su nota GIT-053 lo
   // ofrece); tag con nombre escribe

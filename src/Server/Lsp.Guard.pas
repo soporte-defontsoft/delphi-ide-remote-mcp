@@ -2471,6 +2471,8 @@ end;
   filtraba las letras de la maquina). '' si no lo es, o si no hay unidades
   virtuales. La de PathAnomaly (las lineas de ordenes, que la pedian por
   trozo, se fueron con los args de git en la 1.19.0). }
+function MismaRutaEnOtraUnidad(const APath: string; APermiteGit: Boolean): string; forward;
+
 function UnidadNoServidaDenegada(const APath: string): string;
 var
   Units, List: string;
@@ -2488,6 +2490,13 @@ begin
     List := List + VirtualUnitOf(C, Units) + ':';
   end;
   Result := MsgFmt(SR_UNIT_UNKNOWN_FMT, [APath, List]);
+  // ...y si solo se equivoco de unidad, la misma ruta bajo una que esta sesion
+  // lee y existe: LA casa de READ-011 (V92), con la letra que nombro y su
+  // cola; la unidad que no se sirve no se toca nunca (V140 de la 1.23.1)
+  var Letra := VirtualUnitLetter(APath);
+  var Otra := MismaRutaEnOtraUnidad(Letra + Copy(APath, Pos(':', APath), MaxInt), False);
+  if Otra <> '' then
+    Result := Result + ' ' + MsgFmt(SN_READ_OTRA_UNIDAD_FMT, [Otra]);
 end;
 
 { La pasada de los UNC ajenos en la ENTRADA, sobre las rutas marcadas
