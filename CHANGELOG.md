@@ -269,6 +269,18 @@ the MCP `initialize` response (`serverInfo.version`).
   it skipped the last element, the one the IDE writes with the closing `)`,
   so a list of one element was never judged at all. The elements of a list
   are now read by one reader.
+- **Nothing is written into the recoverable trash through a link.** The
+  trash (`__delphi-patch`), the IDE's dead copies and the server's temporary
+  folder are refused as a place to write (`GUARD-004`, `GUARD-005`). That
+  check looked only at the path as written, so a junction inside a root that
+  led into a day folder of the trash let a tool create or edit a file there:
+  a fake copy that a later restore would bring back. It now looks at the
+  real path too, as the check of git's metadata already did.
+- **The per-agent confinement holds through a link.** With
+  `AgentConfinement=1` an agent writes only in its own folder. A junction
+  inside its folder that led to another agent's folder let it write there,
+  because the confinement judged the path as written while the jail judged
+  the real one. It now judges the real path too.
 
 ### Changed
 

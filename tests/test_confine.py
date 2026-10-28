@@ -14,6 +14,8 @@ operator's console) is unconfined - the same rule the recoverable trash uses.
   C4  ON: writing loose at the root is refused
   C5  ON: reading is NOT confined - the whole tree is readable
   C6  ON: a caller with no identity is not confined (stdio path)
+  C8  ON: nor through a junction from its own folder to another agent's
+      (V113 of 1.23.1: the confinement judged the text, the jail the real path)
 
 Usage:  python tests/test_confine.py [path-to-DelphiLspMcp.exe]
 """
@@ -101,6 +103,19 @@ try:
     check('C7 ON: un png con forma de captura en el workspace se lee, pero no es nuestro y no se borra',
           mc.como_json(r).get('bytes', 0) > 0 and mc.como_json(r).get('consumedOnServer') is not True and
           os.path.exists(CAP), r[:300])
+    # V113 de la 1.23.1: el confinamiento por la ruta REAL. alice\lnk, una union
+    # a la carpeta de bob, dejaba a alice escribir en ella (medido)
+    LNK = os.path.join(base, 'alice', 'lnk')
+    check('C8 (preparacion) la union de la carpeta de alice a la de bob',
+          mc.junction(LNK, os.path.join(base, 'bob')), LNK)
+    try:
+        r = a.call('delphi_textedit', {'path': os.path.join(LNK, 'por-enlace.txt'), 'create': True, 'content': 'x'})
+        check('C8 ON: por una union de SU carpeta a la de otro agente, tampoco escribe',
+              mc.rechazado(r) and mc.es(r, 'SR_AGENT_CONFINED_FMT') and
+              not os.path.exists(os.path.join(base, 'bob', 'por-enlace.txt')), r[:300])
+    finally:
+        if os.path.isdir(LNK):
+            os.rmdir(LNK)  # quita el ENLACE, no lo de detras
 finally:
     proc.kill()
 

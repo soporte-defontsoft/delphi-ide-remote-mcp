@@ -23,6 +23,10 @@ no estaba).
       GUARD-005, el mismo codigo que una edicion suelta, y nada escrito
   C5  (guarda) ...sobre una copia de la papelera: GUARD-004
   C6  (guarda) la edicion suelta sobre __history: GUARD-005
+  C7  (guarda, V112 de la 1.23.1) crear POR una union de la raiz a la carpeta
+      del dia de la papelera: GUARD-004 y nada en ella (la guarda miraba solo
+      el texto, y el fichero quedaba plantado donde restore lo traeria)
+  C8  ...y editar una copia por esa union: GUARD-004 y nada escrito
 
 Usage:  python tests/test_copias_y_artefactos_1230.py [path-to-DelphiLspMcp.exe]
 """
@@ -101,6 +105,25 @@ try:
         r = srv.call('delphi_edit', {'path': HIST, 'old': 'unit UHist;', 'new': 'unit UHist; // x'})
         check('C6 (guarda) la edicion suelta sobre __history: GUARD-005',
               mc.abre(r, 'SR_GUARD_DEAD_IDE') and open(HIST, 'rb').read() == antes, r[:300])
+
+        # ------------------------------------------------------------------ C7-C8
+        LNK = os.path.join(JAIL, 'lnk-papelera')
+        check('C7 (preparacion) la union de la raiz a la carpeta del dia de la papelera',
+              mc.junction(LNK, os.path.dirname(PAPEL)), LNK)
+        try:
+            r = srv.call('delphi_textedit', {'path': os.path.join(LNK, 'plantado.txt'), 'create': True,
+                                             'content': 'x'})
+            check('C7 (guarda) crear POR la union en la papelera: GUARD-004 y nada en ella',
+                  mc.abre(r, 'SR_GUARD_DEAD_TRASH') and
+                  not os.path.exists(os.path.join(os.path.dirname(PAPEL), 'plantado.txt')), r[:300])
+            antes = open(PAPEL, 'rb').read()
+            r = srv.call('delphi_edit', {'path': os.path.join(LNK, 'UPapel.pas'), 'old': 'unit UPapel;',
+                                         'new': 'unit UPapel; // x'})
+            check('C8 (guarda) editar una copia POR la union: GUARD-004 y nada escrito',
+                  mc.abre(r, 'SR_GUARD_DEAD_TRASH') and open(PAPEL, 'rb').read() == antes, r[:300])
+        finally:
+            if os.path.isdir(LNK):
+                os.rmdir(LNK)  # quita el ENLACE, no lo de detras
 finally:
     srv.cierra()
 

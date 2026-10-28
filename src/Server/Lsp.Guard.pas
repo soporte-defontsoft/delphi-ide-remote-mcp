@@ -1235,29 +1235,50 @@ begin
 end;
 
 function DeadCopyWriteDenied(const APath: string): string;
+
+  function DeUnaForma(const ARuta: string): string;
+  var
+    P: string;
+  begin
+    Result := '';
+    // Pascal has no string escapes: '\' here would be TWO literal backslashes
+    // and no path on earth contains them. Written that way once (a Python habit
+    // leaking into Delphi) and the whole guard matched nothing while looking
+    // perfectly correct - the ".by" rule passed only because it has no slash.
+    // canonical first: an 8.3 alias like __DELP~1 IS the trash
+    P := LongCanonical(ARuta);
+    if EsMarcaDeDueno(P) then // la marca de dueno (Lsp.Casa)
+      Exit(MsgText(SR_GUARD_OWNER_MARKER));
+    if EnPapelera(ARuta) then
+      Exit(MsgText(SR_GUARD_DEAD_TRASH));
+    // La carpeta de temporales del servidor, por el mismo motivo y uno propio:
+    // se puede borrar entera en cualquier momento, asi que escribir ahi es
+    // escribir en algo que no tiene por que seguir estando. Esta es la puerta
+    // de ESCRIBIR (lo que hay en la de una raiz es de versiones viejas: las
+    // capturas viven en la casa del servidor desde la 1.18.2).
+    if EnTemporal(ARuta) then
+      Exit(MsgText(SR_GUARD_DEAD_TEMP));
+    if EnCopiaDelIde(ARuta) then
+      Exit(MsgText(SR_GUARD_DEAD_IDE));
+  end;
+
 var
-  P: string;
+  Real: string;
 begin
-  Result := '';
-  // Pascal has no string escapes: '\' here would be TWO literal backslashes
-  // and no path on earth contains them. Written that way once (a Python habit
-  // leaking into Delphi) and the whole guard matched nothing while looking
-  // perfectly correct - the ".by" rule passed only because it has no slash.
-  // canonical first: an 8.3 alias like __DELP~1 IS the trash
-  P := LongCanonical(APath);
-  if EsMarcaDeDueno(P) then // la marca de dueno (Lsp.Casa)
-    Exit(MsgText(SR_GUARD_OWNER_MARKER));
-  if EnPapelera(APath) then
-    Exit(MsgText(SR_GUARD_DEAD_TRASH));
-  // La carpeta de temporales del servidor, por el mismo motivo y uno propio:
-  // se puede borrar entera en cualquier momento, asi que escribir ahi es
-  // escribir en algo que no tiene por que seguir estando. Esta es la puerta
-  // de ESCRIBIR (lo que hay en la de una raiz es de versiones viejas: las
-  // capturas viven en la casa del servidor desde la 1.18.2).
-  if EnTemporal(APath) then
-    Exit(MsgText(SR_GUARD_DEAD_TEMP));
-  if EnCopiaDelIde(APath) then
-    Exit(MsgText(SR_GUARD_DEAD_IDE));
+  // el texto Y la ruta REAL, como los metadatos de git: una union a
+  // __delphi-patch\<dia> dejaba plantar ahi una "copia del dia" que restore
+  // traeria (V112 de la 1.23.1, medido). Una real que no se resuelve la niega
+  // la jaula (EscribibleDeVerdad), que va antes
+  Result := DeUnaForma(APath);
+  if Result <> '' then
+    Exit;
+  try
+    Real := RealPath(APath);
+  except
+    Real := '';
+  end;
+  if (Real <> '') and not EsPrefijoDeDispositivo(Real) then
+    Result := DeUnaForma(Real);
 end;
 
 procedure CrearCarpeta(const ADir: string);
@@ -4664,6 +4685,33 @@ begin
   Result := MsgFmt(SR_AGENT_CONFINED_FMT, [Me, Me]);
 end;
 
+{ El confinamiento por la ruta REAL de AFull: la jaula juzga la real y el
+  confinamiento el texto, y <raiz>\agenteA\lnk, una union a <raiz>\agenteB,
+  dejaba a A escribir en la carpeta de B (V113 de la 1.23.1, medido). Contra
+  la raiz cuya ruta real contiene la real; fuera de todas, lo dice la jaula. }
+function ConfinamientoPorLaRutaReal(const AFull: string; const ARoots: TArray<string>): string;
+var
+  Real: string;
+begin
+  Result := '';
+  if not AgentConfinementNow or (CurrentAgent = '') then
+    Exit;
+  try
+    Real := RealPath(AFull);
+  except
+    Exit; // una real que no se resuelve la niega la jaula
+  end;
+  if (Real = '') or EsPrefijoDeDispositivo(Real) then
+    Exit;
+  Real := FormaLarga(Real);
+  for var R in ARoots do
+  begin
+    var RaizReal := FormaLarga(RealDeLugar(R));
+    if RutaDentroDe(RaizReal, Real) then
+      Exit(AgentConfineDenied(SinBarraFinal(Real), RaizReal));
+  end;
+end;
+
 { La jaula, con AFueraDeJaula = True cuando la negativa es "fuera de las
   raices" (la pista de la zona de biblioteca va solo ahi). Quien pregunta
   es JaulaDenegada, justo debajo. }
@@ -4967,8 +5015,12 @@ begin
       var Ro := SoloLecturaDeclaradaEn(APath);
       if Ro <> '' then
         Exit(MsgFmt(SR_READONLY_PATH_FMT, [APath, Ro]));
-      // las dos en la forma larga: el tramo del agente se cuenta desde la raiz
-      Exit(AgentConfineDenied(SinBarraFinal(FullLargo), FormaLarga(R)));
+      // las dos en la forma larga: el tramo del agente se cuenta desde la raiz;
+      // y por la ruta REAL, la que juzga la jaula (V113 de la 1.23.1)
+      Result := AgentConfineDenied(SinBarraFinal(FullLargo), FormaLarga(R));
+      if Result = '' then
+        Result := ConfinamientoPorLaRutaReal(Full, Roots);
+      Exit;
     end;
   // la jaula lo dejo pasar sin estar en una raiz: es zona de biblioteca,
   // que se lee y nunca se escribe
