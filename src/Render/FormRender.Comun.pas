@@ -1293,6 +1293,7 @@ var
   PI: PPropInfo;
   N64: Int64;
   Entero: Longint;
+  Flotante: Extended;
 begin
   Comp := AEspec.Substring(0, AEspec.IndexOf('=')).Trim;
   Valor := AEspec.Substring(AEspec.IndexOf('=') + 1).Trim;
@@ -1338,6 +1339,12 @@ begin
   else if (PI.PropType^.Kind in [tkInteger, tkInt64]) and not TryStrToInt64(Valor, N64) and
           Assigned(FindIdentToInt(PI.PropType^)) and FindIdentToInt(PI.PropType^)(Valor, Entero) then
     SetOrdProp(Obj, PI, Entero)
+  // un numero de coma flotante como lo escribe un form, por EL lector
+  // (Lsp.DesignerForma.LeeFlotanteDeForm: el parser de forms, punto decimal
+  // siempre): SetPropValue lo convertia por un Variant con el LOCALE del
+  // usuario, y en es-ES Position.X=10.5 era 105 (V121 de la 1.23.1, medido)
+  else if (PI.PropType^.Kind = tkFloat) and LeeFlotanteDeForm(Valor, Flotante) then
+    SetFloatProp(Obj, PI, Flotante)
   else
     SetPropValue(Obj, Hoja, Valor);
 end;

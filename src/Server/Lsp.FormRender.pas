@@ -967,7 +967,7 @@ begin
         Continue; // el lector de state dara su diagnostico de forma
       Prop := Copy(Estado, 1, P - 1).Trim;
       Valor := Copy(Estado, P + 1, MaxInt).Trim;
-      Result := Comprueba(Prop, Valor); // state se entrega crudo a SetPropValue
+      Result := Comprueba(Prop, Valor); // state se entrega crudo al ayudante (AplicaEstado)
       if Result = '' then
         if LeeLiteralDeForm(Valor, Texto) then
           Result := Comprueba(Prop, Texto);

@@ -64,6 +64,16 @@ function ErrorDelParserDeForm(const ABytes: TArray<Byte>; out ALinea: Integer): 
   to-binary (R2 del revisor propio del punto 4 de la 1.18.2). }
 function LineaDeErrorDelParser(const AMensaje: string): Integer;
 
+{ El numero de coma flotante de un VALOR de form (0.5, -2E3, 45123.5d, 1.5s,
+  12.5c) como lo lee el parser de forms de la RTL (TParser, el tokenizador de
+  ObjectTextToBinary: el punto decimal SIEMPRE, el sufijo de su tipo, el signo
+  delante como en ConvertValue), para quien aplica un valor de form sin pasar
+  por el binario. False si no es uno. El state= del preview lo convertia por un
+  Variant con el LOCALE del usuario: en un Windows es-ES, Position.X=10.5 era
+  105 (V121 de la 1.23.1, medido). La inversa de FlotanteDeForm (el escritor,
+  Lsp.DesignerBin); aqui y no alli porque el ayudante de render la usa. }
+function LeeFlotanteDeForm(const AValor: string; out AF: Extended): Boolean;
+
 { Un designer BINARIO, con o sin la cabecera de recurso, como el texto que
   escribe el IDE ("Ver como texto": ASCII con CRLF, lo que no cabe como #N).
   Lanza si esta danado; un texto pasa por DesignerAFlujo y sale como lo
@@ -247,6 +257,46 @@ begin
     Salida.Free;
     Entrada.Free;
   end;
+end;
+
+function LeeFlotanteDeForm(const AValor: string; out AF: Extended): Boolean;
+var
+  V: string;
+  Negativo: Boolean;
+  Flujo: TStringStream;
+  P: TParser;
+begin
+  Result := False;
+  AF := 0;
+  V := AValor.Trim;
+  Negativo := V.StartsWith('-');
+  if Negativo then
+    V := V.Substring(1);
+  if V = '' then
+    Exit;
+  Flujo := TStringStream.Create(V, TEncoding.ASCII);
+  try
+    try
+      P := TParser.Create(Flujo, TFormatSettings.Invariant);
+      try
+        case P.Token of
+          toInteger: AF := P.TokenInt;
+          toFloat: AF := P.TokenFloat;
+        else
+          Exit;
+        end;
+        Result := P.NextToken = toEOF;
+      finally
+        P.Free;
+      end;
+    except
+      Result := False; // un numero que no cabe, o lo que el parser no lee
+    end;
+  finally
+    Flujo.Free;
+  end;
+  if Result and Negativo then
+    AF := -AF;
 end;
 
 function LineaDeErrorDelParser(const AMensaje: string): Integer;

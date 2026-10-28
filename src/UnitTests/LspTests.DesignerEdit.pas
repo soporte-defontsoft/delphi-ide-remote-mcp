@@ -55,6 +55,8 @@ type
     procedure RenombreConservaElOrden;
     [Test]
     procedure ElementosDeUnaListaComoLaEscribeElIde;
+    [Test]
+    procedure ElLectorDelFlotanteEsLaInversaDelEscritor;
   end;
 
 implementation
@@ -1738,6 +1740,27 @@ begin
   Assert.AreEqual('a)', Texto);
   Assert.IsTrue(LeeLiteralDeForm(E[1], Texto));
   Assert.AreEqual('(b', Texto);
+end;
+
+procedure TDesignerEditTests.ElLectorDelFlotanteEsLaInversaDelEscritor;
+var
+  F: Extended;
+begin
+  // LeeFlotanteDeForm (el parser de forms de la RTL, invariante) lee lo que
+  // escribe FlotanteDeForm, y los sufijos s/c/d y el signo que escribe el IDE:
+  // el state= del preview lo leia con el LOCALE del usuario (V121 de la 1.23.1)
+  for var X in TArray<Extended>.Create(0.5, -2E3, 250.5, 1E20, 0.000001339281197943, 94.47236633300781) do
+  begin
+    Assert.IsTrue(LeeFlotanteDeForm(FlotanteDeForm(X, False), F), FloatToStr(X));
+    Assert.IsTrue(Abs(F - X) <= Abs(X) * 1E-14, FlotanteDeForm(X, False));
+  end;
+  Assert.IsTrue(LeeFlotanteDeForm('45123.5d', F) and (F = 45123.5), '45123.5d');
+  Assert.IsTrue(LeeFlotanteDeForm('1.5s', F) and (F = 1.5), '1.5s');
+  Assert.IsTrue(LeeFlotanteDeForm('12.5c', F) and (F = 12.5), '12.5c');
+  Assert.IsTrue(LeeFlotanteDeForm('-10', F) and (F = -10), 'un entero con su signo');
+  // la coma del locale no es la de un form; lo que se lleva algo detras no es uno
+  Assert.IsFalse(LeeFlotanteDeForm('10,5', F) or LeeFlotanteDeForm('1 2', F) or
+    LeeFlotanteDeForm('abc', F) or LeeFlotanteDeForm('', F));
 end;
 
 initialization

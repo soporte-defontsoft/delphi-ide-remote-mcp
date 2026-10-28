@@ -349,6 +349,15 @@ the MCP `initialize` response (`serverInfo.version`).
   routine of a unit outside the roots, and `delphi_completion` with its name
   and parameters. Each entry of those lists is now judged as a name (a
   define, or a scope with dots), and anything else is left out.
+- **A number in the `state=` of a preview is read as a form writes it, on
+  any Windows.** The renderer applied each `Component.Property=Value` through
+  the runtime library's variant conversion, which reads a number with the
+  machine's locale: on a Windows with a decimal comma, `Position.X=10.5` drew
+  the control at 105 and `100.5` drew it outside the capture (`CAPT-007`),
+  while the same text in the form file means 10.5. A floating-point property
+  now takes its value from the form parser of the runtime library (decimal
+  point always, the `s`/`c`/`d` suffixes the IDE writes, the sign in front) -
+  the inverse of the writer that `delphi_designer set` already uses.
 
 ### Changed
 
