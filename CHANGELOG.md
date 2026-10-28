@@ -393,6 +393,13 @@ the MCP `initialize` response (`serverInfo.version`).
   lists it in `formsWithAStyleBook` (`STYLE-057`). Whether the root of a form
   file is a frame is answered by the class chain of its unit, by the reader
   `preview` already used, now shared (`RaizDeDesigner`).
+- **The code of such a form is not judged either.** `delphi_styles lint`
+  reads the `StyleLookup := '...'` of a unit's code too, and judged it
+  against the styles it knows even when the unit's form takes its styles
+  from a StyleBook the lint cannot read, or is a frame: one answer listed
+  the form in `formsWithAStyleBook` - "not judged here" - and its code's
+  lookups as missing. The form of a unit is the one its `{$R}` names; its
+  code now goes apart with it, and a unit with no form is judged as before.
 - **After an edit, `DSGN-175` lists only the `StyleLookup` values that edit
   writes.** The note travelled with every edit of an `.fmx` and listed every
   lookup of the form without a style: changing one `Opacity` brought back 91

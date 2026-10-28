@@ -81,6 +81,7 @@ uses
   Lsp.Listas,       // AgrupaPorFichero: los avisos por carpeta y fichero
   Lsp.Styles,
   Lsp.DesignerBin,  // el literal de cadena: su lector y su compositor
+  Lsp.DesignerForma, // EsDesignerFmx: el designer de una unidad (V153)
   Lsp.Pascal,
   Lsp.Mascara,
   Lsp.Casa,
@@ -587,6 +588,18 @@ var
   Sections, Keys, AllKeys: TStringList;
   Standard, Used: Integer;
   D: string;
+
+  // una form que va aparte (formsWithAStyleBook), una vez: la dicen sus
+  // lineas y el codigo de su unidad (V153)
+  procedure Aparte(const AForm: string);
+  begin
+    var Ruta := MaskDriveText('', AForm);
+    for var V in ConStyleBookF do
+      if SameText(V.Value, Ruta) then
+        Exit;
+    ConStyleBookF.Add(Ruta);
+  end;
+
 begin
   Dir := StylesDirOf(APath);
   Files := TextStylesIn(Dir);
@@ -712,6 +725,7 @@ begin
         // form que lo aloja (LookupsDeDesigner, V151)
         var Lookups: TArray<TLookupDeForm> := [];
         if F.EndsWith('.pas', True) then
+        begin
           for I := 0 to High(Lines) do
           begin
             M := TRegEx.Match(Lines[I], 'StyleLookup\s*:=\s*([^;]+);', [roIgnoreCase]);
@@ -722,7 +736,27 @@ begin
               LP.Linea := I + 1;
               Lookups := Lookups + [LP];
             end;
-          end
+          end;
+          // el codigo de una unidad cuya form toma sus estilos de un StyleBook
+          // que no se lee, o que es un frame: tampoco se juzga, y la form va
+          // aparte. La misma respuesta decia de la form que no se juzgaba y
+          // daba por faltas los de su codigo (V153 de la 1.23.1, medido). Su
+          // designer, el que nombra su {$R} (InspectUnit)
+          var Unidad: TUnitInfo;
+          if (Length(Lookups) > 0) and (InspectUnit(F, Unidad) = '') and Unidad.IsDesigner and
+             EsDesignerFmx(Unidad.Designer) and TFile.Exists(Unidad.Designer) then
+          begin
+            var EncD: string;
+            var ConStyleBookPas: Boolean;
+            LookupsDeDesigner(Unidad.Designer, SplitToLines(PatchLoadText(Unidad.Designer, EncD)),
+              ConStyleBookPas, True);
+            if ConStyleBookPas then
+            begin
+              Aparte(Unidad.Designer);
+              Lookups := [];
+            end;
+          end;
+        end
         else
         begin
           // un componente con el StyleName de uno de estos estilos: la
@@ -744,7 +778,7 @@ begin
           Lookups := LookupsDeDesigner(F, Lines, ConStyleBook);
           if ConStyleBook then
           begin
-            ConStyleBookF.Add(MaskDriveText('', F));
+            Aparte(F);
             Lookups := [];
           end;
         end;

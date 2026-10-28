@@ -41,6 +41,15 @@ la de preview). Rojas contra f6d99ec:
   L18 delphi_styles lint del proyecto: el frame va en formsWithAStyleBook y su lookup no es una
       falta (UMain, sin StyleBook, sigue juzgado: L16 lo mide en otro proyecto)
 
+V153: la rama .pas de delphi_styles lint (StyleLookup := 'x' en codigo) juzgaba contra los estilos
+que conoce aunque la form de esa unidad tome los suyos de un StyleBook que no lee, o sea un frame:
+la misma respuesta decia de la form "its StyleLookup values are not judged here" y daba por faltas
+los de su codigo (medido en vivo el 28-oct). El designer de una unidad: su {$R} (InspectUnit). Rojas
+contra c7868bd:
+  L19 el .pas de un frame con StyleLookup := 'pasdelmarco': no es una falta
+  L20 el .pas de una form con su StyleBook (el Sample): no es una falta
+  L21 (control) una unidad sin designer con un StyleLookup := que nada define: sigue siendo falta
+
 Uso:  python tests/test_lookup_sin_estilo_1231.py [ruta-a-DelphiLspMcp.exe]
 """
 import json
@@ -236,7 +245,31 @@ try:
     check('L18 ...y el frame va en formsWithAStyleBook, con STYLE-057',
           any(x.endswith('UMarco.fmx') for x in (j.get('formsWithAStyleBook') or [])) and
           mc.es(r, 'SN_STYLES_FORMS_CON_STYLEBOOK'), r[:800])
+
+    # V153: el codigo de una unidad cuya form toma un StyleBook que no se lee
+    def con_codigo(pas, lookup):
+        with open(pas, encoding='utf-8-sig', newline='') as f:
+            t = f.read()
+        i = t.rindex('end.')
+        t = t[:i] + ('procedure PonEstilo(C: TStyledControl);\r\nbegin\r\n  C.StyleLookup := \'%s\';\r\n'
+                     'end;\r\n\r\n' % lookup) + t[i:]
+        with open(pas, 'w', encoding='utf-8-sig', newline='') as f:
+            f.write(t)
+
+    con_codigo(os.path.join(carpeta, 'UMarco.pas'), 'pasdelmarco')
+    plano = os.path.join(carpeta, 'UPlano.pas')
+    with open(plano, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write('unit UPlano;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n')
+    con_codigo(plano, 'pasplano')
+    r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos_app, 'project': carpeta}, 300)
+    faltas = json.dumps(mc.como_json(r).get('lookupsWithoutStyle'))
+    check('L19 el .pas de un frame: su StyleLookup := no es una falta', 'pasdelmarco' not in faltas, faltas)
+    check('L21 (control) una unidad sin designer: su StyleLookup := sigue siendo falta', 'pasplano' in faltas, faltas)
+    con_codigo(os.path.join(bt, 'Unit1.pas'), 'pasdelsample')
+    r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos, 'project': bt}, 300)
+    faltas = json.dumps(mc.como_json(r).get('lookupsWithoutStyle'))
+    check('L20 el .pas de una form con su StyleBook: no es una falta', 'pasdelsample' not in faltas, faltas)
 finally:
     srv.cierra()
     mc.borra(BASE)
-mc.fin('lookup sin estilo 1.23.1 (V75, V123, V143, V151)')
+mc.fin('lookup sin estilo 1.23.1 (V75, V123, V143, V151, V153)')

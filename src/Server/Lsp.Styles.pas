@@ -318,10 +318,11 @@ function LookupsDeForm(const ALineas: TArray<string>; out AStyleBookQueNoSeLee: 
   alojarlo), que su .fmx no dice; la nota decia de el "the form takes no
   StyleBook" (V151 de la 1.23.1, medido). Que la raiz es un frame lo dice su
   cadena de clases (Lsp.ProjectUnits.RaizDeDesigner, el de preview), y solo
-  se le pregunta si hay algo que juzgar. Lo usan la nota del disenador y
-  delphi_styles lint. }
+  se le pregunta si hay algo que juzgar: lo del form, o con ASiempre lo del
+  codigo de su unidad (StyleLookup := en el .pas, V153). Lo usan la nota del
+  disenador y delphi_styles lint. }
 function LookupsDeDesigner(const ADesigner: string; const ALineas: TArray<string>;
-  out AStyleBookQueNoSeLee: Boolean): TArray<TLookupDeForm>;
+  out AStyleBookQueNoSeLee: Boolean; ASiempre: Boolean = False): TArray<TLookupDeForm>;
 
 { El juicio de un form FMX (sus lineas, como las numera delphi_read) contra los
   estilos que ve: los StyleLookup (LookupsDeDesigner) que ninguno define, ni el
@@ -1335,10 +1336,10 @@ begin
 end;
 
 function LookupsDeDesigner(const ADesigner: string; const ALineas: TArray<string>;
-  out AStyleBookQueNoSeLee: Boolean): TArray<TLookupDeForm>;
+  out AStyleBookQueNoSeLee: Boolean; ASiempre: Boolean): TArray<TLookupDeForm>;
 begin
   Result := LookupsDeForm(ALineas, AStyleBookQueNoSeLee);
-  if not AStyleBookQueNoSeLee and (Length(Result) > 0) then
+  if not AStyleBookQueNoSeLee and ((Length(Result) > 0) or ASiempre) then
     AStyleBookQueNoSeLee := RaizDeDesigner(ADesigner) = rdFrame;
 end;
 
