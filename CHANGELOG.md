@@ -382,6 +382,17 @@ the MCP `initialize` response (`serverInfo.version`).
   form's, or its ancestor's (an inherited form, an FMX view) - is not judged:
   the lint lists it in `formsWithAStyleBook` (`STYLE-057`), which does not
   change `clean`.
+- **A frame is not judged against the styles of a form it is not in.** An
+  FMX frame takes its styles from the StyleBook of the form that hosts it -
+  FMX looks a `StyleLookup` up in the scene's StyleBook, and a frame placed
+  on a form gets that form's scene - and the frame's `.fmx` cannot say which
+  form that will be. `DSGN-175` said of a frame's lookup that "the form takes
+  no StyleBook" and that FMX would draw the control with its class's own
+  style, and `delphi_styles lint` reported it as missing. A frame is now
+  treated like a form whose StyleBook cannot be read: no note, and the lint
+  lists it in `formsWithAStyleBook` (`STYLE-057`). Whether the root of a form
+  file is a frame is answered by the class chain of its unit, by the reader
+  `preview` already used, now shared (`RaizDeDesigner`).
 - **After an edit, `DSGN-175` lists only the `StyleLookup` values that edit
   writes.** The note travelled with every edit of an `.fmx` and listed every
   lookup of the form without a style: changing one `Opacity` brought back 91

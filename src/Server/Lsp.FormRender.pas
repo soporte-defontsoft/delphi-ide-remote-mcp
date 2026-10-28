@@ -134,7 +134,7 @@ function ComponeOrdenDeRender(const AExe: string; const APeticion: TPeticionRend
   out AOrden: string): string;
 
 { El --root de un render (form | frame): lo que es la raiz de la unidad para
-  el IDE, por sus jueces (Lsp.ProjectUnits.JuzgaRaizDeDiseno: su cadena
+  el IDE, por sus jueces (Lsp.ProjectUnits.RaizDeDesigner, EL lector: su cadena
   contra la tabla del marco, sin esperarla, y si no llega, el registro del
   IDE en un .dproj que la lista), y solo si su designer es el form pedido (un X.fmx al lado
   de un X.dfm: la unidad es del .dfm). Un modulo se lee en la form. Si no se
@@ -289,7 +289,7 @@ uses
   System.RegularExpressions,
   Lsp.Guard,
   Lsp.BuildRunner,  // RunCapturedIn: el lanzador de los programas externos
-  Lsp.ProjectUnits, // InspectUnit: la clase de la unidad y a que raiz llega
+  Lsp.ProjectUnits, // RaizDeDesigner: a que raiz llega la unidad de un designer
   Lsp.DesignerForma, // UnidadDeDesigner
   Lsp.Texts,
   Lsp.DesignerBin,
@@ -329,31 +329,14 @@ begin
 end;
 
 function RaizParaElRender(const ARuta: string): string;
-var
-  Unidad: TUnitInfo;
 begin
-  Result := '';
-  try
-    if (InspectUnit(UnidadDeDesigner(ARuta), Unidad) <> '') or (Unidad.ClassName = '') or
-       not SameFileName(Unidad.Designer, TPath.GetFullPath(ARuta)) then
-      Exit;
-    // la cadena primero (el lint pregunta lo mismo para la raiz: el motor, si
-    // hace falta, ya esta): aqui solo cuenta la categoria, y el registro del
-    // IDE sube por las carpetas leyendo cada .dpr - en cada preview y en el
-    // lint de cada edicion. Solo si la cadena no llega
-    JuzgaRaizDeDiseno(Unidad, '', 0);
-    if Unidad.Raiz = rdDesconocida then
-    begin
-      var Registro := RegistroDelIde(Unidad.PasPath, '');
-      if Registro <> '' then
-        JuzgaRaizDeDiseno(Unidad, Registro, 0);
-    end;
-    case Unidad.Raiz of
-      rdFrame: Result := 'frame';
-      rdForm, rdModulo: Result := 'form';
-    end;
-  except
-    Result := ''; // una unidad que no se deja leer: que mire el ayudante
+  // EL lector de la raiz de un designer (Lsp.ProjectUnits); lo que no sabe,
+  // que lo mire el ayudante
+  case RaizDeDesigner(ARuta) of
+    rdFrame: Result := 'frame';
+    rdForm, rdModulo: Result := 'form';
+  else
+    Result := '';
   end;
 end;
 

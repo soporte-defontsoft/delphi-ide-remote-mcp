@@ -82,6 +82,15 @@ function InspectUnit(const APasPath: string; out AInfo: TUnitInfo): string;
   ediciones del servidor mientras se generaba. Nunca lanza. }
 procedure JuzgaRaizDeDiseno(var AInfo: TUnitInfo; const ARegistro: string;
   AEsperaMs: Cardinal; ARaizDelCreador: TRaizDeDiseno = rdDesconocida);
+{ EL lector de lo que es la raiz de un designer (ARuta, un .dfm/.fmx): su
+  unidad (UnidadDeDesigner) inspeccionada y, si su designer es ese fichero (un
+  X.fmx al lado de un X.dfm: la unidad es del .dfm), JuzgaRaizDeDiseno - su
+  cadena primero, sin esperar a la tabla, y si no llega, el registro del IDE
+  en un .dproj que la lista. rdDesconocida si no se sabe (sin .pas, una unidad
+  que no se deja leer). Lo preguntan preview (Lsp.FormRender.RaizParaElRender)
+  y los StyleLookup de un frame, que toma el StyleBook de la form que lo aloja
+  (Lsp.Styles.LookupsDeDesigner, V151 de la 1.23.1). Nunca lanza. }
+function RaizDeDesigner(const ARuta: string): TRaizDeDiseno;
 { El <DCCReference> con el que el IDE registro APasPath como designer (con
   su <Form>), por la RUTA que resuelve su Include desde la carpeta de cada
   .dproj: primero en ADproj (el proyecto que se toca; '' ninguno), luego en
@@ -559,6 +568,31 @@ begin
       AInfo.DesignClass := '';
       AInfo.RaizSinJuez := E.Message;
     end;
+  end;
+end;
+
+function RaizDeDesigner(const ARuta: string): TRaizDeDiseno;
+var
+  Unidad: TUnitInfo;
+begin
+  Result := rdDesconocida;
+  try
+    if (InspectUnit(UnidadDeDesigner(ARuta), Unidad) <> '') or (Unidad.ClassName = '') or
+       not SameFileName(Unidad.Designer, TPath.GetFullPath(ARuta)) then
+      Exit;
+    // la cadena primero (el lint pregunta lo mismo para la raiz: el motor, si
+    // hace falta, ya esta): aqui solo cuenta la categoria, y el registro del
+    // IDE sube por las carpetas leyendo cada .dpr. Solo si la cadena no llega
+    JuzgaRaizDeDiseno(Unidad, '', 0);
+    if Unidad.Raiz = rdDesconocida then
+    begin
+      var Registro := RegistroDelIde(Unidad.PasPath, '');
+      if Registro <> '' then
+        JuzgaRaizDeDiseno(Unidad, Registro, 0);
+    end;
+    Result := Unidad.Raiz;
+  except
+    Result := rdDesconocida; // una unidad que no se deja leer
   end;
 end;
 

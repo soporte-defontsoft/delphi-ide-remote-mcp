@@ -287,9 +287,19 @@ type
   has no StyleBook" de uno con StyleBook = DM.StyleBook1 (V123 de la 1.23.1,
   medido). Gramatica propia: ningun juez dice que StyleBook carga la app. }
 function LookupsDeForm(const ALineas: TArray<string>; out AStyleBookQueNoSeLee: Boolean): TArray<TLookupDeForm>;
+{ LookupsDeForm del designer ADesigner (sus lineas, ALineas), y ademas un
+  FRAME: toma los estilos del StyleBook de la form que lo aloja (FMX.Controls:
+  un control los busca en Scene.StyleBook, y el padre le pasa su Scene al
+  alojarlo), que su .fmx no dice; la nota decia de el "the form takes no
+  StyleBook" (V151 de la 1.23.1, medido). Que la raiz es un frame lo dice su
+  cadena de clases (Lsp.ProjectUnits.RaizDeDesigner, el de preview), y solo
+  se le pregunta si hay algo que juzgar. Lo usan la nota del disenador y
+  delphi_styles lint. }
+function LookupsDeDesigner(const ADesigner: string; const ALineas: TArray<string>;
+  out AStyleBookQueNoSeLee: Boolean): TArray<TLookupDeForm>;
 
 { El juicio de un form FMX (sus lineas, como las numera delphi_read) contra los
-  estilos que ve: los StyleLookup (LookupsDeForm) que ninguno define, ni el
+  estilos que ve: los StyleLookup (LookupsDeDesigner) que ninguno define, ni el
   estilo por defecto de la plataforma (PlatformDefaultStyleNames, el juez de
   delphi_styles lint) ni un StyleBook (con uno no se juzga). AAntes: las
   lineas del form ANTES de la edicion que lo juzga; solo se dicen los que
@@ -297,8 +307,9 @@ function LookupsDeForm(const ALineas: TArray<string>; out AStyleBookQueNoSeLee: 
   entera, 91 lineas por cambiar una Opacity (V143 de la 1.23.1, medido). Su
   nota entera (DSGN-175 y una linea por lookup), o [] si no hay ninguno, si
   no hay juez (sin el conversor) o si ningun StyleLookup lleva valor (entonces
-  ni se le pregunta). AFichero: el nombre que da la nota. V75 de la 1.23.1. }
-function NotaDeLookupsSinEstilo(const AFichero: string; const ALineas, AAntes: TArray<string>): TArray<string>;
+  ni se le pregunta). ADesigner: el fichero, cuyo nombre da la nota. V75 de
+  la 1.23.1. }
+function NotaDeLookupsSinEstilo(const ADesigner: string; const ALineas, AAntes: TArray<string>): TArray<string>;
 
 type
   TClaseRc = (crRecurso, crInclude);
@@ -383,7 +394,9 @@ uses
   Lsp.Mascara,
   Lsp.Codificacion,
   Lsp.Args, // PrimerTrozo: el nombre de una macro del .rc
-  Lsp.Rutas; // RutaDesde: EL resolutor de una ruta leida de un fichero
+  Lsp.Rutas, // RutaDesde: EL resolutor de una ruta leida de un fichero
+  Lsp.DesignerMeta, // TRaizDeDiseno: un frame (LookupsDeDesigner)
+  Lsp.ProjectUnits; // RaizDeDesigner: EL lector de la raiz de un designer
 
 { TStyleObj }
 
@@ -1216,14 +1229,22 @@ begin
     end;
 end;
 
-function NotaDeLookupsSinEstilo(const AFichero: string; const ALineas, AAntes: TArray<string>): TArray<string>;
+function LookupsDeDesigner(const ADesigner: string; const ALineas: TArray<string>;
+  out AStyleBookQueNoSeLee: Boolean): TArray<TLookupDeForm>;
+begin
+  Result := LookupsDeForm(ALineas, AStyleBookQueNoSeLee);
+  if not AStyleBookQueNoSeLee and (Length(Result) > 0) then
+    AStyleBookQueNoSeLee := RaizDeDesigner(ADesigner) = rdFrame;
+end;
+
+function NotaDeLookupsSinEstilo(const ADesigner: string; const ALineas, AAntes: TArray<string>): TArray<string>;
 var
   Lookups: TArray<TLookupDeForm>;
   Defecto, Estaban: TArray<string>;
   ConStyleBook: Boolean;
 begin
   Result := [];
-  Lookups := LookupsDeForm(ALineas, ConStyleBook);
+  Lookups := LookupsDeDesigner(ADesigner, ALineas, ConStyleBook);
   if ConStyleBook or (Length(Lookups) = 0) then
     Exit;
   Defecto := PlatformDefaultStyleNames;
@@ -1238,7 +1259,7 @@ begin
        (IndexStr(L.Componente + #0 + ClaveDeEstilo(L.Lookup), Estaban) < 0) then
       Result := Result + [MsgFmt(SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [L.Componente, L.Lookup, L.Linea])];
   if Length(Result) > 0 then
-    Result := [MsgFmt(SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT, [AFichero, Length(Result),
+    Result := [MsgFmt(SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT, [ExtractFileName(ADesigner), Length(Result),
       IfThen(Length(AAntes) > 0, MsgText(SF_DESIGNER_LOOKUPS_DE_LA_EDICION), '')])] + Result;
 end;
 

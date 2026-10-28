@@ -706,7 +706,8 @@ begin
         // un .pas, la asignacion; en un form, EL lector de sus StyleLookup
         // (Lsp.Styles.LookupsDeForm, el de la nota del disenador): uno con un
         // StyleBook que no se lee no se juzga, y sus lookups del StyleBook
-        // salian como faltas (V123 de la 1.23.1, medido)
+        // salian como faltas (V123 de la 1.23.1, medido); un frame, el de la
+        // form que lo aloja (LookupsDeDesigner, V151)
         var Lookups: TArray<TLookupDeForm> := [];
         if F.EndsWith('.pas', True) then
           for I := 0 to High(Lines) do
@@ -738,7 +739,7 @@ begin
             end;
           end;
           var ConStyleBook: Boolean;
-          Lookups := LookupsDeForm(Lines, ConStyleBook);
+          Lookups := LookupsDeDesigner(F, Lines, ConStyleBook);
           if ConStyleBook then
           begin
             ConStyleBookF.Add(MaskDriveText('', F));

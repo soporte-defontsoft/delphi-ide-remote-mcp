@@ -4013,7 +4013,7 @@ const
     'duplicated StyleNames, ' +
     'StyleLookup values in the project''s .fmx/.pas that NO style defines ' +
     '(the platform default style counts; a form that may take its styles from ' +
-    'a StyleBook it does not read goes apart, in formsWithAStyleBook), design ' +
+    'a StyleBook it does not read, or a frame, goes apart, in formsWithAStyleBook), design ' +
     'tokens missing in a theme ' +
     'of a *Tokens.ini, .rc entries whose file is missing, what FMX ignores ' +
     'when it loads them (a property the class does not publish, a value it ' +
@@ -4210,12 +4210,14 @@ const
   { Los forms cuyos StyleLookup no se juzgan: toman sus estilos de un
     StyleBook que el lint no lee (Lsp.Styles.LookupsDeForm). Daba por falta
     un lookup del StyleBook del propio form (V123 de la 1.23.1, medido con un
-    Sample: TabItem1Style1). Sale solo si los hay y no cambia clean. }
+    Sample: TabItem1Style1). Un frame, el de la form que lo aloja (V151 de la
+    1.23.1). Sale solo si los hay y no cambia clean. }
   SN_STYLES_FORMS_CON_STYLEBOOK =
     '[STYLE-057] formsWithAStyleBook: forms that may take their styles from ' +
     'a StyleBook this lint does not read - one of their own (it keeps its ' +
     'styles in binary), another form''s (StyleBook = DM.StyleBook1) or their ' +
-    'ancestor''s (an inherited form, an FMX view). Their StyleLookup values ' +
+    'ancestor''s (an inherited form, an FMX view) - and frames, which take ' +
+    'the StyleBook of the form that hosts them. Their StyleLookup values ' +
     'are not judged here, nor counted in lookupsUsed.';
 
   SN_STYLES_NO_DEFAULTS =
@@ -6693,7 +6695,8 @@ const
     suyo, de otro form o de su ancestro, no se juzga: V123). No es un error:
     FMX dibuja el control con el estilo de su clase (asi lo pinta preview). Va
     como nota, en el lint, en designer set y tras una edicion, con lo que lo
-    juzgaria entero }
+    juzgaria entero. Un frame no: toma el StyleBook de la form que lo aloja
+    (V151 de la 1.23.1) }
   SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT =
     '[DSGN-175] %0:s: %1:d StyleLookup value(s) that no style this form ' +
     'sees defines - not the platform''s default style, and the form takes no ' +

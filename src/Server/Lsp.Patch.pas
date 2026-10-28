@@ -5878,7 +5878,7 @@ begin
   // delphi_styles lint (V75 de la 1.23.1: set los escribia y el lint daba
   // CLEAN); tras una edicion, los que ella trae (V143)
   if EsDesignerFmx(ADfm) then
-    Result.Lookups := NotaDeLookupsSinEstilo(ExtractFileName(ADfm), Lineas, LineasDelTexto(AAntes));
+    Result.Lookups := NotaDeLookupsSinEstilo(ADfm, Lineas, LineasDelTexto(AAntes));
   // ...y EL parser del IDE con los bytes del disco (8.10 de la 1.18.0): un //
   // en un .fmx daba CLEAN y solo el IDE lo rechazaba al cargarlo
   if AJuzga then

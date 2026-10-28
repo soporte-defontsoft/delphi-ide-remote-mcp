@@ -31,6 +31,16 @@ UN lector (Lsp.Styles.LookupsDeForm). Rojas contra b2b7024:
       TabItem1Style1/TabItem2Style1 no salen como faltas; el form va en formsWithAStyleBook (STYLE-057)
   L16 control: un form del mismo proyecto SIN StyleBook sigue juzgado (su lookup, en la lista)
 
+V151: un FRAME FMX toma sus estilos del StyleBook de la form que lo aloja (FMX.Controls: el control
+los busca en Scene.StyleBook, y el padre le pasa su Scene al alojarlo); su .fmx no lo dice. La nota
+decia de un frame "the form takes no StyleBook... FMX then draws the control with its class's own
+style". Quien sabe que la raiz es un frame: su cadena de clases (Lsp.ProjectUnits.RaizDeDesigner,
+la de preview). Rojas contra f6d99ec:
+  L17 insert en un frame de un boton con un lookup que no define el estilo por defecto: sin
+      DSGN-175; y su lint, tampoco
+  L18 delphi_styles lint del proyecto: el frame va en formsWithAStyleBook y su lookup no es una
+      falta (UMain, sin StyleBook, sigue juzgado: L16 lo mide en otro proyecto)
+
 Uso:  python tests/test_lookup_sin_estilo_1231.py [ruta-a-DelphiLspMcp.exe]
 """
 import json
@@ -200,7 +210,33 @@ try:
           any(x.endswith('Unit1.fmx') for x in (j.get('formsWithAStyleBook') or [])) and
           mc.es(r, 'SN_STYLES_FORMS_CON_STYLEBOOK'), r[:800])
     check('L16 control: un form SIN StyleBook del mismo proyecto sigue juzgado', 'faltaenotro' in faltas, faltas)
+
+    # V151: un frame toma el StyleBook de la form que lo aloja
+    con('buttonstyle')
+    r = srv.call('delphi_create', {'kind': 'frame-fmx', 'name': 'UMarco',
+                                   'project': os.path.join(carpeta, 'App.dproj')})
+    check('fixture: el frame UMarco creado', 'UMarco' in r and 'error' not in mc.como_json(r), r[:300])
+    marco = os.path.join(carpeta, 'UMarco.fmx')
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': marco, 'classname': 'TButton',
+                                     'component': 'BotonMarco', 'props': 'StyleLookup=delanfitrion'})
+    check('L17 insert en un frame con un lookup del StyleBook de su anfitrion: escrito y sin DSGN-175',
+          '"inserted":"BotonMarco"' in r.replace(' ', '') and
+          not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT'), r[:700])
+    r = lint(marco)
+    check('L17 ...y el lint del frame, tampoco', not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT') and
+          'delanfitrion' not in r, r[:500])
+    estilos_app = os.path.join(carpeta, 'Styles')
+    os.makedirs(estilos_app)
+    with open(os.path.join(estilos_app, 'Uno.style'), 'w', newline='') as f:
+        f.write("object TStyleContainer\r\n  object TLayout\r\n    StyleName = 'mibotonstyle'\r\n  end\r\nend\r\n")
+    r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos_app, 'project': carpeta}, 300)
+    j = mc.como_json(r)
+    faltas = json.dumps(j.get('lookupsWithoutStyle'))
+    check('L18 delphi_styles lint: el lookup del frame no es una falta', 'delanfitrion' not in faltas, faltas)
+    check('L18 ...y el frame va en formsWithAStyleBook, con STYLE-057',
+          any(x.endswith('UMarco.fmx') for x in (j.get('formsWithAStyleBook') or [])) and
+          mc.es(r, 'SN_STYLES_FORMS_CON_STYLEBOOK'), r[:800])
 finally:
     srv.cierra()
     mc.borra(BASE)
-mc.fin('lookup sin estilo 1.23.1 (V75, V123, V143)')
+mc.fin('lookup sin estilo 1.23.1 (V75, V123, V143, V151)')
