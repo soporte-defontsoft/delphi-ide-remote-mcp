@@ -193,6 +193,20 @@ try:
     r = srv.call('delphi_move', {'path': os.path.join(app, 'inc'), 'dest': os.path.join(app, 'inc2')})
     check('M3 una ruta ABSOLUTA del DCC_IncludePath a lo movido: nombrada en MOVE-021',
           nombrado(r, 'App.dproj', 'DCC_IncludePath', 'inc2'), r[:900])
+    # M3b (V106 de la 1.23.1): una absoluta a una SUBCARPETA de lo movido, escrita con sus alias 8.3, y el move
+    # por la forma larga: se juzgaba en la larga y se cortaba el texto crudo por el largo de la otra, y MOVE-021
+    # nombraba la carpeta movida sin su trozo (medido en vivo: "which is now ...\Proj2" sin el \lib) o se
+    # perdia. M3 no lo veia: su absoluta ES lo movido, y un trozo vacio sale vacio cortado como sea
+    os.makedirs(os.path.join(app, 'incb', 'sub'))
+    sub_corta = mc.corta(os.path.join(app, 'incb', 'sub'))
+    check('M3b ...la fixture: la subcarpeta tiene una forma 8.3 distinta de la larga',
+          '~' in sub_corta and sub_corta != mc.larga(sub_corta), sub_corta)
+    planta(dproj, '<DCC_DcuOutput>', '        <DCC_IncludePath>%s;$(DCC_IncludePath)</DCC_IncludePath>\r\n' % sub_corta)
+    r = srv.call('delphi_move', {'path': mc.larga(os.path.join(app, 'incb')),
+                                 'dest': os.path.join(mc.larga(app), 'incb2')})
+    check('M3b una absoluta 8.3 a una SUBCARPETA de lo movido: MOVE-021 la nombra donde esta ahora (incb2\\sub)',
+          nombrado(r, 'App.dproj', 'DCC_IncludePath') and re.search(r'incb2\\{1,2}sub', r or '') is not None,
+          r[:900])
 
     r = srv.call('delphi_move', {'path': os.path.join(app, 'Data'), 'dest': os.path.join(app, 'Data2')})
     check('M4 control: mover Data no nombra el DCC_Namespace (no es una ruta que lea el build)',

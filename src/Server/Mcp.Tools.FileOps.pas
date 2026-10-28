@@ -253,7 +253,7 @@ begin
       RecorreSinEnlaces(Origen,
         procedure(const E: string)
         begin
-          var D := Destino + E.Substring(Length(Origen));
+          var D := RutaTrasladada(E, Origen, Destino);
           if TDirectory.Exists(E) then
           begin
             if Mezcla and TFile.Exists(D) then
@@ -269,7 +269,7 @@ begin
         end,
         procedure(const E: string)
         begin
-          var D := Destino + E.Substring(Length(Origen));
+          var D := RutaTrasladada(E, Origen, Destino);
           if Mezcla and (TFile.Exists(D) or TDirectory.Exists(D)) then
             Choca(D);
           Mide(D, 0);
@@ -958,8 +958,7 @@ var
           if M.A <> '' then // '' es una carpeta que la mezcla vacio y quito
           begin
             if Formas[I] = FM_COPIA_MEZCLA then
-              AViejos := AViejos + [SinBarraFinal(Hechos[I].Origen) +
-                M.De.Substring(Length(SinBarraFinal(Bajadas[I])))]
+              AViejos := AViejos + [RutaTrasladada(M.De, Bajadas[I], SinBarraFinal(Hechos[I].Origen))]
             else
               AViejos := AViejos + [M.De];
             ANuevos := ANuevos + [M.A];

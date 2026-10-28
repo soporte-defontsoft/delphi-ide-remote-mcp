@@ -375,10 +375,13 @@ begin
     var
       Tam: Int64;
       Fecha: TDateTime;
+      Rel: string;
     begin
-      // uno que no se deja mirar no esta en la foto
-      if not TDirectory.Exists(APath) and HuellaDeFichero(APath, Tam, Fecha) then
-        Foto.AddOrSetValue(APath.Substring(Length(Base)),
+      // uno que no se deja mirar no esta en la foto; la clave, su trozo bajo
+      // la carpeta (TrozoBajo)
+      if not TDirectory.Exists(APath) and HuellaDeFichero(APath, Tam, Fecha) and
+         TrozoBajo(Base, APath, Rel) then
+        Foto.AddOrSetValue(Rel,
           IntToStr(Tam) + '|' + FormatDateTime('yyyymmddhhnnsszzz', Fecha));
     end);
   Result := Foto;

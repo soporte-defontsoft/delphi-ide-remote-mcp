@@ -132,7 +132,8 @@ uses
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases: de quien es cada declaracion
   Lsp.ConfigFabricator, // NotaDeRecorte, UnitsDeFueraDelProyecto
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.Rutas;
 
 const
   MAX_COMPLETION_ITEMS = 50;
@@ -1254,7 +1255,11 @@ begin
           D.Free;
         end;
         if Fuera.Count < MAX_NOMBRES_FUERA then
-          Fuera.Add(Copy(F, Length(IncludeTrailingPathDelimiter(Folder)) + 1, MaxInt));
+        begin
+          var Rel: string;
+          TrozoBajo(Folder, F, Rel); // relativo a la carpeta, por EL corte
+          Fuera.Add(Rel);
+        end;
       end;
       Ret.AddPair('total', TJSONNumber.Create(N));
       if N > Units.Count then

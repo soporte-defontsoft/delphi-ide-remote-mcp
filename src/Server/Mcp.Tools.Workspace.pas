@@ -2033,7 +2033,8 @@ begin
         Inc(FueraDelPaquete);
         Continue;
       end;
-      Rel := ConBarrasNormales(F.Substring(Length(IncludeTrailingPathDelimiter(Dir))));
+      TrozoBajo(Dir, F, Rel); // su nombre en el zip, por EL corte
+      Rel := ConBarrasNormales(Rel);
       Zip.Add(F, Rel);
       // Un zip hecho en Windows NO guarda permisos Unix: el binario de
       // Linux64 (un ELF, sin extension) sale del unzip sin el bit de

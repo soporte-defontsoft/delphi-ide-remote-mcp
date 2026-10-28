@@ -257,9 +257,8 @@ begin
     // en la propia raiz: decia la raiz recortada a dos segmentos y parecia
     // OTRA carpeta
     Rel := '.'
-  else if RutaDentroDe(Raiz, Carpeta) then
+  else if TrozoBajo(Raiz, Carpeta, Rel) then
   begin
-    Rel := Carpeta.Substring(Length(IncludeTrailingPathDelimiter(Raiz)));
     var Trozos := Rel.Split([TPath.DirectorySeparatorChar]);
     if Length(Trozos) > 2 then
       Rel := Trozos[0] + TPath.DirectorySeparatorChar + Trozos[1];

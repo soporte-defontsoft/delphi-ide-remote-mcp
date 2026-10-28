@@ -7079,12 +7079,14 @@ const
     '(not MyApp.%s, but MyCompany.MyApp.Whatever).';
 
   { V33 de la 1.23 (David, 25-oct-2026: nota, no negativa): un nombre corto
-    que dcc tambien encuentra por un ambito de unidad }
+    que dcc tambien encuentra por un ambito de unidad: los de SU proyecto, o
+    sin proyecto los de un VCL nuevo (V106 de la 1.23.1) }
   SN_CREATE_NOMBRE_TAPADO_FMT =
-    '[CREATE-037] "%s" is also %s through the unit scope names of a ' +
-    'project the IDE creates: code that writes "uses %s" meaning the ' +
-    'library''s unit gets this one instead. Code that names it in full ' +
-    '(%s), as the IDE writes it, is not affected.';
+    '[CREATE-037] "%s" is also %s through %s: code that writes "uses %s" ' +
+    'meaning the library''s unit gets this one instead. Code that names it ' +
+    'in full (%s), as the IDE writes it, is not affected.';
+  SF_CREATE_AMBITOS_DEL_PROYECTO_FMT = 'the unit scope names of %s';
+  SF_CREATE_AMBITOS_DE_UN_VCL_NUEVO = 'the unit scope names of a VCL project the IDE creates';
 
   SR_CREATE_PROJECT_KIND =
     '[CREATE-011 INVALID_PARAM] I can only make five kinds of project: ' +

@@ -550,7 +550,12 @@ begin
   end;
   if Mejor <> '' then
   begin
-    Result := Mejor + P.Substring(Length(MejorReal));
+    // el resto bajo ese sitio, por EL corte del texto que EnLugar juzgo
+    var Trozo: string;
+    TrozoBajo(MejorReal, P, Trozo);
+    Result := Mejor;
+    if Trozo <> '' then
+      Result := IncludeTrailingPathDelimiter(Mejor) + Trozo;
     // la raiz de la unidad misma: "L:" a secas es la carpeta ACTUAL de L:
     if (Length(Result) = 2) and (Result[2] = ':') then
       Result := Result + '\';

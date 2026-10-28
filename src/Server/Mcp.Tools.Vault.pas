@@ -326,9 +326,8 @@ begin
       var RaizLarga := IncludeTrailingPathDelimiter(
         LongCanonical(SinBarraFinal(Root)));
       var Largo := LongCanonical(Full);
-      if not RutaDentroDe(RaizLarga, Largo) or SameFileName(SinBarraFinal(Largo), SinBarraFinal(RaizLarga)) then
+      if not TrozoBajo(RaizLarga, Largo, Rel) or SameFileName(SinBarraFinal(Largo), SinBarraFinal(RaizLarga)) then
         Exit(MsgText(SR_VAULT_JAIL));
-      Rel := Largo.Substring(Length(RaizLarga));
       Full := IncludeTrailingPathDelimiter(Root) + Rel;
     except
       Exit(MsgText(SR_VAULT_JAIL));
@@ -344,7 +343,10 @@ end;
 
 function VaultRelative(const AFull: string): string;
 begin
-  Result := AFull.Substring(Length(IncludeTrailingPathDelimiter(VaultPath)));
+  // por EL corte (TrozoBajo); lo de fuera, entero: una regla de nombre lo
+  // juzga entero, nunca por un trozo vacio
+  if not TrozoBajo(VaultPath, AFull, Result) then
+    Result := AFull;
 end;
 
 { Vault rule 11 made mechanical: the ORIGINAL of any note we are about to

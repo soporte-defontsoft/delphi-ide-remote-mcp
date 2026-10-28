@@ -4648,7 +4648,9 @@ begin
   Me := CurrentAgent;
   if Me = '' then
     Exit; // stdio / operator: not confined
-  Rel := ConBarrasDeWindows(AFull.Substring(Length(IncludeTrailingPathDelimiter(ARoot))));
+  // el tramo bajo la raiz, por EL corte (TrozoBajo): fuera de ella, '' y se niega
+  TrozoBajo(ARoot, AFull, Rel);
+  Rel := ConBarrasDeWindows(Rel);
   P := Rel.IndexOf('\');
   if P < 0 then
     Seg := Rel

@@ -520,6 +520,18 @@ REGLAS = [
      [],
      'RutaDentroDe (Lsp.Rutas): el "dentro de" de dos rutas es el del sistema de ficheros; '
      'IncludeFor y RelToRoot lo hacian con .ToLower.StartsWith (V81 de la 1.23.1)'),
+    # ...y el TROZO de una ruta bajo una carpeta, cortado a mano por el largo de la carpeta (V106
+    # de la 1.23.1): diecinueve cortes en trece unidades, y dos juzgaban en la forma larga y
+    # cortaban la cruda. Por la forma (el envoltorio de la barra) y por los nombres de carpeta de
+    # la casa; el nombre de un COMPONENTE bajo su raiz (ARaiz.Name) no es una ruta
+    ('el trozo de una ruta bajo una carpeta a mano',
+     r'(?:\.Substring\(|\bCopy\(\s*[\w.\[\]]+\s*,)\s*Length\(\s*(?:'
+     r'(?:IncludeTrailingPathDelimiter|SinBarraFinal|PrefijoSinBarra)\s*\(|'
+     r'(?:A?Base|A?Root|A?Raiz\w*|A?Dir|Folder|Origen|A?Viejos?(?:\[\w+\])?|A?Nuevos?(?:\[\w+\])?|'
+     r'MejorReal|Shared|Carpeta)\s*\))',
+     [],
+     'TrozoBajo y RutaTrasladada (Lsp.Rutas): el juez y el corte del MISMO texto. Con un valor en 8.3, '
+     'MOVE-021 decia que la lib movida estaba en su carpeta, sin el \\lib (medido)'),
     # ...y la CLAVE de una ruta real escrita a mano (V82 de la 1.23.1): los tres recorredores de
     # Lsp.Guard guardaban LowerCase(RealPath(..)) en un TStringList sin mayusculas, que compara con
     # el locale y daba ss y la eszett por la misma: WalkFiles se saltaba la segunda carpeta y
@@ -1563,6 +1575,8 @@ PLANTADO = {
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",
     'un "dentro de" de dos rutas por texto': "  if Full.ToLower.StartsWith(Base.ToLower) then X := 1;",
+    'el trozo de una ruta bajo una carpeta a mano':
+        "  Rel := F.Substring(Length(IncludeTrailingPathDelimiter(Dir)));",
     'la linea de fallo del nodo': "      Writeln('  ', NODO_NO_PUDE, ' ', Bus.Error);",
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
     'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",
@@ -1762,6 +1776,20 @@ for nombre_regla, forma in (
     cazados = fuera_de_casa(regla, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                      'PliegaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "%s": tambien %s' % (nombre_regla, forma.strip()), len(cazados) == 1, cazados)
+
+# el trozo de una ruta bajo una carpeta, en sus otras formas (V106 de la 1.23.1): el Copy de la
+# carpeta mas uno, una carpeta con nombre y su +1; el nombre de un COMPONENTE bajo su raiz
+# (FormRender.Comun) no es una ruta y no se confunde
+REGLA_TROZO = next(r for r in REGLAS if r[0] == 'el trozo de una ruta bajo una carpeta a mano')
+for forma, cuenta in (("  Fuera.Add(Copy(F, Length(IncludeTrailingPathDelimiter(Folder)) + 1, MaxInt));", 1),
+                      ("  D := Destino + E.Substring(Length(Origen));", 1),
+                      ("  R := Common.Substring(Length(Shared) + 1);", 1),
+                      ("  Exit(Nuevos[K] + Full.Substring(Length(Viejos[K])));", 1),
+                      ("  Result := FindNestedComponent(ARaiz, ARuta.Substring(Length(ARaiz.Name) + 1));", 0)):
+    cazados = fuera_de_casa(REGLA_TROZO, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                           'CortaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "el trozo de una ruta bajo una carpeta a mano": %s %s' % (
+        'caza' if cuenta else 'no confunde', forma.strip()), len(cazados) == cuenta, cazados)
 
 # las otras formas de lanzar: los lanzadores con nombre propio (fuera de su casa) y
 # los otros interpretes (revisor de baterias, 18-oct-2026)

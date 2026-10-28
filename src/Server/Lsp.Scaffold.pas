@@ -35,10 +35,11 @@ function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): str
   (revision de paisaje del 4-oct-2026). }
 function BadUnitName(const AName: string): string;
 { ...y lo que no se niega (David, 25-oct-2026: nota, no negativa): un nombre
-  corto que dcc tambien encuentra por un ambito de unidad de un proyecto del
-  IDE (Consts es Vcl.Consts). '' si no; si si, la nota con un salto delante,
-  para ponerla detras de la respuesta de quien crea el nombre. }
-function NotaDeNombreTapado(const AName: string): string;
+  corto que dcc tambien encuentra por un ambito de unidad del proyecto de
+  AFuente (en un VCL, Consts es Vcl.Consts; en una consola, nada). '' si no;
+  si si, la nota con un salto delante, para ponerla detras de la respuesta de
+  quien crea el nombre. }
+function NotaDeNombreTapado(const AName, AFuente: string): string;
 
 implementation
 
@@ -591,15 +592,31 @@ begin
     Exit(MsgFmt(SR_CREATE_RTLNS_FMT, [AName, Head, Head]));
 end;
 
-function NotaDeNombreTapado(const AName: string): string;
+function NotaDeNombreTapado(const AName, AFuente: string): string;
 var
-  Unidades: TArray<string>;
+  Ambitos: TArray<string>;
+  Por: string;
 begin
   Result := '';
-  Unidades := UnidadesDeLaBiblioteca;
-  for var S in AmbitosDeProyectoNuevo do
-    if EnLaBiblioteca(Unidades, S + '.' + AName) then
-      Exit(#10 + MsgFmt(SN_CREATE_NOMBRE_TAPADO_FMT, [AName, S + '.' + AName, AName, S + '.' + AName]));
+  // los ambitos con los que compila SU proyecto, por EL juez de un uses
+  // (ResolutorDeUnidades: su DCC_Namespace). Con los de un VCL nuevo, la unit
+  // Consts de una consola "tapaba" Vcl.Consts, y en esa consola "uses Consts"
+  // no encuentra nada (F2613; V106 de la 1.23.1, medido con dcc)
+  var R := ResolutorDeUnidades(AFuente);
+  if R.Proyecto <> '' then
+  begin
+    Ambitos := R.Ambitos;
+    Por := MsgFmt(SF_CREATE_AMBITOS_DEL_PROYECTO_FMT, [TPath.GetFileName(R.Proyecto)]);
+  end
+  else
+  begin
+    // suelta, sin proyecto: los de un VCL nuevo, el que mas tapa
+    Ambitos := AmbitosDeProyectoNuevo;
+    Por := MsgText(SF_CREATE_AMBITOS_DE_UN_VCL_NUEVO);
+  end;
+  for var S in Ambitos do
+    if EnLaBiblioteca(R.Biblioteca, S + '.' + AName) then
+      Exit(#10 + MsgFmt(SN_CREATE_NOMBRE_TAPADO_FMT, [AName, S + '.' + AName, Por, AName, S + '.' + AName]));
 end;
 
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
@@ -850,7 +867,7 @@ begin
     Result := MsgFmt(SK_CREATE_CREADO_PROYECTO_FMT,
       [AName, Kind, Dir, string.Join(', ', Files.ToStringArray), NewFileEncName,
        IfThen(Kind = 'package', #10 + MsgText(SN_CREATE_PACKAGE_NOTE),
-         IfThen(Kind = 'test', #10 + MsgFmt(SN_CREATE_TEST_NOTE_FMT, [AName, MainUnit]), ''))]) + NotaDeNombreTapado(AName);
+         IfThen(Kind = 'test', #10 + MsgFmt(SN_CREATE_TEST_NOTE_FMT, [AName, MainUnit]), ''))]) + NotaDeNombreTapado(AName, Dproj);
   finally
     Files.Free;
   end;
@@ -1107,7 +1124,7 @@ begin
     Result := MsgFmt(SK_CREATE_CREADO_FORM_FMT,
       [IfThen(Kind.StartsWith('frame'), MsgText(SF_CREATE_CLASE_FRAME), IfThen(Kind = 'datamodule', MsgText(SF_CREATE_CLASE_DATA_MODULE), MsgText(SF_CREATE_CLASE_FORM))),
        AUnitName, FormName, Kind, AUnitName + DesignerExt, Result,
-       IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]) + NotaDeNombreTapado(AUnitName);
+       IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]) + NotaDeNombreTapado(AUnitName, ADprPath);
 end;
 
 { El fuente de una unit: el content del agente, comprobado (su `unit X;` es
@@ -1181,7 +1198,7 @@ begin
       Exit;
     // el content es del agente: lo audita el mismo aviso que delphi_edit
     Exit(ConAvisosDeLlaves(MsgFmt(SN_CREATE_UNIT_SUELTA_FMT,
-      [AUnitName, PasPath, Length(LineasDelTexto(Body))]), PasPath, Body) + NotaDeNombreTapado(AUnitName));
+      [AUnitName, PasPath, Length(LineasDelTexto(Body))]), PasPath, Body) + NotaDeNombreTapado(AUnitName, PasPath));
   end;
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
@@ -1227,7 +1244,7 @@ begin
   end
   else
     Result := ConAvisosDeLlaves(MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,
-      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Result]), PasPath, Body) + NotaDeNombreTapado(AUnitName);
+      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Result]), PasPath, Body) + NotaDeNombreTapado(AUnitName, ADprPath);
 end;
 
 function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;

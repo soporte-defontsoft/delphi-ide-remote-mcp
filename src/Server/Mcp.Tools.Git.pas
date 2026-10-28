@@ -211,8 +211,9 @@ begin
     except
       Ruta := '';
     end;
-    // dentro del repo, por EL juez de rutas (el del sistema de ficheros, H1 de la 1.23)
-    if (Ruta = '') or not RutaDentroDe(Base, Ruta) then
+    // dentro del repo, por EL juez de rutas (el del sistema de ficheros, H1 de la
+    // 1.23), y su trozo por el corte del mismo texto (TrozoBajo)
+    if (Ruta = '') or not TrozoBajo(Base, Ruta, Rel) then
       Exit(MsgFmt(SR_GIT_STASH_RUTA_FMT, [AComando, ALista[I], ARepo]));
     // Devolver un fichero a HEAD es ESCRIBIRLO: la pregunta de todo
     // escritor, por la ruta real de cada uno.
@@ -222,7 +223,7 @@ begin
       if Result <> '' then
         Exit;
     end;
-    Rel := ConBarrasNormales(Ruta.Substring(Length(Base)));
+    Rel := ConBarrasNormales(Rel);
     if Rel = '' then
       Rel := '.'; // la carpeta del propio repo
     // :(literal): el nombre es el nombre, sin comodines ni magia; y en un
@@ -1084,8 +1085,9 @@ begin
     // con raiz (C:\..., \\servidor, \...) es de dentro solo si cuelga del arbol
     if ((Length(Fuente) >= 2) and (Fuente[2] = ':')) or Fuente.StartsWith('\') then
     begin
-      if RutaDentroDe(ARaiz, Fuente) then
-        Fuente := Fuente.Substring(Length(IncludeTrailingPathDelimiter(ARaiz)))
+      var Trozo: string;
+      if TrozoBajo(ARaiz, Fuente, Trozo) then
+        Fuente := Trozo
       else
         Fuente := '';
     end;

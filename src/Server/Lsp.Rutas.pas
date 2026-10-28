@@ -79,6 +79,19 @@ function EnLugar(const APath, ALugar: string;
   Solo yerran hacia "fuera" / "distintas": niegan de mas, nunca de menos. }
 function RutaDentroDe(const AContenedor, ARuta: string): Boolean;
 function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
+{ Lo que sigue a AContenedor en ARuta, sin la barra de delante ('' si ARuta
+  es el propio AContenedor): True si ARuta es AContenedor o esta dentro, por
+  EL juez (RutaDentroDe) y cortando el MISMO texto que juzgo. Las dos llegan
+  en la misma forma: con la larga en un lado y la corta 8.3 en el otro, el
+  juez y el corte hablan de sitios distintos (V106 de la 1.23.1, medido:
+  MOVE-021 decia que una lib movida estaba en su carpeta, sin el \lib). Eran
+  diecinueve cortes a mano por el largo de la carpeta. ATrozo no puede ser
+  la variable de ARuta: un out se vacia antes de la llamada. }
+function TrozoBajo(const AContenedor, ARuta: string; out ATrozo: string): Boolean;
+{ ARuta llevada de ADesde a AHasta: AHasta y el trozo de ARuta bajo ADesde
+  (TrozoBajo); '' si ARuta no esta en ADesde. Lo que se movio o se copio, a
+  donde fue, y lo que llego, de donde venia. }
+function RutaTrasladada(const ARuta, ADesde, AHasta: string): string;
 { LA CLAVE de una ruta en un diccionario o en un conjunto de "ya visto": dos
   rutas tienen la misma si y solo si el sistema de ficheros las da por la
   misma entrada (el juez de RutaDentroDe y SameFileName). Se compara EXACTA
@@ -576,6 +589,34 @@ begin
   // prefijo de "casa2\".
   Result := (Length(R) >= Length(C)) and
     (AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0);
+end;
+
+function TrozoBajo(const AContenedor, ARuta: string; out ATrozo: string): Boolean;
+var
+  C, R: string;
+begin
+  ATrozo := '';
+  Result := RutaDentroDe(AContenedor, ARuta);
+  if not Result then
+    Exit;
+  // el texto que juzgo RutaDentroDe: recortado, el contenedor con su barra
+  C := IncludeTrailingPathDelimiter(AContenedor.Trim);
+  R := ARuta.Trim;
+  if Length(R) > Length(C) then
+    ATrozo := Copy(R, Length(C) + 1, MaxInt);
+end;
+
+function RutaTrasladada(const ARuta, ADesde, AHasta: string): string;
+var
+  Trozo: string;
+begin
+  Result := '';
+  if not TrozoBajo(ADesde, ARuta, Trozo) then
+    Exit;
+  if Trozo = '' then
+    Result := AHasta
+  else
+    Result := IncludeTrailingPathDelimiter(AHasta) + Trozo;
 end;
 
 function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;

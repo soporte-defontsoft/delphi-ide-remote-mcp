@@ -244,6 +244,24 @@ the MCP `initialize` response (`serverInfo.version`).
   holds them. The note beside them (`DSGN-166`, `DSGN-167`) repeated those
   values inside a sentence, where text that looked like a drive letter could
   be masked. The note now points to those fields instead.
+- **`delphi_move` names the right place for a path written with short (8.3)
+  names.** When the build read a moved folder through an absolute path
+  written with its short names (`C:\Users\ABCDEF~1\...`), `MOVE-021` said
+  that what it read was now in the moved folder itself, without the rest of
+  the path (`...\Proj2` instead of `...\Proj2\lib`). The server judged
+  "inside" on the long form of both paths and then cut the path as written
+  by the length of the other form. Nineteen places cut a path below a folder
+  by hand; they all go through one helper now, which judges and cuts the
+  same text.
+- **`CREATE-037` uses the unit scope names of the project the unit is
+  created in.** The note that a short unit name is also a library unit
+  through a unit scope name (`Consts` is `Vcl.Consts`) used the scope names
+  of a new VCL project for every project. So creating `Consts` in a console
+  project said it hid `Vcl.Consts`, which a console project cannot see:
+  `uses Consts` does not compile there. The note now reads the project's own
+  `DCC_Namespace`, as the check of a `uses` clause already did, and names the
+  project. A unit created on its own, outside any project, keeps the scope
+  names of a new VCL project, and the note says so.
 
 ### Changed
 

@@ -118,12 +118,26 @@ for nombre, msg in (('Vcl.NoExisteNunca', 'SR_CREATE_RTLNS_FMT'), ('Generics.Col
           and not os.path.exists(os.path.join(PRJ, nombre + '.pas')), r[:250])
 # ...y un nombre corto que solo tapa por un AMBITO (SysUtils es System.SysUtils,
 # Consts es Vcl.Consts) se crea con una NOTA, no se niega (David, 25-oct-2026):
-# solo afecta a codigo que escriba el nombre sin cualificar. SysUtils se negaba
-for nombre in ('SysUtils', 'Consts'):
-    r = A.call('delphi_create', {'kind': 'unit', 'name': nombre, 'project': DPROJ})
-    check('B2 %s: se crea con la nota de lo que tapa por un ambito' % nombre,
-          mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and mc.es(r, 'SN_CREATE_NOMBRE_TAPADO_FMT')
-          and os.path.exists(os.path.join(PRJ, nombre + '.pas')), r[:400])
+# solo afecta a codigo que escriba el nombre sin cualificar. SysUtils se negaba.
+# Los ambitos son los de SU proyecto (V106 de la 1.23.1): esta consola no tiene
+# Vcl, y en ella "uses Consts" no encuentra nada (F2613, medido con dcc); la nota
+# le decia que tapaba Vcl.Consts, y esta bateria lo daba por bueno
+PRJV = os.path.join(BASE, 'AppV')
+r = A.call('delphi_create', {'kind': 'project-vcl', 'name': 'AppV', 'dir': PRJV})
+assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
+for nombre, dproj, carpeta, tapa in (('SysUtils', DPROJ, PRJ, 'System.SysUtils'),
+                                     ('Consts', DPROJ, PRJ, ''),
+                                     ('Consts', os.path.join(PRJV, 'AppV.dproj'), PRJV, 'Vcl.Consts')):
+    r = A.call('delphi_create', {'kind': 'unit', 'name': nombre, 'project': dproj})
+    creada = mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and os.path.exists(os.path.join(carpeta, nombre + '.pas'))
+    if tapa:
+        check('B2 %s en %s: se crea con la nota de lo que tapa por SUS ambitos (%s)' % (
+              nombre, os.path.basename(dproj), tapa),
+              creada and mc.es(r, 'SN_CREATE_NOMBRE_TAPADO_FMT') and tapa in r
+              and os.path.basename(dproj) in r, r[:400])
+    else:
+        check('B2 %s en %s: sin nota, sus ambitos no la tapan' % (nombre, os.path.basename(dproj)),
+              creada and not mc.es(r, 'SN_CREATE_NOMBRE_TAPADO_FMT'), r[:400])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'MiEmpresa.Datos', 'project': DPROJ})
 check('B2 un espacio de nombres PROPIO sigue valiendo, y sin nota', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT')
       and not mc.es(r, 'SN_CREATE_NOMBRE_TAPADO_FMT'), r[:200])

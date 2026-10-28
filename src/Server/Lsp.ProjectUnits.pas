@@ -182,6 +182,7 @@ type
     el renombrado), un bucle propio en el .dpr y el ultimo trozo de CUALQUIER
     ambito (UnidadEnUses: insert y check-binding). }
   TResolutorDeUnidades = record
+    Proyecto: string; // el .dproj de donde salen los ambitos ('' si no hay)
     Ambitos: TArray<string>;
     // las que dcc encuentra en el proyecto, por su clave (ClaveDeIdentificador):
     // las que lista su fuente principal y las de su carpeta y su search path
@@ -348,7 +349,9 @@ end;
 
 { ---- paths ---- }
 
-function NormPath(const P: string): string;
+{ LA forma en que aqui se comparan dos rutas, la de NormPath sin su clave:
+  con ella se juzga "dentro de" Y se corta (Trasladada). }
+function FormaDeComparar(const P: string): string;
 begin
   // la forma LARGA (Lsp.Rutas.LongCanonical): UPROVE~1.PAS y
   // UProveedorModelo.pas son el mismo fichero (sexta revision). Salvo un
@@ -356,11 +359,16 @@ begin
   // dice un .dpr, y alargarla abria SMB hacia ese host (octava revision)
   // ...ni uno con prefijo de dispositivo (\\?\UNC\host\...): la pregunta de
   // todos (Lsp.Guard.RutaSinTocarElDisco; novena revision)
+  if RutaSinTocarElDisco(P) then
+    Exit(P);
+  Result := LongCanonical(P);
+end;
+
+function NormPath(const P: string): string;
+begin
   // ...y por la clave del disco (ClaveDeRuta): .ToLower junta lo que NTFS
   // separa (V105 de la 1.23.1)
-  if RutaSinTocarElDisco(P) then
-    Exit(ClaveDeRuta(P));
-  Result := ClaveDeRuta(LongCanonical(P));
+  Result := ClaveDeRuta(FormaDeComparar(P));
 end;
 
 function ResolveProjectPair(const AProject: string; out ADpr, ADproj: string): string;
@@ -398,9 +406,9 @@ begin
   // "dentro de" por EL juez de rutas (Lsp.Rutas, el del disco): con
   // .ToLower.StartsWith la unidad de Pk se escribia 'U.pas' junto a un .dpr de
   // P<Kelvin>, que es otra carpeta (V81 de la 1.23.1, medido)
-  if RutaDentroDe(Base, Full) then
-    Result := Full.Substring(Length(Base))
-  else if SameFileName(TPath.GetPathRoot(Full), TPath.GetPathRoot(Base)) then
+  if TrozoBajo(Base, Full, Result) then
+    Exit; // y lo de dentro, por SU corte
+  if SameFileName(TPath.GetPathRoot(Full), TPath.GetPathRoot(Base)) then
     Result := ExtractRelativePath(Base, Full) // ..\..\shared\X.pas, the IDE's form
   else
     Result := Full; // another drive: no relative form exists
@@ -2264,6 +2272,7 @@ begin
     var Info := InfoDeDproj(Xml);
     Result.Ambitos := AmbitosDelProyecto(Xml, Info.PlataformaPorDefecto, Info.ConfigPorDefecto).Split([';'],
       TStringSplitOptions.ExcludeEmpty);
+    Result.Proyecto := Dproj;
     // las que lista su fuente principal, por EL lector de sus entradas
     var Unidades, Escritas, Rutas: TArray<string>;
     if LecturasDelIn(DprDe(Dproj), Unidades, Escritas, Rutas) = '' then
@@ -3422,6 +3431,17 @@ begin
   Result := RutaDentroDe(NormPath(AArbol), NormPath(ARuta));
 end;
 
+{ Donde esta AHORA ARuta si estaba en AViejo, que ahora es ANuevo ('' si no
+  estaba dentro): juzgada y cortada en LA forma de DentroDe (sin su clave: el
+  trozo conserva sus letras). Cortar el texto crudo por el largo de AViejo
+  despues de juzgar en la forma larga daba un trozo desplazado con una de las
+  dos en 8.3: MOVE-021 decia que la lib movida estaba en la carpeta, sin el
+  \lib (V106 de la 1.23.1, medido). }
+function Trasladada(const ARuta, AViejo, ANuevo: string): string;
+begin
+  Result := RutaTrasladada(FormaDeComparar(ARuta), FormaDeComparar(AViejo), ANuevo);
+end;
+
 { La ruta nueva de AValor (relativa a ABaseVieja, visto desde AFicheroNuevo)
   si AMapa dice a donde fue su destino; '' si no se toca: absoluta, empieza
   por una macro ($(BDS)...), comodin, o AMapa contesta ''. La barra final se
@@ -3856,9 +3876,9 @@ begin
           if R = '' then
             Continue;
           // donde esta AHORA lo que leia: movido si estaba dentro
-          var Destino := R;
-          if DentroDe(R, AViejo) then
-            Destino := ANuevo + R.Substring(Length(AViejo));
+          var Destino := Trasladada(R, AViejo, ANuevo);
+          if Destino = '' then
+            Destino := R;
           if RutaEnLista(Destino, Leidas) or not ExisteYSeLee(Destino, True) then
             Continue;
           // si lo que leia no se movio, el que se movio es este .dproj y su
@@ -4000,8 +4020,11 @@ begin
     begin
       Result := '';
       for var K := 0 to High(Viejos) do
-        if DentroDe(A, Viejos[K]) then
-          Exit(Nuevos[K] + TPath.GetFullPath(A).Substring(Length(Viejos[K])));
+      begin
+        Result := Trasladada(A, Viejos[K], Nuevos[K]);
+        if Result <> '' then
+          Exit;
+      end;
     end;
   EsDeMudanza :=
     function(F: string): Boolean
@@ -4013,7 +4036,7 @@ begin
   if AMudanza in [mzMueve, mzCopia] then
     for var I := 0 to High(Nuevos) do
       for var F in FicherosBajo(Nuevos[I], EsDeMudanza, 0, Saltadas) do
-        Mira(F, TPath.GetDirectoryName(Viejos[I] + F.Substring(Length(Nuevos[I]))), FueraDe(Viejos[I]), I);
+        Mira(F, TPath.GetDirectoryName(RutaTrasladada(F, Nuevos[I], Viejos[I])), FueraDe(Viejos[I]), I);
   // ...y FUERA, en un move o un borrado, lo que apuntaba dentro: desde el
   // borde escribible (BordeDeMudanza), una vez por borde
   if AMudanza in [mzMueve, mzBorra] then

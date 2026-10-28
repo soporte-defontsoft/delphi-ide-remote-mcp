@@ -279,14 +279,14 @@ end;
 
 function RelToRoot(const AFull, ARoot: string): string;
 var
-  R: string;
+  R, Trozo: string;
 begin
   R := IncludeTrailingPathDelimiter(ARoot);
   // "dentro de" por EL juez de rutas (Lsp.Rutas, el del disco): con
   // .ToLower.StartsWith un P<Kelvin> se daba por la raiz Pk, que es otra
   // carpeta (V81 de la 1.23.1, medido)
-  if (ARoot <> '') and RutaDentroDe(ARoot, AFull) and (Length(AFull) >= Length(R)) then
-    Result := '\' + Copy(AFull, Length(R) + 1, MaxInt)
+  if (ARoot <> '') and TrozoBajo(ARoot, AFull, Trozo) and (Length(AFull) >= Length(R)) then
+    Result := '\' + Trozo
   else
     Result := AFull;
 end;

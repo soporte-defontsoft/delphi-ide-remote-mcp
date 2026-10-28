@@ -34,6 +34,7 @@ type
     [Test] procedure ElDentroDeRespetaElLimite;
     [Test] procedure LosDentroDePorTextoSonElDisco;
     [Test] procedure LaClaveEsLaDelDisco;
+    [Test] procedure ElTrozoEsElDelMismoTexto;
   end;
 
 implementation
@@ -242,6 +243,26 @@ begin
   // tiene su atajo por la longitud) las junta
   Assert.AreEqual(0, AnsiCompareText('ss', Letra($00DF)),
     'AnsiCompareText da ss = eszett: por ahi WalkFiles se saltaba una carpeta');
+end;
+
+procedure TRutasDelDiscoTests.ElTrozoEsElDelMismoTexto;
+var
+  T: string;
+begin
+  // V106 de la 1.23.1: el juez y el corte del MISMO texto (TrozoBajo); eran
+  // diecinueve cortes a mano por el largo de la carpeta
+  Assert.IsTrue(TrozoBajo('C:\raiz', 'C:\raiz\sub\u.pas', T), 'dentro');
+  Assert.AreEqual('sub\u.pas', T, 'el trozo, sin la barra de delante');
+  Assert.IsTrue(TrozoBajo('C:\raiz\', 'C:\RAIZ', T), 'la carpeta misma, con otras mayusculas y sin barra');
+  Assert.AreEqual('', T, 'la carpeta misma no tiene trozo');
+  Assert.IsFalse(TrozoBajo('C:\raiz', 'C:\raiz2\u.pas', T), 'raiz2 no esta en raiz');
+  Assert.AreEqual('', T, 'fuera, sin trozo');
+  // la forma corta contra la larga no se corta: las alarga a las dos quien
+  // compara en la larga (el corte desplazado de MOVE-021)
+  Assert.IsFalse(TrozoBajo('C:\Users\DFONTA~1\x', 'C:\Users\dfontanet\x\u.pas', T), 'otra forma, otro texto');
+  Assert.AreEqual('D:\nuevo\sub\u.pas', RutaTrasladada('C:\raiz\sub\u.pas', 'C:\raiz', 'D:\nuevo'), 'trasladada');
+  Assert.AreEqual('D:\nuevo', RutaTrasladada('C:\raiz', 'C:\raiz\', 'D:\nuevo'), 'la carpeta misma, a la nueva');
+  Assert.AreEqual('', RutaTrasladada('C:\otra\u.pas', 'C:\raiz', 'D:\nuevo'), 'lo de fuera no se traslada');
 end;
 
 initialization
