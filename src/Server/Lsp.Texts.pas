@@ -8162,6 +8162,14 @@ const
     'command=install apk=<path> device=<serial>, open it with ' +
     'command=run app=<package>, and watch it with command=logcat.';
 
+  { el Deploy de tienda de Android (BT_BuildType=AppStore en Android64): un
+    .aab, que no se instala en un dispositivo (V117 de la 1.23.1) }
+  SN_BUILD_AAB_NOTE =
+    '[BUILD-064] This is the built .aab (the app bundle a store takes, signed ' +
+    'with the project''s keystore). It does not install on a device with ' +
+    'delphi_adb command=install: an .apk comes from a build whose ' +
+    'BT_BuildType is Debug (the IDE''s Development build type).';
+
   // ---------------------------------------------------------------------
   // delphi_report (feedback channel - works at EVERY access level)
   // ---------------------------------------------------------------------

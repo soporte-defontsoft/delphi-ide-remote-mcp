@@ -802,6 +802,17 @@ function CarpetaDeLibreriasDelApk(const APlatform: string): string;
   fichero que deja el build (NombreDelBinario: con OutputExt, lib<p>.<ext>). }
 function LibreriaDelApk(const AProyecto: string): string;
 
+{ EL paquete que deja el Deploy de Android de APlatform/AConfig, como lo
+  compone el juez (CodeGear.Deployment.targets 254-269 y 338-340,
+  APK_FILENAME): la carpeta del binario de ESE build (SalidaDelBinario, el
+  DCC_ExeOutput efectivo: set-output la mueve) + su PROJECTNAME (o ABase) +
+  \bin\ + ABase + .aab en el build de tienda (BT_BuildType=AppStore) de la
+  plataforma que lo da (AabEnTienda), .apk en el resto. Relativa si la salida
+  lo es; '' fuera de Android. Se componia a mano en Plataforma\Config\: tras
+  un set-output, el build declaraba el .apk VIEJO de antes (V117 de la
+  1.23.1, medido). }
+function PaqueteDeAndroid(const ADprojXml, ADir, ABase, APlatform, AConfig: string): string;
+
 { The CANONICAL set of Delphi target platforms. add-platform validates
   against this: a platform name is a fixed, known token, so anything else is
   rejected outright - which also makes it impossible to inject XML into the
@@ -2138,6 +2149,9 @@ type
     // WinARM64EC (P9 de la revision de la 1.22.0: eran dos literales en el
     // fabricante de sus ajustes)
     DelMotor: Boolean;
+    // su Deploy de tienda (BT_BuildType=AppStore) deja un .aab y no un .apk:
+    // el juez, CodeGear.Deployment.targets 338-339 ($(cAndroidArm64Platform))
+    AabEnTienda: Boolean;
   end;
 
 const
@@ -2149,19 +2163,19 @@ const
     de Delphi: su lib\ trae .dcu. WinARM64EC es la maquina ARM64 (un binario
     ARM64EC solo corre en un Windows ARM64). }
   PLATAFORMAS: array [0 .. 12] of TPlataformaConocida = (
-    (Nombre: 'Win32'; Sistema: spWindows; Maquina: $014C; Abi: ''; DelMotor: True),
-    (Nombre: 'Win64'; Sistema: spWindows; Maquina: $8664; Abi: ''; DelMotor: True),
-    (Nombre: 'Win64x'; Sistema: spWindows; Maquina: $8664; Abi: ''; DelMotor: False),
-    (Nombre: 'WinARM64EC'; Sistema: spWindows; Maquina: $AA64; Abi: ''; DelMotor: False),
-    (Nombre: 'OSX64'; Sistema: spMacOS; Maquina: 0; Abi: ''; DelMotor: False),
-    (Nombre: 'OSXARM64'; Sistema: spMacOS; Maquina: 0; Abi: ''; DelMotor: False),
-    (Nombre: 'Linux64'; Sistema: spLinux; Maquina: 0; Abi: ''; DelMotor: False),
-    (Nombre: 'Android'; Sistema: spAndroid; Maquina: 0; Abi: 'armeabi-v7a'; DelMotor: False),
-    (Nombre: 'Android64'; Sistema: spAndroid; Maquina: 0; Abi: 'arm64-v8a'; DelMotor: False),
-    (Nombre: 'iOSDevice32'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False),
-    (Nombre: 'iOSDevice64'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False),
-    (Nombre: 'iOSSimARM64'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False),
-    (Nombre: 'iOSSimulator'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False));
+    (Nombre: 'Win32'; Sistema: spWindows; Maquina: $014C; Abi: ''; DelMotor: True; AabEnTienda: False),
+    (Nombre: 'Win64'; Sistema: spWindows; Maquina: $8664; Abi: ''; DelMotor: True; AabEnTienda: False),
+    (Nombre: 'Win64x'; Sistema: spWindows; Maquina: $8664; Abi: ''; DelMotor: False; AabEnTienda: False),
+    (Nombre: 'WinARM64EC'; Sistema: spWindows; Maquina: $AA64; Abi: ''; DelMotor: False; AabEnTienda: False),
+    (Nombre: 'OSX64'; Sistema: spMacOS; Maquina: 0; Abi: ''; DelMotor: False; AabEnTienda: False),
+    (Nombre: 'OSXARM64'; Sistema: spMacOS; Maquina: 0; Abi: ''; DelMotor: False; AabEnTienda: False),
+    (Nombre: 'Linux64'; Sistema: spLinux; Maquina: 0; Abi: ''; DelMotor: False; AabEnTienda: False),
+    (Nombre: 'Android'; Sistema: spAndroid; Maquina: 0; Abi: 'armeabi-v7a'; DelMotor: False; AabEnTienda: False),
+    (Nombre: 'Android64'; Sistema: spAndroid; Maquina: 0; Abi: 'arm64-v8a'; DelMotor: False; AabEnTienda: True),
+    (Nombre: 'iOSDevice32'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False; AabEnTienda: False),
+    (Nombre: 'iOSDevice64'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False; AabEnTienda: False),
+    (Nombre: 'iOSSimARM64'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False; AabEnTienda: False),
+    (Nombre: 'iOSSimulator'; Sistema: spIOS; Maquina: 0; Abi: ''; DelMotor: False; AabEnTienda: False));
 
 { La fila de APlatform en PLATAFORMAS, sin mirar mayusculas. }
 function DatosDePlataforma(const APlatform: string; out AFila: TPlataformaConocida): Boolean;
@@ -2268,6 +2282,32 @@ end;
 function LibreriaDelApk(const AProyecto: string): string;
 begin
   Result := 'lib' + AProyecto + '.so';
+end;
+
+function PaqueteDeAndroid(const ADprojXml, ADir, ABase, APlatform, AConfig: string): string;
+var
+  P: TPlataformaConocida;
+  Carpeta, Ext: string;
+begin
+  Result := '';
+  if not DatosDePlataforma(APlatform, P) or (P.Sistema <> spAndroid) then
+    Exit;
+  // $(APK_FolderName): $(PROJECTNAME) si lo hay, si no $(MSBuildProjectName).
+  // El IDE lo escribe con Condition="'$(ProjectName)'==''", que el lector no
+  // da por aplicada (un nombre de fuera): vale el del fichero, el mismo salvo
+  // en un .dproj renombrado a mano
+  Carpeta := EffectiveProperty(ADprojXml, 'ProjectName', APlatform, AConfig).Trim;
+  if Carpeta = '' then
+    Carpeta := ABase;
+  // $(APK_EXT)
+  if P.AabEnTienda and
+     SameText(EffectiveProperty(ADprojXml, 'BT_BuildType', APlatform, AConfig).Trim, 'AppStore') then
+    Ext := '.aab'
+  else
+    Ext := '.apk';
+  // $(APK_OutputDir)$(APK_FolderName)\bin\$(MSBuildProjectName)$(APK_EXT)
+  Result := TPath.Combine(SalidaDelBinario(ADprojXml, ADir, ABase, APlatform, AConfig),
+    Carpeta + '\bin\' + ABase + Ext);
 end;
 
 function CarpetaDeLibreriasDelApk(const APlatform: string): string;

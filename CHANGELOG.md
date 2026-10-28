@@ -319,6 +319,17 @@ the MCP `initialize` response (`serverInfo.version`).
   filtering afterwards by hand, as seven of them did and two did not.
   `delphi_package` keeps its own list - it packs build output on purpose -
   and judges `dcu\` below the folder it packs.
+- **An Android Deploy declares the package it just built, where the build
+  left it.** The path of the `.apk` was composed by hand as
+  `<platform>\<config>\<project>\bin\<project>.apk`, whatever the project's
+  output folder. After `delphi_config set-output`, a Deploy declared the OLD
+  `.apk` of an earlier build still sitting at that path, while the new one was
+  in `Compiled\Android64\Debug\...`; and a project with its own output folder
+  from its first Deploy declared the `.so`. It is now composed by one namer
+  with the grammar of the IDE's own deployment targets: the output folder of
+  that build, the project's folder, `bin\` and its name - and `.aab`, with a
+  note of its own (`BUILD-064`: a store bundle does not install on a device),
+  for a store build (`BT_BuildType=AppStore`) of Android64.
 
 ### Changed
 

@@ -2883,18 +2883,30 @@ begin
       // la nota de siempre (BUILD-002: recogerlo con delphi_package) iba en
       // cada build: lo dice delphi_package; queda la del .apk
       var Note := '';
-      // An Android Deploy's real product is the .apk the packager left in
-      // <Platform>\<Config>\<name>\bin - declare THAT, not the .so.
+      // An Android Deploy's real product is the package the packager left -
+      // declare THAT, not the .so. Por EL nombrador (Lsp.Dproj.PaqueteDeAndroid):
+      // en la carpeta de salida de ESTE build, y .aab en el de tienda. A mano en
+      // Plataforma\Config\, tras un set-output declaraba el .apk VIEJO de antes
+      // (V117 de la 1.23.1, medido)
       if (SistemaDePlataforma(Plat) = spAndroid) and Target.Contains('Deploy') then
       begin
-        var ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
-        var Apk := TPath.Combine(
-          TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath)),
-          Plat + '\' + Cfg + '\' + ProjName + '\bin\' + ProjName + '.apk');
-        if TFile.Exists(Apk) then
+        var DprojDelBuild := TPath.GetFullPath(ADprojPath);
+        var Paquete := '';
+        try
+          Paquete := PaqueteDeAndroid(LeeTexto(DprojDelBuild, [ltJaula]), TPath.GetDirectoryName(DprojDelBuild),
+            TPath.GetFileNameWithoutExtension(DprojDelBuild), Plat, Cfg);
+          if Paquete <> '' then
+            Paquete := TPath.GetFullPath(TPath.Combine(TPath.GetDirectoryName(DprojDelBuild), Paquete));
+        except
+          Paquete := ''; // sin leerlo (o con un macro sin resolver), el binario de arriba
+        end;
+        if (Paquete <> '') and TFile.Exists(Paquete) then
         begin
-          Artifact := Apk;
-          Note := MsgText(SN_BUILD_APK_NOTE);
+          Artifact := Paquete;
+          if SameText(TPath.GetExtension(Paquete), '.aab') then
+            Note := MsgText(SN_BUILD_AAB_NOTE)
+          else
+            Note := MsgText(SN_BUILD_APK_NOTE);
         end;
       end;
       if Artifact <> '' then

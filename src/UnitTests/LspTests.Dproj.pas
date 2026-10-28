@@ -64,6 +64,8 @@ type
     [Test] procedure DosGruposConLaMismaCondicionYLaClaveRara;
     [Test] procedure ElParserDelIdeJuzgaLoCompuesto;
     [Test] procedure LosValoresDelBuildSeExpandenEnSuPunto;
+    [Test]
+    procedure ElPaqueteDeAndroidComoLoComponeElJuez;
   end;
 
   { EL analisis del XML de proyecto (1.20.1), lo que el oraculo contra MSXML
@@ -1297,6 +1299,31 @@ begin
   Assert.AreNotEqual('', DprojBuildHazard(CABECERA +
     '  <PropertyGroup><prebuildevent>copy a b</prebuildevent></PropertyGroup>'#13#10 + PIE, RUTA,
     TArray<string>.Create('PreBuildEvent')), 'sin distinguir mayusculas');
+end;
+
+procedure TXmlTextoTests.ElPaqueteDeAndroidComoLoComponeElJuez;
+var
+  XML: string;
+begin
+  // EL paquete de un Deploy de Android como lo compone el juez
+  // (CodeGear.Deployment.targets, APK_FILENAME): en la salida de ESE build,
+  // .aab en el de tienda de Android64 y .apk en el resto (V117 de la 1.23.1)
+  XML := '<Project>' + CadenaDelIde(['Android64', 'Android'], []) + '</Project>';
+  // sin salida declarada, la del IDE
+  Assert.AreEqual('.\Android64\Debug\App\bin\App.apk',
+    PaqueteDeAndroid(XML, 'C:\P', 'App', 'Android64', 'Debug'));
+  // la que declara el .dproj (set-output) y el build de tienda
+  XML := '<Project>' + CadenaDelIde(['Android64', 'Android'], []) +
+    '<PropertyGroup Condition="''$(Base)''!=''''">' +
+    XmlElemento('DCC_ExeOutput', '.\Compiled\$(Platform)\$(Config)') +
+    XmlElemento('BT_BuildType', 'AppStore') + '</PropertyGroup></Project>';
+  Assert.AreEqual('.\Compiled\Android64\Release\App\bin\App.aab',
+    PaqueteDeAndroid(XML, 'C:\P', 'App', 'Android64', 'Release'));
+  // la de 32 bits no da .aab: el juez solo lo pide en $(cAndroidArm64Platform)
+  Assert.AreEqual('.\Compiled\Android\Release\App\bin\App.apk',
+    PaqueteDeAndroid(XML, 'C:\P', 'App', 'Android', 'Release'));
+  // fuera de Android, nada
+  Assert.AreEqual('', PaqueteDeAndroid(XML, 'C:\P', 'App', 'Win64', 'Release'));
 end;
 
 initialization
