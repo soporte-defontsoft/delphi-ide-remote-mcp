@@ -128,6 +128,18 @@ function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
   login- solo se veia entrando en la maquina (2026-09-26). }
 function RemoteOutput(const AProfile, ADprojPath, AJobId: string): TJSONObject;
 
+{ EL lector de una linea de la salida del nodo (NodeProtocolo.inc): si ALinea,
+  sin sus blancos, empieza por AMarca, True y lo que la sigue en AValor, sin
+  blancos. Lo usan quienes leen esa salida: el motivo (NODO_NO_PUDE), el codigo
+  de Windows (NODO_CODIGO_WIN), la captura (NODO_CAPTURA) y cada ventana
+  (NODO_VENTANA). Cada uno la leia a su manera (V106 de la 1.23.1). }
+function LineaDelNodo(const ALinea, AMarca: string; out AValor: string): Boolean;
+{ ...y la que ABRE la lista de ventanas ('  <n> visible windows:'): la marca
+  va al final, y una ventana cuyo titulo la lleve no lo es. Mcp.Tools.Desktop
+  la buscaba con Contains: un titulo con 'visible windows:' dentro reiniciaba
+  la lista (V106 de la 1.23.1). }
+function EsCabeceraDeVentanas(const ALinea: string): Boolean;
+
 { La negativa de Windows a CUALQUIER captura con la sesion bloqueada,
   desconectada o sin escritorio, en la salida del nodo: por el CODIGO que el
   nodo dice (NODO_CODIGO_WIN = ERROR_ACCESS_DENIED), no por la frase, que sale
@@ -285,29 +297,47 @@ begin
   Result := '';
 end;
 
+function LineaDelNodo(const ALinea, AMarca: string; out AValor: string): Boolean;
+var
+  T: string;
+begin
+  AValor := '';
+  T := ALinea.Trim;
+  Result := T.StartsWith(AMarca);
+  if Result then
+    AValor := T.Substring(Length(AMarca)).Trim;
+end;
+
+function EsCabeceraDeVentanas(const ALinea: string): Boolean;
+var
+  V: string;
+begin
+  Result := ALinea.Trim.EndsWith(NODO_VENTANAS) and not LineaDelNodo(ALinea, NODO_VENTANA, V);
+end;
+
 function CapturaDenegada(const ASalida: string): Boolean;
+var
+  V: string;
 begin
   // decidia por dos frases ('Acceso denegado' / 'Access is denied'): un
   // destino en otro idioma salia "ninguno" (regla 6: el juez es el codigo)
   Result := False;
   for var L in LineasDelTexto(ASalida) do
-    if L.Trim.StartsWith(NODO_CODIGO_WIN) and
-       (StrToIntDef(L.Trim.Substring(Length(NODO_CODIGO_WIN)).Trim, 0) = ERROR_ACCESS_DENIED) then
+    if LineaDelNodo(L, NODO_CODIGO_WIN, V) and (StrToIntDef(V, 0) = ERROR_ACCESS_DENIED) then
       Exit(True);
 end;
 
 function MotivoDelNodo(const ASalida, AEntorno: string): string;
 var
-  L: string;
+  L, V: string;
 begin
   Result := '';
   // Lo que dijo el NODO primero: es quien ha mirado, con el mismo detector
   // de sesion que el lanzador (Mld.Sesion). El entorno del lanzador tapaba
   // el motivo real del nodo (revision del 26-sep-2026).
   for L in LineasDelTexto(ASalida) do
-    if (Result = '') and L.Trim.StartsWith(NODO_NO_PUDE) then
-      Result := MsgFmt(SN_DESKTOP_MOTIVO_NODO_FMT,
-        [L.Trim.Substring(Length(NODO_NO_PUDE)).Trim]);
+    if (Result = '') and LineaDelNodo(L, NODO_NO_PUDE, V) then
+      Result := MsgFmt(SN_DESKTOP_MOTIVO_NODO_FMT, [V]);
   if Result = '' then
     if AEntorno = MsgText(SN_REMOTERUN_ENV_NONE) then
       Result := MsgText(SN_DESKTOP_MOTIVO_SIN_SESION)
@@ -361,7 +391,8 @@ begin
         EnUso := True;
         Continue;
       end;
-      if T.StartsWith(NODO_CAPTURA) or T.EndsWith(NODO_VENTANAS) or T.StartsWith(NODO_VENTANA) then
+      var V: string;
+      if LineaDelNodo(L, NODO_CAPTURA, V) or EsCabeceraDeVentanas(L) or LineaDelNodo(L, NODO_VENTANA, V) then
         Continue;
       if AGestoBien and ((Id = '') or EnLista(Id, NODO_RUTINA)) then
         Continue;

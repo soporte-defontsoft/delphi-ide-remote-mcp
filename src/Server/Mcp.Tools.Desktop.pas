@@ -141,7 +141,7 @@ var
   L: string;
   T: TArray<string>;
   O: TJSONObject;
-  Titulo: string;
+  Titulo, V: string;
   Lineas: TArray<string>;
   Desde, I: Integer;
 begin
@@ -152,12 +152,12 @@ begin
   Lineas := LineasDelTexto(ASalida);
   Desde := 0;
   for I := 0 to High(Lineas) do
-    if Lineas[I].Contains(NODO_VENTANAS) then
+    if EsCabeceraDeVentanas(Lineas[I]) then
       Desde := I;
   for I := Desde to High(Lineas) do
   begin
     L := Lineas[I];
-    if not L.TrimLeft.StartsWith(NODO_VENTANA) then
+    if not LineaDelNodo(L, NODO_VENTANA, V) then
       Continue;
     // "VENTANA x y w h <titulo con espacios>": Split con tope TIRA el resto
     // (medido: "Experiencia de entrada" quedaba en "Experiencia"), asi que
@@ -227,12 +227,12 @@ end;
 { La linea CAPTURA=<ruta> que el nodo escribe al guardar una captura. }
 function RutaDeCaptura(const ASalida: string): string;
 var
-  L: string;
+  L, V: string;
 begin
   Result := '';
   for L in LineasDelTexto(ASalida) do
-    if L.TrimLeft.StartsWith(NODO_CAPTURA) then
-      Result := L.Trim.Substring(Length(NODO_CAPTURA));
+    if LineaDelNodo(L, NODO_CAPTURA, V) then
+      Result := V;
 end;
 
 { El nombre del perfil, apto para un nombre de fichero (lo eligio el operador

@@ -593,6 +593,18 @@ REGLAS = [
       ('Lsp.RemoteRun.pas', 'MotivoDelNodo')],     # EL lector
      'NoPude (McpDesktopNode): toda salida del nodo que no pudo escribe su motivo con la marca que lee '
      'MotivoDelNodo; la que no la lleve, el servidor la cuenta como un nodo que no dijo por que'),
+    # ...y su codigo de Windows detras (V85 de la 1.23.1; fila desde V106): UN escritor y UN lector
+    ('el codigo de Windows del nodo', r'\bNODO_CODIGO_WIN\b',
+     [('McpDesktopNode.dpr', 'NoPude'),            # EL escritor
+      ('Lsp.RemoteRun.pas', 'CapturaDenegada')],   # EL lector
+     'NoPude (McpDesktopNode) lo escribe detras del motivo y CapturaDenegada lo juzga'),
+    # una linea de la salida del nodo leida a mano (V106 de la 1.23.1): cada lector la leia a su
+    # manera (Trim, TrimLeft, Contains) y la cabecera de las ventanas se buscaba con Contains, que
+    # tomaba por ella una ventana con la marca en su titulo
+    ('una linea del nodo leida a mano',
+     r'\.(?:StartsWith|EndsWith|Contains)\(\s*NODO_(?:NO_PUDE|CODIGO_WIN|CAPTURA|VENTANAS|VENTANA)\b',
+     [('Lsp.RemoteRun.pas', 'EsCabeceraDeVentanas')],
+     'LineaDelNodo y EsCabeceraDeVentanas (Lsp.RemoteRun): la marca y su valor, sin blancos'),
     ('la forma de los atomos del RTL', r"'(?:ControlOfs|WndProcPtr|FIREMONKEY%|Delphi%\.8X)'",
      [('Lsp.AtomosRtl.pas', '*')],
      'Lsp.AtomosRtl: los atomos globales que deja un proceso VCL/FMX muerto sin finalizar (llena la tabla, '
@@ -788,7 +800,11 @@ REGLAS = [
     ('UTF-8 estricto preguntado a mano', r'\b(?:ValidUtf8|IsBufferValid)\s*\(',
      [('Lsp.Patch.pas', 'DetectEnc'),
       # el juez de la RTL (TEncoding.UTF8.IsBufferValid) en UN sitio
-      ('Lsp.Codificacion.pas', 'ValidUtf8')],
+      ('Lsp.Codificacion.pas', 'ValidUtf8'),
+      # la salida de un HIJO por su tuberia: UTF-8 o la pagina de la consola (TPaginaDelHijo), otra
+      # pregunta que la del detector de ficheros (UTF-8 o ANSI). Tenia su juez propio (LooksUtf8),
+      # que esta regla no veia; desde V106 de la 1.23.1 pregunta a este
+      ('Lsp.BuildRunner.pas', 'DecodificaHijo')],
      'si unos bytes son UTF-8 lo contesta el juez de la RTL, TEncoding.UTF8.IsBufferValid (norma 6: '
      'habia una copia a mano, la de la 1.17 aceptaba formas largas), y lo pregunta el detector: '
      'otro que lo pregunte esta decidiendo una codificacion por su cuenta'),
@@ -1220,6 +1236,11 @@ REGLAS = [
      'ni siquiera tiene estas formas: busca \'<\' + la etiqueta que le piden. Lsp.Docs lee el '
      'HTML de la ayuda, no XML de proyecto; la completion mira el texto <error> de un detalle '
      'del motor'),
+    # un juez de UTF-8 a mano (V106 de la 1.23.1): LooksUtf8 (Lsp.BuildRunner) miraba la FORMA de las
+    # secuencias por sus mascaras y daba por UTF-8 lo que el decodificador rechazaba (sustitutos
+    # CESU-8, sobrelargas); el juez es el de la RTL (Lsp.Codificacion.ValidUtf8, IsBufferValid)
+    ('un juez de UTF-8 a mano', r"\band\s+\$(?:E0|F0|F8|C0)\s*\)\s*(?:=|<>)\s*\$(?:C0|E0|F0|80)\b", [],
+     'ValidUtf8 (Lsp.Codificacion), el juez de la RTL: lo medible no se hardcodea'),
     # el comodin de las copias de la papelera (V106 de la 1.23.1): el sello va DETRAS del nombre
     # (TrashStampedName), y la mascara + '-*' que las recoge la escribian a mano el recorredor
     # (WalkFiles) y la llamada que recupera un lote
@@ -1519,6 +1540,9 @@ PLANTADO = {
     'una linea de elemento XML a mano': "  R := R + '            ' + XmlElemento('Form', N) + CRLF;",
     'cortar un texto por la cabeza a mano': "  Msg := Copy(Salida.Trim, 1, 300);",
     'el comodin de las copias de la papelera a mano': "  for F in TDirectory.GetFiles(D, M + '-*') do",
+    'un juez de UTF-8 a mano': "    if (B[I] and $E0) = $C0 then",
+    'el codigo de Windows del nodo': "    if L.Contains(NODO_CODIGO_WIN + '5') then",
+    'una linea del nodo leida a mano': "    if L.TrimLeft.StartsWith(NODO_CAPTURA) then",
     'el valor cabeza-y-partes del ayudante a mano':
         "  Responde(FR_NOT_LOADED, E.ClassName + FR_PARTES_SEP + LecturaEnPartes(E.Message));",
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",

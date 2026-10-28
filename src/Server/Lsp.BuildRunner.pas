@@ -270,43 +270,6 @@ begin
   end;
 end;
 
-{ Strict UTF-8 scanner over the captured bytes: only well-formed multi-byte
-  sequences count, and pure ASCII answers False (the ANSI default is fine
-  there). An ANSI accent almost never forms a valid UTF-8 sequence, so a
-  positive here is reliable. }
-function LooksUtf8(const B: TBytes): Boolean;
-var
-  I, J, N: Integer;
-  HasHigh: Boolean;
-begin
-  HasHigh := False;
-  I := 0;
-  while I < Length(B) do
-  begin
-    if B[I] < $80 then
-    begin
-      Inc(I);
-      Continue;
-    end;
-    HasHigh := True;
-    if (B[I] and $E0) = $C0 then
-      N := 1
-    else if (B[I] and $F0) = $E0 then
-      N := 2
-    else if (B[I] and $F8) = $F0 then
-      N := 3
-    else
-      Exit(False);
-    if I + N >= Length(B) then
-      Exit(False);
-    for J := 1 to N do
-      if (B[I + J] and $C0) <> $80 then
-        Exit(False);
-    Inc(I, N + 1);
-  end;
-  Result := HasHigh;
-end;
-
 // APIs de Job que la RTL de este Delphi no declara (como las constantes que
 // CreateConfinedJob define a mano): con su nombre real en kernel32.
 function QueryInformationJobObject_(hJob: THandle; InfoClass: DWORD;
@@ -421,18 +384,18 @@ begin
   // ANSI turned MSBuild's "raiz"/"linea"/"posicion" into "ra¡z"/"l¡nea"/
   // "posici¢n" - measured 2026-09-20. Asked to Windows, never hardcoded:
   // another machine has another codepage.
-  if LooksUtf8(ABytes) then
+  // UTF-8 por EL juez de la casa (Lsp.Codificacion.ValidUtf8, el de la RTL),
+  // con algun byte alto: lo puro ASCII va por la pagina, que lo lee igual. Aqui
+  // habia un juez propio, que miraba solo la FORMA de las secuencias y daba por
+  // UTF-8 los sustitutos CESU-8 y las sobrelargas del "modified UTF-8" de las
+  // herramientas Java/Android (adb, gradle); el decodificador los rechazaba y
+  // se caia a la pagina (V106 de la 1.23.1). El juez ya no los da por UTF-8
+  if HayByteAlto(ABytes) and ValidUtf8(ABytes, 0) then
     try
       Exit(TEncoding.UTF8.GetString(ABytes));
     except
-      // LooksUtf8 mira la FORMA de los bytes, y hay secuencias bien
-      // formadas que el decodificador estricto (MB_ERR_INVALID_CHARS)
-      // rechaza igual: los surrogates CESU-8 y las sobrelargas del
-      // "modified UTF-8" que emiten las herramientas Java/Android (adb,
-      // gradle). La red de abajo se puso el 21-sep JUSTO por esta
-      // excepcion... y esta rama quedo fuera de ella (auditoria del mismo
-      // dia). Se cae a la rama del codepage, que decodifica distinto y
-      // ademas tiene la red byte a byte que no puede fallar.
+      // segunda barrera: si aun asi no se deja decodificar, se cae a la rama
+      // de la pagina, que tiene la red byte a byte que no puede fallar
     end;
   begin
     var Cp: Cardinal;

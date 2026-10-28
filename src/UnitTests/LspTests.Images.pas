@@ -46,6 +46,8 @@ type
     [Test] procedure GestoConAvisoLoConserva;
     [Test] procedure StatusYFalloSonDiagnosticoSinProtocoloNiUso;
     [Test] procedure NodoWindowsGestoBienDejaSoloLaAccion;
+    [Test]
+    procedure LasLineasDelNodoTienenUnLector;
   end;
 
 implementation
@@ -757,6 +759,24 @@ begin
     if TFile.Exists(F) then
       TFile.Delete(F);
   end;
+end;
+
+{ V106 de la 1.23.1: UN lector de las lineas del nodo (cada uno la leia a su
+  manera), y la cabecera de las ventanas por su forma: una ventana cuyo titulo
+  lleve la marca no abre la lista (Mcp.Tools.Desktop la buscaba con Contains) }
+procedure TImageTests.LasLineasDelNodoTienenUnLector;
+var
+  V: string;
+begin
+  Assert.IsTrue(LineaDelNodo('  ' + NODO_CODIGO_WIN + '5 ', NODO_CODIGO_WIN, V), 'con su sangria');
+  Assert.AreEqual('5', V);
+  Assert.IsTrue(LineaDelNodo(NODO_CAPTURA + 'C:\x\captura.png'#13, NODO_CAPTURA, V));
+  Assert.AreEqual('C:\x\captura.png', V, 'sin el CR');
+  Assert.IsFalse(LineaDelNodo('  otra cosa', NODO_NO_PUDE, V));
+  Assert.AreEqual('', V, 'sin marca, sin valor');
+  Assert.IsTrue(EsCabeceraDeVentanas('  3 ' + NODO_VENTANAS));
+  Assert.IsFalse(EsCabeceraDeVentanas('  ' + NODO_VENTANA + '0 0 10 10 Lista de ' + NODO_VENTANAS),
+    'una ventana con la marca en su titulo no abre la lista');
 end;
 
 initialization

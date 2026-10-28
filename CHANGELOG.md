@@ -233,6 +233,11 @@ the MCP `initialize` response (`serverInfo.version`).
   in the others, a character beyond U+FFFF right at the limit left half of
   it in the answer. They all cut through one helper now, the twin of the one
   that already cut the end of a text.
+- **A window whose title says "visible windows:" no longer restarts the
+  window list.** `delphi_desktop` looked for the line that opens the list of
+  windows anywhere in a line, so a window with those words in its title was
+  taken for it. The lines the desktop node writes are now read by one reader,
+  and that line by its own form.
 - **The designer's note on how the IDE stores a value no longer repeats it.**
   When the IDE stores a property differently from what was given, the answer
   carries the values in `value`, `storedAs` and `storedIn`, exactly as the form
