@@ -509,6 +509,22 @@ REGLAS = [
      'las dos por el mismo motor; el prefijo, aqui. StartsText/SameText pliegan '
      'con el locale y daban por dentro o iguales lo que NTFS separa: se leia y '
      'escribia fuera de la jaula (medido contra r1222ci)'),
+    # V118 (28-oct-2026): el valor de las macros RESERVADAS de msbuild que
+    # dependen del proyecto y del fichero lo da UN lector,
+    # MacrosReservadasDeMsbuild ('Nombre=valor'). Tres tablas las imitaban por
+    # separado (ResolveImportPath, ExpandOutputMacros y la tabla de BuildRunner)
+    # y derivaron: $(ProjectDir) en un Import importaba fuera de la jaula y
+    # $(MSBuildThisFileDirectory) de un .targets de otra carpeta leia fuera (A y
+    # D, medido contra V154); $(ProjectDir) NO entra (no reservada, no verificable)
+    ('las macros reservadas de msbuild, en un lector',
+     r"'(?:MSBuildProjectDirectory|MSBuildThisFileDirectory|MSBuildProjectName|SanitizedProjectName)='",
+     [('Lsp.Dproj.pas', 'MacrosReservadasDeMsbuild')],
+     'MacrosReservadasDeMsbuild (Lsp.Dproj, V118): EL lector del valor de las '
+     'macros reservadas de msbuild, constantes en la cadena de Import salvo '
+     'MSBuildThisFileDirectory, que sigue al fichero del valor. Lo usan '
+     'ResolveImportPath, ExpandOutputMacros y la tabla de Lsp.BuildRunner; nadie '
+     'arma esas parejas a mano. $(ProjectDir) NO entra: no es reservada y es no '
+     'verificable (V118, medido el 28-oct-2026)'),
     # ...y su forma ESCRITA a mano, la que esa fila no veia (V81 de la 1.23.1): dos
     # rutas pasadas a minusculas y comparadas por prefijo. ToLower lleva el signo
     # Kelvin (U+212A) a 'k' y NTFS no: IncludeFor escribia 'U.pas' de una unidad de
@@ -1594,6 +1610,8 @@ PLANTADO = {
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
         "  if AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0 then X := 1;",
+    'las macros reservadas de msbuild, en un lector':
+        "  T := 'MSBuildThisFileDirectory=' + Carpeta;",
     'un "dentro de" de dos rutas por texto': "  if Full.ToLower.StartsWith(Base.ToLower) then X := 1;",
     'el trozo de una ruta bajo una carpeta a mano':
         "  Rel := F.Substring(Length(IncludeTrailingPathDelimiter(Dir)));",

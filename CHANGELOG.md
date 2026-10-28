@@ -10,6 +10,24 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A path a build reaches through an `<Import>` or a search path is judged
+  where msbuild evaluates it, not where the server guessed.** The build gate
+  expanded the msbuild macros of a `.dproj` with three tables of its own, and
+  in two measured cases they named a different file than msbuild uses.
+  `$(ProjectDir)` is not a reserved macro - `CodeGear.Delphi.Targets` defines it
+  (empty in the body of the `.dproj`, the project folder after that import) and
+  a project may redefine it - so `<Import Project="$(ProjectDir)\x.targets"/>` at
+  the top of a `.dproj` was imported by msbuild from the drive root, outside the
+  workspace, while the gate scanned a file of the same name next to the project
+  and let the build run; and `$(MSBuildThisFileDirectory)` follows each file, so
+  a `DCC_UnitSearchPath` written with `..\..\` in a `.targets` imported from
+  another folder was read by the compiler from that file's folder, outside the
+  workspace, while the gate resolved it from the project folder. The three
+  tables are now one reader (`MacrosReservadasDeMsbuild`) of the reserved
+  macros, with `$(MSBuildThisFileDirectory)` resolved per file; `$(ProjectDir)`
+  is refused as non-verifiable instead of guessed (its value depends on the
+  position in the document and on who defines it, and it appears in no `.dproj`
+  of the install or the workspace). `test_paisaje` guards the one reader.
 - **What an answer quotes from the disk comes back as the disk has it, also
   inside a JSON answer.** The outbound filter leaves the citations a call
   composed (`N|text`, `Lsp.Mascara.CitaDeLinea`) untouched and masks the rest,

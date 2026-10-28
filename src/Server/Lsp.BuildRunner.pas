@@ -1958,19 +1958,28 @@ begin
     end;
     Vars.Values['Platform'] := APlat;
     Vars.Values['Config'] := ACfg;
-    // las de msbuild sobre este proyecto (las de ResolveImportPath y
-    // ExpandOutputMacros, en una tabla)
-    Vars.Values['MSBuildProjectDirectory'] := Dir;
-    Vars.Values['MSBuildThisFileDirectory'] := IncludeTrailingPathDelimiter(Dir);
-    Vars.Values['MSBuildProjectName'] := Base;
-    Vars.Values['SanitizedProjectName'] := Base;
+    // las reservadas de msbuild sobre este proyecto, por EL lector: UNA casa
+    // (V118) para ResolveImportPath, ExpandOutputMacros y esta tabla. La carpeta
+    // del fichero es la del proyecto para sembrar; $(MSBuildThisFileDirectory)
+    // se reajusta por documento mas abajo (cada valor se juzga en SU fichero).
+    for var Macro in MacrosReservadasDeMsbuild(Dir, Base, Dir) do
+    begin
+      var P := Pos('=', Macro);
+      if P > 1 then
+        Vars.Values[Copy(Macro, 1, P - 1)] := Copy(Macro, P + 1, MaxInt);
+    end;
+    // y las que son el path del propio .dproj (constantes en la cadena): de su
+    // path real, sin componer ningun nombre (DprojDe es EL compositor de .dproj)
     Vars.Values['MSBuildProjectFile'] := TPath.GetFileName(ADprojPath);
     Vars.Values['MSBuildProjectFullPath'] := TPath.GetFullPath(ADprojPath);
-    // ProjectDir NO va en la tabla: msbuild lo lee VACIO en el cuerpo del .dproj
-    // (no es una propiedad reservada; medido el 22-oct-2026, $(ProjectDir)\fuera
-    // compilaba leyendo fuera de la jaula), asi que la puerta lo expande vacio
-    // como msbuild y no con Dir (H4). MSBuildProjectDirectory (reservada) y
-    // SanitizedProjectName (= Base, medido) si valen y se quedan arriba.
+    // $(ProjectDir) NO va en la tabla: NO es una propiedad reservada -
+    // CodeGear.Delphi.Targets la DEFINE (vacia en el cuerpo del .dproj, la
+    // carpeta del proyecto tras ese Import) y el proyecto puede redefinirla. En
+    // un valor del cuerpo msbuild la lee VACIA (H4) y la puerta la deja vacia
+    // (asi un \salida cae en la raiz de la unidad y se niega); en un <Import>
+    // depende de la posicion y se niega como NO verificable (V118, medido el
+    // 28-oct-2026: el MISMO Import al principio y al final del .dproj importaba
+    // ficheros distintos, uno de ellos fuera de la jaula).
     // los nombres que msbuild toma de fuera del documento (esta tabla): la
     // evaluacion de las Condition no los da por vacios
     var Externas: TArray<string> := [];
@@ -1992,6 +2001,17 @@ begin
     end;
     for var I := 0 to High(Xmls) do
     begin
+      // las reservadas de ESTE documento, por EL lector con SU fichero:
+      // $(MSBuildThisFileDirectory) sigue al fichero donde se escribe el valor,
+      // no al proyecto (V118, caso D: un DCC_UnitSearchPath con ..\..\ en un
+      // .targets importado de otra carpeta leia fuera de la jaula). UNA sola
+      // casa calcula el valor -el lector-, aqui con el fichero del documento.
+      for var Macro in MacrosReservadasDeMsbuild(Dir, Base, ExtractFileDir(Ficheros[I])) do
+      begin
+        var P := Pos('=', Macro);
+        if P > 1 then
+          Vars.Values[Copy(Macro, 1, P - 1)] := Copy(Macro, P + 1, MaxInt);
+      end;
       var DeOtros: TArray<string> := [];
       for var J := 0 to High(Xmls) do
         if J <> I then

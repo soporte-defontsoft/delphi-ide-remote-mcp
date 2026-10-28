@@ -1033,12 +1033,26 @@ function ProjectXmlChain(const ADprojPath: string): TArray<string>; overload;
   existing <project>.exe/.dll/.bpl among them wins. Returns '' when nothing
   is there (build failed, macro we cannot resolve, unusual layout). }
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
-{ EL expansor de los macros de un valor de SALIDA del .dproj: $(Platform),
-  $(Config), $(MSBuildProjectDirectory) / $(ProjectDir) (ADir) y
-  $(MSBuildProjectName) / $(SanitizedProjectName) (ABase). Lo que conserva
-  '$(' no se sabe resolver aqui. UNA copia: ResolveBuildOutput, BuildOutputDirs
-  (la puerta) y el ProjectOutput del manifiesto de despliegue (que expandia
-  a mano; revisor del 21-oct-2026). }
+{ EL lector de las macros RESERVADAS de msbuild que dependen del proyecto que
+  compila y de la CARPETA del fichero donde se escribe el valor: UNA casa (V118,
+  28-oct-2026) para las tres tablas que antes las imitaban por separado y
+  derivaban (ResolveImportPath, ExpandOutputMacros y la tabla de Lsp.BuildRunner).
+  Devuelve 'Nombre=Valor'. Su valor lo fija la spec de msbuild y es constante en
+  toda la cadena de Import, salvo $(MSBuildThisFileDirectory), que sigue a la
+  carpeta del fichero (ACarpetaDelFichero). NO entra $(ProjectDir): no es
+  reservada - CodeGear.Delphi.Targets la DEFINE (vacia en el cuerpo del .dproj,
+  la carpeta tras su Import) y el proyecto puede redefinirla -, asi que depende
+  de la posicion y quien la lleve la deja escrita, no verificable. Tampoco
+  $(Platform)/$(Config), que elige quien compila, ni $(MSBuildProjectFile) /
+  $(MSBuildProjectFullPath), que salen del path real del .dproj donde hacen falta
+  (Lsp.BuildRunner): aqui no se compone ningun nombre de fichero. }
+function MacrosReservadasDeMsbuild(const ACarpetaProyecto, ANombreProyecto, ACarpetaDelFichero: string): TArray<string>;
+{ EL expansor de los macros de un valor de SALIDA del .dproj: $(Platform) y
+  $(Config), que elige quien compila, mas las reservadas por EL lector
+  (MacrosReservadasDeMsbuild). $(ProjectDir) ya no (V118: no reservada, no
+  verificable). Lo que conserva '$(' no se sabe resolver aqui. UNA copia:
+  ResolveBuildOutput, BuildOutputDirs (la puerta) y el ProjectOutput del
+  manifiesto de despliegue. }
 function ExpandOutputMacros(const AValue, ADir, ABase, APlatform,
   AConfig: string): string;
 
@@ -3466,31 +3480,49 @@ begin
   end;
 end;
 
-{ Expands the few MSBuild macros that point INSIDE the project, so an import
-  written with them can be resolved and read. Returns '' when the path still
-  carries a macro we cannot resolve (which the caller then refuses).
-  ACarpetaDelBuild: la del .dproj que se compila, en la que corre msbuild: un
-  "\x" o un "X:y" se lee desde ella aunque lo escriba un Import de otra
-  carpeta; lo relativo, desde la del fichero que lo escribe. }
+{ Sustituye en ATexto cada $(nombre) que la tabla APares conoce
+  ('Nombre=Valor'), sin mirar mayusculas; lo que no esta en la tabla se deja
+  escrito para que lo niegue quien juzga (no verificable). }
+function ExpandeReservadas(const ATexto: string; const APares: TArray<string>): string;
+var
+  Par: string;
+  Eq: Integer;
+begin
+  Result := ATexto;
+  for Par in APares do
+  begin
+    Eq := Pos('=', Par);
+    if Eq > 1 then
+      Result := Result.Replace('$(' + Copy(Par, 1, Eq - 1) + ')',
+        Copy(Par, Eq + 1, MaxInt), [rfReplaceAll, rfIgnoreCase]);
+  end;
+end;
+
+function MacrosReservadasDeMsbuild(const ACarpetaProyecto, ANombreProyecto, ACarpetaDelFichero: string): TArray<string>;
+begin
+  Result := [
+    'MSBuildProjectDirectory=' + ACarpetaProyecto,
+    'MSBuildProjectName=' + ANombreProyecto,
+    'SanitizedProjectName=' + ANombreProyecto,
+    'MSBuildThisFileDirectory=' + IncludeTrailingPathDelimiter(ACarpetaDelFichero)];
+end;
+
+{ La ruta de un <Import> con sus macros expandidas por EL lector
+  (MacrosReservadasDeMsbuild) y resuelta como la lee msbuild (EL resolutor,
+  que corre en ACarpetaDelBuild: un "\x" o un "X:y" se leen desde ella aunque
+  lo escriba un Import de otra carpeta; lo relativo, desde la del fichero que lo
+  escribe). Lo que queda con una macro que el lector no da -$(ProjectDir) entre
+  ellas (V118): no reservada, depende de la posicion y de quien la defina-
+  devuelve '' y quien llama lo niega como no verificable. }
 function ResolveImportPath(const APath, AProjectFile, ACarpetaDelBuild, ANombreRaiz: string): string;
 var
   Dir: string;
 begin
   Dir := ExtractFileDir(AProjectFile);
-  // $(MSBuildProjectDirectory), $(ProjectDir) y $(MSBuildProjectName) los fija
-  // msbuild al PROYECTO QUE COMPILA, constantes en toda la cadena de Import
-  // (medido con el oraculo de msbuild, A39): se expanden con el raiz, no con el
-  // fichero que importa. Solo $(MSBuildThisFileDirectory) sigue a ESTE fichero.
-  Result := APath;
-  Result := Result.Replace('$(MSBuildProjectDirectory)', ACarpetaDelBuild, [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(MSBuildThisFileDirectory)',
-    IncludeTrailingPathDelimiter(Dir), [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(MSBuildProjectName)', ANombreRaiz, [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(ProjectDir)', ACarpetaDelBuild, [rfReplaceAll, rfIgnoreCase]);
+  Result := ExpandeReservadas(APath,
+    MacrosReservadasDeMsbuild(ACarpetaDelBuild, ANombreRaiz, Dir));
   if Result.Contains('$(') then
-    Exit(''); // still macro-based: not resolvable here
-  // como lo lee msbuild (EL resolutor): se juzgaba en la unidad del PROCESO
-  // del servidor (A9b de la 1.23, medido)
+    Exit(''); // still macro-based (e.g. $(ProjectDir)): not verifiable here
   Result := RutaDesde(Dir, Result, ACarpetaDelBuild);
 end;
 
@@ -3509,19 +3541,14 @@ begin
     (APathLow = '$(appdata)\embarcadero\$(bdsappdatabasedir)\$(productversion)\usertools.proj');
 end;
 
-{ Las macros comunes de una carpeta de salida, para una plataforma/config.
-  Lo que conserva '$(' no se sabe resolver aqui. UNA copia: la usan
-  ResolveBuildOutput (buscar el binario) y BuildOutputDirs (la puerta). }
+{ Un valor de salida, por EL expansor comun: $(Platform)/$(Config), que elige
+  quien compila, y las reservadas por EL lector (MacrosReservadasDeMsbuild). }
 function ExpandOutputMacros(const AValue, ADir, ABase, APlatform,
   AConfig: string): string;
 begin
-  Result := AValue;
-  Result := Result.Replace('$(Platform)', APlatform, [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(Config)', AConfig, [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(MSBuildProjectDirectory)', ADir, [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(ProjectDir)', ADir, [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(MSBuildProjectName)', ABase, [rfReplaceAll, rfIgnoreCase]);
-  Result := Result.Replace('$(SanitizedProjectName)', ABase, [rfReplaceAll, rfIgnoreCase]);
+  Result := ExpandeReservadas(AValue,
+    MacrosReservadasDeMsbuild(ADir, ABase, ADir) +
+    ['Platform=' + APlatform, 'Config=' + AConfig]);
 end;
 
 { Un valor de salida YA expandido (ACand, de ExpandOutputMacros), resuelto a
