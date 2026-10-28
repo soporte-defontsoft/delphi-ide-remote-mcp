@@ -438,7 +438,7 @@ var
   Names, Defaults: TDictionary<string, string>;
   Seen: TDictionary<string, Integer>;
   Ret, Issue: TJSONObject;
-  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas, NoCargan: TJSONArray;
+  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas, NoCargan, ConStyleBookF: TJSONArray;
   Ignorado: TArray<string>;
   NoCarga: string;
   CarganTodos: Boolean;
@@ -482,6 +482,7 @@ begin
   Rc := TJSONArray.Create;
   SinNombre := TJSONArray.Create;
   ComoEstilo := TJSONArray.Create;
+  ConStyleBookF := TJSONArray.Create;
   PorFmx := TJSONArray.Create;
   NoCargan := TJSONArray.Create;
   Formas := TJSONArray.Create;
@@ -564,48 +565,54 @@ begin
         if F.EndsWith('.pas', True) then
           Text := BlankComments(Text); // a lookup in a comment is not a lookup
         Lines := SplitToLines(Text); // las lineas como las numera delphi_read
-        for I := 0 to High(Lines) do
-        begin
-          // EL lector de una linea de propiedad y EL de un literal de form
-          // (#N y trozos incluidos): con la regex '([^']+)' un
-          // 'card'#115'tyle' se leia 'card' (2.2 de la 1.18.0). En un .pas,
-          // la asignacion, con el mismo lector del literal.
-          var Lookup := '';
-          if F.EndsWith('.pas', True) then
+        // EL lector de un literal de form (#N y trozos incluidos): con la regex
+        // '([^']+)' un 'card'#115'tyle' se leia 'card' (2.2 de la 1.18.0). En
+        // un .pas, la asignacion; en un form, EL lector de sus StyleLookup
+        // (Lsp.Styles.LookupsDeForm, el de la nota del disenador): uno con un
+        // StyleBook que no se lee no se juzga, y sus lookups del StyleBook
+        // salian como faltas (V123 de la 1.23.1, medido)
+        var Lookups: TArray<TLookupDeForm> := [];
+        if F.EndsWith('.pas', True) then
+          for I := 0 to High(Lines) do
           begin
             M := TRegEx.Match(Lines[I], 'StyleLookup\s*:=\s*([^;]+);', [roIgnoreCase]);
-            if not (M.Success and LeeLiteralDeForm(M.Groups[1].Value.Trim, Lookup)) then
-              Continue;
+            var LP: TLookupDeForm;
+            if M.Success and LeeLiteralDeForm(M.Groups[1].Value.Trim, LP.Lookup) and (LP.Lookup <> '') then
+            begin
+              LP.Componente := '';
+              LP.Linea := I + 1;
+              Lookups := Lookups + [LP];
+            end;
           end
-          else
+        else
+        begin
+          // un componente con el StyleName de uno de estos estilos: la
+          // confusion con StyleLookup (1.20.1), una pista aparte
+          for I := 0 to High(Lines) do
           begin
-            var Prop, Valor: string;
-            if not LineaDePropiedad(Lines[I], Prop, Valor) then
-              Continue;
-            // un componente con el StyleName de uno de estos estilos: la
-            // confusion con StyleLookup (1.20.1), una pista aparte
-            if SameText(Prop, 'StyleName') and LeeLiteralDeForm(Valor, Lookup) and
-               Names.ContainsKey(ClaveDeEstilo(Lookup)) then
+            var Prop, Valor, Nombre: string;
+            if LineaDePropiedad(Lines[I], Prop, Valor) and SameText(Prop, 'StyleName') and
+               LeeLiteralDeForm(Valor, Nombre) and Names.ContainsKey(ClaveDeEstilo(Nombre)) then
             begin
               Issue := TJSONObject.Create;
-              Issue.AddPair('styleName', Lookup);
+              Issue.AddPair('styleName', Nombre);
               Issue.AddPair('path', F);
               Issue.AddPair('line', TJSONNumber.Create(I + 1));
               ComoEstilo.AddElement(Issue);
-              Continue;
             end;
-            if not (SameText(Prop, 'StyleLookup') and LeeLiteralDeForm(Valor, Lookup)) then
-              Continue;
           end;
-          // vacio: el estilo por defecto de su clase, sin buscar ninguno por
-          // nombre (FMX.Controls, TStyledControl.GetStyleObject: con
-          // StyleLookup vacio va a DefaultStyleLookup). Salia como un lookup
-          // sin estilo y clean=false (StyleLookup = '' de un TTabItem que
-          // escribe el IDE; frame de Galatea, 18-oct-2026)
-          if Lookup = '' then
-            Continue;
+          var ConStyleBook: Boolean;
+          Lookups := LookupsDeForm(Lines, ConStyleBook);
+          if ConStyleBook then
+          begin
+            ConStyleBookF.Add(MaskDriveText('', F));
+            Lookups := [];
+          end;
+        end;
+        for var L in Lookups do
+        begin
           Inc(Used);
-          N := ClaveDeEstilo(Lookup);
+          N := ClaveDeEstilo(L.Lookup);
           if Names.ContainsKey(N) then
             Continue;
           if Defaults.ContainsKey(N) then
@@ -614,11 +621,11 @@ begin
             Continue;
           end;
           Issue := TJSONObject.Create;
-          Issue.AddPair('lookup', Lookup);
+          Issue.AddPair('lookup', L.Lookup);
           // la ruta, para agruparlos por carpeta y fichero al final (el
           // organizador enmascara la carpeta)
           Issue.AddPair('path', F);
-          Issue.AddPair('line', TJSONNumber.Create(I + 1));
+          Issue.AddPair('line', TJSONNumber.Create(L.Linea));
           Missing.AddElement(Issue);
         end;
       end;
@@ -780,6 +787,15 @@ begin
     end
     else
       ComoEstilo.Free;
+    // los forms que no se juzgan, por que: sale solo si los hay, y no cambia
+    // clean (V123 de la 1.23.1)
+    if ConStyleBookF.Count > 0 then
+    begin
+      Ret.AddPair('formsWithAStyleBook', ConStyleBookF);
+      Ret.AddPair('formsWithAStyleBookNote', MsgText(SN_STYLES_FORMS_CON_STYLEBOOK));
+    end
+    else
+      ConStyleBookF.Free;
     // clean = sin hallazgos; ok es "la llamada fue bien" (novena revision)
     Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
       (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0) and (PorFmx.Count = 0) and

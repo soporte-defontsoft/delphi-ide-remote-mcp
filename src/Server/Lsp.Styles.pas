@@ -258,14 +258,38 @@ function PlatformDefaultStyleNames: TArray<string>;
   en mayusculas como nueva (P7 de la segunda revision de la 1.17.0). }
 function ClaveDeEstilo(const ANombre: string): string;
 
+type
+  { Un StyleLookup con valor de un form FMX: su componente, el valor y su
+    linea (1-based, como la numera delphi_read) }
+  TLookupDeForm = record
+    Componente, Lookup: string;
+    Linea: Integer;
+  end;
+
+{ EL lector de los StyleLookup de un form FMX (sus lineas): los que llevan
+  valor (vacio es el estilo de su clase, sin buscar ninguno por nombre).
+  AStyleBookQueNoSeLee: el form puede tomar sus estilos de un StyleBook que
+  estas lineas no dejan leer - uno suyo (TStyleBook: sus estilos van en
+  binario), el de otro form (StyleBook = DM.StyleBook1) o el de su ancestro
+  (una raiz inherited, una vista FMX) -; quien juzga contra los estilos que
+  conoce no juzga entonces ninguno. La nota del disenador y delphi_styles
+  lint leian cada uno los suyos y solo la nota sabia de un StyleBook: el lint
+  daba por falta un lookup del StyleBook del form, y la nota decia "the form
+  has no StyleBook" de uno con StyleBook = DM.StyleBook1 (V123 de la 1.23.1,
+  medido). Gramatica propia: ningun juez dice que StyleBook carga la app. }
+function LookupsDeForm(const ALineas: TArray<string>; out AStyleBookQueNoSeLee: Boolean): TArray<TLookupDeForm>;
+
 { El juicio de un form FMX (sus lineas, como las numera delphi_read) contra los
-  estilos que ve: los StyleLookup que ninguno define, ni el estilo por defecto
-  de la plataforma (PlatformDefaultStyleNames, el juez de delphi_styles lint)
-  ni un TStyleBook del form (con uno no se juzga: sus estilos van en binario).
-  Su nota entera (DSGN-175 y una linea por lookup), o [] si no hay ninguno, si
+  estilos que ve: los StyleLookup (LookupsDeForm) que ninguno define, ni el
+  estilo por defecto de la plataforma (PlatformDefaultStyleNames, el juez de
+  delphi_styles lint) ni un StyleBook (con uno no se juzga). AAntes: las
+  lineas del form ANTES de la edicion que lo juzga; solo se dicen los que
+  esa edicion trae ([] en el lint: todos). Tras cada edicion iba la lista
+  entera, 91 lineas por cambiar una Opacity (V143 de la 1.23.1, medido). Su
+  nota entera (DSGN-175 y una linea por lookup), o [] si no hay ninguno, si
   no hay juez (sin el conversor) o si ningun StyleLookup lleva valor (entonces
   ni se le pregunta). AFichero: el nombre que da la nota. V75 de la 1.23.1. }
-function NotaDeLookupsSinEstilo(const AFichero: string; const ALineas: TArray<string>): TArray<string>;
+function NotaDeLookupsSinEstilo(const AFichero: string; const ALineas, AAntes: TArray<string>): TArray<string>;
 
 type
   TClaseRc = (crRecurso, crInclude);
@@ -1106,40 +1130,70 @@ begin
   Result := ANombre.ToLowerInvariant;
 end;
 
-function NotaDeLookupsSinEstilo(const AFichero: string; const ALineas: TArray<string>): TArray<string>;
+function LookupsDeForm(const ALineas: TArray<string>; out AStyleBookQueNoSeLee: Boolean): TArray<TLookupDeForm>;
 var
   Clave, Nombre, Clase, Prop, Valor, Lookup, Componente: string;
-  Textos, Claves, Defecto: TArray<string>;
+  Objetos: Integer;
+  L: TLookupDeForm;
 begin
   Result := [];
+  AStyleBookQueNoSeLee := False;
   Componente := '';
+  Objetos := 0;
   // por EL lector de una linea de objeto (Lsp.DesignerForma) y EL de una de
-  // propiedad y su literal, el del lint de estilos: las propiedades de un
-  // objeto van antes que sus hijos, asi que la ultima cabecera es la suya
+  // propiedad y su literal: las propiedades de un objeto van antes que sus
+  // hijos, asi que la ultima cabecera es la suya (antes de la segunda, la raiz)
   for var I := 0 to High(ALineas) do
     if LineaDeObjeto(ALineas[I], Clave, Nombre, Clase) then
     begin
-      if SameText(Clase, 'TStyleBook') then
-        Exit;
+      Inc(Objetos);
+      if SameText(Clase, 'TStyleBook') or ((Objetos = 1) and (Clave = 'inherited')) then
+        AStyleBookQueNoSeLee := True;
       Componente := Nombre;
     end
-    // vacio: el estilo de su clase, sin buscar ninguno por nombre
-    else if LineaDePropiedad(ALineas[I], Prop, Valor) and SameText(Prop, 'StyleLookup') and
-       LeeLiteralDeForm(Valor, Lookup) and (Lookup <> '') then
+    else if LineaDePropiedad(ALineas[I], Prop, Valor) then
     begin
-      Textos := Textos + [MsgFmt(SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [Componente, Lookup, I + 1])];
-      Claves := Claves + [ClaveDeEstilo(Lookup)];
+      // el de la raiz, aunque sea el de otro form (DM.StyleBook1)
+      if (Objetos = 1) and SameText(Prop, 'StyleBook') then
+        AStyleBookQueNoSeLee := True
+      // vacio: el estilo de su clase, sin buscar ninguno por nombre
+      // (TStyledControl.GetStyleObject va a DefaultStyleLookup); el lint lo
+      // daba por un lookup sin estilo (StyleLookup = '' de un TTabItem que
+      // escribe el IDE, 18-oct-2026)
+      else if SameText(Prop, 'StyleLookup') and LeeLiteralDeForm(Valor, Lookup) and (Lookup <> '') then
+      begin
+        L.Componente := Componente;
+        L.Lookup := Lookup;
+        L.Linea := I + 1;
+        Result := Result + [L];
+      end;
     end;
-  if Length(Claves) = 0 then
+end;
+
+function NotaDeLookupsSinEstilo(const AFichero: string; const ALineas, AAntes: TArray<string>): TArray<string>;
+var
+  Lookups: TArray<TLookupDeForm>;
+  Defecto, Estaban: TArray<string>;
+  ConStyleBook: Boolean;
+begin
+  Result := [];
+  Lookups := LookupsDeForm(ALineas, ConStyleBook);
+  if ConStyleBook or (Length(Lookups) = 0) then
     Exit;
   Defecto := PlatformDefaultStyleNames;
   if Length(Defecto) = 0 then
     Exit; // sin el juez no se dice nada
-  for var I := 0 to High(Claves) do
-    if IndexStr(Claves[I], Defecto) < 0 then
-      Result := Result + [Textos[I]];
+  // los que ya estaban (el componente y su lookup) no los trae la edicion
+  Estaban := [];
+  for var L in LookupsDeForm(AAntes, ConStyleBook) do
+    Estaban := Estaban + [L.Componente + #0 + ClaveDeEstilo(L.Lookup)];
+  for var L in Lookups do
+    if (IndexStr(ClaveDeEstilo(L.Lookup), Defecto) < 0) and
+       (IndexStr(L.Componente + #0 + ClaveDeEstilo(L.Lookup), Estaban) < 0) then
+      Result := Result + [MsgFmt(SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [L.Componente, L.Lookup, L.Linea])];
   if Length(Result) > 0 then
-    Result := [MsgFmt(SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT, [AFichero, Length(Result)])] + Result;
+    Result := [MsgFmt(SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT, [AFichero, Length(Result),
+      IfThen(Length(AAntes) > 0, MsgText(SF_DESIGNER_LOOKUPS_DE_LA_EDICION), '')])] + Result;
 end;
 
 const

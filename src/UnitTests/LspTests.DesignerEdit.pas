@@ -59,6 +59,8 @@ type
     procedure ElLectorDelFlotanteEsLaInversaDelEscritor;
     [Test]
     procedure LasVistasLasDiceLaDirectiva;
+    [Test]
+    procedure LosLookupsDeUnFormYSuStyleBook;
   end;
 
 implementation
@@ -1780,6 +1782,37 @@ begin
   // el maestro por el nombre; sin vista en el nombre, ninguno
   Assert.AreEqual('C:\p\UMain.fmx', MaestroPorNombre('C:\p\UMain.Windows.fmx'));
   Assert.AreEqual('', MaestroPorNombre('C:\p\UMain.fmx'));
+end;
+
+procedure TDesignerEditTests.LosLookupsDeUnFormYSuStyleBook;
+const
+  CRLF = #13#10;
+var
+  L: TArray<TLookupDeForm>;
+  SB: Boolean;
+begin
+  // EL lector de los StyleLookup de un form (V123 de la 1.23.1): los que
+  // llevan valor, con su componente y su linea; vacio es el de su clase
+  L := LookupsDeForm(SplitToLines('object FormMain: TFormMain' + CRLF +
+    '  object B1: TButton' + CRLF + '    StyleLookup = ''verde''' + CRLF + '  end' + CRLF +
+    '  object B2: TButton' + CRLF + '    StyleLookup = ''''' + CRLF + '  end' + CRLF + 'end'), SB);
+  Assert.IsFalse(SB, 'sin StyleBook');
+  Assert.IsTrue(Length(L) = 1, 'solo el que lleva valor');
+  Assert.AreEqual('B1', L[0].Componente);
+  Assert.AreEqual('verde', L[0].Lookup);
+  Assert.AreEqual(3, L[0].Linea);
+  // un StyleBook que no se lee: el suyo, el de otro form en la raiz, el de
+  // su ancestro; un StyleBook de un hijo no es el del form
+  LookupsDeForm(SplitToLines('object F: TF' + CRLF + '  object StyleBook1: TStyleBook' + CRLF +
+    '  end' + CRLF + 'end'), SB);
+  Assert.IsTrue(SB, 'un TStyleBook en el form');
+  LookupsDeForm(SplitToLines('object F: TF' + CRLF + '  StyleBook = DM.StyleBook1' + CRLF + 'end'), SB);
+  Assert.IsTrue(SB, 'StyleBook = DM.StyleBook1 en la raiz');
+  LookupsDeForm(SplitToLines('inherited F_Windows: TF_Windows' + CRLF + 'end'), SB);
+  Assert.IsTrue(SB, 'una raiz inherited');
+  LookupsDeForm(SplitToLines('object F: TF' + CRLF + '  object X: TMiControl' + CRLF +
+    '    StyleBook = Otro' + CRLF + '  end' + CRLF + 'end'), SB);
+  Assert.IsFalse(SB, 'el StyleBook de un hijo');
 end;
 
 initialization

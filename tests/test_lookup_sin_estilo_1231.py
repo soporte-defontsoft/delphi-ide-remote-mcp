@@ -14,9 +14,28 @@ lo ve delphi_styles lint con su carpeta.
   L5 delphi_edit que escribe un StyleLookup que no existe: sus avisos llevan DSGN-175 (roja)
   L6 con un TStyleBook en el form (sus estilos van en binario y no se leen): sin DSGN-175
 
+V143: tras una edicion, la nota dice solo los StyleLookup que ELLA trae (iba la lista entera en
+cada edicion: 91 lineas por cambiar una Opacity, medido el 28-oct). Rojas contra b2b7024:
+  L7 designer set de otra propiedad del mismo componente: sin DSGN-175
+  L8 delphi_edit de una linea sin StyleLookup: sin DSGN-175
+  L9 ...la tanda (edits): sin DSGN-175
+  L10 ...un changeset: sin DSGN-175; y uno que cambia el lookup: la nota lo dice (control)
+  L11 insert de Boton2 con un lookup que no existe: la nota dice SOLO el suyo, como de esta edicion
+  L12 control: el lint del form los sigue dando todos
+
+V123: "este StyleLookup tiene estilo" eran dos bucles, y solo la nota sabia de un StyleBook.
+UN lector (Lsp.Styles.LookupsDeForm). Rojas contra b2b7024:
+  L13 StyleBook = DM.StyleBook1 en la raiz: sin DSGN-175 (decia "the form has no StyleBook")
+  L14 una vista FMX (raiz inherited: el StyleBook de su maestro): sin DSGN-175
+  L15 delphi_styles lint de un Sample con su StyleBook (Classic Bluetooth Basic app): sus lookups
+      TabItem1Style1/TabItem2Style1 no salen como faltas; el form va en formsWithAStyleBook (STYLE-057)
+  L16 control: un form del mismo proyecto SIN StyleBook sigue juzgado (su lookup, en la lista)
+
 Uso:  python tests/test_lookup_sin_estilo_1231.py [ruta-a-DelphiLspMcp.exe]
 """
+import json
 import os
+import shutil
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -48,14 +67,29 @@ try:
     with open(fmx, encoding='utf-8-sig', newline='') as f:
         ORIGINAL = f.read()
     assert "StyleLookup = 'buttonstyle'" in ORIGINAL, ORIGINAL
+    # ...y su unidad: un insert de un caso deja su campo, y el lint del siguiente lo decia
+    with open(os.path.join(carpeta, 'UMain.pas'), 'rb') as f:
+        PAS_ORIGINAL = f.read()
 
-    def con(lookup, extra=''):
+    def con(lookup, extra='', raiz=''):
         texto = ORIGINAL.replace("StyleLookup = 'buttonstyle'", "StyleLookup = '%s'" % lookup)
         if extra:
             i = texto.rindex('end')
             texto = texto[:i] + extra + texto[i:]
+        if raiz:
+            i = texto.index('\r\n') + 2
+            texto = texto[:i] + raiz + texto[i:]
         with open(fmx, 'w', encoding='utf-8-sig', newline='') as f:
             f.write(texto)
+        with open(os.path.join(carpeta, 'UMain.pas'), 'wb') as f:
+            f.write(PAS_ORIGINAL)
+
+    def linea_con(texto):
+        with open(fmx, encoding='utf-8-sig', newline='') as f:
+            return next(x for x in f.read().split('\r\n') if texto in x)
+
+    def sin_nota(r):
+        return 'error' not in mc.como_json(r) and not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT')
 
     con('estiloquenoexiste')
     r = lint(fmx)
@@ -86,7 +120,87 @@ try:
     r = lint(fmx)
     check('L6 con un TStyleBook en el form: no se juzga (sin DSGN-175)',
           not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT'), r[:500])
+
+    # V143: lo que la edicion trae
+    con('estiloquenoexiste')
+    r = srv.call('delphi_designer', {'command': 'set', 'path': fmx, 'component': 'Boton1',
+                                     'prop': 'Opacity', 'value': '0.5'})
+    check('L7 designer set de otra propiedad (el lookup ya estaba): sin DSGN-175', sin_nota(r), r[:500])
+    lin = linea_con('Opacity')
+    r = srv.call('delphi_edit', {'path': fmx, 'old': lin.strip(), 'new': lin.replace('0.5', '0.6').strip()})
+    check('L8 delphi_edit de una linea sin StyleLookup: sin DSGN-175', sin_nota(r), r[:500])
+    lin = linea_con('Opacity')
+    r = srv.call('delphi_edit', {'path': fmx, 'edits': [{'old': lin.strip(),
+                                                         'new': lin.replace('0.6', '0.7').strip()}]})
+    check('L9 la tanda (edits) de una linea sin StyleLookup: sin DSGN-175', sin_nota(r), r[:500])
+    lin = linea_con('Opacity')
+    i = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+    srv.call('delphi_changeset', {'command': 'stage', 'id': i, 'kind': 'edit', 'path': fmx,
+                                  'old': lin.strip(), 'new': lin.replace('0.7', '0.8').strip()})
+    srv.call('delphi_changeset', {'command': 'preview', 'id': i})
+    r = srv.call('delphi_changeset', {'command': 'commit', 'id': i})
+    check('L10 un changeset de una linea sin StyleLookup: sin DSGN-175',
+          '0.8' in linea_con('Opacity') and sin_nota(r), r[:500])
+    lin = linea_con('estiloquenoexiste')
+    i = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+    srv.call('delphi_changeset', {'command': 'stage', 'id': i, 'kind': 'edit', 'path': fmx,
+                                  'old': lin.strip(), 'new': "StyleLookup = 'cuarto'"})
+    srv.call('delphi_changeset', {'command': 'preview', 'id': i})
+    r = srv.call('delphi_changeset', {'command': 'commit', 'id': i})
+    check('L10 ...y uno que cambia el lookup: la nota lo dice (control)', nota(r, 'cuarto'), r[:500])
+    r = srv.call('delphi_designer', {'command': 'insert', 'path': fmx, 'classname': 'TButton',
+                                     'component': 'Boton2', 'props': 'StyleLookup=nuevoquenoexiste'})
+    DE_LA_EDICION = mc.catalogo()['SF_DESIGNER_LOOKUPS_DE_LA_EDICION'].strip()[:30]
+    check('L11 insert de Boton2 con un lookup que no existe: la nota dice SOLO el suyo, como de esta edicion',
+          mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT') and "'nuevoquenoexiste'" in r and
+          "'cuarto'" not in r and DE_LA_EDICION in r, r[:700])
+    r = lint(fmx)
+    check('L12 control: el lint del form los sigue dando todos', "'nuevoquenoexiste'" in r and
+          nota(r, 'cuarto') and DE_LA_EDICION not in r, r[:700])
+
+    # V123: un StyleBook que estas lineas no dejan leer
+    con('estiloquenoexiste', raiz='  StyleBook = DM.StyleBook1\r\n')
+    r = lint(fmx)
+    check('L13 StyleBook = DM.StyleBook1 en la raiz: sin DSGN-175 (no es "the form has no StyleBook")',
+          not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT'), r[:500])
+    con('buttonstyle')
+    pas = os.path.join(carpeta, 'UMain.pas')
+    with open(pas, encoding='utf-8-sig', newline='') as f:
+        t = f.read()
+    assert '{$R *.fmx}' in t, t
+    with open(pas, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(t.replace('{$R *.fmx}', '{$R *.fmx}\r\n{$R *.Windows.fmx MSWINDOWS}', 1))
+    vista = os.path.join(carpeta, 'UMain.Windows.fmx')
+    with open(vista, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write('inherited FormMain_Windows: TFormMain_Windows\r\n  inherited Boton1: TButton\r\n'
+                "    StyleLookup = 'devistaquenoexiste'\r\n  end\r\nend\r\n")
+    r = lint(vista)
+    check('L14 una vista FMX (el StyleBook de su maestro): sin DSGN-175',
+          not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT') and 'devistaquenoexiste' not in r, r[:500])
+
+    # un Sample con su StyleBook, del BDSCOMMONDIR que pone el rsvars.bat del IDE (como el corpus)
+    SAMPLE_BT = os.path.join(mc.variable_de_rsvars(srv.call, 'BDSCOMMONDIR'), 'Samples', 'Object Pascal',
+                             'Multi-Device Samples', 'Device Sensors and Services', 'Bluetooth',
+                             'Classic Bluetooth Basic app')
+    check('L15 el Sample con StyleBook esta en esta maquina', os.path.isdir(SAMPLE_BT), SAMPLE_BT)
+    bt = os.path.join(BASE, 'bt')
+    shutil.copytree(SAMPLE_BT, bt)
+    estilos = os.path.join(bt, 'Styles')
+    os.makedirs(estilos)
+    with open(os.path.join(estilos, 'Uno.style'), 'w', newline='') as f:
+        f.write("object TStyleContainer\r\n  object TLayout\r\n    StyleName = 'mibotonstyle'\r\n  end\r\nend\r\n")
+    with open(os.path.join(bt, 'Otro.fmx'), 'w', encoding='utf-8-sig', newline='') as f:
+        f.write("object F2: TForm\r\n  object B: TButton\r\n    StyleLookup = 'faltaenotro'\r\n  end\r\nend\r\n")
+    r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos, 'project': bt}, 300)
+    j = mc.como_json(r)
+    faltas = json.dumps(j.get('lookupsWithoutStyle'))
+    check('L15 el lint de un form con su StyleBook: TabItem1Style1 no es una falta',
+          'TabItem1Style1' not in faltas and 'TabItem2Style1' not in faltas, faltas)
+    check('L15 ...va en formsWithAStyleBook, con su nota STYLE-057',
+          any(x.endswith('Unit1.fmx') for x in (j.get('formsWithAStyleBook') or [])) and
+          mc.es(r, 'SN_STYLES_FORMS_CON_STYLEBOOK'), r[:800])
+    check('L16 control: un form SIN StyleBook del mismo proyecto sigue juzgado', 'faltaenotro' in faltas, faltas)
 finally:
     srv.cierra()
     mc.borra(BASE)
-mc.fin('lookup sin estilo 1.23.1 (V75)')
+mc.fin('lookup sin estilo 1.23.1 (V75, V123, V143)')

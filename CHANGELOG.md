@@ -370,6 +370,25 @@ the MCP `initialize` response (`serverInfo.version`).
   renderer uses), and a view is judged and written against the master's
   class (`TFormMain`): a control inserted in a view goes into the view and
   its field into the form's class.
+- **A form that takes its styles from a StyleBook the server cannot read is
+  not judged against the styles it can.** "Does this `StyleLookup` have a
+  style" was two loops with two sets of names, and only the designer's note
+  (`DSGN-175`) knew about a StyleBook: `delphi_styles lint` reported as
+  missing the lookups that a form's own StyleBook defines (a Sample of RAD
+  Studio, `TabItem1Style1`, gave `clean:false`), and the note said "the form
+  has no StyleBook" of a form with `StyleBook = DM.StyleBook1`. One reader
+  now serves both, and a form whose styles may come from a StyleBook that
+  its lines do not let read - its own (the styles go in binary), another
+  form's, or its ancestor's (an inherited form, an FMX view) - is not judged:
+  the lint lists it in `formsWithAStyleBook` (`STYLE-057`), which does not
+  change `clean`.
+- **After an edit, `DSGN-175` lists only the `StyleLookup` values that edit
+  writes.** The note travelled with every edit of an `.fmx` and listed every
+  lookup of the form without a style: changing one `Opacity` brought back 91
+  lines. `delphi_designer` set, insert and delete, `delphi_edit` (one edit or
+  `edits`) and `delphi_changeset` now compare with the form as it was before
+  the edit; `delphi_designer lint` still lists them all, and an upload, which
+  brings the whole file, is judged whole.
 
 ### Changed
 

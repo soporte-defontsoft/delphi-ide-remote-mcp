@@ -857,10 +857,13 @@ type
   binario, que ya paso su conversion). Con ALector, si la tabla no encontro
   nada y dejo lineas sin juicio, el form entero al LECTOR del IDE
   (Lsp.FormRender.LoQueNoCargaElIde, el juez de set): lo piden el lint y el
-  juicio de lo escrito; designer set/insert/delete tienen el suyo. Nunca
-  lanza. }
+  juicio de lo escrito; designer set/insert/delete tienen el suyo. AAntes:
+  el texto del form ANTES de la edicion que se juzga ('' en el lint o en un
+  form nuevo): la nota de los StyleLookup dice solo los que la edicion trae
+  (V143 de la 1.23.1). Nunca lanza. }
 function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
-  AEsperaMs: Cardinal = ESPERA_TABLA_MS; ALector: Boolean = False): TLintDeForm;
+  AEsperaMs: Cardinal = ESPERA_TABLA_MS; ALector: Boolean = False;
+  const AAntes: string = ''): TLintDeForm;
 
 { Los avisos de una respuesta del motor (ExecutePatch, ExecuteTextEdit): las
   lineas desde el primer aviso marcado *** (la marca va detras de la
@@ -875,8 +878,9 @@ function AvisosDelMotor(const ARespuesta: string): TArray<string>;
   edicion: la nota EDIT-084 y lo que dice DesignerLint (el parser del IDE, las
   propiedades, el enlace con su clase, la nota de form ancho). Vacio si APath
   no es un designer. Lo hacen los escritores en cada edicion suelta, y la
-  tanda y el changeset UNA vez al final (AplazaJuicioDeForm). }
-function JuicioDeForm(const APath, ATexto, AEnc: string): TArray<string>;
+  tanda y el changeset UNA vez al final (AplazaJuicioDeForm). AAntes: el
+  texto de antes de la edicion, como en LintDeForm ('' = todo es nuevo). }
+function JuicioDeForm(const APath, ATexto, AEnc: string; const AAntes: string = ''): TArray<string>;
 { El juicio de lo que escribir APath ALCANZA: el de su form si es un designer
   (JuicioDeForm), o el de los forms de su UNIDAD si es un .pas: solo su enlace
   con la clase - el .pas lo rompe tambien; el texto del form, su parser y sus
@@ -887,7 +891,7 @@ function JuicioDeForm(const APath, ATexto, AEnc: string): TArray<string>;
   suelto de un .pas que rompia el enlace no decia nada (punto 7). EL juicio
   de los escritores sueltos, de la tanda y del changeset. }
 function JuicioDeLoEscrito(const APath, ATexto, AEnc: string;
-  const AOmite: TArray<string> = nil): TArray<string>;
+  const AOmite: TArray<string> = nil; const AAntes: string = ''): TArray<string>;
 { Lo que el LECTOR del IDE dice del form APath tal como quedo en disco,
   cuando la tabla calla (LintDeForm con ALector): la cabecera EDIT-127 y sus
   lineas, o nada. Se pide FUERA del cerrojo de escritura (EnterFileEdit): el
@@ -3552,7 +3556,7 @@ begin
     Result := Result + #10 + Aviso;
 end;
 
-function DesignerLint(const APath, ATexto, AEnc: string): TArray<string>; forward;
+function DesignerLint(const APath, ATexto, AEnc, AAntes: string): TArray<string>; forward;
 
 threadvar
   // >0 dentro de una tanda o un changeset sobre un form: ver
@@ -3567,18 +3571,18 @@ begin
     Dec(GJuicioDeFormAplazado);
 end;
 
-function JuicioDeForm(const APath, ATexto, AEnc: string): TArray<string>;
+function JuicioDeForm(const APath, ATexto, AEnc, AAntes: string): TArray<string>;
 begin
   Result := [];
   if not EsRutaDeDesigner(APath) then
     Exit;
-  Result := [MsgText(SN_EDIT_DESIGNER_FORMATO_TEXTO)] + DesignerLint(APath, ATexto, AEnc);
+  Result := [MsgText(SN_EDIT_DESIGNER_FORMATO_TEXTO)] + DesignerLint(APath, ATexto, AEnc, AAntes);
 end;
 
 function JuicioDeLoEscrito(const APath, ATexto, AEnc: string;
-  const AOmite: TArray<string>): TArray<string>;
+  const AOmite: TArray<string>; const AAntes: string): TArray<string>;
 begin
-  Result := JuicioDeForm(APath, ATexto, AEnc);
+  Result := JuicioDeForm(APath, ATexto, AEnc, AAntes);
   if not SameText(ExtractFileExt(APath), '.pas') then
     Exit;
   for var Df in DesignersDeUnidad(APath) do
@@ -4392,7 +4396,7 @@ begin
       if Aplazado and (SinCambios < Arr.Count) then
       try
         var EncF: string;
-        Avisos := Avisos + JuicioDeLoEscrito(APath, PatchLoadText(APath, EncF), EncF);
+        Avisos := Avisos + JuicioDeLoEscrito(APath, PatchLoadText(APath, EncF), EncF, nil, TextoAntes);
       except
         // un form que no se relee no tumba una tanda ya escrita
       end;
@@ -5847,7 +5851,7 @@ begin
 end;
 
 function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
-  AEsperaMs: Cardinal; ALector: Boolean): TLintDeForm;
+  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string): TLintDeForm;
 var
   Lineas: TArray<string>;
 begin
@@ -5871,9 +5875,10 @@ begin
   // en public compila y revienta al cargar el form. Se avisa AL ESCRIBIR.
   Result.Enlace := DesignerBindingWarnings(ADfm, Lineas);
   // ...y los StyleLookup de un form FMX contra los estilos que ve: EL juez de
-  // delphi_styles lint (V75 de la 1.23.1: set los escribia y el lint daba CLEAN)
+  // delphi_styles lint (V75 de la 1.23.1: set los escribia y el lint daba
+  // CLEAN); tras una edicion, los que ella trae (V143)
   if EsDesignerFmx(ADfm) then
-    Result.Lookups := NotaDeLookupsSinEstilo(ExtractFileName(ADfm), Lineas);
+    Result.Lookups := NotaDeLookupsSinEstilo(ExtractFileName(ADfm), Lineas, LineasDelTexto(AAntes));
   // ...y EL parser del IDE con los bytes del disco (8.10 de la 1.18.0): un //
   // en un .fmx daba CLEAN y solo el IDE lo rechazaba al cargarlo
   if AJuzga then
@@ -5947,7 +5952,7 @@ begin
   end;
 end;
 
-function DesignerLint(const APath, ATexto, AEnc: string): TArray<string>;
+function DesignerLint(const APath, ATexto, AEnc, AAntes: string): TArray<string>;
 var
   Raw: TArray<string>;
   Res: TStringList;
@@ -5956,7 +5961,7 @@ var
 begin
   Result := [];
   // (sin el lector: esto corre DENTRO del cerrojo; AvisosDelLector, fuera)
-  var L := LintDeForm(APath, ATexto, AEnc, True, 0);
+  var L := LintDeForm(APath, ATexto, AEnc, True, 0, False, AAntes);
   var Falta := L.Falta;
   var Notas := L.Notas;
   Raw := L.Propiedades;
@@ -6351,7 +6356,7 @@ begin
     // (dentro de una tanda o un changeset lo hace quien agrupa, una vez: H6).
     // Tambien de un .pas: los forms de su unidad, por su enlace (punto 7)
     if GJuicioDeFormAplazado = 0 then
-      for var LintW in JuicioDeLoEscrito(APath, AfterText, EncName(K)) do
+      for var LintW in JuicioDeLoEscrito(APath, AfterText, EncName(K), nil, Text) do
         Warnings.Add(LintW);
 
     if not AIsDesigner then

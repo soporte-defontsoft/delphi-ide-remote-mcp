@@ -82,8 +82,14 @@ type
       1.18.2: un paso sin cambios hacia juzgar el form de una unidad que el
       lote no toco). }
     function Cambio(const ARuta: string): Boolean;
+    { Los bytes de ARuta en la foto: nil si no existia o no es de la foto.
+      Con ellos se juzga lo que una operacion TRAE a un form (la nota de los
+      StyleLookup del changeset, V143 de la 1.23.1). }
+    function Antes(const ARuta: string): TArray<Byte>;
   private
     function CambioEn(I: Integer): Boolean;
+    // el indice de ARuta en la foto (la primera vez), -1 si no es de ella
+    function IndiceDe(const ARuta: string): Integer;
   end;
 
 type
@@ -407,12 +413,26 @@ begin
       Inc(Result);
 end;
 
-function TFotoDeFicheros.Cambio(const ARuta: string): Boolean;
+function TFotoDeFicheros.IndiceDe(const ARuta: string): Integer;
 begin
   for var I := 0 to High(FRutas) do
     if SameFileName(FRutas[I], ARuta) then
-      Exit(CambioEn(I));
-  Result := False;
+      Exit(I);
+  Result := -1;
+end;
+
+function TFotoDeFicheros.Cambio(const ARuta: string): Boolean;
+begin
+  var I := IndiceDe(ARuta);
+  Result := (I >= 0) and CambioEn(I);
+end;
+
+function TFotoDeFicheros.Antes(const ARuta: string): TArray<Byte>;
+begin
+  var I := IndiceDe(ARuta);
+  if I < 0 then
+    Exit(nil);
+  Result := FBytes[I];
 end;
 
 function FicherosTodoONada(const ARutas: array of string;

@@ -1233,7 +1233,15 @@ begin
               var EsForm := EsRutaDeDesigner(FPath);
               if EsForm then
                 TextoF := PatchLoadText(FPath, EncF);
-              for var LJ in JuicioDeLoEscrito(FPath, TextoF, EncF, Escritos) do
+              // ...y del form, lo que el lote le TRAE: como estaba en la foto
+              // (la nota de los StyleLookup, V143 de la 1.23.1)
+              var TextoAntes := '';
+              if EsForm and (Foto.Antes(FPath) <> nil) then
+              begin
+                var EncA: string;
+                TextoAntes := TextoDeBytes(Foto.Antes(FPath), True, EncA);
+              end;
+              for var LJ in JuicioDeLoEscrito(FPath, TextoF, EncF, Escritos, TextoAntes) do
                 AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') + '  ' +
                   IfThen(EsForm, MaskDriveText('', FPath) + ': ', '') + LJ;
             except

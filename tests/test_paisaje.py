@@ -544,6 +544,14 @@ REGLAS = [
       ('Mcp.Tools.Workspace.pas', 'SubirNucleo')],
      'WalkBajoLaRaiz (Lsp.References): WalkFiles sin ENTRAR en lo que SkipBajoLaRaiz salta bajo la raiz; '
      'tras un remove-unit, el proyecto de una unidad era la copia del dia de la papelera (V114, medido)'),
+    # ...y los StyleLookup de un form (V123 de la 1.23.1): la nota del disenador y delphi_styles lint
+    # los leian cada uno por su lado y solo la nota sabia de un StyleBook: el lint daba por falta un
+    # lookup del StyleBook del form, y la nota decia "the form has no StyleBook" de uno con
+    # StyleBook = DM.StyleBook1 (medido)
+    ('un StyleLookup de un form leido a mano', r"\bSameText\(\s*\w+\s*,\s*'StyleLookup'\s*\)",
+     [('Lsp.Styles.pas', 'LookupsDeForm')],
+     'LookupsDeForm (Lsp.Styles): los StyleLookup con valor de un form, y si toma sus estilos de un StyleBook '
+     'que no se lee (el suyo, el de otro form, el de su ancestro); lo juzgan la nota DSGN-175 y el lint'),
     # ...y la CLAVE de una ruta real escrita a mano (V82 de la 1.23.1): los tres recorredores de
     # Lsp.Guard guardaban LowerCase(RealPath(..)) en un TStringList sin mayusculas, que compara con
     # el locale y daba ss y la eszett por la misma: WalkFiles se saltaba la segunda carpeta y
@@ -1758,6 +1766,9 @@ PLANTADO = {
     # la de Lsp.References.ProjectsSearching hasta el 28-oct-2026 (una de nueve)
     'el filtro de lo que no es codigo de un paseo a mano':
         "  for F in WalkFiles(D, ['*.dproj']) do if not SkipBajoLaRaiz(F, D) then X := 1;",
+    # la del lint de estilos (Mcp.Tools.Styles.LintStyles) hasta el 28-oct-2026
+    'un StyleLookup de un form leido a mano':
+        "  if not (SameText(Prop, 'StyleLookup') and LeeLiteralDeForm(Valor, Lookup)) then Continue;",
 }
 for regla in REGLAS:
     nombre = regla[0]

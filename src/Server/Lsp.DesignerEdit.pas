@@ -178,6 +178,9 @@ type
     EsFmx, HayPas: Boolean;
     Doc: TStyleDoc;
     PasTexto, PasEnc: string;
+    // el form como se leyo al abrirlo: la nota de los StyleLookup de tras la
+    // edicion dice solo los que ella trae (V143 de la 1.23.1)
+    TextoAntes: string;
     Tabla: TMetaTable;
     // lo que leyo el juez para cargar el form - ancestros, frames, el .pas de
     // la cadena -, con su huella (READ=): CambioDesdeQueSeJuzgo lo vuelve a
@@ -1065,6 +1068,7 @@ begin
     Exit;
   if (F.Doc.Root = nil) or (F.Doc.Root.ClassName_ = '') then
     Exit(MsgText(SR_DESIGNER_EMPTY));
+  F.TextoAntes := F.Doc.TextoDe(F.Doc.Leidas);
   // su unidad: la del mismo nombre, la que crea el IDE
   F.Pas := UnidadDeDesigner(APath);
   F.PasNombre := TPath.GetFileName(F.Pas);
@@ -1703,7 +1707,7 @@ function AvisosDespues(const F: TFormEnEdicion; const ATexto: string): TArray<st
 begin
   // EL lint de un form (Lsp.Patch.LintDeForm), sin esperar a una tabla; el
   // parser del IDE lo primero, con o sin tabla (8.10 de la 1.18.0)
-  var L := LintDeForm(F.Dfm, ATexto, F.Doc.Encoding, True, 0);
+  var L := LintDeForm(F.Dfm, ATexto, F.Doc.Encoding, True, 0, False, F.TextoAntes);
   Result := L.Propiedades + L.Enlace;
   if L.Parser <> '' then
     Result := [L.Parser] + Result;

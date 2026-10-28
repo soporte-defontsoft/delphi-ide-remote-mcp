@@ -4005,7 +4005,9 @@ const
     '__delphi-patch is the way back); lint checks the whole thing: ' +
     'duplicated StyleNames, ' +
     'StyleLookup values in the project''s .fmx/.pas that NO style defines ' +
-    '(the platform default style counts), design tokens missing in a theme ' +
+    '(the platform default style counts; a form that may take its styles from ' +
+    'a StyleBook it does not read goes apart, in formsWithAStyleBook), design ' +
+    'tokens missing in a theme ' +
     'of a *Tokens.ini, .rc entries whose file is missing, what FMX ignores ' +
     'when it loads them (a property the class does not publish, a value it ' +
     'cannot read) and what it cannot load at all; build converts ' +
@@ -4172,6 +4174,17 @@ const
     'component itself as a style resource; it does not dress it - a ' +
     'control takes a style by StyleLookup (delphi_designer prop says ' +
     'whether its class publishes one). Leave it only if that name is meant.';
+
+  { Los forms cuyos StyleLookup no se juzgan: toman sus estilos de un
+    StyleBook que el lint no lee (Lsp.Styles.LookupsDeForm). Daba por falta
+    un lookup del StyleBook del propio form (V123 de la 1.23.1, medido con un
+    Sample: TabItem1Style1). Sale solo si los hay y no cambia clean. }
+  SN_STYLES_FORMS_CON_STYLEBOOK =
+    '[STYLE-057] formsWithAStyleBook: forms that may take their styles from ' +
+    'a StyleBook this lint does not read - one of their own (it keeps its ' +
+    'styles in binary), another form''s (StyleBook = DM.StyleBook1) or their ' +
+    'ancestor''s (an inherited form, an FMX view). Their StyleLookup values ' +
+    'are not judged here, nor counted in lookupsUsed.';
 
   SN_STYLES_NO_DEFAULTS =
     '[STYLE-017] The platform default style names could not be extracted ' +
@@ -6636,18 +6649,27 @@ const
     'this server''s table or is ambiguous - not an error in itself, but ' +
     'nothing inside them was checked; everything else was:';
 
-  { %s: el fichero; %d: cuantos. Los StyleLookup de un form FMX que ningun
+  { %0:s: el fichero; %1:d: cuantos; %2:s: '' en el lint, o
+    SF_DESIGNER_LOOKUPS_DE_LA_EDICION tras una edicion (solo los que ella
+    trae: V143 de la 1.23.1). Los StyleLookup de un form FMX que ningun
     estilo que el form ve define (V75 de la 1.23.1): ni el estilo por defecto
-    de la plataforma (el juez de delphi_styles lint) ni un TStyleBook del
-    form. No es un error: FMX dibuja el control con el estilo de su clase (asi
-    lo pinta preview). Va como nota, en el lint, en designer set y tras una
-    edicion, con lo que lo juzgaria entero }
+    de la plataforma (el juez de delphi_styles lint) ni un StyleBook (con uno,
+    suyo, de otro form o de su ancestro, no se juzga: V123). No es un error:
+    FMX dibuja el control con el estilo de su clase (asi lo pinta preview). Va
+    como nota, en el lint, en designer set y tras una edicion, con lo que lo
+    juzgaria entero }
   SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT =
-    '[DSGN-175] %s: %d StyleLookup value(s) that no style this form sees ' +
-    'defines - not the platform''s default style, and the form has no ' +
-    'StyleBook. FMX then draws the control with its class''s own style, as ' +
-    'preview shows. If the project loads a style of its own, delphi_styles ' +
-    'lint with path=<its styles folder> checks them against it:';
+    '[DSGN-175] %0:s: %1:d StyleLookup value(s) that no style this form ' +
+    'sees defines - not the platform''s default style, and the form takes no ' +
+    'StyleBook (none of its own, no StyleBook = <another form>.<its StyleBook>, ' +
+    'not inherited). FMX then draws the control with its class''s own style, ' +
+    'as preview shows. If the project loads a style of its own, delphi_styles ' +
+    'lint with path=<its styles folder> checks them against it%2:s:';
+  { lo que va en %2:s de DSGN-175 tras una edicion: la nota dice solo los que
+    ella trae, y el lint los da todos (V143 de la 1.23.1) }
+  SF_DESIGNER_LOOKUPS_DE_LA_EDICION =
+    ' - only the ones this edit writes (delphi_designer lint lists all of ' +
+    'the form''s)';
   { %0:s: el componente; %1:s: su StyleLookup; %2:d: su linea (una linea de
     la nota DSGN-175, sin etiqueta propia) }
   SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT = '  %0:s: StyleLookup = ''%1:s'' (line %2:d)';
