@@ -606,7 +606,7 @@ var
   Kind, Dir, Dpr, Dproj, MainUnit, MainForm, Clash: string;
   Files: TStringList;
 begin
-  Kind := AKind.Trim.ToLower;
+  Kind := SinMayusculas(AKind.Trim);
   if (Kind <> 'console') and (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'package') and
      (Kind <> 'test') then
     // The caller wrote "project-web": answering "console | vcl | fmx" sends
@@ -950,7 +950,7 @@ var
   Kind, Dir, FormName, PasPath, DesignerExt, Have, Want, FrameworkNote: string;
   Fmx: Boolean;
 begin
-  Kind := AKind.Trim.ToLower;
+  Kind := SinMayusculas(AKind.Trim);
   if (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'frame-vcl') and
      (Kind <> 'frame-fmx') and (Kind <> 'datamodule') then
     Exit(MsgText(SR_CREATE_KIND_DEBE_SER_FORM));

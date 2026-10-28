@@ -69,6 +69,7 @@ uses
   MCPServer.Registration,
   Lsp.Patch,   // LeeTexto: la puerta de leer, con la casa como lugar
   Lsp.Casa,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Identidad;
 
 // Slug: EL normalizador de nombres de cliente vive en Lsp.Casa (uno solo).
@@ -156,7 +157,7 @@ var
   Sb: TStringBuilder;
   N: Integer;
 begin
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   if Cmd = '' then
     Cmd := 'read';
   if not MatchText(Cmd, ['read', 'check']) then

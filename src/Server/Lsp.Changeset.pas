@@ -76,6 +76,7 @@ uses
   Lsp.Mascara,
   Lsp.Rutas,
   Lsp.ProjectUnits,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.ShaCache;
 
 type
@@ -646,7 +647,7 @@ var
   AuditText: string;
 begin
   AFormsEscritos := [];
-  Cmd := ACommand.Trim.ToLower;
+  Cmd := SinMayusculas(ACommand.Trim);
   GLock.Enter;
   try
     Prune;

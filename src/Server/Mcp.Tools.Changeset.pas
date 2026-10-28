@@ -72,6 +72,7 @@ uses
   Lsp.Guard,
   Lsp.Mascara, // MaskDriveText: la ruta delante de cada aviso, como el commit
   Lsp.Patch,   // AvisosDelLector: el lector del IDE, fuera del cerrojo
+  Lsp.Pascal,  // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Changeset;
 
 constructor TDelphiChangesetTool.Create;
@@ -87,7 +88,7 @@ begin
   // o preview con kind / path / old / n se ignoraban (octava revision). Lo
   // de cada kind lo mira stage (CHSET-030)
   var Suyos, VaCon: string;
-  var Sobra := ParametroQueNoVa(Params.Command.Trim.ToLower, [
+  var Sobra := ParametroQueNoVa(SinMayusculas(Params.Command.Trim), [
       'begin', '',
       'status', '', // status lista TODOS: su tabla decia id y SP_CHANGESET_ID no (novena)
       'stage', 'id kind path dest old new content atline fragment',
@@ -99,10 +100,10 @@ begin
      'atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
      'n', IfThen(Params.N <> 0, IntToStr(Params.N)), ''], Suyos, VaCon);
   if Sobra <> '' then
-    Exit(MsgFmt(SR_CHANGESET_NO_VA_CON_COMANDO_FMT, [Sobra, Params.Command.Trim.ToLower,
-      Params.Command.Trim.ToLower, ONinguno(Suyos)]) + VaCon);
+    Exit(MsgFmt(SR_CHANGESET_NO_VA_CON_COMANDO_FMT, [Sobra, SinMayusculas(Params.Command.Trim),
+      SinMayusculas(Params.Command.Trim), ONinguno(Suyos)]) + VaCon);
   var Forms: TArray<string>;
-  Result := ChangesetExecuteYForms(Params.Command, Params.Id, Params.Kind.Trim.ToLower,
+  Result := ChangesetExecuteYForms(Params.Command, Params.Id, SinMayusculas(Params.Kind.Trim),
     Params.Path, Params.Dest, Params.Old, Params.New, Params.Content,
     Params.AtLine, Forms, Params.N, Params.Fragment);
   // los forms que el commit escribio, al LECTOR del IDE ya fuera de los

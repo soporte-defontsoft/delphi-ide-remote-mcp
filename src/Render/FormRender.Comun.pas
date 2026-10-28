@@ -1011,7 +1011,10 @@ begin
   Result := '@';
   for var Seg in AUnidad.Split(['.']) do
     if Seg <> '' then
-      Result := Result + Seg.Substring(0, 1).ToUpper + Seg.Substring(1).ToLower + '@';
+      // la decoracion de dcc, en ASCII (UpperCase/LowerCase): con .ToUpper/
+      // .ToLower y el turco, System.UITypes daba @System@U<i sin punto>types@ y
+      // el Register no se encontraba (V108 de la 1.23.1)
+      Result := Result + UpperCase(Seg.Substring(0, 1)) + LowerCase(Seg.Substring(1)) + '@';
   Result := Result + 'Register$qqrv';
 end;
 
@@ -1400,7 +1403,9 @@ var
   Nombre: string;
   H: HMODULE;
 begin
-  Nombre := AClase.ToUpper + '128_PNG';
+  // el nombre del recurso, en ASCII: con .ToUpper y el turco, TEdit era
+  // TED<I con punto>T y el icono no salia (V108)
+  Nombre := UpperCase(AClase) + '128_PNG';
   for var M in GModulos do
     if PngDeModulo(M, Nombre, APng) then
       Exit(True);
@@ -1476,8 +1481,8 @@ begin
     var C := Cabecera(F);
     if C.NoLaCargaElIde then
       FNoCargan.Add(ExtractFileName(F))
-    else if (C.Clase <> '') and not FPorClase.ContainsKey(C.Clase.ToUpper) then
-      FPorClase.Add(C.Clase.ToUpper, F);
+    else if (C.Clase <> '') and not FPorClase.ContainsKey(ClaveDeIdentificador(C.Clase)) then
+      FPorClase.Add(ClaveDeIdentificador(C.Clase), F);
   except
     // un fichero que no se deja leer no es de este renderizador
   end;
@@ -1486,7 +1491,7 @@ end;
 function TCargador.FicheroDeClase(const ACarpeta, AClase: string): string;
 begin
   IndexaCarpeta(ACarpeta);
-  if not FPorClase.TryGetValue(AClase.ToUpper, Result) then
+  if not FPorClase.TryGetValue(ClaveDeIdentificador(AClase), Result) then
     Result := '';
 end;
 

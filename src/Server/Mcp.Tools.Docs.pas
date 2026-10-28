@@ -67,6 +67,7 @@ uses
   Lsp.Mascara,  // MaskDriveText
   Lsp.Docs,
   Lsp.Guard,
+  Lsp.Pascal,   // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Listas;   // TPagina: la pagina de un trozo, la de las listas
 
 const
@@ -245,7 +246,7 @@ var
   Cmd, Fw, Version: string;
   Ayudas: TArray<TAyudaInstalada>;
 begin
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   if Cmd = '' then
     if Params.Id.Trim <> '' then
       Cmd := 'read'
@@ -278,7 +279,7 @@ begin
   if Cmd = 'read' then
     Exit(Lee(Params, Ayudas));
   // framework es de la busqueda: en una lectura no se mira
-  Fw := Params.Framework.Trim.ToLower;
+  Fw := SinMayusculas(Params.Framework.Trim);
   if (Fw <> '') and not MatchText(Fw, ['vcl', 'fmx']) then
     Exit(MsgFmt(SR_DOCS_FRAMEWORK_FMT, [Params.Framework.Trim]));
   Result := Busca(Params, Fw, Ayudas);

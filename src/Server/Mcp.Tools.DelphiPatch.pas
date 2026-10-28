@@ -131,6 +131,7 @@ uses
   Lsp.Guard,
   Lsp.ProjectUnits,
   System.StrUtils, // IfThen: la lista de modos de ModosQueNoCombinan
+  Lsp.Pascal,      // SinMayusculas: EL pliegue de lo que no es una ruta
   MCPServer.Registration;
 
 { TDelphiReadTool }
@@ -230,7 +231,7 @@ begin
   if Params.Edits.Trim <> '' then Modo := 'edits'
   else if Params.AddUses.Trim <> '' then Modo := 'adduses'
   else if Params.RemoveUses.Trim <> '' then Modo := 'removeuses'
-  else if Params.Insert.Trim <> '' then Modo := 'insert=' + Params.Insert.Trim.ToLower
+  else if Params.Insert.Trim <> '' then Modo := 'insert=' + SinMayusculas(Params.Insert.Trim)
   else if Params.CreateUnit then Modo := 'createunit'
   else if Params.Restore then Modo := 'restore'
   else Modo := 'old/new';
@@ -304,7 +305,7 @@ begin
   A.ToLine := Params.ToLine;
   A.DeleteLine := Params.Delete;
   A.Fragment := Params.Fragment;
-  A.Insert := Params.Insert.Trim.ToLower;
+  A.Insert := SinMayusculas(Params.Insert.Trim);
   A.Code := Params.Code;
   A.ClassName_ := Params.InClass;
   A.Visibility := Params.Visibility;

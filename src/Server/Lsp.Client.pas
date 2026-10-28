@@ -274,6 +274,7 @@ uses
   Lsp.Json,  // ObjetoJson: EL lector de un JSON que tiene que ser un objeto
   Lsp.Codificacion,
   System.Character,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.NetDrives;
 
 const
@@ -1110,9 +1111,9 @@ var
   Bytes: TBytes;
 begin
   S := AUri;
-  if S.ToLower.StartsWith('file:///') then
+  if SinMayusculas(S).StartsWith('file:///') then
     S := S.Substring(8)
-  else if S.ToLower.StartsWith('file://') then
+  else if SinMayusculas(S).StartsWith('file://') then
     S := S.Substring(7);
 
   // Percent-decode into UTF-8 bytes, then decode. Lo que NO viene escapado,

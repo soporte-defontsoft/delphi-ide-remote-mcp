@@ -576,7 +576,7 @@ begin
   AInfo := Default(TUnitInfo);
   if not TFile.Exists(APasPath) then
     Exit(NoEsFichero(APasPath, MsgFmt(SR_UNIT_PAS_MISSING_FMT, [APasPath])));
-  if TPath.GetExtension(APasPath).ToLower <> '.pas' then
+  if SinMayusculas(TPath.GetExtension(APasPath)) <> '.pas' then
     Exit(MsgFmt(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   AInfo.PasPath := TPath.GetFullPath(APasPath);
   Src := PatchLoadText(AInfo.PasPath, Enc);
@@ -600,7 +600,7 @@ begin
     if TFile.Exists(Form) then
     begin
       AInfo.Designer := Form;
-      AInfo.FormType := TPath.GetExtension(Form).Substring(1).ToLower;
+      AInfo.FormType := SinMayusculas(TPath.GetExtension(Form).Substring(1));
       Break;
     end;
   if AInfo.Designer = '' then
@@ -2384,7 +2384,7 @@ begin
   Result := ResolveProjectPair(AProject, Dpr, Dproj);
   if Result <> '' then
     Exit;
-  if TPath.GetExtension(APasPath).ToLower <> '.pas' then
+  if SinMayusculas(TPath.GetExtension(APasPath)) <> '.pas' then
     Exit(MsgFmt(SR_UNIT_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   UnitName := TPath.GetFileNameWithoutExtension(APasPath);
   // la ENTRADA como la lista el proyecto: una relativa es desde su .dpr (EL
@@ -3526,7 +3526,7 @@ var
     var Escrito := Copy(Texto, AIni, AFin - AIni);
     // un valor con un CDATA o un comentario dentro no se sabe reescribir
     if Escrito.Contains('<') or
-       ((AExtension <> '') and not Escrito.Trim.ToLower.EndsWith(AExtension)) then
+       ((AExtension <> '') and not SinMayusculas(Escrito.Trim).EndsWith(SinMayusculas(AExtension))) then
       Exit;
     var Nueva := ListaReapuntada(Escrito, ABaseVieja, AFichero, AMapa, AComilla, Cuenta);
     if Nueva = '' then

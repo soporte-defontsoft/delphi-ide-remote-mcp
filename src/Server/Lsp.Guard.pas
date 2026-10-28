@@ -1140,6 +1140,7 @@ uses
   Lsp.Args,
   Lsp.Lugares,
   Lsp.Mascara,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   MCPServer.Logger; // el aviso de un dia de la papelera que se queda
 
 var
@@ -1156,7 +1157,7 @@ end;
 
 function ComandoDeTest(const ACmd, AProject, APath: string): string;
 begin
-  Result := ACmd.Trim.ToLower;
+  Result := SinMayusculas(ACmd.Trim);
   // "project" only exists for run. Falling back to discover and then
   // complaining that discover needs "path" cost a call, and the call after it
   // was delphi_help (field round 11).
@@ -5217,7 +5218,7 @@ const
 var
   N, Prof: string;
 begin
-  N := AToolName.Trim.ToLower;
+  N := SinMayusculas(AToolName.Trim);
   if MatchText(N, ALWAYS) then
     Exit(moNinguna);
   // Las vault_* se registran si CUALQUIER workspace declara vault, pero solo

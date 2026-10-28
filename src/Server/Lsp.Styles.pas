@@ -961,7 +961,7 @@ begin
   try
     if TDirectory.Exists(ADir) then
       for F in TDirectory.GetFiles(ADir, '*.style') do
-        if not F.ToLower.EndsWith('.bin.style') and not IsBinaryStyle(F) then
+        if not SinMayusculas(F).EndsWith('.bin.style') and not IsBinaryStyle(F) then
           L.Add(F);
     L.Sort;
     Result := L.ToArray;

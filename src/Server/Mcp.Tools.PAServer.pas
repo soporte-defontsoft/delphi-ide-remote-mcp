@@ -127,6 +127,7 @@ uses
   Lsp.Patch, // LeeTexto/EscribeTexto: las puertas, con el IDE como lugar
   Lsp.Codificacion, // ekUtf8Bom
   Lsp.Args,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Rutas;
 
 const
@@ -232,7 +233,7 @@ begin
           for F in TDirectory.GetFiles(D) do
           begin
             Ext := LowerCase(TPath.GetExtension(F));
-            if not (F.ToLower.EndsWith('.tar.gz') or (Ext = '.pkg') or (Ext = '.exe')) then
+            if not (SinMayusculas(F).EndsWith('.tar.gz') or (Ext = '.pkg') or (Ext = '.exe')) then
               Continue;
             if not LowerCase(TPath.GetFileName(F)).Contains('paserver') then
               Continue;
@@ -303,7 +304,7 @@ begin
   for C in S do
     if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
       Result := Result + C;
-  Result := Result.ToLower;
+  Result := SinMayusculas(Result);
 end;
 
 { Que distro es el target, por su /etc/os-release y por el mismo transporte que
@@ -1964,7 +1965,7 @@ function TDelphiPAServerTool.ExecuteWithParams(const Params: TDelphiPAServerPara
 var
   Cmd: string;
 begin
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa), como en
   // config, create, edit, textedit, styles, git y changeset; aqui se ignoraba
   // en silencio (decima revision). Solo se nombra el PARAMETRO, nunca su valor

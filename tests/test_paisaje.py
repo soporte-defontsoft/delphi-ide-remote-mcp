@@ -516,7 +516,7 @@ REGLAS = [
     # prefijo de TEXTO contra un literal ('file:///') no es esto
     ('un "dentro de" de dos rutas por texto',
      r'\.ToLower\.StartsWith\(\s*[\w.\[\]()]+\.ToLower\s*\)|LowerCase\([^)]*\)\.StartsWith\(\s*LowerCase\(|'
-     r'\.ToUpper\.StartsWith\(\s*[\w.]+\.ToUpper',
+     r'\.ToUpper\.StartsWith\(\s*[\w.]+\.ToUpper|\bSinMayusculas\([^)]*\)\.StartsWith\(\s*SinMayusculas\(',
      [],
      'RutaDentroDe (Lsp.Rutas): el "dentro de" de dos rutas es el del sistema de ficheros; '
      'IncludeFor y RelToRoot lo hacian con .ToLower.StartsWith (V81 de la 1.23.1)'),
@@ -525,7 +525,7 @@ REGLAS = [
     # el locale y daba ss y la eszett por la misma: WalkFiles se saltaba la segunda carpeta y
     # CopiaArbol no la copiaba (medido). La clave es ClaveDeRuta, en un TDictionary
     ('la clave de una ruta real a mano',
-     r'\b(?:Ansi)?(?:Lower|Upper)Case\(\s*(?:SinBarraFinal\(\s*)?RealPath\(|'
+     r'\b(?:(?:Ansi)?(?:Lower|Upper)Case|SinMayusculas)\(\s*(?:SinBarraFinal\(\s*)?RealPath\(|'
      r'\bRealPath\([^()]*\)\)?\.To(?:Lower|Upper)\b',
      [],
      'ClaveDeRuta (Lsp.Rutas): la clave que junta lo que junta el disco (las mayusculas invariantes), '
@@ -555,6 +555,7 @@ REGLAS = [
     # casas son las que se quedan a proposito, cada una con su razon en el fuente
     ('una ruta con el pliegue del idioma',
      r'\bAnsi(?:Lower|Upper)Case\(|\b\w*(?:Path|Ruta|Dir|Carpeta|Fichero|File|Full|Dproj)\w*(?:\.Trim)?\.ToLower\b|'
+     r'\bSinMayusculas\(\s*\w*(?:Path|Ruta|Dir|Carpeta|Fichero|File|Full|Dproj)\w*(?:\.Trim)?\s*\)|'
      r'\b(?:MatchText|IndexText|AnsiSameText)\(\s*\w*(?:Path|Ruta|Dir|Carpeta|Fichero|Full)\w*\s*,',
      [('Lsp.Casa.pas', 'ClaveDeCarpeta'),         # nombra el mutex y la marca de los contenedores
       ('Lsp.Casa.pas', 'CarpetaDeWorkspace'),     # el NOMBRE de un workspace (su seccion del ini)
@@ -568,6 +569,18 @@ REGLAS = [
      [('Lsp.Rutas.pas', 'ClaveDeRuta'), ('Lsp.ShaCache.pas', 'CachedFileSha256')],
      'ClaveDeRuta (Lsp.Rutas): las mayusculas invariantes son la clave de una ruta; escrita a mano en otro '
      'sitio se separa de la que leen los demas'),
+    # ...y lo que NO es una ruta (V108 de la 1.23.1): .ToLower y .ToUpper llevan el casing del idioma del
+    # usuario (medido con LCMapStringEx: en turco INIT no era init, una busqueda de items no encontraba
+    # Items y TEdit.ToUpper era TED<I con punto>T). Ni uno en src: lo que no es una ruta va por
+    # SinMayusculas (Lsp.Pascal), una ruta por ClaveDeRuta, y un nombre ASCII por LowerCase/UpperCase
+    ('el pliegue del idioma a mano', r'\.To(?:Lower|Upper)\b', [],
+     'SinMayusculas (Lsp.Pascal) para lo que no es una ruta, ClaveDeRuta (Lsp.Rutas) para una ruta: .ToLower '
+     'y .ToUpper llevan el casing del idioma del usuario (V108 de la 1.23.1)'),
+    ('el pliegue invariante a mano', r'\.ToLowerInvariant\b',
+     [('Lsp.Pascal.pas', 'SinMayusculas'),
+      ('Lsp.Styles.pas', 'ClaveDeEstilo')],  # el de FMX.Types, que indexa StyleName.ToLowerInvariant
+     'SinMayusculas (Lsp.Pascal): EL pliegue de lo que no es una ruta; escrito a mano en otro sitio se '
+     'separa de el en cuanto uno de los dos cambie'),
     ('las unidades de una carpeta a mano', r"'\.dcu'.*'\.pas'|'\.pas'.*'\.dcu'",
      [('Lsp.Discovery.pas', 'UnidadesEnCarpetas')],
      'UnidadesEnCarpetas (Lsp.Discovery): los .dcu y .pas de una carpeta, por la clave con que se buscan '
@@ -651,7 +664,8 @@ REGLAS = [
      'ConversionDelIde (Lsp.FormRender): en el servidor, Win64, Extended es Double y un flotante convertido '
      'salia con otras cifras - to-text con 17 decimales, to-binary con otros bytes (V71, medido con '
      'convert.exe el 27-oct-2026)'),
-    ('la clave del nombre de un estilo', r"\.StyleName\.ToLower|SameText\(\s*[\w.\[\]]*\.StyleName\b", [],
+    ('la clave del nombre de un estilo',
+     r"\.StyleName\.ToLower|\bSinMayusculas\(\s*[\w.\[\]]*\.StyleName\s*\)|SameText\(\s*[\w.\[\]]*\.StyleName\b", [],
      'ClaveDeEstilo (Lsp.Styles), la de FMX: ToLowerInvariant (P7 de la segunda revision de la 1.17.0: '
      'SameText en FindStyle y Child, ToLower en el lint)'),
     ('la cadena de clases de la tabla', r"\bPadres\.TryGetValue\s*\(",
@@ -738,7 +752,7 @@ REGLAS = [
      '(inventario del 10-oct-2026; una casa desde el mismo dia)'),
     ('la seccion interface/implementation buscada a mano',
      r"'\^(?:\[ \\t\]\*|\\s\*)'\s*\+\s*\w+\s*\+\s*'\\b'|\^(?:interface|implementation)\[ \]\*\$|"
-     r"\.Trim\.ToLower\s*=\s*'(?:interface|implementation)'",
+     r"(?:\.Trim\.ToLower|\bSinMayusculas\(\s*\w+\.Trim\s*\))\s*=\s*'(?:interface|implementation)'",
      [('Mcp.Tools.DelphiLsp.pas', 'InterfaceDigest'), ('Lsp.Patch.pas', 'ExecutePatch')],
      'FinDeSeccion (Lsp.ProjectUnits): la palabra entera en el codigo, este donde este (estaba cinco '
      'veces en tres funciones de ProjectUnits; a principio de linea hasta el 18-oct-2026, y una unit de '
@@ -1473,6 +1487,8 @@ PLANTADO = {
     'una peticion de render compuesta a mano': "  Pet := Default(TPeticionRender);",
     'las unidades de una carpeta a mano': "  if MatchText(TPath.GetExtension(F), ['.pas', '.dcu']) then X := 1;",
     'una ruta con el pliegue del idioma': "  Clave := AFichero.ToLower;",
+    'el pliegue del idioma a mano': "  Cmd := Params.Command.Trim.ToLower;",
+    'el pliegue invariante a mano': "  K := S.ToLowerInvariant;",
     'la clave de una ruta del disco a mano': "  K := ARuta.ToUpperInvariant;",
     'escribir la seguridad de un objeto': "  SetFileSecurityW(PChar(D), DACL_SECURITY_INFORMATION, @SD);",
     'comparar rutas como el sistema de ficheros':
@@ -1652,6 +1668,22 @@ for regla in REGLAS:
     cazados = fuera_de_casa(regla, [('Plantado.pas', planta)])
     check('mutante "%s": la copia plantada se caza (y el comentario no)' % nombre,
           len(cazados) == 1 and ':6 ' in cazados[0], cazados)
+
+# ...y la forma con SinMayusculas de cinco reglas (V108 de la 1.23.1): el pliegue de lo que no es
+# una ruta cambio de forma, y las reglas que buscaban .ToLower dejaron de ver su copia (la casa de
+# ExecutePatch se quedo sin uso; las otras cuatro, ciegas en silencio)
+for nombre_regla, forma in (
+        ('la seccion interface/implementation buscada a mano',
+         "  if SinMayusculas(L.Trim) = 'implementation' then"),
+        ('un "dentro de" de dos rutas por texto',
+         "  if SinMayusculas(Full).StartsWith(SinMayusculas(Base)) then X := 1;"),
+        ('la clave de una ruta real a mano', "  Vistos.Add(SinMayusculas(RealPath(Sub)));"),
+        ('una ruta con el pliegue del idioma', "  Clave := SinMayusculas(AFichero);"),
+        ('la clave del nombre de un estilo', "  N := SinMayusculas(O.StyleName);")):
+    regla = next(r for r in REGLAS if r[0] == nombre_regla)
+    cazados = fuera_de_casa(regla, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                     'PliegaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (nombre_regla, forma.strip()), len(cazados) == 1, cazados)
 
 # las otras formas de lanzar: los lanzadores con nombre propio (fuera de su casa) y
 # los otros interpretes (revisor de baterias, 18-oct-2026)

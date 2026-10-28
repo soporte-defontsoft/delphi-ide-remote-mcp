@@ -180,6 +180,7 @@ uses
   System.Character, // los pares de sustitutos, por la RTL
   System.Generics.Collections,
   Lsp.Texts,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   System.Win.Registry;
 
 var
@@ -630,7 +631,7 @@ var
   Reg: TRegistry;
 begin
   Result := 0;
-  Etiqueta := AEtiqueta.Trim.ToLower;
+  Etiqueta := SinMayusculas(AEtiqueta.Trim);
   // una etiqueta es un nombre corto, sin separadores: lo que viene del
   // fichero no navega por el registro
   if (Etiqueta = '') or (Length(Etiqueta) > 64) or (Etiqueta.IndexOfAny(['\', '/']) >= 0) then
@@ -661,7 +662,7 @@ begin
           end;
           if not Reg.ValueExists('AliasForCharset') then
             Break;
-          Actual := Reg.ReadString('AliasForCharset').Trim.ToLower;
+          Actual := SinMayusculas(Reg.ReadString('AliasForCharset').Trim);
         finally
           Reg.CloseKey;
         end;

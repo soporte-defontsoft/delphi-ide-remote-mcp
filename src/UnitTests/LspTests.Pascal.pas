@@ -56,6 +56,7 @@ type
     [Test] procedure ElUltimoTrozoYLasReservadas;
     [Test] procedure LasPalabrasDeUnaRutina;
     [Test] procedure LaClaveNoLlevaElIdiomaDelUsuario;
+    [Test] procedure ElPliegueNoLlevaElIdiomaDelUsuario;
   end;
 
   // LA cabecera y LOS end. de un fuente (Lsp.Pascal): eran cinco lectores de
@@ -510,6 +511,26 @@ begin
   Assert.IsTrue(EnLaBiblioteca([ClaveDeIdentificador('System.IOUtils'), ClaveDeIdentificador('UÁrbol')], 'SYSTEM.IOUTILS'),
     'y una ASCII');
   Assert.AreNotEqual(ClaveDeIdentificador('UÁrbol'), LowerCase('UÁrbol'), 'el LowerCase del escritor de antes no la plegaba');
+end;
+
+procedure TIdentificadorTests.ElPliegueNoLlevaElIdiomaDelUsuario;
+begin
+  // V108 de la 1.23.1: EL pliegue de lo que no es una ruta (SinMayusculas)
+  // es el invariante. .ToLower lleva el casing del idioma (medido con
+  // LCMapStringEx el 28-oct-2026): con el turco INIT no es init, y una
+  // busqueda de items no encuentra Items; LowerCase solo pliega A-Z
+  Assert.AreEqual('init', SinMayusculas('INIT'), 'una palabra del contrato');
+  Assert.AreNotEqual('init', 'INIT'.ToLower($041F), 'el turco: .ToLower da la i sin punto');
+  Assert.AreEqual(SinMayusculas('items'), SinMayusculas('Items'), 'buscar sin mayusculas casa en cualquier idioma');
+  Assert.AreNotEqual('items'.ToLower($041F), 'Items'.ToLower($041F), 'con el turco no casaban');
+  Assert.AreEqual('gestoría', SinMayusculas('GESTORÍA'), 'y las letras acentuadas');
+  Assert.AreNotEqual('gestoría', LowerCase('GESTORÍA'), 'LowerCase no las pliega');
+  Assert.AreEqual(Length('İK'), Length(SinMayusculas('İK')), 'del mismo largo: las columnas de una busqueda no se mueven');
+  // ...y lo que distingue el invariante del idioma de ESTA maquina, para que el
+  // mutante .ToLower salga rojo tambien en es-ES: la I con punto se queda
+  Assert.AreEqual('İ', SinMayusculas('İ'), 'la I con punto no es la i (invariante, no el idioma de la maquina)');
+  Assert.AreEqual('i', string('İ').ToLower($0C0A), 'el castellano si la plegaba a la i');
+  Assert.AreEqual(SinMayusculas('Unit'), ClaveDeIdentificador('Unit'), 'la clave de un identificador es este pliegue');
 end;
 
 initialization

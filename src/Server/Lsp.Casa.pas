@@ -229,6 +229,7 @@ uses
   Lsp.NetDrives,        // SinBarraFinal
   Lsp.Rutas,            // LongCanonical: la clave de una carpeta, por su forma canonica
   Lsp.Settings,         // CurrentWorkspaceName: el workspace del buzon lo pone el token
+  Lsp.Pascal,           // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Texts;
 
 const
@@ -439,7 +440,7 @@ begin
     if Length(Result) >= 40 then
       Break;
   end;
-  Result := Result.Trim(['-']).ToLower;
+  Result := SinMayusculas(Result.Trim(['-']));
 end;
 
 function NombreDeMutex(const AClave: string): string;

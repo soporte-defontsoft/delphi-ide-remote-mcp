@@ -88,6 +88,7 @@ uses
   Lsp.ErrorMode, // NoErrorDialogs
   Lsp.Texts,
   Lsp.ProcessLaunch,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.AtomosRtl;
 
 const
@@ -433,7 +434,7 @@ var
   begin
     Result := -1;
     for Line in AHeader.Split([#13#10]) do
-      if Line.ToLower.StartsWith('content-length:') then
+      if SinMayusculas(Line).StartsWith('content-length:') then
         Exit(StrToIntDef(Line.Substring(15).Trim, -1));
   end;
 

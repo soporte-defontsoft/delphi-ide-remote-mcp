@@ -139,6 +139,7 @@ uses
   Lsp.Json,          // ListaDeTextos: paths es una LISTA, como en delphi_git
   Lsp.DesignerMeta,  // MetaTable: la tabla que juzga la raiz de un add-unit
   Lsp.DesignerForma, // DesignersDeUnidad, EsDesignerFmx: de que marco es
+  Lsp.Pascal,        // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.NetDrives;
 
 constructor TDelphiConfigTool.Create;
@@ -283,7 +284,7 @@ var
 begin
   Xml := '';
   RadVisto := False;
-  Sec := ASection.Trim.ToLower;
+  Sec := SinMayusculas(ASection.Trim);
   if Sec = '' then
     Sec := 'summary';
   if not MatchText(Sec, ['summary', 'platforms', 'searchpaths', 'deploy',
@@ -2165,7 +2166,7 @@ var
 begin
   if Params.Project.Trim = '' then
     Exit(MsgText(SR_CFG_DELPHI_CONFIG_NECESITA_PROJECT));
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   // un parametro que no es de este comando se dice, no se ignora
   var Suyos, VaCon: string;
   var Sobra := ParametroQueSobra(Cmd, Params, Suyos, VaCon);

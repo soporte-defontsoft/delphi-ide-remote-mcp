@@ -362,7 +362,7 @@ begin
     Exit(MsgText(SR_SEARCH_VARIAS_LINEAS));
   // la pagina: 100 por defecto, 500 como mucho (TPagina, la de las listas)
   var Pag := PaginaDe(Params.Offset, Params.MaxResults, 100, 500);
-  Q := Params.Query.ToLower;
+  Q := SinMayusculas(Params.Query);
   // regex=true: la consulta es una expresion (PCRE, sin distinguir
   // mayusculas, como la literal), que se aplica linea a linea; una que no
   // compila se dice antes de leer nada. Es del AGENTE: Lsp.Regex.
@@ -478,7 +478,7 @@ begin
           Continue;
         end;
         Inc(FilesScanned);
-        if not Params.Regex and not Text.ToLower.Contains(Q) then
+        if not Params.Regex and not SinMayusculas(Text).Contains(Q) then
           Continue;
         Lines := LineasDelTexto(Text); // numeradas como delphi_read (un CR suelto es salto)
         for I := 0 to High(Lines) do
@@ -499,7 +499,7 @@ begin
             end
             else
             begin
-              P := Pos(Q, LineText.ToLower, ScanFrom);
+              P := Pos(Q, SinMayusculas(LineText), ScanFrom);
               Len := Length(Q);
             end;
             if P = 0 then
@@ -947,7 +947,7 @@ begin
   // Dos senales, porque ninguna depende del idioma de Windows a la vez: el
   // nombre de la cuenta y donde cae su perfil.
   AEsSistema := Result.EndsWith('\SYSTEM', True) or SameText(Result, 'SYSTEM') or
-    GetEnvironmentVariable('USERPROFILE').ToLower.EndsWith('\config\systemprofile');
+    SinMayusculas(GetEnvironmentVariable('USERPROFILE')).EndsWith('\config\systemprofile');
 end;
 
 { En que MAQUINA corre ESTE proceso. Con dos servidores del mismo nombre y
@@ -1337,7 +1337,7 @@ begin
         Saltadas := Saltadas + ', ';
       Saltadas := Saltadas + SinBarraFinal(RootDir.Trim);
     end;
-  Filt := Params.Name.Trim.ToLower;
+  Filt := SinMayusculas(Params.Name.Trim);
   // Paginado como delphi_search: una maquina de trabajo tiene miles de .dproj
   // y la lista entera no cabe en una respuesta (medido: 7025 proyectos = 82 KB
   // = limite del cliente reventado, o sea la tool inservible sin "root").
@@ -1381,7 +1381,7 @@ begin
             Inc(Ocultos);
             Continue;
           end;
-          if (Filt <> '') and not TPath.GetFileName(F).ToLower.Contains(Filt) then
+          if (Filt <> '') and not SinMayusculas(TPath.GetFileName(F)).Contains(Filt) then
             Continue;
           PorCarpeta.Add(F, RootDir.Trim);
           if Pag.Entra then

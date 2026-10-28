@@ -175,7 +175,7 @@ end;
 { vcl | fmx from the explicit param or the file extension; '' = undecidable. }
 function ResolveFramework(const AParam, APath: string): string;
 begin
-  Result := AParam.Trim.ToLower;
+  Result := SinMayusculas(AParam.Trim);
   if MatchText(Result, ['vcl', 'fmx']) then
     Exit;
   if Result <> '' then
@@ -1704,7 +1704,7 @@ function GestoDeDisenador(const Params: TDelphiDesignerParams): string;
 var
   Cmd, Fw: string;
 begin
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   if Cmd = '' then
     Cmd := 'info';
   // Sin guion tambien (un modelo pequeno lo pierde, y este agente dos veces
@@ -1839,7 +1839,7 @@ begin
   // cogido paraban todas las ediciones del servidor (revision de la 1.12.0);
   // leen como delphi_read, que tampoco lo coge (lo que se escribe se escribe
   // entero o nada).
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   if not MatchText(Cmd, ['to-text', 'to-binary', 'totext', 'tobinary', 'insert', 'set', 'delete']) then
     Exit(GestoDeDisenador(Params));
   // el orden entre hermanos pregunta al renderizador (segundos con paquetes):

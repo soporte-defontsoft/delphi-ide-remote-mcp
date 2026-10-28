@@ -120,6 +120,7 @@ uses
   Lsp.RemoteRun,
   Lsp.Dproj,     // DprojDe: un .dpr vale por su .dproj, como en delphi_build
   Lsp.Discovery, // PerfilConSuNombre: el perfil con el nombre del IDE
+  Lsp.Pascal,    // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Casa;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
@@ -176,7 +177,7 @@ begin
     O.AddPair('w', TJSONNumber.Create(StrToIntDef(T[3], 0)));
     O.AddPair('h', TJSONNumber.Create(StrToIntDef(T[4], 0)));
     if (not AHay) and (AWindow <> '') and
-       Titulo.ToLower.Contains(AWindow.ToLower) then
+       SinMayusculas(Titulo).Contains(SinMayusculas(AWindow)) then
     begin
       AHay := True;
       X := StrToIntDef(T[1], 0);
@@ -213,10 +214,10 @@ function CerrojoDePerfil(const APerfil: string): TCriticalSection;
 begin
   GPerfilesLock.Enter;
   try
-    if not GPerfiles.TryGetValue(APerfil.Trim.ToLower, Result) then
+    if not GPerfiles.TryGetValue(SinMayusculas(APerfil.Trim), Result) then
     begin
       Result := TCriticalSection.Create;
-      GPerfiles.Add(APerfil.Trim.ToLower, Result);
+      GPerfiles.Add(SinMayusculas(APerfil.Trim), Result);
     end;
   finally
     GPerfilesLock.Leave;
@@ -246,7 +247,7 @@ begin
       Result := Result + C;
   if Result = '' then
     Result := 'perfil';
-  Result := Result.ToLower;
+  Result := SinMayusculas(Result);
 end;
 
 { Una tecla de Windows se nombra (escape, enter, f4); un numero seria un
@@ -264,7 +265,7 @@ end;
   apuntado. Lo leen el gesto y lo que se decide antes del cerrojo. }
 function ComandoDeEscritorio(const ACommand: string): string;
 begin
-  Result := ACommand.Trim.ToLower;
+  Result := SinMayusculas(ACommand.Trim);
   if Result = '' then
     Result := 'screenshot';
   if Result = 'windows' then
@@ -403,7 +404,7 @@ begin
       por su nombre, que el nodo ya conoce. Hasta 1.0.17 no habia forma (informe
       de Hermes 2026-09-22: un campo que solo abre Ctrl+K). }
     var Mods: TArray<string> := nil;
-    for var M in Params.Modifiers.ToLower.Split([',', '+', ' '], TStringSplitOptions.ExcludeEmpty) do
+    for var M in SinMayusculas(Params.Modifiers).Split([',', '+', ' '], TStringSplitOptions.ExcludeEmpty) do
     begin
       var Mo := M.Trim;
       if Mo = 'control' then Mo := 'ctrl';

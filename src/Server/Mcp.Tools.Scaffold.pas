@@ -56,6 +56,7 @@ uses
   MCPServer.Registration,
   Lsp.Guard,     // ParametroQueNoVa: lo que no va con el kind se dice
   Lsp.Patch,     // EnterFileEdit / LeaveFileEdit: el cerrojo de escritura
+  Lsp.Pascal,    // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Scaffold;
 
 constructor TDelphiCreateTool.Create;
@@ -98,7 +99,7 @@ const
 var
   K, Suyos, Sobra, VaCon: string;
 begin
-  K := Params.Kind.Trim.ToLower;
+  K := SinMayusculas(Params.Kind.Trim);
   // lo que no es de este kind se dice (Lsp.Guard.ParametroQueNoVa): content
   // con un proyecto o un form, formname con una unit, se ignoraban y
   // contestaba CREATED con el esqueleto de siempre (septima revision)

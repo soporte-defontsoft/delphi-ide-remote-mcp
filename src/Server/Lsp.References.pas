@@ -960,7 +960,7 @@ begin
           VistaLine := VistaLines[I];
           ScanCol := 1;
           repeat
-            P := Pos(Ident.ToLower, LineText.ToLower, ScanCol);
+            P := Pos(SinMayusculas(Ident), SinMayusculas(LineText), ScanCol);
             if P = 0 then
               Break;
             // word boundaries; y si el identificador es una palabra reservada

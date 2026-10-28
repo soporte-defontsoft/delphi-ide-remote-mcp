@@ -56,6 +56,7 @@ uses
   Lsp.Rename,
   Lsp.References, // CONTENIDO_DE_UN_USO: los campos que son la linea tal cual
   Lsp.Listas,     // AgrupaPorFichero: los cambios por carpeta y fichero
+  Lsp.Pascal,     // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Mascara;
 
 constructor TDelphiRenameTool.Create;
@@ -70,7 +71,7 @@ var
   Mode: string;
   Ret: TJSONObject;
 begin
-  Mode := Params.Mode.Trim.ToLower;
+  Mode := SinMayusculas(Params.Mode.Trim);
   if Mode = '' then
     Mode := 'preview';
   if (Mode <> 'preview') and (Mode <> 'apply') then

@@ -84,6 +84,7 @@ uses
   Lsp.Codificacion, // ekUtf8Bom
   Lsp.Listas,     // TListaDeFicheros: el organizador de las listas de ficheros
   Lsp.Casa,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.NetDrives;
 
 const
@@ -278,7 +279,7 @@ var
   I, Size: Integer;
 begin
   // leer lo del propio workspace (la via de operador): ni mueve ni borra
-  var Cmd := Params.Command.Trim.ToLower;
+  var Cmd := SinMayusculas(Params.Command.Trim);
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa), como en las
   // demas tools de varios comandos: title con list se ignoraba en silencio
   // (20-oct-2026). agent va con todos: la regla 12 de delphi_help lo pide en
@@ -308,7 +309,7 @@ begin
     Exit(MsgFmt(SR_REPORT_TOO_BIG_FMT,
       [Size div 1024, MAX_REPORT_BYTES div 1024]));
 
-  Kind := Params.Kind.Trim.ToLower;
+  Kind := SinMayusculas(Params.Kind.Trim);
   // A kind nobody recognises used to become "bug" in silence, so a report
   // filed as something else was quietly refiled and the sender never knew
   // (measured 2026-08-25). It still goes through - losing a report over a

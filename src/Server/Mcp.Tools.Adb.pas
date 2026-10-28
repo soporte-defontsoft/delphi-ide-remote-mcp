@@ -101,6 +101,7 @@ uses
   Lsp.InlineImages, // DeliverCapture: la entrega de una captura, la de toda la casa
   Lsp.BuildRunner,
   Lsp.Codificacion,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Listas;
 
 { El valor de una linea "<clave>: <valor>" de la salida de `wm size` / `wm
@@ -121,7 +122,7 @@ function PartirTamano(const S: string; out W, H: Integer): Boolean;
 var
   P: TArray<string>;
 begin
-  P := S.ToLower.Split(['x']);
+  P := SinMayusculas(S).Split(['x']);
   Result := (Length(P) = 2) and TryStrToInt(P[0].Trim, W) and
     TryStrToInt(P[1].Trim, H) and (W > 0) and (H > 0);
 end;
@@ -179,7 +180,7 @@ function DeviceGone(const AOutput: string): Boolean;
 var
   L: string;
 begin
-  L := AOutput.ToLower;
+  L := SinMayusculas(AOutput);
   Result := L.Contains('not found') or L.Contains('offline') or
     L.Contains('no devices/emulators') or L.Contains('failed to connect') or
     L.Contains('cannot connect') or L.Contains('connection refused') or
@@ -283,7 +284,7 @@ var
   Devices: TJSONArray;
   N: Integer;
 begin
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa): aqui se
   // ignoraba en silencio (decima revision). device va con los que hablan con
   // UN dispositivo (adb -s): discover, devices, connect y disconnect lo
@@ -376,8 +377,8 @@ begin
       Denied := ColocacionDenegada(Params.Out.Trim);
       if Denied <> '' then
         Exit(Denied);
-      if not (Params.Out.Trim.ToLower.EndsWith('.txt') or
-              Params.Out.Trim.ToLower.EndsWith('.log')) then
+      if not (SinMayusculas(Params.Out.Trim).EndsWith('.txt') or
+              SinMayusculas(Params.Out.Trim).EndsWith('.log')) then
         Exit(MsgText(SR_ADB_OUT_LOG));
     end;
     // logcat on a missing device WAITS instead of erroring (measured:

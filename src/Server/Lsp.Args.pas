@@ -76,7 +76,8 @@ uses
   Lsp.ProcessLaunch,    // TrocearArgs: el troceador de la linea, y su inversa EnComillas
   Lsp.Texts,
   Lsp.Settings,         // GitRemoteHosts y HostsDeLista: los remotos que declara el workspace
-  Lsp.Casa;             // ServerTempDir y FragmentoUnico: el mensaje de un commit, en la casa
+  Lsp.Casa,             // ServerTempDir y FragmentoUnico: el mensaje de un commit, en la casa
+  Lsp.Pascal;           // SinMayusculas: EL pliegue de lo que no es una ruta
 
 { UN nombrador del fichero -F de git, junto a su filtro de argumentos. }
 function NombreDeMensajeGit: string;
@@ -227,7 +228,7 @@ begin
       if not CharInSet(C, ['0'..'9']) then
         Exit;
   end;
-  Result := Host.ToLower;
+  Result := SinMayusculas(Host);
 end;
 
 function GitRemoteDenied(const AText: string; AScpCorto: Boolean;

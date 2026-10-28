@@ -188,6 +188,7 @@ uses
   Lsp.Args,
   Lsp.Listas,        // ColaDeSalida: EL recorte de una salida en la respuesta
   Lsp.NombresDeTrabajo,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.ShaCache;
 
 var
@@ -930,7 +931,7 @@ var
 begin
   Result := '';
   AAccion := '';
-  if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) >= 0 then
+  if GNodoAlDia.IndexOf(SinMayusculas(AProfile.Trim)) >= 0 then
     Exit;
   { Al target va el binario de SU sistema: el ELF a un Linux y el .exe a un
     Windows con PAServer. El nombre en el destino es el mismo para los dos
@@ -943,7 +944,7 @@ begin
     Exit(MsgText(SR_REMOTERUN_NO_PACLIENT));
   // el SHA-256 de fichero de la casa (Lsp.ShaCache): tenia su propio THashSHA2
   // y leia el binario a mano (V84 de la 1.23.1)
-  LocalSha := CachedFileSha256(Bin).ToLower;
+  LocalSha := SinMayusculas(CachedFileSha256(Bin));
   // Carpeta PROPIA de esta comprobacion: el sello baja con su nombre remoto
   // (node.ver), asi que con un destino comun la comprobacion de un perfil se
   // llevaba por delante la de otro - dos Linux a la vez y cada uno leyendo el
@@ -979,8 +980,8 @@ begin
     else
       AAccion := 'updated';
   end;
-  if GNodoAlDia.IndexOf(AProfile.Trim.ToLower) < 0 then
-    GNodoAlDia.Add(AProfile.Trim.ToLower);
+  if GNodoAlDia.IndexOf(SinMayusculas(AProfile.Trim)) < 0 then
+    GNodoAlDia.Add(SinMayusculas(AProfile.Trim));
   try
     BorraArbol(TmpDir); // la carpeta de ESTA comprobacion, sin cruzar enlaces
   except
@@ -1005,6 +1006,7 @@ end;
 initialization
   GNodoLock := TCriticalSection.Create;
   GNodoAlDia := TStringList.Create;
+  GNodoAlDia.CaseSensitive := True; // las claves ya van plegadas (SinMayusculas): exactas
   GTrabajosLock := TCriticalSection.Create;
   GTrabajos := TStringList.Create;
 

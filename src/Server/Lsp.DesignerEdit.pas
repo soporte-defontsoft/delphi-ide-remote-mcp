@@ -3393,9 +3393,9 @@ begin
           // los del ancestro van delante: De, cuantos son
           var De := SinNombre(PS, H.ClassName_) - SinNombre(PN, H.ClassName_);
           var N := 0;
-          Vistos.TryGetValue(H.ClassName_.ToUpper, N);
+          Vistos.TryGetValue(ClaveDeIdentificador(H.ClassName_), N);
           Inc(N);
-          Vistos.AddOrSetValue(H.ClassName_.ToUpper, N);
+          Vistos.AddOrSetValue(ClaveDeIdentificador(H.ClassName_), N);
           if (De >= 0) and (N > De) then
             ASuyo := ASuyo + [ClaveSinNombre(H.ClassName_, N - De)];
         end;

@@ -90,7 +90,7 @@ var
   Names: TArray<string>;
   N, Close, BestName: string;
 begin
-  N := AName.Trim.ToLower.Replace(' ', '_').Replace('-', '_');
+  N := SinMayusculas(AName.Trim).Replace(' ', '_').Replace('-', '_');
   if (N <> '') and not N.StartsWith('delphi_') and not N.StartsWith('vault_') then
     N := 'delphi_' + N;
   if not TMCPRegistry.HasTool(N) then
@@ -144,7 +144,7 @@ function TDelphiHelpTool.ExecuteWithParams(const Params: TDelphiHelpParams): str
 var
   Cmd: string;
 begin
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   if (Cmd = '') and (Params.Name.Trim <> '') then
     Cmd := 'tool'; // name given, intent obvious
   if Cmd = '' then

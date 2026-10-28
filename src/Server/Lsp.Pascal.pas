@@ -241,6 +241,16 @@ function MismoIdentificador(const A, B: string): Boolean;
 // La CLAVE de un identificador para un diccionario o un conjunto: dos tienen
 // la misma clave si son el mismo (MismoIdentificador es su lector)
 function ClaveDeIdentificador(const S: string): string;
+// EL pliegue de mayusculas de todo lo que no es una RUTA (una ruta es
+// Lsp.Rutas.ClaveDeRuta): las palabras del contrato que manda el agente
+// (command, kind, mode...), lo que se compara con un literal ASCII (un
+// esquema, una cabecera, una extension), lo que se busca sin mayusculas y las
+// claves de un nombre. Las minusculas INVARIANTES: .ToLower lleva el casing
+// del idioma del usuario, y con el turco 'I' es la i sin punto - INIT no era
+// init y una busqueda de items no encontraba Items -, y LowerCase solo pliega
+// A-Z (GESTORIA con su I acentuada no era gestoria). Medido el 28-oct-2026
+// con LCMapStringEx (V108 de la 1.23.1).
+function SinMayusculas(const S: string): string;
 // La distancia de edicion (Levenshtein) entre dos textos, tal cual: quien la
 // quiera sin mayusculas los pliega antes. Vivia dentro de delphi_help (el
 // nombre de una tool casi bien escrito); delphi_designer set es su segundo
@@ -369,6 +379,12 @@ begin
   // en minusculas e invariante (sin el idioma del usuario: con el turco, la I
   // no plegaba a i): en ASCII da lo mismo que LowerCase, y las claves que ya
   // estaban escritas en minusculas (las tablas del disenador) no cambian
+  Result := SinMayusculas(S);
+end;
+
+function SinMayusculas(const S: string): string;
+begin
+  // LCMapString con LOCALE_INVARIANT y sin casing de ningun idioma
   Result := S.ToLowerInvariant;
 end;
 

@@ -1160,8 +1160,8 @@ end;
 
 function IdeDefaultUtf8(const AVersion: string): Boolean;
 begin
-  Result := IdeConfigValue(AVersion, 'Editor', 'DefaultFileFilter')
-    .ToUpper.Contains('UTF8TOUTF8');
+  Result := SinMayusculas(IdeConfigValue(AVersion, 'Editor', 'DefaultFileFilter'))
+    .Contains('utf8toutf8');
 end;
 
 function IdeProfilesDir(const AVersion: string): string;
@@ -1236,14 +1236,14 @@ end;
 function NombreDeSdk(const ANombre: string): string;
 begin
   Result := ANombre.Trim;
-  if not Result.ToLower.EndsWith('.sdk') then
+  if not SinMayusculas(Result).EndsWith('.sdk') then
     Result := Result + '.sdk';
 end;
 
 function NombreSinSdk(const ANombreSdk: string): string;
 begin
   Result := ANombreSdk.Trim;
-  if Result.ToLower.EndsWith('.sdk') then
+  if SinMayusculas(Result).EndsWith('.sdk') then
     SetLength(Result, Length(Result) - Length('.sdk'));
 end;
 

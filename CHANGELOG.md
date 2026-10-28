@@ -197,6 +197,15 @@ the MCP `initialize` response (`serverInfo.version`).
   of a unit, the changeset audit and the SHA-256 cache. They all go through
   the four judges of `Lsp.Rutas` now: one for equality, one for a list, one
   for "inside of" and one for the key of a table.
+- **Names that are not paths no longer follow the user's language either.**
+  Command names, parameter values, file extensions, identifiers and protocol
+  fields were lowered with the user's language rules. In Turkish, Windows'
+  own function lowers a capital `I` to a dotless `ı` (measured with
+  `LCMapStringEx` and the Turkish locale: `INIT` becomes `ınıt`, `Items`
+  becomes `ıtems`), so on a Windows in Turkish a value written in capitals,
+  such as `command=INIT`, would not have matched. They all go through one
+  language-independent fold now, and the house-rules battery refuses a new
+  `.ToLower` or `.ToUpper` anywhere in the server.
 - **The designer's note on how the IDE stores a value no longer repeats it.**
   When the IDE stores a property differently from what was given, the answer
   carries the values in `value`, `storedAs` and `storedIn`, exactly as the form

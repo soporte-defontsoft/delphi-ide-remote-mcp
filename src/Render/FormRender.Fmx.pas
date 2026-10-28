@@ -215,7 +215,7 @@ begin
     Res.Free;
   end;
   Result := MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, [Format('designer platform style %s (%s of %s)',
-    [GPeticion.Estilo.ToLower, Recurso, ExtractFileName(Bpl)]), Lleva]);
+    [LowerCase(GPeticion.Estilo), Recurso, ExtractFileName(Bpl)]), Lleva]);
 end;
 
 { Los no visuales como los ensena el designer: icono en su Left/Top y el nombre debajo }

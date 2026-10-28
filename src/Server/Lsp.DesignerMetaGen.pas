@@ -2815,7 +2815,7 @@ begin
     end;
     if APlataforma <> '' then
       Sb.Append(APlataforma);
-    Result := THashMD5.GetHashString(Sb.ToString).Substring(0, 12).ToLower;
+    Result := SinMayusculas(THashMD5.GetHashString(Sb.ToString).Substring(0, 12));
   finally
     Sb.Free;
   end;

@@ -336,7 +336,7 @@ begin
   Result := M.Success;
   if Result then
   begin
-    AClave := M.Groups[1].Value.ToLower;
+    AClave := SinMayusculas(M.Groups[1].Value);
     ANombre := M.Groups[2].Value;
     AClase := M.Groups[3].Value;
     AResto := Copy(T, M.Index + M.Length, MaxInt);

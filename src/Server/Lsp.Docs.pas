@@ -218,7 +218,7 @@ end;
   el de CodecDeAyuda): lo que se busca en sus bytes. }
 function BytesMin(const S: string; ACodec: TEncoding): TArray<Byte>;
 begin
-  Result := ACodec.GetBytes(S.ToLower);
+  Result := ACodec.GetBytes(SinMayusculas(S));
 end;
 
 { El juego de caracteres de la ayuda que no se declara UTF-8: Windows-1252.
@@ -254,7 +254,7 @@ begin
     Exit(CodecDeCharset('utf-8'));
   // el meta va en la cabecera: hasta 16 KB, en ASCII (con 1 KB se quedaba
   // fuera el de una cabecera larga)
-  Cabeza := TEncoding.ASCII.GetString(ABytes, 0, Min(Length(ABytes), 16384)).ToLower;
+  Cabeza := SinMayusculas(TEncoding.ASCII.GetString(ABytes, 0, Min(Length(ABytes), 16384)));
   Fin := Cabeza.IndexOf('</head');
   if Fin >= 0 then
     Cabeza := Cabeza.Substring(0, Fin);
@@ -382,8 +382,8 @@ var
   C: Char;
 begin
   Result := '';
-  Min := ATag.ToLower;
-  P := Pos(' ' + ANombre.ToLower + '=', ' ' + Min.Replace(#9, ' ').Replace(#10, ' ').Replace(#13, ' '));
+  Min := SinMayusculas(ATag);
+  P := Pos(' ' + SinMayusculas(ANombre) + '=', ' ' + Min.Replace(#9, ' ').Replace(#10, ' ').Replace(#13, ' '));
   if P = 0 then
     Exit;
   P := P + Length(ANombre) + 1; // en ATag: justo detras del '='
@@ -414,7 +414,7 @@ var
 begin
   ANombres := nil;
   ALocales := nil;
-  Min := ABloque.ToLower;
+  Min := SinMayusculas(ABloque);
   P := Pos('<param', Min);
   while P > 0 do
   begin
@@ -422,7 +422,7 @@ begin
     if Q = 0 then
       Break;
     Tag := Copy(ABloque, P + 1, Q - P - 1);
-    N := AtributoDe(Tag, 'name').ToLower;
+    N := SinMayusculas(AtributoDe(Tag, 'name'));
     V := DecodificaEntidades(AtributoDe(Tag, 'value')).Trim;
     if V <> '' then
       if N = 'name' then
@@ -554,7 +554,7 @@ function EsPagina(const APagina: string): Boolean;
 var
   P: string;
 begin
-  P := SinAncla(APagina).ToLower;
+  P := SinMayusculas(SinAncla(APagina));
   Result := P.EndsWith('.htm') or P.EndsWith('.html');
 end;
 
@@ -629,7 +629,7 @@ begin
   K := AId.IndexOf(':');
   if K <= 0 then
     Exit(False);
-  ACorto := AId.Substring(0, K).Trim.ToLower;
+  ACorto := SinMayusculas(AId.Substring(0, K).Trim);
   // (la entrada no es la misma variable que la salida: un out se vacia al
   // entrar)
   PaginaYAncla(AId.Substring(K + 1).Trim, Resto, AAncla);
@@ -672,7 +672,7 @@ begin
       Dec(J);
     S := Copy(S, J, I - J);
   end;
-  for var W in S.ToLower.Split([' ', #9, #10, #13], TStringSplitOptions.ExcludeEmpty) do
+  for var W in SinMayusculas(S).Split([' ', #9, #10, #13], TStringSplitOptions.ExcludeEmpty) do
   begin
     P := W;
     while (P <> '') and CharInSet(P[1], BORDES) do
@@ -700,7 +700,7 @@ begin
   I := 1;
   while (I <= Length(S)) and CharInSet(S[I], ['a' .. 'z', 'A' .. 'Z', '0' .. '9']) do
     Inc(I);
-  Result := Copy(S, 1, I - 1).ToLower;
+  Result := SinMayusculas(Copy(S, 1, I - 1));
 end;
 
 function ClaseTiene(const ATag, AToken: string): Boolean;
@@ -926,7 +926,7 @@ end;
   distinguir mayusculas; 0 si no. }
 function PosMin(const AQue, AEn: string; ADesde: Integer = 1): Integer;
 begin
-  Result := PosEx(AQue.ToLower, AEn.ToLower, ADesde);
+  Result := PosEx(SinMayusculas(AQue), SinMayusculas(AEn), ADesde);
 end;
 
 { El atributo id=X (con o sin comillas) en el HTML, sin distinguir
@@ -936,8 +936,8 @@ function PosDeId(const AHtml, AId: string): Integer;
 var
   H, Id: string;
 begin
-  H := AHtml.ToLower;
-  Id := AId.ToLower;
+  H := SinMayusculas(AHtml);
+  Id := SinMayusculas(AId);
   Result := Pos('id="' + Id + '"', H);
   if Result = 0 then
     Result := Pos('id=''' + Id + '''', H);
@@ -1095,7 +1095,7 @@ end;
   ("## Helper Syntax" tal cual sale en el texto). }
 function NormalizaTitulo(const S: string): string;
 begin
-  Result := S.Replace('_', ' ').Replace(#$A0, ' ').Replace('`', '').Trim.TrimLeft(['#']).Trim.ToLower;
+  Result := SinMayusculas(S.Replace('_', ' ').Replace(#$A0, ' ').Replace('`', '').Trim.TrimLeft(['#']).Trim);
 end;
 
 { La seccion AAncla del contenido: desde su titulo (AQ) hasta el siguiente de
@@ -1235,7 +1235,7 @@ begin
   // el enlace al padre, fuera del texto: el primero de Enlaces
   if EnlaceAlPadre(Contenido, E) then
     Result.Enlaces := [E];
-  Bajo := Contenido.ToLower;
+  Bajo := SinMayusculas(Contenido);
   // las secciones: sus titulos con ancla. Antes salian de la caja de
   // contenidos, que MediaWiki no pone con menos de cuatro titulos: una pagina
   // larga sin ella no ofrecia secciones; ahora un lector para "sections" y
@@ -1384,7 +1384,7 @@ function TAbiertos.Chm(const ACorto: string): TChm;
 var
   A: TAyudaInstalada;
 begin
-  if FChm.TryGetValue(ACorto.ToLower, Result) then
+  if FChm.TryGetValue(SinMayusculas(ACorto), Result) then
     Exit;
   Result := nil;
   if not Ayuda(ACorto, A) then
@@ -1395,7 +1395,7 @@ begin
     Result := nil; // una ayuda que Windows no abre no tumba la busqueda
   end;
   // tambien la que no abre: no se reintenta en cada candidato
-  FChm.Add(ACorto.ToLower, Result);
+  FChm.Add(SinMayusculas(ACorto), Result);
 end;
 
 function TAbiertos.Html(const AId: string; out AHtml: string): Boolean;
@@ -1452,7 +1452,7 @@ function PuntosDeEntrada(const AE: TEntradaDeMapa; const AConsulta: string;
 var
   Nom, Base: string;
 begin
-  Nom := AE.Nombre.ToLower;
+  Nom := SinMayusculas(AE.Nombre);
   Result := PuntosDePalabra(Nom, AConsulta);
   // el nombre cualificado de la pagina: System.SysUtils.FormatDateTime.htm
   Base := LowerCase(ChangeFileExt(NombreDePagina(AE.Local), ''));
@@ -1495,9 +1495,9 @@ var
     Co, Pa, An: string;
   begin
     if PartesDeId(AId, Co, Pa, An) then
-      Result := IdDePagina(Co, Pa, '').ToLower
+      Result := SinMayusculas(IdDePagina(Co, Pa, ''))
     else
-      Result := AId.ToLower;
+      Result := SinMayusculas(AId);
   end;
 
 begin
@@ -1514,7 +1514,7 @@ begin
       Aguja := W;
   if Length(Palabras) = 1 then
     Aguja := Q;
-  Fw := AFramework.Trim.ToLower;
+  Fw := SinMayusculas(AFramework.Trim);
   Abiertos := TAbiertos.Create(AAyudas);
   Cand := TDictionary<string, Integer>.Create;
   Paginas := TDictionary<string, Boolean>.Create;
@@ -1551,7 +1551,7 @@ begin
             Continue;
           for var N in C.Raiz do
           begin
-            Base := N.ToLower;
+            Base := SinMayusculas(N);
             if not (Base.EndsWith('.' + Clase + '_methods.htm') or
                Base.EndsWith('.' + Clase + '_properties.htm') or
                Base.EndsWith('.' + Clase + '_events.htm') or
@@ -1583,7 +1583,7 @@ begin
       R.Titulo := '';
       Base := '';
       if PartesDeId(R.Id, Corto, Pagina, Ancla) then
-        Base := NombreDePagina(Pagina).ToLower;
+        Base := SinMayusculas(NombreDePagina(Pagina));
       // framework=fmx|vcl: la pagina de ese, antes
       if (Fw = 'fmx') and Base.StartsWith('fmx.') or (Fw = 'vcl') and Base.StartsWith('vcl.') then
         Inc(R.Puntos, 15)

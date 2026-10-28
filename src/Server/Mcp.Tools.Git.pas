@@ -145,6 +145,7 @@ uses
   Lsp.Json,          // ListaDeTextos: la lista de "paths"
   Lsp.Args,
   Lsp.Lugares,
+  Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Mascara;
 
 // la tool git va por delante de sus compositores
@@ -1550,7 +1551,7 @@ begin
   if (Params.Message.Contains(#13) or Params.Message.Contains(#10)) and
      not MatchText(Params.Command.Trim, ['commit', 'tag']) then
     Exit(MsgText(SR_GIT_MESSAGE_LINES));
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   // "paths" es una LISTA (el esquema la publica asi; un texto suelto no lo
   // es): se lee una vez, aqui, y la lee RutasDeGit para cada comando
   var Lista: TArray<string>;
@@ -1878,9 +1879,9 @@ begin
     // el global de la cuenta del servidor). Se negaba con GIT-033 y no habia
     // forma de saber con que identidad se iba a firmar (1.21.1)
     if Params.Message.Trim = '' then
-      GitArgs := 'config --get ' + Params.Name.Trim.ToLower
+      GitArgs := 'config --get ' + SinMayusculas(Params.Name.Trim)
     else
-      GitArgs := 'config ' + Params.Name.Trim.ToLower + ' ' + EnComillas(Params.Message);
+      GitArgs := 'config ' + SinMayusculas(Params.Name.Trim) + ' ' + EnComillas(Params.Message);
   end
   else if Cmd = 'switch' then
   begin
@@ -2040,7 +2041,7 @@ begin
     // pueda revisar'). Como clone: la carpeta la elige el agente dentro de sus
     // raices. Sin carpetas temporales ni limpiezas al arrancar (David): la
     // quita quien la pone, y list se la ensena.
-    var Sub := Params.Action.Trim.ToLower;
+    var Sub := SinMayusculas(Params.Action.Trim);
     if Sub = 'list' then
       GitArgs := 'worktree list'
     else if (Sub = 'add') or (Sub = 'remove') then
@@ -2323,7 +2324,7 @@ begin
   // forma de git de contestar "no esta fijada", no un fallo (GIT-079)
   if (ExitCode = 1) and (Output.Trim = '') and (Cmd = 'config') and (Params.Message.Trim = '') then
     Result := GitExito(MsgFmt(SN_GIT_CONFIG_SIN_VALOR_FMT,
-      [Params.Name.Trim.ToLower, Params.Name.Trim.ToLower]), 1);
+      [SinMayusculas(Params.Name.Trim), SinMayusculas(Params.Name.Trim)]), 1);
   // Una respuesta que es solo "exit=0" no se distingue de una que se ha roto
   // por el camino, y lo primero que hace quien la recibe es repetirla. El
   // silencio de git SIGNIFICA cosas distintas segun la orden, asi que se

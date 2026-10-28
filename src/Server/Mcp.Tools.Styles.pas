@@ -626,7 +626,7 @@ begin
     // 3) design tokens: every key must exist in every theme section
     for F in TDirectory.GetFiles(Dir, '*.ini') do
     begin
-      if F.ToLower.Contains('rules') or not F.ToLower.Contains('token') then
+      if SinMayusculas(F).Contains('rules') or not SinMayusculas(F).Contains('token') then
         Continue;
       // como el primer paso: lo que la jaula no deja leer no se mira
       if LugarDeLecturaDenegado(F, [ltJaula]) <> '' then
@@ -1174,7 +1174,7 @@ function GestoDeEstilos(const Params: TDelphiStylesParams; ASoloJuicioFmx: Boole
 var
   Cmd, Denied: string;
 begin
-  Cmd := Params.Command.Trim.ToLower;
+  Cmd := SinMayusculas(Params.Command.Trim);
   if Cmd = '' then
     Cmd := 'view';
   if Params.Path.Trim = '' then
@@ -1266,7 +1266,7 @@ begin
   // cualquier otra edicion. build NO entra - lanza el conversor externo y
   // puede tardar segundos; tener ahi dentro el cerrojo de TODAS las escrituras
   // del servidor seria peor que la carrera que evita.
-  if not MatchText(Params.Command.Trim.ToLower, ['set', 'clone', 'delete']) then
+  if not MatchText(SinMayusculas(Params.Command.Trim), ['set', 'clone', 'delete']) then
     Exit(GestoDeEstilos(Params));
   // set: lo que FMX ignoraria se juzga ANTES y sin el cerrojo - lanza el
   // conversor externo, decimas o hasta su tope si se cuelga -, como build.

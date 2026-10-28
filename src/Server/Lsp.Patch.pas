@@ -5144,7 +5144,7 @@ begin
         if not MF.Success then
           Exit(MsgFmt(SR_EDIT_BLOQUE_NO_EMPIEZA_FIRMA_FMT, [Copy(Firma, 1, 80)]));
         if (MF.Groups[1].Value <> '') and (A.Insert = 'rutina-global') then
-          Exit(MsgFmt(SR_EDIT_RUTINA_GLOBAL_DE_CLASE_FMT, [MF.Groups[2].Value.ToLower]));
+          Exit(MsgFmt(SR_EDIT_RUTINA_GLOBAL_DE_CLASE_FMT, [SinMayusculas(MF.Groups[2].Value)]));
         if GrupoDe(MF, 4) = '.' then // un grupo opcional (Lsp.Regex)
           Exit(MsgText(SR_EDIT_FIRMA_VIENE_CUALIFICADA_CLASE));
         var IFirmaFin := IFirmaIni;
@@ -5435,7 +5435,7 @@ begin
               if FindUniqueLine(SplitToLines(CodigoPascal(DecodeBytes(TFile.ReadAllBytes(A.Path), K))),
                 function(L: string): Boolean
                 begin
-                  Result := L.Trim.ToLower = 'implementation';
+                  Result := SinMayusculas(L.Trim) = 'implementation';
                 end, ImpIdx) then
               begin
                 var Decl := string.Join(#10, FirmaLineas);
@@ -5582,7 +5582,7 @@ begin
         else
         begin
         var IDecl := IFin;
-        var Vis := A.Visibility.Trim.ToLower;
+        var Vis := SinMayusculas(A.Visibility.Trim);
         if Vis = 'default' then
           Vis := 'published';
         // Sin visibility, un metodo que el designer pareja YA cablea como

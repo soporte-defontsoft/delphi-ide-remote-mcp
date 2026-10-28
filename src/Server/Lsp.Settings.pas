@@ -354,6 +354,7 @@ uses
   Lsp.Codificacion,     // BomUtf8En y KindDeBom: el BOM delante de una seccion, el UTF-16 BE
   Lsp.Rutas,
   Lsp.Casa,             // ServerDir: la casa del settings.ini
+  Lsp.Pascal,           // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Mascara;          // EmpiezaPorUnidadVirtual: la forma que ven los agentes
 
 type
@@ -1450,7 +1451,7 @@ begin
             // anywhere saying why. It gets the loudest note of the three.
             GWorkspaceNotes := GWorkspaceNotes +
               [MsgText(SL_GUARD_WORKSPACE_SIN_PUNTO)]
-          else if S.ToLower.StartsWith('work') then
+          else if SinMayusculas(S).StartsWith('work') then
             // [Workopenclaw], [WorkspaceX]... a workspace section spelled
             // wrong used to vanish silently and its token answered 401 with
             // no clue anywhere (measured 2026-09-10). Name the fix.
@@ -1682,7 +1683,7 @@ var
   H, Allowed: string;
 begin
   Result := '';
-  H := AHost.Trim.ToLower;
+  H := SinMayusculas(AHost.Trim);
   if H = '' then
     Exit;
   Allowed := RemoteProbeHosts;

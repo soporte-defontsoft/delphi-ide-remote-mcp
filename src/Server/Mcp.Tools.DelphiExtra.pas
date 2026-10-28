@@ -113,6 +113,7 @@ uses
   Lsp.Listas,     // AgrupaPorFichero: los usos por carpeta y fichero
   Lsp.Guard,      // ReadPathDenied: la guarda antes que nada (ruta vacia)
   Lsp.ConfigFabricator, // NotaDeRecorte, NotaDeDebajoDelProyecto, ProyectoDeLosAjustes
+  Lsp.Pascal,           // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Mascara;
 
 const
@@ -284,7 +285,7 @@ begin
     // uno se lo come el contexto.
     R := RunMsBuild(Params.Project, Params.Platform, Params.Config, Params.Target,
       Params.Profile, Params.DeviceId, 600000, Params.Sdk,
-      IfThen(Params.Verbosity.Trim = '', 'quiet', Params.Verbosity.Trim.ToLower));
+      IfThen(Params.Verbosity.Trim = '', 'quiet', SinMayusculas(Params.Verbosity.Trim)));
   except
     on E: Exception do
       // "error:" tambien, no solo "RECHAZADO": desde v1.0.4-beta el motor

@@ -956,7 +956,7 @@ var
       var Id := N.GetValue<string>('ident', '');
       if Id = '' then
         Id := IdentOf(Nm);
-      if Id.ToLower.Contains(AFilter) then
+      if SinMayusculas(Id).Contains(AFilter) then
       begin
         Inc(Total);
         if Hits.Count < 100 then
@@ -1284,7 +1284,7 @@ begin
     Result := MsgFmt(SR_LSP_NO_FILE_FMT, [Params.Path]);
   if Result <> '' then
     Exit;
-  var Mode := Params.Mode.Trim.ToLower;
+  var Mode := SinMayusculas(Params.Mode.Trim);
   if (Mode <> '') and (Mode <> 'summary') and (Mode <> 'full') then
     Exit(MsgText(SR_LSP_MODE_DEBE_SER_SUMMARY));
   Client := TLspSession.Instance.AcquireFor(Params.Path, Settings);
@@ -1324,7 +1324,7 @@ begin
     // (EnmascaraJsonSalvo); las rutas, enmascaradas
     if not (V is TJSONArray) then
       Exit(EnmascaraJsonSalvo(V.ToJSON, CONTENIDO_DE_SYMBOLS, Note));
-    var Filt := Params.Filter.Trim.ToLower;
+    var Filt := SinMayusculas(Params.Filter.Trim);
     if Filt <> '' then
       Exit(EnmascaraJsonSalvo(FilterSymbols(TJSONArray(V), Filt), CONTENIDO_DE_SYMBOLS, Note));
     AdelgazaArbol(V);
@@ -1356,7 +1356,7 @@ begin
   Result := PosicionQueNoSePregunta(Params.Path, Params.Line, Params.Character);
   if Result <> '' then
     Exit;
-  Kind := Params.Kind.Trim.ToLower;
+  Kind := SinMayusculas(Params.Kind.Trim);
   if (Kind <> '') and (Kind <> 'definition') and (Kind <> 'declaration') and
      (Kind <> 'implementation') then
     Exit(MsgText(SR_LSP_KIND_DEBE_SER_DEFINITION));
