@@ -358,6 +358,18 @@ the MCP `initialize` response (`serverInfo.version`).
   now takes its value from the form parser of the runtime library (decimal
   point always, the `s`/`c`/`d` suffixes the IDE writes, the sign in front) -
   the inverse of the writer that `delphi_designer set` already uses.
+- **An FMX view is a form of its master's unit.** A view
+  (`UMain.Windows.fmx`) has no unit of its own: the IDE declares it in the
+  master's unit with `{$R *.Windows.fmx MSWINDOWS}`, and its root is a class
+  the IDE makes up (`inherited FormMain_Windows: TFormMain_Windows`). The
+  renderer already read it that way, but the rest of the server looked for
+  `UMain.Windows.pas`: `check-binding` answered `DSGN-023`, `insert`,
+  `delete` and a rename refused it (`DSGN-076`), and moving `UMain.pas` alone
+  warned about `UMain.fmx` but not about the view it left behind. The unit of
+  a view is now its master's, found by that directive (the same judge the
+  renderer uses), and a view is judged and written against the master's
+  class (`TFormMain`): a control inserted in a view goes into the view and
+  its field into the form's class.
 
 ### Changed
 

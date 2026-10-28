@@ -335,8 +335,19 @@ const
   con su mismo nombre (la regla del IDE), existan o no, en el orden de la
   lista. La inversa de UnidadDeDesigner (Lsp.DesignerForma): la componian a
   mano, extension a extension, Mcp.Tools.FileOps (el borrado, el mover y su
-  gemelo) y Lsp.ProjectUnits (2.2 de la 1.18.0). }
-function DesignersDeUnidad(const AUnidad: string): TArray<string>;
+  gemelo) y Lsp.ProjectUnits (2.2 de la 1.18.0). Y DETRAS del par (quien busca
+  el primero que exista sigue dando el maestro), sus VISTAS FMX: las que declara
+  su texto (VistasDeUnidad), leido de ATextoDe si se da - tras mover o borrar,
+  la unidad ya no esta donde estaba - y si no, de AUnidad (V122 de la 1.23.1). }
+function DesignersDeUnidad(const AUnidad: string; const ATextoDe: string = ''): TArray<string>;
+{ La clase que declara en su unidad el form de ADesigner, la de su raiz
+  (AClaseDeLaRaiz) - salvo en una VISTA FMX declarada, cuya raiz es una clase
+  que sintetiza el IDE ('inherited ActiveForm_Windows: TActiveForm_Windows',
+  como en los Samples) y que no esta en la unidad: la suya es la de la raiz de
+  su MAESTRO (<unidad>.fmx), contra la que se cablean sus componentes. Una
+  vista se juzgaba contra una clase que no existe: check-binding DSGN-032 e
+  insert DSGN-077 (V122 de la 1.23.1, medido). }
+function ClaseEnSuUnidad(const ADesigner, AClaseDeLaRaiz: string): string;
 { APath con el nombre de su ultimo trozo como lo tiene el DISCO (las
   mayusculas con que se creo); APath tal cual si no existe. Lo pregunta
   tambien la nota del par, que nombraba UFICHA.dfm (compuesto desde la unit)
@@ -1880,11 +1891,13 @@ begin
   Coloca(ADestino, '', ABytes, ALugar);
 end;
 
-function DesignersDeUnidad(const AUnidad: string): TArray<string>;
+function DesignersDeUnidad(const AUnidad: string; const ATextoDe: string): TArray<string>;
 begin
   Result := [];
   for var E in DESIGNER_EXTS do
     Result := Result + [ChangeFileExt(AUnidad, E)];
+  if Assigned(GTextoDeUnidad) then
+    Result := Result + VistasDeUnidad(AUnidad, GTextoDeUnidad(IfThen(ATextoDe <> '', ATextoDe, AUnidad)));
 end;
 
 function EsRutaDeDesigner(const APath: string): Boolean;
@@ -6435,6 +6448,23 @@ begin
   except
     // negada o ilegible: el marco, por la extension
   end;
+end;
+
+function ClaseEnSuUnidad(const ADesigner, AClaseDeLaRaiz: string): string;
+var
+  Maestro, Clave, Nombre, Clase: string;
+begin
+  Result := AClaseDeLaRaiz;
+  // una vista DECLARADA cuya unidad es la del maestro: un <unidad>.<Vista>.pas
+  // propio la hace un form mas
+  Maestro := MaestroDeVistaDeclarada(ADesigner);
+  if (Maestro = '') or not SameFileName(UnidadDeDesigner(ADesigner), UnidadDeDesigner(Maestro)) then
+    Exit;
+  // la raiz del maestro, por EL lector de la linea raiz; uno que no se lee
+  // (binario, negado) deja la de la vista, y su negativa dice cual falta
+  if LineaRaizDeDesigner(SplitToLines(TextoDeUnidadDeDesigner(Maestro)), Clave, Nombre, Clase) and
+     (Clase <> '') then
+    Result := Clase;
 end;
 
 initialization

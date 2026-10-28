@@ -4085,8 +4085,11 @@ end;
   adonde llego cada uno (vacio en un borrado); AVerbo, que se le hizo. El par no
   se parte si el que se queda es el MISMO que lo que llego lee a su lado: un
   renombrado de solo mayusculas (medido en vivo con r1222cf el 26-oct-2026:
-  UFicha.pas -> UFICHA.pas decia que se iba sin su UFicha.dfm). }
-function AvisosDelPar(const AHechos, ADestinos: TArray<string>; const AVerbo: string): string;
+  UFicha.pas -> UFICHA.pas decia que se iba sin su UFicha.dfm). AFuentes: donde
+  se lee AHORA el texto de cada uno (su copia al copiar, adonde llego al mover,
+  la papelera al borrar): de el salen las vistas FMX que declara una unit, y
+  una que se iba sin la suya no avisaba (V122 de la 1.23.1). }
+function AvisosDelPar(const AHechos, ADestinos, AFuentes: TArray<string>; const AVerbo: string): string;
 begin
   Result := '';
   for var I := 0 to High(AHechos) do
@@ -4098,7 +4101,10 @@ begin
     var Alli: TArray<string> := [];
     if SameText(TPath.GetExtension(F), '.pas') then
     begin
-      Otros := DesignersDeUnidad(F);
+      var Fuente := '';
+      if I < Length(AFuentes) then
+        Fuente := AFuentes[I];
+      Otros := DesignersDeUnidad(F, Fuente);
       if I < Length(ADestinos) then
         Alli := DesignersDeUnidad(ADestinos[I]);
     end
@@ -4130,9 +4136,9 @@ begin
     Verbo := MsgText(SF_PAR_BORRADO);
   end;
   if AMudanza = mzBorra then
-    Result := AvisosDelPar(AViejos, [], Verbo)
+    Result := AvisosDelPar(AViejos, [], ANuevos, Verbo)
   else
-    Result := AvisosDelPar(AViejos, ANuevos, Verbo);
+    Result := AvisosDelPar(AViejos, ANuevos, ANuevos, Verbo);
   // lo que sale de la papelera era una copia: no hay proyecto que la liste
   Viejos := [];
   Nuevos := [];

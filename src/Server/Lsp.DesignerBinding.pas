@@ -160,7 +160,7 @@ begin
 end;
 
 function BindingReport(const DfmLines: TArray<string>; const APasTexto, Pas: string;
-  AIsFmx: Boolean): string;
+  AIsFmx: Boolean; const ADfm: string): string;
 var
   L, Nm, Cl2, Ev, Handler, RootClass, Chain, OClave: string;
   Ret: TJSONObject;
@@ -307,6 +307,18 @@ begin
     for I := 0 to High(DfmLines) do
       if (Form[I].Clase = clfObjeto) and (Form[I].Nombre <> '') then
         Objetos.Add(Form[I].Nombre);
+    // ...y en una VISTA FMX, los de su maestro: la vista se carga ENCIMA de
+    // el, y el campo de un componente que solo esta en el maestro no es un
+    // campo sin componente (V122 de la 1.23.1, una vista de los Samples)
+    var Maestro := MaestroDeVistaDeclarada(ADfm);
+    if Maestro <> '' then
+    begin
+      var DelMaestro := SplitToLines(GTextoDeUnidad(Maestro));
+      var FormMaestro := LineasDeForm(DelMaestro);
+      for var K := 0 to High(FormMaestro) do
+        if (FormMaestro[K].Clase = clfObjeto) and (FormMaestro[K].Nombre <> '') then
+          Objetos.Add(FormMaestro[K].Nombre);
+    end;
 
     // the root object of the .dfm names the class this form really is
     RootClass := '';
@@ -314,9 +326,11 @@ begin
     for I := 0 to High(DfmLines) do
       if Form[I].Clase = clfObjeto then
       begin
+        // la clase de su unidad: la de una vista FMX es la de su maestro
+        // (ClaseEnSuUnidad; V122 de la 1.23.1)
+        RootClass := ClaseEnSuUnidad(ADfm, Form[I].ClaseObj);
         Ret.AddPair('form', Form[I].Nombre);
-        Ret.AddPair('class', Form[I].ClaseObj);
-        RootClass := Form[I].ClaseObj;
+        Ret.AddPair('class', RootClass);
         Break;
       end;
     if RootClass = '' then
@@ -507,7 +521,7 @@ begin
     Exit(MsgFmt(SR_DESIGNER_NO_UNIT_FMT, [Pas]));
   // la unit, entera: sus clases las lee EL lector (LeeFuentePascal, sobre su
   // codigo: un bloque comentado no declara componentes)
-  Result := BindingReport(Lineas, PatchLoadText(Pas, Enc), Pas, EsDesignerFmx(ADfm));
+  Result := BindingReport(Lineas, PatchLoadText(Pas, Enc), Pas, EsDesignerFmx(ADfm), ADfm);
 end;
 
 function DesignerBindingWarnings(const ADfm: string;
@@ -523,7 +537,7 @@ begin
   Pas := UnidadDeDesigner(ADfm);
   if not TFile.Exists(Pas) then
     Exit;
-  S := BindingReport(ADfmLines, PatchLoadText(Pas, Enc), Pas, EsDesignerFmx(ADfm));
+  S := BindingReport(ADfmLines, PatchLoadText(Pas, Enc), Pas, EsDesignerFmx(ADfm), ADfm);
   O := ObjetoJson(S); // EL lector (Lsp.Json): estaba su cuerpo aqui
   if O = nil then
     Exit;

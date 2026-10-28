@@ -609,10 +609,12 @@ begin
       Exit;
     Unidad := LeeFuentePascal(APasTexto);
     try
-      Clase := Unidad.Clase(ADoc.Root.ClassName_);
+      // la de su unidad (ClaseEnSuUnidad: la de una vista es la de su maestro)
+      Clase := Unidad.Clase(ClaseEnSuUnidad(ADoc.Path, ADoc.Root.ClassName_));
       if Clase = nil then
       begin
-        Result.Nota := MsgFmt(SN_DESIGNER_IMPACTO_SIN_CLASE_FMT, [ADoc.Root.ClassName_, APasNombre]);
+        Result.Nota := MsgFmt(SN_DESIGNER_IMPACTO_SIN_CLASE_FMT,
+          [ClaseEnSuUnidad(ADoc.Path, ADoc.Root.ClassName_), APasNombre]);
         Exit;
       end;
       // las mismas posiciones y saltos que el texto, sin comentarios ni cadenas
@@ -749,7 +751,7 @@ begin
   APas := APasTexto;
   AImp := AnalizaImpacto(ADoc, AObj, False, APasTexto, APasNombre, AJuez, ATabla);
   if AImp.Nota <> '' then
-    Exit(MsgFmt(SR_DESIGNER_EDIT_SIN_CLASE_FMT, [ADoc.Root.ClassName_, APasNombre]));
+    Exit(MsgFmt(SR_DESIGNER_EDIT_SIN_CLASE_FMT, [ClaseEnSuUnidad(ADoc.Path, ADoc.Root.ClassName_), APasNombre]));
   // la puerta: un metodo propio, exclusivo y con cuerpo
   Bloquean := '';
   N := 0;
@@ -1084,8 +1086,8 @@ begin
     begin
       Unidad := LeeFuentePascal(F.PasTexto);
       try
-        if Unidad.Clase(F.Doc.Root.ClassName_) = nil then
-          Exit(MsgFmt(SR_DESIGNER_EDIT_SIN_CLASE_FMT, [F.Doc.Root.ClassName_, F.PasNombre]));
+        if Unidad.Clase(ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_)) = nil then
+          Exit(MsgFmt(SR_DESIGNER_EDIT_SIN_CLASE_FMT, [ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_), F.PasNombre]));
       finally
         Unidad.Free;
       end;
@@ -2134,7 +2136,7 @@ begin
     UsesNota := '';
     UPas := LeeFuentePascal(F.PasTexto);
     try
-      Cls := UPas.Clase(F.Doc.Root.ClassName_);
+      Cls := UPas.Clase(ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_));
       // el nombre que se pide, con las reglas del renombrado; si no, el del IDE
       if AComponente.Trim <> '' then
       begin
@@ -2298,7 +2300,7 @@ begin
     LineaCampo := 0;
     UPas := LeeFuentePascal(PasNuevo);
     try
-      Cls := UPas.Clase(F.Doc.Root.ClassName_);
+      Cls := UPas.Clase(ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_));
       if Cls <> nil then
         for var C in Cls.Campos do
           if MismoIdentificador(C.Nombre, Nombre) then
@@ -3231,7 +3233,7 @@ begin
     Viejo := Obj.ObjName;
     U := LeeFuentePascal(F.PasTexto);
     try
-      Result := NombreQueNoVale(F, U.Clase(F.Doc.Root.ClassName_), ANuevo, Obj, Nuevo);
+      Result := NombreQueNoVale(F, U.Clase(ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_)), ANuevo, Obj, Nuevo);
     finally
       U.Free;
     end;

@@ -855,31 +855,24 @@ end;
   ALeidos, el .pas leido se anota con su huella (READ=). }
 function MaestroDeVista(const AFichero: string; ALeidos: TStrings): string;
 var
-  Nombre, Base, Vista, Ext, Maestro, Pas: string;
-  P: Integer;
+  Representa, Maestro, Pas: string;
 begin
   Result := '';
-  Nombre := ExtractFileName(RutaQueRepresenta(AFichero));
-  Ext := ExtractFileExt(Nombre);
-  Base := ChangeFileExt(Nombre, '');
-  P := Base.LastIndexOf('.');
-  if P <= 0 then
+  Representa := RutaQueRepresenta(AFichero);
+  Maestro := MaestroPorNombre(Representa);
+  if Maestro = '' then
     Exit;
-  Vista := Base.Substring(P + 1);
-  Base := Base.Substring(0, P);
-  Maestro := TPath.Combine(ExtractFilePath(RutaQueRepresenta(AFichero)), Base + Ext);
   Pas := UnidadDeDesigner(Maestro);
   if not TFile.Exists(Maestro) or EsEnlace(Maestro) or not TFile.Exists(Pas) or EsEnlace(Pas) then
     Exit;
   // la huella ANTES que el texto, como AncestroDeClase
   if ALeidos <> nil then
     AnotaLeido(ALeidos, Pas, TFile.ReadAllBytes(Pas));
-  for var D in DirectivasPascal(TFile.ReadAllText(Pas)) do
-    // su primer trozo, por EL troceador de las directivas de fichero
-    if (D.Nombre = 'R') or (D.Nombre = 'RESOURCE') then
-      for var T in TrozosDeDirectiva(D.Argumento, 1) do
-        if SameText(T.Texto, '*.' + Vista + Ext) then
-          Exit(Maestro);
+  // EL juez de "es una vista", el mismo del servidor (Lsp.DesignerForma.
+  // VistasDeUnidad, V122 de la 1.23.1)
+  for var V in VistasDeUnidad(Pas, TFile.ReadAllText(Pas)) do
+    if SameText(ExtractFileName(V), ExtractFileName(Representa)) then
+      Exit(Maestro);
 end;
 
 function EsFrame(const AFichero, AClase: string; AFrame: TClass): Boolean;

@@ -57,6 +57,8 @@ type
     procedure ElementosDeUnaListaComoLaEscribeElIde;
     [Test]
     procedure ElLectorDelFlotanteEsLaInversaDelEscritor;
+    [Test]
+    procedure LasVistasLasDiceLaDirectiva;
   end;
 
 implementation
@@ -1761,6 +1763,23 @@ begin
   // la coma del locale no es la de un form; lo que se lleva algo detras no es uno
   Assert.IsFalse(LeeFlotanteDeForm('10,5', F) or LeeFlotanteDeForm('1 2', F) or
     LeeFlotanteDeForm('abc', F) or LeeFlotanteDeForm('', F));
+end;
+
+procedure TDesignerEditTests.LasVistasLasDiceLaDirectiva;
+var
+  V: TArray<string>;
+begin
+  // EL juez de "es una vista": la directiva R '*.<Vista>.fmx' de su unidad,
+  // como la escribe el IDE (UActiveForm de los Samples); '*.fmx' es el
+  // maestro, una comentada no cuenta, y la condicion detras no estorba
+  // (V122 de la 1.23.1)
+  V := VistasDeUnidad('C:\p\UMain.pas', 'implementation'#13#10'{$R *.fmx}'#13#10 +
+    '{$R *.Windows.fmx MSWINDOWS}'#13#10'// {$R *.iPhone47in.fmx IOS}'#13#10'{$R *.res}'#13#10'end.');
+  Assert.IsTrue(Length(V) = 1, string.Join('|', V));
+  Assert.AreEqual('C:\p\UMain.Windows.fmx', V[0]);
+  // el maestro por el nombre; sin vista en el nombre, ninguno
+  Assert.AreEqual('C:\p\UMain.fmx', MaestroPorNombre('C:\p\UMain.Windows.fmx'));
+  Assert.AreEqual('', MaestroPorNombre('C:\p\UMain.fmx'));
 end;
 
 initialization

@@ -118,8 +118,30 @@ function LineaDeObjeto(const ALinea: string; out AClave, ANombre, AClase, AResto
 function ComponeLineaDeObjeto(const AClave, ANombre, AClase: string): string;
 
 { La unidad de un form: el .pas de al lado con el mismo nombre (la regla del
-  IDE). Escrita a mano en cuatro sitios hasta la 1.17.0. }
+  IDE). Escrita a mano en cuatro sitios hasta la 1.17.0. Una VISTA de un form
+  FMX (UMain.Windows.fmx) no tiene .pas propio: la suya es la del maestro
+  (UMain.pas) si este la declara (VistasDeUnidad); el texto, por la puerta de
+  leer del servidor (GTextoDeUnidad), y en los renderizadores, el .pas del
+  mismo nombre (alli la vista la lee MaestroDeVista). }
 function UnidadDeDesigner(const ADesigner: string): string;
+
+{ LAS VISTAS de un form FMX que declara su unidad (AUnidad, el .pas; ATexto,
+  su texto): una por directiva R '*.<Vista>.fmx ...' - como las escribe el
+  IDE, por EL lector de directivas (Lsp.Pascal.DirectivasPascal: una comentada
+  no cuenta) -, cada una <unidad>.<Vista>.fmx en la carpeta de la unidad. EL
+  juez de "es una vista" del servidor y del ayudante: el servidor la buscaba
+  por el nombre (<unidad>.<Vista>.pas) y el ayudante por la directiva, y
+  insert, delete, rename y check-binding negaban una vista (V122 de la 1.23.1,
+  medido). }
+function VistasDeUnidad(const AUnidad, ATexto: string): TArray<string>;
+{ El maestro que tendria ADesigner si fuera una vista (<unidad>.<Vista><ext>
+  -> <unidad><ext>), por su NOMBRE; '' si el nombre no lleva vista. Que LO SEA
+  lo dice VistasDeUnidad sobre el .pas de ese maestro. }
+function MaestroPorNombre(const ADesigner: string): string;
+{ El maestro de ADesigner si es una vista que su .pas DECLARA (las dos de
+  arriba, con el texto por GTextoDeUnidad); '' si no lo es, o en los
+  renderizadores (alli, MaestroDeVista). }
+function MaestroDeVistaDeclarada(const ADesigner: string): string;
 
 { True si ADesigner es de FMX, como decide el IDE: un .fmx; y un .dfm cuya
   unidad lo dice con el grupo de clases que el IDE escribe en un modulo de
@@ -413,8 +435,62 @@ begin
 end;
 
 function UnidadDeDesigner(const ADesigner: string): string;
+var
+  Maestro: string;
 begin
   Result := ChangeFileExt(ADesigner, '.pas');
+  if FileExists(Result) then
+    Exit;
+  Maestro := MaestroDeVistaDeclarada(ADesigner);
+  if Maestro <> '' then
+    Result := UnidadDeDesigner(Maestro);
+end;
+
+function MaestroDeVistaDeclarada(const ADesigner: string): string;
+var
+  Maestro, Pas: string;
+begin
+  Result := '';
+  Maestro := MaestroPorNombre(ADesigner);
+  if (Maestro = '') or not Assigned(GTextoDeUnidad) then
+    Exit;
+  Pas := UnidadDeDesigner(Maestro);
+  for var V in VistasDeUnidad(Pas, GTextoDeUnidad(Pas)) do
+    if SameText(ExtractFileName(V), ExtractFileName(ADesigner)) then
+      Exit(Maestro);
+end;
+
+function VistasDeUnidad(const AUnidad, ATexto: string): TArray<string>;
+var
+  Base, Resto: string;
+begin
+  Result := [];
+  Base := ChangeFileExt(AUnidad, '');
+  for var D in DirectivasPascal(ATexto) do
+    if (D.Nombre = 'R') or (D.Nombre = 'RESOURCE') then
+      // su primer trozo, por EL troceador de las directivas de fichero: '*.fmx'
+      // es el maestro; '*.<Vista>.fmx', una vista
+      for var T in TrozosDeDirectiva(D.Argumento, 1) do
+        if T.Texto.StartsWith('*.') and EsDesignerFmx(T.Texto) then
+        begin
+          Resto := T.Texto.Substring(2);
+          if Resto.Contains('.') then
+            Result := Result + [Base + '.' + Resto];
+        end;
+end;
+
+function MaestroPorNombre(const ADesigner: string): string;
+var
+  Nombre, Base: string;
+  P: Integer;
+begin
+  Result := '';
+  Nombre := ExtractFileName(ADesigner);
+  Base := ChangeFileExt(Nombre, '');
+  P := Base.LastIndexOf('.');
+  if P <= 0 then
+    Exit;
+  Result := ExtractFilePath(ADesigner) + Base.Substring(0, P) + ExtractFileExt(Nombre);
 end;
 
 function ComponeLineaDeObjeto(const AClave, ANombre, AClase: string): string;
