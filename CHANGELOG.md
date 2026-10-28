@@ -262,6 +262,13 @@ the MCP `initialize` response (`serverInfo.version`).
   `DCC_Namespace`, as the check of a `uses` clause already did, and names the
   project. A unit created on its own, outside any project, keeps the scope
   names of a new VCL project, and the note says so.
+- **The form preview judges every element of a string list.** Before drawing
+  a form, `delphi_designer preview` refuses one whose text names a file
+  outside what the session can read (`DSGN-115`), because the design-time
+  code of a package may open it. In a string list (`Items.Strings = (...)`)
+  it skipped the last element, the one the IDE writes with the closing `)`,
+  so a list of one element was never judged at all. The elements of a list
+  are now read by one reader.
 
 ### Changed
 

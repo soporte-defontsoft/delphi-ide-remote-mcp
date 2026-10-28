@@ -170,6 +170,14 @@ function LineaDePropiedad(const ALinea: string; out AProp, AValor: string): Bool
   ('(', '{', '<'). *)
 function ValorEnteroDe(const ALineas: TArray<string>; const AForm: TArray<TLineaForm>;
   AIni: Integer): string;
+(* Los ELEMENTOS de la lista que abre la propiedad de la linea AIni (su valor
+  es '(') y acaba en la linea AFin (su Fin, la de FinDeValor): cada uno con sus
+  trozos juntos como los lee LeeLiteralDeForm ('a' + 'b'), sin el ')' que el
+  IDE escribe DETRAS del ultimo; una lista dentro de la lista da los suyos en
+  el mismo orden. Recorrerla a mano se saltaba el ultimo elemento - y el
+  unico -, el del ')' (V109 de la 1.23.1, medido: la puerta del render no lo
+  juzgaba). *)
+function ElementosDeLista(const ALineas: TArray<string>; AIni, AFin: Integer): TArray<string>;
 (* Si el valor de una propiedad (lo de detras del '=', o lo que da
   ValorEnteroDe) es de BLOQUE: una lista '(', un bloque binario '{' o una
   coleccion '<' - lo que no es un valor de una linea, ni se juzga ni se
@@ -1267,6 +1275,35 @@ begin
     Exit;
   for var K := AIni + 1 to AForm[AIni].Fin do
     Result := Trim(Result + ' ' + ALineas[K].Trim);
+end;
+
+function ElementosDeLista(const ALineas: TArray<string>; AIni, AFin: Integer): TArray<string>;
+var
+  Elem, T: string;
+begin
+  Result := [];
+  Elem := '';
+  for var K := AIni + 1 to AFin do
+  begin
+    T := ALineas[K].Trim;
+    // la lista de dentro se abre con '(' (FinDeValor) y se cierra con ')'
+    // detras de su ultimo elemento, como la de fuera: un literal empieza por
+    // comilla, # o digito y acaba en comilla o digito, nunca en un parentesis
+    while T.StartsWith('(') do
+      T := T.Substring(1).TrimLeft;
+    while T.EndsWith(')') do
+      T := T.Substring(0, T.Length - 1).TrimRight;
+    if T = '' then
+      Continue;
+    Elem := Trim(Elem + ' ' + T);
+    // una cadena larga, en trozos que acaban en '+' (como ValorEnteroDe)
+    if Elem.EndsWith('+') then
+      Continue;
+    Result := Result + [Elem];
+    Elem := '';
+  end;
+  if Elem <> '' then
+    Result := Result + [Elem];
 end;
 
 function EsValorDeBloque(const AValor: string): Boolean;

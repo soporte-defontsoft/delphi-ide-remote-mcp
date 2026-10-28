@@ -905,23 +905,16 @@ var
               Exit;
           end
           else if Valor = '(' then
-          begin
-            // Strings de una lista: el mismo lector, no otra gramatica.
-            Valor := '';
-            for var K := I + 1 to Form[I].Fin - 1 do
-            begin
-              Valor := Valor + Doc.Lines[K].Trim;
-              if Valor.EndsWith('+') then
-                Continue;
-              if LeeLiteralDeForm(Valor, Texto) then
+            // Strings de una lista: sus elementos por SU lector (Lsp.DesignerBin)
+            // y cada uno por el mismo lector de literales. A mano se saltaba el
+            // ultimo, el del ')' que el IDE escribe detras (V109 de la 1.23.1)
+            for var Elem in ElementosDeLista(Doc.Lines, I, Form[I].Fin) do
+              if LeeLiteralDeForm(Elem, Texto) then
               begin
                 Result := Comprueba(Prop, Texto);
                 if Result <> '' then
                   Exit;
               end;
-              Valor := '';
-            end;
-          end;
         end;
     finally
       Doc.Free;

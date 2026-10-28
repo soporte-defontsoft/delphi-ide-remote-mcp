@@ -62,6 +62,17 @@ try:
         denied(n,preview(n),'Caption')
     write(form(" object Memo1: TMemo\n Lines.Strings = (\n "+literal(avi)+"\n )\n end"))
     denied('lista',preview('list'),'Lines.Strings')
+    # V109 de la 1.23.1: la lista como la ESCRIBE EL IDE, con el ')' detras del
+    # ultimo elemento. La de arriba lo pone en su propia linea y pasaba por la
+    # forma de la fixture: el ultimo elemento (y el unico) no se juzgaba y el
+    # form se dibujaba (medido en produccion con un TListBox)
+    for n,cuerpo in (('lista del IDE, el unico',literal(avi)+')'),
+                     ('lista del IDE, el ultimo de dos',"'primero'\n "+literal(avi)+')'),
+                     ('lista del IDE, el ultimo en trozos',"'primero'\n "+literal(avi[:len(avi)//2])+' +\n   '+literal(avi[len(avi)//2:])+')')):
+        write(form(" object Memo1: TMemo\n Lines.Strings = (\n "+cuerpo+"\n end"))
+        denied(n,preview(n.replace(' ','-').replace(',','')),'Lines.Strings')
+    write(form(" object Memo1: TMemo\n Lines.Strings = (\n 'uno'\n 'dos')\n end"))
+    mc.check('control lista del IDE sin rutas: se dibuja',ok(preview('lista-normal')))
     write(form(" object Grid1: TGridPanel\n ColumnCollection = <\n item\n Value = 1.0\n DUMMY = "+literal(avi)+"\n end>\n end"))
     denied('item',preview('item'),'DUMMY')
     write(form(''))

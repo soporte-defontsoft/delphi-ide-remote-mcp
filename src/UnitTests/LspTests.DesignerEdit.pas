@@ -53,6 +53,8 @@ type
     procedure HechosDelFuenteDeLaInstalacion;
     [Test]
     procedure RenombreConservaElOrden;
+    [Test]
+    procedure ElementosDeUnaListaComoLaEscribeElIde;
   end;
 
 implementation
@@ -1709,6 +1711,33 @@ begin
   finally
     Doc.Free;
   end;
+end;
+
+procedure TDesignerEditTests.ElementosDeUnaListaComoLaEscribeElIde;
+var
+  L, E: TArray<string>;
+  Texto: string;
+begin
+  // V109 de la 1.23.1: el IDE escribe el ')' DETRAS del ultimo elemento, y la
+  // puerta del render, que recorria la lista a mano, no juzgaba ese elemento
+  L := ['    Items.Strings = (', '      ''C:\x.txt'')'];
+  E := ElementosDeLista(L, 0, 1);
+  Assert.AreEqual<Integer>(1, Length(E), 'el unico elemento, el del )');
+  Assert.IsTrue(LeeLiteralDeForm(E[0], Texto));
+  Assert.AreEqual('C:\x.txt', Texto);
+  L := ['    Lines.Strings = (', '      ''uno''', '      ''dos '' +', '      ''partido'')'];
+  E := ElementosDeLista(L, 0, 3);
+  Assert.AreEqual<Integer>(2, Length(E), 'dos elementos, el ultimo en trozos');
+  Assert.IsTrue(LeeLiteralDeForm(E[1], Texto));
+  Assert.AreEqual('dos partido', Texto);
+  // una lista de dentro, y un parentesis DENTRO de las comillas se queda
+  L := ['    X = (', '      (', '        ''a)'')', '      ''(b'')'];
+  E := ElementosDeLista(L, 0, 3);
+  Assert.AreEqual<Integer>(2, Length(E), 'el de dentro y el de fuera');
+  Assert.IsTrue(LeeLiteralDeForm(E[0], Texto));
+  Assert.AreEqual('a)', Texto);
+  Assert.IsTrue(LeeLiteralDeForm(E[1], Texto));
+  Assert.AreEqual('(b', Texto);
 end;
 
 initialization
