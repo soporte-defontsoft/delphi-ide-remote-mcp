@@ -29,6 +29,8 @@ type
     [Test] procedure ElNombreDeUnEventoNoEsUnPrefijo;
     [Test] procedure UnEventoEnUnComentarioTambienCuenta;
     [Test] procedure UnaAperturaSinCierreNoEscondeLoQueSigue;
+    [Test]
+    procedure SoloCuentanLosEventosPedidos;
   end;
 
   { UN escritor del texto de un elemento (XmlElemento) y sus lectores, que
@@ -122,7 +124,8 @@ begin
     '  <PropertyGroup><PostBuildEvent>signtool sign $(OUTPUTPATH)</PostBuildEvent></PropertyGroup>'#13#10 +
     PIE, RUTA);
   Assert.AreNotEqual('', R);
-  Assert.IsTrue(Pos('postbuildevent', R) > 0, 'nombra el evento: ' + R);
+  // como lo escribe el IDE (V18 de la 1.23.1: la lista iba en minusculas)
+  Assert.IsTrue(Pos('PostBuildEvent', R) > 0, 'nombra el evento: ' + R);
 end;
 
 procedure TDprojHazardTests.EventoDeBuildSeIgnoraSiSePide;
@@ -1275,6 +1278,25 @@ begin
     'la entrada del Deployment del proyecto, con lo escapado');
   Assert.IsFalse(XmlDeployFileDelProyecto('A.inc', 'Debug', 'File', 'Linux64', '', 'A.inc', '').Contains(
     'RemoteDir'), 'sin carpeta, sin RemoteDir');
+end;
+
+{ V18 de la 1.23.1: el aviso BUILD-018 pregunta por los eventos que EJECUTAN
+  los targets del IDE; el escaner cuenta solo los que se le piden, y la lista
+  de los que se vacian son los cinco }
+procedure TDprojHazardTests.SoloCuentanLosEventosPedidos;
+const
+  POST_LINK = '  <PropertyGroup><PostLinkEvent>copy a b</PostLinkEvent></PropertyGroup>'#13#10;
+  PRE_BUILD = '  <PropertyGroup><PreBuildEvent>copy a b</PreBuildEvent></PropertyGroup>'#13#10;
+begin
+  Assert.AreEqual(5, Integer(Length(EventosDeBuild)), 'los cinco, BuildEvent incluido');
+  Assert.AreNotEqual('', DprojBuildHazard(CABECERA + POST_LINK + PIE, RUTA), 'todos: el PostLinkEvent cuenta');
+  Assert.AreEqual('', DprojBuildHazard(CABECERA + POST_LINK + PIE, RUTA,
+    TArray<string>.Create('PreBuildEvent', 'PostBuildEvent')), 'los del IDE: el PostLinkEvent no');
+  Assert.AreNotEqual('', DprojBuildHazard(CABECERA + PRE_BUILD + PIE, RUTA,
+    TArray<string>.Create('PreBuildEvent', 'PostBuildEvent')), 'los del IDE: el PreBuildEvent si');
+  Assert.AreNotEqual('', DprojBuildHazard(CABECERA +
+    '  <PropertyGroup><prebuildevent>copy a b</prebuildevent></PropertyGroup>'#13#10 + PIE, RUTA,
+    TArray<string>.Create('PreBuildEvent')), 'sin distinguir mayusculas');
 end;
 
 initialization

@@ -206,6 +206,15 @@ the MCP `initialize` response (`serverInfo.version`).
   such as `command=INIT`, would not have matched. They all go through one
   language-independent fold now, and the house-rules battery refuses a new
   `.ToLower` or `.ToUpper` anywhere in the server.
+- **A build no longer says it skipped an event the IDE would not have run.**
+  `buildEventsSkipped` came back for any build event with text, also for
+  `PostLinkEvent`, `PreLinkEvent` and `BuildEvent`, which the IDE's own
+  Delphi build never runs: its targets run only `PreBuildEvent` and
+  `PostBuildEvent` (measured in RAD Studio 13). The server now asks the
+  IDE's targets files, so the note comes only when an event that would have
+  run was skipped. Every event with text is still emptied on the msbuild
+  line, and that line now takes the scanner's list, which also covers
+  `BuildEvent`.
 - **The designer's note on how the IDE stores a value no longer repeats it.**
   When the IDE stores a property differently from what was given, the answer
   carries the values in `value`, `storedAs` and `storedIn`, exactly as the form

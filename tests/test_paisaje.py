@@ -2186,7 +2186,7 @@ GLOBALES = set(re.findall(r"'(\w+)'", _m.group(1))) if _m else set()
 check('mutante de las globales: un /p:Nuevo= que no esta en la lista se caza',
       not ((PASADAS | {'Nuevo'}) <= GLOBALES))
 check('las globales del build: cada /p: de la orden de msbuild esta en GLOBALES_DE_LA_ORDEN (%d)' % len(PASADAS),
-      _m is not None and len(PASADAS) >= 5 and PASADAS <= GLOBALES, sorted(PASADAS - GLOBALES))
+      _m is not None and len(PASADAS) >= 3 and PASADAS <= GLOBALES, sorted(PASADAS - GLOBALES))
 
 
 def compuestas(texto):
@@ -2200,4 +2200,22 @@ check('las salidas suplidas: UN /p:%s en la orden y GlobalesDelBuild suma SALIDA
       (compuestas(BR), SUMA.group(0) if SUMA else None))
 check('mutante de las suplidas: un segundo /p:%s compuesto se caza',
       compuestas(BR + "\n  X := Format(' /p:%s=%s', [A, B]);") != 1)
+
+# ...y los eventos que el build vacia (V18 de la 1.23.1): UN /p: compuesto desde EventosDeBuild
+# (Lsp.Dproj), la lista que juzga el escaner, y GlobalesDelBuild la suma. Eran cuatro a mano en la
+# orden y otros cuatro en las globales, y la lista tenia cinco
+A_MANO = r'/p:(?:Pre|Post)?(?:Build|Link)Event\b'
+
+
+def eventos_compuestos(texto):
+    """Cuantos /p: de los eventos compuestos desde su lista lleva la orden."""
+    return len(re.findall(r"for var (\w+) in EventosDeBuild do\s+EventArg := EventArg \+ ' /p:' \+ \1 \+ '='",
+                          texto))
+
+
+check('los eventos del build: UN /p: desde EventosDeBuild, ninguno a mano, y GlobalesDelBuild los suma',
+      eventos_compuestos(BR) == 1 and not re.search(A_MANO, BR) and SUMA is not None and
+      'EventosDeBuild' in SUMA.group(0), (eventos_compuestos(BR), re.findall(A_MANO, BR)))
+check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
+      re.search(A_MANO, BR + "\n  EventArg := ' /p:PreBuildEvent=';") is not None)
 mc.fin('paisaje battery')

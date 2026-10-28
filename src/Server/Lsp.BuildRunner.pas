@@ -1716,17 +1716,17 @@ const
     las Condition, asi que una Condition que las compare no se sabe y se
     juzga. Config y Platform van aparte: son lo pedido. Cada /p: nuevo de la
     orden entra aqui; test_paisaje lo vigila. Las salidas que el build suple
-    van aparte, por su lista (GlobalesDelBuild). }
-  GLOBALES_DE_LA_ORDEN: TArray<string> = ['Profile', 'DeviceId', 'PlatformSDK',
-    'PreBuildEvent', 'PostBuildEvent', 'PreLinkEvent', 'PostLinkEvent'];
+    y los eventos que vacia van aparte, por sus listas (GlobalesDelBuild). }
+  GLOBALES_DE_LA_ORDEN: TArray<string> = ['Profile', 'DeviceId', 'PlatformSDK'];
 
-{ Las globales del build: las de la orden y las salidas que el build suple
-  (SALIDAS_QUE_SUPLE_EL_BUILD, que van por /p: como las otras). UNA lista: las
-  salidas estaban copiadas a mano, y una suplida nueva no habria entrado aqui
-  (revisor Opus de la 1.22.0, H6). }
+{ Las globales del build: las de la orden, los eventos que vacia
+  (Lsp.Dproj.EventosDeBuild: eran cuatro a mano, V18 de la 1.23.1) y las
+  salidas que el build suple (SALIDAS_QUE_SUPLE_EL_BUILD, que van por /p: como
+  las otras). UNA lista cada una: las salidas estaban copiadas a mano, y una
+  suplida nueva no habria entrado aqui (revisor Opus de la 1.22.0, H6). }
 function GlobalesDelBuild: TArray<string>;
 begin
-  Result := GLOBALES_DE_LA_ORDEN;
+  Result := GLOBALES_DE_LA_ORDEN + EventosDeBuild;
   for var S in SALIDAS_QUE_SUPLE_EL_BUILD do
     Result := Result + [S];
 end;
@@ -2049,10 +2049,11 @@ end;
   redefinida + directivas/imports/enlaces duros + lo que el build lee), para
   correrlo BAJO el cerrojo y sobre los MISMOS bytes que compilara msbuild.
   APlat/ACfg/AInfo: el build que se va a lanzar (las macros de lo que lee).
-  Devuelve si hay que vaciar los eventos de build; lanza con su motivo si el
-  proyecto no pasa. }
+  Devuelve si hay que vaciar los eventos de build (y en AAvisaEventos, si
+  alguno de los vaciados lo habria ejecutado el IDE); lanza con su motivo si
+  el proyecto no pasa. }
 function EscaneoCompileOnly(const ADprojPath, APlat, ACfg: string;
-  const AInfo: TRadStudioInfo; AAllowScripts: Boolean): Boolean;
+  const AInfo: TRadStudioInfo; AAllowScripts: Boolean; out AAvisaEventos: Boolean): Boolean;
 begin
   // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
   // shell-running / file-planting MSBuild tasks (a planted <Target><Exec>, a
@@ -2069,6 +2070,7 @@ begin
   // <Import> ajeno- sigue rechazado: el MISMO escaner, primero sin contar los
   // eventos.
   Result := False;
+  AAvisaEventos := False;
   if not AAllowScripts then
   begin
     var ProjXml := '';
@@ -2102,6 +2104,11 @@ begin
       raise Exception.Create(MsgFmt(SR_BUILD_RESERVED_PROP_FMT, [ResProp]));
     end;
     Result := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), False) <> '';
+    // se vacian todos; el aviso, solo si tenia texto uno que los targets del
+    // IDE EJECUTAN (el juez es su fichero): un PostLinkEvent no lo habria
+    // ejecutado el IDE tampoco (V18 de la 1.23.1)
+    AAvisaEventos := Result and (DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath),
+      EventosQueEjecutaElIde(AInfo.RootDir)) <> '');
   end;
   // Before a single line is compiled: what does this project pull in from
   // outside, and is it allowed to? Same shape as the hazard check above.
@@ -2158,6 +2165,7 @@ var
   Errors, Warnings: TJSONArray;
   EsPaquete: Boolean;
   EventosSaltados: Boolean; // eventos pre/post build vaciados en este build
+  EventosAvisados: Boolean; // ...y alguno lo habria ejecutado el IDE (V18)
   YaDicho: TStringList; // lo que ya va en errors[]/warnings[]: la cola no lo repite
   Cola: string;
   Lines: TArray<string>;
@@ -2421,7 +2429,7 @@ begin
   if not Confiado then
     EnterFileEdit;
   try
-  EventosSaltados := EscaneoCompileOnly(ADprojPath, Plat, Cfg, Info, Confiado);
+  EventosSaltados := EscaneoCompileOnly(ADprojPath, Plat, Cfg, Info, Confiado, EventosAvisados);
   // Un Windows REMOTO (perfil PAServer de Windows) despliega como un Linux:
   // sin manifiesto, msbuild "desplegaba" cero ficheros y decia exito. La
   // plataforma local solo lo es cuando no hay perfil (medido 2026-09-22 con
@@ -2555,7 +2563,8 @@ begin
   // eventos aqui es no ejecutarlos, sin tocar el proyecto.
   var EventArg := '';
   if EventosSaltados then
-    EventArg := ' /p:PreBuildEvent= /p:PostBuildEvent= /p:PreLinkEvent= /p:PostLinkEvent=';
+    for var E in EventosDeBuild do
+      EventArg := EventArg + ' /p:' + E + '=';
   // Config entre comillas: su nombre puede llevar un espacio ("Release Plus")
   // y msbuild lo partia en dos argumentos (MSB1008); las comillas no las
   // puede traer, NombreDeConfigNoValido ya lo ha dicho (ConfigDelBuild).
@@ -2713,7 +2722,7 @@ begin
     // toman la del proyecto, como el IDE, y "platform" dice cual fue.
     Result.AddPair('config', Cfg);
     Result.AddPair('target', Target);
-    if EventosSaltados then
+    if EventosAvisados then
     begin
       Result.AddPair('buildEventsSkipped', TJSONBool.Create(True));
       Result.AddPair('buildEventsNote', MsgText(SN_BUILD_EVENTS_SKIPPED));

@@ -953,7 +953,23 @@ function BuscaEnCarpeta(const ADprojPath, AXml, ADir: string): Boolean;
   linea de msbuild, y lo dice (David, 24-sep-2026: "una cosa es compilar la
   version final, otra poder trabajar y ejecutar mientras tanto"). }
 function DprojBuildHazard(const AXml, AProjectPath: string;
-  AIgnoreBuildEvents: Boolean = False): string;
+  AIgnoreBuildEvents: Boolean = False): string; overload;
+{ ...contando como evento solo los de AEventos: si tenia texto uno de los que
+  EJECUTAN los targets del IDE (el aviso BUILD-018, V18 de la 1.23.1) }
+function DprojBuildHazard(const AXml, AProjectPath: string;
+  const AEventos: TArray<string>): string; overload;
+{ Los eventos de build de RAD Studio, como los escribe el IDE: un texto de
+  shell que delphi_build vacia por /p: (BUILD-018) y DprojBuildHazard juzga;
+  no son rutas. UNA lista: la orden de msbuild y sus globales salen de ella
+  (V18 de la 1.23.1: eran cuatro a mano y faltaba BuildEvent). }
+function EventosDeBuild: TArray<string>;
+{ ...los que EJECUTAN los targets del IDE con los que compila un proyecto
+  Delphi: los <Exec Command="$(Evento)"> de bin\CodeGear.Delphi.Targets de
+  ARaizDelIde y de lo que importa de la instalacion. El juez es ese fichero,
+  no una lista: en la 37.0, PreBuildEvent y PostBuildEvent (medido;
+  PreLinkEvent solo lo ejecutan los targets de C++, y PostLinkEvent y
+  BuildEvent ninguno). Sin poder leerlo, todos: lo que no se sabe se dice. }
+function EventosQueEjecutaElIde(const ARaizDelIde: string): TArray<string>;
 
 { Todos los elementos de AXml en orden de documento, con la pila de sus
   antepasados: EL recorrido del documento entero, el de la lista blanca del
@@ -2297,9 +2313,10 @@ const
     ('propertygroup', 'itemgroup', 'projectextensions');
   { Los eventos de build de RAD Studio: un texto de shell, que el runner
     vacia (BUILD-018) y HazardScan juzga; no son rutas (ValoresQueLeeElBuild
-    los salta). En minusculas, como el texto de busqueda. }
-  EVENTOS_DE_BUILD: array [0 .. 4] of string =
-    ('prebuildevent', 'postbuildevent', 'prelinkevent', 'postlinkevent', 'buildevent');
+    los salta). Como los escribe el IDE, que es como van a la orden de
+    msbuild; quien los busca no distingue mayusculas (EventosDeBuild). }
+  EVENTOS_DE_BUILD: TArray<string> =
+    ['PreBuildEvent', 'PostBuildEvent', 'PreLinkEvent', 'PostLinkEvent', 'BuildEvent'];
   { Opciones LIBRES al compilador: su texto va tal cual a la linea de
     ordenes de dcc/brcc32 (CodeGear.Delphi.Targets), y un texto libre no se
     juzga: HazardScan las niega si no estan vacias. }
@@ -2315,6 +2332,11 @@ const
 function EsTextoLibreDelBuild(const ANombre: string): Boolean;
 begin
   Result := MatchText(ANombre.Trim, EVENTOS_DE_BUILD) or MatchText(ANombre.Trim, OPCIONES_LIBRES);
+end;
+
+function EventosDeBuild: TArray<string>;
+begin
+  Result := Copy(EVENTOS_DE_BUILD);
 end;
 
 function ValidOutputFolder(const AFolder: string; out AClean: string): Boolean;
@@ -4441,7 +4463,7 @@ begin
     V.Dudoso := Dudosos[I];
     if Padre = 'propertygroup' then
     begin
-      if E.Tramo.Vacio or MatchStr(E.Nombre, EVENTOS_DE_BUILD) or (Veredictos[I] = vNo) then
+      if E.Tramo.Vacio or MatchText(E.Nombre, EVENTOS_DE_BUILD) or (Veredictos[I] = vNo) then
         Continue;
       V.Escrito := ValorDeTramo(AXml, E.Tramo).Trim;
       if V.Escrito <> '' then
@@ -4461,12 +4483,70 @@ begin
 end;
 
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
-  AIgnoreBuildEvents: Boolean; const ACarpetaDelBuild, ANombreRaiz: string): string; forward;
+  const AEventos: TArray<string>; const ACarpetaDelBuild, ANombreRaiz: string): string; forward;
 
 function DprojBuildHazard(const AXml, AProjectPath: string;
   AIgnoreBuildEvents: Boolean): string;
 begin
-  Result := HazardScan(AXml, AProjectPath, 0, AIgnoreBuildEvents, ExtractFileDir(AProjectPath), TPath.GetFileNameWithoutExtension(AProjectPath));
+  if AIgnoreBuildEvents then
+    Result := DprojBuildHazard(AXml, AProjectPath, TArray<string>(nil))
+  else
+    Result := DprojBuildHazard(AXml, AProjectPath, EVENTOS_DE_BUILD);
+end;
+
+function DprojBuildHazard(const AXml, AProjectPath: string;
+  const AEventos: TArray<string>): string;
+begin
+  Result := HazardScan(AXml, AProjectPath, 0, AEventos, ExtractFileDir(AProjectPath), TPath.GetFileNameWithoutExtension(AProjectPath));
+end;
+
+function EventosQueEjecutaElIde(const ARaizDelIde: string): TArray<string>;
+var
+  Ejecutados, Leidos: TArray<string>;
+
+  // los Exec de un fichero de targets y de lo que importa de la instalacion
+  // ($(BDS)\...); una macro del usuario (sus opciones, sus perfiles) no se
+  // sigue. False: algo no se pudo leer, y entonces no se sabe
+  function Recorre(const AFichero: string; AProfundidad: Integer): Boolean;
+  var
+    Xml: string;
+  begin
+    Result := True;
+    if RutaEnLista(AFichero, Leidos) then
+      Exit;
+    if AProfundidad > 4 then
+      Exit(False);
+    Leidos := Leidos + [AFichero];
+    try
+      Xml := LeeTexto(AFichero, [ltIde]);
+    except
+      Exit(False);
+    end;
+    // por EL analisis: lo comentado no lo ejecuta msbuild
+    for var T in TramosDeEtiqueta(Xml, 'Exec', True) do
+      for var A in AtributosDeTramo(Xml, T) do
+        if SameText(A.Nombre, 'Command') then
+          for var E in EVENTOS_DE_BUILD do
+            if SameText(ValorDeAtributo(Xml, A).Trim, '$(' + E + ')') and not MatchText(E, Ejecutados) then
+              Ejecutados := Ejecutados + [E];
+    for var Ap in AperturasDe(TextoDeBusqueda(Xml), 'Import') do
+      for var A in AtributosDeApertura(Xml, Ap.Abre, Ap.Cierra) do
+      begin
+        var Ruta := ValorDeAtributo(Xml, A).Trim;
+        if SameText(A.Nombre, 'Project') and StartsText('$(BDS)\', Ruta) and
+           (Pos('$(', Ruta, 2) = 0) and not Ruta.Contains('..') and
+           not Recorre(TPath.Combine(ARaizDelIde, Copy(Ruta, Length('$(BDS)\') + 1, MaxInt)),
+             AProfundidad + 1) then
+          Exit(False);
+      end;
+  end;
+
+begin
+  Ejecutados := [];
+  Leidos := [];
+  if (ARaizDelIde = '') or not Recorre(TPath.Combine(ARaizDelIde, 'bin\CodeGear.Delphi.Targets'), 0) then
+    Exit(EventosDeBuild);
+  Result := Ejecutados;
 end;
 
 { LISTA BLANCA (1.21.2): lo que un build compile-only entiende, y nada mas
@@ -4476,7 +4556,7 @@ end;
   de una tarea conocida. No es un interprete de MSBuild; AllowBuildScripts lo
   decide el operador. }
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;
-  AIgnoreBuildEvents: Boolean; const ACarpetaDelBuild, ANombreRaiz: string): string;
+  const AEventos: TArray<string>; const ACarpetaDelBuild, ANombreRaiz: string): string;
 var
   Low, V, Resolved, Imported: string;
 begin
@@ -4521,9 +4601,9 @@ begin
         [Danger]));
 
   // RAD Studio build-event commands: only a NON-EMPTY one runs a shell.
-  // Con AIgnoreBuildEvents no cuentan: el runner los vacia al compilar.
-  if not AIgnoreBuildEvents then
-  for var Tag in EVENTOS_DE_BUILD do
+  // Solo los de AEventos: sin ninguno (AIgnoreBuildEvents) no cuentan, el
+  // runner los vacia al compilar.
+  for var Tag in AEventos do
     // por EL analisis, pero mas estricto que el juez: tambien dentro de un
     // comentario, y el texto ESCRITO (un CDATA vacio o un comentario dentro
     // cuentan). Buscaba '<prebuildevent' como prefijo, y el
@@ -4613,7 +4693,7 @@ begin
     except
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT, [V]));
     end;
-    Result := HazardScan(Imported, Resolved, ADepth + 1, AIgnoreBuildEvents, ACarpetaDelBuild, ANombreRaiz);
+    Result := HazardScan(Imported, Resolved, ADepth + 1, AEventos, ACarpetaDelBuild, ANombreRaiz);
     if Result <> '' then
       Exit(MsgFmt(SF_CFG_HAZARD_POR_IMPORT_FMT, [Result, V]));
   end;
