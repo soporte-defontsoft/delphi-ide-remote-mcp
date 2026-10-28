@@ -102,16 +102,17 @@ begin
   if Sobra <> '' then
     Exit(MsgFmt(SR_CHANGESET_NO_VA_CON_COMANDO_FMT, [Sobra, SinMayusculas(Params.Command.Trim),
       SinMayusculas(Params.Command.Trim), ONinguno(Suyos)]) + VaCon);
-  var Forms: TArray<string>;
+  var Forms: TArray<TFormEscrito>;
   Result := ChangesetExecuteYForms(Params.Command, Params.Id, SinMayusculas(Params.Kind.Trim),
     Params.Path, Params.Dest, Params.Old, Params.New, Params.Content,
     Params.AtLine, Forms, Params.N, Params.Fragment);
   // los forms que el commit escribio, al LECTOR del IDE ya fuera de los
-  // cerrojos, con su ruta delante como los avisos del lote (DSGN-061 de la 1.20)
+  // cerrojos, con su ruta delante como los avisos del lote (DSGN-061 de la 1.20);
+  // con su texto de antes, lo que el lote les trae (V154 de la 1.23.1)
   var Avisos := '';
   for var F in Forms do
-    for var L in AvisosDelLector(F) do
-      Avisos := Avisos + IfThen(Avisos <> '', #10, '') + Format('  %s: %s', [MaskDriveText('', F), L]);
+    for var L in AvisosDelLector(F.Ruta, F.Antes) do
+      Avisos := Avisos + IfThen(Avisos <> '', #10, '') + Format('  %s: %s', [MaskDriveText('', F.Ruta), L]);
   if Avisos <> '' then
     Result := Result + #10 + IfThen(HasMsg(Result, SN_CHANGESET_AVISOS_FMT), Avisos,
       MsgFmt(SN_CHANGESET_AVISOS_FMT, [Avisos]));

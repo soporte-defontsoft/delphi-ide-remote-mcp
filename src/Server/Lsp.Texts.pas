@@ -4131,11 +4131,13 @@ const
   SN_STYLES_GUARDADA_COMO_FMT =
     '[STYLE-058] FMX''s own writer (the IDE''s) stores %0:s as %1:s, not as ' +
     '%2:s: written its way, which is the value FMX loads.%3:s';
+  { LA explicacion de un color de menos de 8 cifras: la comparten la pista de
+    STYLE-058, STYLE-061 y DSGN-176 (V152 y V154 de la 1.23.1) }
+  SF_COLOR_SIN_ALFA =
+    'FMX takes the missing digits as 0 from the left, without an error: the ' +
+    'alpha is 00 or nearly so, the color invisible or nearly.';
   { %3:s de STYLE-058 cuando el valor es un color (x...) }
-  SF_STYLES_COLOR_8_CIFRAS =
-    ' A color takes its 8 hex digits, AARRGGBB: with fewer, FMX takes the ' +
-    'missing ones as 0 from the left, so the alpha is 00 or nearly so and ' +
-    'the color invisible or nearly.';
+  SF_STYLES_COLOR_8_CIFRAS = ' A color takes its 8 hex digits, AARRGGBB: with fewer, ' + SF_COLOR_SIN_ALFA;
   { %0:s: la propiedad; %1:s: el valor; %2:s: '' o SF_STYLES_NO_GUARDADA_QUITADA }
   SN_STYLES_NO_GUARDADA_FMT =
     '[STYLE-059] With %0:s = %1:s the object ends with the value its class ' +
@@ -4251,9 +4253,7 @@ const
     previa (V152 de la 1.23.1, medido; Lsp.Styles.ColoresSinAlfa) }
   SN_STYLES_COLORES_SIN_ALFA_FMT =
     '[STYLE-061] colorsWithoutAlpha: %d color(s) written with fewer than 8 ' +
-    'hex digits. FMX loads them without an error, taking the missing digits ' +
-    'as 0 from the left, so the alpha is 00 or nearly so and the color ' +
-    'invisible or nearly. loadedAs is what FMX''s own writer (the IDE''s) ' +
+    'hex digits. ' + SF_COLOR_SIN_ALFA + ' loadedAs is what FMX''s own writer (the IDE''s) ' +
     'stores for it (empty: the class''s own value, which it does not store). ' +
     'Write all 8 digits, AARRGGBB - xFF for an opaque color: xFFF7DFC6.';
   { Lo que FMX ni siquiera puede CARGAR: su lector lanza y el estilo entero se
@@ -6723,6 +6723,21 @@ const
   { %0:s: el componente; %1:s: su StyleLookup; %2:d: su linea (una linea de
     la nota DSGN-175, sin etiqueta propia) }
   SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT = '  %0:s: StyleLookup = ''%1:s'' (line %2:d)';
+
+  { %0:s: el fichero; %1:d: cuantos; %2:s: '' en el lint, o
+    SF_DESIGNER_LOOKUPS_DE_LA_EDICION tras una edicion (solo los que ella
+    trae). Un color de menos de 8 cifras en un .fmx: delphi_edit lo escribia y
+    el lint decia CLEAN (V154 de la 1.23.1, medido); como lo carga, el
+    escritor del IDE (Lsp.FormRender.ColoresSinAlfaDeForm). Una nota, como
+    DSGN-175: el form carga }
+  SN_DESIGNER_COLORES_SIN_ALFA_FMT =
+    '[DSGN-176] %0:s: %1:d color(s) written with fewer than 8 hex digits%2:s. ' +
+    SF_COLOR_SIN_ALFA + ' Write all 8 digits, AARRGGBB (xFF for an opaque ' +
+    'color); after each, what the IDE''s own writer stores for it:';
+  { %0:s: el componente; %1:s: la propiedad; %2:s: el valor; %3:d: su linea;
+    %4:s: como lo guarda el escritor del IDE, o SF_COLOR_NO_GUARDADO }
+  SF_DESIGNER_COLOR_SIN_ALFA_FMT = '  %0:s.%1:s = %2:s (line %3:d) - the IDE stores %4:s';
+  SF_COLOR_NO_GUARDADO = 'nothing (the class''s own value)';
 
   { lint (b) sin el lector: la tabla no encontro nada, pero hay lineas que
     la clase guarda por codigo y el lector del IDE no se pudo preguntar (sin

@@ -849,6 +849,9 @@ type
     // los StyleLookup de un form FMX que ningun estilo que ve define: una
     // nota (DSGN-175), no un aviso (V75 de la 1.23.1)
     Lookups: TArray<string>;
+    // los colores de menos de 8 cifras, por el escritor del IDE: una nota
+    // (DSGN-176), solo con ALector (V154 de la 1.23.1)
+    Colores: TArray<string>;
   end;
 
 { El lint del form ADfm con el TEXTO ATexto (lo que dice o dira el disco, en
@@ -860,7 +863,9 @@ type
   juicio de lo escrito; designer set/insert/delete tienen el suyo. AAntes:
   el texto del form ANTES de la edicion que se juzga ('' en el lint o en un
   form nuevo): la nota de los StyleLookup dice solo los que la edicion trae
-  (V143 de la 1.23.1). Nunca lanza. }
+  (V143 de la 1.23.1), y la de los colores sin alfa, que pregunta al
+  escritor del IDE y por eso va solo con ALector, tambien (V154). Nunca
+  lanza. }
 function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
   AEsperaMs: Cardinal = ESPERA_TABLA_MS; ALector: Boolean = False;
   const AAntes: string = ''): TLintDeForm;
@@ -899,11 +904,17 @@ function JuicioDeLoEscrito(const APath, ATexto, AEnc: string;
   todos - como el juez del orden del disenador (revisor 5 de la noche, A3).
   Por eso no va en JuicioDeLoEscrito, que corre dentro: lo piden las tools
   que escriben forms al acabar (delphi_edit, el changeset, upload).
-  DSGN-061 de la 1.20. Nunca lanza. }
-function AvisosDelLector(const APath: string): TArray<string>;
+  DSGN-061 de la 1.20. Y los colores sin alfa que la escritura trae (DSGN-176,
+  V154 de la 1.23.1): AAntes, el texto de antes ('' = todos: un form nuevo, o
+  un upload, que trae el fichero entero). Nunca lanza. }
+function AvisosDelLector(const APath: string; const AAntes: string = ''): TArray<string>;
 { ARespuesta (la de una escritura de APath) con AvisosDelLector detras, si
-  APath es un form y no fue un fallo. }
-function ConAvisosDelLector(const ARespuesta, APath: string): string;
+  APath es un form y no fue un fallo. AAntes, el de TextoAntesDeEditar. }
+function ConAvisosDelLector(const ARespuesta, APath: string; const AAntes: string = ''): string;
+{ Lo que dice el disco de APath ANTES de una edicion, si es un form FMX (el
+  de un color sin alfa: AvisosDelLector solo dice lo que la edicion trae);
+  '' si no lo es o no se lee. Nunca lanza. }
+function TextoAntesDeEditar(const APath: string): string;
 { Una edicion SUELTA cuyo ancla trae VARIAS lineas es un BLOQUE: la tanda de
   UNA entrada, la que el propio EDIT-001 mandaba escribir. Hermes tropezo con
   esa negativa 14 veces (12 salieron en la llamada siguiente) y Claude dos el
@@ -5879,6 +5890,10 @@ begin
   // CLEAN); tras una edicion, los que ella trae (V143)
   if EsDesignerFmx(ADfm) then
     Result.Lookups := NotaDeLookupsSinEstilo(ADfm, Lineas, LineasDelTexto(AAntes));
+  // ...y sus colores de menos de 8 cifras: los juzga el escritor del IDE, un
+  // proceso aparte, asi que solo con el lector, fuera de los cerrojos (V154)
+  if ALector and EsDesignerFmx(ADfm) then
+    Result.Colores := NotaDeColoresSinAlfa(ADfm, ATexto, AEnc, AAntes);
   // ...y EL parser del IDE con los bytes del disco (8.10 de la 1.18.0): un //
   // en un .fmx daba CLEAN y solo el IDE lo rechazaba al cargarlo
   if AJuzga then
@@ -5896,7 +5911,7 @@ end;
 { Lo que delphi_edit (y el changeset y la tanda, que escriben por el) dice del
   form que acaba de escribir: LintDeForm con el texto escrito, sin esperar a
   una tabla, presentado como avisos de una edicion. }
-function AvisosDelLector(const APath: string): TArray<string>;
+function AvisosDelLector(const APath, AAntes: string): TArray<string>;
 var
   Texto, Enc: string;
 begin
@@ -5905,23 +5920,38 @@ begin
     if not EsRutaDeDesigner(APath) or (TextoDeDesigner(APath, Texto, Enc) <> '') then
       Exit;
     // la tabla sin esperarla, como tras cada edicion; y el lector
-    var L := LintDeForm(APath, Texto, Enc, True, 0, True);
+    var L := LintDeForm(APath, Texto, Enc, True, 0, True, AAntes);
     if Length(L.Lector) > 0 then
       Result := [MsgFmt(SN_EDIT_AVISO_LECTOR_FMT, [ExtractFileName(APath)])] + L.Lector;
+    Result := Result + L.Colores;
   except
     // un juicio que no se pudo hacer no tumba una escritura ya hecha
     Result := [];
   end;
 end;
 
-function ConAvisosDelLector(const ARespuesta, APath: string): string;
+function ConAvisosDelLector(const ARespuesta, APath, AAntes: string): string;
 begin
   Result := ARespuesta;
   if EsFallo(ARespuesta) or not EsRutaDeDesigner(APath) then
     Exit;
-  var Avisos := AvisosDelLector(TPath.GetFullPath(APath));
+  var Avisos := AvisosDelLector(TPath.GetFullPath(APath), AAntes);
   if Length(Avisos) > 0 then
     Result := Result + #13#10 + string.Join(#13#10, Avisos);
+end;
+
+function TextoAntesDeEditar(const APath: string): string;
+var
+  Enc: string;
+begin
+  Result := '';
+  try
+    if not EsRutaDeDesigner(APath) or not EsDesignerFmx(APath) or
+       (TextoDeDesigner(TPath.GetFullPath(APath), Result, Enc) <> '') then
+      Result := '';
+  except
+    Result := ''; // sin el de antes se juzgan todos
+  end;
 end;
 
 function TandaDeUnBloque(const AOld, ANew, AFragment: string; AAtLine, AToLine: Integer;

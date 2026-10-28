@@ -37,14 +37,22 @@ uses
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer = 0;
   const AFragment: string = ''): string;
+type
+  { Un form que un commit escribio, y su texto de antes del lote ('' si es
+    nuevo): el lector lo juzga al volver y dice solo lo que el lote le trae }
+  TFormEscrito = record
+    Ruta, Antes: string;
+  end;
+
 { Lo mismo, y en AFormsEscritos los forms que un commit aplicado escribio:
   quien llama les pide el juicio del LECTOR del IDE al volver, ya FUERA de
   los cerrojos (Lsp.Patch.AvisosDelLector: un proceso de segundos que dentro
-  paraba las escrituras de todos; DSGN-061 de la 1.20). La tool lo usa; el
-  rename, que no escribe valores de un form, va por ChangesetExecute. }
+  paraba las escrituras de todos; DSGN-061 de la 1.20), con su texto de antes
+  (los colores sin alfa que el lote trae, V154 de la 1.23.1). La tool lo usa;
+  el rename, que no escribe valores de un form, va por ChangesetExecute. }
 function ChangesetExecuteYForms(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer;
-  out AFormsEscritos: TArray<string>; AN: Integer = 0;
+  out AFormsEscritos: TArray<TFormEscrito>; AN: Integer = 0;
   const AFragment: string = ''): string;
 
 { Abre un changeset y devuelve su id ('' = ya hay demasiados abiertos). Es lo
@@ -615,11 +623,22 @@ begin
   end;
 end;
 
+{ El texto de APath en la foto del lote, como estaba ANTES de el ('' si no
+  estaba): lo que el lote trae a un form se juzga contra el (V143, V154) }
+function TextoDeLaFoto(AFoto: TFotoDeFicheros; const APath: string): string;
+var
+  EncA: string;
+begin
+  Result := '';
+  if AFoto.Antes(APath) <> nil then
+    Result := TextoDeBytes(AFoto.Antes(APath), True, EncA);
+end;
+
 function ChangesetExecute(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer; AN: Integer;
   const AFragment: string): string;
 var
-  Forms: TArray<string>;
+  Forms: TArray<TFormEscrito>;
 begin
   Result := ChangesetExecuteYForms(ACommand, AId, AKind, APath, ADest, AOldLine, ANewText,
     AContent, AAtLine, Forms, AN, AFragment);
@@ -627,7 +646,7 @@ end;
 
 function ChangesetExecuteYForms(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer;
-  out AFormsEscritos: TArray<string>; AN: Integer;
+  out AFormsEscritos: TArray<TFormEscrito>; AN: Integer;
   const AFragment: string): string;
 var
   Cmd, Id, Denied, EncName, Text, Err: string;
@@ -1201,7 +1220,12 @@ begin
           if Applied then
             for var FPath in Escritos do
               if EsRutaDeDesigner(FPath) then
-                AFormsEscritos := AFormsEscritos + [FPath];
+              begin
+                var F: TFormEscrito;
+                F.Ruta := FPath;
+                F.Antes := TextoDeLaFoto(Foto, FPath);
+                AFormsEscritos := AFormsEscritos + [F];
+              end;
           for var FPath in Seen do
           begin
             var Kinds := '';
@@ -1236,11 +1260,8 @@ begin
               // ...y del form, lo que el lote le TRAE: como estaba en la foto
               // (la nota de los StyleLookup, V143 de la 1.23.1)
               var TextoAntes := '';
-              if EsForm and (Foto.Antes(FPath) <> nil) then
-              begin
-                var EncA: string;
-                TextoAntes := TextoDeBytes(Foto.Antes(FPath), True, EncA);
-              end;
+              if EsForm then
+                TextoAntes := TextoDeLaFoto(Foto, FPath);
               for var LJ in JuicioDeLoEscrito(FPath, TextoF, EncF, Escritos, TextoAntes) do
                 AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') + '  ' +
                   IfThen(EsForm, MaskDriveText('', FPath) + ': ', '') + LJ;

@@ -240,6 +240,22 @@ function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: str
   sustituyo, salto o no leyo; Fallo si no se pudo preguntar. }
 function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string): TRespuestaRender;
 
+{ Los colores sin alfa del form FMX APath con el texto ATexto (en AEnc): los
+  candidatos de la gramatica (Lsp.Styles.CandidatosSinAlfa) que no estaban
+  ya en AAntes (el texto de antes de una edicion; '' = todos), juzgados por
+  el escritor del IDE (ComoLoEscribeElIde: el ayudante, un proceso aparte,
+  FUERA de los cerrojos) con EL emparejado de Lsp.Styles. Sin candidatos
+  nuevos no se le pregunta: un form normal no lo paga. delphi_edit escribia
+  Fill.Color = xFF7DFC6 y el lint decia CLEAN (V154 de la 1.23.1, medido).
+  False si no se pudo preguntar, o si el ayudante sustituyo una clase o leyo
+  sin un ancestro (lo que escribe no seria lo que guarda el IDE). Nunca
+  lanza. }
+function ColoresSinAlfaDeForm(const APath, ATexto, AEnc, AAntes: string;
+  out AColores: TArray<TColorSinAlfa>): Boolean;
+{ ...y su nota (DSGN-176 y una linea por color), o []: la del lint y la de
+  tras una edicion (Lsp.Patch.LintDeForm, con el lector) }
+function NotaDeColoresSinAlfa(const APath, ATexto, AEnc, AAntes: string): TArray<string>;
+
 { CON el cerrojo, justo antes de escribir lo que juzgo el ayudante: '' si
   cada fichero que leyo para cargar el form (ALeidos) sigue con los bytes de
   su huella; si no, el nombre del primero que cambio (o que ya no se deja
@@ -299,7 +315,8 @@ uses
   Lsp.Discovery,    // DiscoverRadStudio: el Delphi del servidor
   Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante
   Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
-  Lsp.Listas;
+  Lsp.Listas,
+  System.StrUtils;
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
@@ -1234,6 +1251,70 @@ end;
 function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string): TRespuestaRender;
 begin
   Result := JuezDelIde(APath, ATexto, AEnc, AComponente);
+end;
+
+function ColoresSinAlfaDeForm(const APath, ATexto, AEnc, AAntes: string;
+  out AColores: TArray<TColorSinAlfa>): Boolean;
+var
+  Doc, DocAntes, DocE: TStyleDoc;
+begin
+  AColores := [];
+  Result := False;
+  Doc := nil;
+  DocAntes := nil;
+  DocE := nil;
+  try
+    try
+      Doc := TStyleDoc.DeTexto(ATexto);
+      var Candidatos := CandidatosSinAlfa(Doc);
+      // los que ya estaban (su componente, su propiedad y su valor) no los
+      // trae la edicion, como la nota de los StyleLookup (V143)
+      if (Length(Candidatos) > 0) and (AAntes <> '') then
+      begin
+        DocAntes := TStyleDoc.DeTexto(AAntes);
+        var Estaban: TArray<string> := [];
+        for var C in CandidatosSinAlfa(DocAntes) do
+          Estaban := Estaban + [C.Componente + #0 + C.Prop + #0 + C.Valor];
+        var Nuevos: TArray<TColorSinAlfa> := [];
+        for var C in Candidatos do
+          if IndexText(C.Componente + #0 + C.Prop + #0 + C.Valor, Estaban) < 0 then
+            Nuevos := Nuevos + [C];
+        Candidatos := Nuevos;
+      end;
+      if Length(Candidatos) = 0 then
+        Exit(True);
+      var Escrito, Error: string;
+      var Sustituidas, Avisos, SinLeer: TArray<string>;
+      var Leidos: TArray<TLeidoPorElJuez>;
+      var Parada: TIgnorada;
+      if (ComoLoEscribeElIde(APath, ATexto, AEnc, Escrito, Sustituidas, Avisos, SinLeer, Leidos,
+            Error, Parada) <> '') or (Length(Sustituidas) > 0) or (Length(SinLeer) > 0) then
+        Exit;
+      DocE := TStyleDoc.DeTexto(Escrito);
+      Result := ColoresSinAlfaEntre(Doc, DocE, Candidatos, AColores);
+    except
+      Result := False; // un juicio que no se pudo hacer no dice nada
+      AColores := [];
+    end;
+  finally
+    DocE.Free;
+    DocAntes.Free;
+    Doc.Free;
+  end;
+end;
+
+function NotaDeColoresSinAlfa(const APath, ATexto, AEnc, AAntes: string): TArray<string>;
+var
+  Colores: TArray<TColorSinAlfa>;
+begin
+  Result := [];
+  if not ColoresSinAlfaDeForm(APath, ATexto, AEnc, AAntes, Colores) or (Length(Colores) = 0) then
+    Exit;
+  Result := [MsgFmt(SN_DESIGNER_COLORES_SIN_ALFA_FMT, [ExtractFileName(APath), Length(Colores),
+    IfThen(AAntes <> '', MsgText(SF_DESIGNER_LOOKUPS_DE_LA_EDICION), '')])];
+  for var C in Colores do
+    Result := Result + [MsgFmt(SF_DESIGNER_COLOR_SIN_ALFA_FMT, [C.Componente, C.Prop, C.Valor, C.Linea,
+      IfThen(C.ComoLoCarga <> '', C.ComoLoCarga, MsgText(SF_COLOR_NO_GUARDADO))])];
 end;
 
 function CambioEnLoLeido(const ALeidos: TArray<TLeidoPorElJuez>): string;

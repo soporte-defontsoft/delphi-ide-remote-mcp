@@ -255,28 +255,43 @@ function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray
 function ComoLoEscribeFmxDeTexto(const ATexto, AEnc: string; out AEscrito: string): Boolean;
 
 type
-  { Un color de un .style escrito con menos de 8 cifras: su linea (1-based,
-    como la numera delphi_read), el estilo de nivel superior que lo contiene,
-    la propiedad, el valor escrito y como lo carga FMX (lo que guarda su
-    escritor; '' si no lo guarda: el valor que ya da su clase) }
+  { Un color escrito con menos de 8 cifras en un .style o un .fmx: su linea
+    (1-based, como la numera delphi_read), su objeto (el n-esimo del fichero
+    en preorden: con el se empareja con lo escrito), el estilo de nivel
+    superior que lo contiene (en un .style), su componente (la ruta del
+    objeto con nombre mas cercano, en un form), la propiedad, el valor
+    escrito y como lo carga FMX (lo que guarda su escritor; '' si no lo
+    guarda: el valor que ya da su clase) }
   TColorSinAlfa = record
-    Linea: Integer;
-    Estilo, Prop, Valor, ComoLoCarga: string;
+    Linea, Obj: Integer;
+    Estilo, Componente, Prop, Valor, ComoLoCarga: string;
   end;
 
-{ Los colores del .style de texto AFichero escritos con menos de 8 cifras
-  (xF7DFC6, xFF7DFC6): FMX los carga sin error tomando las cifras que faltan
-  como 0 por la izquierda, y el alfa queda en 00 o casi - invisible o casi.
-  delphi_styles lint no lo veia: xFF7DFC6 por xFFF7DFC6 en un tema real, que
-  solo enseno la vista previa (V152 de la 1.23.1, medido). Cuantas cifras
-  lleva un color es gramatica propia (el escritor del IDE escribe siempre 8,
-  o un nombre); como lo carga FMX lo dice su escritor
-  (ComoLoEscribeFmxDeTexto), y solo se dice si el lo guarda de otra forma.
-  Lo demas que reescribe no se dice: en tres temas reales, ~190 propiedades
-  por fichero, todo benigno (defectos, colores con nombre, TabOrder). Los
-  objetos del fichero y los del escrito van en el mismo orden (medido: 558 de
-  558); si no cuadran, no se empareja nada. False si no hay escritor, no
-  contesto o no cuadran: no se sabe. }
+{ LA gramatica de un color sin alfa: x y de 1 a 7 cifras hex (xF7DFC6,
+  xFF7DFC6). FMX lo carga sin error tomando las cifras que faltan como 0 por
+  la izquierda, y el alfa queda en 00 o casi - invisible o casi. Gramatica
+  propia (el escritor del IDE escribe siempre 8, o un nombre); como se carga
+  lo dice el escritor (ColoresSinAlfaEntre). V152 y V154 de la 1.23.1. }
+function EsColorSinAlfa(const AValor: string): Boolean;
+{ Los candidatos de ADoc: cada propiedad cuyo valor es EsColorSinAlfa, sin
+  juzgar (ComoLoCarga vacio). Barato: sin ellos no se pregunta a ningun
+  escritor (un proceso aparte). }
+function CandidatosSinAlfa(ADoc: TStyleDoc): TArray<TColorSinAlfa>;
+{ De ACandidatos (de ADoc), los que el escritor guarda de otra forma en
+  AEscrito (lo que escribio, ya leido), con como lo guarda. Lo demas que un
+  escritor reescribe no se dice: en tres temas reales, ~190 propiedades por
+  fichero, todo benigno (defectos, colores con nombre, TabOrder). Los
+  objetos de los dos van en el mismo orden (medido: 558 de 558); si no
+  cuadran, False y nada: no se sabe. EL emparejado de los dos escritores: el
+  de FMX para un .style (ColoresSinAlfa) y el del IDE para un form
+  (Lsp.FormRender.ColoresSinAlfaDeForm). }
+function ColoresSinAlfaEntre(ADoc, AEscrito: TStyleDoc; const ACandidatos: TArray<TColorSinAlfa>;
+  out AColores: TArray<TColorSinAlfa>): Boolean;
+{ Los colores sin alfa del .style de texto AFichero, por el escritor de FMX
+  (ComoLoEscribeFmxDeTexto). delphi_styles lint no lo veia: xFF7DFC6 por
+  xFFF7DFC6 en un tema real, que solo enseno la vista previa (V152 de la
+  1.23.1, medido). Sin candidatos no se lanza el conversor. False si no hay
+  escritor, no contesto o no cuadran: no se sabe. }
 function ColoresSinAlfa(const AFichero: string; out AColores: TArray<TColorSinAlfa>): Boolean;
 
 { StyleNames of the Windows platform default style, extracted once through the
@@ -1167,18 +1182,40 @@ begin
   AEscrito := Escrito;
 end;
 
-function ColoresSinAlfa(const AFichero: string; out AColores: TArray<TColorSinAlfa>): Boolean;
+{ Los objetos de ADoc en preorden: el indice con el que un candidato se
+  empareja con lo escrito (CandidatosSinAlfa, ColoresSinAlfaEntre) }
+function ObjetosEnPreorden(ADoc: TStyleDoc): TArray<TStyleObj>;
 var
-  Doc, DocE: TStyleDoc;
-  Escrito: string;
-  Objs, ObjsE: TList<TStyleObj>;
+  L: TList<TStyleObj>;
 
-  procedure Aplana(O: TStyleObj; L: TList<TStyleObj>);
+  procedure Aplana(O: TStyleObj);
   begin
     L.Add(O);
     for var K in O.Children do
-      Aplana(K, L);
+      Aplana(K);
   end;
+
+begin
+  Result := [];
+  if (ADoc = nil) or (ADoc.Root = nil) then
+    Exit;
+  L := TList<TStyleObj>.Create;
+  try
+    Aplana(ADoc.Root);
+    Result := L.ToArray;
+  finally
+    L.Free;
+  end;
+end;
+
+function EsColorSinAlfa(const AValor: string): Boolean;
+begin
+  Result := TRegEx.IsMatch(AValor.Trim, '^x[0-9A-Fa-f]{1,7}$');
+end;
+
+function CandidatosSinAlfa(ADoc: TStyleDoc): TArray<TColorSinAlfa>;
+var
+  Objs: TArray<TStyleObj>;
 
   // el estilo de nivel superior que contiene a O; '' en el contenedor
   function EstiloDe(O: TStyleObj): string;
@@ -1191,13 +1228,74 @@ var
       Result := '';
   end;
 
+  // el objeto con nombre mas cercano, por su ruta (Frame11.Edit1)
+  function ComponenteDe(O: TStyleObj): string;
+  begin
+    while (O <> nil) and (O.ObjName = '') do
+      O := O.Parent;
+    if O <> nil then
+      Result := O.Ruta
+    else
+      Result := '';
+  end;
+
+begin
+  Result := [];
+  Objs := ObjetosEnPreorden(ADoc);
+  for var I := 0 to High(Objs) do
+  begin
+    var De, A: Integer;
+    for var Rg in ADoc.Propiedades(Objs[I], De, A) do
+    begin
+      var Esta: Boolean;
+      var Valor := ADoc.ValorDe(Objs[I], Rg.Prop, Esta).Trim;
+      if not EsColorSinAlfa(Valor) then
+        Continue;
+      var C: TColorSinAlfa;
+      C.Linea := Rg.Ini + 1;
+      C.Obj := I;
+      C.Estilo := EstiloDe(Objs[I]);
+      C.Componente := ComponenteDe(Objs[I]);
+      C.Prop := Rg.Prop;
+      C.Valor := Valor;
+      C.ComoLoCarga := '';
+      Result := Result + [C];
+    end;
+  end;
+end;
+
+function ColoresSinAlfaEntre(ADoc, AEscrito: TStyleDoc; const ACandidatos: TArray<TColorSinAlfa>;
+  out AColores: TArray<TColorSinAlfa>): Boolean;
+var
+  Objs, ObjsE: TArray<TStyleObj>;
+begin
+  AColores := [];
+  Objs := ObjetosEnPreorden(ADoc);
+  ObjsE := ObjetosEnPreorden(AEscrito);
+  Result := (Length(Objs) > 0) and (Length(Objs) = Length(ObjsE));
+  if not Result then
+    Exit;
+  for var C in ACandidatos do
+  begin
+    var Esta: Boolean;
+    var ComoLoCarga := AEscrito.ValorDe(ObjsE[C.Obj], C.Prop, Esta).Trim;
+    if Esta and SameText(ComoLoCarga, C.Valor) then
+      Continue;
+    var J := C;
+    J.ComoLoCarga := IfThen(Esta, ComoLoCarga, '');
+    AColores := AColores + [J];
+  end;
+end;
+
+function ColoresSinAlfa(const AFichero: string; out AColores: TArray<TColorSinAlfa>): Boolean;
+var
+  Doc, DocE: TStyleDoc;
+  Escrito: string;
 begin
   AColores := [];
   Result := False;
   Doc := nil;
   DocE := nil;
-  Objs := TList<TStyleObj>.Create;
-  ObjsE := TList<TStyleObj>.Create;
   try
     // por EL abridor: unas lineas que el parser del IDE lee de otra forma
     // (DSGN-160) no se emparejan con las del escritor
@@ -1207,43 +1305,17 @@ begin
     except
       Exit; // uno que no se deja leer: no se sabe
     end;
-    if (Doc.Root = nil) or
-       not ComoLoEscribeFmxDeTexto(Doc.TextoDe(Doc.Lines), Doc.Encoding, Escrito) then
+    var Candidatos := CandidatosSinAlfa(Doc);
+    // sin candidatos no hay nada que preguntar: el conversor no se lanza
+    if Length(Candidatos) = 0 then
+      Exit(True);
+    if not ComoLoEscribeFmxDeTexto(Doc.TextoDe(Doc.Lines), Doc.Encoding, Escrito) then
       Exit;
     DocE := TStyleDoc.DeTexto(Escrito);
-    if DocE.Root = nil then
-      Exit;
-    Aplana(Doc.Root, Objs);
-    Aplana(DocE.Root, ObjsE);
-    if Objs.Count <> ObjsE.Count then
-      Exit;
-    Result := True;
-    for var I := 0 to Objs.Count - 1 do
-    begin
-      var De, A: Integer;
-      for var Rg in Doc.Propiedades(Objs[I], De, A) do
-      begin
-        var Esta: Boolean;
-        var Valor := Doc.ValorDe(Objs[I], Rg.Prop, Esta).Trim;
-        if not TRegEx.IsMatch(Valor, '^x[0-9A-Fa-f]{1,7}$') then
-          Continue;
-        var ComoLoCarga := DocE.ValorDe(ObjsE[I], Rg.Prop, Esta).Trim;
-        if Esta and SameText(ComoLoCarga, Valor) then
-          Continue;
-        var C: TColorSinAlfa;
-        C.Linea := Rg.Ini + 1;
-        C.Estilo := EstiloDe(Objs[I]);
-        C.Prop := Rg.Prop;
-        C.Valor := Valor;
-        C.ComoLoCarga := IfThen(Esta, ComoLoCarga, '');
-        AColores := AColores + [C];
-      end;
-    end;
+    Result := ColoresSinAlfaEntre(Doc, DocE, Candidatos, AColores);
   finally
     DocE.Free;
     Doc.Free;
-    ObjsE.Free;
-    Objs.Free;
   end;
 end;
 

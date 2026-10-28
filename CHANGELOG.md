@@ -463,6 +463,17 @@ the MCP `initialize` response (`serverInfo.version`).
   them harmless (defaults, colors by name, `TabOrder`). The hint `STYLE-058`
   adds to a color now says the same: the missing digits are taken as 0, so
   the alpha is 00 or nearly so.
+- **...and so do `delphi_designer lint` and an edit of an FMX form.** The
+  same color written by hand in a `.fmx` (`delphi_edit`, its `edits`, a
+  changeset) went in silently and the lint said CLEAN; `designer set` and
+  `insert` already wrote it as the IDE does. The note `DSGN-176` now names
+  each one - component, property, value, line - and what the IDE's own
+  writer stores for it: in the lint, all of them; after an edit, only the
+  ones the edit brings, as `DSGN-175` does. The IDE's writer is a separate
+  process, so it is asked only when there is such a color, and only outside
+  the write lock; a form it cannot load whole (a class it replaces, an
+  ancestor it does not find) is not judged. Both checks share one grammar
+  and one way of pairing what is written with what the writer stores.
 - **Refusals that pointed the wrong way now name the way through.**
   `EDIT-019` (a range that takes the whole file) told whoever brought content
   only how to delete; it now says how to replace (leave the last line out of

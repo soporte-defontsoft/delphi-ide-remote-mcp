@@ -260,8 +260,10 @@ begin
     if Result <> '' then
       Exit;
     // lo que el lector del IDE dice del form escrito, ya FUERA del cerrojo
-    // (AvisosDelLector: DSGN-061 de la 1.20)
-    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Params.Edits), Params.Path));
+    // (AvisosDelLector: DSGN-061 de la 1.20), y los colores sin alfa que la
+    // edicion trae: con el texto de antes (V154 de la 1.23.1)
+    var Antes := TextoAntesDeEditar(Params.Path);
+    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Params.Edits), Params.Path, Antes));
   end;
   // ADDUSES: la clausula la escribe el motor de clausulas (Lsp.ProjectUnits),
   // el mismo del .dpr y el .dpk; aqui solo la jaula y el reparto de nombres.
@@ -293,7 +295,8 @@ begin
     Result := WriteTargetDenied(Params.Path);
     if Result <> '' then
       Exit;
-    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Tanda), Params.Path));
+    var Antes := TextoAntesDeEditar(Params.Path);
+    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Tanda), Params.Path, Antes));
   end;
   A := Default(TPatchArgs);
   A.Path := Params.Path;
@@ -316,7 +319,8 @@ begin
   A.Restore := Params.Restore;
   A.Confirm := Params.Confirm;
   // ExecutePatch suelta el cerrojo al volver: el lector, despues
-  Result := ConAvisosDelLector(ExecutePatch(A), Params.Path);
+  var Antes := TextoAntesDeEditar(Params.Path);
+  Result := ConAvisosDelLector(ExecutePatch(A), Params.Path, Antes);
 end;
 
 initialization

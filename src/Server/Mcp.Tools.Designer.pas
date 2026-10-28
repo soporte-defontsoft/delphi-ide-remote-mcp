@@ -1143,7 +1143,8 @@ begin
   end;
   // lo que no se pudo comprobar va aparte y no cuenta como aviso: una clase
   // de terceros no es un error (revision de la 1.12.0)
-  if (Length(Warns) = 0) and (Length(Notas) = 0) and (L.SinLector = '') and (Length(L.Lookups) = 0) then
+  if (Length(Warns) = 0) and (Length(Notas) = 0) and (L.SinLector = '') and (Length(L.Lookups) = 0) and
+     (Length(L.Colores) = 0) then
     Result := MsgFmt(SN_DESIGNER_LINT_OK_FMT, [TPath.GetFileName(APath)])
   else
   begin
@@ -1167,6 +1168,13 @@ begin
       if Result <> '' then
         Result := Result + #13#10;
       Result := Result + string.Join(#13#10, L.Lookups);
+    end;
+    // un color de menos de 8 cifras: no CLEAN, nota como la de arriba (V154)
+    if Length(L.Colores) > 0 then
+    begin
+      if Result <> '' then
+        Result := Result + #13#10;
+      Result := Result + string.Join(#13#10, L.Colores);
     end;
     // sin el lector no se dice CLEAN de lo que solo el sabe juzgar
     if L.SinLector <> '' then
