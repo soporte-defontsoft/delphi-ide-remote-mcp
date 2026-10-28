@@ -5220,7 +5220,9 @@ const
     'component''s block, verbatim) | lint (first what the IDE''s own form ' +
     'parser says, then properties the class does not publish and values ' +
     'their type does not take, as set judges them; objects it could not check ' +
-    '- a class not in the table, or ambiguous - go apart as notes) | ' +
+    '- a class not in the table, or ambiguous - go apart as notes, and so ' +
+    'does an FMX StyleLookup that no style the form sees defines, as set and ' +
+    'an edit of the form also say) | ' +
     'check-binding (does the .dfm agree with the class in the .pas: ' +
     'components with no published field, events naming a method that is ' +
     'not published, published fields with no component, duplicate names, an ' +
@@ -6634,6 +6636,21 @@ const
     '[DSGN-058] Not checked in %s: %d object(s) whose class is not in ' +
     'this server''s table or is ambiguous - not an error in itself, but ' +
     'nothing inside them was checked; everything else was:';
+
+  { %s: el fichero; %d: cuantos. Los StyleLookup de un form FMX que ningun
+    estilo que el form ve define (V75 de la 1.23.1): ni el estilo por defecto
+    de la plataforma (el juez de delphi_styles lint) ni un TStyleBook del
+    form. No es un error: FMX dibuja el control con el estilo de su clase (asi
+    lo pinta preview). Va como nota, en el lint, en designer set y tras una
+    edicion, con lo que lo juzgaria entero }
+  SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT =
+    '[DSGN-173] %s: %d StyleLookup value(s) that no style this form sees ' +
+    'defines - not the platform''s default style, and the form has no ' +
+    'StyleBook. FMX then draws the control with its class''s own style, as ' +
+    'preview shows. If the project loads a style of its own, delphi_styles ' +
+    'lint with path=<its styles folder> checks them against it:';
+  { %0:s: el componente; %1:s: su StyleLookup; %2:d: su linea }
+  SN_DESIGNER_LOOKUP_SIN_ESTILO_FMT = '  %0:s: StyleLookup = ''%1:s'' (line %2:d)';
 
   { lint (b) sin el lector: la tabla no encontro nada, pero hay lineas que
     la clase guarda por codigo y el lector del IDE no se pudo preguntar (sin

@@ -1143,7 +1143,7 @@ begin
   end;
   // lo que no se pudo comprobar va aparte y no cuenta como aviso: una clase
   // de terceros no es un error (revision de la 1.12.0)
-  if (Length(Warns) = 0) and (Length(Notas) = 0) and (L.SinLector = '') then
+  if (Length(Warns) = 0) and (Length(Notas) = 0) and (L.SinLector = '') and (Length(L.Lookups) = 0) then
     Result := MsgFmt(SN_DESIGNER_LINT_OK_FMT, [TPath.GetFileName(APath)])
   else
   begin
@@ -1159,6 +1159,14 @@ begin
       Result := Result + MsgFmt(SN_DESIGNER_LINT_NOTAS_FMT,
         [TPath.GetFileName(APath), Length(Notas)]) + #13#10 +
         string.Join(#13#10, Notas);
+    end;
+    // un StyleLookup que ningun estilo que el form ve define: no CLEAN, pero
+    // nota, no aviso (V75 de la 1.23.1)
+    if Length(L.Lookups) > 0 then
+    begin
+      if Result <> '' then
+        Result := Result + #13#10;
+      Result := Result + string.Join(#13#10, L.Lookups);
     end;
     // sin el lector no se dice CLEAN de lo que solo el sabe juzgar
     if L.SinLector <> '' then

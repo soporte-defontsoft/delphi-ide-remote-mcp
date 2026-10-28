@@ -835,6 +835,9 @@ type
     SinJuez: Integer;
     Lector: TArray<string>;
     SinLector: string;
+    // los StyleLookup de un form FMX que ningun estilo que ve define: una
+    // nota (DSGN-173), no un aviso (V75 de la 1.23.1)
+    Lookups: TArray<string>;
   end;
 
 { El lint del form ADfm con el TEXTO ATexto (lo que dice o dira el disco, en
@@ -1075,6 +1078,7 @@ uses
   System.Character,
   Lsp.Client,
   Lsp.FormRender, // LoQueNoCargaElIde: el lector del IDE juzga lo que la tabla no (LintDeForm)
+  Lsp.Styles, // NotaDeLookupsSinEstilo: los StyleLookup contra los estilos que el form ve (LintDeForm)
   System.Win.Registry, // EscribeClaveDelIde: la puerta del registro del IDE
   Lsp.BuildRunner,     // RunCaptured: reg.exe, la copia de una clave
   Lsp.ProcessLaunch;   // EnComillas: los argumentos de esa linea
@@ -5842,6 +5846,10 @@ begin
   // El form contra su clase (Lsp.DesignerBinding): un OnClick a un metodo
   // en public compila y revienta al cargar el form. Se avisa AL ESCRIBIR.
   Result.Enlace := DesignerBindingWarnings(ADfm, Lineas);
+  // ...y los StyleLookup de un form FMX contra los estilos que ve: EL juez de
+  // delphi_styles lint (V75 de la 1.23.1: set los escribia y el lint daba CLEAN)
+  if EsDesignerFmx(ADfm) then
+    Result.Lookups := NotaDeLookupsSinEstilo(ExtractFileName(ADfm), Lineas);
   // ...y EL parser del IDE con los bytes del disco (8.10 de la 1.18.0): un //
   // en un .fmx daba CLEAN y solo el IDE lo rechazaba al cargarlo
   if AJuzga then
@@ -5937,7 +5945,7 @@ begin
   // fichero que acaba de escribirse
   var NotaEnc := NotaDeCodificacionDeForm(APath);
   if (L.Parser = '') and (Length(Raw) = 0) and (Length(Bind) = 0) and (Length(Notas) = 0) and
-     (Falta.Razon = '') and (NotaEnc = '') then
+     (Length(L.Lookups) = 0) and (Falta.Razon = '') and (NotaEnc = '') then
     Exit;
   Res := TStringList.Create;
   try
@@ -5989,6 +5997,7 @@ begin
       Res.Add(MsgText(SN_DESIGNER_BINDING_LINT_HEADER));
       Res.AddStrings(Bind);
     end;
+    Res.AddStrings(L.Lookups);
     if NotaEnc <> '' then
       Res.Add(NotaEnc);
     Result := Res.ToStringArray;

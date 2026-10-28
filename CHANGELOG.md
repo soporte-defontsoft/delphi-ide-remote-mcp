@@ -215,6 +215,16 @@ the MCP `initialize` response (`serverInfo.version`).
   run was skipped. Every event with text is still emptied on the msbuild
   line, and that line now takes the scanner's list, which also covers
   `BuildEvent`.
+- **The designer no longer calls a form clean when a `StyleLookup` names no
+  style.** `delphi_designer set StyleLookup=<a name no style has>` wrote it,
+  `lint` answered CLEAN, and `preview` drew the control with its class's own
+  style. `delphi_styles lint` already knew it, but only with a folder of
+  styles. Now the designer asks the same judge (the platform's default
+  style): `lint`, `set` and an edit of the form add a note (`DSGN-173`)
+  naming the component and the line. It is a note, not an error: FMX draws
+  the default, and a style the project loads at run time is only checked by
+  `delphi_styles lint` against its folder. A form with a `StyleBook` is not
+  judged, because its styles are stored in binary.
 - **The designer's note on how the IDE stores a value no longer repeats it.**
   When the IDE stores a property differently from what was given, the answer
   carries the values in `value`, `storedAs` and `storedIn`, exactly as the form

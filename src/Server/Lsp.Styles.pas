@@ -258,6 +258,15 @@ function PlatformDefaultStyleNames: TArray<string>;
   en mayusculas como nueva (P7 de la segunda revision de la 1.17.0). }
 function ClaveDeEstilo(const ANombre: string): string;
 
+{ El juicio de un form FMX (sus lineas, como las numera delphi_read) contra los
+  estilos que ve: los StyleLookup que ninguno define, ni el estilo por defecto
+  de la plataforma (PlatformDefaultStyleNames, el juez de delphi_styles lint)
+  ni un TStyleBook del form (con uno no se juzga: sus estilos van en binario).
+  Su nota entera (DSGN-173 y una linea por lookup), o [] si no hay ninguno, si
+  no hay juez (sin el conversor) o si ningun StyleLookup lleva valor (entonces
+  ni se le pregunta). AFichero: el nombre que da la nota. V75 de la 1.23.1. }
+function NotaDeLookupsSinEstilo(const AFichero: string; const ALineas: TArray<string>): TArray<string>;
+
 type
   TClaseRc = (crRecurso, crInclude);
   { Lo que un .rc hace leer a brcc32: un recurso NOMBRE TIPO [banderas]
@@ -1095,6 +1104,42 @@ end;
 function ClaveDeEstilo(const ANombre: string): string;
 begin
   Result := ANombre.ToLowerInvariant;
+end;
+
+function NotaDeLookupsSinEstilo(const AFichero: string; const ALineas: TArray<string>): TArray<string>;
+var
+  Clave, Nombre, Clase, Prop, Valor, Lookup, Componente: string;
+  Textos, Claves, Defecto: TArray<string>;
+begin
+  Result := [];
+  Componente := '';
+  // por EL lector de una linea de objeto (Lsp.DesignerForma) y EL de una de
+  // propiedad y su literal, el del lint de estilos: las propiedades de un
+  // objeto van antes que sus hijos, asi que la ultima cabecera es la suya
+  for var I := 0 to High(ALineas) do
+    if LineaDeObjeto(ALineas[I], Clave, Nombre, Clase) then
+    begin
+      if SameText(Clase, 'TStyleBook') then
+        Exit;
+      Componente := Nombre;
+    end
+    // vacio: el estilo de su clase, sin buscar ninguno por nombre
+    else if LineaDePropiedad(ALineas[I], Prop, Valor) and SameText(Prop, 'StyleLookup') and
+       LeeLiteralDeForm(Valor, Lookup) and (Lookup <> '') then
+    begin
+      Textos := Textos + [MsgFmt(SN_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [Componente, Lookup, I + 1])];
+      Claves := Claves + [ClaveDeEstilo(Lookup)];
+    end;
+  if Length(Claves) = 0 then
+    Exit;
+  Defecto := PlatformDefaultStyleNames;
+  if Length(Defecto) = 0 then
+    Exit; // sin el juez no se dice nada
+  for var I := 0 to High(Claves) do
+    if IndexStr(Claves[I], Defecto) < 0 then
+      Result := Result + [Textos[I]];
+  if Length(Result) > 0 then
+    Result := [MsgFmt(SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT, [AFichero, Length(Result)])] + Result;
 end;
 
 const
