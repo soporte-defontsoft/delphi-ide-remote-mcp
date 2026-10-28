@@ -281,6 +281,14 @@ the MCP `initialize` response (`serverInfo.version`).
   inside its folder that led to another agent's folder let it write there,
   because the confinement judged the path as written while the jail judged
   the real one. It now judges the real path too.
+- **An HTTP session with no name gets an identity of its own.** The server
+  tells agents apart by the `clientInfo.name` of their handshake. A session
+  that sent none, or a name with nothing the server keeps (all Cyrillic,
+  `...`), was left with an empty identity, which is how the server
+  recognises the operator's own console: it was not confined
+  (`AgentConfinement=1`) and it could purge anyone's copies in the trash.
+  Such a session now gets an identity of its own (`session-` and eight
+  hexadecimal characters). The operator's console over stdio is unchanged.
 
 ### Changed
 

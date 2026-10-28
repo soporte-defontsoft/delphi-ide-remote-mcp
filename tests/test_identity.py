@@ -13,7 +13,10 @@ for another agent you would have to steal their session id.
   I1  the mailbox knows who you are without you typing your id
   I2  a trashed item is tagged with who trashed it
   I3  one agent cannot purge another's copy; it can purge its own
-  I4  an agent with no name (or the operator) is trusted with anyone's trash
+  I4  an HTTP session with no name is NOT the operator: it has its own
+      identity and cannot purge another agent's copy (V111 of 1.23.1, David:
+      "identidad propia"; it was trusted with anyone's trash)
+  I5  the operator (stdio with no name) is still trusted with anyone's trash
 
 Usage:  python tests/test_identity.py [path-to-DelphiLspMcp.exe]
 """
@@ -70,15 +73,28 @@ try:
     check('I3 pero tu SI purgas la tuya',
           mc.abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(ca[0]), r[:150])
 
-    # I4 - a session with no name is trusted with anyone's trash
+    # I4 - una sesion HTTP SIN nombre ya no es el operador (V111 de la 1.23.1):
+    # era la identidad vacia y purgaba la papelera de todos; ahora tiene la suya
     cli.call('delphi_delete', {'path': os.path.join(BASE, 'b.txt')}, sid=bob)
     cb = trashed('b.txt')
     anon = cli.session('')  # no clientInfo.name
     assert anon and anon not in (alice, bob), anon
     r = cli.call('delphi_delete', {'path': cb[0], 'purge': True}, sid=anon)
-    check('I4 una sesion sin nombre (operador) purga cualquier copia',
-          mc.abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(cb[0]), r[:150])
+    check('I4 una sesion HTTP sin nombre NO purga la copia de otro: tiene su identidad propia',
+          mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and 'bob' in r and os.path.exists(cb[0]),
+          r[:200])
 finally:
     proc.kill()
+
+# I5 - el operador de verdad (stdio, un proceso, sin nombre) si: su propia copia
+# del exe (sin el settings.ini del workspace de arriba) con las mismas raices
+STDIO = os.path.join(BASE, 'stdio')
+srv = mc.Stdio(mc.copia_exe(STDIO), mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='')
+try:
+    r = srv.call('delphi_delete', {'path': cb[0], 'purge': True})
+    check('I5 el operador (stdio sin nombre) purga cualquier copia',
+          mc.abre(r, 'SN_FILE_PURGED_FMT') and not os.path.exists(cb[0]), r[:150])
+finally:
+    srv.mata()
 
 mc.fin('identity battery')

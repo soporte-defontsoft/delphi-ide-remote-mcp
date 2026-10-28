@@ -8,7 +8,8 @@ unit Lsp.Identidad;
 
   Sale de Lsp.Guard el 8-oct-2026 (la 1.18.0, la version de la limpieza),
   movido sin cambiar una linea. No usa nada de la jaula: debajo solo tiene
-  Lsp.Settings (cuanto dura una sesion sin uso). Sus objetos - el cerrojo,
+  Lsp.Settings (cuanto dura una sesion sin uso) y Lsp.Casa (FragmentoUnico:
+  la identidad de una sesion sin nombre, V111). Sus objetos - el cerrojo,
   la lista de sesiones y la de las caducadas - se crean en su
   initialization, como se creaban en la de Lsp.Guard. }
 
@@ -31,7 +32,10 @@ interface
 
   Bound at initialize; read on every tool call via the per-thread context the
   HTTP layer sets before dispatch. '' when unknown (stdio with no name, or a
-  request before initialize) - callers treat that as 'anon'. }
+  request before initialize) - callers treat that as the operator. An HTTP
+  session with no name, or one the sanitizer empties, gets ITS OWN identity
+  (SESION_SIN_NOMBRE + FragmentoUnico): it was '', the operator's (V111 of
+  1.23.1, measured). }
 procedure BindSessionIdentity(const ASessionId, AName: string);
 procedure SetThreadIdentityBySession(const ASessionId: string);
 procedure SetThreadIdentity(const AName: string); // stdio: one process, one name
@@ -69,7 +73,8 @@ uses
   System.Classes,
   System.SyncObjs,
   System.Generics.Collections,
-  Lsp.Settings;         // SessionTimeoutMinutes: cuanto dura una sesion sin uso
+  Lsp.Settings,         // SessionTimeoutMinutes: cuanto dura una sesion sin uso
+  Lsp.Casa;             // FragmentoUnico: la identidad de una sesion sin nombre
 
 var
   GIdentLock: TCriticalSection;
@@ -96,6 +101,8 @@ end;
 
 const
   MINUTOS_POR_DIA = 1440;
+  // la identidad de una sesion HTTP sin nombre: el prefijo y FragmentoUnico
+  SESION_SIN_NOMBRE = 'session-';
 
 { Bajo GIdentLock. -1 = no esta. }
 function IndiceDeSesion(const AId: string): Integer;
@@ -168,6 +175,12 @@ begin
     begin
       S.Id := Id;
       S.Nombre := Clean;
+      // sin nombre, o con uno que el saneado deja vacio (cirilico, '...'), era
+      // la identidad VACIA - la del operador: sin confinar, y duena de la
+      // papelera de todos (V111 de la 1.23.1, medido). La SUYA, unica, como un
+      // nombre mas; nunca la de otro (David: "identidad propia")
+      if S.Nombre = '' then
+        S.Nombre := SESION_SIN_NOMBRE + FragmentoUnico;
       S.UltimoUso := Now;
       GSesiones.Add(S);
       // lleno: se va la que lleva MAS tiempo sin usarse, no la mas vieja (una

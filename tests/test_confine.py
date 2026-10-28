@@ -16,6 +16,9 @@ operator's console) is unconfined - the same rule the recoverable trash uses.
   C6  ON: a caller with no identity is not confined (stdio path)
   C8  ON: nor through a junction from its own folder to another agent's
       (V113 of 1.23.1: the confinement judged the text, the jail the real path)
+  C9  ON: an HTTP session with no name, or one the sanitizer empties (Cyrillic,
+      '...'), is confined under its OWN identity (V111 of 1.23.1: it was '',
+      the operator's)
 
 Usage:  python tests/test_confine.py [path-to-DelphiLspMcp.exe]
 """
@@ -116,6 +119,18 @@ try:
     finally:
         if os.path.isdir(LNK):
             os.rmdir(LNK)  # quita el ENLACE, no lo de detras
+    # V111 de la 1.23.1: una sesion HTTP sin nombre, o con uno que el saneado deja
+    # vacio, era la identidad VACIA, la del operador: sin confinar (medido). Ahora
+    # tiene la SUYA, y el confinamiento la nombra
+    puerto = int(a.url.rsplit(':', 1)[1].split('/')[0])
+    cirilico = ''.join(chr(c) for c in (0x425, 0x435, 0x440, 0x43C, 0x435, 0x441))  # un nombre que el saneado vacia
+    for nombre in (cirilico, '...', ''):
+        c = mc.Http(puerto, TOKEN)
+        c.session(nombre)
+        f = os.path.join(base, 'bob', 'v111-%d.txt' % len(nombre))
+        r = c.call('delphi_textedit', {'path': f, 'create': True, 'content': 'x'})
+        check('C9 ON: una sesion HTTP llamada %r tampoco escribe en la carpeta de bob, con su identidad propia' % nombre,
+              mc.es(r, 'SR_AGENT_CONFINED_FMT') and 'session-' in r and not os.path.exists(f), r[:300])
 finally:
     proc.kill()
 
