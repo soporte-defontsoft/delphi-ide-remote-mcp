@@ -338,6 +338,17 @@ the MCP `initialize` response (`serverInfo.version`).
   gets the project's aliases in front, as msbuild does. An entry that is not
   `Name=Target` with two unit names is left out: the aliases go on the
   engine's option line, where text with a space would be another option.
+- **Security: nothing in a project file adds an option to the engine's
+  command line.** The project's defines and unit scopes go on the option
+  line of the engine (DelphiLSP), and only an entry with `$(` or `\` was left
+  out. A `DCC_Define` (or a `DCC_Namespace`, or a `FrameworkType`) such as
+  `X -UD:/<a folder outside the roots>` reached the engine as a define AND a
+  new unit path, and the engine indexed the units of a folder outside the
+  workspace: `delphi_hover` and `delphi_definition` refused to show them
+  (`LSP-038`), but `delphi_signature` answered with the signature of a
+  routine of a unit outside the roots, and `delphi_completion` with its name
+  and parameters. Each entry of those lists is now judged as a name (a
+  define, or a scope with dots), and anything else is left out.
 
 ### Changed
 

@@ -401,12 +401,16 @@ end;
   gramatica propia, declarada aqui; el juez seria el motor). Los defines y
   los ambitos. Los trozos, por EL troceador de las listas de msbuild
   (Lsp.Dproj.TrozosDeLista; aqui habia otro Split, P8 de la revision de
-  Opus 5.5). }
+  Opus 5.5). Cada trozo, UN identificador (con puntos: un ambito) por EL juez
+  (EsIdentificador, Lsp.Pascal): la lista va a la linea de opciones del motor,
+  y solo se quitaba lo que llevaba $( o \ - un DCC_Define "X -UD:/fuera" era
+  -DX y un -U nuevo, y signature y completion ensenaron una unidad de FUERA
+  de la jaula (V150 de la 1.23.1, medido). }
 function ListaDeNombres(const ARaw: string): string;
 begin
   Result := '';
   for var P in TrozosDeLista(ARaw) do
-    if not P.Contains('$(') and not P.Contains('\') and
+    if EsIdentificador(P, True) and
        not SinMayusculas(';' + Result + ';').Contains(';' + SinMayusculas(P) + ';') then
       if Result = '' then
         Result := P
