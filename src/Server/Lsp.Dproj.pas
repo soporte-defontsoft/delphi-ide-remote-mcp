@@ -1039,7 +1039,9 @@ function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): strin
   derivaban (ResolveImportPath, ExpandOutputMacros y la tabla de Lsp.BuildRunner).
   Devuelve 'Nombre=Valor'. Su valor lo fija la spec de msbuild y es constante en
   toda la cadena de Import, salvo $(MSBuildThisFileDirectory), que sigue a la
-  carpeta del fichero (ACarpetaDelFichero). NO entra $(ProjectDir): no es
+  carpeta del fichero (ACarpetaDelFichero); una carpeta vacia ('') no la da -no
+  verificable-, para quien recorre la cadena sin saber de que documento sale el
+  valor (ExpandOutputMacros, V118b). NO entra $(ProjectDir): no es
   reservada - CodeGear.Delphi.Targets la DEFINE (vacia en el cuerpo del .dproj,
   la carpeta tras su Import) y el proyecto puede redefinirla -, asi que depende
   de la posicion y quien la lleve la deja escrita, no verificable. Tampoco
@@ -3503,8 +3505,13 @@ begin
   Result := [
     'MSBuildProjectDirectory=' + ACarpetaProyecto,
     'MSBuildProjectName=' + ANombreProyecto,
-    'SanitizedProjectName=' + ANombreProyecto,
-    'MSBuildThisFileDirectory=' + IncludeTrailingPathDelimiter(ACarpetaDelFichero)];
+    'SanitizedProjectName=' + ANombreProyecto];
+  // $(MSBuildThisFileDirectory) sigue al fichero; quien no conoce su carpeta
+  // ('' - ExpandOutputMacros recorre la cadena sin saber de que documento sale
+  // cada salida) no la da, y la macro queda sin expandir -> no verificable (V118b)
+  if ACarpetaDelFichero <> '' then
+    Result := Result + ['MSBuildThisFileDirectory=' +
+      IncludeTrailingPathDelimiter(ACarpetaDelFichero)];
 end;
 
 { La ruta de un <Import> con sus macros expandidas por EL lector
@@ -3547,7 +3554,7 @@ function ExpandOutputMacros(const AValue, ADir, ABase, APlatform,
   AConfig: string): string;
 begin
   Result := ExpandeReservadas(AValue,
-    MacrosReservadasDeMsbuild(ADir, ABase, ADir) +
+    MacrosReservadasDeMsbuild(ADir, ABase, '') +
     ['Platform=' + APlatform, 'Config=' + AConfig]);
 end;
 

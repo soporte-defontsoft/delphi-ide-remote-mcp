@@ -147,6 +147,33 @@ try:
              'de fuera se niega BUILD-050 (rojo contra prod, que compilaba leyendo fuera)',
              mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT'),
              j.get('firstError') or r[:400])
+
+    # --- E: lo mismo que D pero en un DCC_*Output (lo que el build ESCRIBE): la
+    # salida caeria FUERA de la jaula. ExpandOutputMacros recorre la cadena sin
+    # saber de que documento sale cada salida, asi que no resuelve
+    # $(MSBuildThisFileDirectory) (lo deja no verificable, como antes de V118);
+    # el gate de valores, por documento, tambien lo niega (segunda barrera).
+    # Negado antes (BUILD-050, el gate de valores) y con el fix (BUILD-029/031, la
+    # puerta de salidas): control de que la salida no escapa por este camino.
+    d, p = proyecto(os.path.join('c', 'e'), 'PE')
+    os.makedirs(os.path.join(J, 'o2'))
+    with open(os.path.join(J, 'o2', 'o2.targets'), 'w', newline='') as f:
+        f.write(NS + '<PropertyGroup>'
+                '<DCC_ExeOutput>$(MSBuildThisFileDirectory)..\\..\\fuera118b</DCC_ExeOutput>'
+                '<DCC_DcuOutput>$(MSBuildThisFileDirectory)..\\..\\fuera118b</DCC_DcuOutput>'
+                '</PropertyGroup></Project>')
+    t = lee(p)
+    i = t.index('<PropertyGroup')
+    t = t[:i] + '<Import Project="..\\..\\o2\\o2.targets"/>\r\n    ' + t[i:]
+    escribe(p, t)
+    r, j = build(p)
+    mc.check('E: un DCC_*Output con $(MSBuildThisFileDirectory) de un .targets de otra carpeta '
+             'no escapa de la jaula (salida fuera, negada: BUILD-050 el gate de valores, o '
+             'BUILD-029/031 la puerta de salidas)',
+             mc.rechazado(r) and (mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT')
+                                  or mc.es(r, 'SR_BUILD_OUTPUT_DENIED_FMT')
+                                  or mc.es(r, 'SR_BUILD_OUTPUT_UNRESOLVED_FMT')),
+             j.get('firstError') or r[:400])
 finally:
     S.cierra()
     subprocess.run(['subst', L + ':', '/d'], capture_output=True)
