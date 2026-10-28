@@ -1235,10 +1235,8 @@ begin
       Ret.AddPair('notShown', Fuera);
       var N := 0;
       var Peso := 0;
-      for var F in WalkFiles(Folder, '*.pas') do
+      for var F in WalkBajoLaRaiz(Folder, ['*.pas']) do
       begin
-        if SkipBajoLaRaiz(F, Folder) then
-          Continue;
         Inc(N);
         // en orden y hasta el tope (la primera entra siempre); a partir de la
         // primera que no cabe, solo su nombre, relativo a la carpeta

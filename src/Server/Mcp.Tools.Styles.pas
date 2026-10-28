@@ -545,14 +545,13 @@ begin
       // por EL recorredor, como el de los .rc de abajo: no baja por un enlace
       // a lo que no se puede leer y una carpeta ilegible no corta el paseo (la
       // RTL abortaba al primer fallo; revisor de P2b, B3)
-      for F in WalkFiles(ProjDir, '*.*') do
+      // El filtro COMPARTIDO, no una lista propia: esta era el tercer
+      // emisor de "que carpetas se saltan" y no conocia __delphi-temp ni
+      // las carpetas de compilacion (auditoria 2026-09-21); dentro del paseo
+      // (WalkBajoLaRaiz, V114 de la 1.23.1)
+      for F in WalkBajoLaRaiz(ProjDir, ['*.*']) do
       begin
         if not (F.EndsWith('.fmx', True) or F.EndsWith('.pas', True)) then
-          Continue;
-        // El filtro COMPARTIDO, no una lista propia: esta era el tercer
-        // emisor de "que carpetas se saltan" y no conocia __delphi-temp ni
-        // las carpetas de compilacion (auditoria 2026-09-21).
-        if SkipBajoLaRaiz(F, ProjDir) then
           Continue;
         if ReadPathDenied(F) <> '' then
           Continue;

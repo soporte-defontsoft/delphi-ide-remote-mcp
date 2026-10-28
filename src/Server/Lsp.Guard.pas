@@ -569,14 +569,19 @@ function EnlaceAjenoEn(const ADir: string; AEscribe: Boolean;
   const AOmite: TOmiteAlCopiar = nil): string;
 
 { Recorrido de lectura compartido: solo enlaces legibles, ciclos cortados y
-  carpetas ilegibles toleradas. Las tools deciden sus filtros de artefactos.
+  carpetas ilegibles toleradas. Las tools deciden sus filtros de artefactos
+  (el de un arbol de codigo es WalkBajoLaRaiz, Lsp.References).
   AAlEntrar, si va: cada carpeta del paseo, al ENTRAR en ella y antes de
   listarla (quien sella lo que vio - el proyecto de una unidad, FindDproj -
-  sella antes de mirar: lo que cambie despues mueve el sello). }
+  sella antes de mirar: lo que cambie despues mueve el sello).
+  AOmite, si va: una carpeta de debajo por la que diga True no se recorre (ni
+  se lista ni se entra en ella, ni se sella); una papelera se purga al pasar
+  igual. Un parametro del recorredor, como el de CopiaArbol. }
 function WalkFiles(const ADir: string; const AMasks: TArray<string>;
   AConPapelera: Boolean = False; ARecursivo: Boolean = True;
   const AAlEntrar: TVisitaRuta = nil;
-  AIncluyeEnlacesFuera: Boolean = False): TArray<string>; overload;
+  AIncluyeEnlacesFuera: Boolean = False;
+  const AOmite: TOmiteAlCopiar = nil): TArray<string>; overload;
 function WalkFiles(const ADir, AMask: string;
   AConPapelera: Boolean = False): TArray<string>; overload;
 
@@ -3786,7 +3791,7 @@ end;
   hide the rest of the tree. }
 function WalkFiles(const ADir: string; const AMasks: TArray<string>;
   AConPapelera, ARecursivo: Boolean; const AAlEntrar: TVisitaRuta;
-  AIncluyeEnlacesFuera: Boolean): TArray<string>;
+  AIncluyeEnlacesFuera: Boolean; const AOmite: TOmiteAlCopiar): TArray<string>;
 var
   Acc: TStringList;
   // rutas REALES de los enlaces ya seguidos, por ClaveDeRuta: corta ciclos. Era
@@ -3864,6 +3869,10 @@ var
         // La papelera se purga solo despues de admitir la lectura del enlace.
         if SameFileName(TPath.GetFileName(Sub), TrashFolderName) then
           PurgaAlPasar(Sub);
+        // ...y lo que quien llama omite no se recorre (despues de la purga:
+        // la papelera se purga al pasar aunque no se entre en ella)
+        if Assigned(AOmite) and AOmite(Sub) then
+          Continue;
         Recurse(Sub);
       end;
     except

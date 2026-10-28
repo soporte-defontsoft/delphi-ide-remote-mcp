@@ -1149,8 +1149,13 @@ begin
       try
         // por EL recorredor (WalkFiles): solo sigue los enlaces que esta
         // sesion puede leer y tolera una rama ilegible; GetFiles con
-        // soAllDirectories cruzaba cualquier union (2h de la 1.18.4)
-        Files := WalkFiles(Root, AMascaras);
+        // soAllDirectories cruzaba cualquier union (2h de la 1.18.4). Sin
+        // entrar en los artefactos BAJO la raiz (WalkBajoLaRaiz): por la ruta
+        // absoluta, una raiz que cuelga de una carpeta Release no daba ninguna
+        // candidata. Se saltaba ademas toda carpeta con '\backup' en la ruta,
+        // una gramatica sin juez (el IDE no escribe carpetas backup) que
+        // casaba con \BackupService\ (A10 de la 1.23, medido)
+        Files := WalkBajoLaRaiz(Root, AMascaras);
       except
         Continue; // an unreadable root is not the agent's problem
       end;
@@ -1161,12 +1166,7 @@ begin
         // sigue los enlaces, y un junction de las raices a una carpeta de
         // fuera daba como candidata lo que la jaula no deja leer (medido el
         // 4-oct-2026, test_missing_units)
-        // ...y los artefactos BAJO la raiz (SkipBajoLaRaiz): por la ruta
-        // absoluta, una raiz que cuelga de una carpeta Release no daba ninguna
-        // candidata. Se saltaba ademas toda carpeta con '\backup' en la ruta,
-        // una gramatica sin juez (el IDE no escribe carpetas backup) que
-        // casaba con \BackupService\ (A10 de la 1.23, medido)
-        if SkipBajoLaRaiz(F, Root) or (ReadPathDenied(Dir) <> '') then
+        if ReadPathDenied(Dir) <> '' then
           Continue;
         if not L.Contains(F) then
           L.Add(F);

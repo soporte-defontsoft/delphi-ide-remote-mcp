@@ -267,7 +267,8 @@ uses
   Lsp.Settings,
   Lsp.Dproj,         // BuscaEnCarpeta: que proyecto sirve a una unidad
   Lsp.ProjectUnits,  // ProyectoListaUnidad, la otra mitad
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.References;    // WalkBajoLaRaiz: el paseo de un arbol de codigo
 
 type
   { What the engine holds of one document. }
@@ -1201,8 +1202,11 @@ begin
         // puede leer (GetFiles con soAllDirectories cruzaba cualquier union y
         // cada candidato tenia que negarse uno a uno; 2h de la 1.18.4)
         // ...y cada carpeta de debajo, al entrar (un proyecto que la liste
-        // puede aparecer en cualquiera)
-        for C in WalkFiles(Dir, ['*.dproj'], False, True,
+        // puede aparecer en cualquiera). Sin entrar en lo que no es codigo
+        // (WalkBajoLaRaiz): en la papelera la copia del dia conserva su nombre,
+        // y tras un remove-unit la que aun la listaba era el proyecto de la
+        // unidad (V114 de la 1.23.1, medido)
+        for C in WalkBajoLaRaiz(Dir, ['*.dproj'],
           procedure(const ACarpeta: string)
           begin
             var K := PARTE_CARPETA + ClaveDeRuta(ACarpeta);

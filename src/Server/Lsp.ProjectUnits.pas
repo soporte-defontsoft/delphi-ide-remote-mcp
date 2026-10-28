@@ -2925,13 +2925,13 @@ begin
   // UN paseo del arbol, no uno por nombre (M10 del revisor de cierre; que
   // siga los enlaces legibles es la regla del recorredor, la del copiador:
   // dcc los sigue igual)
-  var Pas := WalkFiles(Dir, '*.pas');
+  var Pas := WalkBajoLaRaiz(Dir, ['*.pas']);
   SetLength(Result, Length(ANames));
   for var I := 0 to High(ANames) do
   begin
     Result[I] := '';
     for var F in Pas do
-      if SameFileName(TPath.GetFileNameWithoutExtension(F), ANames[I]) and not SkipBajoLaRaiz(F, Dir) then
+      if SameFileName(TPath.GetFileNameWithoutExtension(F), ANames[I]) then
       begin
         Result[I] := ExtractRelativePath(IncludeTrailingPathDelimiter(Dir), F);
         Break;

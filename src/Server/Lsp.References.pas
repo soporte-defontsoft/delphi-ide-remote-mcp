@@ -17,7 +17,8 @@ unit Lsp.References;
 interface
 
 uses
-  System.JSON;
+  System.JSON,
+  Lsp.Guard; // TVisitaRuta: el AAlEntrar de WalkBajoLaRaiz
 
 type
   { un uso de un nombre: el fichero, su linea y su columna (0-based) y la
@@ -79,6 +80,17 @@ function RelToRoot(const AFull, ARoot: string): string;
   (M1 del revisor de cierre de la 1.18.2, medido). Nombrar una carpeta de
   artefactos como raiz es pedir ver dentro, como en delphi_list. }
 function SkipBajoLaRaiz(const APath, ARaiz: string; AAllowTrash: Boolean = False): Boolean;
+
+{ EL paseo de un arbol de CODIGO: WalkFiles sin ENTRAR en lo que
+  SkipBajoLaRaiz salta bajo ARaiz (artefactos, temporales, .git y la
+  papelera). Para quien lee el arbol; quien cuenta lo escondido (delphi_list,
+  delphi_search, delphi_projects) recorre y juzga cada fichero. Cada lector
+  escribia el paseo y luego el filtro, nueve veces, y dos lo olvidaron: el
+  proyecto de una unidad era la copia del dia de la papelera tras un
+  remove-unit, y discover no veia nada bajo un antepasado llamado Release
+  (V114 de la 1.23.1, medido). AAlEntrar, el de WalkFiles. }
+function WalkBajoLaRaiz(const ARaiz: string; const AMasks: TArray<string>;
+  const AAlEntrar: TVisitaRuta = nil): TArray<string>;
 
 const
   SKIP_ARTIFACTS = 'artifacts';
@@ -159,7 +171,6 @@ uses
   System.Generics.Collections,
   Lsp.Client,
   Lsp.Session,
-  Lsp.Guard,
   Lsp.Texts,
   System.RegularExpressions,
   Lsp.Dproj,        // RutasDeBusqueda: el search path de un .dproj, resuelto
@@ -209,10 +220,8 @@ begin
     begin
       if (Root.Trim = '') or not TDirectory.Exists(Root.Trim) then
         Continue;
-      for var Dproj in WalkFiles(Root.Trim, '*.dproj') do
+      for var Dproj in WalkBajoLaRaiz(Root.Trim, ['*.dproj']) do
       begin
-        if SkipBajoLaRaiz(Dproj, Root.Trim) then
-          Continue;
         try
           Xml := LeeTexto(Dproj, [ltJaula]);
         except
@@ -294,6 +303,21 @@ end;
 function SkipBajoLaRaiz(const APath, ARaiz: string; AAllowTrash: Boolean): Boolean;
 begin
   Result := SkipIdeArtifacts(RelToRoot(APath, ARaiz), AAllowTrash);
+end;
+
+function WalkBajoLaRaiz(const ARaiz: string; const AMasks: TArray<string>;
+  const AAlEntrar: TVisitaRuta): TArray<string>;
+var
+  Raiz: string;
+begin
+  Raiz := ARaiz;
+  // la carpeta con su barra: SkipReason busca SEGMENTOS ('\win64\'), y sin
+  // ella el ultimo no lo es
+  Result := WalkFiles(ARaiz, AMasks, False, True, AAlEntrar, False,
+    function(const ACarpeta: string): Boolean
+    begin
+      Result := SkipBajoLaRaiz(IncludeTrailingPathDelimiter(ACarpeta), Raiz);
+    end);
 end;
 
 function SkipReason(const APath: string; AAllowTrash: Boolean): string;
@@ -920,8 +944,8 @@ begin
         // pasar. Las de LA lista de la casa (SOURCE_EXTS): la escrita aqui a
         // mano no llevaba .dpk, y el contains de un paquete no se veia (punto 8
         // de la 1.18.2)
-        for F in WalkFiles(D, MascarasDe(SOURCE_EXTS)) do
-          if not SkipBajoLaRaiz(F, D) and not AllFiles.Contains(F) then
+        for F in WalkBajoLaRaiz(D, MascarasDe(SOURCE_EXTS)) do
+          if not AllFiles.Contains(F) then
             AllFiles.Add(F);
       end;
     finally
@@ -1275,8 +1299,8 @@ begin
     // papelera al pasar)
     Root := TLspSession.Instance.RaizDelMotor(TPath.GetFullPath(AFilePath));
     if (Root <> '') and TDirectory.Exists(Root) then
-      for var D in WalkFiles(Root, MascarasDe(DESIGNER_EXTS)) do
-        if not SkipBajoLaRaiz(D, Root) and (Lista.IndexOf(D) < 0) then
+      for var D in WalkBajoLaRaiz(Root, MascarasDe(DESIGNER_EXTS)) do
+        if Lista.IndexOf(D) < 0 then
           Lista.Add(D);
     for var P in Lista do
     begin

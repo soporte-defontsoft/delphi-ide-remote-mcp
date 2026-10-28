@@ -2017,7 +2017,9 @@ begin
         Continue;
       if SameText(TPath.GetExtension(F), '.dcu') then
         Continue;
-      if ClaveDeRuta(F).Contains(ClaveDeRuta('\dcu\')) then // la clave del disco (V105)
+      // la clave del disco (V105), DEBAJO de la carpeta (RelToRoot): por la ruta
+      // absoluta, una carpeta de encima llamada dcu vaciaba el zip (V114, medido)
+      if ClaveDeRuta(RelToRoot(F, Dir)).Contains(ClaveDeRuta('\dcu\')) then
         Continue;
       // ni el zip ni ningun intermedio: el suyo y el de otra llamada a la vez
       if SameFileName(TPath.GetFullPath(F), OutZip) or

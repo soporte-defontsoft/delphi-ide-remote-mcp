@@ -532,6 +532,18 @@ REGLAS = [
      [],
      'TrozoBajo y RutaTrasladada (Lsp.Rutas): el juez y el corte del MISMO texto. Con un valor en 8.3, '
      'MOVE-021 decia que la lib movida estaba en su carpeta, sin el \\lib (medido)'),
+    # ...y el filtro de lo que no es codigo, a mano detras de un paseo (V114 de la 1.23.1): nueve
+    # lectores recorrian el arbol y filtraban despues con SkipBajoLaRaiz, y dos lo olvidaron - el
+    # proyecto de una unidad era la copia del dia de la papelera, y discover juzgaba la ruta
+    # ABSOLUTA (SkipIdeArtifacts(F)): un antepasado llamado Release lo escondia todo. Casas: el
+    # paseo de codigo, quien CUENTA lo escondido (delphi_projects) y quien juzga UN fichero (upload)
+    ('el filtro de lo que no es codigo de un paseo a mano',
+     r'\bSkipBajoLaRaiz\(|\bSkipIdeArtifacts\(\s*\w+\s*\)',
+     [('Lsp.References.pas', 'WalkBajoLaRaiz'),
+      ('Mcp.Tools.Workspace.pas', 'TDelphiProjectsTool.ExecuteWithParams'),
+      ('Mcp.Tools.Workspace.pas', 'SubirNucleo')],
+     'WalkBajoLaRaiz (Lsp.References): WalkFiles sin ENTRAR en lo que SkipBajoLaRaiz salta bajo la raiz; '
+     'tras un remove-unit, el proyecto de una unidad era la copia del dia de la papelera (V114, medido)'),
     # ...y la CLAVE de una ruta real escrita a mano (V82 de la 1.23.1): los tres recorredores de
     # Lsp.Guard guardaban LowerCase(RealPath(..)) en un TStringList sin mayusculas, que compara con
     # el locale y daba ss y la eszett por la misma: WalkFiles se saltaba la segunda carpeta y
@@ -1743,6 +1755,9 @@ PLANTADO = {
     'un evento por el prefijo On': "  PATRON_EVENTO = 'On' + PATRON_IDENT;",
     # la de Lsp.BuildRunner hasta el 18-oct-2026 (una de nueve)
     'la familia de una plataforma por su nombre a mano': "  if APlat.StartsWith('Android', True) then",
+    # la de Lsp.References.ProjectsSearching hasta el 28-oct-2026 (una de nueve)
+    'el filtro de lo que no es codigo de un paseo a mano':
+        "  for F in WalkFiles(D, ['*.dproj']) do if not SkipBajoLaRaiz(F, D) then X := 1;",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -1790,6 +1805,16 @@ for forma, cuenta in (("  Fuera.Add(Copy(F, Length(IncludeTrailingPathDelimiter(
                                            'CortaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "el trozo de una ruta bajo una carpeta a mano": %s %s' % (
         'caza' if cuenta else 'no confunde', forma.strip()), len(cazados) == cuenta, cazados)
+
+# la otra forma del filtro de un paseo (V114): el de discover por la ruta ABSOLUTA; el de quien
+# nombra una carpeta de artefactos como raiz (delphi_list, la quiere ver) no se confunde
+REGLA_PASEO = next(r for r in REGLAS if r[0] == 'el filtro de lo que no es codigo de un paseo a mano')
+for forma, cuenta in (("  if SkipIdeArtifacts(F) then Continue;", 1),
+                      ("  RootInArtifacts := SkipIdeArtifacts(IncludeTrailingPathDelimiter(Root));", 0)):
+    cazados = fuera_de_casa(REGLA_PASEO, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                           'FiltraAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": %s %s' % (REGLA_PASEO[0], 'caza' if cuenta else 'no confunde', forma.strip()),
+          len(cazados) == cuenta, cazados)
 
 # las otras formas de lanzar: los lanzadores con nombre propio (fuera de su casa) y
 # los otros interpretes (revisor de baterias, 18-oct-2026)

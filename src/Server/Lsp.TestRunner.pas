@@ -146,10 +146,11 @@ begin
   Arr := TJSONArray.Create;
   Result.AddPair('projects', Arr);
   N := 0;
-  for F in WalkFiles(Dir, '*.dpr') do
+  // lo que no es codigo, DEBAJO de la carpeta (WalkBajoLaRaiz): por la ruta
+  // absoluta, un antepasado llamado Release, Debug, Win32 o dcu escondia todos
+  // los proyectos (V114 de la 1.23.1, medido)
+  for F in WalkBajoLaRaiz(Dir, ['*.dpr']) do
   begin
-    if SkipIdeArtifacts(F) then
-      Continue;
     K := KindOf(F, Why);
     if K = tkNone then
       Continue;

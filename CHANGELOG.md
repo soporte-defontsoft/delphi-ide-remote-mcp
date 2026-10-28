@@ -298,6 +298,27 @@ the MCP `initialize` response (`serverInfo.version`).
   now take one grammar: `1`/`0`, `true`/`false`, `yes`/`no`, `on`/`off`. A
   value outside it is read as the closed side - the capability off, the
   protection on, SSL on - and the startup log says so.
+- **The project of a unit is never a copy in the trash, and a folder named
+  `Release` or `dcu` above your project hides nothing.** The engine tools
+  look for the project of a unit in its folder, above it and in the folders
+  below each level. That walk went into the trash (`__delphi-patch`), where
+  the copy taken before the first change of the day keeps its name, and
+  nothing left it out: after `remove-unit` of a unit its `.dpr` named by an
+  absolute path, `delphi_diagnostics` linted the unit with
+  `app\__delphi-patch\<day>\App.dproj`, the copy that still listed it.
+  `delphi_test discover` judged build folders by the absolute path, so under
+  an ancestor named `Release`, `Debug`, `Win32`, `Win64` or `dcu` it found no
+  test project; `delphi_package` did the same with `dcu\`, and packed nothing
+  under such a folder. The readers of a code tree - the project of a unit,
+  `discover`, the projects that search a folder, the scope of `references`
+  and `rename_symbol`, the forms that name a symbol, the candidates of a
+  missing unit, the units of a `.dpr`, `delphi_symbols` of a folder and the
+  `StyleLookup` scan of `delphi_styles lint` - now walk with one walker that
+  does not go into what is not code below the folder it walks (build output,
+  the IDE's history, `.git`, the trash) instead of walking everything and
+  filtering afterwards by hand, as seven of them did and two did not.
+  `delphi_package` keeps its own list - it packs build output on purpose -
+  and judges `dcu\` below the folder it packs.
 
 ### Changed
 
