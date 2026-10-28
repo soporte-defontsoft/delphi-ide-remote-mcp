@@ -419,6 +419,20 @@ the MCP `initialize` response (`serverInfo.version`).
   and refused only because a path cannot hold its colons, saying the folder
   was outside the roots (`GIT-044`); it is now refused as an address this
   tool does not take (`GIT-045`).
+- **`delphi_styles set` writes what FMX's own writer would store, where it
+  would store it.** It wrote the value it was given, and a new property right
+  after `StyleName`: `Fill.Color = xF7DFC6` came back `CHANGED` while FMX
+  loads it as `x00F7DFC6` - alpha 00, invisible - and `delphi_designer set`
+  of the same value said `storedAs`. It now asks FMX's writer, the IDE's
+  (the style converter's `totext`), as `designer set` asks the IDE's: a value
+  it stores another way is written its way and `STYLE-058` says so (a color
+  with its 8 digits, a color with a name by its name, a `Single` such as
+  `Opacity` with its own decimals), one that leaves the class's default is
+  not written (`STYLE-059`), and a new property goes in the writer's order.
+  The converter is now a 32-bit program, like the IDE and the form
+  renderers: its 64-bit build wrote floating-point values with 17 decimals,
+  the IDE with 18 (measured on the styles of the RAD Studio Samples); its
+  binary output (`build`) is the same byte for byte.
 
 ### Changed
 

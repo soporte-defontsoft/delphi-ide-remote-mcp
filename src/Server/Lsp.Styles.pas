@@ -245,6 +245,15 @@ function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>;
 function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>;
   out ANoCarga: string): Boolean;
 
+{ Como ESCRIBE el escritor de FMX - el del IDE: el conversor de 32 bits,
+  totext, que carga el estilo como FMX y lo guarda con TStyleStreaming - el
+  texto ATexto (en AEnc, la codificacion de su fichero): lo que escribiria el
+  IDE al guardarlo, en AEscrito. False si no hay conversor o no contesto. Lo
+  pregunta delphi_styles set (V141 de la 1.23.1): escribia el valor tal cual
+  y en su sitio, y un color de 6 cifras (xF7DFC6) es para FMX x00F7DFC6, alfa
+  00, invisible. }
+function ComoLoEscribeFmxDeTexto(const ATexto, AEnc: string; out AEscrito: string): Boolean;
+
 { StyleNames of the Windows platform default style, extracted once through the
   helper and cached under LOCALAPPDATA. Empty when the helper is missing.
   Ya como claves (ClaveDeEstilo). }
@@ -1051,25 +1060,26 @@ begin
   Result := True;
 end;
 
-function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>;
-  out ANoCarga: string): Boolean;
+{ LA pregunta al conversor sobre un texto que aun no esta en disco: su copia
+  (en AEnc), en una carpeta de ESTA llamada del temporal del servidor, como la
+  propuesta del renderizador (Lsp.FormRender): no es un entregable del agente
+  ni se escribe en la jaula. APregunta recibe la copia y la carpeta, y dice si
+  se pudo preguntar; la carpeta se borra siempre. La hacian el juicio de lo
+  que FMX ignora (check) y el de como lo escribe (totext, V141). }
+function PreguntaAlConversor(const ATexto, AEnc: string;
+  const APregunta: TFunc<string, string, Boolean>): Boolean;
 var
   Dir: string;
 begin
-  AIgnorado := [];
-  ANoCarga := '';
   if StyleConverterExe = '' then
     Exit(False);
-  // la copia que se le PREGUNTA, en una carpeta de ESTA llamada del temporal
-  // del servidor, como la propuesta del renderizador (Lsp.FormRender): no es
-  // un entregable del agente ni se escribe en la jaula
   Dir := NuevaCarpetaDescarga(ServerTempDir(ESTILOS_CHECK_SUB));
   try
     try
       CrearCarpeta(Dir);
       var Cand := TPath.Combine(Dir, 'c.style');
       EscribeTexto(Cand, ATexto, ltTemporal, EncKindOf(AEnc), False);
-      Result := IgnoradoPorFmx(Cand, AIgnorado, ANoCarga);
+      Result := APregunta(Cand, Dir);
     except
       Result := False; // sin la pregunta no se sabe: quien llama sigue como antes
     end;
@@ -1080,6 +1090,42 @@ begin
       // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
     end;
   end;
+end;
+
+function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>;
+  out ANoCarga: string): Boolean;
+var
+  Ignorado: TArray<string>;
+  NoCarga: string;
+begin
+  Ignorado := [];
+  NoCarga := '';
+  Result := PreguntaAlConversor(ATexto, AEnc,
+    function(ACand, ADir: string): Boolean
+    begin
+      Result := IgnoradoPorFmx(ACand, Ignorado, NoCarga);
+    end);
+  AIgnorado := Ignorado;
+  ANoCarga := NoCarga;
+end;
+
+function ComoLoEscribeFmxDeTexto(const ATexto, AEnc: string; out AEscrito: string): Boolean;
+var
+  Escrito: string;
+begin
+  Escrito := '';
+  Result := PreguntaAlConversor(ATexto, AEnc,
+    function(ACand, ADir: string): Boolean
+    var
+      Code: Cardinal;
+    begin
+      var Salida := TPath.Combine(ADir, 'escrito.style');
+      CorreStyleConvert(StyleConverterExe, 'totext "' + ACand + '" "' + Salida + '"', '', 60000, Code);
+      Result := (Code = 0) and TFile.Exists(Salida);
+      if Result then
+        Escrito := LeeTexto(Salida, [ltTemporal]);
+    end);
+  AEscrito := Escrito;
 end;
 
 function StyleConverterExe: string;

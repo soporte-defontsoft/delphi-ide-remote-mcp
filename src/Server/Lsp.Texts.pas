@@ -3996,9 +3996,10 @@ const
     'Bitmap Style Designer exports and a style pipeline keeps as source of ' +
     'truth). command=view lists the styles of a file (StyleName, class, ' +
     'lines, parts); get shows one whole; set changes or adds ONE property of ' +
-    'a style or of a part inside it (child=background/text), value written ' +
-    'exactly as the file does (xAARRGGBB colors, floats with 18 decimals, ' +
-    'quoted strings), refused if FMX would ignore it when it loads the ' +
+    'a style or of a part inside it (child=background/text), written as ' +
+    'FMX''s own writer (the IDE''s) stores it and in its place among the ' +
+    'object''s properties - STYLE-058 says when that is not the value given, ' +
+    'STYLE-059 when it is the class''s own value and not stored -, refused if FMX would ignore it when it loads the ' +
     'style or could not load the style with it; clone copies a style under ' +
     'a new StyleName - the way to ' +
     'add a variant; delete removes a whole style by StyleName (the copy in ' +
@@ -4117,6 +4118,31 @@ const
   SN_STYLES_PROP_SET_FMT =
     '[STYLE-011] %s: %s (style %s%s, %s). Backup in __delphi-patch. ' +
     'Remember command=build to regenerate the binary the app embeds.';
+
+  { %0:s: la propiedad; %1:s: como la guarda el escritor de FMX; %2:s: lo
+    que se dio. set escribia el valor tal cual: xF7DFC6 salia CHANGED y FMX
+    lo carga x00F7DFC6, alfa 00, invisible (V141 de la 1.23.1, medido con el
+    conversor de 32 bits, el escritor del IDE) }
+  SN_STYLES_GUARDADA_COMO_FMT =
+    '[STYLE-058] FMX''s own writer (the IDE''s) stores %0:s as %1:s, not as ' +
+    '%2:s: written its way, which is the value FMX loads.%3:s';
+  { %3:s de STYLE-058 cuando el valor es un color (x...) }
+  SF_STYLES_COLOR_8_CIFRAS =
+    ' A color takes its 8 hex digits, AARRGGBB: with fewer, the alpha that is ' +
+    'missing is 00 and the color is invisible.';
+  { %0:s: la propiedad; %1:s: el valor; %2:s: '' o SF_STYLES_NO_GUARDADA_QUITADA }
+  SN_STYLES_NO_GUARDADA_FMT =
+    '[STYLE-059] With %0:s = %1:s the object ends with the value its class ' +
+    'already gives (its default, or where the class clamps that value): ' +
+    'FMX''s own writer (the IDE''s) does not store it, so it is not in the ' +
+    'file%2:s.';
+  SF_STYLES_NO_GUARDADA_QUITADA = ' (the line it had was removed)';
+  { sin el conversor (o sin su respuesta) no hay a quien preguntar: lo de
+    antes de V141, y dicho }
+  SN_STYLES_SIN_ESCRITOR =
+    '[STYLE-060] FMX''s own writer could not be asked (DelphiStyleConvert.exe ' +
+    'missing next to the server, or no answer): the value is written as ' +
+    'given, and a new property right after StyleName.';
 
   SN_STYLES_PROP_DELETED_FMT =
     '[STYLE-012] REMOVED property %s from style %s%s (%s). Backup in ' +
@@ -10653,9 +10679,10 @@ const
     'Visible, TextSettings.Font.Size...';
 
   SP_STYLE_VALUE =
-    'set: the value EXACTLY as it appears in a .style file: xFFF6ECDB ' +
-    '(colors AARRGGBB), 44.000000000000000000 (floats), True/False, ' +
-    '''text'' (strings quoted), Center (enums)';
+    'set: the value as a .style file writes it: xFFF6ECDB (colors ' +
+    'AARRGGBB), 44.000000000000000000 (floats), True/False, ''text'' ' +
+    '(strings quoted), Center (enums). FMX''s own writer has the last word ' +
+    '(STYLE-058 / STYLE-059)';
 
   SP_STYLE_NAME =
     'clone: the StyleName of the new style';

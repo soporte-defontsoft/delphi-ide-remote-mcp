@@ -183,8 +183,11 @@ check('set: un valor con el que FMX no puede cargar el estilo ($FFFF0000 en un c
       and rd(S) == _antes_fmx, out[:300])
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "text",
                              "prop": "TextSettings.FontColor", "value": "xFFFF0000"})
-check('set: ...el mismo color como lo escribe el fichero (xFFFF0000) entra',
-      not mc.rechazado(out) and 'TextSettings.FontColor = xFFFF0000' in rd(S), out[:200])
+# ...y se guarda como lo escribe el escritor de FMX, el del IDE: un color con nombre, por su nombre
+# (V141 de la 1.23.1; designer set hace lo mismo, DSGN-166)
+check('set: ...el mismo color como lo escribe el fichero (xFFFF0000) entra, guardado como el escritor de FMX (claRed)',
+      not mc.rechazado(out) and 'TextSettings.FontColor = claRed' in rd(S) and
+      mc.es(out, 'SN_STYLES_GUARDADA_COMO_FMT'), out[:300])
 call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "child": "text",
                        "prop": "TextSettings.FontColor", "delete": True})
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "value": "0.500000000000000000"})
@@ -223,8 +226,16 @@ out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader",
 check('...y cerrada como la escribe un form pasa el parser, y FMX la ignoraria (TLayout no publica Tags): STYLE-050',
       mc.abre(out, 'SR_STYLES_FMX_LO_IGNORARIA_FMT') and 'Tags' in out and "Tags = ('a' 'b')" not in rd(S), out[:300])
 # 1e3 es un numero de form (LA gramatica del numero, EsNumeroDeForm): no lo era
+out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "value": "5e-1"})
+check('set: un numero con exponente (5e-1) entra, guardado como el escritor de FMX (0.5, STYLE-058)',
+      not mc.rechazado(out) and 'Opacity = 0.500000000000000000' in rd(S) and
+      mc.es(out, 'SN_STYLES_GUARDADA_COMO_FMT'), out[:300])
+# ...y uno que la clase acota a su valor por defecto (Opacity = 1e3 queda en 1): el escritor no lo
+# guarda (V141)
+call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "delete": True})
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "value": "1e3"})
-check('set: un numero con exponente (1e3) entra', not mc.rechazado(out) and 'Opacity = 1e3' in rd(S), out[:200])
+check('set: 1e3 en Opacity queda en su valor por defecto: STYLE-059, nada escrito',
+      not mc.rechazado(out) and mc.es(out, 'SN_STYLES_NO_GUARDADA_FMT') and 'Opacity' not in rd(S), out[:300])
 call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Opacity", "delete": True})
 out = call('delphi_styles', {"path": S, "command": "set", "style": "formheader", "prop": "Visible"})
 check('set: sin value pide value (y menciona delete)', mc.es(out, 'SR_STYLES_NEED_VALUE') and 'delete=true' in out, out)

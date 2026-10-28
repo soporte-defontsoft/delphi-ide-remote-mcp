@@ -169,7 +169,7 @@ CONTENT = [
     # existe (test_workspace_tools lo afirma), y aqui se seguia publicando el
     # binario del 20 de agosto - un servidor de hace un mes, con los agujeros
     # de jaula de entonces dentro. Nadie lo recompilaba y nadie lo miraba.
-    (os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', 'DelphiStyleConvert.exe'), 'DelphiStyleConvert.exe'),
+    (os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win32', 'Release', 'DelphiStyleConvert.exe'), 'DelphiStyleConvert.exe'),
     # 1.17.0: los dos renderizadores de forms de delphi_designer preview
     # (src/Render, Win32), junto al exe como el conversor. Entran en la lista
     # el dia que nacen.

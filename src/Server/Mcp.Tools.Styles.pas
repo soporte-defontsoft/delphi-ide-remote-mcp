@@ -192,11 +192,27 @@ begin
     Result := MsgFmt(SR_STYLES_NAME_CHARS_FMT, [ANombre]);
 end;
 
+type
+  { Lo que el escritor de FMX - el del IDE: el conversor de 32 bits, totext -
+    hace con la propiedad que set pone: lo pregunta la pasada sin cerrojo y lo
+    aplica la que escribe (V141 de la 1.23.1). Escribia el valor tal cual y una
+    propiedad nueva detras de StyleName: un color de 6 cifras salia CHANGED y
+    FMX lo carga con alfa 00, invisible, mientras designer set del mismo valor
+    decia storedAs (medido). }
+  TJuicioDelEscritor = record
+    Preguntado: Boolean;   // contesto (sin conversor, no)
+    Guarda: Boolean;       // la escribe; si no, es el valor que ya da su clase
+    Valor: string;         // como la escribe
+    EnUnaLinea: Boolean;   // en una linea (un bloque o una coleccion no se toma: Valor es su primera)
+    Orden: TArray<string>; // las propiedades del objeto, en el orden en que las escribe
+  end;
+
 { ASoloJuicioFmx: la pasada que solo JUZGA, sin escribir nada: compone el
-  cambio y dice si FMX ignoraria algo nuevo (su negativa, o ''). La hace
+  cambio y dice si FMX ignoraria algo nuevo (su negativa, o ''), y deja en
+  AJuicio como lo guarda su escritor, que la pasada que escribe aplica. La hace
   ExecuteWithParams ANTES del cerrojo, porque lanza el conversor externo. }
 function SetStyleProp(const APath, AStyle, AChild, AProp, AValue: string; ADelete: Boolean;
-  ASoloJuicioFmx: Boolean = False): string;
+  var AJuicio: TJuicioDelEscritor; ASoloJuicioFmx: Boolean = False): string;
 var
   Doc: TStyleDoc;
   O: TStyleObj;
@@ -250,6 +266,85 @@ var
     finally
       Quedan.Free;
     end;
+  end;
+
+  { Lo que el escritor de FMX hace con AProp en el texto compuesto: lo
+    escribe todo, y de su objeto se toma la propiedad y el orden }
+  function JuicioDelEscritor: TJuicioDelEscritor;
+  var
+    Escrito, ErrE: string;
+    DocE: TStyleDoc;
+    OE: TStyleObj;
+    De, A: Integer;
+  begin
+    Result := Default(TJuicioDelEscritor);
+    if not ComoLoEscribeFmxDeTexto(Doc.TextoDe(Doc.Lines), Doc.Encoding, Escrito) then
+      Exit;
+    DocE := TStyleDoc.DeTexto(Escrito);
+    try
+      OE := DocE.Resolve(AStyle, AChild, ErrE);
+      if OE = nil then
+        Exit;
+      for var Rg in DocE.Propiedades(OE, De, A) do
+      begin
+        Result.Orden := Result.Orden + [Rg.Prop];
+        if SameText(Rg.Prop, AProp.Trim) then
+          Result.EnUnaLinea := Rg.Fin = Rg.Ini;
+      end;
+      Result.Valor := DocE.ValorDe(OE, AProp.Trim, Result.Guarda);
+      Result.Preguntado := True;
+    finally
+      DocE.Free;
+    end;
+  end;
+
+  { La propiedad AProp, NUEVA en su objeto, donde la pone el escritor: detras
+    de la ultima de las suyas que el escribe antes que ella (StyleName la
+    primera), o delante de todas. Si el escritor no la nombra, donde estaba. }
+  procedure ColocaComoElEscritor(const AOrden: TArray<string>);
+  var
+    De, A, Mia, Tras, MejorIx, Destino: Integer;
+    Rangos: TArray<TRangoDeLineas>;
+    Lineas, Bloque: TArray<string>;
+  begin
+    Doc.Reparsea;
+    O := Doc.Resolve(AStyle, AChild, Err);
+    var IxP := IndexText(AProp.Trim, AOrden);
+    if (O = nil) or (IxP < 0) then
+      Exit;
+    Rangos := Doc.Propiedades(O, De, A);
+    Mia := -1;
+    for var I := 0 to High(Rangos) do
+      if SameText(Rangos[I].Prop, AProp.Trim) then
+        Mia := I;
+    if Mia < 0 then
+      Exit;
+    Tras := -1;
+    MejorIx := -1;
+    for var I := 0 to High(Rangos) do
+      if I <> Mia then
+      begin
+        var Ix := IndexText(Rangos[I].Prop, AOrden);
+        if (Ix >= 0) and (Ix < IxP) and (Ix > MejorIx) then
+        begin
+          MejorIx := Ix;
+          Tras := I;
+        end;
+      end;
+    if Tras >= 0 then
+      Destino := Rangos[Tras].Fin + 1
+    else
+      Destino := Rangos[0].Ini;
+    // ya esta donde va
+    if (Destino >= Rangos[Mia].Ini) and (Destino <= Rangos[Mia].Fin + 1) then
+      Exit;
+    Lineas := Copy(Doc.Lines);
+    Bloque := Copy(Lineas, Rangos[Mia].Ini, Rangos[Mia].Fin - Rangos[Mia].Ini + 1);
+    Delete(Lineas, Rangos[Mia].Ini, Length(Bloque));
+    if Destino > Rangos[Mia].Ini then
+      Dec(Destino, Length(Bloque));
+    Insert(Bloque, Lineas, Destino);
+    Doc.SetLines(Lineas);
   end;
 
 begin
@@ -315,7 +410,8 @@ begin
     // acentos como #N, en trozos de 64 en las lineas de debajo), como hace
     // delphi_designer set: iba en crudo, y uno de 4.095 caracteres en una
     // linea que el IDE no lee (P6 de la segunda revision de la 1.17.0)
-    if LeeLiteralDeForm(AValue.Trim, Texto) then
+    var EsLiteral := LeeLiteralDeForm(AValue.Trim, Texto);
+    if EsLiteral then
     begin
       // medio caracter: el literal lo escribe #N y el codificador no lo ve; el
       // que ya estaba en el valor se escribe como estaba (R8, 1.18.2)
@@ -339,13 +435,53 @@ begin
         Exit(MsgFmt(SR_STYLES_FMX_NO_CARGARIA_FMT, [AProp.Trim, AValue.Trim, NoCarga]));
       if Err <> '' then
         Exit(MsgFmt(SR_STYLES_FMX_LO_IGNORARIA_FMT, [Err]));
+      // ...y como lo guarda su escritor, para la pasada que escribe
+      AJuicio := JuicioDelEscritor;
       Exit('');
+    end;
+    // como lo guarda el escritor de FMX, el del IDE (V141 de la 1.23.1)
+    var Nota := '';
+    if not AJuicio.Preguntado then
+      Nota := MsgText(SN_STYLES_SIN_ESCRITOR)
+    else if not AJuicio.Guarda then
+    begin
+      // el valor que ya da su clase: el escritor no lo guarda, y no se escribe
+      if not WasThere then
+        Exit(MsgFmt(SN_STYLES_NO_GUARDADA_FMT, [AProp.Trim, AValue.Trim, '']));
+      Doc.Reparsea;
+      O := Doc.Resolve(AStyle, AChild, Err);
+      if O <> nil then
+        Doc.DeleteProp(O, AProp.Trim);
+      Result := Doc.Guarda;
+      if Result <> '' then
+        Exit;
+      Exit(MsgFmt(SN_STYLES_NO_GUARDADA_FMT, [AProp.Trim, AValue.Trim,
+        MsgText(SF_STYLES_NO_GUARDADA_QUITADA)]));
+    end
+    else
+    begin
+      // un literal lo escribe el compositor de la casa como el IDE (sus
+      // trozos y sus #N); lo demas, como lo escribe el
+      if not EsLiteral and AJuicio.EnUnaLinea and (AJuicio.Valor <> AValue.Trim) then
+      begin
+        Doc.Reparsea;
+        O := Doc.Resolve(AStyle, AChild, Err);
+        var Habia: Boolean;
+        if O <> nil then
+          Line := Doc.SetProp(O, AProp.Trim, AJuicio.Valor, Habia);
+        Nota := MsgFmt(SN_STYLES_GUARDADA_COMO_FMT, [AProp.Trim, AJuicio.Valor, AValue.Trim,
+          IfThen(StartsText('x', AJuicio.Valor), MsgText(SF_STYLES_COLOR_8_CIFRAS), '')]);
+      end;
+      if not WasThere then
+        ColocaComoElEscritor(AJuicio.Orden);
     end;
     Result := Doc.Guarda;
     if Result <> '' then
       Exit;
     Result := MsgFmt(SN_STYLES_PROP_SET_FMT, [IfThen(WasThere, MsgText(SF_STYLE_CAMBIADA), MsgText(SF_STYLE_ANADIDA)), Line.Trim,
       AStyle, IfThen(AChild <> '', '/' + AChild, ''), TPath.GetFileName(Doc.Path)]);
+    if Nota <> '' then
+      Result := Result + #10 + Nota;
   finally
     Doc.Free;
   end;
@@ -1185,7 +1321,8 @@ end;
 { ---- dispatcher ---- }
 
 { El gesto; ExecuteWithParams envuelve los que ESCRIBEN en el cerrojo. }
-function GestoDeEstilos(const Params: TDelphiStylesParams; ASoloJuicioFmx: Boolean = False): string;
+function GestoDeEstilos(const Params: TDelphiStylesParams; var AJuicio: TJuicioDelEscritor;
+  ASoloJuicioFmx: Boolean = False): string;
 var
   Cmd, Denied: string;
 begin
@@ -1254,7 +1391,7 @@ begin
       Result := GetStyle(Params.Path, Params.Style.Trim, Params.Child.Trim)
     else if Cmd = 'set' then
       Result := SetStyleProp(Params.Path, Params.Style.Trim, Params.Child.Trim,
-        Params.Prop, Params.Value, Params.Delete, ASoloJuicioFmx)
+        Params.Prop, Params.Value, Params.Delete, AJuicio, ASoloJuicioFmx)
     else if Cmd = 'clone' then
       Result := CloneStyle(Params.Path, Params.Style.Trim, Params.Name)
     else if Cmd = 'delete' then
@@ -1276,26 +1413,31 @@ begin
 end;
 
 function TDelphiStylesTool.ExecuteWithParams(const Params: TDelphiStylesParams): string;
+var
+  Juicio: TJuicioDelEscritor;
 begin
+  // lo que el escritor de FMX hace con lo que set pone: lo pregunta la pasada
+  // sin cerrojo y lo aplica la que escribe (V141 de la 1.23.1)
+  Juicio := Default(TJuicioDelEscritor);
   // set/clone/delete reescriben el .dfm leyendolo entero: cerrojo, como
   // cualquier otra edicion. build NO entra - lanza el conversor externo y
   // puede tardar segundos; tener ahi dentro el cerrojo de TODAS las escrituras
   // del servidor seria peor que la carrera que evita.
   if not MatchText(SinMayusculas(Params.Command.Trim), ['set', 'clone', 'delete']) then
-    Exit(GestoDeEstilos(Params));
+    Exit(GestoDeEstilos(Params, Juicio));
   // set: lo que FMX ignoraria se juzga ANTES y sin el cerrojo - lanza el
   // conversor externo, decimas o hasta su tope si se cuelga -, como build.
   // El veredicto depende de la clase del objeto, la propiedad y el valor, y
   // una escritura de este fichero entre medias no cambia ninguno de los tres
   if SameText(Params.Command.Trim, 'set') then
   begin
-    Result := GestoDeEstilos(Params, True);
+    Result := GestoDeEstilos(Params, Juicio, True);
     if Result <> '' then
       Exit;
   end;
   EnterFileEdit;
   try
-    Result := GestoDeEstilos(Params);
+    Result := GestoDeEstilos(Params, Juicio);
   finally
     LeaveFileEdit;
   end;

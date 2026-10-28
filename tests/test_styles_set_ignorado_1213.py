@@ -12,7 +12,7 @@ aunque ya estuviera.
   S2 control: en ese mismo objeto, una propiedad que si publica (Visible): CHANGED
      (lo ignorado que ya estaba y no es de este set no estorba)
   S3 control: Fill.Color en un TRectangle (la publica) con el TLayout al lado:
-     CHANGED
+     CHANGED (guardado como el escritor de FMX: xFF00FF00 es claLime, V141 de la 1.23.1)
   S4 lint ve el Fill.Color del TLayout en ignoredByFmx (el juez es el mismo)
 
 S1 es ROJA contra 1.21.2 (pasar su exe como argumento). Necesita
@@ -64,7 +64,7 @@ try:
     r = srv.call('delphi_styles', {'command': 'set', 'path': FICHERO, 'style': 'caja',
                                    'prop': 'Fill.Color', 'value': 'xFF00FF00'})
     check('S3 control: Fill.Color en un TRectangle (la publica), con el TLayout ignorado al lado, se escribe',
-          mc.abre(r, 'SN_STYLES_PROP_SET_FMT') and 'Fill.Color = xFF00FF00' in leido(), r[:300])
+          mc.abre(r, 'SN_STYLES_PROP_SET_FMT') and 'Fill.Color = claLime' in leido(), r[:300])
     r = srv.call('delphi_styles', {'command': 'lint', 'path': STY})
     d = mc.como_json(r)
     ign = [i for x in d.get('ignoredByFmx', []) for i in x.get('ignored', [])]

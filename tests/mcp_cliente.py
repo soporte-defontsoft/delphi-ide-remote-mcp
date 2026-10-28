@@ -683,7 +683,8 @@ def carpeta(nombre):
 
 
 CONVERSOR = 'DelphiStyleConvert.exe'
-CONVERSOR_COMPILADO = os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win64', 'Release', CONVERSOR)
+# Win32, como el IDE: su escritor de texto es el del IDE (los flotantes con 18 decimales; V141 de la 1.23.1)
+CONVERSOR_COMPILADO = os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win32', 'Release', CONVERSOR)
 # Los renderizadores de forms de delphi_designer preview (1.17.0): Win32, junto
 # al servidor como el conversor. UNA tabla de ayudantes -> donde se compilan,
 # para run_all (la copia limpia) y copia_exe (la de cada bateria).
