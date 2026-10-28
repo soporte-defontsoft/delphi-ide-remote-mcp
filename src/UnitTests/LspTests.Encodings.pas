@@ -92,6 +92,8 @@ type
     procedure ColumnaDelMotorYSuInversa;
     [Test]
     procedure LosNombresDeUnTrabajoYSusInversas;
+    [Test]
+    procedure ElComodinCasaConLasCopias;
   end;
 
 implementation
@@ -109,7 +111,8 @@ uses
   Lsp.Client,
   System.JSON,
   Lsp.References,
-  Lsp.NombresDeTrabajo;
+  Lsp.NombresDeTrabajo,
+  System.Masks;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin
@@ -1202,6 +1205,16 @@ begin
   // el id: lo que compone SelloUnico, y nada mas (eran dos gemelos, uno sin tope)
   Assert.IsTrue(EsIdDeTrabajo(JOB) and EsIdDeTrabajo(SelloUnico));
   Assert.IsFalse(EsIdDeTrabajo('') or EsIdDeTrabajo('..\x') or EsIdDeTrabajo(StringOfChar('a', 65)));
+end;
+
+{ V106 de la 1.23.1: el comodin de las copias, junto a su nombrador; lo
+  escribian a mano el recorredor de la papelera y la llamada de un lote }
+procedure TNombradorTests.ElComodinCasaConLasCopias;
+begin
+  Assert.IsTrue(MatchesMask(TrashStampedName('UFicha.pas'), MascaraDeCopias('*.pas')), 'la copia casa');
+  Assert.IsTrue(MatchesMask(TrashStampedName('UFicha.pas'), MascaraDeCopias('UFicha.pas')),
+    'la de un nombre');
+  Assert.IsFalse(MatchesMask('UFicha.pas', MascaraDeCopias('*.pas')), 'el original no es una copia');
 end;
 
 initialization

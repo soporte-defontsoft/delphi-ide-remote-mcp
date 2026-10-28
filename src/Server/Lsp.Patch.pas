@@ -1004,6 +1004,11 @@ function TrashOriginalName(const AName: string): string;
 
 { El nombre de una copia: el nombre real + el sello. La unica forma. }
 function TrashStampedName(const AName: string): string;
+{ ...y el COMODIN que casa con las copias de AMascara (*.pas -> *.pas-*): el
+  sello va detras del nombre, asi que la mascara sola no las ve. Lo usan quien
+  recorre la papelera (WalkFiles) y la llamada que recupera un lote
+  (Mcp.Tools.FileOps); lo escribian los dos a mano (V106 de la 1.23.1). }
+function MascaraDeCopias(const AMascara: string): string;
 
 const
   { Los CAJONES de la papelera de un dia (TrashDayDir): en que carpeta cae una
@@ -2534,6 +2539,11 @@ end;
 function TrashStampedName(const AName: string): string;
 begin
   Result := AName + '-' + FormatDateTime('hhnnsszzz', Now);
+end;
+
+function MascaraDeCopias(const AMascara: string): string;
+begin
+  Result := AMascara + '-*';
 end;
 
 function TrashPathFor(const APath, ACajon: string): string;

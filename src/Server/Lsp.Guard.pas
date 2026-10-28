@@ -1142,7 +1142,8 @@ uses
   Lsp.Mascara,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   MCPServer.Logger, // el aviso de un dia de la papelera que se queda
-  Lsp.Listas;
+  Lsp.Listas,
+  Lsp.Patch;
 
 var
   // los dias de la papelera que ya dijeron en el log que se quedan: UNA vez
@@ -3817,7 +3818,7 @@ var
     if AConPapelera and EnPapelera(D) then
     try
       for var Mascara in AMasks do
-        for F in TDirectory.GetFiles(D, Mascara + '-*',
+        for F in TDirectory.GetFiles(D, MascaraDeCopias(Mascara),
           TSearchOption.soTopDirectoryOnly) do
           if not EsMarcaDeDueno(F) and (not EsEnlace(F) or EnlaceLegible(F)) then
             Anade(F);

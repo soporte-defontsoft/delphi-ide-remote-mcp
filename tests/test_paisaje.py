@@ -1220,6 +1220,21 @@ REGLAS = [
      'ni siquiera tiene estas formas: busca \'<\' + la etiqueta que le piden. Lsp.Docs lee el '
      'HTML de la ayuda, no XML de proyecto; la completion mira el texto <error> de un detalle '
      'del motor'),
+    # el comodin de las copias de la papelera (V106 de la 1.23.1): el sello va DETRAS del nombre
+    # (TrashStampedName), y la mascara + '-*' que las recoge la escribian a mano el recorredor
+    # (WalkFiles) y la llamada que recupera un lote
+    ('el comodin de las copias de la papelera a mano', r"'-\*'",
+     [('Lsp.Patch.pas', 'MascaraDeCopias')],
+     'MascaraDeCopias (Lsp.Patch), junto a su nombrador TrashStampedName y su lector TrashOriginalName'),
+    # el valor <cabeza>|<mensaje en partes> del ayudante de render, IGNORED= y NOTLOADED= (V106 de
+    # la 1.23.1): se componia a mano tres veces y tenia dos lectores, y el de NOTLOADED= no leia
+    # nada sin cabeza o sin separador
+    ('el valor cabeza-y-partes del ayudante a mano',
+     r"\+\s*FR_PARTES_SEP\s*\+\s*LecturaEnPartes\(|\.IndexOf\(\s*FR_PARTES_SEP\b",
+     [('FormRender.Comun.pas', 'EnCabezaYPartes'), ('Lsp.FormRender.pas', 'PartesDeLectura'),
+      ('Lsp.FormRender.pas', 'DeCabezaYPartes')],
+     'EnCabezaYPartes (FormRender.Comun) lo compone y DeCabezaYPartes (Lsp.FormRender), su inversa, '
+     'lo lee: IGNORED= y NOTLOADED= son la misma forma'),
     # un texto cortado por la CABEZA a un tope (V106 de la 1.23.1): once sitios cortaban a mano sin la
     # guarda del par sustituto (un emoji en el tope dejaba medio caracter en la respuesta) y uno con
     # ella. Gramatica PROPIA y declarada (no hay juez de "esto es texto"): un Copy(X, 1, N) o un
@@ -1503,6 +1518,9 @@ PLANTADO = {
     'una DCCReference compuesta a mano': "  R := '        <DCCReference ' + XmlAtributo('Include', I) + '/>';",
     'una linea de elemento XML a mano': "  R := R + '            ' + XmlElemento('Form', N) + CRLF;",
     'cortar un texto por la cabeza a mano': "  Msg := Copy(Salida.Trim, 1, 300);",
+    'el comodin de las copias de la papelera a mano': "  for F in TDirectory.GetFiles(D, M + '-*') do",
+    'el valor cabeza-y-partes del ayudante a mano':
+        "  Responde(FR_NOT_LOADED, E.ClassName + FR_PARTES_SEP + LecturaEnPartes(E.Message));",
     'lanzar paclient': "  Output := RunCaptured('\"' + PaClient + '\" --timeout=20 \"' + P + '\"', 45000, E);",
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",

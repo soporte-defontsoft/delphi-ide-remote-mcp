@@ -447,6 +447,23 @@ begin
   Result.Texto := AValor.Substring(P3 + 1);
 end;
 
+{ EL lector de un valor <cabeza>|<mensaje en partes> (IGNORED=, NOTLOADED=),
+  la inversa de EnCabezaYPartes (FormRender.Comun): la cabeza en ACabeza y el
+  mensaje en sus partes. Sin separador no hay cabeza y todo es el texto: lo
+  que no se sabe partir no se pierde. V106 de la 1.23.1: eran dos lectores, y
+  el de NOTLOADED= no leia nada sin cabeza o sin separador. }
+function DeCabezaYPartes(const AValor: string; out ACabeza: string): TIgnorada;
+var
+  P: Integer;
+begin
+  ACabeza := '';
+  P := AValor.IndexOf(FR_PARTES_SEP);
+  if P < 0 then
+    Exit(PartesDeLectura(AValor));
+  ACabeza := AValor.Substring(0, P);
+  Result := PartesDeLectura(AValor.Substring(P + 1));
+end;
+
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
 var
   L, V: string;
@@ -504,10 +521,10 @@ begin
     else if Es(FR_IGNORED) then
     begin
       // <de quien>|<mensaje en partes> (FR_ORIGEN_LECTOR = del lector)
-      P := V.IndexOf(FR_PARTES_SEP);
-      var Ig := PartesDeLectura(V.Substring(P + 1));
-      if (P > 0) and (V.Substring(0, P) <> FR_ORIGEN_LECTOR) then
-        Ig.Origen := V.Substring(0, P);
+      var Cabeza: string;
+      var Ig := DeCabezaYPartes(V, Cabeza);
+      if Cabeza <> FR_ORIGEN_LECTOR then
+        Ig.Origen := Cabeza;
       Result.Ignoradas := Result.Ignoradas + [Ig];
     end
     else if Es(FR_NONVISUALS) then
@@ -591,12 +608,7 @@ begin
     begin
       // <clase>|<su mensaje en partes>
       Result.NoCarga := True;
-      P := V.IndexOf(FR_PARTES_SEP);
-      if P > 0 then
-      begin
-        Result.ClaseDeLaParada := V.Substring(0, P);
-        Result.Parada := PartesDeLectura(V.Substring(P + 1));
-      end;
+      Result.Parada := DeCabezaYPartes(V, Result.ClaseDeLaParada);
     end
     else if Es(FR_LINE) then
       Result.LineaDeLaParada := StrToIntDef(V, 0);

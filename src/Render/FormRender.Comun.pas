@@ -415,6 +415,15 @@ begin
     FR_PARTES_SEP + AMensaje;
 end;
 
+{ EL escritor de un valor <cabeza>|<mensaje en partes> (IGNORED=, NOTLOADED=):
+  la cabeza (de quien, o la clase de la excepcion) y el mensaje en sus partes.
+  Su lector es DeCabezaYPartes (Lsp.FormRender). V106 de la 1.23.1: se
+  componia a mano en tres sitios. }
+function EnCabezaYPartes(const ACabeza, AMensaje: string): string;
+begin
+  Result := ACabeza + FR_PARTES_SEP + LecturaEnPartes(AMensaje);
+end;
+
 procedure Traza(const S: string);
 begin
   if GVerbose then
@@ -1643,7 +1652,7 @@ begin
   for var S in ACargador.Ignoradas do
   begin
     var P := Pos(FR_PARTES_SEP, S);
-    Responde(FR_IGNORED, Copy(S, 1, P - 1) + FR_PARTES_SEP + LecturaEnPartes(Copy(S, P + 1, MaxInt)));
+    Responde(FR_IGNORED, EnCabezaYPartes(Copy(S, 1, P - 1), Copy(S, P + 1, MaxInt)));
   end;
   for var S in ACargador.Avisos do
     Aviso(S);
@@ -1660,7 +1669,7 @@ begin
   if not AYaLeido and (ACargador <> nil) then
     RespondeLoLeido(ACargador);
   if ACargando and ((E is EFilerError) or (E is EParserError)) then
-    Responde(FR_NOT_LOADED, E.ClassName + FR_PARTES_SEP + LecturaEnPartes(E.Message));
+    Responde(FR_NOT_LOADED, EnCabezaYPartes(E.ClassName, E.Message));
   if E is ERender then
     Responde(FR_ERROR, E.Message) // ya lleva su etiqueta
   else
@@ -1804,7 +1813,7 @@ begin
           // el conversor solo lee esos bytes: lo que lanza es del contenido,
           // y la linea la dice el formato de ESTE proceso (su idioma)
           Responde(FR_LINE, IntToStr(LineaDeErrorDelParser(E.Message)));
-          Responde(FR_NOT_LOADED, E.ClassName + FR_PARTES_SEP + LecturaEnPartes(E.Message));
+          Responde(FR_NOT_LOADED, EnCabezaYPartes(E.ClassName, E.Message));
           Responde(FR_ERROR, E.ClassName + ': ' + E.Message);
           Exit(FR_RC_ERROR);
         end;

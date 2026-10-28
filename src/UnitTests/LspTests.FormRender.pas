@@ -49,6 +49,8 @@ type
     procedure LaRaizDeDisenoPorLaTabla;
     [Test]
     procedure RutaDeComponenteConLaRaizDelante;
+    [Test]
+    procedure LaCabezaYSusPartesTienenUnLector;
   end;
 
 { Una UNION de carpeta (punto de montaje) AUnion -> ADestino, para las pruebas
@@ -680,6 +682,24 @@ begin
   finally
     Raiz.Free;
   end;
+end;
+
+{ V106 de la 1.23.1: IGNORED= y NOTLOADED= son la MISMA forma,
+  <cabeza>|<partes>, con UN lector: el de NOTLOADED= no leia nada sin cabeza o
+  sin separador, y el de IGNORED= se quedaba el valor entero como texto }
+procedure TFormRenderTests.LaCabezaYSusPartesTienenUnLector;
+var
+  R: TRespuestaRender;
+begin
+  R := LeeRespuestaDeRender(FR_NOT_LOADED + 'mensaje sin partes'#13#10);
+  Assert.IsTrue(R.NoCarga, 'NOTLOADED=');
+  Assert.AreEqual('mensaje sin partes', R.Parada.Texto, 'sin separador, todo es el texto');
+  Assert.AreEqual('', R.ClaseDeLaParada, 'y no hay cabeza');
+  R := LeeRespuestaDeRender(FR_NOT_LOADED + '|||motivo|el texto'#13#10);
+  Assert.AreEqual('motivo', R.Parada.Motivo, 'sin cabeza, sus partes');
+  Assert.AreEqual('el texto', R.Parada.Texto);
+  R := LeeRespuestaDeRender(FR_IGNORED + 'mensaje sin partes'#13#10);
+  Assert.AreEqual('mensaje sin partes', R.Ignoradas[0].Texto, 'IGNORED=, igual');
 end;
 
 initialization

@@ -564,7 +564,7 @@ begin
   for var C in ACopias do
     if not SameFileName(TPath.GetDirectoryName(C), Cajon) then
       Exit;
-  Patron := TPath.Combine(Cajon, ExtractFileName(SinBarraFinal(APath)) + '-*');
+  Patron := TPath.Combine(Cajon, MascaraDeCopias(ExtractFileName(SinBarraFinal(APath))));
   if (EntradasDelComodin(Patron, Entradas) <> '') or (Length(Entradas) <> Length(ACopias)) then
     Exit;
   for var E in Entradas do
