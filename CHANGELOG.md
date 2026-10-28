@@ -409,6 +409,16 @@ the MCP `initialize` response (`serverInfo.version`).
   One reader now serves every list: a list of names takes `;` or `,`, a list
   of paths only `;` (a path may hold a comma), and blanks and quotes around an
   entry are ignored.
+- **The scheme of a git address is read once, the way git reads it.** The
+  host gate took the scheme without case, and what `clone` and a remote of
+  the repository accept looked for four lowercase prefixes: `HTTPS://` to an
+  allowed host passed the gate and was then refused (`GIT-029`, `GIT-045`),
+  although git takes it as `https` (measured with git 2.53). One reader serves
+  both now. And a remote written in git's remote-helper form
+  (`<helper>::<address>`: `ext::`, `fd::`, `https::`) was taken for a folder
+  and refused only because a path cannot hold its colons, saying the folder
+  was outside the roots (`GIT-044`); it is now refused as an address this
+  tool does not take (`GIT-045`).
 
 ### Changed
 

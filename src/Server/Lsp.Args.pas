@@ -66,6 +66,26 @@ function GitRemoteDenied(const AText: string; AScpCorto: Boolean = False;
   direccion de red". }
 function GitUrlHost(const AToken: string; AScpCorto: Boolean = False): string;
 
+{ El esquema de una direccion de git, sin mayusculas: lo de delante del
+  primer '://' ('' si no lo lleva), sin blancos ni comillas alrededor. EL
+  lector de la puerta de los hosts (GitUrlHost) y de lo que clone y un
+  remoto del repo admiten (Mcp.Tools.Git, EsUrlDeRed), que miraba cuatro
+  prefijos en minusculas: HTTPS://<permitido>/x pasaba la puerta y la tool
+  lo negaba, y git lo lleva como https (V130 de la 1.23.1, medido con git
+  2.53). El '://' en CUALQUIER sitio, a proposito: lo que lo lleve es una
+  direccion para la puerta (https::https://x tambien). }
+function EsquemaDeDireccion(const AToken: string): string;
+
+{ El remote-helper de una direccion de git con la forma <helper>::<direccion>
+  (ext::..., fd::..., https::...), sin mayusculas; '' si no la tiene. La
+  regla de git (transport_get): caracteres de esquema desde el principio -
+  una letra, y luego letras, cifras, '+', '-' o '.' - y '::'. Un literal
+  IPv6 ([::1]:ruta) no empieza asi. Un remoto del repo con esa forma se
+  juzgaba como CARPETA y lo negaba la puerta de leer por los ':' de la ruta:
+  por suerte, y diciendo que la carpeta estaba fuera de las raices (V130 de
+  la 1.23.1, medido). }
+function HelperDeDireccion(const AToken: string): string;
+
 implementation
 
 uses
@@ -121,15 +141,13 @@ var
 begin
   Result := '';
   T := AToken.Trim.Trim(['"', '''']);
-  P := Pos('://', T);
-  EsUrl := P > 0;
-  Esquema := '';
+  Esquema := EsquemaDeDireccion(T);
+  EsUrl := Pos('://', T) > 0;
   if EsUrl then
   begin
-    Esquema := LowerCase(Copy(T, 1, P - 1));
     if Esquema = 'file' then
       Exit; // una carpeta: la juzga la jaula, no la lista de hosts
-    T := Copy(T, P + 3, MaxInt);
+    T := Copy(T, Pos('://', T) + 3, MaxInt);
   end
   else if not ((Pos('@', T) > 0) and (Pos(':', T) > Pos('@', T))) and
           not (AScpCorto and TRegEx.IsMatch(T, '^[A-Za-z0-9][A-Za-z0-9.-]+:[^:\\]')) then
@@ -229,6 +247,28 @@ begin
         Exit;
   end;
   Result := SinMayusculas(Host);
+end;
+
+function EsquemaDeDireccion(const AToken: string): string;
+begin
+  var T := AToken.Trim.Trim(['"', '''']);
+  var P := Pos('://', T);
+  if P = 0 then
+    Exit('');
+  Result := SinMayusculas(Copy(T, 1, P - 1));
+end;
+
+function HelperDeDireccion(const AToken: string): string;
+begin
+  var T := AToken.Trim.Trim(['"', '''']);
+  var I := 1;
+  while (I <= Length(T)) and (CharInSet(T[I], ['A'..'Z', 'a'..'z']) or
+        ((I > 1) and CharInSet(T[I], ['0'..'9', '+', '-', '.']))) do
+    Inc(I);
+  if (I > 1) and (Copy(T, I, 2) = '::') then
+    Result := SinMayusculas(Copy(T, 1, I - 1))
+  else
+    Result := '';
 end;
 
 function GitRemoteDenied(const AText: string; AScpCorto: Boolean;

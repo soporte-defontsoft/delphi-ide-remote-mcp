@@ -1102,11 +1102,13 @@ begin
     Result := #10 + MsgFmt(SN_GIT_ADD_IGNORADO_FMT, [Ignorados]);
 end;
 
-{ Una direccion de RED con su esquema. La lista es la de clone. }
+{ Una direccion de RED con su esquema. La lista es la de clone; el esquema,
+  por EL lector de la puerta de los hosts (Lsp.Args.EsquemaDeDireccion), sin
+  mayusculas: miraba cuatro prefijos en minusculas y negaba HTTPS://, que git
+  lleva como https (V130 de la 1.23.1, medido). }
 function EsUrlDeRed(const ADireccion: string): Boolean;
 begin
-  Result := ADireccion.StartsWith('https://') or ADireccion.StartsWith('http://') or
-    ADireccion.StartsWith('git://') or ADireccion.StartsWith('ssh://');
+  Result := MatchStr(EsquemaDeDireccion(ADireccion), ['https', 'http', 'git', 'ssh']);
 end;
 
 { QUE ES la direccion de un remoto. Una lista de lo que vale:
@@ -1134,9 +1136,13 @@ begin
     ACarpeta := ADireccion.Substring(8);
     Exit(drCarpeta);
   end;
+  // un remote-helper de git (<helper>::<direccion>): ni red que la lista
+  // entienda ni carpeta (V130 de la 1.23.1)
+  if HelperDeDireccion(ADireccion) <> '' then
+    Exit(drOtra);
   if EsUrlDeRed(ADireccion) then
     Exit(drRed);
-  if ADireccion.Contains('://') then
+  if EsquemaDeDireccion(ADireccion) <> '' then
     Exit(drOtra);
   // la forma corta de ssh ([usuario@]maquina:ruta) la decide EL MISMO lector
   // de host que el resto (GitUrlHost con scp corto): un solo juez, sin regex
