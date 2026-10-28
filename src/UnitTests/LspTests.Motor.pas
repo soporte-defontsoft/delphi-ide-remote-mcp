@@ -75,6 +75,8 @@ type
     [Test] procedure ElQueNoContestaUnaPeticionNoEstaColgado;
     [Test]
     procedure ElSearchPathSePartePorTrozosTrasExpandir;
+    [Test]
+    procedure LosAliasDelProyectoComoMsbuild;
   end;
 
 implementation
@@ -1409,6 +1411,25 @@ begin
   finally
     Vars.Free;
   end;
+end;
+
+procedure TFabricaTests.LosAliasDelProyectoComoMsbuild;
+var
+  Xml, A: string;
+begin
+  // los del proyecto (DCC_UnitAlias) DELANTE de los de siempre, como
+  // UnitAliases de CodeGear.Common.Targets; lo que no es Nombre=Destino con
+  // dos nombres de unidad no llega a la linea de opciones del motor: un texto
+  // con espacios seria otra opcion (V119 de la 1.23.1)
+  Xml := '<Project><PropertyGroup><DCC_UnitAlias>Legacy=System.SysUtils;Viejo = Vcl.Forms;' +
+    'Malo=X -UC:/fuera;$(Otro)=Y;SinIgual;$(DCC_UnitAlias)</DCC_UnitAlias></PropertyGroup></Project>';
+  A := AliasDelProyecto(Xml, 'Win32', 'Debug');
+  Assert.IsTrue(A.StartsWith('Legacy=System.SysUtils;Viejo=Vcl.Forms;Generics.Collections='), A);
+  Assert.IsFalse(A.Contains('fuera') or A.Contains('$(') or A.Contains('SinIgual') or A.Contains(' '), A);
+  // sin los suyos, los de siempre
+  A := AliasDelProyecto('<Project></Project>', 'Win32', 'Debug');
+  Assert.IsTrue(A.StartsWith('Generics.Collections=System.Generics.Collections;'), A);
+  Assert.IsTrue(A.Contains('WinTypes=Winapi.Windows'), A);
 end;
 
 initialization

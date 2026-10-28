@@ -330,6 +330,14 @@ the MCP `initialize` response (`serverInfo.version`).
   that build, the project's folder, `bin\` and its name - and `.aab`, with a
   note of its own (`BUILD-064`: a store bundle does not install on a device),
   for a store build (`BT_BuildType=AppStore`) of Android64.
+- **The engine knows the project's unit aliases.** msbuild gives the compiler
+  the project's `DCC_UnitAlias` in front of the standard aliases; the
+  engine's settings carried only the standard ones. With
+  `Legacy=System.SysUtils`, `delphi_build` compiled `uses Legacy` and
+  `delphi_hover` of `IntToStr` answered nothing (`LSP-029`). The engine now
+  gets the project's aliases in front, as msbuild does. An entry that is not
+  `Name=Target` with two unit names is left out: the aliases go on the
+  engine's option line, where text with a space would be another option.
 
 ### Changed
 

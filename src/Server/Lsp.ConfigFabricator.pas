@@ -53,6 +53,15 @@ const
   "es la misma unidad" de un uses (Lsp.ProjectUnits, V79 de la 1.23.1). }
 function AmbitosDelProyecto(const AXml, APlat, ACfg: string): string;
 
+{ LOS ALIAS de unidad con los que compila un proyecto (AXml) en APlat/ACfg,
+  como se los da msbuild a dcc (CodeGear.Common.Targets 105-113, UnitAliases):
+  su DCC_UnitAlias efectivo DELANTE de los de siempre (los de Generics y, en
+  Windows, los de Win*/Dbi*). El motor recibia solo los de siempre: con
+  DCC_UnitAlias Legacy=System.SysUtils, dcc compilaba uses Legacy y hover no
+  resolvia nada de ella (V119 de la 1.23.1, medido). El hermano de
+  AmbitosDelProyecto. }
+function AliasDelProyecto(const AXml, APlat, ACfg: string): string;
+
 { The project (main source, a path) a settings file names in
   settings.project; '' when the file cannot be read or names none. The
   inverse of what FabricateSettings writes there. The engine makes THAT
@@ -181,8 +190,9 @@ const
   // 2 = GetIt catalog macros expanded (v0.42.2); 3 = the selected
   // configuration and platform, by the build's evaluator (1.20.2); 4 = the
   // library as msbuild puts it and the IDE's macro table (1.20.2, review);
-  // 5 = la salida de las unidades (-NU) en la casa (V91 de la 1.23.1)
-  FABRICATOR_GEN = 5;
+  // 5 = la salida de las unidades (-NU) en la casa (V91 de la 1.23.1);
+  // 6 = los alias de unidad del proyecto (DCC_UnitAlias) en -A (V119)
+  FABRICATOR_GEN = 6;
   // la carpeta de la cache del servidor que el motor recibe como salida de
   // las unidades (-NU): nuestra, y vacia (el motor no escribe en ella)
   SALIDA_DEL_MOTOR_SUB = 'lsp-dcu';
@@ -541,7 +551,7 @@ begin
   Namespaces := AmbitosDelProyecto(Xml, Plat, Cfg);
 
   PathsJoined := string.Join(';', UnitPaths);
-  Opts := '--no-config -A' + STANDARD_ALIASES;
+  Opts := '--no-config -A' + AliasDelProyecto(Xml, Plat, Cfg);
   if Defines <> '' then
     Opts := Opts + ' -D' + Defines;
   Opts := Opts + ' -NS' + Namespaces + ';';
@@ -637,6 +647,31 @@ begin
   Result := ListaDeNombres(EffectiveProperty(AXml, 'DCC_Namespace', APlat, ACfg));
   if Result = '' then
     Result := DEFAULT_NAMESPACES;
+end;
+
+function AliasDelProyecto(const AXml, APlat, ACfg: string): string;
+var
+  P: Integer;
+  Nombre, Destino: string;
+begin
+  // $(DCC_UnitAlias)$(UnitAliases): los del proyecto delante. Cada entrada,
+  // Nombre=Destino con dos nombres de unidad (EsIdentificador con puntos): va
+  // a la linea de opciones del motor, y un texto con espacios o comillas seria
+  // OTRA opcion; una macro sin resolver no es un alias. Cada una con su ';'
+  // (msbuild pegaria uno sin el ';' final que escribe el IDE al primero de los
+  // de siempre)
+  Result := '';
+  for var E in TrozosDeLista(EffectiveProperty(AXml, 'DCC_UnitAlias', APlat, ACfg)) do
+  begin
+    P := Pos('=', E);
+    if P = 0 then
+      Continue;
+    Nombre := Copy(E, 1, P - 1).Trim;
+    Destino := Copy(E, P + 1, MaxInt).Trim;
+    if EsIdentificador(Nombre, True) and EsIdentificador(Destino, True) then
+      Result := Result + Nombre + '=' + Destino + ';';
+  end;
+  Result := Result + STANDARD_ALIASES;
 end;
 
 initialization
