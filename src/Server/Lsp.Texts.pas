@@ -4145,6 +4145,14 @@ const
     'FMX''s own writer (the IDE''s) does not store it, so it is not in the ' +
     'file%2:s.';
   SF_STYLES_NO_GUARDADA_QUITADA = ' (the line it had was removed)';
+  { %0:s: la propiedad; %1:s: el valor dado; %2:s: lo que el escritor guarda
+    por ella ('Size.Width = 100.0...'; varias con '; '). Una stored False
+    (Width de FMX) decia STYLE-059 y quitaba la linea (V173b de la 1.23.1,
+    medido): el escritor la guarda en otras, y eso es lo que se escribe }
+  SN_STYLES_GUARDADA_EN_OTRAS_FMT =
+    '[STYLE-062] FMX''s own writer (the IDE''s) never stores %0:s by that ' +
+    'name: with %0:s = %1:s it stores %2:s. Written that way, as the IDE ' +
+    'would, and no %0:s line is kept.';
   { sin el conversor (o sin su respuesta) no hay a quien preguntar: lo de
     antes de V141, y dicho }
   SN_STYLES_SIN_ESCRITOR =

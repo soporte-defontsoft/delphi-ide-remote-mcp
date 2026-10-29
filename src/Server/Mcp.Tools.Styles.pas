@@ -206,6 +206,10 @@ type
     Valor: string;         // como la escribe
     EnUnaLinea: Boolean;   // en una linea (un bloque o una coleccion no se toma: Valor es su primera)
     Orden: TArray<string>; // las propiedades del objeto, en el orden en que las escribe
+    // si no la guarda por su nombre: lo que escribe por ella (stored False:
+    // Width de FMX en Size.Width) - lo que de su objeto escribe distinto
+    // despues del cambio que antes (V173b de la 1.23.1)
+    EnOtras: TArray<TPropiedadConClave>;
   end;
 
 { ASoloJuicioFmx: la pasada que solo JUZGA, sin escribir nada: compone el
@@ -269,6 +273,49 @@ var
     end;
   end;
 
+  { Una que el escritor no guarda por su nombre puede guardarla en OTRAS (una
+    stored False: Width de FMX va en Size.Width): lo que escribe del objeto OE
+    (en DocE, el texto compuesto como el lo escribe) distinto de lo que
+    escribe del mismo objeto en el fichero tal como se leyo. El juez es el
+    escritor dos veces, no una lista: lo que no cambia es lo de siempre, y si
+    nada cambia es el valor de su clase (STYLE-059). Solo las del nivel
+    propio (la de un item no se pone con SetProp). Sin el antes, nada. V173b. }
+  function LoQueGuardaEnOtras(DocE: TStyleDoc; OE: TStyleObj): TArray<TPropiedadConClave>;
+  var
+    EscritoAntes: string;
+    DocB: TStyleDoc;
+    ObjsE, ObjsB: TArray<TStyleObj>;
+  begin
+    Result := [];
+    if not ComoLoEscribeFmxDeTexto(Doc.TextoDe(Doc.Leidas), Doc.Encoding, EscritoAntes) then
+      Exit;
+    DocB := TStyleDoc.DeTexto(EscritoAntes);
+    try
+      // el mismo objeto antes, por EL emparejado (los dos los escribio el)
+      if not ObjetosEmparejados(DocB, DocE, ObjsB, ObjsE) then
+        Exit;
+      var OB: TStyleObj := nil;
+      for var K := 0 to High(ObjsE) do
+        if ObjsE[K] = OE then
+          OB := ObjsB[K];
+      if OB = nil then
+        Exit;
+      var Antes := DocB.PropiedadesConItems(OB);
+      for var Pr in DocE.PropiedadesConItems(OE) do
+        if not Pr.Clave.Contains('[') then
+        begin
+          var Igual := False;
+          for var Pa in Antes do
+            if SameText(Pa.Clave, Pr.Clave) and (Pa.Valor.Trim = Pr.Valor.Trim) then
+              Igual := True;
+          if not Igual then
+            Result := Result + [Pr];
+        end;
+    finally
+      DocB.Free;
+    end;
+  end;
+
   { Lo que el escritor de FMX hace con AProp en el texto compuesto: lo
     escribe todo, y de su objeto se toma la propiedad y el orden }
   function JuicioDelEscritor: TJuicioDelEscritor;
@@ -305,15 +352,17 @@ var
       end;
       Result.Valor := DocE.ValorDe(OE, AProp.Trim, Result.Guarda);
       Result.Preguntado := True;
+      if not Result.Guarda then
+        Result.EnOtras := LoQueGuardaEnOtras(DocE, OE);
     finally
       DocE.Free;
     end;
   end;
 
-  { La propiedad AProp, NUEVA en su objeto, donde la pone el escritor: detras
+  { La propiedad AQue, NUEVA en su objeto, donde la pone el escritor: detras
     de la ultima de las suyas que el escribe antes que ella (StyleName la
     primera), o delante de todas. Si el escritor no la nombra, donde estaba. }
-  procedure ColocaComoElEscritor(const AOrden: TArray<string>);
+  procedure ColocaComoElEscritor(const AOrden: TArray<string>; const AQue: string);
   var
     De, A, Mia, Tras, MejorIx, Destino: Integer;
     Rangos: TArray<TRangoDeLineas>;
@@ -321,13 +370,13 @@ var
   begin
     Doc.Reparsea;
     O := Doc.Resolve(AStyle, AChild, Err);
-    var IxP := IndexText(AProp.Trim, AOrden);
+    var IxP := IndexText(AQue, AOrden);
     if (O = nil) or (IxP < 0) then
       Exit;
     Rangos := Doc.Propiedades(O, De, A);
     Mia := -1;
     for var I := 0 to High(Rangos) do
-      if SameText(Rangos[I].Prop, AProp.Trim) then
+      if SameText(Rangos[I].Prop, AQue) then
         Mia := I;
     if Mia < 0 then
       Exit;
@@ -440,6 +489,22 @@ begin
     // cerrojo, y aqui sale sin escribir
     if ASoloJuicioFmx then
     begin
+      // la que se pone, la ULTIMA de su objeto, como la aplica un set: el
+      // lector de FMX aplica las propiedades en orden y una de detras la
+      // pisaba (Width = 100 delante de Size.Width = 50 cargaba 50, y su
+      // escritor no veia el cambio; V173b de la 1.23.1). Esta pasada no
+      // escribe: donde queda en el fichero lo dice el escritor, en la otra
+      Doc.Reparsea;
+      O := Doc.Resolve(AStyle, AChild, Err);
+      if O <> nil then
+      begin
+        var De, A: Integer;
+        var EnOrden: TArray<string> := [];
+        for var Rg in Doc.Propiedades(O, De, A) do
+          if not SameText(Rg.Prop, AProp.Trim) then
+            EnOrden := EnOrden + [Rg.Prop];
+        ColocaComoElEscritor(EnOrden + [AProp.Trim], AProp.Trim);
+      end;
       Err := NuevoIgnoradoPorFmx(NoCarga);
       // lo que FMX ni siquiera puede cargar: pasaba set y lint, y solo build lo
       // negaba (TextSettings.FontColor = $FFFF0000; Hermes, test completo de la 1.21.0)
@@ -455,6 +520,34 @@ begin
     var Nota := '';
     if not AJuicio.Preguntado then
       Nota := MsgText(SN_STYLES_SIN_ESCRITOR)
+    else if (not AJuicio.Guarda) and (Length(AJuicio.EnOtras) > 0) then
+    begin
+      // la guarda en OTRAS (stored False: Width en Size.Width): se escriben
+      // esas como el las escribe, cada una en su sitio, y la suya no; decia
+      // STYLE-059 y quitaba la linea, ni el valor de antes ni el nuevo (V173b
+      // de la 1.23.1, medido)
+      var Escritas := '';
+      Doc.Reparsea;
+      O := Doc.Resolve(AStyle, AChild, Err);
+      if O <> nil then
+        Doc.DeleteProp(O, AProp.Trim);
+      for var Pr in AJuicio.EnOtras do
+      begin
+        Doc.Reparsea;
+        O := Doc.Resolve(AStyle, AChild, Err);
+        if O = nil then
+          Break;
+        var Habia: Boolean;
+        Doc.SetProp(O, Pr.Clave, Pr.Valor.Trim, Habia);
+        if not Habia then
+          ColocaComoElEscritor(AJuicio.Orden, Pr.Clave);
+        Escritas := Escritas + IfThen(Escritas <> '', '; ', '') + Pr.Clave + ' = ' + Pr.Valor.Trim;
+      end;
+      Result := Doc.Guarda;
+      if Result <> '' then
+        Exit;
+      Exit(MsgFmt(SN_STYLES_GUARDADA_EN_OTRAS_FMT, [AProp.Trim, AValue.Trim, Escritas]));
+    end
     else if not AJuicio.Guarda then
     begin
       // el valor que ya da su clase: el escritor no lo guarda, y no se escribe
@@ -488,7 +581,7 @@ begin
           IfThen(EsColorSinAlfa(AValue), MsgText(SF_STYLES_COLOR_8_CIFRAS), '')]);
       end;
       if not WasThere then
-        ColocaComoElEscritor(AJuicio.Orden);
+        ColocaComoElEscritor(AJuicio.Orden, AProp.Trim);
     end;
     Result := Doc.Guarda;
     if Result <> '' then

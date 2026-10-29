@@ -42,6 +42,13 @@ V173h y V173i (29-oct, revisor del disenador #8 y #9), rojas contra 6334404:
   S15 (V173d) set child=Fondo (un objeto con NOMBRE, sin StyleName) de xF7DFC6: se escribe
       x00F7DFC6 y lo dice STYLE-058. El juicio buscaba el objeto por su nombre en lo que
       devuelve el escritor, que quita los nombres: STYLE-060 "sin escritor" y xF7DFC6 tal cual
+  S16 (V173b) set Width = 100 (stored False en FMX: el escritor la guarda en Size.Width): se
+      escribe Size.Width = 100, no queda una linea Width, y lo dice STYLE-062. Decia STYLE-059 "el
+      valor de la clase" y quitaba la linea: ni 50 ni 100. El juez, el escritor: lo que escribe del
+      objeto antes y despues del cambio; y la que se pone, la ultima al juzgar (medido: Width = 100
+      DELANTE de Size.Width = 50 carga 50, detras carga 100)
+  S17 (control) el mismo set con Align = Client: el tamano lo pone la alineacion y el escritor
+      guarda 50 (medido): STYLE-059 sigue siendo la respuesta ("donde la clase deja el valor")
 
 Uso:  python tests/test_styles_escritor_1231.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -206,6 +213,21 @@ try:
     check('S15 (V173d) set de un hijo con nombre y sin StyleName: x00F7DFC6 y STYLE-058, no STYLE-060',
           'Fill.Color = x00F7DFC6' in lee() and mc.es(r, 'SN_STYLES_GUARDADA_COMO_FMT') and
           not mc.es(r, 'SN_STYLES_SIN_ESCRITOR'), (r[:500], lee()))
+
+    # V173b: una stored False (Width de FMX) va donde la guarda su escritor (Size.Width); sin
+    # Align: con Align = Client el tamano lo da la alineacion (S17)
+    escribe(ORIGINAL.replace("    Align = Client\r\n", ""))
+    r = pon('Width', '100')
+    lineas = [x.strip() for x in lee().split('\r\n')]
+    check('S16 (V173b) set Width = 100: Size.Width = 100 escrito, sin linea Width, y STYLE-062 (no STYLE-059)',
+          'Size.Width = 100.000000000000000000' in lineas and not [x for x in lineas if x.startswith('Width =')]
+          and mc.es(r, 'SN_STYLES_GUARDADA_EN_OTRAS_FMT') and not mc.es(r, 'SN_STYLES_NO_GUARDADA_FMT'),
+          (r[:500], lee()))
+    escribe()
+    r = pon('Width', '100')
+    check('S17 (control) con Align = Client el escritor guarda 50: STYLE-059 y Size.Width sigue en 50',
+          mc.es(r, 'SN_STYLES_NO_GUARDADA_FMT') and 'Size.Width = 50.000000000000000000' in lee(),
+          (r[:500], lee()))
 finally:
     srv.cierra()
     mc.borra(BASE)

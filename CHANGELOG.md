@@ -575,7 +575,13 @@ the MCP `initialize` response (`serverInfo.version`).
   The object is found in the writer's output by its position, not its name:
   the writer drops names, and a part named only by its object name (`child=Fondo`,
   no `StyleName`) said the writer could not be asked (`STYLE-060`) and was
-  written as given.
+  written as given. A property the writer never stores by its name (FMX's
+  `Width`, kept as `Size.Width`) is written where the writer keeps it, and
+  `STYLE-062` says so: it said `STYLE-059`, "the class's own value", and
+  removed the line, keeping neither the old size nor the new one. The judge is
+  the writer itself - what it stores for the object before and after the
+  change - and the property is judged as applied last, as a `set` applies it
+  (`Width = 100` ahead of `Size.Width = 50` loads 50).
   The converter is now a 32-bit program, like the IDE and the form
   renderers: its 64-bit build wrote floating-point values with 17 decimals,
   the IDE with 18 (measured on the styles of the RAD Studio Samples); its
