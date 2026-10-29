@@ -18,6 +18,10 @@ folder: a subst unit over a temp folder, so nothing is written outside it.
      against 06f59ce: it names Evil.fmx, the path-traversed view)
   V2 (control) a legit {$R *.Windows.fmx} companion inside the jail is still
      named on delete
+  V3 (V165b) the same traversal with '/' ({$R *./../../Evil.fmx}): not named
+     either. The first judge, ExtractFileName(Resto) = Resto, only splits on
+     '\\' and ':' on Windows, and '/' named Evil.fmx (RED against 13f78f3);
+     the judge is Windows now (the composed view resolves in the unit's folder)
 
 Usage:  python tests/test_vistas_unidad_jaula_v165.py [path-to-DelphiLspMcp.exe]
 """
@@ -57,6 +61,12 @@ try:
           'Evil' not in r and 'Evil.fmx' not in r, r[:300])
 
     # V2 control: una vista legitima dentro de la jaula sigue avisandose
+    # V3 (V165b): la misma travesia con '/', que Windows resuelve y ExtractFileName no veia
+    p3 = unidad('UBarra', '/../../Evil.fmx')
+    r3 = S.call('delphi_delete', {'path': p3})
+    check('V3 borrar un .pas con {$R *./../../Evil.fmx}: el aviso de pareja NO nombra el .fmx de fuera',
+          'Evil' not in r3 and mc.abre(r3, 'SK_FILE_BORRADO_PAPELERA_FMT'), r3[:300])
+
     p2 = unidad('UOtra', 'Windows.fmx')
     open(os.path.join(J, 'UOtra.Windows.fmx'), 'w', newline='\r\n').write('object W: TForm\r\nend\r\n')
     r2 = S.call('delphi_delete', {'path': p2})

@@ -62,8 +62,9 @@ the MCP `initialize` response (`serverInfo.version`).
   (`*.\..\..\Otra\x.fmx`) built a path outside the unit's folder, which the
   callers (the delete/move companion note, the designer, the binding check) then
   probed with a file-exists and named - an oracle for a `.fmx` outside the jail.
-  A view is now kept only when it is a bare filename (`ExtractFileName(rest) =
-  rest`).
+  A view is now kept only when Windows resolves the composed path in the unit's
+  own folder and with that same name - so `/` (`*./../../x.fmx`), which a
+  `ExtractFileName(rest) = rest` check let through, is refused too.
 - **A delete named inside a server temporary is judged by its real path, not
   its name.** A delete under `__delphi-temp` is permanent (nothing is restored
   from a temporary), and `EnTemporal` matched on the text, which a junction
