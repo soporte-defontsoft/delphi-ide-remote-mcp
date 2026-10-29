@@ -829,10 +829,18 @@ function CanonicalPlatform(const AName: string): string;
   y decia "needs a PAServer profile + SDK" con su .sdk puesto.) }
 function PlataformaDeClaveLibrary(const AClave: string): string;
 
+{ Como se llama, para quien lo lee, lo de una clave Library: su plataforma, o
+  la clave misma si no es una plataforma conocida (platforms la escribia a
+  mano; components ensenaba la clave, Android32: V198 de la 1.23.1). }
+function NombreDeClaveLibrary(const AClave: string): string;
+
 { La lista de plataformas validas, para los mensajes que la ensenan: la
   misma que valida CanonicalPlatform (estaba copiada a mano en tres textos
   con 11 nombres mientras el validador aceptaba 13). }
 function KnownPlatformsList: string;
+{ Esas plataformas, una por elemento: la carpeta de salida de cada una que el
+  .gitignore de un proyecto nuevo ignora (nombraba 6 de las 13 a mano: V213). }
+function PlataformasConocidas: TArray<string>;
 { LA negativa de un nombre que no es una plataforma de Delphi, con las validas:
   la de toda tool que recibe una (la puerta y el build, delphi_config). Eran
   cinco textos y cinco codigos para el mismo hecho (BUILD-003, CFG-007,
@@ -2417,13 +2425,14 @@ end;
 
 function KnownPlatformsList: string;
 begin
-  Result := '';
+  Result := string.Join(', ', PlataformasConocidas);
+end;
+
+function PlataformasConocidas: TArray<string>;
+begin
+  Result := nil;
   for var P in PLATAFORMAS do
-  begin
-    if Result <> '' then
-      Result := Result + ', ';
-    Result := Result + P.Nombre;
-  end;
+    Result := Result + [P.Nombre];
 end;
 
 function NegativaDePlataforma(const ARaw: string): string;
@@ -2445,6 +2454,13 @@ begin
   if SameText(AClave.Trim, 'Android32') then
     Exit(CanonicalPlatform('Android'));
   Result := CanonicalPlatform(AClave);
+end;
+
+function NombreDeClaveLibrary(const AClave: string): string;
+begin
+  Result := PlataformaDeClaveLibrary(AClave);
+  if Result = '' then
+    Result := AClave;
 end;
 
 function GroupCondition(const APlatform: string; const AClave: string): string;

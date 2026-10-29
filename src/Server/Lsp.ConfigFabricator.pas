@@ -248,17 +248,13 @@ begin
   AFuera := nil;
   Vars := TStringList.Create;
   try
-    IdeMacroVars(AInfo, Vars);
-    Vars.Values['Platform'] := APlat;
-    Vars.Values['Config'] := ACfg;
-    // Las reservadas de msbuild (EL lector de V118, MacrosReservadasDeMsbuild):
-    // sin ellas CleanPathList tiraba un search path con $(MSBuildProjectDirectory)
-    // -que la puerta del build expande y dcc compila- y el motor no veia esas
-    // unidades (hover LSP-029 de una unidad que SI compila; V160d de la 1.23.1,
-    // medido). El juez de la jaula (MotorPuedeEnsenar) sigue recortando lo que
-    // caiga fuera. El fichero es el .dproj (lo comun: el search path vive ahi).
-    for var M in MacrosReservadasDeMsbuild(ADprojDir, ANombreRaiz, ADprojDir) do
-      Vars.Add(M); // 'Nombre=valor': ExpandIdeMacros lo lee por Values[]
+    // EL lector de la tabla (Lsp.Discovery.MacrosDelProyecto), con las
+    // reservadas de msbuild: sin ellas CleanPathList tiraba un search path con
+    // $(MSBuildProjectDirectory) -que la puerta del build expande y dcc
+    // compila- y el motor no veia esas unidades (hover LSP-029 de una unidad
+    // que SI compila; V160d de la 1.23.1, medido). El juez de la jaula
+    // (MotorPuedeEnsenar) sigue recortando lo que caiga fuera.
+    MacrosDelProyecto(AInfo, ADprojDir, ANombreRaiz, APlat, ACfg, Vars);
     for var P in CleanPathList(EffectiveProperty(AXml, 'DCC_UnitSearchPath', APlat, ACfg),
       ADprojDir, Vars) do
       if MotorPuedeEnsenar(P) then

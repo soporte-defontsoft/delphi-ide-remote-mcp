@@ -103,7 +103,7 @@ begin
   for Plat in IdeLibraryPlatforms(AInfo.Version) do
     for P in IdePlatformLibraryPaths(AInfo, Plat) do
       if ContainsText(P, AFiltro) then
-        AnotaPlataforma(Result, P, Plat);
+        AnotaPlataforma(Result, P, NombreDeClaveLibrary(Plat)); // Android, no la clave Android32 (V198)
 end;
 
 { platform=X: the IDE's Library Search Path of that platform, expanded, and
@@ -154,7 +154,7 @@ begin
     // what the OTHER platforms register and this one lacks, by install root
     for Other in IdeLibraryPlatforms(AInfo.Version) do
     begin
-      if SameText(Other, Plat) then
+      if SameText(NombreDeClaveLibrary(Other), Plat) then // su clave (Android32) es ella misma (V198)
         Continue;
       Others := IdePlatformLibraryPaths(AInfo, Other);
       for P in Others do
@@ -169,7 +169,7 @@ begin
            SameFileName(Root, UserDocs) or SameFileName(Root, CommonDocs) or
            UnderMine(Root) then
           Continue;
-        AnotaPlataforma(Missing, Root, Other);
+        AnotaPlataforma(Missing, Root, NombreDeClaveLibrary(Other));
       end;
     end;
     N := Missing.Count;

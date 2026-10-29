@@ -58,6 +58,12 @@ procedure EnsureDeployManifest(const ADprojPath, APlat, ABdsRoot: string;
   proyecto: una sola definicion de "que SDK hay", no dos que se desincronizan. }
 function SdksDePlataforma(const AVersion, APlat: string): TArray<string>;
 
+{ El SDK que pide el agente, con SU nombre: el de esa lista ('' si no esta).
+  El agente solo elige (2an); el build y set-sdk lo escribian cada uno, y
+  set-sdk ponia en el .dproj la grafia tecleada (V203 de la 1.23.1). La
+  gemela de PerfilDelIde. }
+function SdkDelIde(const AVersion, APlat, APedido: string): string;
+
 { El SDK que fija EL PROYECTO para esa plataforma (PlatformSDK de su
   PropertyGroup), y el que el SDK Manager del IDE tiene por defecto para ella.
   El build lee el primero; delphi_config view, el segundo (y el del proyecto
@@ -1476,6 +1482,15 @@ begin
   end;
 end;
 
+function SdkDelIde(const AVersion, APlat, APedido: string): string;
+begin
+  Result := '';
+  var Lista := SdksDePlataforma(AVersion, APlat);
+  var I := IndexText(NombreDeSdk(APedido.Trim), Lista);
+  if I >= 0 then
+    Result := Lista[I];
+end;
+
 { El SDK que el SDK MANAGER de esa version tiene por defecto para la
   plataforma (Default_<Plataforma> de PlatformSDKs). Es la eleccion explicita
   del operador en el IDE, asi que manda sobre cualquier adivinanza nuestra. }
@@ -2448,16 +2463,13 @@ begin
     var Pedido := ASdk.Trim;
     if Pedido <> '' then
     begin
-      Pedido := NombreDeSdk(Pedido);
-      // No basta con que exista un fichero con ese nombre: la lista de SDKs
-      // de la plataforma, la MISMA que usa set-sdk (auditoria 25-sep-2026).
-      var SdksMaquina := SdksDePlataforma(Info.Version, Plat);
-      var IdxSdk := IndexText(Pedido, SdksMaquina);
-      if IdxSdk < 0 then
+      // No basta con que exista un fichero con ese nombre: uno de la lista de
+      // la plataforma, con SU nombre - EL elector, el de set-sdk (2an, V203)
+      var Elegido := SdkDelIde(Info.Version, Plat, Pedido);
+      if Elegido = '' then
         raise Exception.Create(MsgFmt(SR_BUILD_SDK_NOEXISTE_FMT,
-          [Pedido, string.Join(', ', SdksMaquina)]));
-      // con SU nombre, el de la lista de la maquina: el agente solo elige (2an)
-      Pedido := SdksMaquina[IdxSdk];
+          [NombreDeSdk(Pedido), string.Join(', ', SdksDePlataforma(Info.Version, Plat))]));
+      Pedido := Elegido;
       SdkArg := ' /p:PlatformSDK="' + Pedido + '"';
       SdkUsado := Pedido;
     end

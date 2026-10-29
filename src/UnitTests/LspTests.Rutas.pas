@@ -89,6 +89,17 @@ type
     [Test] procedure LaBarraFinalNoCambiaLaClave;
   end;
 
+  { V204 de la 1.23.1: el Include de un proyecto se resuelve por EL resolutor
+    (RutaDeInclude), desde la carpeta del proyecto. Tres sitios lo hacian con
+    TPath.Combine, que deja 'X:Comun\U.pas' a la carpeta actual del PROCESO en
+    esa unidad: ProyectoListaUnidad (el proyecto del motor, ProjectsUsingUnit)
+    decia que el proyecto no lista una unidad que si lista. }
+  [TestFixture]
+  TIncludeDelProyectoTests = class
+  public
+    [Test] procedure UnIncludeRelativoALaUnidadSeLeeDesdeElProyecto;
+  end;
+
   { EL sello de una operacion (Lsp.Casa.SelloUnico): su texto se ordena como
     nacio, tambien dentro de un tick del reloj (la purga de las copias del IDE
     se queda con las mas nuevas por el nombre; test_sdk fallaba "por azar"). }
@@ -245,6 +256,7 @@ uses
   Lsp.Codificacion,   // ekUtf8Bom
   Lsp.Discovery,      // la instalacion del IDE
   Lsp.Rutas,          // EsRutaAbsoluta, RutaDesde
+  Lsp.ProjectUnits,   // ProyectoListaUnidad (V204)
   LspTests.FormRender, // CreaUnion
   Lsp.Mascara,
   System.RegularExpressions,
@@ -1417,8 +1429,31 @@ begin
   Assert.Contains(S, Letra + ':\cr', 'la cita del disco, tal cual: ' + S);
 end;
 
+procedure TIncludeDelProyectoTests.UnIncludeRelativoALaUnidadSeLeeDesdeElProyecto;
+var
+  Base, Dpr, Pas: string;
+begin
+  Base := TPath.Combine(ExtractFileDir(ParamStr(0)), 'inc-' + FragmentoUnico);
+  ForceDirectories(TPath.Combine(Base, 'Comun'));
+  try
+    Pas := TPath.Combine(Base, 'Comun\U.pas');
+    TFile.WriteAllText(Pas, 'unit U;'#13#10'interface'#13#10'implementation'#13#10'end.'#13#10);
+    Dpr := TPath.Combine(Base, 'P.dpr');
+    // 'D:Comun\U.pas': relativa a la carpeta actual de ESA unidad, que para dcc
+    // es la del proyecto; la del proceso de la prueba es otra
+    TFile.WriteAllText(Dpr, 'program P;'#13#10'uses'#13#10'  U in ''' + ExtractFileDrive(Base) +
+      'Comun\U.pas'';'#13#10'begin'#13#10'end.'#13#10);
+    Assert.IsFalse(SameFileName(ExcludeTrailingPathDelimiter(GetCurrentDir), Base),
+      'la carpeta actual del proceso no es la del proyecto');
+    Assert.IsTrue(ProyectoListaUnidad(Dpr, Pas), 'el proyecto lista Comun\U.pas');
+  finally
+    TDirectory.Delete(Base, True);
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
+  TDUnitX.RegisterTestFixture(TIncludeDelProyectoTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
   TDUnitX.RegisterTestFixture(TBarridoDeUnidadesTests);
   TDUnitX.RegisterTestFixture(TClaveDeCarpetaTests);

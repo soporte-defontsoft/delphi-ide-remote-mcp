@@ -849,10 +849,15 @@ begin
         no son Win32/Win64. Lo vio David el 2026-09-21 mirando esta misma linea
         ("donde has dejado los maps?"). Si se anade algo aqui, va tambien al
         .gitignore del repo, y al reves. }
+      // la carpeta de salida de CADA plataforma (IDE_OUTPUT_DEFAULT,
+      // .\$(Platform)\$(Config)): nombraba 6 de las 13 a mano, y tras un
+      // add-platform OSXARM64 o Win64x su binario entraba en el primer
+      // commit (V213 de la 1.23.1)
+      var Salidas := '';
+      for var Pl in PlataformasConocidas do
+        Salidas := Salidas + Pl + '/' + CRLF;
       WriteNewFile(TPath.Combine(Dir, '.gitignore'),
-        'Compiled/' + CRLF + 'Win32/' + CRLF + 'Win64/' + CRLF +
-        'Linux64/' + CRLF + 'Android/' + CRLF + 'Android64/' + CRLF +
-        'OSX64/' + CRLF + 'Debug/' + CRLF + 'Release/' + CRLF +
+        'Compiled/' + CRLF + Salidas + 'Debug/' + CRLF + 'Release/' + CRLF +
         '*.dcu' + CRLF + '*.dcp' + CRLF + '*.bpl' + CRLF +
         '*.exe' + CRLF + '*.dll' + CRLF +
         '*.map' + CRLF + '*.drc' + CRLF + '*.rsm' + CRLF +
@@ -1081,7 +1086,9 @@ begin
   else
   begin
     // data module: the designer file is a .dfm on BOTH frameworks
-    Fmx := SameText(ReadDproj(DprojDe(TPath.GetFullPath(ADprPath))).FrameworkType, 'FMX');
+    // EL juez del marco, el del form y el frame (uses, FrameworkType,
+    // requires): un paquete FMX sin FrameworkType recibia el de la VCL (V214)
+    Fmx := ProjectFramework(ADprPath) = 'fmx';
     WriteNewFile(PasPath, DataModulePas(AUnitName, FormName, Fmx));
     WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), DataModuleDfm(FormName));
   end;

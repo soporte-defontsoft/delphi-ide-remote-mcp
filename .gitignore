@@ -7,6 +7,13 @@ Linux64/
 Android/
 Android64/
 OSX64/
+Win64x/
+WinARM64EC/
+OSXARM64/
+iOSDevice32/
+iOSDevice64/
+iOSSimARM64/
+iOSSimulator/
 Debug/
 Release/
 __history/

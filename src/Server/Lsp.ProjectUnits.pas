@@ -445,6 +445,17 @@ begin
   end;
 end;
 
+{ El Include de un .dpr, .dproj o .groupproj nombra APath: por EL resolutor
+  (RutaDeInclude). Tres sitios lo resolvian con TPath.Combine, que deja
+  '\Comun\U.pas' o 'D:Comun\U.pas' al directorio del PROCESO: el motor, move,
+  delete y el registro del IDE no veian que el proyecto lista la unidad, y
+  fix-references si (V204 de la 1.23.1). }
+function MismoInclude(const AFichero, AInclude, APath: string): Boolean;
+begin
+  var Full := RutaDeInclude(AFichero, AInclude);
+  Result := (Full <> '') and (NormPath(Full) = NormPath(APath));
+end;
+
 { ---- unit inspection ---- }
 
 function DesignerHeaderName(const ADesigner: string; out AName, AClass: string): Boolean;
@@ -488,18 +499,18 @@ function RegistroDelIde(const APasPath, ADproj: string): string;
 
   function EnUno(const ADprojDe: string): string;
   var
-    Xml, Enc, Dir: string;
+    Xml, Enc: string;
   begin
     Result := '';
     if (ADprojDe = '') or not TFile.Exists(ADprojDe) then
       Exit;
     Xml := PatchLoadText(ADprojDe, Enc);
-    Dir := TPath.GetDirectoryName(TPath.GetFullPath(ADprojDe));
     // por EL analisis del .dproj, y por la ruta que resuelve el Include (como
     // ProyectoListaUnidad), no por como va escrito
+    // EL resolutor del Include (RutaDeInclude): un TPath.Combine resolvia
+    // '\Comun\U.pas' o 'D:Comun\U.pas' contra el PROCESO del servidor (V204)
     for var T in TramosDeEtiqueta(Xml, 'DCCReference', True) do
-      if NormPath(TPath.Combine(Dir, AtributoDeTramo(Xml, T, 'DCCReference', 'Include'))) =
-         NormPath(APasPath) then
+      if MismoInclude(ADprojDe, AtributoDeTramo(Xml, T, 'DCCReference', 'Include'), APasPath) then
       begin
         Result := Copy(Xml, T.Abre, T.Cierra - T.Abre);
         if Length(AllTagValues(Result, 'Form')) = 0 then
@@ -3419,7 +3430,7 @@ begin
   Stem := TPath.GetFileNameWithoutExtension(LongCanonical(APasPath));
   for var P in UnitsParaBuscar(F, Stem) do
     if MismoIdentificador(P.UnitName, Stem) and
-      (NormPath(TPath.Combine(TPath.GetDirectoryName(F), P.Include)) = NormPath(APasPath)) then
+      MismoInclude(F, P.Include, APasPath) then // EL resolutor (V204)
       Exit(True);
 end;
 
@@ -4253,7 +4264,7 @@ end;
 function MismoProyecto(const AGroup, AInclude, AAbs: string): Boolean;
 begin
   try
-    Result := NormPath(TPath.Combine(TPath.GetDirectoryName(AGroup), AInclude)) = NormPath(AAbs);
+    Result := MismoInclude(AGroup, AInclude, AAbs); // EL resolutor (V204)
   except
     Result := False;
   end;

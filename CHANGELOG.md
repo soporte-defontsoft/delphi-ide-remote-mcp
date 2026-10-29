@@ -10,6 +10,50 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The IDE's library path of the Android (32-bit) platform is read.** The
+  IDE keeps it under the registry key `Library\Android32`, while the project,
+  msbuild, the `.sdk` files and the `lib\android` folder call the platform
+  `Android`. Its reader composed the key from the name it was given and set
+  `$(Platform)` to it: asked for `Android` it read a key that does not exist,
+  and from the key it expanded `$(BDSLIB)\$(PLATFORM)\Release` to
+  `lib\Android32\Release`, which does not exist either. `delphi_components
+  platform=Android` answered "0 registered folders" and listed everything the
+  IDE registers there as "NOT on Android"; the same list feeds the library
+  zone and the engine settings of an Android project. The key is now found
+  among the ones the IDE has, as the inverse of the reader that already named
+  `Android32` as `Android`, and `$(Platform)` is the platform; the listings
+  name platforms, not keys.
+- **`delphi_config set-sdk` writes the SDK under the name the IDE gives it.**
+  It checked the requested name against the IDE's list case-insensitively and
+  then wrote the agent's spelling into `<PlatformSDK>`; `delphi_build` already
+  took the list's own name. Both now go through one chooser.
+- **`add-searchpath` accepts the macros the build expands.** Its check
+  expanded only the IDE's macros, so `lib\$(Platform)` or
+  `$(MSBuildProjectDirectory)\common` were refused as "unknown macro" while
+  the build expands them and dcc compiles them. It now reads a path with the
+  same project macro table as the engine settings: the IDE's, the platform of
+  the command and the msbuild reserved ones.
+- **`remove-searchpath` finds an entry that `add-searchpath` finds.** One
+  compared with the file system's case rule and the other with an ASCII-only
+  one: with a non-ASCII letter in another case, add said "already there" and
+  remove said "not there". Both use the file system's rule now, and so does
+  the check of a deploy file written with a macro.
+- **A new project's `.gitignore` ignores the output folder of every
+  platform.** It named 6 of the 13, by hand; after `add-platform OSXARM64` or
+  `Win64x` the first commit carried the binaries. The list now comes from the
+  table of known platforms (the repository's own `.gitignore`, which mirrors
+  it, too).
+- **`delphi_create kind=datamodule` tells FMX from VCL like a form does.** It
+  read only the `.dproj`'s `FrameworkType`, so in an FMX project whose
+  `.dproj` does not carry it the module got the VCL class group; it now asks
+  the same judge as forms and frames (the uses clause, then `FrameworkType`,
+  then a package's requires).
+- **A unit listed in a project as `D:Folder\U.pas` is seen as listed.** Three
+  places resolved a project's `Include` by hand, which leaves a drive-relative
+  path to the server process's current folder on that drive: the engine's
+  choice of project for a unit and the IDE-registry check of a form did not
+  see that the project lists it, while `fix-references` did. They now use the
+  one resolver, from the project's folder, as dcc does.
 - **`delphi_references` and `delphi_rename_symbol` no longer take a field's
   declaration for a unit-level symbol of the same name.** On the declaration
   of a record or class field, the language engine sometimes answers a

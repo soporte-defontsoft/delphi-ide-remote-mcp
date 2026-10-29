@@ -670,9 +670,7 @@ begin
         // clave Library "Android32" es la plataforma "Android", y preguntada
         // por el nombre de la clave salia "needs a PAServer profile + SDK"
         // con su .sdk puesto (M4 del revisor de cierre)
-        var Nombre := PlataformaDeClaveLibrary(Plat);
-        if Nombre = '' then
-          Nombre := Plat; // una clave que no es una plataforma conocida, tal cual
+        var Nombre := NombreDeClaveLibrary(Plat); // una clave desconocida, tal cual
         Obj := TJSONObject.Create;
         Arr.AddElement(Obj);
         Obj.AddPair('platform', Nombre);

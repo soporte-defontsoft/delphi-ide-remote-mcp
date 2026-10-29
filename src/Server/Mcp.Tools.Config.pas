@@ -782,7 +782,7 @@ end;
   resolve relative to the project, then the read jail (roots + library zone)
   and existence. Returns '' when fine, else the refusal. AShow is the
   resolved path for messages. }
-function SearchPathDenied(const ADproj, ARaw: string; out AShow: string): string;
+function SearchPathDenied(const ADproj, APlat, ARaw: string; out AShow: string): string;
 var
   Info: TRadStudioInfo;
   Vars: TStringList;
@@ -805,8 +805,10 @@ begin
       // carry $(BDS), $(BDSLIB) or $(BDSUSERDIR) - the ones the schema
       // promises and an agent reaches for first. Every $(BDS...) path was
       // refused with a message that recommended $(BDS) (field round 8).
-      if Info.Found then
-        IdeMacroVars(Info, Vars);
+      // EL lector de la tabla del proyecto, la de los ajustes del motor: con
+      // la plataforma del comando y las reservadas de msbuild (V205)
+      MacrosDelProyecto(Info, TPath.GetDirectoryName(ADproj),
+        TPath.GetFileNameWithoutExtension(ADproj), APlat, '', Vars);
       Expanded := ExpandIdeMacros(Expanded, Vars);
     finally
       Vars.Free;
@@ -884,7 +886,7 @@ begin
   SetLength(Shows, Length(ARawPaths));
   for var I := 0 to High(ARawPaths) do
   begin
-    Result := SearchPathDenied(ADproj, ARawPaths[I], Shows[I]);
+    Result := SearchPathDenied(ADproj, Plat, ARawPaths[I], Shows[I]);
     if Result <> '' then
     begin
       if Length(ARawPaths) > 1 then
@@ -952,7 +954,10 @@ function DondeEsta(const AXml, ATag: string; const ASoloCon: TArray<string> = ni
 function EsEntradaPedida(const AEntrada: string; const APedidas: TArray<string>): Boolean;
 begin
   for var R in APedidas do
-    if SameText(XmlUnescape(AEntrada), R.Trim) then
+    // la igualdad de rutas del sistema (la de add-searchpath): SameText solo
+    // junta la A..Z, y una entrada con una letra no ASCII en otra caja no se
+    // quitaba (V206 de la 1.23.1)
+    if SameFileName(XmlUnescape(AEntrada), R.Trim) then
       Exit(True);
   Result := False;
 end;
@@ -1423,7 +1428,7 @@ var
         var Full := RutaDeInclude(ADproj, D.LocalName);
         if Full = '' then
         begin
-          if SameText(AInclude, D.LocalName) then
+          if SameFileName(AInclude, D.LocalName) then // la de SameDeployFile (V206)
             Exit(True);
         end
         else if SameDeployFile(AInclude, ADproj, Full) then
@@ -1721,12 +1726,15 @@ begin
   Quitar := EsPalabraQueQuita(Sdk);
   if not Quitar then
   begin
-    Sdk := NombreDeSdk(Sdk);
     // No basta con que exista: CADA .sdk declara SU plataforma (por eso el
     // dialogo del IDE empieza preguntandola y la lista sale agrupada), asi
-    // que un SDK de Android no puede acabar puesto en Linux64.
-    if not MatchText(Sdk, SdksDePlataforma(Info.Version, APlatform)) then
-      Exit(MsgFmt(SR_CONFIG_SDK_NOEXISTE_FMT, [Sdk, APlatform, Disponibles]));
+    // que un SDK de Android no puede acabar puesto en Linux64. Uno de esa
+    // lista y con SU nombre, que es el que se escribe en el .dproj: EL
+    // elector, el del build (escribia la grafia tecleada: V203 de la 1.23.1)
+    var Elegido := SdkDelIde(Info.Version, APlatform, Sdk);
+    if Elegido = '' then
+      Exit(MsgFmt(SR_CONFIG_SDK_NOEXISTE_FMT, [NombreDeSdk(Sdk), APlatform, Disponibles]));
+    Sdk := Elegido;
     // ...para una plataforma que el proyecto compila (PlataformaDelComando)
     Result := PlataformaNoDeclarada(ReadDproj(ADproj), APlatform, True);
     if Result <> '' then

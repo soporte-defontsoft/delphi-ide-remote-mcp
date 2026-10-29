@@ -390,11 +390,24 @@ function PlataformaDelIde(const ARootDir: string): string;
   the library zone is built from. ADest receives Name=Value pairs. }
 procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
 
+{ La tabla de macros con que se lee una ruta de UN proyecto: la del IDE, la
+  plataforma y la configuracion del build cuando se saben ('' = sin ellas) y
+  las reservadas de msbuild del .dproj (MacrosReservadasDeMsbuild). Los ajustes
+  del motor y la puerta de add-searchpath la componian cada uno, y esa solo
+  con la del IDE: $(Platform) o $(MSBuildProjectDirectory) eran CFG-017
+  "unknown macro" con un search path que el build expande (V205 de la 1.23.1). }
+procedure MacrosDelProyecto(const AInfo: TRadStudioInfo; const ADprojDir, ANombre,
+  APlat, ACfg: string; ADest: TStrings);
+
 { The IDE's Library Search Path of ONE platform, every entry expanded to a
   real folder (macros resolved, no trailing delimiter), in registry order.
   Entries that still carry an unresolved macro or are not rooted are left
   out. What "delphi_components platform=X" shows and what the F2613 helper
-  of delphi_build compares against. AValor es la lista del IDE que se lee:
+  of delphi_build compares against. APlatform: la plataforma (Android) o su
+  clave Library del registro (Android32): se lee la clave del IDE y
+  $(Platform) vale la PLATAFORMA, la de msbuild (lib\android; V198 de la
+  1.23.1: con el nombre se leia una clave que no existe, y con la clave
+  salia lib\Android32). AValor es la lista del IDE que se lee:
   'Search Path' (la de siempre) o 'Browsing Path', la del fuente que el IDE
   ensena (las tablas del disenador leen las dos: Lsp.DesignerMetaGen). De
   ESA instalacion, la que se le da - la del servidor, DiscoverRadStudio:
@@ -1439,6 +1452,19 @@ begin
   end;
 end;
 
+procedure MacrosDelProyecto(const AInfo: TRadStudioInfo; const ADprojDir, ANombre,
+  APlat, ACfg: string; ADest: TStrings);
+begin
+  if AInfo.Found then
+    IdeMacroVars(AInfo, ADest);
+  if APlat <> '' then
+    ADest.Values['Platform'] := APlat;
+  if ACfg <> '' then
+    ADest.Values['Config'] := ACfg;
+  for var M in MacrosReservadasDeMsbuild(ADprojDir, ANombre, ADprojDir) do
+    ADest.Add(M); // 'Nombre=valor': ExpandIdeMacros lo lee por Values[]
+end;
+
 procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
 var
   UserDocs, CommonDocs: string;
@@ -1472,6 +1498,17 @@ begin
       IncludeTrailingPathDelimiter(CommonDocs) + 'CatalogRepository';
 end;
 
+{ La clave Library del IDE de una plataforma: la inversa de
+  PlataformaDeClaveLibrary, entre las claves que el IDE TIENE (su registro es
+  el juez); sin ninguna que case, la plataforma misma. }
+function ClaveLibraryDePlataforma(const AVersion, APlatform: string): string;
+begin
+  for var K in IdeLibraryPlatforms(AVersion) do
+    if SameText(NombreDeClaveLibrary(K), APlatform) then
+      Exit(K);
+  Result := APlatform;
+end;
+
 function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
   const AValor: string; const AConfig: string): TArray<string>;
 var
@@ -1485,13 +1522,15 @@ begin
   List := TStringList.Create;
   try
     IdeMacroVars(AInfo, Vars);
-    Vars.Values['Platform'] := APlatform;
+    var Plat := NombreDeClaveLibrary(APlatform);
+    Vars.Values['Platform'] := Plat;
     if AConfig <> '' then
       Vars.Values['Config'] := AConfig;
     // expandido ANTES de partir, como los ajustes del motor: un macro que
     // expande a una lista era UN trozo con ';' dentro (revisor C, 21-oct-2026);
     // EL troceador, el de la puerta del build (TrozosDeLista)
-    for Item in TrozosDeLista(ExpandIdeMacros(IdeConfigValue(AInfo.Version, 'Library\' + APlatform, AValor), Vars)) do
+    for Item in TrozosDeLista(ExpandIdeMacros(IdeConfigValue(AInfo.Version,
+      'Library\' + ClaveLibraryDePlataforma(AInfo.Version, Plat), AValor), Vars)) do
     begin
       // solo las completas: un valor del registro no tiene carpeta, y "\x" o
       // "X:y" se resolvian contra el PROCESO del servidor (EL resolutor)
