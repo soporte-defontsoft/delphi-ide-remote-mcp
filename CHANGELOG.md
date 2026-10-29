@@ -33,6 +33,13 @@ the MCP `initialize` response (`serverInfo.version`).
   reader dropped its note. The note is no longer asked with the lock held: the
   commit lists the `.style` files it wrote next to its forms, and the tool asks
   FMX about each one on its way back, outside the lock.
+- **One unreadable form no longer denies the whole `delphi_styles lint`.** For
+  the code of a unit that sets a `StyleLookup`, the lint asks its form whether
+  it takes its styles from a `StyleBook`; a form the read gate refuses (a hard
+  link, `GUARD-042`) made that read throw, and the lint of the WHOLE project
+  answered `GUARD-042`. That form is now one that cannot be read here: its
+  code is not judged and it goes in `formsWithAStyleBook`, the same answer
+  whatever the file behind it holds.
 - **The log masker reads secret keys the way the binder does.** The transports
   log the request body before the tool gate, masking the value of secret-named
   keys; the masker matched the literal key (`"password"`...), but the binder

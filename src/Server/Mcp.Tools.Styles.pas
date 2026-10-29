@@ -850,13 +850,44 @@ begin
           // daba por faltas los de su codigo (V153 de la 1.23.1, medido). Su
           // designer, el que nombra su {$R} (InspectUnit)
           var Unidad: TUnitInfo;
-          if (Length(Lookups) > 0) and (InspectUnit(F, Unidad) = '') and Unidad.IsDesigner and
+          var Inspeccion := '';
+          if Length(Lookups) > 0 then
+          try
+            Inspeccion := InspectUnit(F, Unidad);
+          except
+            // su designer no se deja leer (la puerta lo niega: un enlace duro):
+            // la negativa saltaba como excepcion y el lint de TODO el proyecto
+            // salia GUARD-042 (V173j de la 1.23.1, medido). Es una form que no
+            // se lee aqui: va aparte, por su nombrador, y su codigo no se juzga
+            for var Dsg in DesignersDeUnidad(F) do
+              if EsDesignerFmx(Dsg) and TFile.Exists(Dsg) then
+              begin
+                Aparte(Dsg);
+                Lookups := [];
+                Break;
+              end;
+            Inspeccion := '-';
+          end;
+          if (Length(Lookups) > 0) and (Inspeccion = '') and Unidad.IsDesigner and
              EsDesignerFmx(Unidad.Designer) and TFile.Exists(Unidad.Designer) then
           begin
             var EncD: string;
-            var ConStyleBookPas: Boolean;
-            LookupsDeDesigner(Unidad.Designer, SplitToLines(PatchLoadText(Unidad.Designer, EncD)),
-              ConStyleBookPas, True);
+            var ConStyleBookPas := False;
+            // por la MISMA puerta que el paseo de arriba, y un designer que niega
+            // o no se deja leer es una form que no se lee aqui: su codigo no se
+            // juzga y va aparte. Su negativa saltaba como excepcion y el lint de
+            // TODO el proyecto salia GUARD-042 por un enlace duro (V173j de la
+            // 1.23.1, medido)
+            var Leido := ReadPathDenied(Unidad.Designer) = '';
+            if Leido then
+            try
+              LookupsDeDesigner(Unidad.Designer, SplitToLines(PatchLoadText(Unidad.Designer, EncD)),
+                ConStyleBookPas, True);
+            except
+              Leido := False;
+            end;
+            if not Leido then
+              ConStyleBookPas := True;
             if ConStyleBookPas then
             begin
               Aparte(Unidad.Designer);
