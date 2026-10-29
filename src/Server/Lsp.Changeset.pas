@@ -44,8 +44,9 @@ type
     Ruta, Antes: string;
   end;
 
-{ Lo mismo, y en AFormsEscritos los forms que un commit aplicado escribio:
-  quien llama les pide el juicio del LECTOR del IDE al volver, ya FUERA de
+{ Lo mismo, y en AFormsEscritos los forms (y los .style, V173f) que un commit
+  aplicado escribio: quien llama les pide el juicio del LECTOR del IDE (a un
+  .style, el de FMX: Lsp.TextEdit.NotaDeEstiloFmx) al volver, ya FUERA de
   los cerrojos (Lsp.Patch.AvisosDelLector: un proceso de segundos que dentro
   paraba las escrituras de todos; DSGN-061 de la 1.20), con su texto de antes
   (los colores sin alfa que el lote trae, V154 de la 1.23.1). La tool lo usa;
@@ -1216,10 +1217,12 @@ begin
           for var FPath in Seen do
             if Foto.Cambio(FPath) then
               Escritos := Escritos + [FPath];
-          // ...y de ellos, los forms: el lector los juzga al volver, fuera
+          // ...y de ellos, los forms y los .style: el lector y FMX los juzgan al
+          // volver, fuera (un .style, por su nota STYLE-055: dentro del cerrojo
+          // corria el conversor y su aviso se perdia; V173f de la 1.23.1)
           if Applied then
             for var FPath in Escritos do
-              if EsRutaDeDesigner(FPath) then
+              if EsRutaDeDesigner(FPath) or EsRutaDeEstilo(FPath) then
               begin
                 var F: TFormEscrito;
                 F.Ruta := FPath;

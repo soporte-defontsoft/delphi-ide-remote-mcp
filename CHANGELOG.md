@@ -26,6 +26,13 @@ the MCP `initialize` response (`serverInfo.version`).
   packages held every write of the server for 87 s. Like `insert` and the
   ordering forms of `set`, they now take the lock only to read the form and to
   write it, and refuse (`DSGN-144`) if it changed in between.
+- **A changeset commit that leaves a `.style` FMX cannot load says so
+  (`STYLE-055`), as `delphi_textedit` does.** The commit wrote through the
+  text engine inside its own write lock, so FMX's style converter (a separate
+  process) ran with every write of the server stopped, and the commit's notice
+  reader dropped its note. The note is no longer asked with the lock held: the
+  commit lists the `.style` files it wrote next to its forms, and the tool asks
+  FMX about each one on its way back, outside the lock.
 - **The log masker reads secret keys the way the binder does.** The transports
   log the request body before the tool gate, masking the value of secret-named
   keys; the masker matched the literal key (`"password"`...), but the binder

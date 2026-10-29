@@ -9,6 +9,10 @@ editado por textedit con un valor que FMX no lee salia OK y solo lint lo veia de
   T2  edit que lo arregla (xFFFF0000): escrito y SIN la nota
   T3  edits (la tanda) que lo vuelve a romper: la nota otra vez
   T4  control: un .txt con lo mismo no pregunta a FMX (sin nota)
+  T5  (V173f de la 1.23.1) el commit de un changeset que lo rompe: la nota tambien. El
+      commit escribia por textedit dentro de SU cerrojo: la nota se pedia ahi (el
+      conversor, un proceso, con todas las escrituras paradas) y su lector de avisos la
+      perdia (ROJA contra 4d0cd64); ahora la pide la tool al volver, fuera
 
 T1 y T3 son ROJAS contra 1.21.3. Necesita DelphiStyleConvert.exe junto al exe bajo prueba
 (con_conversor).
@@ -40,6 +44,17 @@ try:
     r = srv.call('delphi_textedit', {'path': sty, 'edits': [{'old': "    TextSettings.FontColor = xFFFF0000",
                                                              'new': "    TextSettings.FontColor = $FFFF0000"}]})
     check('T3 edits (la tanda) que lo rompe otra vez: la nota', not mc.rechazado(r) and 'STYLE-055' in r, r[:300])
+    srv.call('delphi_textedit', {'path': sty, 'old': "    TextSettings.FontColor = $FFFF0000",
+                                 'new': "    TextSettings.FontColor = xFFFF0000"})
+    i = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
+    srv.call('delphi_changeset', {'command': 'stage', 'id': i, 'kind': 'edit', 'path': sty,
+                                  'old': "    TextSettings.FontColor = xFFFF0000",
+                                  'new': "    TextSettings.FontColor = $FFFF0000"})
+    srv.call('delphi_changeset', {'command': 'preview', 'id': i}, 120)
+    r = srv.call('delphi_changeset', {'command': 'commit', 'id': i}, 120)
+    check('T5 el commit de un changeset que lo rompe: escrito y la nota STYLE-055',
+          not mc.rechazado(r) and b'$FFFF0000' in open(sty, 'rb').read() and
+          mc.es(r, 'SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT'), r[-600:])
     txt = os.path.join(BASE, 'Roto.txt')
     r = srv.call('delphi_textedit', {'path': txt, 'create': True, 'content': MALO})
     check('T4 control: un .txt con lo mismo no pregunta a FMX', not mc.rechazado(r) and not mc.es(r, 'SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT'), r[:200])

@@ -42,6 +42,13 @@ function ExecuteTextEdit(const A: TTextEditArgs): string;
   2026-09-20 usando este servidor como agente). }
 function ExecuteTextEdits(const APath, AEditsJson: string): string;
 
+{ Lo que FMX dice de un .style que se acaba de escribir con exito (STYLE-055
+  si no lo carga; '' si lo carga, si AResultado es una negativa o no es un
+  .style). Pregunta al conversor, un proceso: NUNCA con el cerrojo de
+  escritura cogido - quien lo tiene por encima (el commit de un changeset) la
+  pide al soltarlo (V173f de la 1.23.1). }
+function NotaDeEstiloFmx(const APath, AResultado: string): string;
+
 implementation
 
 uses
@@ -364,6 +371,11 @@ var
 begin
   Result := '';
   if EsFallo(AResultado) or not EsRutaDeEstilo(APath) then
+    Exit;
+  // con el cerrojo de alguien por encima (el commit de un changeset): el
+  // conversor paraba todas las escrituras, y el lector de avisos del commit
+  // perdia la nota; la pide el al soltarlo (V173f de la 1.23.1, medido)
+  if EnCerrojoDeEscritura then
     Exit;
   if IgnoradoPorFmx(APath, Ignorado, NoCarga) and (NoCarga <> '') then
     Result := #10 + MsgFmt(SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT, [NoCarga]);
