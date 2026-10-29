@@ -306,6 +306,13 @@ function CandidatosSinAlfa(ADoc: TStyleDoc): TArray<TColorSinAlfa>;
   (Lsp.FormRender.ColoresSinAlfaDeForm). }
 function ColoresSinAlfaEntre(ADoc, AEscrito: TStyleDoc; const ACandidatos: TArray<TColorSinAlfa>;
   out AColores: TArray<TColorSinAlfa>): Boolean;
+{ EL emparejado de los objetos de ADoc con los de AEscrito, lo que escribio su
+  escritor (que quita los nombres de un .style y reescribe lo demas): por su
+  posicion en preorden (ObjetosEnPreorden), con los dos arboles del mismo
+  tamano; si no cuadran, False y nada: no se sabe. Lo usan ColoresSinAlfaEntre
+  y el juicio del escritor de delphi_styles set, que emparejaba por NOMBRE y
+  no encontraba un hijo con nombre sin StyleName (V173d de la 1.23.1). }
+function ObjetosEmparejados(ADoc, AEscrito: TStyleDoc; out AObjs, AObjsE: TArray<TStyleObj>): Boolean;
 { Los colores sin alfa del .style de texto AFichero, por el escritor de FMX
   (ComoLoEscribeFmxDeTexto). delphi_styles lint no lo veia: xFF7DFC6 por
   xFFF7DFC6 en un tema real, que solo enseno la vista previa (V152 de la
@@ -1341,9 +1348,7 @@ var
   Objs, ObjsE: TArray<TStyleObj>;
 begin
   AColores := [];
-  Objs := ObjetosEnPreorden(ADoc);
-  ObjsE := ObjetosEnPreorden(AEscrito);
-  Result := (Length(Objs) > 0) and (Length(Objs) = Length(ObjsE));
+  Result := ObjetosEmparejados(ADoc, AEscrito, Objs, ObjsE);
   if not Result then
     Exit;
   for var C in ACandidatos do
@@ -1364,6 +1369,13 @@ begin
     J.ComoLoCarga := IfThen(Esta, ComoLoCarga, '');
     AColores := AColores + [J];
   end;
+end;
+
+function ObjetosEmparejados(ADoc, AEscrito: TStyleDoc; out AObjs, AObjsE: TArray<TStyleObj>): Boolean;
+begin
+  AObjs := ObjetosEnPreorden(ADoc);
+  AObjsE := ObjetosEnPreorden(AEscrito);
+  Result := (Length(AObjs) > 0) and (Length(AObjs) = Length(AObjsE));
 end;
 
 function ColoresSinAlfa(const AFichero: string; out AColores: TArray<TColorSinAlfa>): Boolean;

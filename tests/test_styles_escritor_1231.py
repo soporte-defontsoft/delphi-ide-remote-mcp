@@ -39,6 +39,9 @@ V173h y V173i (29-oct, revisor del disenador #8 y #9), rojas contra 6334404:
       la clave de su item (Fill.Gradient.Points[0].Color) y como lo carga FMX (x0FF5FBF5); los
       candidatos eran solo las propiedades del nivel propio, fuera de las colecciones
   S14 (control) el otro item, con sus 8 cifras (xFFFFFFFF): no sale
+  S15 (V173d) set child=Fondo (un objeto con NOMBRE, sin StyleName) de xF7DFC6: se escribe
+      x00F7DFC6 y lo dice STYLE-058. El juicio buscaba el objeto por su nombre en lo que
+      devuelve el escritor, que quita los nombres: STYLE-060 "sin escritor" y xF7DFC6 tal cual
 
 Uso:  python tests/test_styles_escritor_1231.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -193,6 +196,16 @@ try:
           c13[0].get('loadedAs') == 'x0FF5FBF5' and c13[0].get('style') == 'gradstyle', r[:900])
     check('S14 (control) el item con sus 8 cifras no sale',
           not [c for c in colores if c.get('value') == 'xFFFFFFFF'], r[:900])
+
+    # V173d: el objeto del escritor, por su posicion (el escritor quita los nombres)
+    escribe(ORIGINAL.replace("    Size.PlatformDefault = False\r\n",
+                             "    Size.PlatformDefault = False\r\n    object Fondo: TRectangle\r\n"
+                             "      Fill.Color = xFFFFFFFF\r\n    end\r\n"))
+    r = srv.call('delphi_styles', {'command': 'set', 'path': STYLE, 'style': 'cardstyle', 'child': 'Fondo',
+                                   'prop': 'Fill.Color', 'value': 'xF7DFC6'})
+    check('S15 (V173d) set de un hijo con nombre y sin StyleName: x00F7DFC6 y STYLE-058, no STYLE-060',
+          'Fill.Color = x00F7DFC6' in lee() and mc.es(r, 'SN_STYLES_GUARDADA_COMO_FMT') and
+          not mc.es(r, 'SN_STYLES_SIN_ESCRITOR'), (r[:500], lee()))
 finally:
     srv.cierra()
     mc.borra(BASE)

@@ -572,6 +572,10 @@ the MCP `initialize` response (`serverInfo.version`).
   with its 8 digits, a color with a name by its name, a `Single` such as
   `Opacity` with its own decimals), one that leaves the class's default is
   not written (`STYLE-059`), and a new property goes in the writer's order.
+  The object is found in the writer's output by its position, not its name:
+  the writer drops names, and a part named only by its object name (`child=Fondo`,
+  no `StyleName`) said the writer could not be asked (`STYLE-060`) and was
+  written as given.
   The converter is now a 32-bit program, like the IDE and the form
   renderers: its 64-bit build wrote floating-point values with 17 decimals,
   the IDE with 18 (measured on the styles of the RAD Studio Samples); its

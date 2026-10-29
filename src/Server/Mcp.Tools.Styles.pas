@@ -283,7 +283,18 @@ var
       Exit;
     DocE := TStyleDoc.DeTexto(Escrito);
     try
-      OE := DocE.Resolve(AStyle, AChild, ErrE);
+      // su objeto en lo escrito, por SU posicion (ObjetosEmparejados): el
+      // escritor quita los nombres, y buscarlo por el suyo no encontraba un
+      // hijo con nombre sin StyleName (STYLE-060 falso y el valor tal cual;
+      // V173d de la 1.23.1, medido)
+      var Objs, ObjsE: TArray<TStyleObj>;
+      var OD := Doc.Resolve(AStyle, AChild, ErrE);
+      if (OD = nil) or not ObjetosEmparejados(Doc, DocE, Objs, ObjsE) then
+        Exit;
+      OE := nil;
+      for var K := 0 to High(Objs) do
+        if Objs[K] = OD then
+          OE := ObjsE[K];
       if OE = nil then
         Exit;
       for var Rg in DocE.Propiedades(OE, De, A) do
