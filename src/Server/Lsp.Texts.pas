@@ -7507,6 +7507,16 @@ const
     '[FILE-013 DENIED] %s is a WHOLE server temporary folder (the one in ' +
     'the workspace is what an earlier version left there). Delete what is ' +
     'inside it, one entry at a time.';
+  { delphi_delete nombrado dentro de una temporal por el TEXTO, pero cuya ruta
+    REAL es un fichero vivo al que apunta un enlace (una union __delphi-temp a
+    una carpeta viva, o una union dentro de una temporal): borrarlo como
+    temporal lo perderia para siempre (V164 de la 1.23.1). }
+  SR_FILE_DELETE_TEMP_ENLACE_FMT =
+    '[FILE-053 DENIED] %s is named inside a server temporary (__delphi-temp), ' +
+    'but its real path is a LIVE file or folder a link points to, outside any ' +
+    'temporary. Deleting it as a temporary would wipe it for good, with no ' +
+    'recoverable copy. Delete the real file by its own path instead - that one ' +
+    'goes to the recoverable trash.';
 
   SN_FILE_PURGED_FMT =
     '[FILE-014] PURGED %s. There is no way back from this: it was a copy ' +

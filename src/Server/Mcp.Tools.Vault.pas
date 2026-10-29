@@ -508,13 +508,18 @@ var
 begin
   try
     for F in TDirectory.GetFiles(ADir, '*.md') do
-      if not VaultExcluded(VaultRelative(F)) then
+      // un ENLACE no se sigue: cruzaba FUERA del vault y listaba/leia .md que la
+      // jaula del vault no deja leer, y una union a un antepasado era recursion
+      // sin fin (no habia corte de ciclos). El vault es un arbol de notas y no
+      // usa enlaces; el operador los planta (V166 de la 1.23.1, medido). Como
+      // WalkFiles, pero el vault es OTRA jaula (su recorredor es propio).
+      if not EsEnlace(F) and not VaultExcluded(VaultRelative(F)) then
         AAcc.Add(F);
   except
   end;
   try
     for Sub in TDirectory.GetDirectories(ADir) do
-      if not VaultExcluded(VaultRelative(Sub) + '\') then
+      if not EsEnlace(Sub) and not VaultExcluded(VaultRelative(Sub) + '\') then
         CollectNotes(Sub, AAcc);
   except
   end;

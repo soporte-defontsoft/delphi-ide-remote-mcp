@@ -1782,6 +1782,13 @@ begin
   // el maestro por el nombre; sin vista en el nombre, ninguno
   Assert.AreEqual('C:\p\UMain.fmx', MaestroPorNombre('C:\p\UMain.Windows.fmx'));
   Assert.AreEqual('', MaestroPorNombre('C:\p\UMain.fmx'));
+  // V165 de la 1.23.1: una "vista" cuyo nombre lleva ruta ('*.\..\..\fuera\x.fmx'
+  // o '*.sub\Otra.fmx') componia Base + '.' + Resto, una ruta FUERA de la
+  // carpeta, y los consumidores la tocaban con TFile.Exists y la nombraban
+  // (oraculo de existencia de un .fmx de fuera). Una vista es un nombre SUELTO.
+  V := VistasDeUnidad('C:\p\UMain.pas', 'implementation'#13#10 +
+    '{$R *.\..\..\fuera\Evil.fmx}'#13#10'{$R *.sub\Otra.fmx}'#13#10'end.');
+  Assert.IsTrue(Length(V) = 0, 'una vista con ruta no es una vista: ' + string.Join('|', V));
 end;
 
 procedure TDesignerEditTests.LosLookupsDeUnFormYSuStyleBook;

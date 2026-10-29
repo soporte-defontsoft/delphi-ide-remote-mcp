@@ -716,6 +716,23 @@ begin
   var EsLaTemporal: Boolean;
   if not Comodin and EnTemporal(Params.Path, EsLaTemporal) then
   begin
+    // ...pero por la ruta REAL, no por el texto: EnTemporal usa LongCanonical,
+    // que no resuelve uniones, asi que un __delphi-temp que es una union a
+    // <raiz>\src (o una union dentro de un __delphi-temp viejo) hacia que este
+    // delete se tomara por un temporal -borrado DE VERDAD, sin papelera- y
+    // desapareciera src\Main.pas sin copia (V164 de la 1.23.1, medido; el
+    // inverso de V112). Como la purga, que niega lo que su real no tiene en la
+    // papelera: si la real NO esta en un temporal, es un enlace a algo vivo y
+    // se niega; el fichero real se borra por SU ruta, a la papelera. (En
+    // BorraLoNuestro no: romperia el rollback de TodoONada.)
+    var RealDelBorrado := Params.Path;
+    try
+      RealDelBorrado := RealPath(SinBarraFinal(TPath.GetFullPath(Params.Path)));
+    except
+      // una real que no se resuelve: se queda con el texto (StillThere decide)
+    end;
+    if not EnTemporal(RealDelBorrado) then
+      Exit(MsgFmt(SR_FILE_DELETE_TEMP_ENLACE_FMT, [Params.Path]));
     if EsLaTemporal then
       Exit(MsgFmt(SR_FILE_DELETE_TEMP_ROOT_FMT, [Params.Path]));
     if not StillThere(Params.Path) then

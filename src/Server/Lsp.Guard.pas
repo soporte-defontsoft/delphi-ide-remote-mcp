@@ -4722,12 +4722,18 @@ begin
   if (Real = '') or EsPrefijoDeDispositivo(Real) then
     Exit;
   Real := FormaLarga(Real);
+  // la raiz real MAS ESPECIFICA (la mas larga) que la contiene, no la PRIMERA
+  // que casa: con raices anidadas el confinamiento dependia del ORDEN de las
+  // raices (V167 de la 1.23.1, como RaizQueContiene y como PathDenied)
+  var Mejor := '';
   for var R in ARoots do
   begin
     var RaizReal := FormaLarga(RealDeLugar(R));
-    if RutaDentroDe(RaizReal, Real) then
-      Exit(AgentConfineDenied(SinBarraFinal(Real), RaizReal));
+    if RutaDentroDe(RaizReal, Real) and (Length(RaizReal) > Length(Mejor)) then
+      Mejor := RaizReal;
   end;
+  if Mejor <> '' then
+    Result := AgentConfineDenied(SinBarraFinal(Real), Mejor);
 end;
 
 { La jaula, con AFueraDeJaula = True cuando la negativa es "fuera de las
@@ -5021,25 +5027,37 @@ begin
   if Ref <> '' then
     Exit(MsgFmt(SR_REFERENCE_ROOT_FMT, [APath, Ref]));
   var FullLargo := FormaLarga(Full);
+  // La raiz MAS ESPECIFICA que lo contiene (la mas larga), no la PRIMERA que
+  // casa: con raices anidadas (D:\W y D:\W\agents) el tramo del agente, y con
+  // el el confinamiento, dependia del ORDEN en que se declararon las raices
+  // (V167 de la 1.23.1). Como RaizQueContiene, EL namer de "que raiz contiene
+  // esto". La pertenencia a la jaula, por las dos formas, como antes.
+  var MejorRaiz := '';
   for R in Roots do
     if RutaDentroDe(R, Full) or
        RutaDentroDe(FormaLarga(R), FullLargo) then
     begin
-      // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO
-      // LECTURA: un vendor/, un submodulo, un clon de referencia con su
-      // propio git. Se comprueba AQUI y no en el lector, y esa es justo la
-      // distincion que se quiere: se lee, no se escribe. EL lector de
-      // ReadOnlyPaths, por el texto y por la ruta real (su nota)
-      var Ro := SoloLecturaDeclaradaEn(APath);
-      if Ro <> '' then
-        Exit(MsgFmt(SR_READONLY_PATH_FMT, [APath, Ro]));
-      // las dos en la forma larga: el tramo del agente se cuenta desde la raiz;
-      // y por la ruta REAL, la que juzga la jaula (V113 de la 1.23.1)
-      Result := AgentConfineDenied(SinBarraFinal(FullLargo), FormaLarga(R));
-      if Result = '' then
-        Result := ConfinamientoPorLaRutaReal(Full, Roots);
-      Exit;
+      var RaizLarga := FormaLarga(R);
+      if Length(RaizLarga) > Length(MejorRaiz) then
+        MejorRaiz := RaizLarga;
     end;
+  if MejorRaiz <> '' then
+  begin
+    // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO
+    // LECTURA: un vendor/, un submodulo, un clon de referencia con su
+    // propio git. Se comprueba AQUI y no en el lector, y esa es justo la
+    // distincion que se quiere: se lee, no se escribe. EL lector de
+    // ReadOnlyPaths, por el texto y por la ruta real (su nota)
+    var Ro := SoloLecturaDeclaradaEn(APath);
+    if Ro <> '' then
+      Exit(MsgFmt(SR_READONLY_PATH_FMT, [APath, Ro]));
+    // las dos en la forma larga: el tramo del agente se cuenta desde la raiz
+    // MAS especifica; y por la ruta REAL, la que juzga la jaula (V113 de la 1.23.1)
+    Result := AgentConfineDenied(SinBarraFinal(FullLargo), MejorRaiz);
+    if Result = '' then
+      Result := ConfinamientoPorLaRutaReal(Full, Roots);
+    Exit;
+  end;
   // la jaula lo dejo pasar sin estar en una raiz: es zona de biblioteca,
   // que se lee y nunca se escribe
   Result := NegativaDeJaula(APath);

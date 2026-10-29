@@ -474,7 +474,13 @@ begin
         if T.Texto.StartsWith('*.') and EsDesignerFmx(T.Texto) then
         begin
           Resto := T.Texto.Substring(2);
-          if Resto.Contains('.') then
+          // una vista es un nombre SUELTO, no una ruta: '*.\..\..\fuera\x.fmx'
+          // componia Base + '.\..\..\fuera\x.fmx', una ruta FUERA de la carpeta,
+          // y los consumidores (AvisosDelPar, InspectUnit, Patch, DesignerBinding,
+          // Config) la tocaban con TFile.Exists y la nombraban - oraculo de
+          // existencia de un .fmx de fuera de la jaula (V165 de la 1.23.1). El
+          // juez: ExtractFileName(Resto) = Resto (sin separadores ni '..').
+          if Resto.Contains('.') and (ExtractFileName(Resto) = Resto) then
             Result := Result + [Base + '.' + Resto];
         end;
 end;

@@ -10,6 +10,36 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **Per-agent confinement uses the most specific root, not the first one
+  declared.** With nested write roots (`D:\W` and `D:\W\agents`) and confinement
+  on, the agent's own folder was taken from the first root that contained the
+  path, so the same write was allowed or refused depending on the order the
+  roots were declared. `PathDenied` and `ConfinamientoPorLaRutaReal` now pick the
+  longest matching root, like `RaizQueContiene` (the "which root contains this"
+  namer).
+- **The vault walker does not follow links.** `vault_search` and its file
+  listing walked the vault with a recursive directory scan of their own, with no
+  link check and no cycle cut: a junction inside the vault pointing outside it
+  listed and read the notes behind it (outside the vault's own jail), and a
+  junction to an ancestor looped until the path blew up. `CollectNotes` now skips
+  reparse points (`EsEnlace`), the way the workspace's `WalkFiles` does.
+- **A unit's companion view is a bare name, not a path.** A `{$R *.<X>.fmx}`
+  directive names a companion form; the reader composed it as `<unit-base>.<rest>`
+  from the directive text, and a `rest` with path separators
+  (`*.\..\..\Otra\x.fmx`) built a path outside the unit's folder, which the
+  callers (the delete/move companion note, the designer, the binding check) then
+  probed with a file-exists and named - an oracle for a `.fmx` outside the jail.
+  A view is now kept only when it is a bare filename (`ExtractFileName(rest) =
+  rest`).
+- **A delete named inside a server temporary is judged by its real path, not
+  its name.** A delete under `__delphi-temp` is permanent (nothing is restored
+  from a temporary), and `EnTemporal` matched on the text, which a junction
+  defeats: a `__delphi-temp` that is a junction to `<root>\src`, or a junction
+  inside an old `__delphi-temp`, made `delphi_delete` of a file through it wipe
+  the live `src` file for good, with no recoverable copy (the inverse of V112).
+  The temp branch now resolves the real path first; if it is a link to a live
+  file outside any temporary the delete is refused (FILE-053), and the real file
+  is deleted - recoverably - by its own path.
 - **The engine resolves a unit through a msbuild-macro search path, the same as
   the compiler.** A `DCC_UnitSearchPath` such as
   `$(MSBuildProjectDirectory)\..\Shared` compiles - the build gate expands the
