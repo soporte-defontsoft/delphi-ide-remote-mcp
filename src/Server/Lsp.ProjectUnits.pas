@@ -41,6 +41,7 @@ type
     function IsDesigner: Boolean;
     function NeedsCreateForm: Boolean; // forms and data modules, not frames
   end;
+  PUnitInfo = ^TUnitInfo;
 
   TProjectUnit = record
     UnitName: string;
@@ -81,7 +82,18 @@ function InspectUnit(const APasPath: string; out AInfo: TUnitInfo): string;
   la del disenador (delphi_config add-unit), que dentro se paraban todas las
   ediciones del servidor mientras se generaba. Nunca lanza. }
 procedure JuzgaRaizDeDiseno(var AInfo: TUnitInfo; const ARegistro: string;
-  AEsperaMs: Cardinal; ARaizDelCreador: TRaizDeDiseno = rdDesconocida);
+  AEsperaMs: Cardinal; ARaizDelCreador: TRaizDeDiseno = rdDesconocida; APrevia: PUnitInfo = nil);
+{ La unidad APasPath inspeccionada y su raiz juzgada por su CADENA (el paso 3
+  de JuzgaRaizDeDiseno), FUERA del cerrojo de escritura: la cadena puede
+  arrancar el motor, y dentro paraba TODAS las escrituras del servidor (V177
+  de la 1.23.1, medido: 1,91 s de los 2,33 de un add-unit). Solo cuando los
+  pasos 1 y 2 no contestan - ni el creador ni el registro del IDE de
+  ARegistroDe en AProject -: con ellos no hay motor, y juzgar antes lo
+  arrancaba (medido: un fix-references de 0,13 s pasaba a 2,34, con el cerrojo
+  cogido). Quien escribe la pasa como APrevia a JuzgaRaizDeDiseno, que la toma
+  si es de la misma unidad. Vacia si no hace falta o no se pudo. Nunca lanza. }
+function PrejuzgaRaiz(const AProject, APasPath, ARegistroDe: string;
+  ARaizDelCreador: TRaizDeDiseno = rdDesconocida): TUnitInfo;
 { EL lector de lo que es la raiz de un designer (ARuta, un .dfm/.fmx): su
   unidad (UnidadDeDesigner) inspeccionada y, si su designer es ese fichero (un
   X.fmx al lado de un X.dfm: la unidad es del .dfm), JuzgaRaizDeDiseno - su
@@ -514,7 +526,7 @@ begin
 end;
 
 procedure JuzgaRaizDeDiseno(var AInfo: TUnitInfo; const ARegistro: string;
-  AEsperaMs: Cardinal; ARaizDelCreador: TRaizDeDiseno);
+  AEsperaMs: Cardinal; ARaizDelCreador: TRaizDeDiseno; APrevia: PUnitInfo);
 var
   M: TMetaTable;
   Falta: TFaltaTabla;
@@ -548,7 +560,18 @@ begin
     AInfo.Raiz := RaizDeDesignClass(AInfo.DesignClass);
     Exit;
   end;
-  // 3) la clase de la unidad por su cadena, contra la tabla de su marco
+  // 3) la clase de la unidad por su cadena, contra la tabla de su marco: la
+  // que se juzgo FUERA del cerrojo (PrejuzgaRaiz), si es de esta misma unidad
+  // - la misma ruta, clase, ancestro y designer -; si cambio entre medias, aqui
+  // (V177 de la 1.23.1)
+  if (APrevia <> nil) and (APrevia.Raiz <> rdDesconocida) and
+     SameFileName(APrevia.PasPath, AInfo.PasPath) and SameFileName(APrevia.Designer, AInfo.Designer) and
+     SameText(APrevia.ClassName, AInfo.ClassName) and SameText(APrevia.Ancestor, AInfo.Ancestor) then
+  begin
+    AInfo.Raiz := APrevia.Raiz;
+    AInfo.DesignClass := APrevia.DesignClass;
+    Exit;
+  end;
   try
     M := MetaTable(Fmx, Falta, AEsperaMs);
     if M = nil then
@@ -568,6 +591,25 @@ begin
       AInfo.DesignClass := '';
       AInfo.RaizSinJuez := E.Message;
     end;
+  end;
+end;
+
+function PrejuzgaRaiz(const AProject, APasPath, ARegistroDe: string;
+  ARaizDelCreador: TRaizDeDiseno): TUnitInfo;
+var
+  Dpr, Dproj: string;
+begin
+  Result := Default(TUnitInfo);
+  // los pasos 1 y 2 contestan sin la cadena: nada que juzgar antes
+  if ARaizDelCreador <> rdDesconocida then
+    Exit;
+  try
+    if (ResolveProjectPair(AProject, Dpr, Dproj) <> '') or (RegistroDelIde(ARegistroDe, Dproj) <> '') or
+       (InspectUnit(APasPath, Result) <> '') then
+      Exit(Default(TUnitInfo));
+    JuzgaRaizDeDiseno(Result, '', 0);
+  except
+    Result := Default(TUnitInfo); // una unidad que no se deja leer: se juzga dentro, como antes
   end;
 end;
 
@@ -2055,7 +2097,7 @@ end;
 { ---- public operations ---- }
 
 function AddProjectUnitNucleo(const AProject, APasPath: string;
-  ARaizDelCreador: TRaizDeDiseno): string;
+  ARaizDelCreador: TRaizDeDiseno; APrevia: PUnitInfo): string;
 var
   Dpr, Dproj, Enc, Text, Include, Entry, Note: string;
   Info: TUnitInfo;
@@ -2072,8 +2114,9 @@ begin
   if Result <> '' then
     Exit;
   // lo que es su raiz para el IDE, con la tabla como este: quien la espera lo
-  // hace antes de coger el cerrojo
-  JuzgaRaizDeDiseno(Info, RegistroDelIde(Info.PasPath, Dproj), 0, ARaizDelCreador);
+  // hace antes de coger el cerrojo; y su cadena, juzgada antes tambien
+  // (APrevia, PrejuzgaRaiz: V177 de la 1.23.1)
+  JuzgaRaizDeDiseno(Info, RegistroDelIde(Info.PasPath, Dproj), 0, ARaizDelCreador, APrevia);
   Include := IncludeFor(Dpr, Info.PasPath);
 
   // .dpr
@@ -2238,13 +2281,16 @@ begin
   // Registrar una unidad es leer el .dpr, modificarlo y escribirlo: dos
   // agentes creando unidades en el MISMO proyecto a la vez perdian entradas
   // dando exito (medido 2026-09-20, bateria de concurrencia). Con el cerrojo
-  // de escritura por delante, el .dpr deja de ser una carrera.
+  // de escritura por delante, el .dpr deja de ser una carrera. Lo que es su
+  // raiz por su cadena (el motor, si sale de la unidad), ANTES: dentro paraba
+  // todas las escrituras del servidor (V177 de la 1.23.1, medido)
+  var Previa := PrejuzgaRaiz(AProject, APasPath, APasPath, ARaizDelCreador);
   EnterFileEdit;
   try
     Result := ProyectoTodoONada(AProject,
       function: string
       begin
-        Result := AddProjectUnitNucleo(AProject, APasPath, ARaizDelCreador);
+        Result := AddProjectUnitNucleo(AProject, APasPath, ARaizDelCreador, @Previa);
       end);
   finally
     LeaveFileEdit;
@@ -2539,7 +2585,8 @@ begin
   end;
 end;
 
-function RenameProjectUnitNucleo(const AProject, AOldPasPath, ANewPasPath: string): string;
+function RenameProjectUnitNucleo(const AProject, AOldPasPath, ANewPasPath: string;
+  APrevia: PUnitInfo): string;
 var
   Dpr, Dproj, Enc, Text, OldName, OldInclude, Entry, NewInclude: string;
   U: TUsesClause;
@@ -2555,8 +2602,9 @@ begin
   Result := InspectUnit(ANewPasPath, Info);
   if Result <> '' then
     Exit;
-  // su raiz: la registro el IDE con la ruta VIEJA
-  JuzgaRaizDeDiseno(Info, RegistroDelIde(AOldPasPath, Dproj), 0);
+  // su raiz: la registro el IDE con la ruta VIEJA; su cadena, juzgada antes
+  // del cerrojo (APrevia, V177 de la 1.23.1)
+  JuzgaRaizDeDiseno(Info, RegistroDelIde(AOldPasPath, Dproj), 0, rdDesconocida, APrevia);
   OldName := TPath.GetFileNameWithoutExtension(AOldPasPath);
   NewInclude := IncludeFor(Dpr, Info.PasPath);
 
@@ -2608,6 +2656,8 @@ end;
 
 function RenameProjectUnit(const AProject, AOldPasPath, ANewPasPath: string): string;
 begin
+  // su cadena, ANTES del cerrojo, como add-unit (V177 de la 1.23.1)
+  var Previa := PrejuzgaRaiz(AProject, ANewPasPath, AOldPasPath);
   EnterFileEdit;
   try
     // TODO O NADA, como registrar y quitar (ProyectoTodoONada): con el .dproj
@@ -2616,7 +2666,7 @@ begin
     Result := ProyectoTodoONada(AProject,
       function: string
       begin
-        Result := RenameProjectUnitNucleo(AProject, AOldPasPath, ANewPasPath);
+        Result := RenameProjectUnitNucleo(AProject, AOldPasPath, ANewPasPath, @Previa);
       end);
   finally
     LeaveFileEdit;
@@ -4611,8 +4661,14 @@ end;
 
 function ArreglaReferencias(const AProject: string): string;
 begin
-  // con el cerrojo de las ediciones, como toda reescritura de proyectos
-  // (el de un grupo corria sin el)
+  // un proyecto: cada unidad la re-apunta RenameProjectUnit con SU cerrojo, y
+  // con la raiz de su designer juzgada antes de cogerlo; con uno alrededor de
+  // todo, el motor se juzgaba con todas las escrituras del servidor paradas
+  // (V177 de la 1.23.1, medido)
+  if not SameText(TPath.GetExtension(AProject), '.groupproj') then
+    Exit(ArreglaReferenciasNucleo(AProject));
+  // un grupo, con el cerrojo de las ediciones, como toda reescritura de
+  // proyectos (corria sin el)
   EnterFileEdit;
   try
     Result := ArreglaReferenciasNucleo(AProject);

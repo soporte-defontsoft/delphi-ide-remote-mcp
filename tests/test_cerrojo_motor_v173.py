@@ -24,6 +24,18 @@ solo para leer y para escribir (AbreFormParaJuzgar), como insert.
      servidor nuevo; B no espera a A
   Q4 (control) el rename sigue preguntando al motor, ahora FUERA del cerrojo:
      un nombre que la base ya publica (Heredado1) se niega (DSGN-NOMBRE_OCUPADO)
+  Q5 (V177) delphi_config add-unit de un data module cuya base esta en OTRA
+     unidad (lo que es su raiz lo dice la cadena, por el motor), motor FRIO: B no
+     espera a A (medido contra 7d0416d: 1,91 s de 2,33), y se registra como el
+     data module que es ({Datos: TDataModule}: test_raiz_de_diseno_1202 P1)
+  Q6 (V177) fix-references de ese data module, movido a mano, que el .dproj YA
+     registra (su DesignClass: el juez contesta por el registro, sin motor),
+     motor FRIO: ni A arranca el motor ni B espera (medido contra el primer
+     V177, que lo juzgaba antes por la cadena siempre y con el cerrojo de
+     ArreglaReferencias cogido: A 2,34 s, B 1,87; 7d0416d: A 0,13, B 0,02)
+  Q7 (V177) el mismo fix-references con la unidad SIN registro de designer en el
+     .dproj (el juez va a la cadena, el motor), motor FRIO: B no espera a A, y
+     se re-apunta como el data module que es
 
 Cada caso con un servidor recien lanzado (el motor frio es el que tarda). Si
 A no tarda lo bastante para separar "espera" de "no espera", el caso sale
@@ -135,6 +147,64 @@ try:
     check('Q4 control: renombrar a un nombre que la base ya publica (Heredado1) se niega y no escribe',
           mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_NOMBRE_OCUPADO_FMT') and open(FMX, 'rb').read() == antes,
           r[:300])
+
+    # Q5 (V177): add-unit, con lo que es su raiz por la cadena (el motor), fuera del cerrojo
+    PV = os.path.join(JAIL, 'vcl')
+    proc, cli = servidor()
+    try:
+        r = cli.call('delphi_create', {'kind': 'project-vcl', 'name': 'PRaiz', 'dir': PV})
+        assert not mc.fallo(r), r[:300]
+    finally:
+        proc.kill()
+    for nombre, texto in (('UBaseDM.pas', 'unit UBaseDM;\r\n\r\ninterface\r\n\r\nuses\r\n  System.Classes;\r\n\r\n'
+                                          'type\r\n  TBaseDM = class(TDataModule)\r\n  end;\r\n\r\nimplementation\r\n\r\n'
+                                          '{$R *.dfm}\r\n\r\nend.\r\n'),
+                          ('UBaseDM.dfm', 'object BaseDM: TBaseDM\r\n  Height = 150\r\n  Width = 215\r\nend\r\n'),
+                          ('UDatos.pas', 'unit UDatos;\r\n\r\ninterface\r\n\r\nuses\r\n  System.Classes, UBaseDM;\r\n\r\n'
+                                         'type\r\n  TDatos = class(TBaseDM)\r\n  end;\r\n\r\nvar\r\n  Datos: TDatos;\r\n\r\n'
+                                         'implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n'),
+                          ('UDatos.dfm', 'inherited Datos: TDatos\r\nend\r\n')):
+        open(os.path.join(PV, nombre), 'wb').write(texto.encode('ascii'))
+    DPRV = os.path.join(PV, 'PRaiz.dpr')
+    no_espera('Q5', 'add-unit de un data module con su base en otra unidad (V177)',
+              ('delphi_config', {'project': os.path.join(PV, 'PRaiz.dproj'), 'command': 'add-unit',
+                                 'path': os.path.join(PV, 'UDatos.pas')}, 300), 'cinco', 'seis',
+              lambda ra: not mc.fallo(ra) and
+              b"UDatos in 'UDatos.pas' {Datos: TDataModule}" in open(DPRV, 'rb').read())
+
+    # Q6 (V177): fix-references de UDatos movido a mano; el .dproj lo registra (Q5)
+    def mueve(de, a):
+        os.makedirs(os.path.join(PV, a))
+        for ext in ('.pas', '.dfm'):
+            os.rename(os.path.join(PV, de, 'UDatos' + ext), os.path.join(PV, a, 'UDatos' + ext))
+    DPROJV = os.path.join(PV, 'PRaiz.dproj')
+    mueve('', 'Sub')
+    check('Q6 preparacion: el .dproj registra UDatos con su DesignClass (el juez contesta por el registro)',
+          b'<DesignClass>TDataModule</DesignClass>' in open(DPROJV, 'rb').read())
+    proc, cli = servidor()
+    try:
+        (ra, a_t), (rb, b_t), _ = mc.a_la_vez(
+            cli.call, ('delphi_config', {'project': DPROJV, 'command': 'fix-references'}, 300),
+            ('delphi_textedit', {'path': TXT, 'old': 'seis', 'new': 'siete'}, 300), B_DELAY)
+    finally:
+        proc.kill()
+    print('  (Q6: A tardo %.2f s; B %.2f s)' % (a_t, b_t))
+    check('Q6 fix-references de una unidad registrada: re-apuntada como data module, y B escribio',
+          not mc.fallo(ra) and b"UDatos in 'Sub\\UDatos.pas' {Datos: TDataModule}" in open(DPRV, 'rb').read()
+          and not mc.fallo(rb), (ra[:300], rb[:200]))
+    check('Q6 ...sin arrancar el motor (A tarda menos de %.1f s) y sin que B espere' % MIN_A,
+          a_t < MIN_A and b_t < MIN_A, (a_t, b_t))
+
+    # Q7 (V177): el mismo, con la unidad SIN registro de designer en el .dproj
+    dproj = open(DPROJV, 'rb').read()
+    ini = dproj.index(b'<DCCReference Include="Sub\\UDatos.pas">')
+    fin = dproj.index(b'</DCCReference>', ini) + len(b'</DCCReference>')
+    open(DPROJV, 'wb').write(dproj[:ini] + b'<DCCReference Include="Sub\\UDatos.pas"/>' + dproj[fin:])
+    mueve('Sub', 'Sub2')
+    no_espera('Q7', 'fix-references de una unidad sin registro de designer (V177)',
+              ('delphi_config', {'project': DPROJV, 'command': 'fix-references'}, 300), 'siete', 'ocho',
+              lambda ra: not mc.fallo(ra) and
+              b"UDatos in 'Sub2\\UDatos.pas' {Datos: TDataModule}" in open(DPRV, 'rb').read())
 finally:
     mc.borra(WORK)
 

@@ -2270,6 +2270,29 @@ begin
         Break;
       end;
 
+  // add-unit y fix-references cogen el cerrojo ELLOS (AddProjectUnit, y
+  // RenameProjectUnit por cada unidad re-apuntada), y lo que es la raiz de un
+  // designer por su cadena - el motor, si sale de la unidad - lo juzgan antes
+  // (PrejuzgaRaiz). Dentro del de la tool se juzgaba con todas las escrituras
+  // del servidor paradas (V177 de la 1.23.1, medido: 1,91 s de los 2,33 de un
+  // add-unit). fix-references de un grupo ya iba sin el (ArreglaReferencias)
+  if Cmd = 'add-unit' then
+  begin
+    if Params.Path.Trim = '' then
+      Exit(MsgText(SR_UNIT_NEED_PATH));
+    // la unit solo se NOMBRA y la pregunta es la de LEER (una de una
+    // referencia o de vendor va al .dpr propio y no se le escribe nada;
+    // duodecima revision, r12a)
+    Result := WriteTargetDenied(Params.Project);
+    if Result = '' then
+      Result := ReadPathDenied(Params.Path);
+    if Result <> '' then
+      Exit;
+    Exit(AddProjectUnit(Params.Project, Params.Path));
+  end;
+  if Cmd = 'fix-references' then
+    Exit(ArreglaReferencias(Params.Project));
+
   // Todo lo demas ESCRIBE el .dproj leyendolo, cambiandolo y guardandolo, asi
   // que va bajo el mismo cerrojo que las demas ediciones: dos agentes tocando
   // la configuracion del mismo proyecto a la vez perdian el cambio de uno con
@@ -2359,28 +2382,19 @@ begin
       if Result = '' then
         Result := AddPackageRequires(Params.Project, Params.Requires);
     end
-    else if (Cmd = 'add-unit') or (Cmd = 'remove-unit') then
+    else if Cmd = 'remove-unit' then
     begin
       if Params.Path.Trim = '' then
         Exit(MsgText(SR_UNIT_NEED_PATH));
       Result := WriteTargetDenied(Params.Project);
-      // add-unit: la unit solo se NOMBRA y la pregunta es la de LEER (una de
-      // una referencia o de vendor va al .dpr propio y no se le escribe nada;
-      // duodecima revision, r12a). remove-unit: la ruta es la ENTRADA que se
-      // quita, tal como la lista el proyecto, y no se lee ni se escribe: una
-      // de fuera (BUILD-050 pide quitarla) o que ya no existe se quita igual
-      // (21-oct-2026; el nucleo no la abre si esta fuera)
-      if (Result = '') and (Cmd = 'add-unit') then
-        Result := ReadPathDenied(Params.Path);
+      // la ruta es la ENTRADA que se quita, tal como la lista el proyecto, y
+      // no se lee ni se escribe: una de fuera (BUILD-050 pide quitarla) o que
+      // ya no existe se quita igual (21-oct-2026; el nucleo no la abre si
+      // esta fuera). add-unit y fix-references, arriba, fuera de este cerrojo
       if Result <> '' then
         Exit;
-      if Cmd = 'add-unit' then
-        Result := AddProjectUnit(Params.Project, Params.Path)
-      else
-        Result := RemoveProjectUnit(Params.Project, Params.Path);
+      Result := RemoveProjectUnit(Params.Project, Params.Path);
     end
-    else if Cmd = 'fix-references' then
-      Result := ArreglaReferencias(Params.Project)
     else if (Cmd = 'add-project') or (Cmd = 'remove-project') then
       Result := MsgFmt(SR_GRUPO_SOLO_GRUPO_FMT, [Cmd, TPath.GetFileName(Proj)])
     else

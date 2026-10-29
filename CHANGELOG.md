@@ -20,6 +20,18 @@ the MCP `initialize` response (`serverInfo.version`).
   callers were meant to follow: the root over a base in another unit stays
   unjudged there, as without project settings, and `delphi_designer lint`
   judges it in full.
+- **`delphi_config add-unit` and `fix-references` judge a form's root outside
+  the write lock.** Registering a unit whose form descends from a base in
+  another unit asks the language engine what that root is (data module, frame
+  or form: its `DesignClass` and `CreateForm`), and the tool held the
+  server-wide lock for the whole command: a `delphi_textedit` of an unrelated
+  file waited 1.9 s of an `add-unit`'s 2.3 s, and `fix-references` held it
+  around every unit it re-pointed. The root is now judged by its chain before
+  the lock, only when the IDE's own registration in the project does not
+  already say it (then no engine is asked at all), and the writer uses that
+  judgment if the unit is still the one judged (same path, class, ancestor and
+  form). `fix-references` on a project takes the lock for each unit it
+  re-points instead of around the whole command.
 - **`delphi_designer set` (single property, `props` and `Name`) judges outside
   the write lock.** The tool held the lock for the whole command while the
   IDE's helper process and the engine answered: a `set` on a form with design
