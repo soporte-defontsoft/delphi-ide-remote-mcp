@@ -34,7 +34,6 @@ puede, la bateria lo DICE y no finge que paso.
 Usage:  python tests/test_round33.py [path-to-DelphiLspMcp.exe]
 """
 import os
-import subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -53,17 +52,12 @@ open(os.path.join(DENTRO, 'Legitima.pas'), 'w').write(
     SECRETO.replace('Secreto', 'Legitima'))
 
 
-def junction(enlace, destino):
-    """mklink /J no necesita administrador. True si quedo hecho."""
-    r = subprocess.run(['cmd', '/c', 'mklink', '/J', enlace, destino],
-                       capture_output=True, text=True)
-    return r.returncode == 0 and os.path.isdir(enlace)
-
-
 SALIDA = os.path.join(JAIL, 'salida')      # enlace -> FUERA  (el escape)
 INTERNO = os.path.join(JAIL, 'interno')    # enlace -> DENTRO (legitimo)
-HAY_SALIDA = junction(SALIDA, FUERA)
-HAY_INTERNO = junction(INTERNO, DENTRO)
+# por EL ayudante de las baterias: la copia de aqui leia la salida de mklink como
+# UTF-8 y la consola contesta en su pagina OEM ("Union creada", 0xA2)
+HAY_SALIDA = mc.junction(SALIDA, FUERA)
+HAY_INTERNO = mc.junction(INTERNO, DENTRO)
 
 TOK = 'r33'
 PORT = mc.puerto_libre()

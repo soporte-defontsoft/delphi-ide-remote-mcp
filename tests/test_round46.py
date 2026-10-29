@@ -23,18 +23,10 @@ casa del servidor; lo mide test_desktop_casa_1182.)
 """
 import os
 import re
-import subprocess
 import time
 import zipfile
 import mcp_cliente as mc
 from mcp_cliente import check
-
-
-def junction(link, target):
-    """mklink /J no necesita privilegios; devuelve True si el enlace quedo."""
-    r = subprocess.run(['cmd', '/c', 'mklink', '/J', link, target],
-                       capture_output=True)
-    return r.returncode == 0 and os.path.isdir(link)
 
 
 # lo que deje una pasada rota (solo lectura, enlaces) lo quita mc.carpeta:
@@ -69,8 +61,8 @@ TEMP_CASA = os.path.join(EXEDIR, mc.TEMPORALES)
 TEMP_JAULA = os.path.join(JAIL, mc.TEMPORALES)  # la de la raiz: T5 y el zip de delphi_package
 os.makedirs(os.path.join(TEMP_CASA, 'normal'))
 open(os.path.join(TEMP_CASA, 'normal', 'basura.txt'), 'w').write('x')
-HAY_J1 = junction(os.path.join(JAIL, 'vendor', 'out'), SECRETO)
-HAY_J2 = junction(os.path.join(TEMP_CASA, 'trampa'), VICTIMA)
+HAY_J1 = mc.junction(os.path.join(JAIL, 'vendor', 'out'), SECRETO)
+HAY_J2 = mc.junction(os.path.join(TEMP_CASA, 'trampa'), VICTIMA)
 
 
 def arranca(puerto):
