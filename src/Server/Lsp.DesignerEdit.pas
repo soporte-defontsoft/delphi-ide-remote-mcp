@@ -102,8 +102,10 @@ function PlanDeRenombre(ADoc: TStyleDoc; AObj: TStyleObj;
   ATabla: TMetaTable = nil): string;
 
 { Los comandos. Cada uno devuelve el JSON de lo hecho, o la negativa sin
-  haber escrito nada. La jaula de escritura la piden ellos; el cerrojo de
-  escritura (EnterFileEdit) lo coge la tool. }
+  haber escrito nada. La jaula de escritura la piden ellos. El cerrojo de
+  escritura (EnterFileEdit): insert y set (todas sus formas) lo cogen ellos,
+  solo para leer y para escribir, con el juicio fuera (AbreFormParaJuzgar,
+  V173c de la 1.23.1); delete lo coge la tool. }
 // AProps (3.10 de la 1.18.0): 'Prop=valor;...' - las propiedades iniciales de
 // insert, o varias de set de una vez; todo o nada, cada una juzgada como set
 function InsertaComponente(const APath, AClase, AComponente, AParent: string;
@@ -2880,11 +2882,16 @@ var
   Nombre, NotaLector: string;
   LineaN, Ini, Fin: Integer;
   Ret: TJSONObject;
+  Antes, AntesPas: TArray<Byte>;
 begin
   Result := PropiedadQueNoVa(AProp, AValor);
   if Result <> '' then
     Exit;
-  Result := AbreForm(APath, False, True, F);
+  // los bytes que se juzgan, leidos con el cerrojo; el juicio (el ayudante del
+  // IDE, el motor de la clase raiz) FUERA de el, y el cerrojo otra vez solo
+  // para escribir: dentro paraba todas las ediciones del servidor (V173c de la
+  // 1.23.1, medido: 87 s con una Sample con paquetes)
+  Result := AbreFormParaJuzgar(APath, False, True, F, Antes, AntesPas);
   if Result <> '' then
     Exit;
   try
@@ -2908,7 +2915,15 @@ begin
     var Otras: TArray<TGuardadaComo>;
     F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, [Info.Prop], NotaIde, NoGuarda, Otras));
     MarcaLoQueGuarda(Info, NoGuarda, Otras);
-    Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+    // con el cerrojo: el form es el que se juzgo
+    EnterFileEdit;
+    try
+      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
+      if Result = '' then
+        Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+    finally
+      LeaveFileEdit;
+    end;
     if Result <> '' then
       Exit;
     // el arbol se releyo al guardar: su linea, la de ahora
@@ -2997,11 +3012,13 @@ var
   Nombre, NotaLector: string;
   Ret, Una: TJSONObject;
   Lista: TJSONArray;
+  Antes, AntesPas: TArray<Byte>;
 begin
   Result := ParesDeProps(AProps, Props, Valores);
   if Result <> '' then
     Exit;
-  Result := AbreForm(APath, False, True, F);
+  // como set de una: el juicio FUERA del cerrojo (V173c de la 1.23.1)
+  Result := AbreFormParaJuzgar(APath, False, True, F, Antes, AntesPas);
   if Result <> '' then
     Exit;
   try
@@ -3037,7 +3054,15 @@ begin
     F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras));
     for var I := 0 to High(Infos) do
       MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
-    Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)
+    // con el cerrojo: el form es el que se juzgo
+    EnterFileEdit;
+    try
+      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
+      if Result = '' then
+        Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)
+    finally
+      LeaveFileEdit;
+    end;
     if Result <> '' then
       Exit;
     Ret := TJSONObject.Create;
@@ -3222,9 +3247,12 @@ var
   Lista: TArray<string>;
   LineaCampo, Linea: Integer;
   Ret: TJSONObject;
+  Antes, AntesPas: TArray<Byte>;
 begin
-  // la tabla tambien: que lineas del form son referencias (JuezDeReferencias)
-  Result := AbreForm(APath, True, True, F);
+  // la tabla tambien: que lineas del form son referencias (JuezDeReferencias).
+  // El nombre libre (los heredados los dice el motor) se juzga FUERA del
+  // cerrojo, que solo se coge para leer y para escribir (V173c de la 1.23.1)
+  Result := AbreFormParaJuzgar(APath, True, True, F, Antes, AntesPas);
   if Result <> '' then
     Exit;
   try
@@ -3255,7 +3283,15 @@ begin
     if Result <> '' then
       Exit;
     Linea := Obj.StartLine;
-    Result := EscribeFormYUnidad(F, Dfm, Pas, Pas <> F.PasTexto);
+    // con el cerrojo: el form y la unidad son los que se juzgaron
+    EnterFileEdit;
+    try
+      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
+      if Result = '' then
+        Result := EscribeFormYUnidad(F, Dfm, Pas, Pas <> F.PasTexto);
+    finally
+      LeaveFileEdit;
+    end;
     if Result <> '' then
       Exit;
     LineaCampo := 0;

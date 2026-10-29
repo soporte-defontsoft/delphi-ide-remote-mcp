@@ -327,8 +327,9 @@ function LintConTablaYSinJuez(M: TMetaTable; const AIsFmx: Boolean;
   property Foo): la clase real las lee y la tabla no las conoce. La juzgan
   set y el lint (H8 de la 1.19.2). AConMotor False: sin el motor, la cadena
   para en una base del usuario de otra unidad (quien la pide tras cada
-  escritura, o con el cerrojo de escribir, no espera a un motor). Nunca
-  lanza. }
+  escritura no espera a un motor). El lint que corre con el cerrojo de escribir
+  cogido lo veda entero, se pida o no (Lsp.Patch.LintDeForm: VedaElMotor; V173a
+  de la 1.23.1, dos de sus jueces no pasaban el False). Nunca lanza. }
 function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
   out APropias: TArray<TPropiedadDelUsuario>; AConMotor: Boolean = True): string;
 

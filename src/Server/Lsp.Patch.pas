@@ -715,6 +715,15 @@ function XmlMalFormadoSegunElIde(const AXml: string): string;
 procedure EnterFileEdit;
 procedure LeaveFileEdit;
 
+{ Si ESTE hilo tiene el cerrojo de escritura (un EnterFileEdit sin su
+  LeaveFileEdit). Lo pregunta el lint que corre tras escribir (LintDeForm):
+  con el cerrojo cogido veda el motor (Lsp.Herencia.VedaElMotor), que
+  arrancaba y paraba TODAS las escrituras del servidor (V173a de la 1.23.1,
+  medido: un textedit de otro fichero espero 1,9 s de los 2,6 del edit de un
+  .fmx con su base en otra unidad). La regla vivia en cada llamador
+  (AConMotor, Lsp.DesignerMeta) y dos jueces del lint no la pasaban. }
+function EnCerrojoDeEscritura: Boolean;
+
 { El "eol" de quien crea un fichero: '' si vale (crlf, lf, o vacio = crlf); si
   no, la negativa. UNA regla para delphi_textedit y delphi_edit createunit: la
   segunda aceptaba "mac" y creaba en CRLF (tercera revision, 27-sep-2026). }
@@ -1110,6 +1119,7 @@ uses
   Lsp.Client,
   Lsp.FormRender, // LoQueNoCargaElIde: el lector del IDE juzga lo que la tabla no (LintDeForm)
   Lsp.Styles, // NotaDeLookupsSinEstilo: los StyleLookup contra los estilos que el form ve (LintDeForm)
+  Lsp.Herencia, // VedaElMotor: con el cerrojo, el lint no arranca motores (LintDeForm)
   Lsp.Listas, // PrincipioDeTexto: EL corte de un texto por la cabeza, sin partir un par
   System.Win.Registry, // EscribeClaveDelIde: la puerta del registro del IDE
   Lsp.BuildRunner,     // RunCaptured: reg.exe, la copia de una clave
@@ -1131,6 +1141,10 @@ const
 
 var
   GLock: TCriticalSection;
+
+threadvar
+  // cuantas veces tiene ESTE hilo el cerrojo (es recursivo): EnCerrojoDeEscritura
+  TVecesEnCerrojo: Integer;
 
 var
   GIdeUtf8Loaded: Boolean = False;
@@ -1544,11 +1558,18 @@ end;
 procedure EnterFileEdit;
 begin
   GLock.Enter;
+  Inc(TVecesEnCerrojo);
 end;
 
 procedure LeaveFileEdit;
 begin
+  Dec(TVecesEnCerrojo);
   GLock.Leave;
+end;
+
+function EnCerrojoDeEscritura: Boolean;
+begin
+  Result := TVecesEnCerrojo > 0;
 end;
 
 function RelecturaDe(const APath: string; const AEscrito: TArray<Byte>;
@@ -4801,7 +4822,8 @@ var
   Lines, CodeLines: TArray<string>;
   I: Integer;
 begin
-  GLock.Enter;
+  // por SU puerta, que cuenta quien lo tiene (EnCerrojoDeEscritura)
+  EnterFileEdit;
   try
     try
       Result := WriteTargetDenied(A.Path); // jaula + carpetas muertas, UNA puerta
@@ -5812,7 +5834,7 @@ begin
         Result := MsgExcepcion(E.ClassName, E.Message);
     end;
   finally
-    GLock.Leave;
+    LeaveFileEdit;
   end;
 end;
 
@@ -5861,7 +5883,7 @@ begin
   end;
 end;
 
-function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
+function LosJuecesDeUnForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
   AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string): TLintDeForm;
 var
   Lineas: TArray<string>;
@@ -5906,6 +5928,25 @@ begin
   if ALector and (Result.SinJuez > 0) and (Result.Parser = '') and
      (Length(Result.Propiedades) = 0) and (Result.Falta.Razon = '') then
     Result.Lector := LoQueNoCargaElIde(ADfm, ATexto, AEnc, Result.SinLector);
+end;
+
+function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
+  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string): TLintDeForm;
+begin
+  // con el cerrojo de escritura cogido (DesignerLint de delphi_edit y del
+  // changeset, delete del disenador), ningun juez arranca ni pregunta al
+  // motor: paraba TODAS las escrituras del servidor (V173a de la 1.23.1,
+  // medido: un textedit de otro fichero espero 1,9 s de los 2,6 del edit). La
+  // raiz con su base en otra unidad queda sin juzgar, como sin ajustes de
+  // proyecto; el lint de fuera (delphi_designer lint) la juzga entera
+  if not EnCerrojoDeEscritura then
+    Exit(LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes));
+  VedaElMotor;
+  try
+    Result := LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes);
+  finally
+    LevantaElMotor;
+  end;
 end;
 
 { Lo que delphi_edit (y el changeset y la tanda, que escriben por el) dice del

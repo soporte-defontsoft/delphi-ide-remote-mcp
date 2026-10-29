@@ -10,6 +10,22 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A form edit no longer stops every other write of the server while the
+  language engine starts.** After `delphi_edit` (or a changeset) writes a form,
+  its lint runs inside the server-wide write lock; for a form whose class
+  descends from a base in another unit, two of its judges (the root class and
+  the `StyleLookup` check) asked the engine, starting it if it was cold - a
+  `delphi_textedit` of an unrelated file waited 1.9 s of the edit's 2.6 s. That
+  lint now runs with the engine barred (`VedaElMotor`), the rule the after-write
+  callers were meant to follow: the root over a base in another unit stays
+  unjudged there, as without project settings, and `delphi_designer lint`
+  judges it in full.
+- **`delphi_designer set` (single property, `props` and `Name`) judges outside
+  the write lock.** The tool held the lock for the whole command while the
+  IDE's helper process and the engine answered: a `set` on a form with design
+  packages held every write of the server for 87 s. Like `insert` and the
+  ordering forms of `set`, they now take the lock only to read the form and to
+  write it, and refuse (`DSGN-144`) if it changed in between.
 - **The log masker reads secret keys the way the binder does.** The transports
   log the request body before the tool gate, masking the value of secret-named
   keys; the masker matched the literal key (`"password"`...), but the binder

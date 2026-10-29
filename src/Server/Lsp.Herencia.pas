@@ -81,9 +81,20 @@ type
 
 { El motor del proyecto de AFile, listo para preguntar por el, o nil: sin
   ajustes de proyecto el motor no cruza unidades, y para nada se arranca uno
-  (ResolveSettings lo sabe sin arrancarlo); tampoco si no se puede abrir.
-  Nunca lanza. }
+  (ResolveSettings lo sabe sin arrancarlo); tampoco si no se puede abrir, ni
+  con el motor vedado en este hilo (VedaElMotor). Nunca lanza. }
 function MotorPara(const AFile: string): TLspClient;
+
+{ El motor VEDADO en ESTE hilo mientras dure: MotorPara da nil, como sin
+  ajustes de proyecto, y la cadena para en una base del usuario de otra
+  unidad. Lo pide el lint que corre tras escribir con el cerrojo de escritura
+  cogido (Lsp.Patch.LintDeForm): arrancar o preguntar al motor ahi paraba
+  TODAS las escrituras del servidor (V173a de la 1.23.1, medido). Un juez que
+  se anada a ese lint la cumple sin acordarse; quien necesita el motor para
+  decidir lo que escribe (add-unit, un rename) no esta vedado. En pares, con
+  try/finally; se anidan. }
+procedure VedaElMotor;
+procedure LevantaElMotor;
 
 { Un recorredor sobre el motor de AFile (MotorPara); nil sin motor. Para
   quien no maneja motores (el disenador): lo crea, lo usa, lo libera. }
@@ -108,11 +119,27 @@ uses
 const
   SIN_ANCESTRO = '';
 
+threadvar
+  // cuantas vedas tiene ESTE hilo abiertas (VedaElMotor / LevantaElMotor)
+  TVedasDelMotor: Integer;
+
+procedure VedaElMotor;
+begin
+  Inc(TVedasDelMotor);
+end;
+
+procedure LevantaElMotor;
+begin
+  Dec(TVedasDelMotor);
+end;
+
 function MotorPara(const AFile: string): TLspClient;
 var
   RootDir, Settings: string;
 begin
   Result := nil;
+  if TVedasDelMotor > 0 then
+    Exit; // vedado en este hilo (V173a)
   try
     // un fichero sin proyecto no arranca motor (FindDproj: sin hacer los
     // ajustes, que hace AcquireFor)

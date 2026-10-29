@@ -1864,9 +1864,12 @@ begin
   // insert y set parent=, que le preguntan desde el 17f4edd donde dejar el
   // bloque (AbreFormParaJuzgar / CambioDesdeQueSeJuzgo): se quedaron dentro y
   // el juez corria con el cerrojo (revisor del 17f4edd, A1: un textedit de
-  // otro fichero esperaba al insert)
-  if ((Cmd = 'set') and ((Params.Before.Trim <> '') or (Params.After.Trim <> '') or
-     (Params.Index >= 0) or (Params.Parent.Trim <> ''))) or (Cmd = 'insert') then
+  // otro fichero esperaba al insert). Y set entero desde la V173c de la
+  // 1.23.1: el simple, props y Name juzgaban con el cerrojo (el ayudante del
+  // IDE, el motor de la clase raiz y de los heredados), y un set de una Sample
+  // con paquetes paro 87 s todas las ediciones del servidor; ahora cogen el
+  // cerrojo ellos, solo para leer y para escribir (AbreFormParaJuzgar)
+  if MatchText(Cmd, ['set', 'insert']) then
     Exit(GestoDeDisenador(Params));
   // la tabla que piden insert, set (parent= y Name tambien) y delete se
   // espera FUERA del cerrojo, por lo mismo: set parent= la esperaba dentro y
