@@ -585,9 +585,11 @@ the MCP `initialize` response (`serverInfo.version`).
   line, style and property, and with `loadedAs`, what FMX's own writer
   stores for it; `clean` is false. Only that is reported from the writer:
   on three real themes it rewrites about 190 properties per file, all of
-  them harmless (defaults, colors by name, `TabOrder`). The hint `STYLE-058`
-  adds to a color now says the same: the missing digits are taken as 0, so
-  the alpha is 00 or nearly so.
+  them harmless (defaults, colors by name, `TabOrder`). A color written with
+  `$` (`$F7DFC6`, as Pascal writes it) counts too. The hint `STYLE-058` adds
+  to a color now says the same: the missing digits are taken as 0, so the
+  alpha is 00 or nearly so - and only when the value given had fewer than 8
+  digits (an 8-digit color in lower case, stored in upper case, got it too).
 - **...and so do `delphi_designer lint` and an edit of an FMX form.** The
   same color written by hand in a `.fmx` (`delphi_edit`, its `edits`, a
   changeset) went in silently and the lint said CLEAN; `designer set` and

@@ -471,7 +471,10 @@ begin
         if O <> nil then
           Line := Doc.SetProp(O, AProp.Trim, AJuicio.Valor, Habia);
         Nota := MsgFmt(SN_STYLES_GUARDADA_COMO_FMT, [AProp.Trim, AJuicio.Valor, AValue.Trim,
-          IfThen(StartsText('x', AJuicio.Valor), MsgText(SF_STYLES_COLOR_8_CIFRAS), '')]);
+          // la pista de las 8 cifras, si las que dio el agente son menos: por LA
+          // gramatica (EsColorSinAlfa); se miraba si lo GUARDADO empezaba por x, y
+          // xfff7dfc5 la llevaba (V173i de la 1.23.1, medido)
+          IfThen(EsColorSinAlfa(AValue), MsgText(SF_STYLES_COLOR_8_CIFRAS), '')]);
       end;
       if not WasThere then
         ColocaComoElEscritor(AJuicio.Orden);

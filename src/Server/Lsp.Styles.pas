@@ -267,8 +267,9 @@ type
     Estilo, Componente, Prop, Valor, ComoLoCarga: string;
   end;
 
-{ LA gramatica de un color sin alfa: x y de 1 a 7 cifras hex (xF7DFC6,
-  xFF7DFC6). FMX lo carga sin error tomando las cifras que faltan como 0 por
+{ LA gramatica de un color sin alfa: x o $ y de 1 a 7 cifras hex (xF7DFC6,
+  xFF7DFC6, $F7DFC6 - el $ es como lo escribe Pascal; solo veia x, V173h de
+  la 1.23.1). FMX lo carga sin error tomando las cifras que faltan como 0 por
   la izquierda, y el alfa queda en 00 o casi - invisible o casi. Gramatica
   propia (el escritor del IDE escribe siempre 8, o un nombre); como se carga
   lo dice el escritor (ColoresSinAlfaEntre). V152 y V154 de la 1.23.1. }
@@ -1210,7 +1211,7 @@ end;
 
 function EsColorSinAlfa(const AValor: string): Boolean;
 begin
-  Result := TRegEx.IsMatch(AValor.Trim, '^x[0-9A-Fa-f]{1,7}$');
+  Result := TRegEx.IsMatch(AValor.Trim, '^[x$][0-9A-Fa-f]{1,7}$');
 end;
 
 function CandidatosSinAlfa(ADoc: TStyleDoc): TArray<TColorSinAlfa>;

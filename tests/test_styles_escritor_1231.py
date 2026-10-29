@@ -29,6 +29,13 @@ que reescribe, solo esto. Rojas contra 42f24cd:
   S8 (control) el mismo fichero con 8 cifras y un color con nombre: sin colorsWithoutAlpha
   S9 (control de V141) set de xFF7DFC6: se escribe x0FF7DFC6 y STYLE-058 lo dice
 
+V173h y V173i (29-oct, revisor del disenador #8 y #9), rojas contra 6334404:
+  S10 (V173h) lint de un .style con Fill.Color = $F7DFC6 (6 cifras con $, como lo escribe Pascal):
+      colorsWithoutAlpha lo dice; la gramatica solo veia x
+  S11 (V173i) set de xfff7dfc5 (8 cifras, minusculas): el escritor lo guarda xFFF7DFC5 y STYLE-058
+      lo dice SIN la pista de "menos de 8 cifras" (se miraba si lo guardado empezaba por x)
+  S12 (control) set de xF7DFC6: STYLE-058 CON la pista
+
 Uso:  python tests/test_styles_escritor_1231.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -135,6 +142,27 @@ try:
     r = pon('Fill.Color', 'xFF7DFC6')
     check('S9 (V141) set de un color de 7 cifras: se escribe x0FF7DFC6 y STYLE-058 lo dice',
           'Fill.Color = x0FF7DFC6' in lee() and mc.es(r, 'SN_STYLES_GUARDADA_COMO_FMT'), (r[:400], lee()))
+
+    # V173h: un color sin alfa escrito con $
+    escribe(ORIGINAL.replace("    Fill.Color = xFFFFFFFF\r\n", "    Fill.Color = $F7DFC6\r\n"))
+    r, j = lint()
+    c10 = [c for c in (j.get('colorsWithoutAlpha') or []) if c.get('value') == '$F7DFC6']
+    check('S10 (V173h) lint: $F7DFC6 (6 cifras con $) sale en colorsWithoutAlpha, con como lo carga FMX',
+          len(c10) == 1 and c10[0].get('loadedAs') not in ('$F7DFC6', None) and
+          mc.es(r, 'SN_STYLES_COLORES_SIN_ALFA_FMT'), r[:900])
+
+    # V173i: la pista de las 8 cifras, solo si el valor dado tiene menos (un fragmento sin
+    # etiqueta: se busca por su texto del catalogo)
+    PISTA = mc.catalogo()['SF_STYLES_COLOR_8_CIFRAS'].strip()
+    escribe()
+    r = pon('Fill.Color', 'xfff7dfc5')
+    check('S11 (V173i) set de xfff7dfc5 (8 cifras): STYLE-058 sin la pista de menos de 8 cifras',
+          'Fill.Color = xFFF7DFC5' in lee() and mc.es(r, 'SN_STYLES_GUARDADA_COMO_FMT') and
+          PISTA not in r, (r[:500], lee()))
+    escribe()
+    r = pon('Fill.Color', 'xF7DFC6')
+    check('S12 (control) set de xF7DFC6 (6 cifras): STYLE-058 con la pista',
+          mc.es(r, 'SN_STYLES_GUARDADA_COMO_FMT') and PISTA in r, r[:500])
 finally:
     srv.cierra()
     mc.borra(BASE)
