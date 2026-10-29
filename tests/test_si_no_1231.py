@@ -11,7 +11,9 @@ valor CERRADO y una nota al arrancar (David: "cerrado y nunca callado").
   S1  [CORS] Enabled=false: la respuesta no lleva cabeceras CORS (ROJO contra la
       build anterior: las llevaba)
   S2  (control) [CORS] Enabled=true: las lleva
-  S3  [CORS] Enabled=quizas: el lado cerrado (sin CORS) y el log de arranque lo dice
+  S3  [CORS] Enabled=quizas: el lado cerrado y el log de arranque lo dice. El de
+      CORS es ENCENDIDO: apagado no valida el Origin (V161 de la 1.23.1; aqui
+      decia apagado, y V161 cambio el lector sin esta bateria)
   S4  DELPHI_MCP_LIBRARY_ZONE=false: delphi_workspace sin la zona de biblioteca
       (ROJO: la daba)
   S5  (control) sin la variable, la zona esta (su defecto)
@@ -75,9 +77,9 @@ check('S1 [CORS] Enabled=false: sin cabeceras CORS', cab is None, cab)
 cab, log = con_cors('true', 2)
 check('S2 (control) [CORS] Enabled=true: con ellas', cab == 'http://localhost', cab)
 cab, log = con_cors('quizas', 3)
-nota = CAT['SL_GUARD_SINO_ILEGIBLE_FMT'] % ('[CORS] Enabled', 'quizas', '0')
-check('S3 [CORS] Enabled=quizas: el lado cerrado (sin CORS) y el log de arranque lo dice',
-      cab is None and nota in log, (cab, log[-600:]))
+nota = CAT['SL_GUARD_SINO_ILEGIBLE_FMT'] % ('[CORS] Enabled', 'quizas', '1')
+check('S3 [CORS] Enabled=quizas: el lado cerrado (CORS encendido, valida el Origin) y el log de arranque lo dice',
+      cab == 'http://localhost' and nota in log, (cab, log[-600:]))
 hay, ws = zona({'DELPHI_MCP_LIBRARY_ZONE': 'false'})
 check('S4 DELPHI_MCP_LIBRARY_ZONE=false: delphi_workspace sin la zona de biblioteca', not hay,
       str(ws)[:300])

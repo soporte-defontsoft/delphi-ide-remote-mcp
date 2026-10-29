@@ -27,7 +27,7 @@ SRC = os.path.join(JAIL, 'src')
 os.makedirs(SRC)
 open(os.path.join(SRC, 'Main.pas'), 'w', newline='\r\n').write(
     'unit Main;\r\ninterface\r\nimplementation\r\nend.\r\n')
-LNK = os.path.join(JAIL, '__delphi-temp')
+LNK = os.path.join(JAIL, mc.TEMPORALES)
 _winapi.CreateJunction(SRC, LNK)  # __delphi-temp -> src (una union a algo vivo)
 
 S = mc.Stdio(mc.copia_exe(os.path.join(BASE, 's'), src=exe_src),
@@ -42,7 +42,7 @@ try:
           (r[:160], 'sigue=%s' % sigue, copias))
 
     # T2 control: un temporal de VERDAD se borra para siempre (sin union)
-    tmp = os.path.join(JAIL, 'proj', '__delphi-temp', 'cap')
+    tmp = os.path.join(JAIL, 'proj', mc.TEMPORALES, 'cap')
     os.makedirs(tmp)
     open(os.path.join(tmp, 'x.png'), 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 32)
     r2 = S.call('delphi_delete', {'path': os.path.join(tmp, 'x.png')})
