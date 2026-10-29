@@ -66,25 +66,37 @@ function GitRemoteDenied(const AText: string; AScpCorto: Boolean = False;
   direccion de red". }
 function GitUrlHost(const AToken: string; AScpCorto: Boolean = False): string;
 
-{ El esquema de una direccion de git, sin mayusculas: lo de delante del
-  primer '://' ('' si no lo lleva), sin blancos ni comillas alrededor. EL
-  lector de la puerta de los hosts (GitUrlHost) y de lo que clone y un
-  remoto del repo admiten (Mcp.Tools.Git, EsUrlDeRed), que miraba cuatro
-  prefijos en minusculas: HTTPS://<permitido>/x pasaba la puerta y la tool
-  lo negaba, y git lo lleva como https (V130 de la 1.23.1, medido con git
-  2.53). El '://' en CUALQUIER sitio, a proposito: lo que lo lleve es una
-  direccion para la puerta (https::https://x tambien). }
+{ El esquema de una direccion de git: lo de delante del primer '://' ('' si
+  no lo lleva), tal como git la recibe - sin quitar blancos ni comillas: el
+  protocolo de "https://x" es para git '"https', y lo niega -. Sin mayusculas
+  solo si cumple la gramatica de un esquema de git (LargoDeEsquemaGit):
+  entonces git lo lleva a un remote-helper, que Windows encuentra sin
+  mayusculas (HTTPS:// es https); si no, su connect.c lo compara tal cual
+  (V168 de la 1.23.1, medido con git 2.53). EL lector de la puerta de los
+  hosts (GitUrlHost) y de lo que clone y un remoto del repo admiten
+  (Mcp.Tools.Git, EsUrlDeRed), que miraba cuatro prefijos en minusculas:
+  HTTPS://<permitido>/x pasaba la puerta y la tool lo negaba (V130 de la
+  1.23.1). El '://' en CUALQUIER sitio, como el strstr de connect.c:
+  192.0.2.9:x://h/y es para git el protocolo '192.0.2.9:x', no la forma
+  scp (medido), y https::https://x es una direccion para la puerta. }
 function EsquemaDeDireccion(const AToken: string): string;
 
 { El remote-helper de una direccion de git con la forma <helper>::<direccion>
-  (ext::..., fd::..., https::...), sin mayusculas; '' si no la tiene. La
-  regla de git (transport_get): caracteres de esquema desde el principio -
-  una letra, y luego letras, cifras, '+', '-' o '.' - y '::'. Un literal
-  IPv6 ([::1]:ruta) no empieza asi. Un remoto del repo con esa forma se
-  juzgaba como CARPETA y lo negaba la puerta de leer por los ':' de la ruta:
-  por suerte, y diciendo que la carpeta estaba fuera de las raices (V130 de
-  la 1.23.1, medido). }
+  (ext::..., fd::..., https::..., 1x::...), sin mayusculas; '' si no la
+  tiene. La regla de git (transport_get): caracteres de esquema desde el
+  principio (LargoDeEsquemaGit: una letra o una CIFRA, V168) y '::', en la
+  direccion tal como git la recibe. Un literal IPv6 ([::1]:ruta) no empieza
+  asi. Un remoto del repo con esa forma se juzgaba como CARPETA y lo negaba
+  la puerta de leer por los ':' de la ruta: por suerte, y diciendo que la
+  carpeta estaba fuera de las raices (V130 de la 1.23.1, medido). }
 function HelperDeDireccion(const AToken: string): string;
+
+{ La direccion que clone le da a git: su message sin blancos alrededor (una
+  pegada con un salto detras). UNA, para la puerta de los hosts (Lsp.Guard)
+  y para la tool, que la juzgaban cada una a su manera: con los lectores
+  leyendo la direccion tal como git la recibe (V168 de la 1.23.1), la puerta
+  tiene que juzgar la misma que la tool le pasa. }
+function UrlDeClone(const AMessage: string): string;
 
 implementation
 
@@ -140,7 +152,9 @@ var
   EsUrl: Boolean;
 begin
   Result := '';
-  T := AToken.Trim.Trim(['"', '''']);
+  // tal como git la recibe: unas comillas o un blanco alrededor son suyos
+  // (V168 de la 1.23.1)
+  T := AToken;
   Esquema := EsquemaDeDireccion(T);
   EsUrl := Pos('://', T) > 0;
   if EsUrl then
@@ -249,24 +263,40 @@ begin
   Result := SinMayusculas(Host);
 end;
 
+{ LA gramatica del esquema de una direccion de git (url.c, is_urlschemechar):
+  cuantos caracteres del principio de AToken la cumplen - una letra o una
+  cifra ASCII, y luego letras, cifras, '+', '-' o '.' -. Sin juez al que
+  preguntar (git no tiene una orden que diga como lee una direccion sin
+  conectarse): gramatica propia, UNA, calcada de la suya (V168 de la 1.23.1). }
+function LargoDeEsquemaGit(const AToken: string): Integer;
+begin
+  Result := 0;
+  while (Result < Length(AToken)) and
+        (CharInSet(AToken[Result + 1], ['A'..'Z', 'a'..'z', '0'..'9']) or
+         ((Result > 0) and CharInSet(AToken[Result + 1], ['+', '-', '.']))) do
+    Inc(Result);
+end;
+
 function EsquemaDeDireccion(const AToken: string): string;
 begin
-  var T := AToken.Trim.Trim(['"', '''']);
-  var P := Pos('://', T);
+  var P := Pos('://', AToken);
   if P = 0 then
     Exit('');
-  Result := SinMayusculas(Copy(T, 1, P - 1));
+  Result := Copy(AToken, 1, P - 1);
+  if LargoDeEsquemaGit(AToken) = P - 1 then
+    Result := SinMayusculas(Result);
+end;
+
+function UrlDeClone(const AMessage: string): string;
+begin
+  Result := AMessage.Trim;
 end;
 
 function HelperDeDireccion(const AToken: string): string;
 begin
-  var T := AToken.Trim.Trim(['"', '''']);
-  var I := 1;
-  while (I <= Length(T)) and (CharInSet(T[I], ['A'..'Z', 'a'..'z']) or
-        ((I > 1) and CharInSet(T[I], ['0'..'9', '+', '-', '.']))) do
-    Inc(I);
-  if (I > 1) and (Copy(T, I, 2) = '::') then
-    Result := SinMayusculas(Copy(T, 1, I - 1))
+  var L := LargoDeEsquemaGit(AToken);
+  if (L > 0) and (Copy(AToken, L + 1, 2) = '::') then
+    Result := SinMayusculas(Copy(AToken, 1, L))
   else
     Result := '';
 end;

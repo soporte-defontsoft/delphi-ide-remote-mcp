@@ -389,6 +389,15 @@ REGLAS = [
       ('FormRender.Textos.pas', '*')],
      'ClaveDelIde (Lsp.Discovery): la raiz, la de una version o una subclave; quien la quiera '
      'absoluta le pone la barra delante'),
+    # el esquema de una direccion de git: git no tiene una orden que diga como la lee sin
+    # conectarse, asi que es gramatica nuestra, UNA y calcada de la suya (url.c is_urlschemechar;
+    # el '://' en cualquier sitio, como el strstr de connect.c). La leian dos lectores, uno que
+    # pedia letra al principio, y los tres quitaban comillas y blancos que git si recibe (V168)
+    ('el esquema de una direccion de git leido a mano', r"Pos\(\s*'://'|\['\+', '-', '\.'\]",
+     [('Lsp.Args.pas', 'GitUrlHost'), ('Lsp.Args.pas', 'EsquemaDeDireccion'),
+      ('Lsp.Args.pas', 'LargoDeEsquemaGit')],
+     'Lsp.Args: LargoDeEsquemaGit (la gramatica), EsquemaDeDireccion y HelperDeDireccion (lo que '
+     'git lee de ella) y GitUrlHost (la autoridad, detras del primer :// como git)'),
     # la rama ABSOLUTA de una entrada de sitio (la unidad a secas o la ruta -> GetFullPath, letra,
     # barra final, o rechazada) la tenian ParseRootsList y ParseReadOnlyList cada una (D5 de la
     # auditoria de duplicados, 1.21.4): configuracion + jaula = UN lector. Lsp.Rutas canonicaliza
@@ -1690,6 +1699,7 @@ PLANTADO = {
         "  for var Mt in TRegEx.Matches(T, '(?is)RegisterClass\\s*\\((.*?)\\)\\s*;') do",
     'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
     'la clave del IDE en el registro': "  if Reg.OpenKeyReadOnly('SOFTWARE\\Embarcadero\\BDS\\' + Ver) then",
+    'el esquema de una direccion de git leido a mano': "  if Pos('://', Url) > 0 then",
     'la rama absoluta de una entrada de sitio': "  Full := TPath.GetFullPath(RaizSiUnidad(V));",
     'el significado de old/new': "  A.HasNew := (ANew <> '') or A.HasOld;",
     'lo que choca con fragment': "  if A.HasOld then Otros := 'old'",

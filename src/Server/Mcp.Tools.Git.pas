@@ -370,7 +370,7 @@ function RemotosDelRepo(const ARepo, AFijado: string;
   out ANombres: TArray<string>): Boolean; forward;
 
 function GitContesta(const ARepo, AFijado, APregunta: string;
-  out ALineas: TArray<string>): Boolean; forward;
+  out ALineas: TArray<string>; ATalCual: Boolean = False): Boolean; forward;
 
 { Medido con objetos LFS ausentes: estas ordenes materializan el arbol.
   Los filtros clean de add/commit/status no descargan objetos. }
@@ -904,9 +904,11 @@ end;
   JUZGAR no toma un fallo por un "no hay" (cuarta revision de la 1.7.7: una
   pregunta que fallaba acababa en "se puede"). Por eso las preguntas se
   hacen de forma que "no hay" salga con 0: el que se queda sin plazo sale
-  con 1, que es tambien con lo que git config dice que una clave no esta. }
+  con 1, que es tambien con lo que git config dice que una clave no esta.
+  ATalCual: cada linea como la da git, sin quitarle los blancos - lo que se
+  juzga como lo usa git, una direccion de remoto (V168 de la 1.23.1) -. }
 function GitContesta(const ARepo, AFijado, APregunta: string;
-  out ALineas: TArray<string>): Boolean;
+  out ALineas: TArray<string>; ATalCual: Boolean): Boolean;
 var
   Salida, Linea: string;
   Codigo: Cardinal;
@@ -917,6 +919,9 @@ begin
   if Result then
     for Linea in LineasDelTexto(Salida) do
     if Linea.Trim <> '' then
+      if ATalCual then
+        ALineas := ALineas + [Linea]
+      else
         ALineas := ALineas + [Linea.Trim];
 end;
 
@@ -1287,7 +1292,9 @@ begin
     Mirar := Nombres;
   for Nombre in Mirar do
   begin
-    if not GitContesta(ARepo, AFijado, Pregunta + EnComillas(Nombre), Lineas) or
+    // las direcciones tal como las usa git: con un blanco delante, git no la
+    // lee como de red (V168 de la 1.23.1)
+    if not GitContesta(ARepo, AFijado, Pregunta + EnComillas(Nombre), Lineas, True) or
        (Length(Lineas) = 0) then
       Exit(MsgFmt(SR_GIT_REMOTO_SIN_RESPUESTA_FMT, [ACmd]));
     // las del repo: su negativa no aconseja usar el nombre del remoto, que
@@ -1832,7 +1839,7 @@ begin
   begin
     // The URL travels in "message" (a URL legitimately carries ':' '/'
     // '@'). Destination = repo (jailed).
-    var Url := Params.Message.Trim;
+    var Url := UrlDeClone(Params.Message);
     if Url = '' then
       Exit(MsgText(SR_GIT_CLONE_NEEDS_REPOSITORY_URL));
     if not EsUrlDeRed(Url) then

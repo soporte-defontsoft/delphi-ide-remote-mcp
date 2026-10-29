@@ -591,7 +591,14 @@ the MCP `initialize` response (`serverInfo.version`).
   (`<helper>::<address>`: `ext::`, `fd::`, `https::`) was taken for a folder
   and refused only because a path cannot hold its colons, saying the folder
   was outside the roots (`GIT-044`); it is now refused as an address this
-  tool does not take (`GIT-045`).
+  tool does not take (`GIT-045`). The reader also takes the address exactly
+  as git receives it: quotes or blanks around it were trimmed off, while git
+  reads `"https` as the protocol of `"https://host/x"` and refuses it, so the
+  gate judged one address and git got another; a remote helper may start
+  with a digit (`1x::`, as git's own scheme grammar allows); and a remote's
+  address is judged as `git remote get-url` gives it. The address `clone`
+  passes to git is its `message` without the blanks around it, and the host
+  gate now judges that same one.
 - **`delphi_styles set` writes what FMX's own writer would store, where it
   would store it.** It wrote the value it was given, and a new property right
   after `StyleName`: `Fill.Color = xF7DFC6` came back `CHANGED` while FMX

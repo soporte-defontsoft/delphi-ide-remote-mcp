@@ -16,6 +16,26 @@ permitido>/x pasaba la puerta y la tool lo negaba.
      niega como direccion que la tool no toma (SR_GIT_REMOTO_ILEGIBLE_FMT), no como una carpeta
      fuera de las raices (ROJA: GIT-044, por los ':' de la ruta, por suerte)
 
+V168: el lector leia OTRA cadena que git. Quitaba comillas y blancos alrededor (git recibe la
+direccion tal cual: '"https' es su protocolo y lo niega), pedia una letra al principio de un
+remote-helper (git, url.c is_urlschemechar: una letra o una CIFRA) y plegaba con Unicode. Medido
+con git 2.53 (`git ls-remote`, ssh falso):
+
+  U6 clone de "https://<permitido>/x" (con comillas): la tool lo niega como direccion que no es
+     de red (ROJA contra b48699c: pasaba y git contestaba "protocol '"https' is not supported")
+  U7 (guarda) clone de " https://<permitido>/x" y de "https://<permitido>/x\n" (blancos
+     alrededor, una direccion pegada): clone se los quita (UrlDeClone) y git recibe la que se
+     juzgo, asi que lo intenta git; la puerta de los hosts juzga ESA, no la del message (con los
+     lectores sin recortar, el salto de detras la hacia ilegible)
+  U8 un remoto 1x::foo (git lo lleva a git-remote-1x): direccion que la tool no toma, no una
+     carpeta fuera de las raices (ROJA: GIT-044)
+  U9 un remoto "https://<permitido>/x" (con comillas): direccion que la tool no toma (ROJA: pasaba)
+  U11 un remoto " https://<permitido>/x" (un blanco delante, guardado asi en el repo): igual -
+     la direccion se juzga como git la da (remote get-url), no recortada (ROJA: pasaba)
+  U10 (guardas) 192.0.2.9:x://<permitido>/y - git: protocol '192.0.2.9:x', su connect.c corta en
+     el PRIMER '://' - se niega en clone y en un remoto; y g\u0130t:// y h2:// (git: protocolo que no
+     soporta; h2, un remote-helper) son direcciones que la tool no toma
+
 Permitido: 127.0.0.1 en el puerto 1, que rechaza al instante (no sale nada a la red). No
 permitido: 192.0.2.9 (TEST-NET), que la puerta niega antes de que git lo intente.
 
@@ -63,7 +83,33 @@ try:
         rh = repo_con_remoto('h%d' % i, url)
         r = srv.call('delphi_git', {'command': 'fetch', 'repo': rh, 'remote': 'origin'})
         check('U5 un remote-helper de git (%s): direccion que la tool no toma, no una carpeta' % url,
+                 mc.es(r, 'SR_GIT_REMOTO_ILEGIBLE_FMT') and not mc.es(r, 'SR_GIT_REMOTO_FUERA_FMT'), r[:300])
+
+    # V168: lo que git recibe, tal cual
+    r = srv.call('delphi_git', {'command': 'clone', 'repo': os.path.join(JAIL, 'U6'),
+                                'message': '"https://127.0.0.1:1/x.git"'})
+    check('U6 clone de una direccion con comillas: no es de red como la lee git (la tool la niega)',
+          mc.es(r, 'SR_GIT_CLONE_URLS_ACCEPTED'), r[:400])
+    for clave, url in (('U7a', ' https://127.0.0.1:1/x.git'), ('U7b', 'https://127.0.0.1:1/x.git\n')):
+        r = srv.call('delphi_git', {'command': 'clone', 'repo': os.path.join(JAIL, clave), 'message': url})
+        check('%s (guarda) clone de %r: lo intenta git con la que se juzgo (ni la puerta ni la tool lo niegan)'
+              % (clave, url), not mc.es(r, 'SR_GIT_CLONE_URLS_ACCEPTED') and not mc.es(r, 'SR_GIT_REMOTE_HOST_FMT')
+              and not mc.es(r, 'SR_GIT_REMOTE_AMBIGUA_FMT'), r[:400])
+    for clave, que, url in (('U8', 'un remote-helper que empieza por cifra (1x::foo)', '1x::foo'),
+                            ('U9', 'una direccion con comillas', '"https://127.0.0.1:1/x.git"'),
+                            ('U10a', 'un :// detras de host:ruta (git: protocol 192.0.2.9:x)',
+                             '192.0.2.9:x://127.0.0.1:1/x.git'),
+                            ('U10b', 'un esquema que no es ASCII (g, I con punto, t)', 'g\u0130t://127.0.0.1:1/x.git'),
+                            ('U10c', 'un esquema con cifra (h2, un remote-helper)', 'h2://127.0.0.1:1/x.git'),
+                            ('U11', 'un blanco delante', ' https://127.0.0.1:1/x.git')):
+        rv = repo_con_remoto(clave, url)
+        r = srv.call('delphi_git', {'command': 'fetch', 'repo': rv, 'remote': 'origin'})
+        check('%s un remoto con %s: direccion que la tool no toma' % (clave, que),
               mc.es(r, 'SR_GIT_REMOTO_ILEGIBLE_FMT') and not mc.es(r, 'SR_GIT_REMOTO_FUERA_FMT'), r[:300])
+    r = srv.call('delphi_git', {'command': 'clone', 'repo': os.path.join(JAIL, 'U10d'),
+                                'message': '192.0.2.9:x://127.0.0.1:1/x.git'})
+    check('U10d (guarda) clone de 192.0.2.9:x://<permitido>: no es de red', mc.es(r, 'SR_GIT_CLONE_URLS_ACCEPTED'),
+          r[:400])
 finally:
     srv.cierra()
     mc.borra(BASE)

@@ -2855,7 +2855,7 @@ begin
     // went to the other; review of addc44e). In the other commands message
     // is text - a commit's goes through -F.
     if SameText(ArgStr(AArguments, 'command').Trim, 'clone') then
-      Result := GitRemoteDenied(EnComillas(ArgStr(AArguments, 'message')));
+      Result := GitRemoteDenied(EnComillas(UrlDeClone(ArgStr(AArguments, 'message'))));
     if Result <> '' then
       Exit;
   end;
