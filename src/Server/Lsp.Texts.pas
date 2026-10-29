@@ -4713,7 +4713,7 @@ const
     no se la anuncia y command=tool la describia entera, y la llamada se
     negaria (V199 de la 1.23.1). El motivo es el texto de la tabla. }
   SR_HELP_TOOL_NO_DISPONIBLE_FMT =
-    '[HELP-010] %s exists, but not for this session: tools/list does not ' +
+    '[HELP-010 DENIED] %s exists, but not for this session: tools/list does not ' +
     'announce it to you and a call would be refused.%s';
 
   SN_HELP_TOOL_NOTE =
