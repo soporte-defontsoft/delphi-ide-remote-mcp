@@ -557,7 +557,7 @@ const
     'delphi_symbols.';
 
   SP_SYMBOLS_PATH =
-    'A Delphi file (.pas/.dpr) for its symbols - or a FOLDER: at once, ' +
+    'A Delphi file (.pas/.dpr/.dpk/.inc) for its symbols - or a FOLDER: at once, ' +
     'what each unit in it OFFERS (its interface: types, classes, routines, ' +
     'properties, uses), without bodies - ONE call to find your way around ' +
     'code you did not write.';
@@ -941,10 +941,11 @@ const
     'delphi_report and say what for.';
 
   SN_PROJECTS_HIDDEN_FMT =
-    '[PROJ-004] %d .dproj/.groupproj hidden because they are COPIES: ' +
-    'backups of this server (__delphi-patch), of the IDE (__history) or ' +
-    'build artifacts. They are not projects you can open. If you want to ' +
-    'see them, pass that folder as "root" and I will show them.';
+    '[PROJ-004] %d .dproj/.groupproj hidden: COPIES (backups of this ' +
+    'server in __delphi-patch, of the IDE in __history), build artifacts ' +
+    'and temporaries, git''s own folder, or the knowledge vault. They are ' +
+    'not projects you can open. To see the copies or the artifacts, pass ' +
+    'that folder as "root"; the vault is read with the vault_* tools.';
 
   SN_LIST_MASK_NO_MATCH_FMT =
     '[LIST-001] The mask "%s" matched nothing, but the folder is NOT ' +
@@ -4319,6 +4320,13 @@ const
     '[MSGS-006] Pending messages: %d (command=read delivers and deletes ' +
     'them):';
 
+  { Un mensaje que no se deja leer (otro lector lo acaba de consumir, o el
+    fichero esta bloqueado): ya no tumba la respuesta ni se pierden los
+    demas, que se borraban antes de leerlo (V200 de la 1.23.1). }
+  SN_MESSAGES_ILEGIBLE_FMT =
+    '[MSGS-007] %s could not be read now: it was not delivered, and it stays ' +
+    'in your mailbox if it is still there.';
+
   SN_MESSAGES_DELIVERED =
     '[MSGS-004] (read and deleted: they will not appear again. If they ' +
     'ask for something, do it and, if appropriate, answer with ' +
@@ -4376,7 +4384,7 @@ const
     'you to look at. Rebuild afterwards.';
 
   SP_RENAME_PATH =
-    'The .pas/.dpr with the symbol (any occurrence works)';
+    'The .pas/.dpr/.dpk/.inc with the symbol (any occurrence works)';
 
   SP_RENAME_LINE =
     'Zero-based line of the identifier (a hit''s "line0"; same convention ' +
@@ -4699,6 +4707,14 @@ const
   SR_HELP_NO_TOOL_FMT =
     '[HELP-003 NOT_FOUND] There is no tool "%s". These resemble what you ' +
     'ask for: %s';
+
+  { Una tool que esta sesion no puede usar (Lsp.Guard.MotivoToolOculta: la
+    credencial de solo lectura, sin vault, el vault de solo lectura): tools/list
+    no se la anuncia y command=tool la describia entera, y la llamada se
+    negaria (V199 de la 1.23.1). El motivo es el texto de la tabla. }
+  SR_HELP_TOOL_NO_DISPONIBLE_FMT =
+    '[HELP-010] %s exists, but not for this session: tools/list does not ' +
+    'announce it to you and a call would be refused.%s';
 
   SN_HELP_TOOL_NOTE =
     '[HELP-004] What rules is the tool''s description: this is the same ' +
@@ -10259,10 +10275,10 @@ const
 
   // Descripciones que estaban en linea en Mcp.Tools.DelphiExtra.pas (paso 3d, 27-sep-2026)
   SP_BUILD_PATH =
-    'Absolute path of the Delphi source file to lint (.pas/.dpr)';
+    'Absolute path of the Delphi source file to lint (.pas/.dpr/.dpk/.inc)';
 
   SP_BUILD_PATH_2 =
-    'Absolute path of the Delphi source file';
+    'Absolute path of the Delphi source file (.pas/.dpr/.dpk/.inc)';
 
   SP_BUILD_LINE =
     'Zero-based line of the identifier to find references for (a hit''s ' +
@@ -10437,7 +10453,8 @@ const
     'sections) with 0-based ranges, from the official DelphiLSP engine; ' +
     'works without project settings. Big trees come as a compact summary ' +
     'by default (mode/filter control it); a FOLDER answers with the ' +
-    'interface digest of every unit inside. The engine parses as the ' +
+    'interface digest of every unit inside (copies and build artifacts ' +
+    'left out). The engine parses as the ' +
     'COMPILER would for Windows: code inside an inactive {$IFDEF} (LINUX, ' +
     'ANDROID, MACOS...) is not in the tree, and nothing says so - for ' +
     'those blocks use delphi_search or delphi_read.';

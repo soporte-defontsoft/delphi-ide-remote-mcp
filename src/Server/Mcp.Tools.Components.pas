@@ -63,12 +63,21 @@ uses
   miraba con Contains, donde Win64 esta dentro de Win64x. }
 procedure AnotaPlataforma(ACarpetas: TDictionary<string, string>; const AClave, APlat: string);
 var
-  V: string;
+  V, Clave: string;
 begin
-  if not ACarpetas.TryGetValue(AClave, V) then
-    ACarpetas.Add(AClave, APlat)
+  // la misma carpeta escrita con otras mayusculas por otra plataforma es la
+  // misma: EL juez de rutas, no el texto de la clave (V211 de la 1.23.1)
+  Clave := AClave;
+  for var K in ACarpetas.Keys do
+    if SameFileName(K, AClave) then
+    begin
+      Clave := K;
+      Break;
+    end;
+  if not ACarpetas.TryGetValue(Clave, V) then
+    ACarpetas.Add(Clave, APlat)
   else if not MatchText(APlat, V.Split([', '])) then
-    ACarpetas[AClave] := V + ', ' + APlat;
+    ACarpetas[Clave] := V + ', ' + APlat;
 end;
 
 { Las lineas 'carpeta (registered in: plataformas)', por orden de carpeta (un
@@ -148,7 +157,7 @@ begin
         Sb.Append(MsgText(SF_COMP_NO_EXISTE));
       Sb.AppendLine;
       Root := ComponentRootOf(P);
-      if (Root <> '') and not MineRoots.Contains(Root) then
+      if (Root <> '') and not RutaEnLista(Root, MineRoots.ToArray) then // V211
         MineRoots.Add(Root);
     end;
     // what the OTHER platforms register and this one lacks, by install root
@@ -160,7 +169,7 @@ begin
       for P in Others do
       begin
         Root := ComponentRootOf(P);
-        if (Root = '') or MineRoots.Contains(Root) then
+        if (Root = '') or RutaEnLista(Root, MineRoots.ToArray) then
           Continue;
         // the IDE's own trees (install, user and common documents) are not
         // components, and a root already under one of THIS platform's

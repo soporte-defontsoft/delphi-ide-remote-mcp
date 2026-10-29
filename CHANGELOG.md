@@ -10,6 +10,56 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_messages read` no longer loses mail when one message cannot be
+  read.** It read and deleted the messages one by one: one that another reader
+  had just consumed, or that was locked, turned the whole answer into an error
+  (naming the server's own folder) with the earlier ones already deleted and
+  never delivered. It now reads them all first, says which one could not be
+  read (MSGS-007) and leaves it in the mailbox, and deletes only what it
+  delivered; the read gate still answers first, so a mailbox that is a link is
+  refused as before, and `check` lists an unreadable message by its name.
+- **`delphi_help command=tool` no longer describes a tool this session cannot
+  use.** With a read-only credential, or a vault that is missing or read-only
+  in the workspace, `tools/list` leaves those tools out and a call is refused,
+  but `delphi_help` handed over their whole description and parameters. It
+  now says that the tool exists but not for this session, and why (HELP-010).
+  A tool left out only by the workspace's tool profile, which stays callable,
+  is still described.
+- **`delphi_edit insert=rutina-global visible=true` works on a unit whose
+  `implementation` line is written `Implementation` or carries a comment.**
+  It found the line case-insensitively in the code view, then anchored the
+  declaration on the literal `implementation`, which did not match: the
+  declaration was not written and the body was undone. The anchor is now the
+  line as it stands.
+- **The default encoding the IDE gives new files is followed while the server
+  runs.** It was read once and kept for the life of the process; changing it in
+  the IDE's options only reached new units after a restart. It is now kept
+  while the registry key does not change, with the same key watcher as the
+  library zone.
+- **`delphi_edit createunit` names the encoding as `delphi_read` does.** An
+  ASCII skeleton written in ANSI was reported as `cp1252` and read back as
+  `ascii (utf8/ansi compatible)`.
+- **The `definition` that `delphi_references` returns carries `character0`.**
+  The position parameters ask for "a hit's character0", and the definition had
+  only `line` and `line0`; it now gives the column of the identifier on its
+  line, as every hit does.
+- **The hidden-projects note of `delphi_projects` says what it hides.** It said
+  every hidden `.dproj` was a copy or a build artifact, to be seen by passing
+  its folder as `root` - also for one inside git's folder, a temporary or the
+  knowledge vault, which that does not show. It now names them all, and that
+  the vault is read with the `vault_*` tools. The folder form of
+  `delphi_symbols` says that it leaves copies and build artifacts out.
+- **The `path` of the engine's sibling tools promises what they accept.**
+  `delphi_symbols`, `delphi_diagnostics`, `delphi_references` and
+  `delphi_rename_symbol` said `.pas/.dpr` (or nothing) while their judge, the
+  one of every engine tool, accepts `.pas/.dpr/.dpk/.inc`; measured, all four
+  take a `.dpk` and an `.inc`.
+- **`delphi_rename_symbol` and `delphi_components platform=` compare folders
+  by the file system's rule.** The files a rename touches were kept in a list
+  compared as text, so the engine's spelling and the walk's spelling of the
+  same file counted twice (collision check, `filesTouched`); the component
+  roots of a platform, the same, and a root registered in another case by
+  another platform was listed as missing.
 - **The IDE's library path of the Android (32-bit) platform is read.** The
   IDE keeps it under the registry key `Library\Android32`, while the project,
   msbuild, the `.sdk` files and the `lib\android` folder call the platform

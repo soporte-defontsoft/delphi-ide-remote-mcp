@@ -129,7 +129,7 @@ begin
       // the jail (an RTL unit can be 1 MB) is NEVER scanned further
       if PathDenied(DefPath) <> '' then
         Blockers.Add(MsgText(SR_RENAME_LIBRARY))
-      else if not Touched.Contains(DefPath) then
+      else if not RutaEnLista(DefPath, Touched.ToArray) then // EL juez de rutas (V211)
         Touched.Add(DefPath);
 
       // confirmed occurrences become the change list
@@ -138,7 +138,7 @@ begin
       begin
         Item := Arr.Items[I] as TJSONObject;
         P := Item.GetValue('path').Value;
-        if not Touched.Contains(P) then
+        if not RutaEnLista(P, Touched.ToArray) then // la grafia del motor y la del paseo (V211)
           Touched.Add(P);
         // the change list is capped: a symbol with hundreds of uses must
         // not flood a small client's context (measured 2026-08-24). The

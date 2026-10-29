@@ -122,6 +122,16 @@ begin
         [AName.Trim, string.Join(', ', Names)]));
     Exit(MsgFmt(SR_HELP_NO_TOOL_FMT, [AName.Trim, Close]));
   end;
+  // una que ESTA sesion no puede usar no se describe como si pudiera: la
+  // llamada se negaria (V199 de la 1.23.1). La de un perfil si: sigue llamable
+  case MotivoToolOculta(N) of
+    moCredencialLectura:
+      Exit(MsgFmt(SR_HELP_TOOL_NO_DISPONIBLE_FMT, [N, MsgText(SF_HELP_TASKS_SOLO_LECTURA)]));
+    moSinVault:
+      Exit(MsgFmt(SR_HELP_TOOL_NO_DISPONIBLE_FMT, [N, MsgText(SF_HELP_TASKS_SIN_VAULT)]));
+    moVaultLectura:
+      Exit(MsgFmt(SR_HELP_TOOL_NO_DISPONIBLE_FMT, [N, MsgText(SF_HELP_TASKS_VAULT_LECTURA)]));
+  end;
   Tool := TMCPRegistry.CreateTool(N);
   Ret := TJSONObject.Create;
   try

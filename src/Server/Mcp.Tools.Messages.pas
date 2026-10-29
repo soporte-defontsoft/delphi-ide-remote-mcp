@@ -132,7 +132,17 @@ begin
   Result := '';
   L := TStringList.Create;
   try
-    L.Text := LeeTexto(APath, [ltCasa]);
+    // la puerta, SU negativa (un buzon que es una union: GUARD-034); lo que
+    // pase despues de ella (bloqueado, recien consumido por otro lector) se
+    // lista por su nombre (V200 de la 1.23.1)
+    var Neg := LugarDeLecturaDenegado(APath, [ltCasa]);
+    if Neg <> '' then
+      raise Exception.Create(Neg);
+    try
+      L.Text := LeeTexto(APath, [ltCasa]);
+    except
+      Exit;
+    end;
     for I := 0 to L.Count - 1 do
       if L[I].Trim <> '' then
         Exit(L[I].Trim.TrimLeft(['#', ' ']));
@@ -185,25 +195,44 @@ begin
         Sb.AppendLine(Format('  - %s  (%s)', [FirstLine(F), TPath.GetFileName(F)]));
       Exit(Sb.ToString.TrimRight);
     end;
+    // Todos leidos ANTES de borrar ninguno: uno que no se deja leer (otro
+    // lector lo consumio entre medias, o esta bloqueado) tumbaba la respuesta
+    // con los anteriores ya borrados, y se perdian (V200 de la 1.23.1)
+    var Entregados: TArray<string> := [];
     N := 0;
     for F in Files do
     begin
       Inc(N);
+      // la puerta primero, con SU negativa: un buzon que es una union no
+      // entrega ni borra nada (GUARD-034); solo se salta lo ilegible despues
+      var Neg := LugarDeLecturaDenegado(F, [ltCasa]);
+      if Neg <> '' then
+        raise Exception.Create(Neg);
+      var Texto: string;
+      try
+        Texto := LeeTexto(F, [ltCasa]).TrimRight;
+      except
+        Sb.AppendLine(MsgFmt(SN_MESSAGES_ILEGIBLE_FMT, [TPath.GetFileName(F)]));
+        Sb.AppendLine;
+        Continue;
+      end;
       Sb.AppendLine(MsgFmt(SF_MSGS_CABECERA_FMT, [N, Length(Files),
         TPath.GetFileName(F)]));
-      Sb.AppendLine(LeeTexto(F, [ltCasa]).TrimRight);
+      Sb.AppendLine(Texto);
       Sb.AppendLine;
-      // Leido = borrado, como una captura entregada (David, 25-sep-2026: "una
-      // vez entregado se borra y punto, no acumulamos basura"). Nada se guarda
-      // aparte y no hay purga: en el buzon solo queda lo que no se ha leido.
+      Entregados := Entregados + [F];
+    end;
+    Sb.AppendLine(MsgText(SN_MESSAGES_DELIVERED));
+    Result := Sb.ToString.TrimRight;
+    // Leido = borrado, como una captura entregada (David, 25-sep-2026: "una
+    // vez entregado se borra y punto, no acumulamos basura"). Nada se guarda
+    // aparte y no hay purga: en el buzon solo queda lo que no se ha leido.
+    for F in Entregados do
       try
         BorraFichero(F, ltCasa); // por la puerta de borrar: un buzon que es una union no borra detras
       except
         // lo que no se puede borrar sigue pendiente: se entrega otra vez
       end;
-    end;
-    Sb.AppendLine(MsgText(SN_MESSAGES_DELIVERED));
-    Result := Sb.ToString.TrimRight;
   finally
     Sb.Free;
   end;

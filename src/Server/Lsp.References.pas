@@ -718,7 +718,7 @@ var
   Settings, RootDir, FullPath, Ident, TargetUri, CandUri: string;
   Lines: TStringList;
   Resp: TJSONObject;
-  TargetLine, CandLine: Integer;
+  TargetLine, CandLine, TargetCol: Integer;
   Candidates: TList<TCandidate>;
   Cand: TCandidate;
   Files: TArray<string>;
@@ -819,7 +819,9 @@ begin
   Resp := DefinicionCorregida(Client.DefinitionResolved(TLspClient.PathToUri(FullPath),
     ALine, ACharacter, Pending), FullPath, ALine, ACharacter, CursorTexto, Client);
   try
-    if not DefinitionLocation(Resp, TargetUri, TargetLine) then
+    // por EL lector, con su columna: la definicion sale con character0 como
+    // cada hit (V210 de la 1.23.1)
+    if not UbicacionDeLsp(Resp.GetValue('result'), TargetUri, TargetLine, TargetCol) then
     begin
       // Hover knows the symbol but definition is not indexed yet: that is
       // "not yet", not "not a symbol" (measured by Hermes, 2026-09-22).
@@ -927,7 +929,12 @@ begin
         var TwinCol := 0;
         var MTwin := TRegEx.Match(TwinLines[TargetLine], PatronIdentEntero(Ident), [roIgnoreCase]);
         if MTwin.Success then
+        begin
           TwinCol := MTwin.Index;
+          // el character0 de la definicion: el del identificador, como el de
+          // un hit (el motor da donde EMPIEZA la declaracion: 0; V210)
+          TargetCol := TwinCol - 1;
+        end;
         if TwinCol > 0 then
         begin
           // con LA correccion: en la cabecera de una anidada el motor contesta
@@ -1274,6 +1281,9 @@ begin
       Entry.AddPair('path', TLspClient.UriToPath(TargetUri));
       Entry.AddPair('line', TJSONNumber.Create(TargetLine + 1));
       Entry.AddPair('line0', TJSONNumber.Create(TargetLine));
+      // como cada hit (CandidateJson): SP_LSP_CHARACTER manda usar el
+      // character0 de un hit, y la definicion no lo traia (V210)
+      Entry.AddPair('character0', TJSONNumber.Create(TargetCol));
       Result.AddPair('confirmed', Confirmed);
       Result.AddPair('unverified', Unverified);
       // Menciones: el nombre esta escrito ahi, pero en prosa. No son

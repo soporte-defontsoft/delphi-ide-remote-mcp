@@ -38,13 +38,13 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Document symbol tree of a Delphi unit (classes, methods, properties, sections) with 0-based ranges, from the official DelphiLSP engine; works without project settings. Big trees come as a compact summary by default (mode/filter control it); a FOLDER answers with the interface digest of every unit inside. The engine parses as the COMPILER would for Windows: code inside an inactive {$IFDEF} (LINUX, ANDROID, MACOS...) is not in the tree, and nothing says so - for those blocks use delphi_search or delphi_read.
+Document symbol tree of a Delphi unit (classes, methods, properties, sections) with 0-based ranges, from the official DelphiLSP engine; works without project settings. Big trees come as a compact summary by default (mode/filter control it); a FOLDER answers with the interface digest of every unit inside (copies and build artifacts left out). The engine parses as the COMPILER would for Windows: code inside an inactive {$IFDEF} (LINUX, ANDROID, MACOS...) is not in the tree, and nothing says so - for those blocks use delphi_search or delphi_read.
 
 *Access: read-only OK.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | A Delphi file (.pas/.dpr) for its symbols - or a FOLDER: at once, what each unit in it OFFERS (its interface: types, classes, routines, properties, uses), without bodies - ONE call to find your way around code you did not write. |
+| `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc) for its symbols - or a FOLDER: at once, what each unit in it OFFERS (its interface: types, classes, routines, properties, uses), without bodies - ONE call to find your way around code you did not write. |
 | `mode` | string | optional | For a FILE only: summary = the skeleton (each section with its members and line; containers say how many they hold) \| full = the LSP tree with its ranges, minus what repeats. Empty = full if the tree is small, summary if large (a summary says so, and how big the full one was). |
 | `filter` | string | optional | For a file: only the symbols whose name contains this (case-insensitive), with kind, declaration as written (decl), line and container. Ignores mode. The cheap way to find a method without the whole tree. |
 <!-- /contract -->
@@ -123,7 +123,7 @@ Find references to the identifier at a 0-based line:character position. Hybrid m
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | Absolute path of the Delphi source file |
+| `path` | string | **yes** | Absolute path of the Delphi source file (.pas/.dpr/.dpk/.inc) |
 | `line` | integer | **yes** | Zero-based line of the identifier to find references for (a hit's "line0"; its "line" is 1-based) |
 | `character` | integer | **yes** | Zero-based character inside the identifier (a hit's "character0") |
 <!-- /contract -->
@@ -138,7 +138,7 @@ Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight, 
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | Absolute path of the Delphi source file to lint (.pas/.dpr) |
+| `path` | string | **yes** | Absolute path of the Delphi source file to lint (.pas/.dpr/.dpk/.inc) |
 <!-- /contract -->
 
 ## Read files & explore
@@ -686,7 +686,7 @@ SEMANTIC RENAME of a Delphi symbol: point at the identifier (path + 0-based line
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `path` | string | **yes** | The .pas/.dpr with the symbol (any occurrence works) |
+| `path` | string | **yes** | The .pas/.dpr/.dpk/.inc with the symbol (any occurrence works) |
 | `line` | integer | **yes** | Zero-based line of the identifier (a hit's "line0"; same convention as delphi_definition) |
 | `character` | integer | **yes** | Zero-based column inside the identifier (a hit's "character0") |
 | `newname` | string | **yes** | The new identifier (legal Delphi name, no reserved words) |

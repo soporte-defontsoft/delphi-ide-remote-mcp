@@ -1149,20 +1149,34 @@ threadvar
 var
   GIdeUtf8Loaded: Boolean = False;
   GIdeUtf8: Boolean = False;
+  GIdeUtf8Vigia: TVigiaDeClave;
+  GIdeUtf8Candado: TObject;
 
-{ The IDE's configured default encoding, cached (registry, active install). }
+{ The IDE's configured default encoding (registry, active install), cached
+  while its key does not change: EL vigia del registro, como la zona de
+  biblioteca (Lsp.Lugares). Se cacheaba para siempre, y cambiar en el IDE la
+  codificacion por defecto no llegaba al servidor hasta reiniciarlo (V207 de
+  la 1.23.1). }
 function IdeWantsUtf8: Boolean;
 var
   Info: TRadStudioInfo;
 begin
-  if not GIdeUtf8Loaded then
-  begin
+  TMonitor.Enter(GIdeUtf8Candado);
+  try
     Info := DiscoverRadStudio;
-    if Info.Found then
-      GIdeUtf8 := IdeDefaultUtf8(Info.Version);
-    GIdeUtf8Loaded := True;
+    // el vigia ANTES de la primera lectura: un cambio que llegue mientras se
+    // lee sale en la siguiente pregunta
+    if (not GIdeUtf8Loaded) and Info.Found then
+      GIdeUtf8Vigia := VigilaClaveDelIde(Info.Version, 'Editor');
+    if (not GIdeUtf8Loaded) or CambioLaClave(GIdeUtf8Vigia) then
+    begin
+      GIdeUtf8 := Info.Found and IdeDefaultUtf8(Info.Version);
+      GIdeUtf8Loaded := True;
+    end;
+    Result := GIdeUtf8;
+  finally
+    TMonitor.Exit(GIdeUtf8Candado);
   end;
-  Result := GIdeUtf8;
 end;
 
 function NewFileEncName: string;
@@ -4950,7 +4964,9 @@ begin
         var NotaCreada: string;
         var CM := Measure(RelecturaDe(A.Path, CreadoBytes, NotaCreada));
         Exit(ConAvisosDeLlaves(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
-          [TPath.GetFileName(A.Path), UnitName, Note, EncName(NewK),
+          // LA etiqueta, la de delphi_read del mismo fichero: un esqueleto ASCII
+          // en ANSI decia cp1252 y read "ascii" (V208 de la 1.23.1)
+          [TPath.GetFileName(A.Path), UnitName, Note, EtiquetaDeCodificacion(NewK, not HayByteAlto(CreadoBytes)),
            NombreDelSalto(SaltoPedido(A.Eol)), Auditoria(CM)]) +
           IfThen(NotaCreada <> '', #10 + NotaCreada, '') + NotaDeNombreTapado(UnitName, A.Path), A.Path, Skel));
       end;
@@ -5497,7 +5513,8 @@ begin
             try
               FotoVis.Vigila(A.Path);
               var ImpIdx: Integer;
-              if FindUniqueLine(SplitToLines(CodigoPascal(DecodeBytes(TFile.ReadAllBytes(A.Path), K))),
+              var Crudas := SplitToLines(DecodeBytes(TFile.ReadAllBytes(A.Path), K));
+              if FindUniqueLine(SplitToLines(CodigoPascal(string.Join(#10, Crudas))),
                 function(L: string): Boolean
                 begin
                   Result := SinMayusculas(L.Trim) = 'implementation';
@@ -5513,7 +5530,11 @@ begin
                 var R2: string;
                 AplazaJuicioDeForm(True);
                 try
-                  R2 := DoEdit(A.Path, 'implementation', Decl + #10#10 + 'implementation', ImpIdx + 1, False);
+                  // el ancla es LA linea tal cual esta (Implementation, o con
+                  // un comentario detras): con el literal no casaba la que la
+                  // busqueda encontro, y la declaracion caia y se deshacia el
+                  // cuerpo (V202 de la 1.23.1)
+                  R2 := DoEdit(A.Path, Crudas[ImpIdx], Decl + #10#10 + Crudas[ImpIdx], ImpIdx + 1, False);
                 finally
                   AplazaJuicioDeForm(False);
                 end;
@@ -6546,8 +6567,11 @@ end;
 initialization
   GLock := TCriticalSection.Create;
   GTextoDeUnidad := TextoDeUnidadDeDesigner;
+  GIdeUtf8Candado := TObject.Create;
 
 finalization
+  SueltaVigia(GIdeUtf8Vigia);
+  GIdeUtf8Candado.Free;
   GLock.Free;
 
 end.
