@@ -607,10 +607,7 @@ function TMCPIdHTTPServer.VerifyAndSetCORSHeaders(RequestInfo: TIdHTTPRequestInf
   ResponseInfo: TIdHTTPResponseInfo): Boolean;
 var
   AllowedOrigin: string;
-  CurrentOrigin: string;
-  Found: Boolean;
   Origin: string;
-  OriginsList: TStringList;
 begin
   Result := True;
 
@@ -622,31 +619,20 @@ begin
 
   if (FSettings.CorsAllowedOrigins <> '*') and (Origin <> '') then
   begin
-    OriginsList := TStringList.Create;
-    try
-      OriginsList.CommaText := FSettings.CorsAllowedOrigins;
-      Found := False;
-
-      for CurrentOrigin in OriginsList do
-      begin
-        if SameText(Trim(CurrentOrigin), Origin) then
-        begin
-          AllowedOrigin := Origin;
-          Found := True;
-          Break;
-        end;
-      end;
-
-      if not Found then
-      begin
-        Result := False;
-        ResponseInfo.ResponseNo := HTTP_FORBIDDEN;
-        ResponseInfo.ResponseText := 'Forbidden - Origin not allowed';
-        TLogger.Info('CORS blocked origin: ' + Origin);
-        Exit;
-      end;
-    finally
-      OriginsList.Free;
+    // [local change] por EL lector de las listas del operador (EntradasDeLista)
+    // y SU pregunta (NombreEnLaLista, con el comodin): CommaText cortaba por
+    // coma Y blanco, no por ';', y el comodin era solo '*' exacto y suelto, asi
+    // que 'http://a;http://b' quedaba en UNA entrada y todo Origin recibia 403
+    // (V162 de la 1.23.1, el sexto lector de una lista que V128 no alcanzo).
+    if NombreEnLaLista(Origin, EntradasDeLista(FSettings.CorsAllowedOrigins, True)) then
+      AllowedOrigin := Origin
+    else
+    begin
+      Result := False;
+      ResponseInfo.ResponseNo := HTTP_FORBIDDEN;
+      ResponseInfo.ResponseText := 'Forbidden - Origin not allowed';
+      TLogger.Info('CORS blocked origin: ' + Origin);
+      Exit;
     end;
   end;
 

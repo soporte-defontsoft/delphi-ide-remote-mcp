@@ -10,6 +10,23 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The log masker reads secret keys the way the binder does.** The transports
+  log the request body before the tool gate, masking the value of secret-named
+  keys; the masker matched the literal key (`"password"`...), but the binder
+  normalizes keys (lowercase, drop `_`), so `pass_word` or a unicode-escaped
+  variant of the key - which the binder binds as the password - was written to
+  the log in cleartext. The masker now parses
+  the body and masks the value of any key whose normalized form is a secret,
+  falling back to the literal scan for a body that is not valid JSON.
+- **`[CORS] AllowedOrigins` is read with the one list reader.** It was split with
+  `TStringList.CommaText` (comma and whitespace, not `;`) and matched with a lone
+  exact `*` as the only wildcard, so `AllowedOrigins=http://a;http://b` became a
+  single entry and every browser Origin got 403. It now uses `EntradasDeLista` /
+  `NombreEnLaLista` (the V128 reader), splitting on `;`/`,` and honouring `*`.
+- **An illegible `[CORS] Enabled` reads as the closed side.** V110 reads an
+  illegible toggle as the closed side, but for CORS the closed side is ON (off
+  does not validate the `Origin`), and it was read as off. An illegible value now
+  turns Origin validation on; an absent key still uses the transport default.
 - **Per-agent confinement uses the most specific root, not the first one
   declared.** With nested write roots (`D:\W` and `D:\W\agents`) and confinement
   on, the agent's own folder was taken from the first root that contained the

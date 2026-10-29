@@ -1364,10 +1364,14 @@ begin
       GIniTransporte.Host := Ini.ReadString('Server', 'Host', GIniTransporte.Host);
       GIniTransporte.Endpoint := Ini.ReadString('Server', 'Endpoint', GIniTransporte.Endpoint);
       // los si/no por SU gramatica: el ReadBool de la RTL leia 'false' como el
-      // defecto (V110); CORS cierra apagado, SSL encendido (en claro abriria)
+      // defecto (V110). El lado CERRADO de cada uno, para un valor ilegible: CORS
+      // ENCENDIDO -apagado NO valida el Origin, que es el lado ABIERTO; V110 lo
+      // leia apagado (abierto), al reves de lo que promete "cerrado y dicho"
+      // (V161 de la 1.23.1)- y SSL encendido (en claro abriria). Una clave
+      // ausente no pasa por aqui (ValueExists): el defecto del transporte manda.
       if Ini.ValueExists('CORS', 'Enabled') then
         GIniTransporte.CorsEnabled := SiNoCerrado(Ini.ReadString('CORS', 'Enabled', ''),
-          '[CORS] Enabled', False);
+          '[CORS] Enabled', True);
       GIniTransporte.CorsAllowedOrigins := Ini.ReadString('CORS', 'AllowedOrigins',
         GIniTransporte.CorsAllowedOrigins);
       if Ini.ValueExists('SSL', 'Enabled') then

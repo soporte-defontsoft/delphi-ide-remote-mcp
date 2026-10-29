@@ -5,7 +5,8 @@ interface
 uses
   System.SysUtils,
   System.Classes,
-  System.SyncObjs;
+  System.SyncObjs,
+  System.JSON; // [local change] MaskSecretValues reads keys as the binder does
 
 type
   {$SCOPEDENUMS ON}
@@ -82,7 +83,58 @@ uses
 // [local change] See the interface comment. String-scan on purpose (no regex
 // dependency in the vendor): finds each secret key, walks to its quoted JSON
 // value (escapes respected) and replaces the value with ***.
-function MaskSecretValues(const S: string): string;
+const
+  SECRET_KEYS: array[0..3] of string = ('password', 'passkey', 'passfile', 'token');
+
+// [local change 2026-10-29] La clave como la LEE el binder: NormalizeKey
+// (minusculas, sin '_'). Antes el masker casaba la clave LITERAL ("password"),
+// y un "pass_word" o un "password" -que el binder liga igual como Password-
+// se escribia en claro en el log (V163 de la 1.23.1, medido). Un solo lector.
+function ClaveSecreta(const AKey: string): Boolean;
+var
+  K, N: string;
+begin
+  N := LowerCase(AKey).Replace('_', '', [rfReplaceAll]);
+  for K in SECRET_KEYS do
+    if N = K then
+      Exit(True);
+  Result := False;
+end;
+
+// [local change] Enmascara EL VALOR (string) de toda clave secreta del arbol
+// JSON, a cualquier profundidad. Recoge las claves antes de mutar (no se toca
+// el objeto mientras se itera); quita y vuelve a poner, el patron de la casa.
+procedure EnmascaraValoresSecretos(V: TJSONValue);
+var
+  Secretas: TArray<string>;
+  Clave: string;
+  I: Integer;
+begin
+  if V is TJSONObject then
+  begin
+    Secretas := nil;
+    for I := 0 to TJSONObject(V).Count - 1 do
+    begin
+      var P := TJSONObject(V).Pairs[I];
+      if (P.JsonValue is TJSONString) and ClaveSecreta(P.JsonString.Value) then
+        Secretas := Secretas + [P.JsonString.Value]
+      else
+        EnmascaraValoresSecretos(P.JsonValue);
+    end;
+    for Clave in Secretas do
+    begin
+      TJSONObject(V).RemovePair(Clave).Free;
+      TJSONObject(V).AddPair(Clave, TJSONString.Create('***'));
+    end;
+  end
+  else if V is TJSONArray then
+    for var E in TJSONArray(V) do
+      EnmascaraValoresSecretos(E);
+end;
+
+// [local change] El barrido LITERAL de antes, por si el cuerpo no es JSON
+// valido (un cuerpo troceado): al menos enmascara la clave literal.
+function MaskSecretValuesLiteral(const S: string): string;
 const
   KEYS: array[0..3] of string = ('"password"', '"passkey"', '"passfile"',
     '"token"');
@@ -113,6 +165,26 @@ begin
       end;
       Inc(I);
     until False;
+  end;
+end;
+
+function MaskSecretValues(const S: string): string;
+var
+  V: TJSONValue;
+begin
+  V := nil;
+  try
+    try
+      V := TJSONObject.ParseJSONValue(S);
+    except
+      V := nil;
+    end;
+    if V = nil then
+      Exit(MaskSecretValuesLiteral(S)); // un cuerpo que no es JSON: el barrido literal
+    EnmascaraValoresSecretos(V);
+    Result := V.ToJSON;
+  finally
+    V.Free;
   end;
 end;
 
