@@ -69,6 +69,13 @@ const
   SR_RENDER_ESTADO_SIN_REFERIDO_FMT =
     '[RENDER-013 NOT_FOUND] state: there is no component %s to put in %s.';
 
+  // %s = el valor, %s = la propiedad: un numero de coma flotante que el parser
+  // de forms no lee (0,5 con coma) se leia con el locale del usuario, y lo que
+  // designer set niega (DSGN-092) se pintaba (V173k de la 1.23.1)
+  SR_RENDER_ESTADO_FLOTANTE_FMT =
+    '[RENDER-024 INVALID_PARAM] state: %s is not a number as a form writes ' +
+    'it, the type of %s (decimal point, never a comma: 0.5).';
+
   SN_RENDER_EXCEPCION_BUCLE_FMT =
     '[RENDER-014] An exception reached the message loop and was recorded ' +
     'instead of shown: %s: %s.';

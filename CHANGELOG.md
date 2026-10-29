@@ -487,7 +487,10 @@ the MCP `initialize` response (`serverInfo.version`).
   while the same text in the form file means 10.5. A floating-point property
   now takes its value from the form parser of the runtime library (decimal
   point always, the `s`/`c`/`d` suffixes the IDE writes, the sign in front) -
-  the inverse of the writer that `delphi_designer set` already uses.
+  the inverse of the writer that `delphi_designer set` already uses. A value
+  that parser does not read (`Opacity=0,5`, with a comma) is refused
+  (`RENDER-024`), as `set` refuses it (`DSGN-092`): it fell back to the
+  locale's conversion and was drawn.
 - **An FMX view is a form of its master's unit.** A view
   (`UMain.Windows.fmx`) has no unit of its own: the IDE declares it in the
   master's unit with `{$R *.Windows.fmx MSWINDOWS}`, and its root is a class

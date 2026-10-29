@@ -1336,8 +1336,15 @@ begin
   // (Lsp.DesignerForma.LeeFlotanteDeForm: el parser de forms, punto decimal
   // siempre): SetPropValue lo convertia por un Variant con el LOCALE del
   // usuario, y en es-ES Position.X=10.5 era 105 (V121 de la 1.23.1, medido)
-  else if (PI.PropType^.Kind = tkFloat) and LeeFlotanteDeForm(Valor, Flotante) then
-    SetFloatProp(Obj, PI, Flotante)
+  else if PI.PropType^.Kind = tkFloat then
+  begin
+    // ...y uno que ese parser no lee se niega: caia a SetPropValue, con el
+    // locale, y 0,5 se pintaba en es-ES lo que designer set niega (DSGN-092):
+    // dos jueces del mismo valor (V173k de la 1.23.1, medido)
+    if not LeeFlotanteDeForm(Valor, Flotante) then
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_FLOTANTE_FMT, [Valor, Hoja]));
+    SetFloatProp(Obj, PI, Flotante);
+  end
   else
     SetPropValue(Obj, Hoja, Valor);
 end;
