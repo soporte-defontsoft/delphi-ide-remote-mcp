@@ -1615,7 +1615,8 @@ begin
   // cannot see the cursor lands a column or two short and gets the whole global
   // scope (5157 symbols) with no hint it aimed at the wrong place - measured
   // 2026-08-25 by a frontier agent dogfooding a real FMX form. When the caller
-  // says trigger='.', snap the position to just past the nearest dot and say so.
+  // says trigger='.', snap the position to just past the dot that ends the
+  // identifier under the cursor, and say so.
   EffChar := Params.Character;
   AdjNote := '';
   var Enc: string;
@@ -1625,20 +1626,30 @@ begin
     if (Params.Line >= 0) and (Params.Line <= High(Lines)) then
     begin
       var LineTxt := Lines[Params.Line];
-      // already just after a dot? (char before the 0-based cursor is '.')
-      var AfterDot := (EffChar >= 1) and (EffChar <= Length(LineTxt)) and
-        (LineTxt[EffChar] = '.');
-      if not AfterDot then
+      // el punto del IDENTIFICADOR bajo el cursor, no el mas cercano: era el
+      // punto mas proximo en -3..+2 columnas, que no llegaba al de un nombre
+      // largo (el ambito global entero) y movia hacia atras un cursor que ya
+      // escribia un miembro (Rect1.Op|: perdia el prefijo y decia LSP-027 de
+      // una columna buena; V169 de la 1.23.1, medido). Las letras, por la
+      // regla de la casa (EsCaracterDeIdent). 1-based: LineTxt[EffChar] es la
+      // letra de antes del cursor
+      var Ini := Min(EffChar, Length(LineTxt));
+      while (Ini >= 1) and EsCaracterDeIdent(LineTxt[Ini]) do
+        Dec(Ini);
+      // ...tras un punto (o escribiendo un miembro tras el): el prefijo filtra
+      var TrasPunto := (Ini >= 1) and (LineTxt[Ini] = '.');
+      if not TrasPunto then
       begin
-        var Best := -1;
-        for var K := Max(1, EffChar - 3) to Min(Length(LineTxt), EffChar + 2) do
-          if (LineTxt[K] = '.') and
-             ((Best < 0) or (Abs(K - EffChar) < Abs(Best - EffChar))) then
-            Best := K;
-        if (Best >= 1) and (Best <> EffChar) then
+        var Fin := EffChar + 1;
+        while (Fin <= Length(LineTxt)) and EsCaracterDeIdent(LineTxt[Fin]) do
+          Inc(Fin);
+        // en un identificador (letras antes o despues del cursor) que acaba en
+        // un punto: justo detras de el
+        if (Fin <= Length(LineTxt)) and (LineTxt[Fin] = '.') and
+           ((Ini < Min(EffChar, Length(LineTxt))) or (Fin > EffChar + 1)) then
         begin
-          AdjNote := MsgFmt(SN_COMPLETION_SNAPPED_FMT, [Params.Character, Best]);
-          EffChar := Best; // 0-based col past the dot = 1-based index of the dot
+          AdjNote := MsgFmt(SN_COMPLETION_SNAPPED_FMT, [Params.Character, Fin]);
+          EffChar := Fin; // 0-based col past the dot = 1-based index of the dot
         end;
       end;
     end;

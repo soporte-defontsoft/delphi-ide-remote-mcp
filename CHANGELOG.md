@@ -33,6 +33,14 @@ the MCP `initialize` response (`serverInfo.version`).
   reader dropped its note. The note is no longer asked with the lock held: the
   commit lists the `.style` files it wrote next to its forms, and the tool asks
   FMX about each one on its way back, outside the lock.
+- **`delphi_completion` with `trigger="."` moves the column to the dot of the
+  identifier under the cursor, and only then.** It moved it to the nearest dot
+  within three columns: on a long name (`TStringList|` ten columns before its
+  dot) nothing moved and the whole global scope came back, and a cursor already
+  typing a member (`Rect1.Op|`) was moved back to the dot, losing the prefix
+  `Op` and saying `LSP-027` about a column that was right. A cursor on an
+  identifier that ends in a dot moves right after that dot; one typing a
+  member stays, and its prefix filters.
 - **One unreadable form no longer denies the whole `delphi_styles lint`.** For
   the code of a unit that sets a `StyleLookup`, the lint asks its form whether
   it takes its styles from a `StyleBook`; a form the read gate refuses (a hard

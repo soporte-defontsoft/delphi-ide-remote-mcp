@@ -13,6 +13,15 @@ tope contaba indices de la lista cruda, los <error> saltados incluidos.
   P3 el control: con el cursor tras un punto (miembros) no hay prefijo y
      contesta igual
 
+V169 de la 1.23.1 (revisor del protocolo): trigger="." movia la columna al
+punto MAS CERCANO en una ventana de -3..+2 columnas, no al del identificador:
+  P6 el cursor en la col 8, sobre TStringList (su punto en la 18): se mueve
+     tras el punto, LSP-027 lo dice y contesta miembros, no el ambito entero
+     (ROJO: la ventana no llegaba, y salian los miles del ambito global)
+  P7 el cursor tras "Cr" de Create (col 21), escribiendo un miembro: NO se
+     mueve, prefix = Cr y Create esta (ROJO: lo movia al punto de la 18,
+     perdia el prefijo y decia LSP-027 de un cursor que estaba bien)
+
 Uso:  python tests/test_completion_prefijo_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import json
@@ -32,6 +41,7 @@ DPR = ("program Pref;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nuses\r\n  System.SysUtils
 LINEA_W = 12    # 0-based: "  Writeln('x');"
 LINEA_L = 13    # 0-based: "  L.Free;"
 LINEA_Z = 14    # 0-based: "  Zqxv;" (un nombre que no casa con nada)
+LINEA_C = 11    # 0-based: "  L := TStringList.Create;" (TStringList de 7 a 17, el punto en 18)
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='completion', t=240)
 try:
@@ -82,6 +92,17 @@ try:
         j = mc.como_json(r) or {}
         check('P5 prefijo que no casa con nada: matching 0, items vacio y la nota LSP-049',
               j.get('prefix') == 'Zqxv' and j.get('matching') == 0 and j.get('items') == [] and 'LSP-049' in r,
+              r[:300])
+        # V169: el punto es el del identificador bajo el cursor, no el mas cercano
+        r = srv.call('delphi_completion', {'path': dpr, 'line': LINEA_C, 'character': 8, 'trigger': '.'}, t=240)
+        j = mc.como_json(r) or {}
+        check('P6 (V169) sobre TStringList, su punto 10 columnas despues: movido tras el punto (LSP-027), miembros',
+              mc.es(r, 'SN_COMPLETION_SNAPPED_FMT') and 'prefix' not in j and 0 < j.get('total', 0) < 1000, r[:300])
+        r = srv.call('delphi_completion', {'path': dpr, 'line': LINEA_C, 'character': 21, 'trigger': '.'}, t=240)
+        j = mc.como_json(r) or {}
+        labels = [i.get('label', '') for i in j.get('items', [])]
+        check('P7 (V169) tras "Cr" de Create, escribiendo un miembro: no se mueve, prefix=Cr y Create esta',
+              not mc.es(r, 'SN_COMPLETION_SNAPPED_FMT') and j.get('prefix') == 'Cr' and 'Create' in labels,
               r[:300])
 finally:
     srv.cierra()
