@@ -64,6 +64,25 @@ type
     property Character: Integer read FCharacter write FCharacter;
   end;
 
+  { Los de delphi_signature: su columna va DENTRO de los parentesis de la
+    llamada, no en un identificador; con la generica, su parametro decia lo
+    contrario que su descripcion (V182 de la 1.23.1, Hermes). Line y
+    Character en la MISMA clase, como en TDelphiPositionParams: la RTTI da
+    primero las de la clase derivada, y partida en dos el orden publicado de
+    hover, definition y completion pasaba a path, character, line. }
+  TDelphiSignatureParams = class(TDelphiFileParams)
+  private
+    FLine: Integer;
+    FCharacter: Integer;
+  public
+    [SchemaDescription(SP_LSP_LINE)]
+    [Required]
+    property Line: Integer read FLine write FLine;
+    [SchemaDescription(SP_LSP_SIGNATURE_CHARACTER)]
+    [Required]
+    property Character: Integer read FCharacter write FCharacter;
+  end;
+
   TDelphiCompletionParams = class(TDelphiPositionParams)
   private
     FTrigger: string;
@@ -94,9 +113,9 @@ type
     constructor Create; override;
   end;
 
-  TDelphiSignatureTool = class(TMCPToolBase<TDelphiPositionParams>)
+  TDelphiSignatureTool = class(TMCPToolBase<TDelphiSignatureParams>)
   protected
-    function ExecuteWithParams(const Params: TDelphiPositionParams): string; override;
+    function ExecuteWithParams(const Params: TDelphiSignatureParams): string; override;
   public
     constructor Create; override;
   end;
@@ -701,17 +720,6 @@ begin
   I := Result.IndexOfAny(['(', ':']);
   if I >= 0 then
     Result := Result.Substring(0, I).Trim;
-end;
-
-function SymChildren(const ANode: TJSONObject): TJSONArray;
-var
-  C: TJSONValue;
-begin
-  C := ANode.GetValue('children');
-  if C is TJSONArray then
-    Result := TJSONArray(C)
-  else
-    Result := nil;
 end;
 
 { La linea del simbolo EN BASE 1, que es como cuenta delphi_read y como
@@ -1372,7 +1380,13 @@ begin
     // definition (correct at a call site) to reach the body, then declaration
     // AT the body's identifier column to reach the interface declaration.
     var Pending: Boolean;
-    var DefResp := Client.DefinitionResolved(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character, Pending);
+    var Crudo := Client.DefinitionResolved(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character, Pending);
+    // LA correccion de references ANTES de la cadena: sobre la declaracion de
+    // un campo el motor contesta una var o una const homonima, o nada, y la
+    // cadena seguia desde ahi; la declaracion de un campo es el campo (V181 de
+    // la 1.23.1). Si corrige, devuelve otra respuesta y Crudo ya no existe
+    var DefResp := DefinicionCorregida(Crudo, Params.Path, Params.Line, Params.Character, '', Client);
+    var Corregida := DefResp <> Crudo;
     var DefLoc: TLoc;
     if ParseLoc(DefResp.GetValue('result'), DefLoc) then
     begin
@@ -1391,8 +1405,8 @@ begin
       // global y con un metodo), y seguir la cadena llevaba de ahi al CUERPO
       // (test completo de Opus de la 1.22.0); en la de una anidada el motor
       // contesta la que la contiene: LA correccion de references
-      if EsCabeceraDeCuerpo(Params.Path, Params.Line) then
-        Resp := DefinicionCorregida(DefResp, Params.Path, Params.Line, Params.Character, '')
+      if EsCabeceraDeCuerpo(Params.Path, Params.Line) or Corregida then
+        Resp := DefResp
       else
       begin
         var Col := RoutineIdentCol(TgtPath, DefLoc.Line);
@@ -1457,7 +1471,7 @@ begin
     end;
     // sobre el nombre de la cabecera de una anidada el motor contesta la rutina
     // que la contiene: LA correccion de references (Lsp.References)
-    Resp := DefinicionCorregida(Resp, Params.Path, Params.Line, Params.Character, '');
+    Resp := DefinicionCorregida(Resp, Params.Path, Params.Line, Params.Character, '', Client);
   end;
   // una ubicacion de FUERA no sale: ni la ruta ni la linea (LSP-038)
   Result := NegativaDeFuera(Resp, Params.Path, Params.Line, Params.Character);
@@ -1482,7 +1496,7 @@ begin
   FDescription := SD_LSP_SIGNATURE;
 end;
 
-function TDelphiSignatureTool.ExecuteWithParams(const Params: TDelphiPositionParams): string;
+function TDelphiSignatureTool.ExecuteWithParams(const Params: TDelphiSignatureParams): string;
 var
   Client: TLspClient;
   Settings: string;

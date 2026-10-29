@@ -11,19 +11,23 @@ Cada uno se compara con SU texto del catalogo (Lsp.Texts), que contra el build a
      ruta final; si querias una carpeta, ...)
   X5 V140 una unidad virtual que no se sirve (srvq:) con la misma cola bajo una que si: CFG-006 y
      READ-011 con la buena
+  X6 V182 el parametro character de delphi_signature dice lo que su descripcion: DENTRO de los
+     parentesis de la llamada (ROJA contra b48699c: el generico de posicion, "inside the identifier",
+     y ahi el motor no contesta)
 (V132a, el alcance de RENAME-021, en test_rename.)
 
 Uso:  python tests/test_textos_1231.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
 import subprocess
+import sys
 import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('textos-1231')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
-EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'), src=sys.argv[1] if len(sys.argv) > 1 else None)
 CAT = mc.catalogo()
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='textos-1231', t=120)
 try:
@@ -48,6 +52,10 @@ try:
     desc = next((t.get('description', '') for t in m['result']['tools'] if t['name'] == 'delphi_completion'), '')
     check('X3 la descripcion de delphi_completion es la del catalogo, con la columna reubicada (V138)',
           CAT['SD_LSP_COMPLETION'] in desc and mc.id_de('SN_COMPLETION_SNAPPED_FMT') in desc, desc)
+    sig = next((t for t in m['result']['tools'] if t['name'] == 'delphi_signature'), {})
+    car = ((sig.get('inputSchema') or {}).get('properties') or {}).get('character', {}).get('description', '')
+    check('X6 el character de delphi_signature es el suyo: DENTRO de los parentesis, como su descripcion (V182)',
+          car == CAT['SP_LSP_SIGNATURE_CHARACTER'] and 'parentheses' in sig.get('description', ''), car)
 
     fmx = os.path.join(JAIL, 'UMain.fmx')
     with open(fmx, 'w', newline='') as f:
@@ -69,4 +77,4 @@ try:
 finally:
     srv.cierra()
     mc.borra(BASE)
-mc.fin('textos 1.23.1 (V146, V133, V138, V139, V140)')
+mc.fin('textos 1.23.1 (V146, V133, V138, V139, V140, V182)')

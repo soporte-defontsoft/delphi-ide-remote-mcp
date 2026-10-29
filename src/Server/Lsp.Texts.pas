@@ -10415,6 +10415,14 @@ const
     'Zero-based character (column) inside the identifier (a hit''s ' +
     '"character0")';
 
+  // el de delphi_signature: su posicion va DENTRO de los parentesis de la
+  // llamada, y con el generico su parametro decia lo contrario que su
+  // descripcion: en el nombre de la rutina el motor no contesta (V182 de la
+  // 1.23.1, Hermes; medido: detras del "(" la firma, en el nombre null)
+  SP_LSP_SIGNATURE_CHARACTER =
+    'Zero-based character INSIDE the parentheses of the call: right after ' +
+    'its "(" or a "," (not on the routine''s name)';
+
   SP_LSP_TRIGGER =
     'Optional trigger character, e.g. "." (empty = manual invocation). ' +
     'Only the ones the engine completes on do anything; another is said ' +

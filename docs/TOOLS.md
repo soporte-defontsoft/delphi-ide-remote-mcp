@@ -78,7 +78,7 @@ Signature help (parameter completion) for the call under a 0-based line:characte
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `line` | integer | **yes** | Zero-based line of the identifier: the "line0" of a search, references, symbols or definition hit ("line" is 1-based) |
-| `character` | integer | **yes** | Zero-based character (column) inside the identifier (a hit's "character0") |
+| `character` | integer | **yes** | Zero-based character INSIDE the parentheses of the call: right after its "(" or a "," (not on the routine's name) |
 | `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: a position resolves in a source. What a folder's units offer: delphi_symbols. |
 <!-- /contract -->
 

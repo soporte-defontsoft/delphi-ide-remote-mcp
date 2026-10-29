@@ -32,6 +32,8 @@ const
   // has not answered in this is not waited for. Public: a test tells by it
   // that the wait is there, and that it is bounded (LspTests.Motor).
   SHUTDOWN_WAIT_MS = 1000;
+  // el SymbolKind de LSP de un campo (Field), en el arbol de documentSymbol
+  SYMBOL_KIND_FIELD = 8;
 
 type
   ELspClient = class(Exception);
@@ -263,6 +265,11 @@ type
     class function ColumnaDelMotor(const ALinea: string; ACol: Integer): Integer;
   end;
 
+{ Los hijos de un nodo del arbol de documentSymbol (nil si no tiene): EL
+  lector de ese arbol, de delphi_symbols y de references (vivia en
+  Mcp.Tools.DelphiLsp; references lo necesito para V181 de la 1.23.1). }
+function SymChildren(const ANode: TJSONObject): TJSONArray;
+
 implementation
 
 uses
@@ -276,6 +283,17 @@ uses
   System.Character,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.NetDrives;
+
+function SymChildren(const ANode: TJSONObject): TJSONArray;
+var
+  C: TJSONValue;
+begin
+  C := ANode.GetValue('children');
+  if C is TJSONArray then
+    Result := TJSONArray(C)
+  else
+    Result := nil;
+end;
 
 const
   RETRY_DELAYS_MS: array [0 .. 1] of Integer = (2000, 5000);

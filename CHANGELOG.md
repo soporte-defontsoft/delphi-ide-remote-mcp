@@ -10,6 +10,24 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_references` and `delphi_rename_symbol` no longer take a field's
+  declaration for a unit-level symbol of the same name.** On the declaration
+  of a record or class field, the language engine sometimes answers a
+  variable or constant of the unit with that name, or nothing (measured
+  against the engine alone): references of the constant `Blocked` confirmed
+  the declaration of the field `Blocked` of a record, and a rename of the
+  constant renamed the field too - silently, since a field nobody uses still
+  compiles. A field has no forward declaration and no twin, so its
+  declaration is its own definition; the engine's own symbol tree
+  (`documentSymbol`) is what says a position declares a field. The same
+  correction answers `delphi_definition` on a field's declaration (also with
+  `kind=declaration`, which went on from the engine's answer), and on a field
+  with no homonym, where the engine said nothing.
+- **The `character` parameter of `delphi_signature` says what the tool
+  needs.** It carried the generic position text ("inside the identifier, a
+  hit's character0") while the tool asks for a position inside the call's
+  parentheses, right after "(" or ",": following the parameter, the engine
+  answers null. It now says the same as the tool.
 - **A form edit no longer stops every other write of the server while the
   language engine starts.** After `delphi_edit` (or a changeset) writes a form,
   its lint runs inside the server-wide write lock; for a form whose class

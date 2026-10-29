@@ -18,6 +18,7 @@ interface
 
 uses
   System.JSON,
+  Lsp.Client, // TLspClient: el motor al que DefinicionCorregida pregunta sus simbolos
   Lsp.Guard; // TVisitaRuta: el AAlEntrar de WalkBajoLaRaiz
 
 type
@@ -126,7 +127,9 @@ type
 { El identificador que contiene la columna ACol (0-based, la del LSP) de
   una linea, con EL identificador de Lsp.Pascal; '' si no hay ninguno ahi.
   Lo usan references y las negativas de las tools del motor (LSP-038). }
-function IdentifierAt(const ALineText: string; ACol: Integer): string;
+function IdentifierAt(const ALineText: string; ACol: Integer): string; overload;
+{ ...y la columna (0-based) donde EMPIEZA, en AInicio (-1 si no hay ninguno). }
+function IdentifierAt(const ALineText: string; ACol: Integer; out AInicio: Integer): string; overload;
 
 { LA correccion de lo que contesta el motor sobre la CABECERA de una rutina
   ANIDADA: sobre su nombre, en su cabecera, DelphiLSP contesta la rutina que
@@ -140,9 +143,17 @@ function IdentifierAt(const ALineText: string; ACol: Integer): string;
   delphi_definition y, en references (y en rename, que va por references), el
   cursor, el gemelo y cada candidato. Corregia solo el cursor: el gemelo
   salia la rutina de fuera, una homonima hermana se confirmaba y rename la
-  renombraba (revisor de version de la 1.18.1). }
+  renombraba (revisor de version de la 1.18.1).
+  Y la DECLARACION de un campo (V181 de la 1.23.1): sobre ella el motor
+  contesta a veces una var o una const de la unidad del mismo nombre, o nada
+  (medido a pelo el 29-oct-2026), y references de esa const confirmaba el
+  campo: rename lo renombraba. Un campo no tiene declaracion adelantada ni
+  gemelo, asi que su declaracion es su definicion. Quien dice que esa
+  posicion declara un campo es el motor mismo, su documentSymbol (AClient;
+  nil = sin esta correccion); antes, un filtro barato que no juzga: detras
+  del nombre, ':' (no ':=') o ','. }
 function DefinicionCorregida(AResp: TJSONObject; const APath: string;
-  ALine, ACharacter: Integer; const ALineText: string): TJSONObject;
+  ALine, ACharacter: Integer; const ALineText: string; AClient: TLspClient): TJSONObject;
 
 { LA primera ubicacion del result de una respuesta textDocument/* del motor:
   un Location o un LocationLink (targetUri, targetSelectionRange o
@@ -169,7 +180,6 @@ uses
   System.IOUtils,
   System.StrUtils,
   System.Generics.Collections,
-  Lsp.Client,
   Lsp.Session,
   Lsp.Texts,
   System.RegularExpressions,
@@ -183,10 +193,11 @@ uses
   Lsp.Rutas,            // EsRutaAbsoluta: LA regla de ruta completa
   Lsp.Herencia;         // LA cadena de ancestros por el motor (TCadenaPorElMotor)
 
-function IdentifierAt(const ALineText: string; ACol: Integer): string;
+function IdentifierAt(const ALineText: string; ACol: Integer; out AInicio: Integer): string;
 var
   S, E: Integer;
 begin
+  AInicio := -1;
   // ACol is 0-based; string is 1-based. EL identificador (Lsp.Pascal): con
   // A-Z a mano, el de debajo del cursor en un nombre con enye era un trozo
   // (censo del 4-oct-2026)
@@ -198,7 +209,15 @@ begin
   E := ACol + 1;
   while (E < Length(ALineText)) and EsCaracterDeIdent(ALineText[E + 1]) do
     Inc(E);
+  AInicio := S - 1;
   Result := Copy(ALineText, S, E - S + 1);
+end;
+
+function IdentifierAt(const ALineText: string; ACol: Integer): string;
+var
+  Inicio: Integer;
+begin
+  Result := IdentifierAt(ALineText, ACol, Inicio);
 end;
 
 { Folders of projects whose SEARCH PATH points at ADir - i.e. projects that
@@ -544,18 +563,60 @@ begin
   end;
 end;
 
+{ La DECLARACION de un campo en el arbol de documentSymbol del motor
+  (ASimbolos, su result): un nodo de kind Field cuyo rango empieza en
+  (ALinea, ACol), a cualquier profundidad (V181 de la 1.23.1). }
+function DeclaraUnCampo(ASimbolos: TJSONValue; ALinea, ACol: Integer): Boolean;
+var
+  V, Rango: TJSONValue;
+  N: TJSONObject;
+begin
+  Result := False;
+  if not (ASimbolos is TJSONArray) then
+    Exit;
+  for V in TJSONArray(ASimbolos) do
+    if V is TJSONObject then
+    begin
+      N := TJSONObject(V);
+      Rango := N.GetValue('selectionRange');
+      if Rango = nil then
+        Rango := N.GetValue('range');
+      if (N.GetValue<Integer>('kind', 0) = SYMBOL_KIND_FIELD) and (Rango <> nil) and
+         (Rango.GetValue<Integer>('start.line', -1) = ALinea) and
+         (Rango.GetValue<Integer>('start.character', -1) = ACol) then
+        Exit(True);
+      if DeclaraUnCampo(SymChildren(N), ALinea, ACol) then
+        Exit(True);
+    end;
+end;
+
 function DefinicionCorregida(AResp: TJSONObject; const APath: string;
-  ALine, ACharacter: Integer; const ALineText: string): TJSONObject;
+  ALine, ACharacter: Integer; const ALineText: string; AClient: TLspClient): TJSONObject;
 var
   Texto, Ident, Uri: string;
-  Col, Linea: Integer;
+  Col, ColRutina, Linea: Integer;
   Vista: TStringList;
+  Cabecera, Campo: Boolean;
 
   function Posicion(ACaracter: Integer): TJSONObject;
   begin
     Result := TJSONObject.Create;
     Result.AddPair('line', TJSONNumber.Create(ALine));
     Result.AddPair('character', TJSONNumber.Create(ACaracter));
+  end;
+
+  { Detras del nombre que empieza en ACol, ':' (no ':=') o ',': la forma de
+    una declaracion con su tipo. El filtro barato del campo: no juzga, decide
+    si se le pregunta al juez (documentSymbol). }
+  function SigueUnTipo(const ALinea: string): Boolean;
+  var
+    K: Integer;
+  begin
+    K := Col + Length(Ident) + 1;
+    while (K <= Length(ALinea)) and CharInSet(ALinea[K], [' ', #9]) do
+      Inc(K);
+    Result := (K <= Length(ALinea)) and ((ALinea[K] = ',') or
+      ((ALinea[K] = ':') and ((K = Length(ALinea)) or (ALinea[K + 1] <> '='))));
   end;
 
 begin
@@ -579,11 +640,19 @@ begin
       Vista.Free;
     end;
   end;
-  // lo barato primero, en cada candidato: que la linea parezca una cabecera y
-  // el caracter caiga en su nombre
-  Ident := IdentifierAt(Texto, ACharacter);
-  Col := ColumnaDelNombreDeRutina(Texto);
-  if (Ident = '') or (Col < 0) or (ACharacter < Col) or (ACharacter >= Col + Length(Ident)) then
+  // lo barato primero, en cada candidato y sobre la linea tal cual: que
+  // parezca una cabecera de rutina y el caracter caiga en su nombre (la
+  // anidada), o la declaracion de un campo que el motor no resuelve a si
+  // misma (V181)
+  Ident := IdentifierAt(Texto, ACharacter, Col);
+  if Ident = '' then
+    Exit;
+  ColRutina := ColumnaDelNombreDeRutina(Texto);
+  Cabecera := (ColRutina >= 0) and (ACharacter >= ColRutina) and (ACharacter < ColRutina + Length(Ident));
+  Campo := not Cabecera and (AClient <> nil) and SigueUnTipo(Texto) and
+    not (DefinitionLocation(AResp, Uri, Linea) and (Linea = ALine) and
+         SameFileName(TLspClient.UriToPath(Uri), TPath.GetFullPath(APath)));
+  if not Cabecera and not Campo then
     Exit;
   // ...que lo sea en la vista del CODIGO (no una linea de un comentario largo)
   Vista := TStringList.Create;
@@ -593,16 +662,42 @@ begin
     except
       Exit;
     end;
-    if (ALine < 0) or (ALine >= Vista.Count) or (ColumnaDelNombreDeRutina(Vista[ALine]) <> Col) then
+    if (ALine < 0) or (ALine >= Vista.Count) then
       Exit;
+    if Cabecera then
+      Cabecera := ColumnaDelNombreDeRutina(Vista[ALine]) = ColRutina
+    else
+      Campo := SigueUnTipo(Vista[ALine]);
   finally
     Vista.Free;
   end;
-  // ...y que la linea que contesta el motor no lo nombre. Lo que el motor no
-  // puede ensenar no se lee para saberlo (EL juez de LSP-038): se queda como
-  // vino y la negativa de quien llama lo dice
-  if not DefinitionLocation(AResp, Uri, Linea) or
-     not MotorPuedeEnsenar(TLspClient.UriToPath(Uri)) or LineaNombra(Uri, Linea, Ident) then
+  if Cabecera then
+  begin
+    // ...y que la linea que contesta el motor no lo nombre. Lo que el motor no
+    // puede ensenar no se lee para saberlo (EL juez de LSP-038): se queda como
+    // vino y la negativa de quien llama lo dice
+    if not DefinitionLocation(AResp, Uri, Linea) or
+       not MotorPuedeEnsenar(TLspClient.UriToPath(Uri)) or LineaNombra(Uri, Linea, Ident) then
+      Exit;
+    Col := ColRutina;
+  end
+  else if Campo then
+  begin
+    // EL juez: el arbol de simbolos del motor dice si esa posicion declara un
+    // campo; si no contesta, nada se corrige
+    try
+      var Simbolos := AClient.DocumentSymbols(TLspClient.PathToUri(TPath.GetFullPath(APath)));
+      try
+        if (Simbolos = nil) or not DeclaraUnCampo(Simbolos.GetValue('result'), ALine, Col) then
+          Exit;
+      finally
+        Simbolos.Free;
+      end;
+    except
+      Exit;
+    end;
+  end
+  else
     Exit;
   Result := TJSONObject.Create;
   var Lugar := TJSONObject.Create;
@@ -722,7 +817,7 @@ begin
   var Pending: Boolean;
   // ...con LA correccion de la cabecera de una anidada (DefinicionCorregida)
   Resp := DefinicionCorregida(Client.DefinitionResolved(TLspClient.PathToUri(FullPath),
-    ALine, ACharacter, Pending), FullPath, ALine, ACharacter, CursorTexto);
+    ALine, ACharacter, Pending), FullPath, ALine, ACharacter, CursorTexto, Client);
   try
     if not DefinitionLocation(Resp, TargetUri, TargetLine) then
     begin
@@ -841,7 +936,7 @@ begin
           // para el motor, cae DETRAS de un nombre de una letra y no la veia;
           // revisor de version de la 1.18.1)
           Resp := DefinicionCorregida(Client.Definition(TargetUri, TargetLine, TwinCol),
-            TargetPath, TargetLine, TwinCol - 1, TwinLines[TargetLine]);
+            TargetPath, TargetLine, TwinCol - 1, TwinLines[TargetLine], Client);
           try
             var TwinUri: string;
             var TwinLine: Integer;
@@ -1078,7 +1173,7 @@ begin
         // una homonima hermana a la suya, no a la rutina que la contiene
         // (la correccion, con la columna donde EMPIEZA, como el gemelo)
         Resp := DefinicionCorregida(Client.Definition(TLspClient.PathToUri(Cand.Path),
-          Cand.Line, Cand.Col + 1), Cand.Path, Cand.Line, Cand.Col, Cand.Text);
+          Cand.Line, Cand.Col + 1), Cand.Path, Cand.Line, Cand.Col, Cand.Text, Client);
         try
           var Resuelto := DefinitionLocation(Resp, CandUri, CandLine);
           var EsElMismo := Resuelto and SameText(CandUri, TargetUri) and
