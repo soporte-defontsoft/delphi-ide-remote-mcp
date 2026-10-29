@@ -2321,8 +2321,8 @@ begin
     // encuentra, ni un .dcu viejo en la carpeta de salida). Lo que el motor no
     // puede ensenar no se mira: el build lo niega (BUILD-050)
     var Dentro, Fuera: TArray<string>;
-    CarpetasDelProyecto(Xml, TPath.GetDirectoryName(Dproj), Info.PlataformaPorDefecto, Info.ConfigPorDefecto,
-      DiscoverRadStudio, Dentro, Fuera);
+    CarpetasDelProyecto(Xml, TPath.GetDirectoryName(Dproj), TPath.GetFileNameWithoutExtension(Dproj),
+      Info.PlataformaPorDefecto, Info.ConfigPorDefecto, DiscoverRadStudio, Dentro, Fuera);
     Result.Propias := Result.Propias + UnidadesEnCarpetas([TPath.GetDirectoryName(Dproj)] + Dentro);
   except
     // lo que no se lee no cuenta: se queda lo que ya se sabe

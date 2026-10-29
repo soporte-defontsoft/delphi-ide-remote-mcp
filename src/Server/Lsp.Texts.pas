@@ -4967,6 +4967,15 @@ const
     'nobuild, or delphi_build with that SAME platform and config), or ' +
     'point to the config that does have a binary.';
 
+  SR_TEST_BINARY_FUERA_FMT =
+    '[TEST-036 DENIED] The binary to run resolves to %s, outside the ' +
+    'workspace roots. The test runs on a COPY of its folder inside the ' +
+    'server, so that folder has to be one the session could build into - ' +
+    'inside the roots. With a build, that is checked on the output folder ' +
+    '(BUILD-029); with nobuild=true a DCC_ExeOutput that points outside ' +
+    'skipped it. Build it (remove nobuild), or point the output inside the ' +
+    'workspace.';
+
   SN_TEST_STALE_FMT =
     '[TEST-003] NOTE: %s is NEWER than the binary I just ran. You ' +
     'touched the code after building it, so these numbers are from the ' +

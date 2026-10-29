@@ -741,6 +741,19 @@ begin
   end;
   if Exe = '' then
     Exe := ResolveBuildOutput(Dproj, Plat, Cfg);
+  // El binario se corre en el contenedor sobre una COPIA de su carpeta en la
+  // casa del servidor (CopiaArbol, mas abajo): esa carpeta se LEE, asi que
+  // tiene que estar DENTRO de las raices, por la jaula. Con build lo garantiza
+  // SalidaDenegada sobre la carpeta de salida; con nobuild=true, Exe sale de
+  // ResolveBuildOutput (cualquier DCC_ExeOutput, sin juez), y uno fuera de las
+  // raices nombraba el binario, lo fechaba, COPIABA su carpeta a la casa del
+  // servidor y lo corria (V160b de la 1.23.1, medido). EL mismo juez de lectura
+  // de la jaula que los <Import> del escaneo (LugarDeLecturaDenegado [ltJaula]).
+  if (Exe <> '') and (LugarDeLecturaDenegado(Exe, [ltJaula]) <> '') then
+  begin
+    Result.AddPair('error', MsgFmt(SR_TEST_BINARY_FUERA_FMT, [Exe]));
+    Exit;
+  end;
   if (Exe = '') or not TFile.Exists(Exe) then
   begin
     Result.AddPair('error', IfThen(ANoBuild, MsgText(SR_TEST_NOBINARY_NOBUILD),

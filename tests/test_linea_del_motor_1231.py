@@ -17,8 +17,11 @@ Here the witness is UFuera.pas in BASE\\fuera, outside the only root
      of UFuera, and dccOptions carries no -U to it; DEBUG is still defined
   L2 DCC_Namespace "System;Y -U<fuera>": the same, and System is still a scope
   L3 FrameworkType "None -U<fuera>" (it becomes -DFRAMEWORK_<type>): the same
+  L4 (V160c, security sibling): a <MainSource> that resolves OUTSIDE the roots
+     pointed settings.project (and the engine's Held folder) at a project
+     outside the jail; now it falls back to the sibling .dpr (DprDe), inside.
 
-L1-L3 are RED against the build before (pass its exe as argument); L0 is green
+L1-L4 are RED against the build before (pass its exe as argument); L0 is green
 with both.
 
 Usage:  python tests/test_linea_del_motor_1231.py [path-to-DelphiLspMcp.exe]
@@ -96,6 +99,29 @@ for clave, dpr, comprueba in (
     o = opciones(dpr)
     check('%s ...y la linea del motor no lleva ese -U (y conserva %s)' % (clave, comprueba.strip()),
           o != '' and INYECCION not in o and comprueba in o, o[:400])
+
+# ---------------------------------------------------------------- L4 (V160c)
+# <MainSource> -> settings.project: un MainSource que resuelve FUERA de las
+# raices apuntaba el motor (y su Held, Lsp.Session) a un proyecto de fuera (el
+# hermano de V150). Ahora, fuera de las raices vale lo que no tenerla: el .dpr
+# de al lado (DprDe). Rojo contra el build anterior; verde con el fix.
+import re
+open(os.path.join(FUERA, 'Evil.dpr'), 'w', newline='\r\n').write('program Evil;\nbegin\nend.\n')
+dmain = consola('Lanzadera')
+dproj_main = dmain[:-4] + '.dproj'
+_t = open(dproj_main, 'rb').read().decode('utf-8-sig')
+_t2 = re.sub(r'<MainSource>.*?</MainSource>',
+             lambda m: '<MainSource>..\\..\\fuera\\Evil.dpr</MainSource>', _t, count=1)
+assert '<MainSource>..\\..\\fuera\\Evil.dpr</MainSource>' in _t2, _t[:300]
+open(dproj_main, 'wb').write((chr(0xfeff) + _t2).encode('utf-8'))
+S.call('delphi_completion', {'path': dmain, 'line': 1, 'character': 0}, 300)
+_cfg = ''
+_dir = mc.cache_servidor('configs', APPDATA)
+for _f in (os.listdir(_dir) if os.path.isdir(_dir) else []):
+    if _f.startswith('Lanzadera-') and _f.endswith('.delphilsp.json'):
+        _cfg = json.load(open(os.path.join(_dir, _f), encoding='utf-8-sig'))['settings']['project']
+check('L4 (V160c) un MainSource que resuelve fuera de las raices cae al .dpr de al lado, no al de fuera',
+      _cfg != '' and '/jail/' in _cfg and 'Lanzadera.dpr' in _cfg and 'Evil' not in _cfg and '/fuera/' not in _cfg, _cfg)
 
 S.cierra()
 mc.borra(BASE)

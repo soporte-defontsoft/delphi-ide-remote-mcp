@@ -94,7 +94,7 @@ function MotorPuedeEnsenar(const APath: string): Boolean;
   las que el motor puede ensenar (ADentro) y las que no (AFuera). Las leen los
   ajustes del motor y el juez de que unidad es un nombre en un uses
   (Lsp.ProjectUnits.ResolutorDeUnidades, V107 de la 1.23.1). }
-procedure CarpetasDelProyecto(const AXml, ADprojDir, APlat, ACfg: string;
+procedure CarpetasDelProyecto(const AXml, ADprojDir, ANombreRaiz, APlat, ACfg: string;
   const AInfo: TRadStudioInfo; out ADentro, AFuera: TArray<string>);
 { Las units que el .dpr del proyecto nombra con ruta (in '...') FUERA de lo
   que esta sesion puede leer, por su nombre. No se pueden recortar (son el
@@ -239,7 +239,7 @@ end;
   motor veia por ellas lo que ninguna tool deja leer (medido el 9-oct-2026: el
   VALOR de una constante de fuera en completion, su firma y su ruta en
   hover). David: "recortar y negar", coherente con LSP-014. }
-procedure CarpetasDelProyecto(const AXml, ADprojDir, APlat, ACfg: string;
+procedure CarpetasDelProyecto(const AXml, ADprojDir, ANombreRaiz, APlat, ACfg: string;
   const AInfo: TRadStudioInfo; out ADentro, AFuera: TArray<string>);
 var
   Vars: TStringList;
@@ -251,6 +251,14 @@ begin
     IdeMacroVars(AInfo, Vars);
     Vars.Values['Platform'] := APlat;
     Vars.Values['Config'] := ACfg;
+    // Las reservadas de msbuild (EL lector de V118, MacrosReservadasDeMsbuild):
+    // sin ellas CleanPathList tiraba un search path con $(MSBuildProjectDirectory)
+    // -que la puerta del build expande y dcc compila- y el motor no veia esas
+    // unidades (hover LSP-029 de una unidad que SI compila; V160d de la 1.23.1,
+    // medido). El juez de la jaula (MotorPuedeEnsenar) sigue recortando lo que
+    // caiga fuera. El fichero es el .dproj (lo comun: el search path vive ahi).
+    for var M in MacrosReservadasDeMsbuild(ADprojDir, ANombreRaiz, ADprojDir) do
+      Vars.Add(M); // 'Nombre=valor': ExpandIdeMacros lo lee por Values[]
     for var P in CleanPathList(EffectiveProperty(AXml, 'DCC_UnitSearchPath', APlat, ACfg),
       ADprojDir, Vars) do
       if MotorPuedeEnsenar(P) then
@@ -477,7 +485,7 @@ begin
   Plat := PlataformaDelMotor(Proyecto);
   Cfg := Proyecto.ConfigPorDefecto;
   IdePaths := CarpetasDelIde(AInfo, Plat, Cfg);
-  CarpetasDelProyecto(Xml, DprojDir, Plat, Cfg, AInfo, ProjDentro, ProjFuera);
+  CarpetasDelProyecto(Xml, DprojDir, TPath.GetFileNameWithoutExtension(ADprojPath), Plat, Cfg, AInfo, ProjDentro, ProjFuera);
   // lo que se recorta de su search path entra en el nombre (dos sesiones que
   // no ven lo mismo, dos ajustes y dos motores)
   Recorte := '';
@@ -505,7 +513,15 @@ begin
   // como la lee msbuild, desde la carpeta del .dproj; una que no se resuelve
   // ("X:y" de otra unidad) vale lo que no tenerla: la de al lado
   DprPath := RutaDesde(DprojDir, MainSource);
-  if DprPath = '' then
+  // settings.project apunta el motor -y su carpeta de trabajo, el Held de
+  // Lsp.Session- a ese .dpr: tiene que estar DENTRO de las raices. Un
+  // <MainSource> que resuelve fuera (..\..\fuera\x.dpr) lo sacaba de la jaula:
+  // el motor indexaba un proyecto de fuera y signature/completion filtraban sus
+  // simbolos (el hermano de V150, el search path; el fallback de '' solo saltaba
+  // con una ruta irresoluble, no con una de fuera resoluble). Fuera de las
+  // raices vale lo que no tenerla: el .dpr de al lado (DprDe, EL nombrador),
+  // que esta donde el .dproj. V160c de la 1.23.1, medido.
+  if (DprPath = '') or (LugarDeLecturaDenegado(DprPath, [ltJaula]) <> '') then
     DprPath := DprDe(ADprojPath);
 
   // EL sufijo de su compilador, el que HAY en su bin (TRadStudioInfo). Antes

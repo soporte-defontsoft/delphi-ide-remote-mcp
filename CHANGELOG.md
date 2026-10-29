@@ -10,6 +10,26 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The engine resolves a unit through a msbuild-macro search path, the same as
+  the compiler.** A `DCC_UnitSearchPath` such as
+  `$(MSBuildProjectDirectory)\..\Shared` compiles - the build gate expands the
+  reserved macros (V118) - but the engine's own path reader expanded only the
+  IDE macros and dropped anything still carrying `$(`, so hover, definition and
+  completion answered LSP-029 for a unit the compiler resolves. V118's one
+  reader (`MacrosReservadasDeMsbuild`) now feeds the engine's path reader too;
+  the jail's read gate (`MotorPuedeEnsenar`) still trims any path that lands
+  outside the roots.
+- **`delphi_test` with `nobuild=true` runs only a binary inside the workspace,
+  not one a `DCC_ExeOutput` points to outside it.** A build gates its output
+  folder (it writes there); `nobuild=true` skips the build, and the binary then
+  came from `ResolveBuildOutput`, which resolves any `DCC_ExeOutput` to any
+  folder with no gate. A `.dproj` pointing `DCC_ExeOutput` outside the roots,
+  with a binary of the project's name there, made `delphi_test` name it, date
+  it, copy its folder into the server's own working area (the sandbox runs on a
+  copy) and run it - reading outside the jail. The binary's folder is now judged
+  by the jail's read gate before anything is named, copied or run (TEST-036),
+  the same judge the build's `<Import>` scan uses; a binary inside the roots is
+  unaffected.
 - **An HTTP request with no session runs under its own identity, never the
   operator's.** The per-session identity the file tools read was `''` - the
   trusted operator (stdio) - for any HTTP request that carried no
