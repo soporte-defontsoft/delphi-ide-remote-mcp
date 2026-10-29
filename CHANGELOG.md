@@ -586,7 +586,9 @@ the MCP `initialize` response (`serverInfo.version`).
   stores for it; `clean` is false. Only that is reported from the writer:
   on three real themes it rewrites about 190 properties per file, all of
   them harmless (defaults, colors by name, `TabOrder`). A color written with
-  `$` (`$F7DFC6`, as Pascal writes it) counts too. The hint `STYLE-058` adds
+  `$` (`$F7DFC6`, as Pascal writes it) counts too, and so does one inside the
+  items of a collection - a gradient's points -, named by its item's path
+  (`Fill.Gradient.Points[0].Color`). The hint `STYLE-058` adds
   to a color now says the same: the missing digits are taken as 0, so the
   alpha is 00 or nearly so - and only when the value given had fewer than 8
   digits (an 8-digit color in lower case, stored in upper case, got it too).

@@ -34,6 +34,14 @@ type
     Ini, Fin: Integer;
   end;
 
+  { Una propiedad de un VALOR de AObj, del nivel propio o de un item de sus
+    colecciones, con su CLAVE (TStyleDoc.PropiedadesConItems), su linea
+    (0-based) y su valor entero (ValorEnteroDe). }
+  TPropiedadConClave = record
+    Clave, Valor: string;
+    Linea: Integer;
+  end;
+
   TStyleObj = class
     ClassName_: string;   // TLayout, TRectangle...
     ObjName: string;      // the name before ':' when present
@@ -142,6 +150,15 @@ type
       que queda ahi fuera de los rangos no es una propiedad. Lo pide la mezcla
       con lo que guarda el IDE (Lsp.DesignerEdit, 1.22.1). }
     function Propiedades(AObj: TStyleObj; out ADesde, AHasta: Integer): TArray<TRangoDeLineas>;
+    { Las propiedades de un valor de AObj, en el orden del fichero, CON las de
+      los items de sus colecciones (Propiedades se las salta). La CLAVE es el
+      nombre en el nivel propio (Fill.Color) y, dentro de un item, su ruta: la
+      coleccion, el numero del item desde 0 y la propiedad
+      (Fill.Gradient.Points[0].Color; anidadas, una tras otra). EL compositor
+      de esa clave: la comparan dos recorridos del mismo objeto, el fichero y
+      lo que guarda su escritor (ColoresSinAlfaEntre). La linea de una
+      coleccion no va: su valor es su '<'. V173g de la 1.23.1. }
+    function PropiedadesConItems(AObj: TStyleObj): TArray<TPropiedadConClave>;
     { El VALOR de AProp en el nivel propio de AObj, entero (una cadena partida,
       sus trozos en uno: ValorEnteroDe; de una lista o un bloque, su primera
       linea); '' y AFound False si no esta. EL lector del valor de una
@@ -274,9 +291,10 @@ type
   propia (el escritor del IDE escribe siempre 8, o un nombre); como se carga
   lo dice el escritor (ColoresSinAlfaEntre). V152 y V154 de la 1.23.1. }
 function EsColorSinAlfa(const AValor: string): Boolean;
-{ Los candidatos de ADoc: cada propiedad cuyo valor es EsColorSinAlfa, sin
-  juzgar (ComoLoCarga vacio). Barato: sin ellos no se pregunta a ningun
-  escritor (un proceso aparte). }
+{ Los candidatos de ADoc: cada propiedad cuyo valor es EsColorSinAlfa, las de
+  los items de sus colecciones tambien (Prop = su clave, PropiedadesConItems;
+  V173g), sin juzgar (ComoLoCarga vacio). Barato: sin ellos no se pregunta a
+  ningun escritor (un proceso aparte). }
 function CandidatosSinAlfa(ADoc: TStyleDoc): TArray<TColorSinAlfa>;
 { De ACandidatos (de ADoc), los que el escritor guarda de otra forma en
   AEscrito (lo que escribio, ya leido), con como lo guarda. Lo demas que un
@@ -945,6 +963,58 @@ begin
   Result := RangosDePropiedad(AObj, Clasificadas, '');
 end;
 
+function TStyleDoc.PropiedadesConItems(AObj: TStyleObj): TArray<TPropiedadConClave>;
+var
+  Form: TArray<TLineaForm>;
+  Abiertas: TArray<string>;   // las colecciones abiertas, de fuera a dentro (su propiedad)
+  Fines, Items: TArray<Integer>; // la linea de su '>' y el item en que se va (-1: ninguno)
+  P: TPropiedadConClave;
+begin
+  Result := [];
+  Form := Clasificadas;
+  Abiertas := [];
+  Fines := [];
+  Items := [];
+  for var I := AObj.StartLine to Min(FinDePropiedades(AObj), Length(Form)) - 1 do
+  begin
+    // las que ya se cerraron: su '>' quedo atras (su Fin, por EL lector)
+    while (Length(Fines) > 0) and (I > Fines[High(Fines)]) do
+    begin
+      SetLength(Abiertas, Length(Abiertas) - 1);
+      SetLength(Fines, Length(Fines) - 1);
+      SetLength(Items, Length(Items) - 1);
+    end;
+    case Form[I].Clase of
+      clfItem:
+        if Length(Items) > 0 then
+          Items[High(Items)] := Items[High(Items)] + 1;
+      clfPropiedad:
+        begin
+          var Prefijo := '';
+          for var K := 0 to High(Abiertas) do
+            Prefijo := Prefijo + Abiertas[K] + '[' + IntToStr(Items[K]) + '].';
+          if Form[I].Valor.StartsWith('<') then
+          begin
+            // una coleccion: sus items, por dentro ('<>', vacia, no abre nada)
+            if Form[I].Fin > I then
+            begin
+              Abiertas := Abiertas + [Form[I].Prop];
+              Fines := Fines + [Form[I].Fin];
+              Items := Items + [-1];
+            end;
+          end
+          else
+          begin
+            P.Clave := Prefijo + Form[I].Prop;
+            P.Valor := ValorEnteroDe(FLines, Form, I);
+            P.Linea := I;
+            Result := Result + [P];
+          end;
+        end;
+    end;
+  end;
+end;
+
 function TStyleDoc.ValorDe(AObj: TStyleObj; const AProp: string; out AFound: Boolean): string;
 var
   Ini, Fin: Integer;
@@ -1245,19 +1315,19 @@ begin
   Objs := ObjetosEnPreorden(ADoc);
   for var I := 0 to High(Objs) do
   begin
-    var De, A: Integer;
-    for var Rg in ADoc.Propiedades(Objs[I], De, A) do
+    // con los items de sus colecciones: el color de un punto de un degradado
+    // no era candidato (V173g de la 1.23.1, medido)
+    for var Pr in ADoc.PropiedadesConItems(Objs[I]) do
     begin
-      var Esta: Boolean;
-      var Valor := ADoc.ValorDe(Objs[I], Rg.Prop, Esta).Trim;
+      var Valor := Pr.Valor.Trim;
       if not EsColorSinAlfa(Valor) then
         Continue;
       var C: TColorSinAlfa;
-      C.Linea := Rg.Ini + 1;
+      C.Linea := Pr.Linea + 1;
       C.Obj := I;
       C.Estilo := EstiloDe(Objs[I]);
       C.Componente := ComponenteDe(Objs[I]);
-      C.Prop := Rg.Prop;
+      C.Prop := Pr.Clave;
       C.Valor := Valor;
       C.ComoLoCarga := '';
       Result := Result + [C];
@@ -1278,8 +1348,16 @@ begin
     Exit;
   for var C in ACandidatos do
   begin
-    var Esta: Boolean;
-    var ComoLoCarga := AEscrito.ValorDe(ObjsE[C.Obj], C.Prop, Esta).Trim;
+    // por su CLAVE, la del mismo recorredor (PropiedadesConItems): la ultima
+    // que esta, como ValorDe en el nivel propio
+    var Esta := False;
+    var ComoLoCarga := '';
+    for var Pr in AEscrito.PropiedadesConItems(ObjsE[C.Obj]) do
+      if SameText(Pr.Clave, C.Prop) then
+      begin
+        Esta := True;
+        ComoLoCarga := Pr.Valor.Trim;
+      end;
     if Esta and SameText(ComoLoCarga, C.Valor) then
       Continue;
     var J := C;

@@ -35,6 +35,10 @@ V173h y V173i (29-oct, revisor del disenador #8 y #9), rojas contra 6334404:
   S11 (V173i) set de xfff7dfc5 (8 cifras, minusculas): el escritor lo guarda xFFF7DFC5 y STYLE-058
       lo dice SIN la pista de "menos de 8 cifras" (se miraba si lo guardado empezaba por x)
   S12 (control) set de xF7DFC6: STYLE-058 CON la pista
+  S13 (V173g) lint de un degradado con un item Color = xFF5FBF5: colorsWithoutAlpha lo dice, con
+      la clave de su item (Fill.Gradient.Points[0].Color) y como lo carga FMX (x0FF5FBF5); los
+      candidatos eran solo las propiedades del nivel propio, fuera de las colecciones
+  S14 (control) el otro item, con sus 8 cifras (xFFFFFFFF): no sale
 
 Uso:  python tests/test_styles_escritor_1231.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -163,6 +167,32 @@ try:
     r = pon('Fill.Color', 'xF7DFC6')
     check('S12 (control) set de xF7DFC6 (6 cifras): STYLE-058 con la pista',
           mc.es(r, 'SN_STYLES_GUARDADA_COMO_FMT') and PISTA in r, r[:500])
+
+    # V173g: los colores de los items de una coleccion (los puntos de un degradado)
+    DEGRADADO = ("object TStyleContainer\r\n"
+                 "  object TRectangle\r\n"
+                 "    StyleName = 'gradstyle'\r\n"
+                 "    Fill.Kind = Gradient\r\n"
+                 "    Fill.Gradient.Points = <\r\n"
+                 "      item\r\n"
+                 "        Color = xFF5FBF5\r\n"
+                 "      end\r\n"
+                 "      item\r\n"
+                 "        Color = xFFFFFFFF\r\n"
+                 "        Offset = 1.000000000000000000\r\n"
+                 "      end>\r\n"
+                 "  end\r\n"
+                 "end\r\n")
+    escribe(DEGRADADO)
+    r, j = lint()
+    colores = j.get('colorsWithoutAlpha') or []
+    c13 = [c for c in colores if c.get('value') == 'xFF5FBF5']
+    check('S13 (V173g) lint: el Color de un item del degradado sale, con la clave de su item y como lo carga FMX',
+          len(c13) == 1 and c13[0].get('prop') == 'Fill.Gradient.Points[0].Color' and
+          c13[0].get('line') == DEGRADADO.split('\r\n').index('        Color = xFF5FBF5') + 1 and
+          c13[0].get('loadedAs') == 'x0FF5FBF5' and c13[0].get('style') == 'gradstyle', r[:900])
+    check('S14 (control) el item con sus 8 cifras no sale',
+          not [c for c in colores if c.get('value') == 'xFFFFFFFF'], r[:900])
 finally:
     srv.cierra()
     mc.borra(BASE)
