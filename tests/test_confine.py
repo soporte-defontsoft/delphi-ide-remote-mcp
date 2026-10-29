@@ -19,6 +19,9 @@ operator's console) is unconfined - the same rule the recoverable trash uses.
   C9  ON: an HTTP session with no name, or one the sanitizer empties (Cyrillic,
       '...'), is confined under its OWN identity (V111 of 1.23.1: it was '',
       the operator's)
+  C10 ON: a request with NO session at all (no Mcp-Session-Id, no initialize)
+      is confined too, under its own identity - not the operator (V159 of
+      1.23.1: the hole V111 left for a header-less request)
 
 Usage:  python tests/test_confine.py [path-to-DelphiLspMcp.exe]
 """
@@ -131,6 +134,17 @@ try:
         r = c.call('delphi_textedit', {'path': f, 'create': True, 'content': 'x'})
         check('C9 ON: una sesion HTTP llamada %r tampoco escribe en la carpeta de bob, con su identidad propia' % nombre,
               mc.es(r, 'SR_AGENT_CONFINED_FMT') and 'session-' in r and not os.path.exists(f), r[:300])
+    # C10 (V159 de la 1.23.1): una peticion HTTP SIN la cabecera Mcp-Session-Id
+    # (ni initialize) caia en la identidad VACIA, la del operador: SIN confinar.
+    # Ahora tiene la suya y el confinamiento la nombra. (La misma identidad que
+    # en produccion cierra la purga de la papelera de otro: test_identity I6.)
+    cuerpo = {"jsonrpc": "2.0", "id": 888, "method": "tools/call", "params": {
+        "name": "delphi_textedit",
+        "arguments": {"path": os.path.join(base, 'bob', 'nohdr.txt'), "create": True, "content": "x"}}}
+    _st, _h, raw = mc.post(a.url, cuerpo, TOKEN, sid=None)
+    r = mc.texto(next((m for m in mc.Http.mensajes(raw) if m.get('id') == 888), None))
+    check('C10 ON: una peticion sin Mcp-Session-Id tampoco escribe en la carpeta de bob (identidad propia, no el operador)',
+          mc.es(r, 'SR_AGENT_CONFINED_FMT') and 'session-' in r and not os.path.exists(os.path.join(base, 'bob', 'nohdr.txt')), r[:300])
 finally:
     proc.kill()
 

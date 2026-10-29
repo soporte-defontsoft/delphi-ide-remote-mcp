@@ -17,6 +17,11 @@ for another agent you would have to steal their session id.
       identity and cannot purge another agent's copy (V111 of 1.23.1, David:
       "identidad propia"; it was trusted with anyone's trash)
   I5  the operator (stdio with no name) is still trusted with anyone's trash
+  I6  a request with NO session at all (no Mcp-Session-Id, no initialize) is
+      NOT the operator either: its own identity, so it cannot purge another
+      agent's copy - the hole V111 left for a header-less request (V159 of
+      1.23.1, measured; server/discover is a real header-less probe, so a 400
+      would break it - the fix is its own identity, never the empty one)
 
 Usage:  python tests/test_identity.py [path-to-DelphiLspMcp.exe]
 """
@@ -44,6 +49,16 @@ cli = mc.Http(PORT, TOKEN)
 
 def trashed(name):
     return mc.copias(BASE, name, 'CAJON_BORRADOS')
+
+
+def sin_cabecera(cli, name, args):
+    """Un tools/call por HTTP SIN la cabecera Mcp-Session-Id y sin initialize
+    (sid=None): el hueco de V159. Devuelve el texto de la tool, como
+    cli.call()."""
+    body = {"jsonrpc": "2.0", "id": 777, "method": "tools/call",
+            "params": {"name": name, "arguments": args}}
+    _st, _h, raw = mc.post(cli.url, body, cli.token, sid=None)
+    return mc.texto(next((m for m in mc.Http.mensajes(raw) if m.get('id') == 777), None))
 
 
 try:
@@ -81,6 +96,15 @@ try:
     assert anon and anon not in (alice, bob), anon
     r = cli.call('delphi_delete', {'path': cb[0], 'purge': True}, sid=anon)
     check('I4 una sesion HTTP sin nombre NO purga la copia de otro: tiene su identidad propia',
+          mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and 'bob' in r and os.path.exists(cb[0]),
+          r[:200])
+
+    # I6 - una peticion HTTP SIN la cabecera Mcp-Session-Id (ni initialize)
+    # caia en la identidad VACIA, la del operador, y purgaba la papelera de
+    # cualquiera, tambien en produccion (sin confinamiento). Ahora tiene la
+    # suya. cb[0] sigue ahi tras I4 (denegado).
+    r = sin_cabecera(cli, 'delphi_delete', {'path': cb[0], 'purge': True})
+    check('I6 una peticion sin Mcp-Session-Id NO es el operador: no purga la copia de bob',
           mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and 'bob' in r and os.path.exists(cb[0]),
           r[:200])
 finally:

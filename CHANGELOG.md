@@ -10,6 +10,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **An HTTP request with no session runs under its own identity, never the
+  operator's.** The per-session identity the file tools read was `''` - the
+  trusted operator (stdio) - for any HTTP request that carried no
+  `Mcp-Session-Id` header and was not an `initialize`: it skipped per-agent
+  write confinement and could purge any agent's recoverable-trash copies, the
+  latter even with confinement off, as in production. `V111` had closed only
+  the sibling case of a session whose name the sanitizer empties, in
+  `BindSessionIdentity`; a request with no session at all never reached it. Now
+  `SetThreadIdentityBySession` gives such a request its own unique identity
+  (`session-...`), never `''` (which stays reserved for the stdio operator), so
+  it is confined and owns only its own trash. Measured in production first: a
+  real header-less probe (`server/discover`) is sent without the header, so a
+  `400` at the transport - the other spec-sanctioned option - would break it;
+  the fix is its own identity, as the operator decided for `V111`.
 - **A path a build reaches through an `<Import>` or a search path is judged
   where msbuild evaluates it, not where the server guessed.** The build gate
   expanded the msbuild macros of a `.dproj` with three tables of its own, and

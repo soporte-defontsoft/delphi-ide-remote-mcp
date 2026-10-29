@@ -31,11 +31,15 @@ interface
   stop casual impersonation. A real per-agent token is the next rung.
 
   Bound at initialize; read on every tool call via the per-thread context the
-  HTTP layer sets before dispatch. '' when unknown (stdio with no name, or a
-  request before initialize) - callers treat that as the operator. An HTTP
-  session with no name, or one the sanitizer empties, gets ITS OWN identity
-  (SESION_SIN_NOMBRE + FragmentoUnico): it was '', the operator's (V111 of
-  1.23.1, measured). }
+  HTTP layer sets before dispatch. '' ONLY for stdio with no name (the
+  operator's own console) - callers treat that as the operator. Over HTTP the
+  identity is NEVER '': an HTTP session with no name, or one the sanitizer
+  empties, gets ITS OWN identity (SESION_SIN_NOMBRE + FragmentoUnico) in
+  BindSessionIdentity, and a request with NO session at all (no header and no
+  initialize - the server/discover probe and others, measured in production)
+  gets its own in SetThreadIdentityBySession. It was '', the operator's, which
+  under HTTP let it bypass confinement and purge anyone's trash (V111 and V159
+  of 1.23.1, measured; David: "identidad propia, nunca el operador"). }
 procedure BindSessionIdentity(const ASessionId, AName: string);
 procedure SetThreadIdentityBySession(const ASessionId: string);
 procedure SetThreadIdentity(const AName: string); // stdio: one process, one name
@@ -256,18 +260,32 @@ end;
 procedure SetThreadIdentityBySession(const ASessionId: string);
 var
   I: Integer;
+  Id, Nombre: string;
 begin
-  TCurrentAgent := '';
-  if ASessionId.Trim = '' then
-    Exit;
-  GIdentLock.Enter;
-  try
-    I := IndiceDeSesion(ASessionId.Trim);
-    if I >= 0 then
-      TCurrentAgent := GSesiones[I].Nombre;
-  finally
-    GIdentLock.Leave;
+  Id := ASessionId.Trim;
+  Nombre := '';
+  if Id <> '' then
+  begin
+    GIdentLock.Enter;
+    try
+      I := IndiceDeSesion(Id);
+      if I >= 0 then
+        Nombre := GSesiones[I].Nombre;
+    finally
+      GIdentLock.Leave;
+    end;
   end;
+  // Una peticion HTTP sin sesion (sin cabecera Mcp-Session-Id y sin
+  // initialize, como el sondeo server/discover, medido), o con una que no
+  // esta en el registro, NO es el operador: la '' era la SUYA, y por HTTP eso
+  // le dejaba saltarse el confinamiento y purgar la papelera de todos. V111
+  // solo cerro la sesion con nombre vacio en BindSessionIdentity; esta es su
+  // gemela sin sesion. La suya, unica, como una sesion sin nombre; nunca ''
+  // (reservada para stdio, el operador). Un 400 aqui rompia server/discover
+  // (David: "identidad propia, nunca el operador"; V159 de la 1.23.1).
+  if Nombre = '' then
+    Nombre := SESION_SIN_NOMBRE + FragmentoUnico;
+  TCurrentAgent := Nombre;
 end;
 
 procedure SetThreadIdentity(const AName: string);
