@@ -295,6 +295,8 @@ begin
   Result := LugarDeLecturaDenegado(AFull, [ltVault]) = '';
 end;
 
+function VaultRelative(const AFull: string): string; forward;
+
 function VaultResolve(const ARel: string; out AFull: string): string;
 var
   Rel, Full, Root: string;
@@ -340,6 +342,12 @@ begin
   // 25-sep-2026; el vault no tiene enlaces propios: 'Obsidian no toca el vault').
   if not DentroDelVault(Full) then
     Exit(MsgText(SR_VAULT_JAIL));
+  // ...y lo excluido, por la ruta RESUELTA bajo el vault, la que lee el
+  // listado (VaultRelative): por el texto, './backups/x.md' tenia '.' de
+  // primer trozo y backups\ de la raiz se servia (V170 de la 1.23.1, medido;
+  // la regla por trozos de V127 lo dejo pasar)
+  if VaultExcluded(VaultRelative(Full)) then
+    Exit(MsgExcluida(ARel));
   // La forma LARGA de lo que nombra el agente: el alias 8.3 es el mismo
   // fichero y las reglas de NOMBRE (gobierno, carpetas excluidas, .md) se
   // miraban en su texto: vault_patch AGENTS~1.MD reescribio AGENTS-VAULT.md

@@ -13,6 +13,8 @@ vault de David; notas.bak.md en test_vault). Una nota legitima quedaba oculta a 
   E5 (guarda) una copia .bak sigue excluida: notas.bak.md, viejo.bak/nota.md, a.bak1.md
   E6 (guarda) los metadatos, a cualquier profundidad: .git, .obsidian (raiz) y .claude, .trash
      dentro de una carpeta
+  E7 (V170) backups/ de la raiz con un '.' delante (./backups/..., .//backups/...) sigue
+     excluido: se juzgaba el texto, y el trozo 0 era '.' (ROJA contra 9f528c8: VAULT-039)
 
 Uso:  python tests/test_vault_excluidas_1231.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -83,6 +85,10 @@ try:
     for rel in ('.git/x.md', '.obsidian/x.md', 'projects/p/.claude/x.md', 'projects/p/.trash/x.md'):
         check('E6 los metadatos, a cualquier profundidad: %s' % rel, excluida(lee(rel)))
     check('E6 ...y search no los lista', 'marcaE6' not in contenido, contenido[:400])
+    for rel in ('./backups/mcp/vieja/secreto.md', './/backups/mcp/vieja/secreto.md'):
+        r = lee(rel)
+        check('E7 backups/ de la raiz con un . delante sigue excluido: %s' % rel,
+              excluida(r) and 'marcaE4' not in r, r[:200])
 finally:
     srv.cierra()
     mc.borra(BASE)

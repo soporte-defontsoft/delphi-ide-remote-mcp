@@ -532,6 +532,8 @@ the MCP `initialize` response (`serverInfo.version`).
   them; git and tool metadata (`.git`, `.obsidian`, `.claude`, `.trash`) at
   any depth; and a `.bak` copy by its name (`notes.bak.md`,
   `progress.md.bak-20260605`), not by a word that starts with those letters.
+  The pieces are those of the path as resolved under the vault, so
+  `./backups/...` is the root's `backups` too (it was served).
 - **An operator list means what it says, with or without a blank after the
   separator.** The lists of `settings.ini` and of the environment were split
   five ways: `GitRemotes` and `RemoteHosts` by `,` and `;`, `AdbAllowedDevices`
