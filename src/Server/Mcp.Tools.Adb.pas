@@ -317,7 +317,7 @@ begin
   if Cmd = 'discover' then
   begin
     // mDNS: the devices ANNOUNCING wireless debugging, each with its ip:port.
-    // "adb-XXXX  _adb-tls-connect._tcp  192.168.1.163:5556" (or _adb._tcp).
+    // "adb-XXXX  _adb-tls-connect._tcp  192.0.2.163:5556" (or _adb._tcp).
     Output := RunAdb(Adb, 'mdns services', 20000, ExitCode);
     Return := TJSONObject.Create;
     Devices := TJSONArray.Create;

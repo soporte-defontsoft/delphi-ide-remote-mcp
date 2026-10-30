@@ -130,7 +130,7 @@ end;
   <job>.wait.<pid>.exe. Un deploy fallido (E0017) borra el .pid de la carpeta
   antes de rendirse, pero no puede borrar el vigia mientras vive (el exe esta
   en uso), asi que el pid sobrevive ahi donde el .pid no, y @kill lo
-  encuentra. Medido 2026-09-23 en 192.168.1.10: GUI huerfana dos veces. Un
+  encuentra. Medido 2026-09-23 en una maquina de la red: GUI huerfana dos veces. Un
   solo nombrador y su inversa, los de Lsp.NombresDeTrabajo (NombreDelVigia,
   PidDelNombreDeVigia), que comparte el servidor. }
 function NombreVigia(const ACarpeta, AJobId: string; APid: DWORD): string;

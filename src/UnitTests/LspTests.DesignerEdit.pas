@@ -1118,7 +1118,7 @@ begin
   Assert.AreEqual<Integer>(3, Linea(CAB + '    Top = 1 Left = 10' + CRLF + '  end' + CRLF + 'end' + CRLF),
     'dos propiedades en una linea');
   // una coleccion dentro de una lista: tambien la escribe el IDE (_Headers de
-  // un TTeeGrid, su DefineProperties; un frame de Galatea, en la sonda)
+  // un TTeeGrid, su DefineProperties; un frame real, en la sonda)
   Assert.AreEqual<Integer>(0, Linea(CAB + '    _Headers = (' + CRLF + '      1' + CRLF +
     '      ''TColumnHeaderBand''' + CRLF + '      <' + CRLF + '        item' + CRLF + '        end>)' + CRLF + PIE),
     'una coleccion dentro de una lista');

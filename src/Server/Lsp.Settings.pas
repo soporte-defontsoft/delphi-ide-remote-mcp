@@ -2001,7 +2001,7 @@ end;
   semicolon list): when configured, the ONLY devices this server will
   address - outside it, nothing, at BOTH access levels (David's rule). An
   entry matches the target exactly, or matches its host part (the text
-  before ':'), so '192.168.1.163' covers whatever port wifi debugging
+  before ':'), so '192.0.2.163' covers whatever port wifi debugging
   negotiates and a USB serial is listed as-is. Ausente o vacia = NINGUN
   dispositivo: cada workspace declara la suya con AdbAllowedDevices= y lo
   que no se declara no existe (v0.98; antes fallaba abierto). }

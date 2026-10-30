@@ -237,7 +237,7 @@ check('no termina: devuelve la salida PARCIAL', 'arrancando' in (j.get('output')
 check('no termina: lo dice sin hablar de errores', mc.es(j.get('stillRunningNote'), 'SN_REMOTERUN_TIMEOUT_FMT'), r[:300])
 # 1.5.0: la salida de un programa que SIGUE vivo se queda en el target, y lo
 # que escriba despues se lee con command=output (antes se borraba al volver:
-# el AV de Galatea tras el login solo se veia en el journal de Zorin).
+# el AV de una app real tras el login solo se veia en el journal de Zorin).
 job6 = j.get('jobId') or ''
 OUT6 = os.path.join(DEPLOY, job6 + '.out')
 check('no termina: su salida SE QUEDA en el target para leerla despues', os.path.isfile(OUT6), os.listdir(DEPLOY))
@@ -251,7 +251,7 @@ os.remove(ESPERA)
 
 # 6b) kill: el trabajo vivo se mata por su .pid; y SIN .pid (un deploy fallido
 # borra la carpeta antes de rendirse en el vigia, medido 2026-09-23 en
-# 192.168.1.10 con dos GUI huerfanas) el vigia lleva el pid en su NOMBRE
+# una maquina de la red con dos GUI huerfanas) el vigia lleva el pid en su NOMBRE
 # (<job>.wait.<pid>.exe) y kill lo saca de ahi. El stub corre el lanzador
 # REAL de Windows, asi que esto mide el binario que viaja en node\.
 job6 = j.get('jobId')

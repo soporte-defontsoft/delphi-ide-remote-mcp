@@ -743,7 +743,7 @@ begin
 end;
 
 { The Android staging map, measured against an IDE-written .deployproj
-  (GalateaFMX) and a live msbuild run: for Android the DeployFile list IS
+  (a real FMX project) and a live msbuild run: for Android the DeployFile list IS
   the apk layout - each file lands in APK_RootDir at RemoteDir - and the
   Embarcadero pipeline (CreateAndroidManifestFile, manifest merger, aapt2,
   dexer, packager, debug signing) does ALL the assembly itself; classes.dex
@@ -1056,7 +1056,7 @@ begin
   // 2) the manifest itself, only when the project has none - BUT an IDE
   //    manifest written before the platform was ever deployed from the IDE
   //    carries an EMPTY group for it (<ItemGroup Condition="'$(Platform)'==
-  //    'Linux64'"/>, measured on GalateaFMX): msbuild then deploys nothing
+  //    'Linux64'"/>, measured on a real FMX project): msbuild then deploys nothing
   //    and still succeeds. The project output is added to such a group.
   F := ManifiestoDe(ADprojPath);
   if TFile.Exists(F) then
@@ -2099,7 +2099,7 @@ begin
   // opt-in; an inert custom <Target> now builds without it (field round 9 FP).
   // Los EVENTOS pre/post build (la firma, una copia) ya no cierran la puerta:
   // se compila con ellos vaciados (/p:PreBuildEvent= ...) y se dice. Sin eso
-  // Galatea no compilaba en el workspace de un agente, y "una cosa es compilar
+  // Un proyecto real no compilaba en el workspace de un agente, y "una cosa es compilar
   // la version final, otra poder trabajar y ejecutar mientras tanto" (David,
   // 24-sep-2026). Lo que ejecuta de verdad -un <Exec>/<Target> propio, un
   // <Import> ajeno- sigue rechazado: el MISMO escaner, primero sin contar los
@@ -2671,7 +2671,7 @@ begin
   end;
   // "cannot find -lX" con un sysroot nuestro: el nombre -dev que falta se
   // completa en el SDK (ver CompletaEnlacesDev) y el build se repite UNA vez.
-  // Medido 2026-09-21: GalateaFMX dejo de enlazar en zorin18 y fedora44 por
+  // Medido 2026-09-21: una app FMX real dejo de enlazar en zorin18 y fedora44 por
   // un libz.so que ninguno de los dos traia; con la copia enlaza en ambos.
   if (ExitCode <> 0) and (SdkUsado <> '') and Output.Contains('cannot find -l') then
   begin
@@ -2761,7 +2761,7 @@ begin
     Result.AddPair('success', TJSONBool.Create(ExitCode = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Integer(ExitCode)));
     // lo que tardo, sin la cola (queuedMs): el mismo nombre que delphi_test y
-    // remote-run (Qwen en la regresion de GalateaFMX, 1.22.1)
+    // remote-run (Qwen en la regresion de una app real, 1.22.1)
     Result.AddPair('durationMs', TJSONNumber.Create(QueueSW.ElapsedMilliseconds - QueuedMs));
     if QueuedMs >= 500 then
     begin
@@ -3072,7 +3072,7 @@ begin
     // de un remote-run anterior (<job>.wait.exe) sigue vivo: ese programa
     // sigue corriendo alli. El E0017 crudo de msbuild no lo dice; el nombre
     // del fichero lleva el id del trabajo, asi que se le da la orden de kill.
-    // Medido 2026-09-23 contra 192.168.1.10 con una GUI viva.
+    // Medido 2026-09-23 contra una maquina de la red con una GUI viva.
     if (ExitCode <> 0) and Target.Contains('Deploy') and Output.Contains('E0017') then
     begin
       // el id del trabajo por el patron de su nombrador (Lsp.Casa.SelloUnico)

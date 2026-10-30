@@ -8,7 +8,7 @@ renderizador, 7-oct-2026), escritas aqui en la jaula de la bateria: una form
 con no visuales, una heredada, frames inline VCL y FMX. Lo que se pinta se
 comprueba POR PIXEL (mc.png_pixeles): el tamano de un PNG no dice si se pinto.
 Los casos son los de su bateria DUnitX (RenderTests, 20/20 lanzando los exes
-a mano) pasados por el servidor; las cobayas de Galatea no (estan fuera de
+a mano) pasados por el servidor; las cobayas privadas no (estan fuera de
 las raices a proposito), y el tiempo limite tampoco: el servidor no deja
 pedir uno corto (lo dice una NOTA).
 

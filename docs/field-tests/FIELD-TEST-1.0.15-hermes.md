@@ -4,7 +4,7 @@
 
 You are an EXTERNAL tester of this MCP server. You work with your own token
 (`[Workspace.Hermes]`), inside your own jail, on a real project:
-**GalateaFMX**, which is in your sandbox. You do not know the server's code and
+**a real FMX application**, which is in your sandbox. You do not know the server's code and
 you do not need to: what is being tested is **what the tools tell you and let you do**.
 
 A bug you find is worth more than ten green batteries: the batteries were
@@ -31,11 +31,11 @@ written by whoever wrote the code.
   a jail refusal is unfair, report it and carry on.
 - **On a remote desktop, type ONLY into something you have just opened and that
   starts empty**: the start menu search box, the calculator, a field of the
-  GalateaFMX app itself. **Never into a terminal, never into a text editor that
+  FMX application itself. **Never into a terminal, never into a text editor that
   already had a document, never into a browser with an open session.**
   Take a screenshot BEFORE typing to see where the focus is.
 - **Do not open, read or copy credential files**, neither on the remote desktop
-  nor on the server. If GalateaFMX asks for a user and password, **stop
+  nor on the server. If the application asks for a user and password, **stop
   and ask David for them**; do not look for them.
 - **Do not press "save", "discard", "delete" or "send"** on anything you have
   not created yourself in this test.
@@ -49,7 +49,7 @@ written by whoever wrote the code.
 - `delphi_workspace` (see above).
 - `delphi_help` — read it: it is what the server says about itself. Write down
   anything it promises and then does not deliver.
-- `delphi_projects` on your root: find GalateaFMX's `.dproj`.
+- `delphi_projects` on your root: find the application's `.dproj`.
 - `delphi_config` `command=view` on that `.dproj`: active platforms, SDK
   and the project's profile.
 - `delphi_paserver` `command=profiles`: which profiles and SDKs exist, with their glibc.
@@ -57,7 +57,7 @@ written by whoever wrote the code.
 **Report:** after five calls, is it clear what you can do and where?
 What did you miss knowing?
 
-## Phase 1 — Build GalateaFMX
+## Phase 1 — Build the application
 
 1. `delphi_build` for **Win64** (Debug). Write down the time, the errors, and whether
    the answer tells you where the binary ended up.
@@ -87,7 +87,7 @@ What did you miss knowing?
 With `delphi_adb_linux profile=<profile>`:
 
 1. `command=status` and then `command=screenshot`. Download the capture with
-   `delphi_fetch` and LOOK at it. Can you see GalateaFMX?
+   `delphi_fetch` and LOOK at it. Can you see the application?
 2. `command=windows` if the window is covered.
 3. **Get into the app** as far as you can without credentials. If it asks for a login,
    stop and ask David for it (hard rule).
@@ -115,7 +115,7 @@ whether the message explains it.
 
 ## Phase 4 — Edit the way an agent would (on a COPY)
 
-Do not touch the good GalateaFMX. Create a toy project in your jail:
+Do not touch the good application. Create a toy project in your jail:
 
 1. `delphi_create kind=project-fmx name=HermesTest dir=<your root>\HermesTest`.
 2. **NEW — subfolders**: `delphi_create kind=unit name=UModel
@@ -148,7 +148,7 @@ Do not touch the good GalateaFMX. Create a toy project in your jail:
 ## Phase 5 — Whatever you see
 
 Half an hour free, using the server for something that feels natural to you in
-GalateaFMX (finding where a class is used with `delphi_references`, a
+the application (finding where a class is used with `delphi_references`, a
 `delphi_rename_symbol` in preview, `delphi_diagnostics` of a large unit,
 `delphi_styles lint`). Write down frictions: parameters you do not guess the
 first time, answers that are too long or too short, messages that do not

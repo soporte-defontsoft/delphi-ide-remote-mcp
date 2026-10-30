@@ -10,7 +10,7 @@ agente confinado la jaula le niega __delphi-temp y, sin raiz escribible, la
 temporal del servidor esta fuera de las raices. Medido contra el Zorin el
 11-oct-2026: DESK-019 en los dos (con GUARD-015 y GUARD-002 dentro).
 
-Necesita el Zorin encendido (perfil zorin-desktop, 192.168.1.177) con una
+Necesita el Zorin encendido (perfil zorin-desktop) con una
 sesion grafica, y que se pida (MCP_BATERIAS_DESTINO_REAL=1, V52 de la 1.23:
 una bateria no despliega su nodo en un destino real salvo que se le pida):
 si no se pide o no contesta, la bateria lo dice (NOTA) y solo mide D0c.
@@ -43,7 +43,8 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PERFIL, HOST = 'zorin-desktop', '192.168.1.177'
+PERFIL = 'zorin-desktop'
+HOST = mc.host_de_perfil(PERFIL)
 BASE = mc.carpeta('desktop_casa_1182')
 atexit.register(mc.borra, BASE)
 JAIL = os.path.join(BASE, 'jail')

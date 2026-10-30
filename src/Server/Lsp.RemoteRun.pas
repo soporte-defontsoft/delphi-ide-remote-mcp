@@ -738,7 +738,7 @@ begin
   // PAServer de Windows arrancaba el lanzador (flag 5) sin tener escrito aun
   // el .job (flag 0): el lanzador salia sin trabajo, el .job se quedaba en la
   // carpeta y el agente veia "sigue corriendo" de un programa que nunca
-  // arranco. Medido 2026-09-23 contra 192.168.1.10 con paclient a pelo: 6/6
+  // arranco. Medido 2026-09-23 contra una maquina de la red con paclient a pelo: 6/6
   // fallos en un solo put, 6/6 bien en dos. Un viaje mas (~0,1 s) y ningun
   // orden que adivinar.
   Ops := Format('"--put=%s,%s,0,%s"', [GuionFile, DeployRel, NombreDelTrabajo(JobId)]);
@@ -818,7 +818,7 @@ begin
   // ventana viva se queda). Y la salida si ya viajo ENTERA. La de un
   // programa que sigue vivo se queda para output: lo que escriba despues
   // -un error al cerrar tras el login, su codigo- es justo lo que se
-  // perdia (2026-09-26: el AV de Galatea solo se veia en el journal de
+  // perdia (2026-09-26: el AV de una app real solo se veia en el journal de
   // Zorin). Un nombre que no exista no es un error que importe.
   if Terminado or not AGuardaSiSigue then
     Ops := Format('"--Remove=%s/%s;%s/%s;%s/%s"',

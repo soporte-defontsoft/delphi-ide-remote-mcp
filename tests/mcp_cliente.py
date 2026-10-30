@@ -1036,6 +1036,16 @@ def entorno(extra=None):
     return env
 
 
+def host_de_perfil(nombre):
+    """El host de un perfil REAL del IDE, leido de su .profile (solo esa clave:
+    el fichero lleva la contrasena del PAServer). Una direccion de la red no se
+    escribe en una bateria: el repo es publico."""
+    p = os.path.join(os.environ['APPDATA'], 'Embarcadero', 'BDS', '37.0', nombre + '.profile')
+    with open(p, encoding='utf-8-sig') as f:
+        m = re.search(r'<Profile_host>([^<]+)</Profile_host>', f.read())
+    return m.group(1) if m else ''
+
+
 def appdata_perfil(base, nombre='x', host='127.0.0.1', platform='Win64', por_defecto=False):
     """Un %APPDATA% de PRUEBA para un servidor de bateria, con un perfil FALSO.
     Copia del real los ficheros de config que HEREDAN los hijos (paclient,

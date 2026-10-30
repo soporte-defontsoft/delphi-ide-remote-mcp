@@ -17,7 +17,7 @@ the manifest, and it runs anywhere Python runs:
 
 Usage:  python tests/test_docs_static.py
 """
-import json, os, re, glob, warnings, py_compile
+import json, os, re, glob, warnings, py_compile, subprocess
 # 'mc' es aqui el match del CHANGELOG: el modulo entra por sus nombres
 from mcp_cliente import check, fin
 
@@ -64,11 +64,25 @@ check('README nombra los 5 vault_* como opcionales',
 # ---- lo que se publica no nombra proyectos internos nuestros -----------
 # David, 21-oct-2026 ("eso debe convertirse en regla"): una entrada nombraba el
 # exe de un proyecto interno. UNA lista con nombre, vigilada: el caso se cuenta
-# de forma generica ("un proyecto real", "<proyecto>.<OutputExt>").
-INTERNOS = ('galatea', 'galateamdb')
-changelog_pub = open(os.path.join(REPO, 'CHANGELOG.md'), encoding='utf-8').read().lower()
-nombrados = [n for n in INTERNOS if n in changelog_pub]
-check('CHANGELOG.md no nombra proyectos internos nuestros (regla del 21-oct-2026)', not nombrados, nombrados)
+# de forma generica ("un proyecto real", "<proyecto>.<OutputExt>"). David,
+# 30-oct-2026: "ni nombrarlo, ningun proyecto interno". Solo miraba el CHANGELOG y
+# el nombre seguia en 22 ficheros, codigo incluido: ahora, TODO lo versionado. La
+# lista es privada (una bateria publica no puede nombrarlos): sin ella, no se mide.
+INTERNOS_F = os.environ.get('DELPHI_MCP_NOMBRES_INTERNOS',
+                            'D:/Vaults/AI-Memory/projects/lsp-mcp-server/nombres-internos.txt')
+VERSIONADOS = subprocess.run(['git', '-C', REPO, 'ls-files'], capture_output=True, text=True).stdout.split('\n')
+VERSIONADOS = [f for f in VERSIONADOS if f and os.path.isfile(os.path.join(REPO, f))]
+if os.path.exists(INTERNOS_F):
+    INTERNOS = [n.strip().lower().encode() for n in open(INTERNOS_F, encoding='utf-8') if n.strip()]
+    nombrados = [f for f in VERSIONADOS if any(n in open(os.path.join(REPO, f), 'rb').read().lower() for n in INTERNOS)]
+    check('lo versionado no nombra proyectos internos nuestros (%d nombres, %d ficheros)' % (len(INTERNOS), len(VERSIONADOS)),
+          INTERNOS and not nombrados, nombrados)
+else:
+    print('NOTA: sin la lista privada de nombres internos no se mide que el repo no los nombre')
+# ...ni una direccion de la red en lo que se lee (192.0.2.x es la de los ejemplos)
+IP_PRIVADA = re.compile(rb'192\.168\.\d+\.\d+')
+las_ip = [f for f in VERSIONADOS if IP_PRIVADA.search(open(os.path.join(REPO, f), 'rb').read())]
+check('lo versionado no lleva direcciones de la red (192.168.x.x)', not las_ip, las_ip)
 
 # ---- TOOLS.md ----------------------------------------------------------
 toolsmd = open(os.path.join(REPO, 'docs', 'TOOLS.md'), encoding='utf-8').read()

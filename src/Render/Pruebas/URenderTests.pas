@@ -12,7 +12,7 @@
   de una release (src\Render\README.md).
 
   Las cobayas hechas a mano viven aqui (src\Render\Pruebas) y sus tests
-  pasan SIEMPRE. Las de Galatea (forms reales con paquetes de terceros) NO
+  pasan SIEMPRE. Las privadas (forms reales con paquetes de terceros) NO
   viajan en el repo, que es publico: su carpeta sale de RENDER_COBAYAS o de
   la primera linea de render_cobayas.txt junto al runner, y sin ella su
   fixture ni se registra (DUnitX no tiene "saltado" en marcha; ver la
@@ -72,11 +72,11 @@ type
     [Test] procedure Vcl_archivo_avi;
   end;
 
-  { Con las cobayas de Galatea: solo si su carpeta existe }
+  { Con las cobayas privadas: solo si su carpeta existe }
   [TestFixture]
-  TRenderGalateaTests = class
+  TRenderPrivadasTests = class
   public
-    [Test] procedure Vcl_Galatea_con_paquetes;
+    [Test] procedure Vcl_con_paquetes;
     [Test] procedure Fmx_Login_canvas;
     [Test] procedure Fmx_estilo_fichero_y_none;
     [Test] procedure Fmx_estilo_de_plataforma;
@@ -106,7 +106,7 @@ begin
   Result := TPath.GetFullPath(TPath.Combine(Carpeta, '..\..\'));
 end;
 
-{ La carpeta de las cobayas de Galatea: RENDER_COBAYAS, o la primera linea de
+{ La carpeta de las cobayas privadas: RENDER_COBAYAS, o la primera linea de
   render_cobayas.txt junto al runner; '' si no hay }
 function CarpetaDeCobayas: string;
 var
@@ -131,6 +131,30 @@ end;
 function Cobaya(const ANombre: string): string;
 begin
   Result := TPath.Combine(CarpetaDeCobayas, ANombre);
+end;
+
+{ El nombre real de una cobaya privada, por su clave: las lineas clave=valor de
+  render_cobayas.txt (login, estilo, frame, stylebook). El repo es publico y no
+  nombra proyectos internos: esos nombres viven solo en ese fichero }
+function NombrePrivado(const AClave: string): string;
+var
+  F: string;
+  L: TStringList;
+begin
+  Result := '';
+  F := TPath.Combine(Carpeta, 'render_cobayas.txt');
+  if TFile.Exists(F) then
+  begin
+    L := TStringList.Create;
+    try
+      L.LoadFromFile(F);
+      Result := L.Values[AClave].Trim;
+    finally
+      L.Free;
+    end;
+  end;
+  if Result = '' then
+    raise Exception.Create('falta ' + AClave + '= en render_cobayas.txt');
 end;
 
 function Ayudante(const ANombre: string): string;
@@ -535,26 +559,26 @@ begin
   Assert.IsTrue(R.Valor(FR_ERROR).StartsWith('[RENDER-021 INVALID_PARAM]'), R.Valor(FR_ERROR));
 end;
 
-{ ---- con las cobayas de Galatea ---- }
+{ ---- con las cobayas privadas ---- }
 
-procedure TRenderGalateaTests.Vcl_Galatea_con_paquetes;
+procedure TRenderPrivadasTests.Vcl_con_paquetes;
 var
   R: TRespuesta;
 begin
   R := Vcl(Format('--path "%s" --out "%s" --state PageControlFicha.ActivePage=TabFacturacion --component TabFacturacion',
-    [Cobaya('UFichaCliente.dfm'), Salida('galatea')]));
+    [Cobaya('UFichaCliente.dfm'), Salida('ficha')]));
   CompruebaCaptura(R, '870x532');
   Assert.AreEqual('317', R.Valor(FR_COMPONENTS));
-  Assert.IsFalse(R.Tiene(FR_SUBSTITUTED), 'todo lo de Galatea viene de los paquetes del IDE: ' + R.Valor(FR_SUBSTITUTED));
+  Assert.IsFalse(R.Tiene(FR_SUBSTITUTED), 'todo lo de la form viene de los paquetes del IDE: ' + R.Valor(FR_SUBSTITUTED));
   Assert.IsTrue(R.Valor(FR_PACKAGES).StartsWith('1'), 'cargo los paquetes del IDE: ' + R.Valor(FR_PACKAGES));
   Assert.IsTrue(R.Valor(FR_RECT).StartsWith('TabFacturacion='), R.Valor(FR_RECT));
 end;
 
-procedure TRenderGalateaTests.Fmx_Login_canvas;
+procedure TRenderPrivadasTests.Fmx_Login_canvas;
 var
   R: TRespuesta;
 begin
-  R := Fmx(Format('--path "%s" --out "%s"', [Cobaya('Galatea.View.Login.fmx'), Salida('login')]));
+  R := Fmx(Format('--path "%s" --out "%s"', [Cobaya(NombrePrivado('login')), Salida('login')]));
   CompruebaCaptura(R, '920x700');
   Assert.AreEqual('LoginForm:TLoginForm:form', R.Valor(FR_ROOT));
   Assert.AreEqual('65', R.Valor(FR_COMPONENTS));
@@ -562,60 +586,60 @@ begin
   Assert.IsTrue(R.Valor(FR_STYLE).Contains('StyleBook'), 'el estilo es el de la form: ' + R.Valor(FR_STYLE));
 end;
 
-procedure TRenderGalateaTests.Fmx_estilo_fichero_y_none;
+procedure TRenderPrivadasTests.Fmx_estilo_fichero_y_none;
 var
   R: TRespuesta;
 begin
-  R := Fmx(Format('--path "%s" --out "%s" --style "%s"', [Cobaya('Galatea.View.Login.fmx'), Salida('login_clasico'),
-    Cobaya('Galatea.Clasico.style')]));
+  R := Fmx(Format('--path "%s" --out "%s" --style "%s"', [Cobaya(NombrePrivado('login')), Salida('login_clasico'),
+    Cobaya(NombrePrivado('estilo'))]));
   CompruebaCaptura(R, '920x700');
-  Assert.IsTrue(R.Valor(FR_STYLE).StartsWith('file Galatea.Clasico.style'), R.Valor(FR_STYLE));
+  Assert.IsTrue(R.Valor(FR_STYLE).StartsWith('file ' + NombrePrivado('estilo')), R.Valor(FR_STYLE));
   // 1.20.1: y dice lo que lleva la form, lo que vera la app: el StyleBook del
-  // login esta vacio en el .fmx (Galatea lo carga por codigo)
+  // login esta vacio en el .fmx (la app lo carga por codigo)
   Assert.IsTrue(R.Valor(FR_STYLE).Contains('for this image only') and
-    R.Valor(FR_STYLE).Contains('EMPTY StyleBook StyleBookGalatea'), R.Valor(FR_STYLE));
-  R := Fmx(Format('--path "%s" --out "%s" --style none', [Cobaya('Galatea.View.Login.fmx'), Salida('login_none')]));
+    R.Valor(FR_STYLE).Contains('EMPTY StyleBook ' + NombrePrivado('stylebook')), R.Valor(FR_STYLE));
+  R := Fmx(Format('--path "%s" --out "%s" --style none', [Cobaya(NombrePrivado('login')), Salida('login_none')]));
   CompruebaCaptura(R, '920x700');
   Assert.IsTrue(R.Valor(FR_STYLE).StartsWith('none'), R.Valor(FR_STYLE));
 end;
 
-procedure TRenderGalateaTests.Fmx_estilo_de_plataforma;
+procedure TRenderPrivadasTests.Fmx_estilo_de_plataforma;
 var
   R: TRespuesta;
 begin
-  R := Fmx(Format('--path "%s" --out "%s" --style android', [Cobaya('Galatea.View.Login.fmx'), Salida('login_android')]));
+  R := Fmx(Format('--path "%s" --out "%s" --style android', [Cobaya(NombrePrivado('login')), Salida('login_android')]));
   CompruebaCaptura(R, '920x700');
   Assert.IsTrue(R.Valor(FR_STYLE).Contains('ANDROIDSTYLE'), R.Valor(FR_STYLE));
-  R := Fmx(Format('--path "%s" --out "%s" --style win11', [Cobaya('Galatea.View.Login.fmx'), Salida('login_win11')]));
+  R := Fmx(Format('--path "%s" --out "%s" --style win11', [Cobaya(NombrePrivado('login')), Salida('login_win11')]));
   CompruebaCaptura(R, '920x700');
   Assert.IsTrue(R.Valor(FR_STYLE).Contains('WIN11STYLE'), R.Valor(FR_STYLE));
 end;
 
-procedure TRenderGalateaTests.Fmx_estilo_desconocido_rc1;
+procedure TRenderPrivadasTests.Fmx_estilo_desconocido_rc1;
 var
   R: TRespuesta;
 begin
-  R := Fmx(Format('--path "%s" --out "%s" --style marte', [Cobaya('Galatea.View.Login.fmx'), Salida('login_marte')]));
+  R := Fmx(Format('--path "%s" --out "%s" --style marte', [Cobaya(NombrePrivado('login')), Salida('login_marte')]));
   Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc);
   Assert.IsTrue(R.Valor(FR_ERROR).Contains('android'), 'el error lista las plataformas: ' + R.Valor(FR_ERROR));
 end;
 
-procedure TRenderGalateaTests.Fmx_frame_solo_con_terceros;
+procedure TRenderPrivadasTests.Fmx_frame_solo_con_terceros;
 var
   R: TRespuesta;
 begin
-  R := Fmx(Format('--path "%s" --out "%s"', [Cobaya('Galatea.Frame.Maestro.fmx'), Salida('maestro')]));
+  R := Fmx(Format('--path "%s" --out "%s"', [Cobaya(NombrePrivado('frame')), Salida('maestro')]));
   CompruebaCaptura(R, '1280x600');
   Assert.AreEqual('MaestroFrame:TMaestroFrame:frame', R.Valor(FR_ROOT), 'frame por su .pas');
   Assert.IsFalse(R.Tiene(FR_SUBSTITUTED), 'el TTeeGrid viene de los paquetes del IDE: ' + R.Valor(FR_SUBSTITUTED));
   Assert.IsTrue(R.Valor(FR_PACKAGES).StartsWith('1'), R.Valor(FR_PACKAGES));
 end;
 
-procedure TRenderGalateaTests.Fmx_rect_del_componente;
+procedure TRenderPrivadasTests.Fmx_rect_del_componente;
 var
   R: TRespuesta;
 begin
-  R := Fmx(Format('--path "%s" --out "%s" --component pnlVelo', [Cobaya('Galatea.View.Login.fmx'), Salida('login_rect')]));
+  R := Fmx(Format('--path "%s" --out "%s" --component pnlVelo', [Cobaya(NombrePrivado('login')), Salida('login_rect')]));
   CompruebaCaptura(R, '920x700');
   Assert.IsTrue(R.Valor(FR_RECT).StartsWith('pnlVelo='), R.Valor(FR_RECT));
 end;
@@ -739,16 +763,16 @@ initialization
   // atributo [Ignore] (DUnitX.TestRunner: test.Ignored -> ExecuteIgnoredResult),
   // y Assert.Pass lanza ETestPass, que cuenta como SUPERADO
   // (ExecuteSuccessfulResult; fuente del IDE 37.0, leido el 7-oct-2026). Sin
-  // las cobayas de Galatea su fixture ni se registra, y se dice.
+  // las cobayas privadas su fixture ni se registra, y se dice.
   if HayCobayas then
   begin
     if TFile.Exists(Cobaya('DUMMY-events.dfm')) then
       TDUnitX.RegisterTestFixture(TRenderDUMMYTests)
     else
-      TDUnitX.RegisterTestFixture(TRenderGalateaTests);
+      TDUnitX.RegisterTestFixture(TRenderPrivadasTests);
   end
   else
-    Writeln('NO MEDIDO: sin las cobayas de Galatea (RENDER_COBAYAS, o render_cobayas.txt junto al ' +
+    Writeln('NO MEDIDO: sin las cobayas privadas (RENDER_COBAYAS, o render_cobayas.txt junto al ' +
       'runner): los 7 casos de paquetes de terceros y estilos reales no se pasan.');
 
 end.

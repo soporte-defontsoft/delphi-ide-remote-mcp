@@ -246,7 +246,7 @@ open(ESTILO, 'w').write('object TStyleContainer\n'
 ECO = os.path.join(JAIL, 'eco.txt')
 open(ECO, 'w').write('uno [CFG-001 DENIED]\n'
                      "  '%s (%s) lineas %d-%d de %s:'#10 +\n"
-                     'Roots=D:\\Projects\\Galatea\n')
+                     'Roots=D:\\Projects\\App\n')
 DPROJ = os.path.join(JAIL, 'App.dproj')
 open(DPROJ, 'w').write('<?xml version="1.0" encoding="utf-8"?>\n'
                        '<Project><PropertyGroup><MainSource>App.dpr</MainSource>'
@@ -313,7 +313,7 @@ try:
 
     res, sc, t = llama('delphi_read', {'path': ECO})
     check('E8 delphi_read devuelve el contenido tal cual aunque cite etiquetas con resultado',
-          "de %s:'#10" in t and 'Roots=D:\\Projects\\Galatea' in t and 'srv0' not in t, t[-300:])
+          "de %s:'#10" in t and 'Roots=D:\\Projects\\App' in t and 'srv0' not in t, t[-300:])
 
     # E9: el caracter no cabe en CP1252 -> el motor se niega; eso ES la respuesta
     res, sc, t = llama('delphi_edit', {'path': U1252, 'insert': 'rutina-global',

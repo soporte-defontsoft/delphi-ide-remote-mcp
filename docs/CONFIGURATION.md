@@ -251,7 +251,7 @@ AllowTests=1
 ; ITS persistent memory (vault_* tools)
 VaultPath=D:\Vaults\TeamMemory
 ; ITS Android devices (absent = NONE)
-AdbAllowedDevices=192.168.1.163
+AdbAllowedDevices=192.0.2.163
 ; optional: trims tools/list for this token
 Profile=coder
 
@@ -540,7 +540,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   either way. The copy of the original `.dproj` is in the `__delphi-patch` trash
   (`delphi_delete` the probe, then `delphi_move` the copy back).
 - **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist —
-  `AdbAllowedDevices=192.168.1.163;SERIAL123` (a `;` or `,` list; an IP entry covers whatever
+  `AdbAllowedDevices=192.0.2.163;SERIAL123` (a `;` or `,` list; an IP entry covers whatever
   port wifi debugging negotiates, a USB serial is listed as-is). Devices outside the
   workspace's list are refused at **both** access levels, every device-addressing command
   must name its `device` explicitly (an implicit target could be an unlisted device that

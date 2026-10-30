@@ -517,7 +517,7 @@ al = Server(env={'DELPHI_MCP_ADB_DEVICES': '10.9.9.9;SERIALX'})
 out = al.call('delphi_adb', {"command": "devices"}, t=60)
 check('allowlist: devices (listar) sigue abierto',
       not mc.es(out, 'SR_ADB_ALLOWLIST_FMT') and 'devices' in out and lista_devices(out), out[:200])
-out = al.call('delphi_adb', {"command": "connect", "address": "192.168.1.163:5556"})
+out = al.call('delphi_adb', {"command": "connect", "address": "192.0.2.163:5556"})
 check('allowlist: connect a IP fuera de lista rechazado',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_FMT'), out[:250])
 out = al.call('delphi_adb', {"command": "disconnect", "address": "10.9.9.9:5555"})
@@ -547,7 +547,7 @@ noal = Server()
 out = noal.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X"})
 check('sin lista: comando con device implicito RECHAZADO (fail closed)',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_DEVICE') and 'AdbAllowedDevices' in out, out[:250])
-out = noal.call('delphi_adb', {"command": "connect", "address": "192.168.1.163:5555"})
+out = noal.call('delphi_adb', {"command": "connect", "address": "192.0.2.163:5555"})
 check('sin lista: hasta un connect explicito se rechaza (lista vacia = nada)',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_FMT'), out[:250])
 out = noal.call('delphi_adb', {"command": "devices"}, t=60)

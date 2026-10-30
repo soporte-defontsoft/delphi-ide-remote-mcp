@@ -29,7 +29,7 @@
   el Library Search Path y el Browsing Path de su IDE (Win32 y Win64),
   carpeta a carpeta sin bajar, como el compilador - asi entran tambien los
   componentes de terceros instalados desde su fuente (medido el 3-oct en
-  este PC: Defontsoft, QuickReport, ICS, ZipMaster, TeeChart... estan en el
+  este PC: QuickReport, ICS, ZipMaster, TeeChart... estan en el
   Search Path, no en el Browsing). Sin compilar ni ejecutar nada (David).
 
   Como: cada unidad pasa por EL preprocesador (Lsp.Preproceso, con los

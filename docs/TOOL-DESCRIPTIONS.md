@@ -11,7 +11,7 @@ fills its window early.
 
 ## The budget
 
-`tests/test_docs_tokens.py` (T1) keeps `tools/list` under **100,000
+`tests/test_docs_tokens.py` (T1) keeps `tools/list` under **105,000
 characters** (measured without a vault; the five `vault_*` tools come on top).
 Going over it is a decision, not an accident: the battery fails and names the
 size. The same battery watches the answers too (one audit line in a clean edit,

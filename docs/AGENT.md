@@ -12,7 +12,8 @@ The short version:
    yourself**: `clientInfo.name` = your agent id, or `agent=<id>` on every
    `delphi_report` / `delphi_messages` call (a generic client name leaves
    your mail unread).
-2. **Nothing executes on the server** except a test project through `delphi_test` (`AllowTests`); a program runs on a target through `delphi_paserver remote-run`.
+2. **Nothing executes on the server** except a test project through `delphi_test` (`AllowTests`), and what a project's build declares in a workspace with `AllowBuildScripts=1`; a program runs on a target through `delphi_paserver remote-run`.
 3. **Nothing is hard-deleted**: `delphi_delete` moves to the trash and `delphi_move`
-   restores from it. The one exception is `delphi_delete purge=true`, which is
-   allowed only inside the trash.
+   restores from it. The exceptions: `delphi_delete purge=true`, allowed only
+   inside the trash, and the trash itself, which keeps 15 days: older days are
+   purged.

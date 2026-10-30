@@ -625,8 +625,8 @@ begin
   // su eco de verificacion son las lineas RELEIDAS DEL DISCO, que es la
   // prueba con la que el agente comprueba que escribio lo que queria. Si esa
   // prueba va enmascarada, no prueba nada. Encontrado escribiendo este mismo
-  // CHANGELOG el 2026-09-20: se escribio "D:\Projects\Galatea", el disco lo
-  // tenia bien, y el eco devolvia "srvd:\Projects\Galatea". Sus negativas
+  // CHANGELOG el 2026-09-20: se escribio "D:\Projects\App", el disco lo
+  // tenia bien, y el eco devolvia "srvd:\Projects\App". Sus negativas
   // empiezan por su etiqueta con resultado y siguen enmascarandose por el test de
   // abajo.
   // delphi_docs (1.10.0): su texto es la AYUDA instalada, y sus ejemplos citan

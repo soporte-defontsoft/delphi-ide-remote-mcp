@@ -75,7 +75,7 @@ injects it).
 
 ### Downloading build output through OpenCode (`delphi_fetch`)
 
-Every `delphi_fetch` answer carries a `download` link (`GET /files?path=...`
+Over HTTP, every `delphi_fetch` answer carries a `download` link (`GET /files?path=...`
 on the same host, with the same Bearer token) and the response comes with an
 `X-File-SHA256` header to verify the bytes. A big file is one `curl`, however
 large — use the `download` value verbatim:

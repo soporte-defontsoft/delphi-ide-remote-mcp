@@ -269,7 +269,7 @@ begin
   Assert.IsFalse(EsIdentificador('Foo'#10), 'con salto');
   Assert.IsFalse(EsIdentificador('Vcl.Forms'), 'puntos sin APuntos');
   Assert.IsTrue(EsIdentificador('Vcl.Forms', True), 'Vcl.Forms');
-  Assert.IsTrue(EsIdentificador('Galatea.Año', True), 'Galatea.Año');
+  Assert.IsTrue(EsIdentificador('Modulo.Año', True), 'Modulo.Año');
   Assert.IsFalse(EsIdentificador('Vcl..Forms', True), 'dos puntos');
   Assert.IsFalse(EsIdentificador('Vcl.', True), 'punto final');
 end;
@@ -440,8 +440,8 @@ begin
   Assert.AreEqual('P', C.Nombre);
   Assert.IsTrue(CabeceraDeFuente('unit U platform;', C));
   Assert.AreEqual('U', C.Nombre);
-  Assert.IsTrue(CabeceraDeFuente('library Galatea.Año;', C), 'un nombre con acentos');
-  Assert.AreEqual('Galatea.Año', C.Nombre);
+  Assert.IsTrue(CabeceraDeFuente('library Modulo.Año;', C), 'un nombre con acentos');
+  Assert.AreEqual('Modulo.Año', C.Nombre);
   Assert.IsTrue(CabeceraDeFuente('package P;', C));
   Assert.AreEqual('package', C.Palabra);
 end;

@@ -167,7 +167,7 @@ begin
   EsVisual := EsVcl or EsFmx;
   EsConsola := SameText(AAppType, 'Console') and not AEsTest;
   // Los ambitos de unidad como los reparte el IDE (medido en los Samples de
-  // la 37.0 y en GalateaFMX.dproj, 17-oct-2026): en Base los de todas las
+  // la 37.0 y en un .dproj real, 17-oct-2026): en Base los de todas las
   // plataformas, y los de Windows (Winapi, System.Win...) en Base_Win32 (con
   // Bde) y Base_Win64. Los de la VCL, solo en un proyecto VCL: con ellos un
   // 'uses Dialogs' sin calificar compilaba contra Vcl.Dialogs en Win32 y no
@@ -193,7 +193,7 @@ begin
     'OriginalFilename=;ProgramID=com.embarcadero.$(MSBuildProjectName);' +
     'ProductName=$(MSBuildProjectName);ProductVersion=1.0.0.0;Comments=');
   // Un paquete se diferencia en cuatro cosas, medidas contra un .dproj de
-  // paquete del IDE (FMXDefontsoft, 2026-09-23): el fuente principal es el
+  // paquete del IDE (un paquete real, 2026-09-23): el fuente principal es el
   // .dpk, AppType/ProjectType = Package, GenDll+GenPackage+AppFileExt=bpl,
   // y el BPL y el DCP se quedan en la carpeta del proyecto (el IDE los
   // manda por defecto a la carpeta publica Bpl/Dcp de Embarcadero: fuera de

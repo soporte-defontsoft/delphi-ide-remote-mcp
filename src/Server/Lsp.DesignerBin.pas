@@ -501,7 +501,7 @@ var
           begin
             // una coleccion dentro de una lista: tambien la escribe el IDE
             // (_Headers de un TTeeGrid, por su DefineProperties: un frame de
-            // Galatea, medido el 18-oct-2026), y sus lineas son de la lista,
+            // un proyecto real, medido el 18-oct-2026), y sus lineas son de la lista,
             // como para el lector: se recorre sin tomar ninguna
             P.NextToken;
             while P.Token <> '>' do

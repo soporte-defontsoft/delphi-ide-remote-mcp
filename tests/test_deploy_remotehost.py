@@ -4,8 +4,8 @@ get-sdk y remote-run (ProfileHostDenido). El motor de deploy la salta.
 
 Servidor de prueba con RemoteHosts restringido a 127.0.0.1 (via
 DELPHI_MCP_REMOTE_HOSTS, sin tocar el settings.ini de produccion). El perfil
-'linux-desktop' existe en el IDE y apunta a 192.168.1.177, que NO esta en esa
-lista y esta caido (un deploy no envia nada). Control: 192.168.1.177 es el
+'linux-desktop' existe en el IDE y apunta a un host que NO esta en esa
+lista y esta caido (un deploy no envia nada). Control: ese host es el
 "fuera"; con la puerta puesta no se contacta.
 
   D1  control: la puerta restringida DENIEGA test-connection a ese perfil
@@ -14,7 +14,7 @@ lista y esta caido (un deploy no envia nada). Control: 192.168.1.177 es el
   D5  el MISMO deploy SIN profile=, con el perfil declarado en el PROYECTO
       (set-profile): msbuild lee $(Profile) del .dproj, asi que la puerta
       juzga ese (medido 2026-10-06 con la primera version del arreglo, que
-      solo miraba el argumento: E0003 contra 192.168.1.177)
+      solo miraba el argumento: E0003 contra ese host)
   D6  sin perfil en la llamada ni en el proyecto: el que el IDE tiene para la
       plataforma (como el IDE; 24-oct-2026), juzgado por la misma puerta; sin
       ninguno, BUILD-058 antes de compilar (V15 de la 1.23: msbuild recibia
@@ -37,8 +37,8 @@ import os, sys, json
 import mcp_cliente as mc
 from mcp_cliente import check
 
-PERFIL = 'linux-desktop'           # existe en el IDE, host 192.168.1.177
-HOST_PERFIL = '192.168.1.177'
+PERFIL = 'linux-desktop'           # existe en el IDE
+HOST_PERFIL = mc.host_de_perfil(PERFIL)
 PERMITIDO = '127.0.0.1'            # lo unico que esta en RemoteHosts aqui
 
 BASE = mc.carpeta('deployrh')

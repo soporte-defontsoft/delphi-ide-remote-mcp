@@ -98,7 +98,7 @@ const
 { No esta en Winapi.Windows de esta version. Pinta UNA ventana desde su
   superficie del DWM; llamado desde OTRO proceso (este nodo lo es) con
   PW_RENDERFULLCONTENT trae los pixeles reales aunque la tape otra. Desde el
-  hilo de la propia ventana degenera en WM_PRINT (leccion de Galatea,
+  hilo de la propia ventana degenera en WM_PRINT (leccion de una app real,
   2026-07-04), pero ese caso aqui no se da. }
 function PrintWindow(hwnd: HWND; hdcBlt: HDC; nFlags: UINT): BOOL; stdcall;
   external user32 name 'PrintWindow';

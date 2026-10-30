@@ -43,7 +43,7 @@ EXE = mc.copia_exe(EXEDIR)
 # Fichero con una letra de unidad REAL dentro: es lo que el filtro de salida
 # reescribia. Se escribe aqui y no se busca en el README para que la bateria
 # no dependa de lo que diga la documentacion ese dia.
-CEBO = 'Roots=D:\\Projects\\Galatea;D:\\Projects\\Shared'
+CEBO = 'Roots=D:\\Projects\\App;D:\\Projects\\Shared'
 open(os.path.join(JAIL, 'cebo.md'), 'w').write(
     'linea uno\n%s\nlinea tres\n' % CEBO)
 

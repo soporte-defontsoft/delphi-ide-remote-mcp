@@ -610,7 +610,7 @@ has to be applied by hand.
 
 **The screenshot says what the display really is.** Every `screenshot` answer carries `image` (the PNG's size) and `display` - the device's `physical` size, its `override` size when one is set and its `density`, from `wm size` / `wm density` - because `input tap` takes pixels of the display in force, not of the picture. Normally they are the same and what you measure on the image is what you tap; when they differ (a device that captures at another scale) the answer carries `tapScale {x, y}` and its note says to multiply first. A rotated display (WxH against HxW) is not a scale: screencap and input share the orientation.
 
-Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.168.1.163;SERIAL123` in its section (semicolon list; an IP entry covers any port wifi debugging negotiates). Targets outside the workspace list are refused at BOTH access levels, every device-addressing command must name its `device` explicitly, and an absent list means NO devices (v0.98).
+Devices are allowlisted PER WORKSPACE — `AdbAllowedDevices=192.0.2.163;SERIAL123` in its section (semicolon list; an IP entry covers any port wifi debugging negotiates). Targets outside the workspace list are refused at BOTH access levels, every device-addressing command must name its `device` explicitly, and an absent list means NO devices (v0.98).
 
 ### `delphi_desktop`
 
@@ -1015,7 +1015,7 @@ From then on this server does the rest with no hands anywhere: `get-sdk` (once p
 
 ### Deploy and drive an app on an Android device (the device hangs off the server)
 1. `delphi_adb {command:"discover"}` — devices announcing wireless debugging on the server's network, each with its ip:port (or the developer reads it off the device screen and hands it to you).
-2. `delphi_adb {command:"connect", address:"192.168.1.163:5556"}` — attach it (Android 11+ has to be paired with the server once first: on the device, Wireless debugging > Pair device with pairing code, and the server's operator runs `adb pair` with that dialog's ip:port and code - a failed connect, `ADB-030`, says so); `{command:"devices"}` lists what is attached.
+2. `delphi_adb {command:"connect", address:"192.0.2.163:5556"}` — attach it (Android 11+ has to be paired with the server once first: on the device, Wireless debugging > Pair device with pairing code, and the server's operator runs `adb pair` with that dialog's ip:port and code - a failed connect, `ADB-030`, says so); `{command:"devices"}` lists what is attached.
 3. `delphi_config {project, command:"add-platform", platform:"Android64"}` then `delphi_build {project, platform:"Android64", config:"Debug", target:"Deploy"}` — the server generates the deployment manifest if the project has none and the result declares the built `.apk`.
 4. `delphi_adb {command:"install", apk:"...\bin\App.apk", device:"..."}` → `{command:"run", app:"com.embarcadero.App", device:"..."}` — the IDE's "Deploy and Run", by tools.
 5. `delphi_adb {command:"screenshot", device:"..."}` (the screen comes back in the answer), `{command:"tap", x, y, device:"..."}`, `{command:"key", key:"back", device:"..."}`, `{command:"logcat", filter:"MyApp", device:"..."}` — your remote eyes and hands to drive and debug it.

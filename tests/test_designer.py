@@ -322,7 +322,7 @@ pares = [(x.get('name', ''), x.get('class', '')) for x in _nodos(mc.como_json(r)
 check('tree: el componente de nombre con acento sale con su nombre y su clase',
       ('lblDirecci\u00f3n', 'TLabel') in pares and not any(c.startswith('lblDirecci') for _, c in pares), pares)
 
-# 4-oct-2026 (Hermes, VM 13.2, un form de produccion de GalateaAPI): lint y
+# 4-oct-2026 (Hermes, VM 13.2, un form de produccion de un proyecto real): lint y
 # check-binding caian con SYS-006 'Index out of bounds (2)' si el .pas tenia
 # una cabecera de clase SIN parentesis detras de class: su ancestro iba en un
 # grupo opcional y Groups[2] no existia (Lsp.Regex). 'class of' no es un

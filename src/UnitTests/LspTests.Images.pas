@@ -591,14 +591,14 @@ const
     CAPTURA_ZORIN + #10 +
     '  1 visible windows:'#10 +
     '  [NODE-024] (X11/Xwayland windows: native Wayland windows do not appear in the list)'#10 +
-    '  WINDOW 0 0 3440 1390 Galatea'#10#10 +
+    '  WINDOW 0 0 3440 1390 MiApp'#10#10 +
     '[NODE-032] -- 3. the hands --'#10 +
     '  [NODE-036] ready. logical screen 2752x1152, scale 1,25'#10;
   DESPUES_ZORIN =
     CAPTURA_ZORIN + #10 +
     '  1 visible windows:'#10 +
     '  [NODE-024] (X11/Xwayland windows: native Wayland windows do not appear in the list)'#10 +
-    '  WINDOW 0 0 3440 1390 Galatea'#10#10 +
+    '  WINDOW 0 0 3440 1390 MiApp'#10#10 +
     '[NODE-017] node ready';
 
 procedure TImageTests.GestoBienDejaSoloLaAccion;
