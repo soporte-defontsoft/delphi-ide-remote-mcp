@@ -3149,16 +3149,20 @@ begin
     // there. Rejecting them here refused legitimate parent-directory paths.
     if (Name = '.') or (Name = '..') then
       Continue;
-    // un nombre que Windows reserva para un dispositivo (CON, PRN, AUX, NUL,
-    // COM1-9, LPT1-9), con o sin extension: en este Windows 11 se crea como un
-    // fichero normal que un Explorer de Windows 10 no abre ni borra; en otros
-    // es el dispositivo mismo (decima revision, medido con CON.txt)
+    // un nombre que Windows reserva para un dispositivo, con o sin extension: en
+    // este Windows 11 se crea como un fichero normal que un Explorer de Windows
+    // 10 no abre ni borra; en otros es el dispositivo mismo (decima revision,
+    // medido con CON.txt). No hay juez: RtlIsDosDeviceName_U contesta por ESTE
+    // Windows, que en una carpeta solo marca NUL (build 26100, V131 de la 1.24),
+    // y lo que se protege es el fichero en los otros: la lista documentada
     var Base := Name;
     if Base.IndexOf('.') > 0 then
       Base := Base.Substring(0, Base.IndexOf('.'));
-    if MatchText(Base.TrimRight, ['CON', 'PRN', 'AUX', 'NUL', 'COM1', 'COM2', 'COM3', 'COM4',
-         'COM5', 'COM6', 'COM7', 'COM8', 'COM9', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6',
-         'LPT7', 'LPT8', 'LPT9']) then
+    if MatchText(Base.TrimRight, ['CON', 'PRN', 'AUX', 'NUL', 'CONIN$', 'CONOUT$',
+         'COM0', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
+         'COM'#$00B9, 'COM'#$00B2, 'COM'#$00B3,
+         'LPT0', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',
+         'LPT'#$00B9, 'LPT'#$00B2, 'LPT'#$00B3]) then
       Exit(MsgFmt(SR_GUARD_NOMBRE_RESERVADO_FMT, [Name, APath]));
     // mas de 255 no es un nombre de Windows: SYS-009 INTERNAL al escribir
     // (octava revision)

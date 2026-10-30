@@ -10,6 +10,10 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The device names Windows documents are all refused in a path.** `GUARD-027`
+  missed `COM0`, `LPT0`, `COM` and `LPT` with a superscript 1-3, `CONIN$` and
+  `CONOUT$`: a file with one of those names could be created here and then not open
+  on another Windows.
 - **A package disabled in the IDE is no longer loaded to draw or judge a form.**
   `delphi_designer` preview, lint and the check of what the IDE would save loaded
   every package in the IDE's Known Packages, without looking at Disabled Packages:

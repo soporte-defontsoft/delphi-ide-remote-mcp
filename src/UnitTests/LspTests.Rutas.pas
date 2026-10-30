@@ -75,6 +75,8 @@ type
     [Test] procedure LosControlesSonAnomaliasPorSiMismos;
     [Test]
     procedure UnaCitaConSuCrVaComoEsta;
+    [Test]
+    procedure LosNombresDeDispositivoDocumentadosSonAnomalias;
   end;
 
   { LA clave de una carpeta (Lsp.Casa.ClaveDeCarpeta): la misma carpeta
@@ -1449,6 +1451,22 @@ begin
   finally
     TDirectory.Delete(Base, True);
   end;
+end;
+
+procedure TBarridoDeUnidadesTests.LosNombresDeDispositivoDocumentadosSonAnomalias;
+begin
+  // V131 de la 1.24: los que faltaban en la lista, con y sin extension, en
+  // cualquier punto del camino y sin distinguir mayusculas
+  for var N in TArray<string>.Create('COM0', 'LPT0', 'COM'#$00B9, 'COM'#$00B2, 'COM'#$00B3,
+    'LPT'#$00B9, 'LPT'#$00B2, 'LPT'#$00B3, 'CONIN$', 'CONOUT$', 'com0', 'conin$') do
+  begin
+    Assert.IsNotEmpty(PathAnomaly('C:\carpeta\' + N), N);
+    Assert.IsNotEmpty(PathAnomaly('C:\carpeta\' + N + '.pas'), N + '.pas');
+    Assert.IsNotEmpty(PathAnomaly('C:\carpeta\' + N + '\unidad.pas'), N + ' como carpeta');
+  end;
+  // control: lo que solo se les parece sigue siendo un nombre
+  for var N in TArray<string>.Create('COM10', 'LPT10', 'COMA', 'CONIN', 'CONOUT', 'COM'#$00B4, 'COM'#$2074) do
+    Assert.AreEqual('', PathAnomaly('C:\carpeta\' + N + '.pas'), N);
 end;
 
 initialization

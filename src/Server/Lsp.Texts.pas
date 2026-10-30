@@ -8517,7 +8517,8 @@ const
   { Un nombre reservado de Windows en la ruta (decima revision). }
   SR_GUARD_NOMBRE_RESERVADO_FMT =
     '[GUARD-027 INVALID_PARAM] "%s" is a name Windows reserves for a device ' +
-    '(CON, PRN, AUX, NUL, COM1-9, LPT1-9), with or without an extension: ' +
+    '(CON, PRN, AUX, NUL, CONIN$, CONOUT$, COM0-9, LPT0-9, COM or LPT with a ' +
+    'superscript 1-3), with or without an extension: ' +
     'in %s. Choose another name.';
 
   // Mensajes que estaban en linea en Lsp.Patch.pas (paso 3c, 27-sep-2026)
