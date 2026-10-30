@@ -31,6 +31,8 @@ type
     Estilo: string;      // --style <fichero> | <plataforma> | none | '' (lo que traiga el fichero)
     Componente: string;  // --component <Nombre>: RECT= de ese componente
     Bds: string;         // --bds 37.0
+    BdsComun: string;    // --commondir: el $(BDSCOMMONDIR) del IDE, el que mide el servidor
+    Desactivados: TArray<string>; // --disabled x.bpl (repetible): los que el IDE tiene desactivados, los dice el servidor
     Paquetes: string;    // --packages auto | none | all
     Fidelidad: string;   // --fidelity auto | window | print (VCL)
     Raiz: string;        // --root auto | form | frame
@@ -485,6 +487,8 @@ begin
       else if P = '--style' then GPeticion.Estilo := Valor
       else if P = '--component' then GPeticion.Componente := Valor
       else if P = '--bds' then GPeticion.Bds := Valor
+      else if P = '--commondir' then GPeticion.BdsComun := Valor
+      else if P = '--disabled' then GPeticion.Desactivados := GPeticion.Desactivados + [Valor]
       else if P = '--packages' then GPeticion.Paquetes := Entre(Valor, ['auto', 'none', 'all'])
       else if P = '--fidelity' then GPeticion.Fidelidad := Entre(Valor, ['auto', 'window', 'print'])
       else if P = '--root' then GPeticion.Raiz := Entre(Valor, ['auto', 'form', 'frame'])
@@ -966,10 +970,24 @@ end;
 
 function ExpandeMacros(const S, ARoot: string): string;
 begin
-  Result := StringReplace(S, '$(BDSCOMMONDIR)',
-    TPath.Combine(TPath.GetSharedDocumentsPath, 'Embarcadero\Studio\' + GPeticion.Bds), [rfReplaceAll, rfIgnoreCase]);
+  Result := S;
+  // sin valor la macro se queda y el paquete sale como que falta: vacia daria
+  // \Bpl\x.bpl, la raiz de la unidad actual
+  if GPeticion.BdsComun <> '' then
+    Result := StringReplace(Result, '$(BDSCOMMONDIR)', GPeticion.BdsComun, [rfReplaceAll, rfIgnoreCase]);
   Result := StringReplace(Result, '$(BDSBIN)', ARoot + 'bin', [rfReplaceAll, rfIgnoreCase]);
   Result := StringReplace(Result, '$(BDS)', ExcludeTrailingPathDelimiter(ARoot), [rfReplaceAll, rfIgnoreCase]);
+end;
+
+{ Desactivado en el IDE (V124 de la 1.24): por el nombre del fichero, como
+  BplFile en el servidor: el registro no escribe igual la misma ruta
+  ($(BDSBIN)\x.bpl en una clave, $(BDS)\bin\x.bpl en otra; medido) }
+function EstaDesactivado(const ANombre: string): Boolean;
+begin
+  Result := False;
+  for var D in GPeticion.Desactivados do
+    if SameText(TPath.GetFileName(ANombre), D) then
+      Exit(True);
 end;
 
 procedure LeeConocidos(const ABds: string);
@@ -992,7 +1010,8 @@ begin
       Reg.CloseKey;
     end;
     for var N in Nombres do
-      GConocidos.Add(ExpandeMacros(N, Root));
+      if not EstaDesactivado(N) then
+        GConocidos.Add(ExpandeMacros(N, Root));
   finally
     Reg.Free;
     Nombres.Free;

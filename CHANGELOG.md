@@ -8,6 +8,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- **A package disabled in the IDE is no longer loaded to draw or judge a form.**
+  `delphi_designer` preview, lint and the check of what the IDE would save loaded
+  every package in the IDE's Known Packages, without looking at Disabled Packages:
+  a class of a disabled package was drawn as if it were available, and a package
+  disabled because it misbehaves still ran. Now the server tells
+  the renderers which packages are disabled, so such a class comes out substituted
+  and `packages` counts only the enabled ones (`DSGN-068` says it may be disabled).
+  They also take `$(BDSCOMMONDIR)` from the server's reader of `rsvars.bat` instead
+  of composing it by hand.
+
 ## [1.23.1] - 2026-10-30
 
 A patch with the holes that a review of the whole source measured in the

@@ -322,6 +322,11 @@ type
   machine, 3 disabled. }
 function IdeKnownPackages(const AVersion: string): TArray<TIdePackage>;
 
+{ Los .bpl (solo el nombre, como BplFile) que el IDE de 32 bits tiene
+  desactivados: los de SU lista, sin la x64 que IdeKnownPackages junta para
+  listar. Lo que no debe cargar quien hace de ese IDE (el renderizador). }
+function IdeBplsDesactivados32(const AVersion: string): TArray<string>;
+
 type
   TValorIde = record
     Nombre: string;   // el nombre del valor
@@ -996,6 +1001,13 @@ begin
     Off.Free;
     Map.Free;
   end;
+end;
+
+function IdeBplsDesactivados32(const AVersion: string): TArray<string>;
+begin
+  Result := nil;
+  for var V in IdeValoresDeClave(AVersion, 'Disabled Packages', False) do
+    Result := Result + [TPath.GetFileName(ConBarrasDeWindows(V.Nombre))];
 end;
 
 function IdeValoresDeClave(const AVersion, ASubKey: string;

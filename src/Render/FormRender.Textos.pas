@@ -148,10 +148,11 @@ const
     '%s --path <dfm|fmx> --out <png> [--state Component.Property=Value]* ' +
     '[--component Name] [--style <file|platform|none>] [--nonvisual on|off (off)] ' +
     '[--packages auto|none|all] [--root auto|form|frame] ' +
-    '[--fidelity auto|window|print] [--bds 37.0] [--timeout ms] [--verbose] | ' +
+    '[--fidelity auto|window|print] [--bds 37.0] [--commondir <dir>] [--disabled x.bpl]* ' +
+    '[--timeout ms] [--verbose] | ' +
     '%s --path <dfm|fmx> --writeback on [--folder <dir of the real form>] ' +
     '[--component Name] [--dropped Name] ' +
-    '[--packages ...] [--root ...] [--bds] [--timeout ms] | ' +
+    '[--packages ...] [--root ...] [--bds] [--commondir] [--disabled]* [--timeout ms] | ' +
     '%s --path <dfm|fmx> --convert text|binary --out <file> [--timeout ms]';
 
 function MsgText(const AMsg: string): string;

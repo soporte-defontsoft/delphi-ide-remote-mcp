@@ -360,6 +360,8 @@ begin
   P.Estilo := 'android';
   P.NoVisuales := True;
   P.Bds := '37.0';
+  P.BdsComun := 'C:\Comun\37.0';
+  P.Desactivados := ['Un paquete.bpl', 'otro.bpl'];
   Assert.AreEqual('', ComponeOrdenDeRender('C:\s\DelphiFormRenderVcl.exe', P, O));
   Assert.IsTrue(O.StartsWith('"C:\s\DelphiFormRenderVcl.exe" '), O);
   Assert.IsTrue(O.Contains(' --path "C:\w\Form 1.dfm"'), 'un valor con espacios va entero: ' + O);
@@ -370,6 +372,9 @@ begin
   Assert.IsTrue(O.Contains(' --style "android"'), O);
   Assert.IsTrue(O.Contains(' --nonvisual on'), O);
   Assert.IsTrue(O.Contains(' --bds "37.0"'), O);
+  Assert.IsTrue(O.Contains(' --commondir "C:\Comun\37.0"'), O);
+  Assert.IsTrue(O.Contains(' --disabled "Un paquete.bpl"'), 'un valor con espacios va entero: ' + O);
+  Assert.IsTrue(O.Contains(' --disabled "otro.bpl"'), 'un --disabled por paquete: ' + O);
   Assert.IsTrue(O.Contains(' --timeout '), 'el vigia del ayudante va siempre: ' + O);
 end;
 
@@ -384,11 +389,14 @@ begin
   P.Path := 'C:\w\F.dfm';
   P.Salida := 'C:\w\o.png';
   P.Estados := [''];
+  P.Desactivados := [''];
   Assert.AreEqual('', ComponeOrdenDeRender('C:\s\r.exe', P, O));
   Assert.IsFalse(O.Contains('--component'), O);
   Assert.IsFalse(O.Contains('--style'), O);
   Assert.IsFalse(O.Contains('--state'), O);
   Assert.IsFalse(O.Contains('--bds'), O);
+  Assert.IsFalse(O.Contains('--commondir'), O);
+  Assert.IsFalse(O.Contains('--disabled'), O);
   Assert.IsFalse(O.Contains('""'), 'ningun valor vacio: ' + O);
   Assert.IsTrue(O.Contains(' --nonvisual off'), 'apagado por defecto: ' + O);
 end;
@@ -408,6 +416,10 @@ begin
   Assert.IsTrue(EsMsg(R, SR_DESIGNER_VALOR_CON_COMILLAS_FMT), R);
   Assert.AreEqual('', O, 'sin orden: nada que lanzar');
   P.Estados := [];
+  P.Desactivados := ['x.bpl" --out "C:\fuera\x.png'];
+  Assert.IsTrue(EsMsg(ComponeOrdenDeRender('C:\s\r.exe', P, O), SR_DESIGNER_VALOR_CON_COMILLAS_FMT),
+    'lo que dice el registro se juzga igual');
+  P.Desactivados := [];
   P.Componente := 'Panel'#10'1';
   Assert.IsTrue(EsMsg(ComponeOrdenDeRender('C:\s\r.exe', P, O), SR_DESIGNER_VALOR_CON_COMILLAS_FMT),
     'un salto de linea tampoco viaja');

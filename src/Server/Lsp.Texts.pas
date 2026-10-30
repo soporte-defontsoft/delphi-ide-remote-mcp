@@ -5663,10 +5663,11 @@ const
     'for real: fidelity=window.';
 
   SN_DESIGNER_SUSTITUIDAS =
-    '[DSGN-068] substituted: classes no installed package registers, drawn ' +
+    '[DSGN-068] substituted: classes no enabled package registers, drawn ' +
     'as a pink box with the class name, at their place and size. If they ' +
     'should exist, the package that brings them is not installed in this ' +
-    'RAD Studio (delphi_components lists what is).';
+    'RAD Studio, or is disabled in its IDE (delphi_components lists what is ' +
+    'and marks the disabled).';
 
   SN_DESIGNER_NO_VISUALES_OCULTOS =
     '[DSGN-069] nonVisual: the non-visual components of the form, NOT ' +

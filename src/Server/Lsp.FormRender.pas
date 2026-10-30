@@ -41,6 +41,8 @@ type
     Estilo: string;            // fichero (ya por la puerta), plataforma, none o ''
     NoVisuales: Boolean;       // dibujar los no visuales
     Bds: string;               // la version del Delphi del servidor (37.0)
+    BdsComun: string;          // su $(BDSCOMMONDIR), de EL lector de rsvars.bat
+    Desactivados: TArray<string>; // los .bpl que el IDE tiene desactivados (no se cargan)
     Raiz: string;              // form | frame, por el lector de clases del servidor; '' = que mire el ayudante
     // el JUEZ de lo que guarda el IDE (3.11 de la 1.18.0): sin png, el form
     // cargado y escrito por TWriter (WRITTEN=); Carpeta, la del form de verdad
@@ -390,7 +392,8 @@ begin
   // un valor vacio no se pasa nunca: el lector de Delphi se salta un "" y
   // tomaria el interruptor siguiente como valor
   for var V in TArray<string>.Create(APeticion.Path, APeticion.Salida,
-    APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.Carpeta) + APeticion.Estados do
+    APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.BdsComun, APeticion.Carpeta) +
+    APeticion.Estados + APeticion.Desactivados do
     if not ValorDeArgumento(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V]));
   AOrden := '"' + AExe + '"' + Arg('--path', APeticion.Path);
@@ -411,6 +414,11 @@ begin
   AOrden := AOrden + ' --timeout ' + IntToStr(RENDER_TIEMPO_AYUDANTE_MS);
   if APeticion.Bds <> '' then
     AOrden := AOrden + Arg('--bds', APeticion.Bds);
+  if APeticion.BdsComun <> '' then
+    AOrden := AOrden + Arg('--commondir', APeticion.BdsComun);
+  for var D in APeticion.Desactivados do
+    if D <> '' then
+      AOrden := AOrden + Arg('--disabled', D);
   for var E in APeticion.Estados do
     if E <> '' then
       AOrden := AOrden + Arg('--state', E);
@@ -1115,6 +1123,8 @@ begin
     Result.Framework := (if EsDesignerFmx(APath) then 'fmx' else 'vcl');
   Result.Path := APath;
   Result.Bds := DiscoverRadStudio.Version;
+  Result.BdsComun := BdsCommonDir(DiscoverRadStudio);
+  Result.Desactivados := IdeBplsDesactivados32(Result.Bds);
   // form o frame lo dice EL lector de clases (RaizParaElRender): el ayudante
   // lo adivinaba con su regex. Sin .pas legible, o sin saberlo, que mire el
   var Pas := UnidadDeDesigner(APath);
