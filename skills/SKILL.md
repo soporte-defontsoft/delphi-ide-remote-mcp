@@ -222,8 +222,12 @@ handshake.
   changes too; to undo only one, read its lines in that copy and put them
   back with `delphi_textedit`.
 - Before and after touching a `.fmx`: `delphi_styles command=lint
-  path=<Styles folder> project=<.dproj>` - a `StyleLookup` that no style
-  defines renders with the default look and nobody tells you.
+  path=<Styles folder> project=<.dproj>` judges each `StyleLookup` against
+  your styles. `delphi_designer lint`, `set` and an edit of the form judge it
+  against the platform's default style only (`DSGN-175`, a note): FMX draws a
+  lookup with no style with the default look. A form or frame whose styles may
+  come from a StyleBook that cannot be read is not judged
+  (`formsWithAStyleBook`, `STYLE-057`).
 - After editing styles: `command=build path=<Styles folder>` (text ->
   `.bin.style` -> `.res`), then `delphi_build target=Build`: the app embeds
   the binary form; the text form loads but does not resolve `StyleLookup`.
@@ -245,7 +249,9 @@ handshake.
   profile (the call's `profile`, else the project's `set-profile`), which
   has to be in `RemoteHosts`; to RUN it there use
   `delphi_paserver command=remote-run profile=<profile> project=<the .dproj>
-  args=... timeoutms=...`. It returns `exitCode` and the program's output.
+  args=... timeoutms=...`. It returns `exitCode` and the program's output (a
+  long one as its last 400 lines, at most 64K characters, with
+  `outputTruncated` and `RUN-023`).
   You never give a remote path: the server runs what THAT project deployed
   and nothing else on that machine (a script in the same folder is refused
   too - only native binaries).
@@ -336,7 +342,9 @@ in frame. Do the gesture you came for and nothing else.
   `view` lists the project's `units`.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess. `target=Deploy` on Android builds the
-  full `.apk` (the server generates the deployment manifest if missing).
+  full `.apk`, or the `.aab` for a store build of Android64
+  (`BT_BuildType=AppStore`; `BUILD-064`: it does not install on a device). The
+  server generates the deployment manifest if missing.
   It is compile-only and its gate is a whitelist: an element a build does
   not understand, a task, free compiler options or a foreign `<Import>`
   is refused by name (`BUILD-017`), and what the build reads through the
@@ -438,7 +446,8 @@ Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
 
 - Devices are allowlisted PER WORKSPACE (`AdbAllowedDevices`; absent =
   none): always name your `device=` explicitly.
-- `logcat`: default 300 lines, inline answers carry the newest 400.
+- `logcat`: default 300 lines, inline answers carry the newest 400, at most
+  64K characters.
   For the full dump pass `out=srvd:\...\dump.txt`, then read it in
   ranges or download it. Validate app behaviour by logging from your app
   and filtering on your own tag: `filter=MyTag`.
@@ -466,7 +475,8 @@ server was updated after you connected: reconnect the MCP session (or
 restart your client) and fetch the tools again. `initialize` tells you
 the server version. A NEW optional parameter your cached schema does not
 list (e.g. `fragment`) still travels if you send it; the contract you can
-trust is `delphi_help command=tool name=<tool>`. A 404 on your session id
+trust is `delphi_help command=tool name=<tool>` (`HELP-010`: that tool exists,
+but not for this session). A 404 on your session id
 also happens when the session expired by inactivity (`[Server]
 SessionTimeoutMinutes`, default 720): re-initialize, it is not a failure.
 

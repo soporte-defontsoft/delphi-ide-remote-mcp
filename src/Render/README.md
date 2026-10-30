@@ -39,7 +39,7 @@ one Delphi version (the `370` BPLs), like the server since 1.14.0.
   the palette does not know** (`--packages auto`). Installing a package in
   the IDE is all it takes for the renderer to see it.
 
-## Command line (one switch per `preview` parameter)
+## Command line
 
 The server composes it in ONE place, `Lsp.FormRender.ComponeOrdenDeRender`
 (and `ParseaArgumentos` here is its inverse; `tests/test_paisaje.py` keeps
@@ -68,7 +68,12 @@ DelphiFormRenderFmx --path <fmx> --out <png> [--state ...]* [--component Name]
   writer (TWriter), each line as `WRITTEN=`. `--folder` is the folder of the
   real form when `--path` is a proposal written elsewhere: its siblings
   (frames, ancestors) and its `.pas` are read from there.
-  `delphi_designer set before=/after=/index=` asks it before writing.
+  `delphi_designer` `insert` and `set` ask it before writing; `--dropped` names
+  the control just dropped, which gets what the designer gives it (alignment,
+  tab order).
+- `--convert text|binary`: no load and no paint: the bytes of `--path` converted
+  into `--out`, with the IDE's own conversion. `delphi_designer to-text`/`to-binary`
+  and every reading of a binary `.dfm` use it.
 - `--component`: the renderer answers `RECT=<name>=l,t,w,h` in PNG pixels;
   the server crops with its own cropper (`Lsp.Imagen.RecortaPng`).
 - `--nonvisual on` (like the designer's "Show non-visual components"):

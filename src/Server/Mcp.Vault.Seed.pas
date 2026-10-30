@@ -107,8 +107,9 @@ const
     '    measured, with dates.' + #10 + #10 +
     '## Never' + #10 + #10 +
     '11. Do not reorganize folders or move existing notes without a human OK.' + #10 +
-    '12. Do not touch the governance files (this one, [[MEMORY]] and' + #10 +
-    '    [[AGENTS-VAULT-WRITE]]) - the server refuses anyway.' + #10 +
+    '12. Do not touch the governance files (this one, [[MEMORY]],' + #10 +
+    '    [[AGENTS-VAULT-WRITE]] and VAULT-INSTRUCTIONS.md) - the server refuses' + #10 +
+    '    anyway.' + #10 +
     '13. Do not record secrets: tokens, passwords, keys or personal data.' + #10;
 
   T_INDEX =

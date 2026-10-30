@@ -1055,8 +1055,8 @@ credential).
 - Paths are **relative to the vault** (`projects/x/context.md`), `.md` only. The
   vault is a separate jail from the workspace roots.
 - Before modifying any note the server copies the original to
-  `backups/mcp/<timestamp>/`. The governance files (`AGENTS-VAULT.md`,
-  `AGENTS-VAULT-WRITE.md`, `MEMORY.md`) are never writable.
+  `backups/mcp/<timestamp>/`. The governance files (`VAULT-INSTRUCTIONS.md`,
+  `AGENTS-VAULT.md`, `AGENTS-VAULT-WRITE.md`, `MEMORY.md`) are never writable.
 
 Full explanation: [VAULT.md](VAULT.md).
 

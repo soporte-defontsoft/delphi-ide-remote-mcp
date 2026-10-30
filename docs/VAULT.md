@@ -82,12 +82,14 @@ On top of that:
   `backups/mcp/<timestamp>/<relative-path>` inside the vault. No parameter
   disables it. The first copy in a run is the one kept, so what is preserved is
   always the state before the session touched it.
-- **Governance files are read-only**, always: `AGENTS-VAULT.md`,
-  `AGENTS-VAULT-WRITE.md` and `MEMORY.md`. The rules and the index are curated
-  by a human. An agent that needs a new note indexed says so in its answer.
-- **Strict jail**: relative paths only, no drives, no `..`, `.md` only, and
-  `backups/`, `.git/`, `.obsidian/`, `.claude/`, `.trash/` and `*.bak*` are
-  excluded from both reads and searches.
+- **Governance files are read-only**, always: `VAULT-INSTRUCTIONS.md`,
+  `AGENTS-VAULT.md`, `AGENTS-VAULT-WRITE.md` and `MEMORY.md`. The rules, the
+  index and the instructions are curated by a human. An agent that needs a new
+  note indexed says so in its answer.
+- **Strict jail**: relative paths only, no drives, no `..`, `.md` only. Not
+  served, neither read nor searched: the server's copies in the `backups` folder
+  at the vault's root; `.git`, `.obsidian`, `.claude` and `.trash` at any depth;
+  and a `.bak` copy by its name (`notes.bak.md`, `progress.md.bak-20260605`).
 - **UTF-8 in, UTF-8 without BOM out.** A note is read with the same encoding
   detector as the sources, and one whose bytes do not come back the same is
   read (its bad bytes as U+FFFD) but never written back by `vault_append` or

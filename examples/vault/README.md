@@ -47,8 +47,8 @@ Do not try to fill this in up front. The rule that works: **whenever you find
 yourself explaining the same thing to an agent for the second time, that is a
 note.** Write it, index it in `MEMORY.md`, move on.
 
-The three governance files (`AGENTS-VAULT.md`, `AGENTS-VAULT-WRITE.md`,
-`MEMORY.md`) are never writable by an agent — the server refuses. You curate
+The four governance files (`VAULT-INSTRUCTIONS.md`, `AGENTS-VAULT.md`,
+`AGENTS-VAULT-WRITE.md`, `MEMORY.md`) are never writable by an agent — the server refuses. You curate
 those; the agent fills in the rest.
 
 Full explanation of how the vault works: [../../docs/VAULT.md](../../docs/VAULT.md).

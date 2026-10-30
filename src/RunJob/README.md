@@ -4,8 +4,8 @@
 execution — `delphi_paserver remote-run` and every `delphi_desktop` gesture —
 and that PAServer starts on the target machine. One source, two builds:
 `McpRunJob` (Linux64, ELF) and `McpRunJob.exe` (Win64), both shipped in
-[`node/`](../../node) next to the desktop nodes. `BuildGroup.bat Release`
-compiles and copies both.
+[`node/`](../../node) next to the desktop nodes. `BuildGroup.bat quiet build
+Release` compiles and copies both.
 
 ## Why it exists
 

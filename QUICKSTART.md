@@ -17,7 +17,8 @@ certutil -hashfile DelphiLspMcp-*.zip SHA256
 
 Inside: `DelphiLspMcp.exe` (the server), `DelphiStyleConvert.exe` (its style
 companion), `DelphiFormRenderVcl.exe` and `DelphiFormRenderFmx.exe` (the form
-renderers of `delphi_designer preview`), `settings.example.ini`, `node\` (the
+renderers of `delphi_designer preview`; the VCL one also converts binary `.dfm`
+files, which are not read without it), `settings.example.ini`, `node\` (the
 desktop node and the launcher, used later for Linux targets) and `docs\`. Keep
 the helpers next to the exe.
 

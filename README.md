@@ -65,7 +65,7 @@ The table below says which engine each one uses and why it matters:
 | **Registry / IDE configuration** | `delphi_installs`, `delphi_config`, `delphi_paserver` | Which RAD Studio versions exist, project platforms and output paths, remote-target profiles and SDKs. |
 | **The IDE's own `adb`** (found via the SDK Manager's `.sdk` files) | `delphi_adb` | The Android devices hanging off the server — discover, attach, install, run, screenshot, tap, logcat — with the exact adb the IDE itself uses. |
 | **The desktop of a PAServer target** - Linux, Windows, or this server itself (a small Delphi node this server deploys there) | `delphi_desktop` | Bring the whole desktop here as a PNG, measure the pixel, press it, type into it. Nothing installed on the target beyond the node itself; the machine is the `profile` parameter. |
-| **Its own `.style` parser and `DelphiStyleConvert.exe`** | `delphi_styles` | **FMX styles by StyleName**: `view`/`get` a text `.style`, `set` one property of a style or of a part, `clone` a variant, `delete` one, `lint` (duplicated StyleNames, `StyleLookup` values of the project's `.fmx`/`.pas` that no style defines, design tokens missing in a theme, `.rc` entries without file, what FMX ignores when it loads them and what it cannot load at all) and `build` (text `.style` → `.bin.style` the app embeds, `.rc` → `.res`). Ships `DelphiStyleConvert.exe` next to the server |
+| **Its own `.style` parser and `DelphiStyleConvert.exe`** | `delphi_styles` | **FMX styles by StyleName**: `view`/`get` a text `.style`, `set` one property of a style or of a part, `clone` a variant, `delete` one, `lint` (duplicated StyleNames, `StyleLookup` values of the project's `.fmx`/`.pas` that no style defines (a form or frame whose StyleBook cannot be read goes apart: `formsWithAStyleBook`), colors with fewer than 8 hex digits, design tokens missing in a theme, `.rc` entries without file, what FMX ignores when it loads them and what it cannot load at all) and `build` (text `.style` → `.bin.style` the app embeds, `.rc` → `.res`). Ships `DelphiStyleConvert.exe` next to the server |
 | **The IDE's registry** (Known Packages — what the palette loads) | `delphi_components` | The design packages installed in the server's RAD Studio, whatever the install channel — what the agent has available to program with. List only; installing stays a human decision. |
 | **The RAD Studio help** (the `.chm` files the IDE registers - the ones F1 opens - read in place with Windows' own help storage) | `delphi_docs` | The documentation of the Delphi installed here, as a wiki the agent pages through: `search` gives a short list (id + title, the best first; `framework=vcl\|fmx` for a class both have), `read` gives one page as text in chunks. It asks for no switch, in any workspace: it opens only the help files the IDE itself registers. For an exact signature the installed sources win (`delphi_hover`, `delphi_definition`). |
 | **Your Markdown vault** | `vault_read`, `vault_search`, `vault_append`, `vault_create`, `vault_patch` | Persistent memory, isolated from the code tools (see below). |
@@ -102,7 +102,8 @@ Two design choices worth knowing before you enable it:
   Nothing about your way of working is hardcoded here.
 - **What can be enforced by code is enforced by the server**, not left to the
   model to remember: the original of any note is backed up before it changes,
-  the rules and index files are never writable, and there is no rewrite, delete
+  the rules, the index, the write guide and the instructions the server sends
+  to every client are never writable, and there is no rewrite, delete
   or move — only append, create and anchored replace. A confused model cannot
   destroy accumulated knowledge.
 
@@ -207,7 +208,7 @@ remote allowlist and the host allowlist exist to gate. If you want it, it needs 
 switch and its own allowlist; it will not arrive by accident.
 
 > **Start here, whoever you are.** `delphi_help` is the map: `command=tasks` gives a
-> task→tool table, `command=tool name=<x>` explains one tool and every parameter it takes, and
+> task→tool table, `command=tool name=<x>` explains one tool and every parameter it takes (a tool this session cannot use answers `HELP-010`, with why), and
 > `command=conventions` is the house rules — how to read the `[AREA-NNN OUTCOME]` tag an answer
 > starts with, how the
 > recoverable trash works, how agents identify themselves and share a mailbox. An agent that
@@ -217,9 +218,9 @@ switch and its own allowlist; it will not arrive by accident.
 
 | Tool | What it does |
 |---|---|
-| [`delphi_help`](docs/TOOLS.md#delphi_help) | **The map** - the first call after `delphi_workspace`: a task -> tool table, one tool with every parameter it takes, and the house rules (how to read the `[AREA-NNN OUTCOME]` tag, the trash, identity, the mailbox) |
+| [`delphi_help`](docs/TOOLS.md#delphi_help) | **The map** - the first call after `delphi_workspace`: a task -> tool table, one tool with every parameter it takes (`HELP-010` if this session cannot use it), and the house rules (how to read the `[AREA-NNN OUTCOME]` tag, the trash, identity, the mailbox) |
 | [`delphi_docs`](docs/TOOLS.md#delphi_docs) | **The RAD Studio help** installed with Delphi - RTL, VCL, FMX, FireDAC, the language, the IDE, and the components that register one: `search`, then `read` a page in chunks |
-| [`delphi_symbols`](docs/TOOLS.md#delphi_symbols) | Symbol tree of a unit, each declaration as written in the source; a folder answers with the interface digest of every unit inside |
+| [`delphi_symbols`](docs/TOOLS.md#delphi_symbols) | Symbol tree of a unit, each declaration as written in the source; a folder answers with the interface digest of every unit inside, copies and build output left out |
 | [`delphi_definition`](docs/TOOLS.md#delphi_definition) | Compiler-grade go-to-definition, cross-unit, into RTL/VCL sources; `kind=declaration` for the interface half |
 | [`delphi_signature`](docs/TOOLS.md#delphi_signature) | Signature help for the call under the cursor - the IDE's Ctrl+Shift+Space |
 | [`delphi_hover`](docs/TOOLS.md#delphi_hover) | Type/signature of an identifier usage |
@@ -233,7 +234,7 @@ switch and its own allowlist; it will not arrive by accident.
 | [`delphi_rename_symbol`](docs/TOOLS.md#delphi_rename_symbol) | **Semantic rename**: every occurrence re-confirmed; anything unverified, a designer or string hit, an RTL symbol or a collision makes it not applicable, with the reasons; `mode=apply` writes all files or none |
 | [`delphi_textedit`](docs/TOOLS.md#delphi_textedit) | The same safe editing for **non-Delphi text files**: docs, tests, scripts, web assets, config |
 | [`delphi_create`](docs/TOOLS.md#delphi_create) | Scaffold projects (console/VCL/FMX, runtime packages, DUnitX test projects) and forms, frames, data modules and units - registered and buildable at birth |
-| [`delphi_build`](docs/TOOLS.md#delphi_build) | Real MSBuild with structured errors and the artifact it produced; it builds what the IDE would build, and `target=Deploy` ships to a PAServer target or assembles the Android `.apk` |
+| [`delphi_build`](docs/TOOLS.md#delphi_build) | Real MSBuild with structured errors and the artifact it produced; it builds what the IDE would build, and `target=Deploy` ships to a PAServer target or assembles the Android `.apk` (`.aab` for a store build) |
 | [`delphi_fetch`](docs/TOOLS.md#delphi_fetch) | Download files from the server: a `download` link (HTTP GET, same Bearer, SHA-256 header) for any size, base64 chunks for clients without a shell |
 | [`delphi_upload`](docs/TOOLS.md#delphi_upload) | The mirror of fetch: send files TO the server in chunks, SHA-256 verified |
 | [`delphi_search`](docs/TOOLS.md#delphi_search) | Recursive search, literal or a regular expression, each file decoded with its real encoding; hits grouped by folder and file |

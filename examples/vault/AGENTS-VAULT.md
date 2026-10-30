@@ -37,6 +37,7 @@ Read in full at the start of every session, together with the index
 ## Never
 
 11. Do not reorganize folders or move existing notes without a human OK.
-12. Do not touch the governance files ([[MEMORY]], this one, and
-    [[AGENTS-VAULT-WRITE]]) — the server refuses anyway.
+12. Do not touch the governance files ([[MEMORY]], this one,
+    [[AGENTS-VAULT-WRITE]] and VAULT-INSTRUCTIONS.md) — the server refuses
+    anyway.
 13. Do not record secrets: tokens, passwords, keys or personal data.

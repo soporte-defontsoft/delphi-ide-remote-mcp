@@ -496,7 +496,12 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   with `in` (`uses X in '...'`, `contains` in a package: `BUILD-061`), and the `{$I}`/`{$R}`
   directives of every source the build reads from the workspace - the project's folder, a
   unit reached by such an `in`, the workspace folders of its search and include paths
-  (`BUILD-028`). The project's **pre/post build events**
+  (`BUILD-028`). The fields of a deployment entry only take what a path takes, and in
+  `RemoteDir` and `RemoteName` no macro but `$(PROJECTNAME)` (`BUILD-066`), and a project
+  that goes to a PAServer target has a name of letters, digits, spaces and `_ - . ( ) +`
+  (`PAS-071`). A `resinator.exe` in the project's folder is refused too (`BUILD-065`): the
+  IDE's resource compiler would run it instead of its own. The server takes the current
+  folder out of the library search of everything it starts. The project's **pre/post build events**
   (signing, copies, EurekaLog) are not
   refused either: the build runs with them emptied and says so (`buildEventsSkipped`) -
   the binary is for working and testing in the agent's workspace; the final, signed one is
