@@ -10,6 +10,13 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A copy of a form next to the original no longer takes its place.** To draw or
+  judge a form, the renderers look for its ancestors and frames by root class among
+  the forms of the folder, and took the first one listed. With `UBase - copia.dfm`
+  next to `UBase.dfm` (what copying a form in Explorer leaves), `delphi_designer`
+  drew the copy while the program links `UBase`. Now the `uses` of the `.pas` that
+  names the class decides, by file name; when it does not, `RENDER-025` says which
+  one was read.
 - **A reparse point is a link only when its tag says so.** Any reparse point counted
   as a link, so a OneDrive placeholder or a deduplicated file was skipped when
   listing, walking or purging a folder, and a form's sibling held that way was not

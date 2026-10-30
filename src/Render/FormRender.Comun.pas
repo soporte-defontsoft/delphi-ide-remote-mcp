@@ -76,7 +76,7 @@ type
     FDesconocida: string;
     FFramePendiente: string;      // el fichero del frame inline que toca crear
     FClaseFrame: string;          // y la clase con la que lo escribe el fichero
-    FPorClase: TDictionary<string, string>; // clase raiz -> fichero, en la carpeta
+    FPorClase: TDictionary<string, TArray<string>>; // clase raiz -> sus ficheros, en la carpeta
     FNoCargan: TStringList;       // los de la carpeta que el lector del IDE no toma por texto (A28 de la 1.23)
     // lo creado con OTRA clase que la escrita (un sustituto, un frame inline):
     // la escrita, la que el agente conoce (ClaseEscrita)
@@ -99,7 +99,9 @@ type
     constructor Create;
     destructor Destroy; override;
     { El fichero de la carpeta cuya raiz es de la clase AClase ('' si no hay) }
-    function FicheroDeClase(const ACarpeta, AClase: string): string;
+    { El fichero de AClase en ACarpeta para quien la nombra (AQuienLaNombra, un
+      form; su .pas decide si hay varios). '' si no hay ninguno. }
+    function FicheroDeClase(const ACarpeta, AClase, AQuienLaNombra: string): string;
     { Lee AFichero (y antes sus ancestros, si su raiz es 'inherited') en AInstancia }
     procedure Lee(const AFichero: string; AInstancia: TComponent);
     { Solo ese fichero, sin ancestros }
@@ -345,7 +347,8 @@ uses
   Lsp.Pascal,        // EL lexico Pascal: que es codigo y que comentario
   Lsp.ShaCache,      // Sha256DeBytes: la huella de READ=, la misma con la que compara el servidor
   Lsp.Reparse,
-  Lsp.AtomosRtl;
+  Lsp.AtomosRtl,
+  System.StrUtils;
 
 type
   TComponentCrack = class(TComponent);
@@ -773,6 +776,17 @@ begin
     ALeidos.Add(Sha256DeBytes(ABytes) + '|' + AFichero);
 end;
 
+{ El texto de un .pas que decide lo que se carga, anotado en ALeidos: la huella
+  ANTES que el texto (que lo decodifica la RTL, sin imitarla): si cambia entre
+  las dos lecturas, la huella es la vieja y el servidor da DSGN-144 de mas; al
+  reves, aceptaria un juicio de un .pas que ya no esta. }
+function TextoDeUnidadAnotada(const APas: string; ALeidos: TStrings): string;
+begin
+  if ALeidos <> nil then
+    AnotaLeido(ALeidos, APas, TFile.ReadAllBytes(APas));
+  Result := TFile.ReadAllText(APas);
+end;
+
 function Cabecera(const AFichero: string): TCabecera;
 var
   Bytes: TBytes;
@@ -832,18 +846,13 @@ begin
   Pas := UnidadDeDesigner(RutaQueRepresenta(AFichero));
   if not TFile.Exists(Pas) or EsEnlace(Pas) then
     Exit;
-  // la huella ANTES que el texto (que lo decodifica la RTL, sin imitarla):
-  // si cambia entre las dos lecturas, la huella es la vieja y el servidor da
-  // DSGN-144 de mas; al reves, aceptaria un juicio de un .pas que ya no esta
-  if ALeidos <> nil then
-    AnotaLeido(ALeidos, Pas, TFile.ReadAllBytes(Pas));
   // 'TX = class(TY)', tambien 'class abstract(...)' y con la unidad delante
   // (Unidad.TY); el nombre por lo que lo rodea, no por \w (ASCII). El lector
   // de clases del servidor (Lsp.PascalDecl) no se enlaza aqui; la raiz, form
   // o frame, ya la manda el servidor con --root (revision de la 1.17.0). Sobre
   // el CODIGO solo (CodigoPascal): una declaracion vieja comentada encima de
   // la buena se tomaba por ella (segunda revision de la 1.17.0)
-  M := TRegEx.Match(CodigoPascal(TFile.ReadAllText(Pas)), '\b' + TRegEx.Escape(AClase) +
+  M := TRegEx.Match(CodigoPascal(TextoDeUnidadAnotada(Pas, ALeidos)), '\b' + TRegEx.Escape(AClase) +
     '\s*=\s*class(?:\s+(?:abstract|sealed))?\s*\(\s*([^\s,)]+)', [roIgnoreCase]);
   if M.Success then
     Result := M.Groups[1].Value.Substring(M.Groups[1].Value.LastIndexOf('.') + 1);
@@ -869,12 +878,9 @@ begin
   Pas := UnidadDeDesigner(Maestro);
   if not TFile.Exists(Maestro) or EsEnlace(Maestro) or not TFile.Exists(Pas) or EsEnlace(Pas) then
     Exit;
-  // la huella ANTES que el texto, como AncestroDeClase
-  if ALeidos <> nil then
-    AnotaLeido(ALeidos, Pas, TFile.ReadAllBytes(Pas));
   // EL juez de "es una vista", el mismo del servidor (Lsp.DesignerForma.
   // VistasDeUnidad, V122 de la 1.23.1)
-  for var V in VistasDeUnidad(Pas, TFile.ReadAllText(Pas)) do
+  for var V in VistasDeUnidad(Pas, TextoDeUnidadAnotada(Pas, ALeidos)) do
     if SameText(ExtractFileName(V), ExtractFileName(Representa)) then
       Exit(Maestro);
 end;
@@ -1476,7 +1482,7 @@ begin
   FNoAplicados := TStringList.Create;
   FNoAplicados.Sorted := True;
   FNoAplicados.Duplicates := dupIgnore;
-  FPorClase := TDictionary<string, string>.Create;
+  FPorClase := TDictionary<string, TArray<string>>.Create;
   FNoCargan := TStringList.Create;
   FEscritas := TDictionary<TComponent, string>.Create;
 end;
@@ -1513,18 +1519,62 @@ begin
     var C := Cabecera(F);
     if C.NoLaCargaElIde then
       FNoCargan.Add(ExtractFileName(F))
-    else if (C.Clase <> '') and not FPorClase.ContainsKey(ClaveDeIdentificador(C.Clase)) then
-      FPorClase.Add(ClaveDeIdentificador(C.Clase), F);
+    else if C.Clase <> '' then
+    begin
+      var Ficheros: TArray<string>;
+      if not FPorClase.TryGetValue(ClaveDeIdentificador(C.Clase), Ficheros) then
+        Ficheros := nil;
+      FPorClase.AddOrSetValue(ClaveDeIdentificador(C.Clase), Ficheros + [F]);
+    end;
   except
     // un fichero que no se deja leer no es de este renderizador
   end;
 end;
 
-function TCargador.FicheroDeClase(const ACarpeta, AClase: string): string;
+{ Las unidades de los uses de un fuente, por su clave. El servidor tiene sus
+  lectores (Lsp.PascalDecl), que no se enlazan aqui; sobre el CODIGO solo. }
+function UnidadesEnUses(const AFuente: string): TArray<string>;
+begin
+  Result := nil;
+  for var M in TRegEx.Matches(CodigoPascal(AFuente), '\buses\b([^;]*);', [roIgnoreCase]) do
+    for var E in M.Groups[1].Value.Split([',']) do
+    begin
+      var Trozos := E.Trim.Split([' ', #9, #13, #10], TStringSplitOptions.ExcludeEmpty);
+      if Length(Trozos) > 0 then
+        Result := Result + [ClaveDeIdentificador(Trozos[0])];
+    end;
+end;
+
+function TCargador.FicheroDeClase(const ACarpeta, AClase, AQuienLaNombra: string): string;
+var
+  Candidatos: TArray<string>;
+  Pas: string;
 begin
   IndexaCarpeta(ACarpeta);
-  if not FPorClase.TryGetValue(ClaveDeIdentificador(AClase), Result) then
-    Result := '';
+  if not FPorClase.TryGetValue(ClaveDeIdentificador(AClase), Candidatos) then
+    Exit('');
+  Result := Candidatos[0];
+  if Length(Candidatos) = 1 then
+    Exit;
+  // varios con esa raiz, la copia que deja el Explorador ("UBase - copia.dfm",
+  // con la misma clase): el primero listado era la copia y se dibujaba ella (V120
+  // de la 1.24, medido: el exe enlaza UBase). Lo dice el uses del que la nombra,
+  // por el NOMBRE del fichero: la copia sigue diciendo "unit UBase;" y dcc la
+  // busca por el suyo. Sin .pas, o sin nombrarla, no decide y se avisa
+  Pas := UnidadDeDesigner(RutaQueRepresenta(AQuienLaNombra));
+  if TFile.Exists(Pas) and not EsEnlace(Pas) then
+  begin
+    var Usadas := UnidadesEnUses(TextoDeUnidadAnotada(Pas, FLeidos));
+    for var F in Candidatos do
+      if IndexStr(ClaveDeIdentificador(TPath.GetFileNameWithoutExtension(F)), Usadas) >= 0 then
+        Exit(F);
+  end;
+  var Nombres: TArray<string> := nil;
+  for var F in Candidatos do
+    Nombres := Nombres + [ExtractFileName(F)];
+  var Aviso := MsgFmt(SN_RENDER_CLASE_EN_VARIOS_FMT, [AClase, string.Join(', ', Nombres), ExtractFileName(Result)]);
+  if FAvisos.IndexOf(Aviso) < 0 then
+    FAvisos.Add(Aviso);
 end;
 
 procedure TCargador.FindComponentClass(Reader: TReader; const ClassName: string;
@@ -1533,7 +1583,7 @@ begin
   if ComponentClass <> nil then
     Exit;
   // un frame inline (o una form metida en otra): su fichero esta en la carpeta
-  FFramePendiente := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(GPeticion.Path)), ClassName);
+  FFramePendiente := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(GPeticion.Path)), ClassName, GPeticion.Path);
   if FFramePendiente <> '' then
   begin
     FClaseFrame := ClassName;
@@ -1910,7 +1960,7 @@ begin
         FSinLeer.Add(ExtractFileName(Fichero));
         Break;
       end;
-      Fichero := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(AFichero)), Ancestro);
+      Fichero := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(AFichero)), Ancestro, Fichero);
       if Fichero = '' then
       begin
         if not DelMarco(Ancestro) then

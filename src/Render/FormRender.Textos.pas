@@ -49,6 +49,13 @@ const
     '[RENDER-010] The ancestor %s has no form file in the folder: read ' +
     'without it.';
 
+  // dos forms de la carpeta con la misma clase raiz (la copia que deja el
+  // Explorador) y el uses del .pas no decide (V120 de la 1.24). %s = la clase,
+  // %s = los ficheros, %s = el que se leyo
+  SN_RENDER_CLASE_EN_VARIOS_FMT =
+    '[RENDER-025] The class %s is the root of several forms of the folder (%s) ' +
+    'and the uses of the .pas that names it does not say which: read %s.';
+
   // ...y si en la carpeta hay forms que el lector del IDE no toma por texto
   // (TestStreamFormat: un UTF-16 o un UTF-32, que el editor del IDE deja
   // guardar y su disenador no reabre; A28 de la 1.23), el ancestro puede ser

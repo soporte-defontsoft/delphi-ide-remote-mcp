@@ -1044,9 +1044,10 @@ REGLAS = [
       ('Lsp.Guard.pas', 'ReclamaCaptura'),
       # programas que NO son el servidor: los renderizadores y el conversor leen lo que
       # el servidor ya paso por su puerta; el nodo y el lanzador corren en el destino
-      ('FormRender.Comun.pas', 'Cabecera'), ('FormRender.Comun.pas', 'AncestroDeClase'),
-      # (la gemela de AncestroDeClase para una vista FMX: el .pas del maestro, 18-oct-2026)
-      ('FormRender.Comun.pas', 'MaestroDeVista'),
+      ('FormRender.Comun.pas', 'Cabecera'),
+      # (el .pas que decide lo que se carga, anotado: era de AncestroDeClase y de
+      # MaestroDeVista, su gemela para una vista FMX; V120 de la 1.24)
+      ('FormRender.Comun.pas', 'TextoDeUnidadAnotada'),
       ('FormRender.Comun.pas', 'TCargador.LeeUno'), ('FormRender.Fmx.pas', 'AplicaEstilo'),
       ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Entrada'),
       # (la copia que el servidor le da a convertir en su temporal, V71)
