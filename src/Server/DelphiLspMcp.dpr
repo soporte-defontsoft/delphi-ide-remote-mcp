@@ -149,7 +149,8 @@ uses
   Lsp.Mascara in 'Lsp.Mascara.pas',
   Lsp.Png in 'Lsp.Png.pas',
   Lsp.Herencia in 'Lsp.Herencia.pas',
-  Lsp.AtomosRtl in 'Lsp.AtomosRtl.pas';
+  Lsp.AtomosRtl in 'Lsp.AtomosRtl.pas',
+  Lsp.Reparse in 'Lsp.Reparse.pas';
 
 {$R *.res}
 

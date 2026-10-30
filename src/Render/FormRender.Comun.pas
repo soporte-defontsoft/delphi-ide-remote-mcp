@@ -216,12 +216,11 @@ function RespondeFallo(E: Exception; ACargador: TCargador; ACargando, AYaLeido: 
 { csDesigning en un componente recien creado (y en lo que se le inserte) }
 procedure PonEnDiseno(AComp: TComponent);
 function Cabecera(const AFichero: string): TCabecera;
-{ Un ENLACE (symlink, punto de reparse): no se lee. El servidor paso por su
+{ Un ENLACE (Lsp.Reparse: no lo es un marcador de OneDrive): no se lee. El servidor paso por su
   puerta el fichero PEDIDO, por su ruta real; los hermanos que este ayudante
   lee por su cuenta (los .dfm/.fmx de la carpeta, para frames y ancestros, y
   el .pas) no, y uno enlazado sacaria al PNG algo de fuera de las raices
-  (revision de Fable, 7-oct-2026). El mismo criterio que Lsp.Guard.EsEnlace:
-  el ayudante no enlaza el guard del servidor. }
+  (revision de Fable, 7-oct-2026). }
 function EsEnlace(const AFichero: string): Boolean;
 { 'TX = class(TY' en el .pas hermano de AFichero: TY ('' si no hay). Con
   ALeidos, el .pas leido se anota ahi con su huella (READ=) }
@@ -345,6 +344,7 @@ uses
   Lsp.DesignerForma, // la forma del fichero, la misma que lee el servidor
   Lsp.Pascal,        // EL lexico Pascal: que es codigo y que comentario
   Lsp.ShaCache,      // Sha256DeBytes: la huella de READ=, la misma con la que compara el servidor
+  Lsp.Reparse,
   Lsp.AtomosRtl;
 
 type
@@ -1398,11 +1398,8 @@ begin
 end;
 
 function EsEnlace(const AFichero: string): Boolean;
-var
-  A: DWORD;
 begin
-  A := GetFileAttributes(PChar(AFichero));
-  Result := (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0);
+  Result := Lsp.Reparse.EsEnlace(AFichero);
 end;
 
 function ListaDeNoVisuales(const ALista: TArray<TComponent>): string;

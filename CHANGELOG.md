@@ -10,6 +10,13 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A reparse point is a link only when its tag says so.** Any reparse point counted
+  as a link, so a OneDrive placeholder or a deduplicated file was skipped when
+  listing, walking or purging a folder, and a form's sibling held that way was not
+  read. Now only a tag with the name-surrogate bit (junction, symlink) is a link, and
+  one whose tag cannot be read still counts as one. Measured here with the app aliases
+  of `WindowsApps`; there is no OneDrive on the test machine, so a real placeholder
+  has not been tried.
 - **The device names Windows documents are all refused in a path.** `GUARD-027`
   missed `COM0`, `LPT0`, `COM` and `LPT` with a superscript 1-3, `CONIN$` and
   `CONOUT$`: a file with one of those names could be created here and then not open

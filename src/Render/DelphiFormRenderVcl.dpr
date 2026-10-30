@@ -18,7 +18,8 @@ uses
   Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas',
   Lsp.Pascal in '..\Server\Lsp.Pascal.pas',
   Lsp.ShaCache in '..\Server\Lsp.ShaCache.pas',
-  Lsp.AtomosRtl in '..\Server\Lsp.AtomosRtl.pas';
+  Lsp.AtomosRtl in '..\Server\Lsp.AtomosRtl.pas',
+  Lsp.Reparse in '..\Server\Lsp.Reparse.pas';
 
 begin
   ExitCode := Main;

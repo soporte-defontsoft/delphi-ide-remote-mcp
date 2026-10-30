@@ -77,6 +77,8 @@ type
     procedure UnaCitaConSuCrVaComoEsta;
     [Test]
     procedure LosNombresDeDispositivoDocumentadosSonAnomalias;
+    [Test]
+    procedure SoloLaEtiquetaConNombreEsUnEnlace;
   end;
 
   { LA clave de una carpeta (Lsp.Casa.ClaveDeCarpeta): la misma carpeta
@@ -262,7 +264,8 @@ uses
   LspTests.FormRender, // CreaUnion
   Lsp.Mascara,
   System.RegularExpressions,
-  System.JSON;
+  System.JSON,
+  Lsp.Reparse;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;
@@ -1467,6 +1470,30 @@ begin
   // control: lo que solo se les parece sigue siendo un nombre
   for var N in TArray<string>.Create('COM10', 'LPT10', 'COMA', 'CONIN', 'CONOUT', 'COM'#$00B4, 'COM'#$2074) do
     Assert.AreEqual('', PathAnomaly('C:\carpeta\' + N + '.pas'), N);
+end;
+
+procedure TBarridoDeUnidadesTests.SoloLaEtiquetaConNombreEsUnEnlace;
+var
+  Carpeta, Alias: string;
+begin
+  // V126 de la 1.24: junction, symlink, symlink de WSL...
+  for var T in TArray<Cardinal>.Create($A0000003, $A000000C, $A000001D) do
+    Assert.IsTrue(EtiquetaDeEnlace(T), IntToHex(T, 8));
+  // ...y OneDrive, dedup, alias de WindowsApps, socket y ProjFS no apuntan a otro nombre
+  for var T in TArray<Cardinal>.Create($9000601A, $80000013, $8000001B, $80000023, $9000001C) do
+    Assert.IsFalse(EtiquetaDeEnlace(T), IntToHex(T, 8));
+  // uno de verdad, si la maquina tiene: un punto de reparse que no es un enlace
+  Carpeta := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'Microsoft\WindowsApps');
+  Alias := '';
+  if TDirectory.Exists(Carpeta) then
+    for var F in TDirectory.GetFiles(Carpeta, '*.exe') do
+      if (GetFileAttributes(PChar(F)) and FILE_ATTRIBUTE_REPARSE_POINT) <> 0 then
+      begin
+        Alias := F;
+        Break;
+      end;
+  if Alias <> '' then
+    Assert.IsFalse(Lsp.Reparse.EsEnlace(Alias), Alias);
 end;
 
 initialization

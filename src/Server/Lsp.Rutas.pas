@@ -206,6 +206,7 @@ uses
   System.SysUtils,
   System.StrUtils,
   System.IOUtils,
+  Lsp.Reparse,          // DatosDeReparse: lo que guarda un enlace
   Lsp.NetDrives;        // RaizSiUnidad, SinBarraFinal, PrefijoSinBarra, ConBarrasDeWindows
 
 function Ancestros(const ARuta: string; ATope: Integer): TArray<string>;
@@ -335,29 +336,19 @@ end;
   lanza). }
 function DestinoDeEnlace(const AEnlace: string): string;
 const
-  FSCTL_GET_REPARSE_POINT = $000900A8;
   IO_REPARSE_TAG_MOUNT_POINT = $A0000003;
   IO_REPARSE_TAG_SYMLINK = $A000000C;
   SYMLINK_FLAG_RELATIVE = 1;
 var
-  H: THandle;
   Buf: TBytes;
   Devuelto, Tag: Cardinal;
   Base, SubOff, SubLen: Integer;
   S: string;
 begin
   Result := '';
-  H := CreateFile(PChar(AEnlace), 0, FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil,
-    OPEN_EXISTING, FILE_FLAG_OPEN_REPARSE_POINT or FILE_FLAG_BACKUP_SEMANTICS, 0);
-  if H = INVALID_HANDLE_VALUE then
+  if not DatosDeReparse(AEnlace, Buf, Devuelto) or (Devuelto < 16) then
     Exit;
   try
-  try
-    SetLength(Buf, 16 * 1024); // MAXIMUM_REPARSE_DATA_BUFFER_SIZE
-    Devuelto := 0;
-    if not DeviceIoControl(H, FSCTL_GET_REPARSE_POINT, nil, 0, @Buf[0], Length(Buf), Devuelto, nil) or
-       (Devuelto < 16) then
-      Exit;
     // REPARSE_DATA_BUFFER: etiqueta (4), largo (2), reservado (2), y luego
     // SubstituteName offset/largo y PrintName offset/largo (2 cada uno); el
     // de un symlink lleva ademas sus Flags (4) antes del texto
@@ -394,9 +385,6 @@ begin
       Result := ConPrefijoDeDispositivo(S.TrimLeft(['\']));
   except
     Result := ''; // un relativo que no se deja componer: Windows tampoco lo sigue
-  end;
-  finally
-    CloseHandle(H);
   end;
 end;
 

@@ -488,8 +488,9 @@ procedure CopiaArbol(const AOrigen, ADestino: string; AConservaAtributos: Boolea
   AComoDestino): lo copiado llega alli entero (1.18.2, 2r). }
 function CopiaDenegada(const AOrigen, ADestino: string): string;
 
-{ P es un enlace (junction o symlink, de carpeta o de fichero). LA
-  comprobacion: estaba escrita cuatro veces en esta unidad. }
+{ P es un enlace (junction o symlink, de carpeta o de fichero; un marcador de
+  OneDrive no lo es). LA comprobacion, la de Lsp.Reparse: estaba escrita cuatro
+  veces en esta unidad. }
 function EsEnlace(const P: string): Boolean;
 { APath ES ALugar o esta DENTRO por su forma larga, y NINGUN tramo entre
   ALugar (sin el) y APath es un enlace: lo de detras de un enlace no es de
@@ -1166,6 +1167,7 @@ uses
   Lsp.Texts,
   Lsp.Json,
   Lsp.Rutas,
+  Lsp.Reparse,
   Lsp.Casa,
   Lsp.Settings,
   Lsp.Identidad,
@@ -1953,7 +1955,7 @@ var
 begin
   A := GetFileAttributes(PChar(APath));
   if (A = INVALID_FILE_ATTRIBUTES) or ((A and FILE_ATTRIBUTE_DIRECTORY) <> 0) or
-     ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) or ((A and FILE_ATTRIBUTE_READONLY) = 0) then
+     ((A and FILE_ATTRIBUTE_READONLY) = 0) or EsEnlace(APath) then
     Exit;
   // un enlace duro tampoco: su +R es el del otro nombre, y quitarlo aqui lo
   // quitaba FUERA de las raices (medido el 11-oct-2026: una carpeta con un
@@ -3654,13 +3656,9 @@ begin
   Result := MetadatosGitEnArbolDenegados(Full, True);
 end;
 
-{ P es un enlace (junction o symlink, de carpeta o de fichero). }
 function EsEnlace(const P: string): Boolean;
-var
-  A: Cardinal;
 begin
-  A := GetFileAttributes(PChar(P));
-  Result := (A <> INVALID_FILE_ATTRIBUTES) and ((A and FILE_ATTRIBUTE_REPARSE_POINT) <> 0);
+  Result := Lsp.Reparse.EsEnlace(P);
 end;
 
 function EnLugarSinEnlaces(const APath, ALugar: string): Boolean;
