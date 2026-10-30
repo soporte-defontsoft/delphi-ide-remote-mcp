@@ -239,4 +239,5 @@ finally:
 check('M5 la carpeta actual del servidor (en el repo) sale como estaba',
       sorted(os.listdir(OTRA)) == ANTES_OTRA, set(os.listdir(OTRA)) ^ set(ANTES_OTRA))
 
+mc.borra(BASE)  # con el servidor va su caja de paquetes: cien megas (V65 de la 1.24)
 mc.fin('rutas a medias 1.23.0 battery')

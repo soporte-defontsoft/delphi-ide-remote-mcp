@@ -276,4 +276,6 @@ check('M12 vault_search: el patron de "sin resultados" sale con la unidad virtua
       (REAL + 'nadaquebuscar') not in r and (VIRTUAL + 'nadaquebuscar') in r, r[:300])
 
 srv.cierra()
+mc.borra(BASE)  # con el servidor va su caja de paquetes: cien megas (V65 de la 1.24)
+mc.borra(VAULT)
 mc.fin('mascara-contenido battery')

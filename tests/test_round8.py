@@ -558,4 +558,5 @@ check('F2 un build con varios errores nombra el PRIMERO',
       str(jb)[:250])
 
 A.mata()
+mc.borra(BASE)  # con el servidor va su caja de paquetes: cien megas (V65 de la 1.24)
 mc.fin('round-8 battery')

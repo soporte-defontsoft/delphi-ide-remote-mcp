@@ -461,4 +461,5 @@ check('to-text sin guion (totext) se acepta como alias: no es "comando invalido"
       not mc.es(r, 'SR_DESIGNER_CMD') and 'could not convert it to text' in r, r[:200])
 
 srv.mata()
+mc.borra(BASE)  # con el servidor va su caja de paquetes: cien megas (V65 de la 1.24)
 mc.fin('designer battery')

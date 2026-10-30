@@ -430,4 +430,5 @@ else:
           '|  Simple = 0.250000000000000000' in r2, (r1[:300], r2[:300]))
 
 srv.mata()
+mc.borra(BASE)  # con el servidor va su caja de paquetes: cien megas (V65 de la 1.24)
 mc.fin('designer-binary battery')
