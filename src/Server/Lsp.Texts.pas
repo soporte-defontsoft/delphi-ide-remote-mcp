@@ -6648,6 +6648,13 @@ const
     'this server lets you read: the compiler follows the link and would read ' +
     'that file. Replace it with a copy of something you can read.';
 
+  SR_BUILD_PROGRAMA_EN_SU_CARPETA_FMT =
+    '[BUILD-065 DENIED] I will not build this. %s, in the project''s folder, ' +
+    'would run instead of the IDE''s own: its resource compiler looks for that ' +
+    'program in the current folder first, and a build here only compiles, it ' +
+    'never runs anything of the project. Nothing was built. Move the file out ' +
+    'of that folder (a subfolder is fine) and build again.';
+
   SN_BUILD_LOCKED_OUTPUT =
     '[BUILD-032] F2039 "Could not create output file" is almost never a ' +
     'fault in your code: the binary this build wants to write is OPEN. ' +

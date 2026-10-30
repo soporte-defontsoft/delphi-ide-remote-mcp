@@ -2052,6 +2052,8 @@ end;
   el proyecto no pasa. }
 function EscaneoCompileOnly(const ADprojPath, APlat, ACfg: string;
   const AInfo: TRadStudioInfo; AAllowScripts: Boolean; out AAvisaEventos: Boolean): Boolean;
+const
+  PROGRAMA_QUE_CGRC_BUSCA_EN_SU_CARPETA = 'resinator.exe';
 begin
   // Compile-only guarantee: a build must not EXECUTE code. Scan the project for
   // shell-running / file-planting MSBuild tasks (a planted <Target><Exec>, a
@@ -2100,6 +2102,22 @@ begin
       TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_REDEFINES_FMT,
         [TPath.GetFullPath(ADprojPath), ResProp]));
       raise Exception.Create(MsgFmt(SR_BUILD_RESERVED_PROP_FMT, [ResProp]));
+    end;
+    // Parte 3: lo que el IDE ejecutaria de la carpeta del proyecto. cgrc lanza su
+    // compilador por el nombre y lo busca PRIMERO en su carpeta actual, la del
+    // proyecto (donde msbuild pone siempre a sus tareas): un resinator.exe del
+    // agente corria con la cuenta del servicio y el build salia verde (V218 de
+    // la 1.23.1, medido con Process Monitor y una sonda). El nombre no lo
+    // decide el .dproj: BRCC_CompilerToUse solo elige este o msrc, que va por
+    // su ruta. Bajo el cerrojo, como el resto: nada lo planta tras mirar.
+    var Plantado := TPath.Combine(TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath)),
+      PROGRAMA_QUE_CGRC_BUSCA_EN_SU_CARPETA);
+    if FileExists(Plantado) then
+    begin
+      TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
+        [TPath.GetFullPath(ADprojPath), PROGRAMA_QUE_CGRC_BUSCA_EN_SU_CARPETA]));
+      raise Exception.Create(MsgFmt(SR_BUILD_PROGRAMA_EN_SU_CARPETA_FMT,
+        [PROGRAMA_QUE_CGRC_BUSCA_EN_SU_CARPETA]));
     end;
     Result := DprojBuildHazard(ProjXml, TPath.GetFullPath(ADprojPath), False) <> '';
     // se vacian todos; el aviso, solo si tenia texto uno que los targets del
@@ -2573,8 +2591,10 @@ begin
   // (el servicio: la casa del servidor) y lo que una tarea escribe RELATIVO -el
   // .vrc/.res de la info de version- cae FUERA de la jaula (2ak de la 1.18.2,
   // medido: Incl.res/Incl.vrc en la raiz del repo). La carpeta del .dproj ya
-  // esta en las raices y la aprobo la puerta de salida. Ya no se busca nada en
-  // ella: msbuild va por su ruta (con cmd, un msbuild.bat de ahi ganaba)
+  // esta en las raices y la aprobo la puerta de salida. msbuild no se busca en
+  // ella: va por su ruta (con cmd, un msbuild.bat de ahi ganaba). Lo que SUS
+  // hijos busquen ahi lo cierran SacaLaCarpetaActualDeLasDll y la parte 3 de
+  // EscaneoCompileOnly (V218)
   var Cwd := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
   // el .res de version de antes: si este build lo deja sin recursos, se dice
   // (resNote, abajo)

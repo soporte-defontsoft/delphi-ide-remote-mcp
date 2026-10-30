@@ -51,6 +51,16 @@ function EnComillas(const AValor: string): string;
   la 1.18.2, medido el 13-oct contra produccion). }
 function ProgramaEnPath(const APrograma, APath: string): string;
 
+{ Saca la carpeta actual de la busqueda de DLL de este proceso y de TODOS sus
+  hijos y nietos, que lo heredan. msbuild pone a sus tareas en la carpeta del
+  proyecto, que escribe el agente: dccaarm64 cargaba de ahi un LNKDFM380.DLL (no
+  existe en el IDE, que trae la 370) con la cuenta del servicio (V218 de la
+  1.23.1, medido con Process Monitor y una sonda). Sin lista de nombres: vale
+  para cualquier DLL que busque cualquier herramienta. Con una carpeta REAL: el
+  valor vacio no se hereda (medido). Solo el servidor: McpRunJob tambien enlaza
+  esta unidad, y el programa de un agente en su destino no se toca. }
+procedure SacaLaCarpetaActualDeLasDll;
+
 implementation
 
 const
@@ -332,6 +342,14 @@ begin
   if (N = 0) or (N >= DWORD(Length(Result))) then
     Exit('');
   SetLength(Result, N);
+end;
+
+procedure SacaLaCarpetaActualDeLasDll;
+var
+  Sistema: array[0..MAX_PATH] of Char;
+begin
+  if GetSystemDirectory(Sistema, MAX_PATH) > 0 then
+    SetDllDirectory(Sistema);
 end;
 
 end.

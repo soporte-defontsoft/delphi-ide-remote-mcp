@@ -10,6 +10,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A build no longer runs code left in the project's folder.** msbuild keeps
+  its tasks in the project's folder, which an agent writes, and two tools of
+  the IDE look for programs there: the resource compiler for its back end, and
+  the Android compiler for a library the IDE does not ship. Either one ran from
+  that folder with the service's account, outside any container, and the first
+  left the build green (measured with Process Monitor and inert probes; 13-oct
+  closed the same door for `msbuild.bat`, but not for what msbuild starts). The
+  current folder is now out of the library search of the server and everything
+  it starts, whatever the library is called, and a build refuses that program
+  in the project's folder (BUILD-065). A subfolder is fine.
+
 - **An agent can no longer write the instructions every client receives.**
   `VAULT-INSTRUCTIONS.md` is the text the server sends as `instructions` to
   every client of the workspace when it connects, but the vault's write gate
