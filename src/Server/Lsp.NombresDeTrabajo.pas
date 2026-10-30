@@ -26,6 +26,14 @@ const
   { ...y como patron detras del de un id (la nota del deploy bloqueado lo
     busca en lo que contesta msbuild, Lsp.Casa.SELLO_UNICO_PATRON delante). }
   PATRON_DEL_VIGIA_TRAS_EL_ID = '\.wait(?:\.[0-9]+)?\.exe';
+  { Las ordenes del lanzador van en la linea del binario del .job y empiezan
+    por PREFIJO_DE_VERBO; VERBO_MATAR (matar OTRO trabajo de la carpeta) lo
+    escribe el servidor (RemoteKill) y lo lee el lanzador. Estaba escrito a
+    mano en los dos, y un fichero desplegado llamado "@kill" lanzado con
+    remote-run exe= era la orden de matar sin pasar por TrabajoNuestro: el
+    juez de exe= niega lo que empiece por el prefijo (V196 de la 1.23.1). }
+  PREFIJO_DE_VERBO = '@';
+  VERBO_MATAR = PREFIJO_DE_VERBO + 'kill';
 
 { Si AId tiene la forma de un id de trabajo, el que compone el servidor
   (Lsp.Casa.SelloUnico: fecha-hora-fragmento): solo [0-9a-f-] y 64 como

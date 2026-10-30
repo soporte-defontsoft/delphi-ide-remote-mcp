@@ -701,7 +701,7 @@ begin
     // @kill <id>: matar OTRO trabajo de esta carpeta. El PID sale de su .pid
     // (lo escribio el vigia al arrancarlo y lo borra al terminar): sin .pid
     // no hay nada que matar, y un id que no sea de los nuestros no se mira.
-    if SameText(Exe, '@kill') then
+    if SameText(Exe, VERBO_MATAR) then // el del servidor (Lsp.NombresDeTrabajo, V196)
     begin
       if (Length(Args) < 1) or not EsIdDeTrabajo(Args[0].Trim) then
         Anade(Salida, MsgText(SR_JOB_KILL_NECESITA_ID) + LineaRC(2))

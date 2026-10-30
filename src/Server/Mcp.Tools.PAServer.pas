@@ -128,7 +128,8 @@ uses
   Lsp.Codificacion, // ekUtf8Bom
   Lsp.Args,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.NombresDeTrabajo;
 
 const
   { La plataforma de los SDK que trae get-sdk y que este servidor registra,
@@ -1262,6 +1263,10 @@ begin
   if (ExeName <> '') and (ExeName.Contains('/') or ExeName.Contains(chr(92)) or
      ExeName.Contains('..')) then
     Exit(MsgText(SR_PASERVER_RUN_EXENAME));
+  // ...ni una orden del lanzador: un fichero desplegado "@kill" iba en la
+  // linea del binario del .job como la orden de matar (V196 de la 1.23.1)
+  if ExeName.StartsWith(PREFIJO_DE_VERBO) then
+    Exit(MsgFmt(SR_PASERVER_RUN_EXE_RESERVADO_FMT, [ExeName]));
   if ExeName <> '' then
   begin
     Denied := ExeNoDesplegado(Proj, Prof, ExeName);

@@ -61,7 +61,7 @@ open(os.path.join(PRJDIR, PROJNAME + '.deployproj'), 'w', encoding='utf-8').writ
     '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
     '    <ItemGroup Condition="\'$(Platform)\'==\'Win64\'">\n'
     + ''.join('        <DeployFile Include="%s"><RemoteDir>Saluda\\</RemoteDir><RemoteName>%s</RemoteName>'
-              '<DeployClass>File</DeployClass></DeployFile>\n' % (n, n) for n in ('noexiste.exe', 'run.py')) +
+              '<DeployClass>File</DeployClass></DeployFile>\n' % (n, n) for n in ('noexiste.exe', 'run.py', '@kill')) +
     '    </ItemGroup>\n</Project>\n')
 
 # paclient stub: a .cmd that calls python on the stub script
@@ -184,6 +184,17 @@ check('...y las comillas dobles siguen agrupando un argumento con espacios',
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': '..\\..\\fuera.exe', 'timeoutms': 20000})
 j = json.loads(r) if r.startswith('{') else {}
 check('exe con separadores rechazado por el server', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_RUN_EXENAME'), r[:250])
+# V196 de la 1.23.1: un fichero DESPLEGADO llamado "@kill" (el .deployproj lo lista) no es la orden de matar
+# del lanzador: iba en la linea del binario del .job y mataba un trabajo de la carpeta sin TrabajoNuestro
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': '@kill',
+                             'args': '20260101-000000-abcd', 'timeoutms': 20000}, t=180)
+check('V196 exe=@kill desplegado: negado como orden del lanzador (RUN-024), nada corre',
+      mc.rechazado(r) and mc.es(r, 'SR_PASERVER_RUN_EXE_RESERVADO_FMT'), r[:250])
+# V197: un perfil o un dispositivo que empieza por "-" iria SOLO en la linea de paclient / adb
+r = call('delphi_paserver', {'command': 'test-connection', 'name': '-x'})
+check('V197 perfil "-x": negado por su forma (PAS-015)', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_NAME_FMT'), r[:250])
+r = call('delphi_adb', {'command': 'devices', 'device': '-x'})
+check('V197 dispositivo "-x": negado por su forma, antes de la lista', mc.rechazado(r) and mc.es(r, 'SR_ADB_TARGET_FMT'), r[:250])
 # 5) exe inexistente -> runnerError
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'noexiste.exe', 'timeoutms': 20000}, t=180)
 j = json.loads(r) if r.startswith('{') else {}

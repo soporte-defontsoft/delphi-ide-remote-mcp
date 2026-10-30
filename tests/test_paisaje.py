@@ -258,6 +258,12 @@ REGLAS = [
     ('un paquete juzgado por su extension', r"(?i)SameText\([^;]*GetExtension\([^;]*\)\s*,\s*'\.dpk'\s*\)",
      [],
      'EsFuenteDePaquete (Lsp.Pascal, A30 de la 1.23)'),
+    # los nombres de gobierno del vault a mano: estaban en cuatro sitios y la puerta de escritura conocia
+    # tres - VAULT-INSTRUCTIONS.md, las instrucciones de TODOS los clientes, lo creaba un agente (V191)
+    ('un fichero de gobierno del vault nombrado a mano',
+     r"'(?:AGENTS-VAULT|AGENTS-VAULT-WRITE|MEMORY|VAULT-INSTRUCTIONS)\.md'",
+     [('Mcp.Vault.Seed.pas', '*')],
+     'VAULT_REGLAS / EsFicheroDeGobierno (Mcp.Vault.Seed, V191 de la 1.23.1)'),
     ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
@@ -1794,6 +1800,8 @@ PLANTADO = {
     # la de Lsp.References.ProjectsSearching hasta el 28-oct-2026 (una de nueve)
     'el filtro de lo que no es codigo de un paseo a mano':
         "  for F in WalkFiles(D, ['*.dproj']) do if not SkipBajoLaRaiz(F, D) then X := 1;",
+    # la de Mcp.Tools.Vault.VaultGovernance hasta el 30-oct-2026 (V191)
+    'un fichero de gobierno del vault nombrado a mano': "  if SameText(Name, 'MEMORY.md') then Exit(True);",
     # la del lint de estilos (Mcp.Tools.Styles.LintStyles) hasta el 28-oct-2026
     'un StyleLookup de un form leido a mano':
         "  if not (SameText(Prop, 'StyleLookup') and LeeLiteralDeForm(Valor, Lookup)) then Continue;",

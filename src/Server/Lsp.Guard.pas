@@ -1492,7 +1492,10 @@ function BadProfileName(const V: string): Boolean;
 var
   C: Char;
 begin
-  Result := Length(V) > 64;
+  // ...ni empieza por "-": el nombre va SOLO en la linea de paclient, y la
+  // regla de la casa es que ningun valor suelto lo haga (git ya la tiene;
+  // V197 de la 1.23.1)
+  Result := (Length(V) > 64) or V.StartsWith('-');
   if not Result then
     for C in V do
       if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-']) then
@@ -1519,7 +1522,8 @@ function BadDeviceToken(const V: string): Boolean;
 var
   C: Char;
 begin
-  Result := Length(V) > 64;
+  // ...ni empieza por "-" (adb connect lo lleva solo en su linea; V197)
+  Result := (Length(V) > 64) or V.StartsWith('-');
   if not Result then
     for C in V do
       if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '.', ':', '_', '-']) then
@@ -4787,6 +4791,18 @@ begin
   // back, skipping its automatic backup and its protected governance files.
   if InVault(APath) then
     Exit(MsgText(SR_VAULT_NOT_CODE));
+  // ...y por la ruta REAL, UNA vez y antes de toda rama: la de las raices lo
+  // preguntaba y la de las referencias y la de la biblioteca contestaban
+  // antes "se lee" - con el vault dentro de una ReadOnlyRoot, un enlace en la
+  // raiz o en la referencia que apuntase dentro dejaba leerlo (V192 de la
+  // 1.23.1, medido; la sexta revision lo habia cerrado solo en las raices)
+  var VerdadDelVault := '';
+  if Length(TodosLosVaults) > 0 then
+  begin
+    VerdadDelVault := IncludeTrailingPathDelimiter(RealPath(APath));
+    if InVault(VerdadDelVault) then
+      Exit(MsgText(SR_VAULT_NOT_CODE));
+  end;
   if not HayJaula then
     Exit; // no jail configured
   Roots := WorkspaceRoots;
@@ -4824,7 +4840,10 @@ begin
       // (DFONTA~1), RealPath las alarga, la comparacion dejaba de casar y se
       // pudo BORRAR la propia raiz del workspace. Lo cazo test_guard en la
       // misma tanda.
-      var Verdad := IncludeTrailingPathDelimiter(RealPath(APath));
+      // (la de arriba si ya se calculo: una ruta real por pregunta)
+      var Verdad := VerdadDelVault;
+      if Verdad = '' then
+        Verdad := IncludeTrailingPathDelimiter(RealPath(APath));
       var DentroDeVerdad := False;
       for var RR in Roots do
         if EnLugar(Verdad, RealPath(SinBarraFinal(RR)), False) then
@@ -4834,11 +4853,7 @@ begin
         end;
       if not DentroDeVerdad then
         Exit(MsgFmt(SR_JAIL_LINK_FMT, [APath]));
-      // ...y el vault por la ruta REAL: un junction de la raiz que apunte
-      // dentro de el llevaba a el con un texto que no lo nombra (sexta
-      // revision; lo paraba de rebote un fallo de CrearCarpeta).
-      if InVault(Verdad) then
-        Exit(MsgText(SR_VAULT_NOT_CODE));
+      // (el vault por la ruta REAL se pregunta arriba, para todas las ramas)
       Exit(''); // dentro de una raiz, de verdad: se lee
     end;
   // Fuera de las raices: la zona de biblioteca (RTL/VCL, componentes

@@ -23,6 +23,21 @@ unit Mcp.Vault.Seed;
 
 interface
 
+const
+  { Los ficheros de GOBIERNO del vault, por su nombre: los escribe una persona,
+    un agente solo los lee. EL nombrador de los cuatro: estaban escritos en
+    cuatro sitios y la puerta de escritura conocia tres. VAULT_INSTRUCCIONES
+    es el texto "instructions" que reciben TODOS los clientes del workspace al
+    conectar: un agente lo creaba y la sesion siguiente lo llevaba como las
+    instrucciones del servidor (V191 de la 1.23.1, medido). }
+  VAULT_REGLAS = 'AGENTS-VAULT.md';
+  VAULT_INDICE = 'MEMORY.md';
+  VAULT_GUIA_ESCRITURA = 'AGENTS-VAULT-WRITE.md';
+  VAULT_INSTRUCCIONES = 'VAULT-INSTRUCTIONS.md';
+
+{ Si ANombre (el nombre de un fichero, sin carpeta) es uno de gobierno. }
+function EsFicheroDeGobierno(const ANombre: string): Boolean;
+
 { Creates the starter vault when APath does not exist or holds no .md at all.
   Returns True when it seeded. Never raises: a vault that cannot be created is
   simply a vault that is not there. }
@@ -36,6 +51,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.StrUtils,    // MatchText
   System.IOUtils,
   System.Types,
   Lsp.Guard,
@@ -272,6 +288,12 @@ begin
   EscribeTexto(APath, AText, ltVault, ekUtf8);
 end;
 
+function EsFicheroDeGobierno(const ANombre: string): Boolean;
+begin
+  Result := MatchText(ANombre, [VAULT_REGLAS, VAULT_INDICE, VAULT_GUIA_ESCRITURA,
+    VAULT_INSTRUCCIONES]);
+end;
+
 function SeedVaultIfEmpty(const APath: string): Boolean;
 var
   Root: string;
@@ -290,8 +312,8 @@ begin
     else
       CrearCarpeta(Root);
 
-    var Notas := TArray<string>.Create('VAULT-INSTRUCTIONS.md', 'AGENTS-VAULT.md',
-      'MEMORY.md', 'AGENTS-VAULT-WRITE.md', 'conventions\example-conventions.md',
+    var Notas := TArray<string>.Create(VAULT_INSTRUCCIONES, VAULT_REGLAS,
+      VAULT_INDICE, VAULT_GUIA_ESCRITURA, 'conventions\example-conventions.md',
       'projects\example-project\context.md', 'projects\example-project\progress.md',
       'projects\example-project\log.md');
     var Textos := TArray<string>.Create(T_INSTRUCTIONS, T_RULES, T_INDEX, T_WRITE,

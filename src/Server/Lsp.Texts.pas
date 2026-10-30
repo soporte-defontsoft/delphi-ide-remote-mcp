@@ -1963,9 +1963,10 @@ const
     'if you need to write to it, ask for it with delphi_report.';
 
   SR_VAULT_GOVERNANCE =
-    '[VAULT-009 DENIED] AGENTS-VAULT.md, AGENTS-VAULT-WRITE.md and ' +
-    'MEMORY.md are the GOVERNANCE files of the vault (its rules and its ' +
-    'index) and are only touched under human supervision. You can read ' +
+    '[VAULT-009 DENIED] AGENTS-VAULT.md, AGENTS-VAULT-WRITE.md, ' +
+    'MEMORY.md and VAULT-INSTRUCTIONS.md are the GOVERNANCE files of the ' +
+    'vault (its rules, its index and the instructions every client gets on ' +
+    'connecting) and are only touched under human supervision. You can read ' +
     'them (vault_read without path). If a new note needs indexing, say ' +
     'so in your answer or file it with delphi_report (command=report) so ' +
     'a person does ' +
@@ -2196,6 +2197,12 @@ const
     '[PAS-006 INVALID_PARAM] "exe" is optional and, if given, must be a file ' +
     'NAME of that project''s deploy folder (no "/", no "\" and no ".."). ' +
     'By default the project binary is run.';
+  { exe= con el prefijo de las ordenes del lanzador (Lsp.NombresDeTrabajo):
+    un fichero desplegado "@kill" era la orden de matar (V196 de la 1.23.1). }
+  SR_PASERVER_RUN_EXE_RESERVADO_FMT =
+    '[RUN-024 DENIED] "exe" %s starts with "@", which is reserved for the ' +
+    'launcher''s own orders on the target: it is never run as a program. ' +
+    'Rename the file in the project and its deployment. Nothing was run.';
   { exe= que el proyecto no despliega en esa plataforma (1.22.2: valia
     cualquier fichero de la carpeta del destino) }
   SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT =
@@ -2471,8 +2478,8 @@ const
 
   SR_PASERVER_NAME_FMT =
     '[PAS-015 INVALID_PARAM] "%s" is not valid as a profile name. Use letters, ' +
-    'digits, "_" or "-" (max 64): the name becomes a file <name>.profile ' +
-    'on the server.';
+    'digits, "_" or "-" (max 64, not starting with "-"): the name becomes a ' +
+    'file <name>.profile on the server.';
 
   SR_PASERVER_HOST_FMT =
     '[PAS-016 INVALID_PARAM] "%s" is not valid as a host. Use a hostname or an ' +

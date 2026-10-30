@@ -404,13 +404,14 @@ begin
   // No identity (stdio, the operator's own console) is trusted with everything.
   if Me = '' then
     Exit;
+  // su marca o la de la copia que lo contiene (DuenoEnLaPapelera): un
+  // fichero de DENTRO de la carpeta que otro tiro no lleva marca propia, y se
+  // purgaba - y con el, la copia entera (V193 de la 1.23.1, medido)
+  Owner := DuenoEnLaPapelera(APath);
+  if (Owner <> '') and not SameText(Owner, Me) then
+    Exit(MsgFmt(SR_FILE_PURGE_NOT_YOURS_FMT, [Owner]));
   if TFile.Exists(APath) then
-  begin
-    Owner := TrashOwner(APath);
-    if (Owner <> '') and not SameText(Owner, Me) then
-      Result := MsgFmt(SR_FILE_PURGE_NOT_YOURS_FMT, [Owner]);
     Exit;
-  end;
   if not TDirectory.Exists(APath) then
     Exit;
   Others := TStringList.Create;
@@ -1184,6 +1185,10 @@ begin
           CopiaArbol(P.Origen, Copia, True, NoSegCopia, False)
         else
           TFile.Copy(P.Origen, Copia);
+        // con SU marca, como toda copia de la papelera (MoveToTrash,
+        // GuardaContenidoActual): sin ella era "de nadie" y cualquier agente
+        // purgaba la red de este move (V194 de la 1.23.1, medido)
+        WriteOwnerMarker(Copia);
       end;
       if not EsCarpeta then
       begin

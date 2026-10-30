@@ -838,7 +838,7 @@ begin
       Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
     Exit;
   end;
-  Result := RemoteRun(AProfile, ADprojPath, '@kill', [AJobId], 20000);
+  Result := RemoteRun(AProfile, ADprojPath, VERBO_MATAR, [AJobId], 20000); // Lsp.NombresDeTrabajo (V196)
   Result.RemovePair('remoteExe').Free;
   Result.AddPair('job', AJobId);
   Rc := -1;

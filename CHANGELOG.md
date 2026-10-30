@@ -10,6 +10,43 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **An agent can no longer write the instructions every client receives.**
+  `VAULT-INSTRUCTIONS.md` is the text the server sends as `instructions` to
+  every client of the workspace when it connects, but the vault's write gate
+  knew only three governance files: `vault_create` made it, and the next
+  session carried the agent's text as the server's own instructions
+  (measured). It is a governance file now, like the rules, the index and the
+  write guide, and the four names live in one place.
+- **The knowledge vault cannot be read through a link.** The code tools keep
+  out of the vault, and by its text they did; by its real path only the
+  workspace-roots branch of the jail asked. With the vault inside a read-only
+  reference root, a link in a root or in the reference that pointed into it let
+  `delphi_read` read its notes and `delphi_search` find them (measured). The
+  real path is now asked once, before every branch.
+- **One agent can no longer purge what another sent to the trash.** A deleted
+  folder carries one owner mark, next to it, not one per file: another agent
+  purged a file from inside it - and with it the whole copy - or the folder
+  itself, whose mark the purge looked for below it (measured). The owner of
+  something in the trash is now its own mark or that of the copy that contains
+  it. And the copy `delphi_move` keeps before moving now carries its owner's
+  mark, like every trash copy: without it, it was anybody's to purge.
+- **A workspace with a repeated key under `[Workspace. <name>]` stays
+  closed.** With a space after the dot, the loader trimmed the name and the
+  check that closes a workspace with a repeated key did not: the workspace
+  stayed open, the second `ReadOnlyPaths` had no effect, and the log said it
+  was closed (measured: a file was created in the folder the operator
+  protected). Both read the name through one reader now.
+- **A deployed file named `@kill` is not the launcher's kill order.** The
+  launcher's orders travel in the binary line of the job file and start with
+  "@"; `remote-run exe=` accepted any name the project deploys, so a file
+  called `@kill` killed a job of the same remote folder without the check that
+  the job is this server's (measured with the batteries' launcher). `exe=`
+  now refuses a name that starts with "@" (RUN-024), and the order is one
+  constant shared by the server and the launcher.
+- **A profile or device name cannot start with "-".** Both travel alone on the
+  `paclient` and `adb connect` command lines; the house rule, which git already
+  kept, is that no lone value starts with "-".
+
 - **`delphi_messages read` no longer loses mail when one message cannot be
   read.** It read and deleted the messages one by one: one that another reader
   had just consumed, or that was locked, turned the whole answer into an error

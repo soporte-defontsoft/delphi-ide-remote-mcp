@@ -179,7 +179,8 @@ uses
   Lsp.Rutas,
   Lsp.Settings,
   Lsp.Mascara,
-  System.Character;
+  System.Character,
+  Mcp.Vault.Seed;
 
 const
   // Per-result budget. A client caps what one tool result may carry (~25K
@@ -190,8 +191,6 @@ const
   // the bootstrap splits BETWEEN FILES rather than mid-file - which is also
   // how the same vault is read locally: one complete file per read.
   MAX_READ_CHARS = 70000;
-  BOOT_RULES = 'AGENTS-VAULT.md';
-  BOOT_INDEX = 'MEMORY.md';
   BACKUP_SUB = 'backups';
 
 var
@@ -275,12 +274,10 @@ end;
   resolved path means the comparison is made against the file that will
   actually be written. }
 function VaultGovernance(const AFullPath: string): Boolean;
-var
-  Name: string;
 begin
-  Name := TPath.GetFileName(AFullPath);
-  Result := SameText(Name, BOOT_RULES) or SameText(Name, BOOT_INDEX) or
-    SameText(Name, 'AGENTS-VAULT-WRITE.md');
+  // EL juez de los cuatro (Mcp.Vault.Seed): este conocia tres y
+  // VAULT-INSTRUCTIONS.md, las instrucciones del servidor, se escribia (V191)
+  Result := EsFicheroDeGobierno(TPath.GetFileName(AFullPath));
 end;
 
 { Resolves a vault-relative path to a full path inside the vault. Returns ''

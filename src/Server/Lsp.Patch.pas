@@ -1076,6 +1076,11 @@ function GuardaContenidoActual(const APath: string;
 procedure WriteOwnerMarker(const ATrash: string);
 { El agente dueno de una copia, '' si no consta. }
 function TrashOwner(const APath: string): string;
+{ El agente dueno de lo que hay en APath dentro de la papelera: su marca, o
+  la de la copia que lo CONTIENE - MoveToTrash marca la carpeta entera, no
+  cada fichero de dentro, y otro agente purgaba lo de dentro de una copia
+  ajena (V193 de la 1.23.1, medido). '' si nadie la marco. }
+function DuenoEnLaPapelera(const APath: string): string;
 
 implementation
 
@@ -2663,6 +2668,25 @@ begin
       Result := LeeTexto(MarcaDeDueno(APath), [ltJaula]).Trim([' ', #9, #13, #10, #$FEFF]);
   except
     Result := '';
+  end;
+end;
+
+function DuenoEnLaPapelera(const APath: string): string;
+var
+  A, Padre: string;
+  EsLaCarpeta: Boolean;
+begin
+  Result := TrashOwner(APath);
+  A := TPath.GetDirectoryName(SinBarraFinal(APath));
+  // hacia arriba mientras se siga DENTRO de la papelera (la carpeta
+  // __delphi-patch misma no es una copia de nadie)
+  while (Result = '') and (A <> '') and EnPapelera(A, EsLaCarpeta) and not EsLaCarpeta do
+  begin
+    Result := TrashOwner(A);
+    Padre := TPath.GetDirectoryName(A);
+    if (Padre = '') or SameFileName(Padre, A) then
+      Break;
+    A := Padre;
   end;
 end;
 

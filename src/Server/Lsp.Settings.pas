@@ -875,6 +875,16 @@ begin
     Result := (TWorkspaceIx1 = 0) and (Length(WorkspaceRoots) = 0);
 end;
 
+{ El nombre de un workspace desde su seccion "[Workspace.<n>]": UNO para el
+  cargador y para quien cierra un workspace mal escrito, que no recortaba - con
+  "[Workspace. W]" una clave repetida (ReadOnlyPaths dos veces, la segunda sin
+  efecto) dejaba el workspace ABIERTO y la nota decia CERRADO (V195 de la
+  1.23.1, medido). }
+function NombreDeWorkspace(const ASeccion: string): string;
+begin
+  Result := ASeccion.Substring(Length('Workspace.')).Trim;
+end;
+
 { Un copia-pega futuro puede dejar el MISMO token en dos [Workspace.*], la
   misma clave dos veces en una seccion, o la misma seccion dos veces. TIniFile
   no avisa de nada de eso: coge lo primero y calla, y un agente entra en una
@@ -951,7 +961,7 @@ begin
         begin
           if Seccion.StartsWith('Workspace.', True) then
           begin
-            Cierra(Seccion.Substring(Length('Workspace.')));
+            Cierra(NombreDeWorkspace(Seccion));
             GWorkspaceNotes := GWorkspaceNotes +
               [MsgFmt(SL_GUARD_SECCION_DOS_VECES_CERRADO_FMT, [Seccion])];
           end
@@ -976,7 +986,7 @@ begin
       begin
         if Seccion.StartsWith('Workspace.', True) then
         begin
-          Cierra(Seccion.Substring(Length('Workspace.')));
+          Cierra(NombreDeWorkspace(Seccion));
           GWorkspaceNotes := GWorkspaceNotes +
             [MsgFmt(SL_GUARD_REPITE_CLAVE_CERRADO_FMT, [Seccion, T.Substring(0, P).Trim])];
         end
@@ -1406,7 +1416,7 @@ begin
           if S.StartsWith('Workspace.', True) and (S.Length > Length('Workspace.')) then
           begin
             var W: TWorkspaceDef;
-            W.Name := S.Substring(Length('Workspace.')).Trim;
+            W.Name := NombreDeWorkspace(S);
             W.Token := Ini.ReadString(S, 'Token', '').Trim;
             // Everyone had typed AuthToken= for years, so the
             // hand writes it again inside a workspace (measured: the operator

@@ -64,7 +64,6 @@ uses
   Lsp.Listas;
 
 const
-  INSTRUCTIONS_FILE = 'VAULT-INSTRUCTIONS.md';
   MAX_INSTRUCTIONS = 8000; // instructions ride in every prompt: keep them sane
   BOOTSTRAP_BUDGET = 70000; // same per-result cap as vault_read (see there)
 
@@ -77,7 +76,7 @@ begin
   Sb := TStringBuilder.Create;
   try
     Pending := '';
-    for var Boot in ['AGENTS-VAULT.md', 'MEMORY.md'] do
+    for var Boot in [VAULT_REGLAS, VAULT_INDICE] do // EL nombrador (Mcp.Vault.Seed)
     begin
       Full := TPath.Combine(VaultPath, Boot);
       Body := '';
@@ -124,7 +123,7 @@ begin
     Exit;
   // The vault's own instructions win: this is where a particular vault says
   // what it contains, in which language to write, and which projects it covers.
-  Custom := TPath.Combine(VaultPath, INSTRUCTIONS_FILE);
+  Custom := TPath.Combine(VaultPath, VAULT_INSTRUCCIONES);
   if TFile.Exists(Custom) then
   begin
     try
