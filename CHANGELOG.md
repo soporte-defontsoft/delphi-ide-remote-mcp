@@ -8,6 +8,21 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.23.1] - 2026-10-30
+
+A patch with the holes that a review of the whole source measured in the
+published 1.23.0, which earlier versions share. A build could run code left in
+the project's folder, with the service's account and outside any container. A
+project's name or a hand-written `.deployproj` could send a file of the server's
+own folder to a PAServer target. An agent could write the instructions every
+client receives, read the knowledge vault through a link and purge what another
+agent sent to the trash, and a workspace with a repeated key could stay open. All
+closed, so update if you give the server to agents you do not fully trust. It
+also brings 90 smaller fixes: the library path of Android, answers that say what
+really happened, a mailbox that loses nothing. Validated before the release
+through Hermes on a second machine by Qwen3.8 Flash Next (a full test of every
+tool and directed tests of what was fixed).
+
 ### Fixed
 
 - **A project name can no longer inject a field into paclient.** The name an

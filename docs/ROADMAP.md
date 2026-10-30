@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-26 (current release v1.23.0; 42 tools).
+Status page as of 2026-10-30 (current release v1.23.1; 42 tools).
 
 ## Delivered
 
@@ -57,6 +57,8 @@ Status page as of 2026-10-26 (current release v1.23.0; 42 tools).
 - The patch of 1.22: accents wherever an agent reads or points - the position tools on a line with accents, the failure messages of `delphi_test`, `delphi_git diff`/`show` of a source in the machine's ANSI code page -; `delphi_designer insert`/`set` writing what the IDE's own writer stores, and saying when it is not what was given; the build gate resolving a search path the way msbuild and `dcc` do; and a new project property written where the IDE writes it (1.22.1)
 
 - The cleanup of 1.23: one rule where there were several. Files move, copy and delete as an operator does (only what is named, never overwriting, a folder that exists merged into, `Form1.*`), with a note of what crosses the border instead of rewriting projects; the jail comparing paths as the filesystem does; holes of the published 1.22.1 closed (a unit read through the main source's `in`, a profile and a move's note telling what exists outside the roots, a deploy command reaching the build); the server's house cleaning up a folder a test left locked; a copy taking a project and a whole repository
+
+- The patch of 1.23: the holes a review of the whole source found in the published 1.23.0 closed (a build running code left in the project's folder; a project name or a hand-written `.deployproj` sending a file of the server's folder to a target; the instructions every client receives, the vault through a link and another agent's trash; a workspace with a repeated key staying open) (1.23.1)
 
 ## Next
 

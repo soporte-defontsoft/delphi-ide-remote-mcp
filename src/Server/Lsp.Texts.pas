@@ -56,7 +56,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.23.0';
+  SERVER_VERSION = '1.23.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -1572,7 +1572,7 @@ const
   { E0017 sobre <job>.wait.exe = el vigia de un remote-run anterior sigue
     vivo porque su programa sigue corriendo en el target. El deploy borra
     la carpeta antes de copiar, asi que ademas puede haberse llevado el .pid
-    de ese trabajo. Medido 2026-09-23 (192.168.1.10, GUI viva). }
+    de ese trabajo. Medido 2026-09-23 (una maquina de la red, GUI viva). }
   SN_BUILD_DEPLOY_LOCKED_FMT =
     '[BUILD-012] The deploy could not rewrite the project folder on the ' +
     'target: msbuild hit E0017 on the watcher of remote-run job %s, ' +
@@ -3125,7 +3125,7 @@ const
 
   SR_ADB_NEED_ADDRESS =
     '[ADB-016 INVALID_PARAM] connect/disconnect need "address" (ip:port of the ' +
-    'device with wireless debugging on, e.g. 192.168.1.50:5555).';
+    'device with wireless debugging on, e.g. 192.0.2.50:5555).';
 
   SR_ADB_NEED_APK =
     '[ADB-017 INVALID_PARAM] install needs "apk" (path of the compiled .apk, ' +
