@@ -1100,6 +1100,26 @@ function ToolCallDenied(const AToolName: string;
   un perfil que delphi_build profile= negaba despues (9-oct-2026). }
 function BadProfileName(const V: string): Boolean;
 
+{ La regla del nombre de un proyecto que viaja a paclient (--put / --get /
+  --Remove de Lsp.RemoteRun y el Deploy de msbuild): paclient parte --put/--get
+  por ',' y --Remove por ';', y la orden va como UN argumento entre comillas.
+  True = el valor NO puede ir en un campo de paclient. Lista BLANCA: letras y
+  digitos de cualquier alfabeto y ' _-.()+'; una lista de separadores no ve la
+  variante que alguien normalice por el camino. Vacio, '.' y '..' tampoco. No
+  hay juez que preguntar -la gramatica de campos de paclient es suya, medida-:
+  una gramatica NUESTRA, UNA, aqui y vigilada por test_paisaje (V217 de la
+  1.23.1). }
+function NombreRompeCampoDePaclient(const V: string): Boolean;
+
+{ El nombre que el agente nombra (el del .dproj, como lo derivan remote-run,
+  output, el Deploy...: TPath.GetFileNameWithoutExtension), juzgado para
+  paclient: '' si es seguro componerlo en un campo, o PAS-071. EL lector de
+  todas las puertas que mandan ese nombre a paclient -Lsp.RemoteRun
+  (FetchFromTarget, RemoteRun, RemoteOutput; RemoteKill por RemoteRun), la
+  puerta de Mcp.Tools.PAServer (EjecucionRemotaDenegada) y el Deploy de
+  Lsp.BuildRunner-, para que ninguna derive a mano una regla que drifte. }
+function NombreDeProyectoParaPaclientDenegado(const ADprojPath: string): string;
+
 { INVERSION DE DEPENDENCIA (9.A, metadatos de git). La puerta de ESCRITURA
   vive aqui -la unidad de seguridad, baja- y no puede llamar a git -alto-.
   Mcp.Tools.Git le pone este gancho en su initialization. Dada una CARPETA
@@ -1148,7 +1168,8 @@ uses
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   MCPServer.Logger, // el aviso de un dia de la papelera que se queda
   Lsp.Listas,
-  Lsp.Patch;
+  Lsp.Patch,
+  System.Character;
 
 var
   // los dias de la papelera que ya dijeron en el log que se quedan: UNA vez
@@ -1512,6 +1533,28 @@ begin
   Result := '';
   if (V.Trim <> '') and BadProfileName(V.Trim) then
     Result := MsgFmt(SR_PASERVER_NAME_FMT, [V.Trim]);
+end;
+
+function NombreRompeCampoDePaclient(const V: string): Boolean;
+var
+  C: Char;
+begin
+  if (V = '') or (V = '.') or (V = '..') then
+    Exit(True);
+  for C in V do
+    if not (C.IsLetterOrDigit or CharInSet(C, [' ', '_', '-', '.', '(', ')', '+'])) then
+      Exit(True);
+  Result := False;
+end;
+
+function NombreDeProyectoParaPaclientDenegado(const ADprojPath: string): string;
+var
+  Nombre: string;
+begin
+  Result := '';
+  Nombre := TPath.GetFileNameWithoutExtension(ADprojPath);
+  if NombreRompeCampoDePaclient(Nombre) then
+    Result := MsgFmt(SR_PACLIENT_NOMBRE_FMT, [Nombre]);
 end;
 
 { The identifier rule for a device address or serial (adb's ip:port or a

@@ -10,6 +10,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **A project name can no longer inject a field into paclient.** The name an
+  agent gives a project (its `.dproj` file name) travelled unjudged into
+  paclient's transfer fields - `--put`/`--get`, which paclient splits on `,`,
+  and `--Remove`, which it splits on `;` - composed by hand in about eleven
+  places, and into the `--put` msbuild writes for a PAServer deploy. A name
+  like `P;file` split the field and the leftover was read as a LOCAL file in
+  the server's own folder and shipped to the target (measured against the local
+  PAServer: an inoffensive local exe reached it, hash-identical). One judge now
+  vets the name for every door that sends it to paclient - remote-run, kill,
+  output (the one gate in the PAServer tool, plus a second barrier inside the
+  remote-run unit) and the deploy in the build runner - and takes only letters,
+  digits, spaces and `_ - . ( ) +` (PAS-071).
 - **A build no longer runs code left in the project's folder.** msbuild keeps
   its tasks in the project's folder, which an agent writes, and two tools of
   the IDE look for programs there: the resource compiler for its back end, and

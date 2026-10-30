@@ -2408,6 +2408,12 @@ begin
     var NoEjecutable := RemoteRunProjectDenied(ADprojPath);
     if NoEjecutable <> '' then
       raise Exception.Create(NoEjecutable);
+    // ...y un nombre que no rompa un campo de paclient: msbuild compone el
+    // --put del Deploy con el nombre del proyecto como carpeta remota
+    // (<usuario>-<perfil>/<Nombre>/), y un ',' o ';' partiria el campo (V217)
+    var NombrePaclient := NombreDeProyectoParaPaclientDenegado(ADprojPath);
+    if NombrePaclient <> '' then
+      raise Exception.Create(NombrePaclient);
   end;
   // The deployment targets address the remote machine through $(Profile)
   // (their PAClient task takes ProfileName="$(Profile)"). Vetted at the gate

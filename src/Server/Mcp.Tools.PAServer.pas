@@ -1196,6 +1196,12 @@ begin
   if not TFile.Exists(AProj) then
     Exit(NoEsFichero(AProj, MsgFmt(SR_PASERVER_RUN_NOPROJ_FMT, [AProj])));
   Result := RemoteRunProjectDenied(AProj);
+  if Result <> '' then
+    Exit;
+  // ...y un nombre que no rompa un campo de paclient: remote-run, kill y output
+  // lo meten en --put / --get / --Remove (V217). UNA puerta para los tres; el
+  // segundo cerrojo vive dentro de Lsp.RemoteRun
+  Result := NombreDeProyectoParaPaclientDenegado(AProj);
 end;
 
 { Lo que pide cada comando de un trabajo (remote-run, kill, output) antes

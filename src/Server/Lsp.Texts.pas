@@ -7679,6 +7679,19 @@ const
     'profile points to another machine or to another PAServer. delphi_paserver ' +
     'profiles lists them; create one for that platform with add-profile.';
 
+  // La regla del nombre de un proyecto que viaja a paclient: paclient parte
+  // --put/--get por ',' y --Remove por ';', y la orden va como UN argumento
+  // entre comillas. Un ';' en el nombre parte el campo y el trozo que sobra se
+  // lee como fichero LOCAL, relativo a la carpeta del servidor (medido
+  // 30-oct-2026 contra el PAServer local; V217 de la 1.23.1). El texto no lo
+  // cuenta: al agente no se le nombra la casa del servidor. La regla, en
+  // Lsp.Guard (NombreRompeCampoDePaclient).
+  SR_PACLIENT_NOMBRE_FMT =
+    '[PAS-071 DENIED] The project name "%s" cannot travel to a PAServer ' +
+    'target: its name goes into the fields of the transfer, and only letters, ' +
+    'digits, spaces and _ - . ( ) + are safe there. Nothing was sent. Rename ' +
+    'the project (its .dproj) and try again.';
+
   SR_GIT_REMOTE_OFF_FMT =
     '[GIT-004 DENIED] This server does not talk to "%s". An explicit URL ' +
     'in a git command makes THE SERVER open the connection, so deciding ' +

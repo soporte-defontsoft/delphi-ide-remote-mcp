@@ -283,6 +283,9 @@ begin
      ARelPath.StartsWith('/') or ARelPath.Contains('\') then
     Exit(MsgText(SR_FETCHTARGET_BADPATH));
   ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
+  Result := NombreDeProyectoParaPaclientDenegado(ADprojPath); // V217: no a un campo de paclient
+  if Result <> '' then
+    Exit;
   CrearCarpeta(ADestDir);
   Ops := Format('"--get=%s/%s,%s"', [ProjName, ARelPath, ADestDir]);
   Rc := Paclient(Pc, Ops, AProfile, Output);
@@ -677,6 +680,16 @@ begin
   // THAT same folder and runs from there, so $D is the deploy dir.
   ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
   DeployRel := ProjName;
+  // V217: el nombre no puede romper un campo de paclient (--put / --get /
+  // --Remove de abajo). La puerta de Mcp.Tools.PAServer ya lo juzga; este es
+  // el cerrojo de dentro, para cualquier llamador
+  var NombreMalo := NombreDeProyectoParaPaclientDenegado(ADprojPath);
+  if NombreMalo <> '' then
+  begin
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('error', NombreMalo);
+    Exit;
+  end;
   if AExeName = '' then
     ExeLeaf := ProjName
   else
@@ -880,6 +893,14 @@ begin
   end;
   // la misma carpeta que deriva remote-run: la del proyecto, nunca otra
   DeployRel := TPath.GetFileNameWithoutExtension(ADprojPath);
+  // V217: segundo cerrojo del nombre a paclient (su --get y su --Remove)
+  var NombreMalo := NombreDeProyectoParaPaclientDenegado(ADprojPath);
+  if NombreMalo <> '' then
+  begin
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('error', NombreMalo);
+    Exit;
+  end;
   TmpDir := ServerTempDir(REMOTERUN_SUB);
   CrearCarpeta(TmpDir);
   Texto := '';
