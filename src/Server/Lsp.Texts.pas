@@ -6655,6 +6655,14 @@ const
     'never runs anything of the project. Nothing was built. Move the file out ' +
     'of that folder (a subfolder is fine) and build again.';
 
+  SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT =
+    '[BUILD-066 DENIED] I will not build this. %s in %s is "%s", and a field of ' +
+    'a deployment entry only takes letters, digits, spaces and the characters ' +
+    'of a path: a comma, a semicolon, a quote or an msbuild escape would change ' +
+    'what the transfer to the target sends, and in RemoteDir and RemoteName a ' +
+    'macro other than $(PROJECTNAME) cannot be checked. Nothing was built. Fix ' +
+    'that entry of the deployment manifest.';
+
   SN_BUILD_LOCKED_OUTPUT =
     '[BUILD-032] F2039 "Could not create output file" is almost never a ' +
     'fault in your code: the binary this build wants to write is OPEN. ' +

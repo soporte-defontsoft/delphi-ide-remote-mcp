@@ -1908,6 +1908,31 @@ var
     end;
   end;
 
+  // RemoteDir y RemoteName de un DeployFile: van tal cual al --put de paclient, y
+  // un ';' abre otra entrada que sube un fichero local (V217). Sin macros: no se
+  // expanden aqui. Salvo $(PROJECTNAME), la unica de los manifiestos del IDE, que
+  // tambien la define en cada .dproj (<ProjectName Condition=...>): vale si lo que
+  // el proyecto le pone pasa como nombre.
+  function JuzgaCampoRemoto(const AValor: TValorDelProyecto; const AFichero: string): string;
+  const
+    MACRO_DEL_IDE = '$(PROJECTNAME)';
+  begin
+    var Sin := StringReplace(AValor.Escrito, MACRO_DEL_IDE, '', [rfReplaceAll, rfIgnoreCase]);
+    var Malo := Sin.Contains('$') or ValorRompeCampoDePaclient(Sin);
+    if Sin <> AValor.Escrito then
+      for var I := 0 to High(Docs) do
+        for var E in Docs[I] do
+          if SameText(E.Nombre, 'ProjectName') and (Length(E.Ruta) > 0) and
+             (E.Ruta[High(E.Ruta)] = 'propertygroup') and not E.Tramo.Vacio and
+             NombreRompeCampoDePaclient(ValorDeTramo(Xmls[I], E.Tramo).Trim) then
+            Malo := True;
+    if Malo then
+      Result := MsgFmt(SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT,
+        [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito])
+    else
+      Result := '';
+  end;
+
   function Juzga(const AValor: TValorDelProyecto; const AFichero: string;
     const ADeOtros: TArray<string>): string;
   begin
@@ -1948,6 +1973,10 @@ var
     // ';' que separa la lista (medido el 22-oct-2026, los dos leian fuera) (H3)
     for var Trozo in TrozosDeLista(DesescapaDeMsbuild(Expande(AValor.Expandido, ADeOtros))) do
     begin
+      // el Include de un DeployFile tambien viaja a un campo de paclient (V217)
+      if SameText(AValor.Elemento, 'DeployFile') and ValorRompeCampoDePaclient(Trozo) then
+        Exit(MsgFmt(SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT,
+          [AValor.Elemento, TPath.GetFileName(AFichero), Trozo]));
       Result := JuzgaTrozo(Trozo, AValor, AFichero);
       if Result <> '' then
         Exit;
@@ -2034,6 +2063,12 @@ begin
       for var V in ValoresQueLeeElBuild(Xmls[I], APlat, ACfg, Externas + DeOtros, GlobalesDelBuild) do
       begin
         Result := Juzga(V, Ficheros[I], DeOtros);
+        if Result <> '' then
+          Exit;
+      end;
+      for var C in CamposRemotosDeDespliegue(Xmls[I]) do
+      begin
+        Result := JuzgaCampoRemoto(C, Ficheros[I]);
         if Result <> '' then
           Exit;
       end;
@@ -2462,6 +2497,14 @@ begin
     EnsureDeployManifest(TPath.GetFullPath(ADprojPath), Plat, Info.RootDir,
       ManifestNew, Cfg); // la config del build (A35)
     ManifestFilled := ManifestFilled and ManifestNew;
+    // otra pasada, con el manifiesto ya importado y completado: uno escrito a
+    // mano antes del primer Deploy no estaba en la cadena del escaneo (V217)
+    if not Confiado then
+    begin
+      var LecturaDelManifiesto := LecturasDelBuildDenegadas(ADprojPath, Plat, Cfg, Info);
+      if LecturaDelManifiesto <> '' then
+        raise Exception.Create(LecturaDelManifiesto);
+    end;
   end;
   // /p:DeviceId= reaches the deployment targets, but measured they only
   // auto-install on iOS (_InstallIpa); an Android install is delphi_adb's

@@ -24,6 +24,8 @@ y nada viaja a paclient.
   P5 control: un nombre limpio ("Limpio") SIGUE llegando a paclient (no se sobre-niega).
   P6 la regla es una lista blanca: un punto y coma de ancho completo tambien se niega.
   P7 control: acentos, espacios, puntos y guiones son un nombre normal y no se niegan.
+  D1-D9 los campos de un DeployFile de un .deployproj a mano (BUILD-066): el ';' abre otra entrada
+     del --put de msbuild (medido contra el PAServer local con un nombre que no existe).
 
 Sin PAServer: paclient = tests/paclient_stub.py (DELPHI_MCP_PACLIENT), que imita el reparto por
 ',' y ';'. El servidor corre con cwd=CASA, como en produccion, para que el trozo que sobra se
@@ -108,6 +110,23 @@ def limpia_scratch():
 
 
 JOB = '20991231-235959999-deadbeef'  # id con la forma buena pero que este servidor no emitio
+SIN_CAMPO = 'NOEXISTE_INOCUO.bin'  # lo que sobraria: un nombre que no existe
+
+
+def manifiesto(d, nombre, remotedir=None, remotename=None, include=None):
+    # un .deployproj como el que genera el servidor, con un campo cambiado
+    open(os.path.join(d, nombre + '.deployproj'), 'w', encoding='utf-8').write(
+        '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
+        '  <Import Condition="Exists(\'$(BDS)\\bin\\CodeGear.Deployment.targets\')" Project="$(BDS)\\bin\\CodeGear.Deployment.targets"/>\n'
+        '  <ItemGroup>\n'
+        '    <DeployFile Include="%s">\n'
+        '      <RemoteDir>%s</RemoteDir>\n'
+        '      <RemoteName>%s</RemoteName>\n'
+        '      <Operation>1</Operation>\n'
+        '      <Overwrite>True</Overwrite>\n'
+        '    </DeployFile>\n'
+        '  </ItemGroup>\n'
+        '</Project>\n' % (include or 'x.txt', remotedir or (nombre + '\\'), remotename or 'x.txt'))
 
 try:
     # P1: ';' en el nombre -> el trozo que sobra sube un fichero local de la casa; el arreglo lo niega
@@ -154,6 +173,39 @@ try:
                                  'project': dproj('Mi Gesti' + chr(0xf3) + 'n-2.1 (v2)')}, t=60)
     check('P7 control: acento, espacio, punto, guion y parentesis no se niegan',
           not mc.es(r, 'SR_PACLIENT_NOMBRE_FMT'), r[:200])
+
+    # Los campos de un .deployproj escrito a mano (BUILD-066). ROJOS contra 4f07b8e: nadie los juzga
+    dep = os.path.join(JAIL, 'Dep')
+    call('delphi_create', {'kind': 'project-console', 'name': 'Dep', 'dir': dep})
+    dep_proj = os.path.join(dep, 'Dep.dproj')
+    open(os.path.join(dep, 'x.txt'), 'w').write('x')
+    for etiqueta, campos in [
+            ('D1 ";" en RemoteDir, sin desplegar antes (el manifiesto a mano aun no esta importado)',
+             {'remotedir': 'Dep\\;' + SIN_CAMPO}),
+            ('D2 ";" en RemoteName', {'remotename': 'x.txt;' + SIN_CAMPO}),
+            ('D3 "," en RemoteDir', {'remotedir': 'Dep\\,' + SIN_CAMPO}),
+            ('D4 ";" escapado para msbuild', {'remotedir': 'Dep\\%3B' + SIN_CAMPO}),
+            ('D5 ";" como entidad XML', {'remotedir': 'Dep\\&#59;' + SIN_CAMPO}),
+            ('D6 una macro que no se expande aqui', {'remotedir': '$(MiProp)\\'}),
+            ('D7 "," en el Include', {'include': 'x,y.txt'})]:
+        manifiesto(dep, 'Dep', **campos)
+        r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64', 'target': 'Deploy', 'profile': PROF}, t=300)
+        check(etiqueta + ': BUILD-066', mc.es(r, 'SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT'), r[:240])
+    # lo mismo en un build que no despliega: el manifiesto ya esta importado
+    manifiesto(dep, 'Dep', remotedir='Dep\\;' + SIN_CAMPO)
+    r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64'}, t=300)
+    check('D8 ...y tambien en un build sin Deploy', mc.es(r, 'SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT'), r[:240])
+    # control: lo que escribe el IDE de verdad (medido en 62 manifiestos)
+    manifiesto(dep, 'Dep', remotedir='$(PROJECTNAME).app\\..\\Contents\\', remotename='Default~ipad@2x.png')
+    r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64'}, t=300)
+    check('D9 control: $(PROJECTNAME), .., ~ y @ no se niegan', not mc.es(r, 'SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT'), r[:240])
+    # ...pero $(PROJECTNAME) con un valor que el proyecto redefine mal, si
+    texto = open(dep_proj, encoding='utf-8-sig').read()
+    i = texto.index('<PropertyGroup')
+    open(dep_proj, 'w', encoding='utf-8').write(
+        texto[:i] + '<PropertyGroup><ProjectName>Dep;' + SIN_CAMPO + '</ProjectName></PropertyGroup>' + texto[i:])
+    r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64'}, t=300)
+    check('D10 $(PROJECTNAME) con un ";" puesto por el proyecto: BUILD-066', mc.es(r, 'SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT'), r[:240])
 finally:
     srv.mata()
 

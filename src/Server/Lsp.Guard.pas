@@ -1111,6 +1111,14 @@ function BadProfileName(const V: string): Boolean;
   1.23.1). }
 function NombreRompeCampoDePaclient(const V: string): Boolean;
 
+{ La hermana para los campos de un DeployFile (Include, RemoteDir, RemoteName),
+  que el Deploy de msbuild pone en el --put de paclient: un ';' abre otra entrada
+  y lo que sobra se lee como fichero LOCAL a subir (medido el 30-oct-2026 contra
+  el PAServer local, V217). Lista blanca: la del nombre mas lo que lleva una ruta.
+  Su juez de lo legitimo son 62 manifiestos del IDE (Samples y raices, 30-oct): ni
+  un ',' ';' '"' ni '%'. Lleva '$' y parentesis: quien llama decide las macros. }
+function ValorRompeCampoDePaclient(const V: string): Boolean;
+
 { El nombre que el agente nombra (el del .dproj, como lo derivan remote-run,
   output, el Deploy...: TPath.GetFileNameWithoutExtension), juzgado para
   paclient: '' si es seguro componerlo en un campo, o PAS-071. EL lector de
@@ -1545,6 +1553,17 @@ begin
     if not (C.IsLetterOrDigit or CharInSet(C, [' ', '_', '-', '.', '(', ')', '+'])) then
       Exit(True);
   Result := False;
+end;
+
+function ValorRompeCampoDePaclient(const V: string): Boolean;
+var
+  C: Char;
+begin
+  Result := False;
+  for C in V do
+    if not (C.IsLetterOrDigit or CharInSet(C, [' ', '\', '/', '.', '_', '-', '(', ')', '+',
+       '$', ':', '@', '~', '&', '''', '#', '[', ']', '{', '}', '!', '=', '^'])) then
+      Exit(True);
 end;
 
 function NombreDeProyectoParaPaclientDenegado(const ADprojPath: string): string;

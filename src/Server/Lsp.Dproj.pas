@@ -1024,6 +1024,13 @@ function PropiedadesDefinidas(const AElementos: TArray<TElementoXml>): TArray<st
 function ValoresQueLeeElBuild(const AXml, APlatform, AConfig: string;
   const AExternas, AGlobales: TArray<string>): TArray<TValorDelProyecto>;
 
+{ Los campos de un DeployFile que no son rutas de aqui y viajan a paclient
+  (RemoteDir, RemoteName), como estan escritos: hijos del item, asi que
+  ValoresQueLeeElBuild, que lee el Include, no los ve. Solo Elemento y Escrito:
+  VeredictosDeElementos no expande metadatos, y quien los juzga no se fia de una
+  macro. De todos los grupos: un manifiesto del IDE pasa en cualquiera. }
+function CamposRemotosDeDespliegue(const AXml: string): TArray<TValorDelProyecto>;
+
 { Los textos del .dproj y de cada fichero DEL PROYECTO que importa (un
   .optset), recursivo hasta 4 niveles, con el fichero de cada texto en el
   mismo orden: lo que un build lee de este proyecto. Los del IDE no se leen
@@ -4570,6 +4577,24 @@ begin
             Result := Result + [V];
         end;
   end;
+end;
+
+function CamposRemotosDeDespliegue(const AXml: string): TArray<TValorDelProyecto>;
+var
+  Mal: string;
+  V: TValorDelProyecto;
+begin
+  Result := nil;
+  for var E in ElementosDe(AXml, Mal) do
+    if (Length(E.Ruta) > 0) and (E.Ruta[High(E.Ruta)] = 'deployfile') and
+       MatchText(E.Nombre, ['RemoteDir', 'RemoteName']) and not E.Tramo.Vacio then
+    begin
+      V := Default(TValorDelProyecto);
+      V.Elemento := E.Escrito;
+      V.Escrito := ValorDeTramo(AXml, E.Tramo).Trim;
+      if V.Escrito <> '' then
+        Result := Result + [V];
+    end;
 end;
 
 function HazardScan(const AXml, AProjectFile: string; ADepth: Integer;

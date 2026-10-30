@@ -21,7 +21,13 @@ the MCP `initialize` response (`serverInfo.version`).
   vets the name for every door that sends it to paclient - remote-run, kill,
   output (the one gate in the PAServer tool, plus a second barrier inside the
   remote-run unit) and the deploy in the build runner - and takes only letters,
-  digits, spaces and `_ - . ( ) +` (PAS-071).
+  digits, spaces and `_ - . ( ) +` (PAS-071). The same split was open through
+  the fields of a deployment entry in a hand-written `.deployproj`: `RemoteDir`
+  and `RemoteName` reached paclient unjudged, and only the path of `Include` was
+  checked (measured with a name that does not exist: paclient looked for it as a
+  local file). The build now judges the three, with their msbuild escapes and
+  macros, also on a manifest it has just imported, and refuses what the IDE never
+  writes (BUILD-066; measured over 62 IDE manifests).
 - **A build no longer runs code left in the project's folder.** msbuild keeps
   its tasks in the project's folder, which an agent writes, and two tools of
   the IDE look for programs there: the resource compiler for its back end, and
