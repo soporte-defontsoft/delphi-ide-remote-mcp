@@ -54,7 +54,11 @@ REGLAS = [
       # el lanzado se movio aqui desde BuildStyles (antes compilaba el .rc directo)
       ('Mcp.Tools.Styles.pas', 'CompilaRcEnContenedor'),
       ('Lsp.TestRunner.pas', 'CorreEnContenedor'), ('Mcp.Tools.Adb.pas', 'RunAdb'),
-      ('Mcp.Tools.Git.pas', 'GitCorre'), ('Lsp.FormRender.pas', 'CorreRender'),
+      ('Mcp.Tools.Git.pas', 'GitCorre'),
+      # el ayudante del render, DENTRO de su contenedor (V65 de la 1.24)
+      ('Lsp.FormRender.pas', 'CorreEnSuContenedor'),
+      # ...y la pregunta de la caja de paquetes: que clases COM no alcanza (V65)
+      ('Lsp.FormRender.pas', 'DaSusClasesAlContenedor'),
       # los que la regla no veia hasta el 18-oct-2026: el nucleo de RunCaptured*
       # (con y sin contenedor), el lanzador del AppContainer, el del motor LSP
       # (DelphiLSP.exe) y el ayudante de remote-run que arranca lo pedido
@@ -388,11 +392,7 @@ REGLAS = [
     # unas 18 veces en cuatro unidades con dos grafias, y dio un bug medido el 9-oct-2026
     # (SysrootsRegistrados); D9 de la auditoria de duplicados, cerrado en la 1.21.4
     ('la clave del IDE en el registro', r'Embarcadero\\+BDS',
-     [('Lsp.Discovery.pas', 'ClaveDelIde'),
-      # otro programa: el renderizador de forms no lleva Lsp.Discovery (sus dos lecturas)
-      ('FormRender.Comun.pas', 'RaizDelIde'), ('FormRender.Comun.pas', 'LeeConocidos'),
-      # ...y sus textos (el Lsp.Texts del renderizador): un mensaje la nombra, no la compone
-      ('FormRender.Textos.pas', '*')],
+     [('Lsp.Discovery.pas', 'ClaveDelIde')],
      'ClaveDelIde (Lsp.Discovery): la raiz, la de una version o una subclave; quien la quiera '
      'absoluta le pone la barra delante'),
     # el esquema de una direccion de git: git no tiene una orden que diga como la lee sin
@@ -604,7 +604,8 @@ REGLAS = [
     # la peticion al ayudante de render vive en su nombrador (V102 de la 1.23.1): el conversor de V71
     # la componia a mano y salia sin la version del IDE
     ('una peticion de render compuesta a mano', r'\bDefault\(\s*TPeticionRender\s*\)',
-     [('Lsp.FormRender.pas', 'PeticionDeRender')],
+     # DaSusClasesAlContenedor: la pregunta de la caja no lleva form ni IDE, no hay nada comun que poner
+     [('Lsp.FormRender.pas', 'PeticionDeRender'), ('Lsp.FormRender.pas', 'DaSusClasesAlContenedor')],
      'PeticionDeRender (Lsp.FormRender): lo comun de una peticion al ayudante - framework, ruta, la version '
      'del IDE, la raiz -; quien la usa anade lo suyo (Salida, Convierte...)'),
     # que es una unidad en una carpeta que dcc mira: la biblioteca y, desde V107 de la 1.23.1, la
@@ -1048,6 +1049,8 @@ REGLAS = [
       # (el .pas que decide lo que se carga, anotado: era de AncestroDeClase y de
       # MaestroDeVista, su gemela para una vista FMX; V120 de la 1.24)
       ('FormRender.Comun.pas', 'TextoDeUnidadAnotada'),
+      # (la lista de paquetes que le da el servidor; V65 de la 1.24)
+      ('FormRender.Comun.pas', 'LeeConocidos'),
       ('FormRender.Comun.pas', 'TCargador.LeeUno'), ('FormRender.Fmx.pas', 'AplicaEstilo'),
       ('FormRender.Vcl.pas', 'Main'), ('DelphiStyleConvert.dpr', 'Entrada'),
       # (la copia que el servidor le da a convertir en su temporal, V71)
@@ -1119,6 +1122,11 @@ REGLAS = [
       # los recorredores y movimientos de la jaula (no cruzan enlaces; la puerta antes)
       ('Lsp.Guard.pas', 'CopiaNuestra'), ('Lsp.Guard.pas', 'CopiaArbol'),
       ('Lsp.Guard.pas', 'MueveArbol'), ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
+      # la caja de paquetes del render: lo de la instalacion a NUESTRO temporal, lo
+      # que ningun agente nombra y su jaula negaria (V65 de la 1.24)
+      ('Lsp.FormRender.pas', 'CajaDePaquetes'),
+      # ...y la vuelta de una copia del ayudante cuyo manifiesto Windows no acepto
+      ('Lsp.FormRender.pas', 'DaSusClasesAlContenedor'),
       ('Mcp.Tools.FileOps.pas', 'MoveToTrash'), ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
       # el mezclador de una carpeta que ya esta en el destino y su deshacer (V19: la
       # puerta del arbol antes, MovidoDenegado; entrada a entrada, un enlace como
@@ -2341,7 +2349,7 @@ POSITIVOS = re.compile(r"""(['"])\[?(?:%s)-\d{3}(?: [A-Z_]+)?\]?\1\s+in\b|(?<!no
 check('mutante de los ids positivos: se cuentan las dos formas, y las negativas no',
       len(POSITIVOS.findall("x = 'CFG-043' in r and mc.tiene(r, 'GIT-067') and not mc.tiene(r, 'GIT-001') "
                             "and 'GIT-002' not in r and '[GIT-051 DENIED]' in r")) == 3)
-IDS_POSITIVOS_TOPE = 201  # medido el 25-oct-2026 (V56; 201 tras V19, que paso los de una bateria a mc.es)
+IDS_POSITIVOS_TOPE = 200  # medido el 25-oct-2026 (V56; 201 tras V19, que paso los de una bateria a mc.es; 200 tras V65)
 _n = sum(len(POSITIVOS.findall(l)) for _, t in TEXTOS_PY for l in codigo_py(t))
 check('los ids positivos a mano: %d, el tope declarado (solo puede encoger: si baja, se baja el tope)' % _n,
       _n == IDS_POSITIVOS_TOPE, IDS_POSITIVOS_TOPE)

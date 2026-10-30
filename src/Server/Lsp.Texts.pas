@@ -5642,6 +5642,17 @@ const
   SR_DESIGNER_RENDER_NO_ARRANCA_FMT =
     '[DSGN-064 INTERNAL] %s could not be started: %s';
 
+  SL_RENDER_PAQUETE_SIN_COPIAR_FMT =
+    'A package could not be copied for the renderer, which will load without it: %s (%s).';
+
+  SL_RENDER_CLASES_SIN_DAR_FMT =
+    'The renderer''s container was left without the COM classes it cannot look up itself, ' +
+    'so components that need them will not load in a form: %s.';
+
+  SR_DESIGNER_SIN_CONTENEDOR_FMT =
+    '[DSGN-177 INTERNAL] The form renderer runs only inside its container, ' +
+    'and the container could not be prepared: %s. Nothing was drawn.';
+
   SR_DESIGNER_VALOR_CON_COMILLAS_FMT =
     '[DSGN-065 INVALID_PARAM] "%s" carries a double quote or a control ' +
     'character, which cannot travel to the renderer as one value. Nothing ' +

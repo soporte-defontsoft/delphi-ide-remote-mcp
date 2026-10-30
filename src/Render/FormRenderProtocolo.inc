@@ -45,6 +45,8 @@
                                  // nombre del metodo de un evento (no hay codigo) o una referencia a un
                                  // componente que no resolvio en el form (la de otro modulo). El escritor no
                                  // lo escribe, y el servidor conserva esa linea (1.22.1)
+  FR_UNREADABLE_CLASS = 'UNREADABLECLASS='; // UNREADABLECLASS=<clsid> (repetible; --unreadableclasses): una clase
+                                 // COM cuya clave InprocServer32 no se deja leer desde el contenedor
   FR_MS = 'MS=';                 // MS=<carga>,<pintado> en milisegundos
   FR_ERROR = 'ERROR=';           // ERROR=<motivo>; va con codigo de salida 1 (3 si fue el tiempo limite)
   FR_NOT_LOADED = 'NOTLOADED=';  // NOTLOADED=<clase de la excepcion>|<su mensaje EN PARTES>, antes del ERROR=:

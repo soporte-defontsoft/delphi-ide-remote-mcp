@@ -9,7 +9,8 @@ never reproduce it: 1.11.0 shipped with delphi_test broken from the service
 not connect to the session-0 desktop) and NO battery caught it - only the live
 test against the real service did. This battery is that guard: it launches the
 server on a freshly created RESTRICTED desktop (built WITHOUT the AC ACE) and
-runs a real DUnitX test through it.
+runs a real DUnitX test through it, and a real form render (S14-S16), which
+needs more of that desktop than a test does.
 
 With the 1.11.1 fix (Lsp.Sandbox.ConcedeAPaquetes grants the AC ACE to the
 server's window station and desktop before launching) the test runs and stays
@@ -30,7 +31,7 @@ BASE = mc.carpeta('servicio')
 SRV = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
-EXE = mc.copia_exe(SRV)
+EXE = mc.copia_exe(SRV, con_render=True)
 with open(os.path.join(SRV, 'settings.ini'), 'w') as f:
     f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n' % PORT +
             '[Workspace.Srv]\nToken=%s\nRoots=%s\nAllowTests=1\n'
@@ -322,6 +323,30 @@ try:
     if hstation:
         check('S13 estacion: el solapamiento devuelve su ACL original',
               foto_permisos(hstation)['aces'] == antes_estacion['aces'])
+
+    # El ayudante del render, en su contenedor desde este escritorio (V65 de la 1.24): sus
+    # ventanas piden mas que delphi_test (ConVentanas), y las baterias en sesion interactiva no
+    # lo veian: el primer preview por el servicio respondio SYS-028. El form lleva ADO: tambien
+    # la pregunta de la caja de paquetes pasa por aqui.
+    FORM_DIR = os.path.join(JAIL, 'Form')
+    os.makedirs(FORM_DIR)
+    with open(os.path.join(FORM_DIR, 'UAdo.pas'), 'wb') as f:
+        f.write(b'unit UAdo;\r\n\r\ninterface\r\n\r\nuses\r\n  System.Classes, Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, Data.DB, Data.Win.ADODB;\r\n\r\n'
+                b'type\r\n  TFormAdo = class(TForm)\r\n    Boton: TButton;\r\n    Query: TADOQuery;\r\n  end;\r\n\r\n'
+                b'implementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
+    FORM = os.path.join(FORM_DIR, 'UAdo.dfm')
+    with open(FORM, 'wb') as f:
+        f.write(b"object FormAdo: TFormAdo\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'A'\r\n  ClientHeight = 200\r\n  ClientWidth = 300\r\n"
+                b"  object Boton: TButton\r\n    Left = 8\r\n    Top = 8\r\n    Width = 75\r\n    Height = 25\r\n    Caption = 'B'\r\n    TabOrder = 0\r\n  end\r\n"
+                b'  object Query: TADOQuery\r\n    Parameters = <>\r\n    Left = 200\r\n    Top = 16\r\n  end\r\nend\r\n')
+    PNG = os.path.join(FORM_DIR, 'o.png')
+    antes_render = foto_permisos(hdesk)
+    r = cli.call('delphi_designer', {'command': 'preview', 'path': FORM, 'out': PNG}, 240)
+    j = J(r)
+    check('S14 el render dibuja desde un escritorio de sesion 0, en su contenedor', os.path.exists(PNG) and j.get('components') == 2, r[:500])
+    check('S15 ...y no se deja por el camino un componente de ADO', bool(j) and not j.get('ignored'), r[:500])
+    check('S16 al terminar el render quedan las ACE de antes', foto_permisos(hdesk)['aces'] == antes_render['aces'],
+          str(foto_permisos(hdesk)['permitidos']))
 finally:
     try:
         k32.TerminateProcess(pi.hProcess, 0)

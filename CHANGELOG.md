@@ -10,6 +10,42 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **The form renderer now always runs inside its own container, and its answer no
+  longer says whether a file exists.** `delphi_designer` preview, lint and the check
+  of what the IDE would save run the design code of the installed packages. That code
+  reads and writes whatever a form asks it to, and it ran with the service's account.
+  Before drawing, the server looked up each file a form names and refused the ones
+  outside the session's reach, so the refusal told an agent which files exist on the
+  server. Now each call gets an AppContainer with no capabilities and its Job Object,
+  and if that cannot be prepared nothing is drawn (`DSGN-177`). From there, nothing of
+  the roots, the server's folder, the user's profile or a mapped drive can be opened,
+  and there is no network. Windows and the Program Files folders stay readable to any
+  container, so a form literal naming something there is refused by its text
+  (`DSGN-115`), exists or not. What the renderer needs travels to it: the form, its
+  sibling forms and units and what its literals name below its folder are copied to a
+  folder of the call, and the packages to a read-only box shared by all calls. The
+  renderers no longer read the registry: the server tells them where the IDE is and
+  which packages they may load. The ADO classes, which Windows keeps under a registry
+  key no container may read, are declared in the manifest of the box's copy of the
+  renderers, so a form with a `TADOQuery` still loads whole and can still be judged.
+  Measured over 876 forms, the 292 that could differ repeated with the ADO classes in
+  place: components and reader messages match the previous version; time on forms with ADO is 3 % more, and
+  the first call after a change of packages takes about a second more to make the box.
+  What changes on purpose, because it is what the container is for:
+  - A form no longer shows live data from outside: a `TFileListBox` lists the call's
+    folder, a dataset that opens its database at design time comes out empty, and a
+    component that needs a blocked dialog says so (`RENDER-022`).
+  - A form literal under Windows or Program Files stops the drawing even if that file
+    does not exist on this machine: an image path of an older RAD Studio does it, as
+    in two forms of the RAD Studio samples.
+  - A component that opens a file by its full path fails as with a missing file, even
+    inside the roots.
+  - The language of the RTL's messages is Windows's: the per-program override in the
+    IDE's registry does not reach the container.
+  - If asking for those COM classes fails when the box is made, that box goes without
+    them until the next one: the server logs it, and the components that need them
+    come out in `ignored`.
+  Not yet measured on an installation with other third-party packages.
 - **A copy of a form next to the original no longer takes its place.** To draw or
   judge a form, the renderers look for its ancestors and frames by root class among
   the forms of the folder, and took the first one listed. With `UBase - copia.dfm`
@@ -32,11 +68,10 @@ the MCP `initialize` response (`serverInfo.version`).
   `delphi_designer` preview, lint and the check of what the IDE would save loaded
   every package in the IDE's Known Packages, without looking at Disabled Packages:
   a class of a disabled package was drawn as if it were available, and a package
-  disabled because it misbehaves still ran. Now the server tells
-  the renderers which packages are disabled, so such a class comes out substituted
-  and `packages` counts only the enabled ones (`DSGN-068` says it may be disabled).
-  They also take `$(BDSCOMMONDIR)` from the server's reader of `rsvars.bat` instead
-  of composing it by hand.
+  disabled because it misbehaves still ran. Now the server gives the renderers only
+  the enabled ones, so such a class comes out substituted and `packages` counts only
+  those (`DSGN-068` says it may be disabled). `$(BDSCOMMONDIR)` comes from the
+  server's reader of `rsvars.bat` instead of being composed by hand.
 
 ## [1.23.1] - 2026-10-30
 

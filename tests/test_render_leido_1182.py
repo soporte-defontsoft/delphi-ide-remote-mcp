@@ -11,14 +11,15 @@ La carrera no se puede provocar desde fuera de forma fiable (el ayudante lee el
 ancestro y acaba en milisegundos): la comparacion la miden las unitarias
 (LspTests.FormRender: el lector de READ=, CambioEnLoLeido con el fichero igual,
 cambiado y borrado). Aqui, el renderizador DE VERDAD, lanzado como lo lanza el
-juez (--writeback on --folder), y el servidor entero de control:
+juez (--writeback on, con la propuesta entre sus hermanos: lo copia todo a la
+carpeta de la llamada), y el servidor entero de control:
 
   L1 READ= del ancestro (UBase.dfm) con el sha256 de sus bytes (ROJO en
      produccion: no habia READ=)
   L2 ...y del frame del ancestro (UMarco.dfm) y del .pas que decide la cadena
      (UHija.pas), con sus sha256
-  L3 la propuesta (lo PEDIDO, en otra carpeta) no se anota, ni el form de verdad
-     (lo compara el servidor por sus bytes)
+  L3 la propuesta (lo PEDIDO) no se anota: el form de verdad lo compara el
+     servidor por sus bytes
   L4 control: el juez contesto (WRITTEN=) sin form a medias (sin PARTIAL=)
   E1 control por el servidor: ordenar en esa form heredada se escribe (lo leido
      sigue igual: ningun DSGN-144 de mas)
@@ -35,9 +36,7 @@ from mcp_cliente import check
 
 BASE = mc.carpeta('render_leido_1182')
 JAIL = os.path.join(BASE, 'jail')
-PROP = os.path.join(BASE, 'propuesta')
 os.makedirs(JAIL)
-os.makedirs(PROP)
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)  # el juez es el renderizador
 RENDER = os.path.join(os.path.dirname(EXE), 'DelphiFormRenderVcl.exe')
 
@@ -72,13 +71,11 @@ HIJA = escribe('UHija.dfm', 'inherited FormHija: TFormHija\n  Caption = \'Hija\'
                '    Left = 8\n    Top = 120\n    Width = 75\n    Height = 25\n    Caption = \'Dos\'\n'
                '    TabOrder = 1\n  end\n  object Button3: TButton\n    Left = 100\n    Top = 120\n'
                '    Width = 75\n    Height = 25\n    Caption = \'Tres\'\n    TabOrder = 2\n  end\nend\n')
-# la propuesta, como la escribe el juez del servidor: el mismo nombre, en otra carpeta
-PROPUESTA = os.path.join(PROP, 'UHija.dfm')
-shutil.copyfile(HIJA, PROPUESTA)
 
 # el renderizador, como lo lanza ComoLoEscribeElIde (Lsp.FormRender.ComponeOrdenDeRender)
-p = subprocess.run([RENDER, '--path', PROPUESTA, '--writeback', 'on', '--folder', JAIL,
-                    '--timeout', '60000', '--bds', '37.0'], capture_output=True, timeout=120, cwd=JAIL)
+p = subprocess.run([RENDER, '--path', HIJA, '--writeback', 'on',
+                    '--timeout', '60000', '--bds', '37.0', '--bdsroot', mc.raiz_del_ide()],
+                   capture_output=True, timeout=120, cwd=JAIL)
 salida = p.stdout.decode('utf-8', 'replace').replace('\r', '').split('\n')
 leidos = {}
 for linea in salida:
@@ -95,8 +92,7 @@ check('L1 READ= del ancestro UBase.dfm con el sha256 de sus bytes', leido(ANCEST
       (leidos, p.returncode))
 check('L2 ...y del frame del ancestro (UMarco.dfm) y del .pas que decide la cadena (UHija.pas)',
       leido(MARCO) == sha(MARCO) and leido(HIJA_PAS) == sha(HIJA_PAS), leidos)
-check('L3 ni la propuesta (lo pedido) ni el form de verdad se anotan',
-      leido(PROPUESTA) is None and leido(HIJA) is None, leidos)
+check('L3 la propuesta (lo pedido) no se anota', leido(HIJA) is None, leidos)
 check('L4 control: el juez contesto (WRITTEN=) sin form a medias (sin PARTIAL=)',
       p.returncode == 0 and any(x.startswith('WRITTEN=') for x in salida) and
       not any(x.startswith('PARTIAL=') for x in salida), (p.returncode, salida[:20]))

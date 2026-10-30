@@ -31,8 +31,8 @@ type
     Estilo: string;      // --style <fichero> | <plataforma> | none | '' (lo que traiga el fichero)
     Componente: string;  // --component <Nombre>: RECT= de ese componente
     Bds: string;         // --bds 37.0
-    BdsComun: string;    // --commondir: el $(BDSCOMMONDIR) del IDE, el que mide el servidor
-    Desactivados: TArray<string>; // --disabled x.bpl (repetible): los que el IDE tiene desactivados, los dice el servidor
+    RaizBds: string;     // --bdsroot: la carpeta del IDE; la dice el servidor, el contenedor no lee el registro
+    FicheroPaquetes: string; // --knownfile: los paquetes que puede cargar, una ruta por linea; sin el, ninguno
     Paquetes: string;    // --packages auto | none | all
     Fidelidad: string;   // --fidelity auto | window | print (VCL)
     Raiz: string;        // --root auto | form | frame
@@ -42,11 +42,9 @@ type
     Verbose: Boolean;    // --verbose: trazas '#'
     // --writeback on: EL JUEZ de lo que guarda el IDE (3.11 de la 1.18.0) -
     // la form cargada como la carga el designer y escrita por TWriter, sin
-    // pintar nada (sin --out); --folder <dir>: la carpeta del form de verdad,
-    // cuando --path es una propuesta escrita en otra (sus hermanos - frames,
-    // ancestros - y su .pas salen de ahi)
+    // pintar nada (sin --out). Sus hermanos - frames, ancestros - y su .pas, junto
+    // a --path: el servidor se lo copia todo a la carpeta de la llamada
     Escribe: Boolean;
-    Carpeta: string;
     // --dropped <Nombre>: el que se acaba de soltar (insert, set parent=): el
     // juez lo deja como lo deja el disenador al soltarlo (FMX: el ultimo de
     // la lista de tabulacion de su padre, V72)
@@ -54,6 +52,9 @@ type
     // --convert text|binary: EL conversor del IDE, sin cargar el form (V71):
     // los bytes de --path en la otra forma, escritos en --out
     Convierte: string;
+    // --unreadableclasses: la pregunta del servidor al hacer la caja de paquetes:
+    // que clases COM no se dejan buscar desde este contenedor (ListaClasesSinLeer)
+    ClasesSinLeer: Boolean;
   end;
 
   { El lector comun de un .dfm/.fmx, texto o binario, sobre una instancia ya
@@ -203,6 +204,13 @@ procedure EscribeComoElIde(ARaiz: TComponent);
   es el contenido: LINE= y NOTLOADED=, con ERROR=. Devuelve el codigo de
   salida. Sin form, sin paquetes y sin ventanas. }
 function ConvierteComoElIde: Integer;
+{ --unreadableclasses: las clases COM en proceso cuya clave InprocServer32 no
+  abre ESTE proceso, UNREADABLECLASS= por cada una. El juez es el propio
+  contenedor abriendola, no una lectura de sus permisos. Quien no se deja leer
+  esta aqui: CoCreateInstance responderia acceso denegado, aunque la biblioteca
+  se lea (medido el 30-oct-2026: 4 de 5181 clases de 32 bits, las de ADO de
+  msado15.dll). Sin form, sin paquetes y sin ventanas. }
+function ListaClasesSinLeer: Integer;
 { Lo que el cargador dice de lo leido, igual en los dos renderizadores:
   SUBSTITUTED=, IGNORED=, WARNING=, PARTIAL= y READ= }
 procedure RespondeLoLeido(ACargador: TCargador);
@@ -250,7 +258,7 @@ function LeeConLosPaquetes(var ACargador: TCargador; const ANuevo: TFunc<TCargad
 { Los Known Packages del IDE de 32 bits (HKCU\...\BDS\<Bds>\Known Packages),
   con el Register de cada unidad llamado como lo hace el IDE; los expertos se
   saltan. ACargados/AConocidos para PACKAGES=. Solo carga una vez. }
-procedure CargaPaquetesDelIde(const ABds: string; out ACargados, AConocidos: Integer);
+procedure CargaPaquetesDelIde(out ACargados, AConocidos: Integer);
 function RaizDelIde(const ABds: string): string;
 function PaquetesCargados: Boolean;
 { La ventana de aplicacion que se le da a FMX en vez de la suya. Sin ella FMX
@@ -333,7 +341,6 @@ implementation
 
 uses
   System.TypInfo,
-  System.Win.Registry,
   System.IOUtils,
   System.RegularExpressions,
   System.RTLConsts,
@@ -365,7 +372,6 @@ var
   GModulosDatos: TDictionary<string, HMODULE>; // paquetes abiertos solo como datos (iconos)
   GConocidos: TStringList;           // rutas de los Known Packages
   GPaquetesCargados: Boolean = False;
-  GBdsRoot: string;
 
 { ---- respuesta ---- }
 
@@ -442,9 +448,9 @@ end;
 
 function TextoDeUso(const AExe: string): string;
 begin
-  // tres formas de uso, cada una con el nombre del programa: con uno solo
+  // cuatro formas de uso, cada una con el nombre del programa: con uno solo
   // salia "%s --path ..." y el "(No argument for format)" de MsgFmt
-  Result := MsgFmt(SF_RENDER_USO_FMT, [AExe, AExe, AExe]);
+  Result := MsgFmt(SF_RENDER_USO_FMT, [AExe, AExe, AExe, AExe]);
 end;
 
 function ParseaArgumentos(out AUso: string): string;
@@ -490,8 +496,8 @@ begin
       else if P = '--style' then GPeticion.Estilo := Valor
       else if P = '--component' then GPeticion.Componente := Valor
       else if P = '--bds' then GPeticion.Bds := Valor
-      else if P = '--commondir' then GPeticion.BdsComun := Valor
-      else if P = '--disabled' then GPeticion.Desactivados := GPeticion.Desactivados + [Valor]
+      else if P = '--bdsroot' then GPeticion.RaizBds := Valor
+      else if P = '--knownfile' then GPeticion.FicheroPaquetes := Valor
       else if P = '--packages' then GPeticion.Paquetes := Entre(Valor, ['auto', 'none', 'all'])
       else if P = '--fidelity' then GPeticion.Fidelidad := Entre(Valor, ['auto', 'window', 'print'])
       else if P = '--root' then GPeticion.Raiz := Entre(Valor, ['auto', 'form', 'frame'])
@@ -506,22 +512,22 @@ begin
         V := Entre(Valor, ['on', 'off', 'true', 'false', '1', '0']);
         GPeticion.Escribe := (V = 'on') or (V = 'true') or (V = '1');
       end
-      else if P = '--folder' then GPeticion.Carpeta := Valor
       else if P = '--dropped' then GPeticion.Soltado := Valor
       else if P = '--convert' then GPeticion.Convierte := Entre(Valor, ['text', 'binary'])
+      else if P = '--unreadableclasses' then GPeticion.ClasesSinLeer := True
       else if P = '--timeout' then GPeticion.TiempoMs := StrToInt(Valor)
       else if P = '--verbose' then GPeticion.Verbose := True
       else
         raise ERender.Create(MsgFmt(SR_RENDER_ARG_DESCONOCIDO_FMT, [P]));
       Inc(I);
     end;
+    if GPeticion.ClasesSinLeer then
+      Exit;
     if GPeticion.Path = '' then
       raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, ['--path']));
     // el juez no pinta: sin png
     if (GPeticion.Salida = '') and not GPeticion.Escribe then
       raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, ['--out']));
-    if (GPeticion.Carpeta <> '') and not TDirectory.Exists(GPeticion.Carpeta) then
-      raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [GPeticion.Carpeta]));
     if not TFile.Exists(GPeticion.Path) then
       raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [GPeticion.Path]));
     // ...y con una propiedad detras del ultimo punto: Button1.=x llegaba a
@@ -535,6 +541,37 @@ begin
   except
     on E: Exception do
       Result := E.Message;
+  end;
+end;
+
+function ListaClasesSinLeer: Integer;
+var
+  Clases, H: HKEY;
+  Nombre: array[0..63] of Char;
+  N, I, R: DWORD;
+begin
+  Result := FR_RC_OK;
+  if RegOpenKeyEx(HKEY_LOCAL_MACHINE, 'SOFTWARE\Classes\CLSID', 0, KEY_READ, Clases) <> ERROR_SUCCESS then
+    Exit(FR_RC_ERROR);
+  try
+    I := 0;
+    while True do
+    begin
+      N := Length(Nombre);
+      R := RegEnumKeyEx(Clases, I, Nombre, N, nil, nil, nil, nil);
+      Inc(I);
+      if R = ERROR_NO_MORE_ITEMS then
+        Break;
+      if R <> ERROR_SUCCESS then
+        Continue; // un nombre que no cabe no es un CLSID
+      R := RegOpenKeyEx(Clases, PChar(string(Nombre) + '\InprocServer32'), 0, KEY_READ, H);
+      if R = ERROR_ACCESS_DENIED then
+        Responde(FR_UNREADABLE_CLASS, Nombre)
+      else if R = ERROR_SUCCESS then
+        RegCloseKey(H);
+    end;
+  finally
+    RegCloseKey(Clases);
   end;
 end;
 
@@ -768,7 +805,7 @@ end;
   usaron, en ALeidos (READ=; B5 rev6 de la 1.18.2): el servidor juzga sin
   el cerrojo y, antes de escribir lo juzgado, vuelve a mirar cada uno - un
   ancestro que otro escritor cambie mientras tanto dejaria un juicio viejo.
-  El pedido no se anota: con --folder es la propuesta del servidor, y el
+  El pedido no se anota: con el juez es la propuesta del servidor, y el
   form de verdad ya lo compara el servidor por sus bytes. Sin ALeidos, nada. }
 procedure AnotaLeido(ALeidos: TStrings; const AFichero: string; const ABytes: TBytes);
 begin
@@ -827,23 +864,13 @@ begin
   end;
 end;
 
-{ El fichero por el que esta AFichero: con --folder, el --path es una
-  propuesta escrita en otra carpeta y esta por el del mismo nombre en esa
-  (el form de verdad, cuyo .pas y cuyos hermanos se leen); si no, el mismo }
-function RutaQueRepresenta(const AFichero: string): string;
-begin
-  Result := AFichero;
-  if (GPeticion.Carpeta <> '') and SameFileName(AFichero, GPeticion.Path) then
-    Result := TPath.Combine(GPeticion.Carpeta, ExtractFileName(AFichero));
-end;
-
 function AncestroDeClase(const AFichero, AClase: string; ALeidos: TStrings): string;
 var
   Pas: string;
   M: TMatch;
 begin
   Result := '';
-  Pas := UnidadDeDesigner(RutaQueRepresenta(AFichero));
+  Pas := UnidadDeDesigner(AFichero);
   if not TFile.Exists(Pas) or EsEnlace(Pas) then
     Exit;
   // 'TX = class(TY)', tambien 'class abstract(...)' y con la unidad delante
@@ -868,11 +895,10 @@ end;
   ALeidos, el .pas leido se anota con su huella (READ=). }
 function MaestroDeVista(const AFichero: string; ALeidos: TStrings): string;
 var
-  Representa, Maestro, Pas: string;
+  Maestro, Pas: string;
 begin
   Result := '';
-  Representa := RutaQueRepresenta(AFichero);
-  Maestro := MaestroPorNombre(Representa);
+  Maestro := MaestroPorNombre(AFichero);
   if Maestro = '' then
     Exit;
   Pas := UnidadDeDesigner(Maestro);
@@ -881,7 +907,7 @@ begin
   // EL juez de "es una vista", el mismo del servidor (Lsp.DesignerForma.
   // VistasDeUnidad, V122 de la 1.23.1)
   for var V in VistasDeUnidad(Pas, TextoDeUnidadAnotada(Pas, ALeidos)) do
-    if SameText(ExtractFileName(V), ExtractFileName(Representa)) then
+    if SameText(ExtractFileName(V), ExtractFileName(AFichero)) then
       Exit(Maestro);
 end;
 
@@ -957,71 +983,22 @@ begin
 end;
 
 function RaizDelIde(const ABds: string): string;
-var
-  Reg: TRegistry;
 begin
-  if GBdsRoot <> '' then
-    Exit(GBdsRoot);
-  Reg := TRegistry.Create(KEY_READ);
-  try
-    Reg.RootKey := HKEY_CURRENT_USER;
-    if not Reg.OpenKeyReadOnly('\Software\Embarcadero\BDS\' + ABds) then
-      raise ERender.Create(MsgFmt(SR_RENDER_SIN_IDE_FMT, [ABds]));
-    GBdsRoot := IncludeTrailingPathDelimiter(Reg.ReadString('RootDir'));
-  finally
-    Reg.Free;
-  end;
-  Result := GBdsRoot;
+  if GPeticion.RaizBds = '' then
+    raise ERender.Create(MsgFmt(SR_RENDER_SIN_IDE_FMT, [ABds]));
+  Result := IncludeTrailingPathDelimiter(GPeticion.RaizBds);
 end;
 
-function ExpandeMacros(const S, ARoot: string): string;
-begin
-  Result := S;
-  // sin valor la macro se queda y el paquete sale como que falta: vacia daria
-  // \Bpl\x.bpl, la raiz de la unidad actual
-  if GPeticion.BdsComun <> '' then
-    Result := StringReplace(Result, '$(BDSCOMMONDIR)', GPeticion.BdsComun, [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, '$(BDSBIN)', ARoot + 'bin', [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, '$(BDS)', ExcludeTrailingPathDelimiter(ARoot), [rfReplaceAll, rfIgnoreCase]);
-end;
-
-{ Desactivado en el IDE (V124 de la 1.24): por el nombre del fichero, como
-  BplFile en el servidor: el registro no escribe igual la misma ruta
-  ($(BDSBIN)\x.bpl en una clave, $(BDS)\bin\x.bpl en otra; medido) }
-function EstaDesactivado(const ANombre: string): Boolean;
-begin
-  Result := False;
-  for var D in GPeticion.Desactivados do
-    if SameText(TPath.GetFileName(ANombre), D) then
-      Exit(True);
-end;
-
-procedure LeeConocidos(const ABds: string);
-var
-  Reg: TRegistry;
-  Nombres: TStringList;
-  Root: string;
+{ Los paquetes, de la lista que da el servidor (Lsp.FormRender.PaquetesDelIde:
+  los de su IDE sin los desactivados, ya con su ruta): dentro del contenedor
+  no se lee el registro del usuario (V65 de la 1.24, medido) }
+procedure LeeConocidos;
 begin
   if GConocidos <> nil then
     Exit;
   GConocidos := TStringList.Create;
-  Root := RaizDelIde(ABds);
-  Nombres := TStringList.Create;
-  Reg := TRegistry.Create(KEY_READ);
-  try
-    Reg.RootKey := HKEY_CURRENT_USER;
-    if Reg.OpenKeyReadOnly('\Software\Embarcadero\BDS\' + ABds + '\Known Packages') then
-    begin
-      Reg.GetValueNames(Nombres);
-      Reg.CloseKey;
-    end;
-    for var N in Nombres do
-      if not EstaDesactivado(N) then
-        GConocidos.Add(ExpandeMacros(N, Root));
-  finally
-    Reg.Free;
-    Nombres.Free;
-  end;
+  if GPeticion.FicheroPaquetes <> '' then
+    GConocidos.LoadFromFile(GPeticion.FicheroPaquetes);
 end;
 
 { Lo que hace el IDE tras LoadPackage y nadie mas hace: llamar al Register de
@@ -1139,7 +1116,7 @@ begin
     V^ := @ApuntaModulo;
 end;
 
-procedure CargaPaquetesDelIde(const ABds: string; out ACargados, AConocidos: Integer);
+procedure CargaPaquetesDelIde(out ACargados, AConocidos: Integer);
 const
   // expertos del IDE: no registran componentes y tocan BorlandIDEServices.
   // Una lista de la casa por el nombre del bpl: no hay juez sin cargarlo
@@ -1158,7 +1135,7 @@ var
   Reloj: TStopwatch;
 begin
   ACargados := 0;
-  LeeConocidos(ABds);
+  LeeConocidos;
   AConocidos := GConocidos.Count;
   if GPaquetesCargados then
   begin
@@ -1244,7 +1221,7 @@ begin
     FreeAndNil(Result);
     ACargador.Free;
     ACargador := ANuevo();
-    CargaPaquetesDelIde(GPeticion.Bds, ACargados, AConocidos);
+    CargaPaquetesDelIde(ACargados, AConocidos);
     Result := ALee(ACargador, ARaiz);
   end;
 end;
@@ -1449,7 +1426,7 @@ begin
       Exit(True);
   // sin paquetes cargados (una form estandar): los Known Packages como DATOS,
   // nada suyo se ejecuta; se abren una vez y se quedan abiertos
-  LeeConocidos(GPeticion.Bds);
+  LeeConocidos;
   for var Ruta in GConocidos do
   begin
     if not GModulosDatos.TryGetValue(Ruta, H) then
@@ -1561,7 +1538,7 @@ begin
   // de la 1.24, medido: el exe enlaza UBase). Lo dice el uses del que la nombra,
   // por el NOMBRE del fichero: la copia sigue diciendo "unit UBase;" y dcc la
   // busca por el suyo. Sin .pas, o sin nombrarla, no decide y se avisa
-  Pas := UnidadDeDesigner(RutaQueRepresenta(AQuienLaNombra));
+  Pas := UnidadDeDesigner(AQuienLaNombra);
   if TFile.Exists(Pas) and not EsEnlace(Pas) then
   begin
     var Usadas := UnidadesEnUses(TextoDeUnidadAnotada(Pas, FLeidos));
@@ -1583,7 +1560,7 @@ begin
   if ComponentClass <> nil then
     Exit;
   // un frame inline (o una form metida en otra): su fichero esta en la carpeta
-  FFramePendiente := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(GPeticion.Path)), ClassName, GPeticion.Path);
+  FFramePendiente := FicheroDeClase(ExtractFilePath(GPeticion.Path), ClassName, GPeticion.Path);
   if FFramePendiente <> '' then
   begin
     FClaseFrame := ClassName;
@@ -1960,7 +1937,7 @@ begin
         FSinLeer.Add(ExtractFileName(Fichero));
         Break;
       end;
-      Fichero := FicheroDeClase(ExtractFilePath(RutaQueRepresenta(AFichero)), Ancestro, Fichero);
+      Fichero := FicheroDeClase(ExtractFilePath(AFichero), Ancestro, Fichero);
       if Fichero = '' then
       begin
         if not DelMarco(Ancestro) then

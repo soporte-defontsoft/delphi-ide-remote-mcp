@@ -36,6 +36,9 @@ type
     Sid: PSID;
     // Handles prestados de esta ejecucion: no se cierran, solo se quita SU ACE.
     Estacion, Escritorio: THandle;
+    // Lo pone quien va a lanzar un programa con ventanas (el renderizador, aunque
+    // no se vean): un test de consola no las crea, y no las pide.
+    ConVentanas: Boolean;
   end;
   PContenedor = ^TContenedor;
 
@@ -58,16 +61,24 @@ procedure BorraContenedor(var AC: TContenedor);
 function PreparaCarpetaDelContenedor(const AC: TContenedor;
   const ADir: string): DWORD;
 
+{ Una carpeta VACIA recien creada que TODOS los contenedores pueden leer y
+  ejecutar, y ninguno escribir: lo que se copie despues dentro lo hereda. Es
+  la de lo que comparten y no es de nadie (los paquetes del IDE, V65 de la
+  1.24): un ACE por contenedor serian dos escritores de la misma DACL y un
+  permiso a propagar por cientos de ficheros en cada ejecucion. 0 o el error. }
+function PreparaCarpetaParaLosContenedores(const ADir: string): DWORD;
+
 { CreateProcess DENTRO del contenedor, heredando handles (la tuberia de la
   salida) como el de siempre, y con el entorno SIN la configuracion del
   servidor (DELPHI_MCP_*: raices, tokens, interruptores): el test no ve con
   que se configuro quien lo lanza - medido el 2-oct-2026, las unitarias del
   propio servidor pasaban porque heredaban sus raices. False con GetLastError
   si Windows no lo lanza; no lanza excepciones: quien llama decide, y no
-  poder lanzar dentro NO es lanzar fuera. }
+  poder lanzar dentro NO es lanzar fuera. AEntorno, si va, el bloque entero
+  (EntornoSinConfiguracion con lo que el hijo necesite fijo). }
 function CreateProcessEnContenedor(const AC: TContenedor; const ACmdLine: string;
   AWorkDir: PChar; ACreateFlags: DWORD; const ASI: TStartupInfo;
-  out API: TProcessInformation): Boolean;
+  out API: TProcessInformation; const AEntorno: string = ''): Boolean;
 
 { Al arrancar: borra los contenedores de ESTA casa que dejo una caida. Los
   de otro servidor de la misma cuenta (una bateria, una segunda instalacion)
@@ -279,6 +290,7 @@ var
   G: string;
 begin
   AC.Sid := nil;
+  AC.ConVentanas := False;
   AC.Estacion := GetProcessWindowStation;
   AC.Escritorio := GetThreadDesktop(GetCurrentThreadId);
   // 'DelphiLspMcp.Test.' + 8 + '.' + 32 = 59: el limite de Windows es 64
@@ -337,6 +349,19 @@ begin
   Result := PonDescriptor(ADir,
     'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;' + Yo + ')' +
     '(A;OICI;0x1301bf;;;' + Suyo + ')', DACL_SECURITY_INFORMATION);
+end;
+
+function PreparaCarpetaParaLosContenedores(const ADir: string): DWORD;
+var
+  Yo: string;
+begin
+  Yo := SidDeEstaCuenta;
+  if Yo = '' then
+    Exit(ERROR_INVALID_SID);
+  // 0x1200a9 = leer y ejecutar; AC = TODOS LOS PAQUETES DE APLICACIONES
+  Result := PonDescriptor(ADir,
+    'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;' + Yo + ')' +
+    '(A;OICI;0x1200a9;;;AC)', DACL_SECURITY_INFORMATION);
 end;
 
 
@@ -470,7 +495,7 @@ end;
 
 function CreateProcessEnContenedor(const AC: TContenedor; const ACmdLine: string;
   AWorkDir: PChar; ACreateFlags: DWORD; const ASI: TStartupInfo;
-  out API: TProcessInformation): Boolean;
+  out API: TProcessInformation; const AEntorno: string): Boolean;
 var
   Entorno: string;
   Err: DWORD;
@@ -483,17 +508,24 @@ begin
     Exit;
   end;
   // Minimo medido en estacion privada: leer seguridad y usar atomos globales.
-  Err := PermisoDeVentanas(AC.Estacion, AC.Sid,
-    READ_CONTROL or WINSTA_ACCESSGLOBALATOMS, 'window station');
+  var Estacion: DWORD := READ_CONTROL or WINSTA_ACCESSGLOBALATOMS;
+  var Escritorio: DWORD := DESKTOP_READOBJECTS or DESKTOP_WRITEOBJECTS;
+  if AC.ConVentanas then
+  begin
+    Estacion := Estacion or WINSTA_READATTRIBUTES;
+    Escritorio := Escritorio or DESKTOP_CREATEWINDOW or DESKTOP_CREATEMENU;
+  end;
+  Err := PermisoDeVentanas(AC.Estacion, AC.Sid, Estacion, 'window station');
   if Err = 0 then
-    Err := PermisoDeVentanas(AC.Escritorio, AC.Sid,
-      DESKTOP_READOBJECTS or DESKTOP_WRITEOBJECTS, 'desktop');
+    Err := PermisoDeVentanas(AC.Escritorio, AC.Sid, Escritorio, 'desktop');
   if Err <> 0 then
   begin
     SetLastError(Err);
     Exit;
   end;
-  Entorno := EntornoSinConfiguracion;
+  Entorno := AEntorno;
+  if Entorno = '' then
+    Entorno := EntornoSinConfiguracion;
   Result := CreateProcessConHandles(ACmdLine, AWorkDir,
     ACreateFlags or CREATE_UNICODE_ENVIRONMENT, PChar(Entorno), ASI, API, AC.Sid);
 end;

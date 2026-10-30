@@ -38,8 +38,8 @@ const
     'itself.';
 
   SR_RENDER_SIN_IDE_FMT =
-    '[RENDER-008 NOT_FOUND] There is no RAD Studio %s for this user ' +
-    '(HKCU\Software\Embarcadero\BDS).';
+    '[RENDER-008 NOT_FOUND] Nobody said where RAD Studio %s is (--bdsroot): ' +
+    'inside its container the renderer does not read the registry.';
 
   SN_RENDER_HEREDA_SIN_PAS_FMT =
     '[RENDER-009] %s is inherited and no .pas next to it says from which ' +
@@ -155,12 +155,13 @@ const
     '%s --path <dfm|fmx> --out <png> [--state Component.Property=Value]* ' +
     '[--component Name] [--style <file|platform|none>] [--nonvisual on|off (off)] ' +
     '[--packages auto|none|all] [--root auto|form|frame] ' +
-    '[--fidelity auto|window|print] [--bds 37.0] [--commondir <dir>] [--disabled x.bpl]* ' +
+    '[--fidelity auto|window|print] [--bds 37.0] [--bdsroot <dir>] [--knownfile <file>] ' +
     '[--timeout ms] [--verbose] | ' +
-    '%s --path <dfm|fmx> --writeback on [--folder <dir of the real form>] ' +
+    '%s --path <dfm|fmx> --writeback on ' +
     '[--component Name] [--dropped Name] ' +
-    '[--packages ...] [--root ...] [--bds] [--commondir] [--disabled]* [--timeout ms] | ' +
-    '%s --path <dfm|fmx> --convert text|binary --out <file> [--timeout ms]';
+    '[--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout ms] | ' +
+    '%s --path <dfm|fmx> --convert text|binary --out <file> [--timeout ms] | ' +
+    '%s --unreadableclasses';
 
 function MsgText(const AMsg: string): string;
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;

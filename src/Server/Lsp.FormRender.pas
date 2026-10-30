@@ -35,18 +35,19 @@ type
   TPeticionRender = record
     Framework: string;         // vcl | fmx
     Path: string;              // el .dfm/.fmx, ya pasado por la puerta de lectura
-    Salida: string;            // el .png que escribe el renderizador
+    Salida: string;            // el .png que deja CorreRender, en la casa del servidor
     Estados: TArray<string>;   // Componente.Propiedad=Valor, uno por entrada
     Componente: string;        // '' = la form entera
     Estilo: string;            // fichero (ya por la puerta), plataforma, none o ''
     NoVisuales: Boolean;       // dibujar los no visuales
     Bds: string;               // la version del Delphi del servidor (37.0)
-    BdsComun: string;          // su $(BDSCOMMONDIR), de EL lector de rsvars.bat
-    Desactivados: TArray<string>; // los .bpl que el IDE tiene desactivados (no se cargan)
+    RaizBds: string;           // su carpeta: el contenedor no lee el registro
+    FicheroPaquetes: string;   // los .bpl que puede cargar, una ruta por linea (lo pone CorreRender)
     Raiz: string;              // form | frame, por el lector de clases del servidor; '' = que mire el ayudante
     // el JUEZ de lo que guarda el IDE (3.11 de la 1.18.0): sin png, el form
     // cargado y escrito por TWriter (WRITTEN=); Carpeta, la del form de verdad
-    // cuando Path es una propuesta escrita en otra (sus hermanos y su .pas)
+    // cuando Path es una propuesta escrita en otra (sus hermanos y su .pas: se le
+    // copian de ahi)
     Escribe: Boolean;
     Carpeta: string;
     // con Escribe, el que se acaba de soltar (insert, set parent=): el juez lo
@@ -56,6 +57,8 @@ type
     // binario), los bytes de Path escritos en Salida; sin form ni paquetes.
     // Lo pone ConversionDelIde
     Convierte: string;
+    // --unreadableclasses: la pregunta al hacer la caja de paquetes; nada mas en la orden
+    ClasesSinLeer: Boolean;
   end;
 
   { Una propiedad que el lector se salto (IGNORED=, el OnError de TReader que
@@ -121,6 +124,7 @@ type
     // evento, una referencia que no resolvio -, por su valor (1.22.1)
     NoAplicados: TArray<string>;
     SinLeer: TArray<string>;   // PARTIAL=: sin que ancestro (o fichero) se leyo el form
+    ClasesSinLeer: TArray<string>; // UNREADABLECLASS=: las clases COM que su contenedor no busca
     Leidos: TArray<TLeidoPorElJuez>; // READ=: lo que leyo para cargarlo, con su huella
   end;
 
@@ -214,8 +218,31 @@ function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
 
 { Lanza el renderizador y lee lo que contesta. Fallo = '' si hay imagen en
   APeticion.Salida; si no, el mensaje que toca (el ERROR= del ayudante tal
-  cual si ya lleva su etiqueta). Nunca lanza. }
+  cual si ya lleva su etiqueta). Nunca lanza.
+  Siempre DENTRO de un contenedor por llamada (V65 de la 1.24; Lsp.Sandbox): el
+  codigo de diseno de los paquetes lee y escribe lo que un form le pida, y ahi
+  no alcanza nada de las raices, del servidor ni de la red. Sus ficheros van
+  COPIADOS a la carpeta de esta llamada, lo que dice se traduce de vuelta a las
+  rutas de verdad, y sin contenedor no se dibuja (DSGN-177). }
 function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
+
+{ La ruta de un paquete de la lista del IDE (AValor, el nombre del valor en
+  Known Packages: $(BDSBIN)\x.bpl o una ruta) con sus macros resueltas; una sin
+  valor se queda, y el paquete sale como que falta: vacia daria \Bpl\x.bpl, la
+  raiz de la unidad actual. }
+function RutaDePaqueteDelIde(const AValor, ARaiz, AComun: string): string;
+
+type
+  { Una clase COM en proceso: su CLSID, su biblioteca y su modelo de hilos }
+  TClaseCom = record
+    Clsid, Dll, Hilos: string;
+  end;
+
+{ El manifiesto con el que un ayudante tiene AClases sin buscarlas en el
+  registro: un <file> por biblioteca, con su ruta. De dos bibliotecas de igual
+  nombre, la primera: un manifiesto no distingue un <file> de otro por su
+  carpeta. '' si no hay clases. }
+function ManifiestoDeClases(const AClases: TArray<TClaseCom>): string;
 
 { EL JUEZ de lo que guarda el IDE (3.11 de la 1.18.0; norma 6: lo que dice un
   juez real se le pregunta): ATexto, un form PROPUESTO para APath (en AEnc),
@@ -304,9 +331,17 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.Diagnostics,
+  System.Generics.Collections,
+  System.Generics.Defaults,
+  Winapi.Windows,
+  MCPServer.Logger,
   System.RegularExpressions,
+  System.Win.Registry,
+  Lsp.Dproj,        // XmlEscape: las rutas del manifiesto de la caja
   Lsp.Guard,
-  Lsp.BuildRunner,  // RunCapturedIn: el lanzador de los programas externos
+  Lsp.BuildRunner,  // RunCapturedEnContenedor: el lanzador de los programas externos
+  Lsp.Sandbox,      // el contenedor del ayudante y el entorno que lleva
+  Lsp.TodoONada,    // HuellaDeFichero: la generacion de la caja de paquetes
   Lsp.ProjectUnits, // RaizDeDesigner: a que raiz llega la unidad de un designer
   Lsp.DesignerForma, // UnidadDeDesigner
   Lsp.Texts,
@@ -317,6 +352,7 @@ uses
   Lsp.Discovery,    // DiscoverRadStudio: el Delphi del servidor
   Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante
   Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
+  Lsp.NetDrives,    // PrefijoSinBarra y ConBarrasDeWindows: la forma de una ruta del IDE
   Lsp.Listas,
   System.StrUtils;
 
@@ -389,11 +425,16 @@ function ComponeOrdenDeRender(const AExe: string; const APeticion: TPeticionRend
 begin
   Result := '';
   AOrden := '';
+  if APeticion.ClasesSinLeer then
+  begin
+    AOrden := '"' + AExe + '" --unreadableclasses';
+    Exit;
+  end;
   // un valor vacio no se pasa nunca: el lector de Delphi se salta un "" y
   // tomaria el interruptor siguiente como valor
   for var V in TArray<string>.Create(APeticion.Path, APeticion.Salida,
-    APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.BdsComun, APeticion.Carpeta) +
-    APeticion.Estados + APeticion.Desactivados do
+    APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.RaizBds,
+    APeticion.FicheroPaquetes) + APeticion.Estados do
     if not ValorDeArgumento(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V]));
   AOrden := '"' + AExe + '"' + Arg('--path', APeticion.Path);
@@ -403,22 +444,17 @@ begin
       Arg('--out', APeticion.Salida)
   // el juez no pinta: sin --out (3.11)
   else if APeticion.Escribe then
-  begin
-    AOrden := AOrden + ' --writeback on';
-    if APeticion.Carpeta <> '' then
-      AOrden := AOrden + Arg('--folder', APeticion.Carpeta);
-  end
+    AOrden := AOrden + ' --writeback on'
   else
     AOrden := AOrden + Arg('--out', APeticion.Salida) +
       ' --nonvisual ' + (if APeticion.NoVisuales then 'on' else 'off');
   AOrden := AOrden + ' --timeout ' + IntToStr(RENDER_TIEMPO_AYUDANTE_MS);
   if APeticion.Bds <> '' then
     AOrden := AOrden + Arg('--bds', APeticion.Bds);
-  if APeticion.BdsComun <> '' then
-    AOrden := AOrden + Arg('--commondir', APeticion.BdsComun);
-  for var D in APeticion.Desactivados do
-    if D <> '' then
-      AOrden := AOrden + Arg('--disabled', D);
+  if APeticion.RaizBds <> '' then
+    AOrden := AOrden + Arg('--bdsroot', APeticion.RaizBds);
+  if APeticion.FicheroPaquetes <> '' then
+    AOrden := AOrden + Arg('--knownfile', APeticion.FicheroPaquetes);
   for var E in APeticion.Estados do
     if E <> '' then
       AOrden := AOrden + Arg('--state', E);
@@ -580,6 +616,8 @@ begin
     end
     else if Es(FR_WRITTEN) then
       Result.Escrito := Result.Escrito + [V]
+    else if Es(FR_UNREADABLE_CLASS) then
+      Result.ClasesSinLeer := Result.ClasesSinLeer + [V]
     else if Es(FR_ORDER) then
     begin
       // <Nombre>=<prop>,<prop>,...: el nombre no lleva '='
@@ -829,14 +867,35 @@ begin
   Result := Lineas;
 end;
 
+{ Lo que el contenedor SI puede leer: gramatica de la casa, porque el juez (que
+  abra el fichero) diria tambien si existe. Por su texto y sin preguntar por el
+  fichero. }
+function LoLeeElContenedor(const ARuta: string): Boolean;
+begin
+  Result := False;
+  for var C in CarpetasDelSistema do
+    if (C <> '') and EnLugar(ARuta, C) then
+      Exit(True);
+end;
+
 { La forma del VALOR decide, nunca una lista de propiedades.
-  Se pregunta al unico juez de lectura por cada fichero existente.
-  El ayudante interpreta relativos desde la form o desde su cwd (la carpeta
-  del form desde la 1.18.2; antes, la del PNG). }
-function LiteralesDeRenderDenegados(const APeticion: TPeticionRender): string;
+  El contenedor ya no deja leer las raices, la casa ni la red, asi que aqui solo
+  queda lo que si leeria (las carpetas del sistema), juzgado por el unico juez
+  de lectura; y por el TEXTO, exista el fichero o no: mirar si existia decia a
+  un agente, por la respuesta, que ficheros hay en el servidor (V65 de la 1.24).
+  El ayudante interpreta relativos desde su cwd, AEtapa.
+  AJunto, de paso: lo que los literales nombran por debajo de la carpeta del form
+  y la sesion puede leer (un .avi de un TAnimate), relativo a ella y con su tope,
+  para copiarselo: alli donde esta ya no lo alcanza. Solo se pregunta si existe
+  por lo que la puerta deja leer, asi que no dice nada de fuera. }
+function LiteralesDeRenderDenegados(const APeticion: TPeticionRender; const AEtapa: string;
+  out AJunto: TArray<string>): string;
+const
+  TOPE_JUNTO_BYTES = 64 * 1024 * 1024;
 var
   Bases: TArray<string>;
-  BytesLeidos: Int64;
+  Hermanos: string;
+  BytesLeidos, BytesJunto: Int64;
   Doc: TStyleDoc;
   Form: TArray<TLineaForm>;
   Texto, Valor, Prop: string;
@@ -853,11 +912,9 @@ var
       Exit;
     for var Base in Bases do
     begin
-      // como lo lee el ayudante, cuya carpeta actual es una de estas bases (EL
-      // resolutor): "\x" y "X:y" se miraban en la unidad del PROCESO, y el
-      // ayudante los lee en la del form (A9 de la 1.23, medido). "X:y" de OTRA
-      // unidad, por la carpeta de esa unidad que el ayudante hereda del
-      // servidor con su entorno (RunCapturedIn): la de este proceso
+      // como lo lee el ayudante, cuya carpeta actual es AEtapa (EL resolutor).
+      // "X:y" de OTRA unidad, por la carpeta de esa unidad que el ayudante
+      // hereda del servidor con su entorno: la de este proceso
       Ruta := RutaDesde(Base, AValor);
       if Ruta = '' then
       try
@@ -865,15 +922,28 @@ var
       except
         Continue; // una cadena que no es ruta no nombra un fichero
       end;
-      // la propuesta del juez (Carpeta: la del form de verdad) es el texto del
-      // agente, que el servidor escribio para ESTA llamada en una carpeta suya:
-      // un relativo que la nombra ('UNom.dfm', el nombre del form) no sale de
-      // ningun sitio, y daba DSGN-115 falso (revisor de version de la 1.18.0,
-      // B2). Lo demas de esa base sigue juzgado: un '..\x' saldria del temporal
-      if (APeticion.Carpeta <> '') and SameFileName(Ruta, TPath.GetFullPath(APeticion.Path)) then
-        Continue;
-      if TFile.Exists(Ruta) and (ReadPathDenied(Ruta) <> '') then
+      // lo normal, un texto: se queda en esa carpeta y no nombra el sistema.
+      // Por su texto y antes de tocar el disco: un form trae miles, y por cada uno
+      // de los hermanos en el NAS tardaba 80 s en lugar de 15 (medido)
+      var Trozo: string;
+      if not TrozoBajo(Base, Ruta, Trozo) and LoLeeElContenedor(Ruta) and (ReadPathDenied(Ruta) <> '') then
         Exit(MsgFmt(SR_DESIGNER_LITERAL_FUERA_FMT, [AProp]));
+    end;
+    // ...y solo uno con forma de fichero, con su extension, se busca al lado del form
+    if ExtractFileExt(AValor).Length < 2 then // (TPath.GetExtension lanza con un | o un <)
+      Exit;
+    Ruta := RutaDesde(Hermanos, AValor);
+    var Trozo: string;
+    if (Ruta <> '') and TrozoBajo(Hermanos, Ruta, Trozo) and TFile.Exists(Ruta) and
+       (ReadPathDenied(Ruta) = '') and not EsEnlace(Ruta) then
+    begin
+      var Tam: Int64;
+      var Fecha: TDateTime;
+      if HuellaDeFichero(Ruta, Tam, Fecha) and (BytesJunto + Tam <= TOPE_JUNTO_BYTES) then
+      begin
+        Inc(BytesJunto, Tam);
+        AJunto := AJunto + [Trozo];
+      end;
     end;
   end;
 
@@ -931,21 +1001,17 @@ var
 
 begin
   Result := '';
+  AJunto := [];
   BytesLeidos := 0;
-  // las carpetas desde las que el ayudante resuelve un relativo y en las que
-  // busca hermanos: la del fichero que lee y, cuando el fichero es una
-  // propuesta escrita en otra, la del form de verdad (--folder: de ahi lee
-  // frames y ancestros, y es su cwd). La del png fue su cwd hasta la 1.18.2 y
-  // se sigue mirando: una base de mas no abre nada. Una base que no mira es
-  // un relativo que pasa la puerta (revisor 3 de la noche, A-1)
-  var Hermanos := TPath.GetDirectoryName(APeticion.Path);
+  BytesJunto := 0;
+  // la carpeta en la que el ayudante resuelve un relativo: su cwd, la de esta
+  // llamada, y de ahi nombra lo que quiera subiendo con ..\. Sus hermanos, los
+  // de la carpeta del form de verdad: se le copian (CopiaLoQueLee). Una base que
+  // no mira es un relativo que pasa la puerta (revisor 3 de la noche, A-1)
+  Hermanos := TPath.GetDirectoryName(APeticion.Path);
   if APeticion.Carpeta <> '' then
     Hermanos := APeticion.Carpeta;
-  Bases := [TPath.GetDirectoryName(APeticion.Path)];
-  if APeticion.Salida <> '' then
-    Bases := Bases + [TPath.GetDirectoryName(APeticion.Salida)];
-  if APeticion.Carpeta <> '' then
-    Bases := Bases + [APeticion.Carpeta];
+  Bases := [AEtapa];
   try
     // lo que se le da a leer al ayudante, TAMBIEN la propuesta del juez
     // (Carpeta): el form de verdad se leyo en otro momento y un escritor que
@@ -987,9 +1053,474 @@ begin
   end;
 end;
 
+function RutaDePaqueteDelIde(const AValor, ARaiz, AComun: string): string;
+begin
+  Result := ConBarrasDeWindows(AValor);
+  if AComun <> '' then
+    Result := StringReplace(Result, '$(BDSCOMMONDIR)', AComun, [rfReplaceAll, rfIgnoreCase]);
+  Result := StringReplace(Result, '$(BDSBIN)', ARaiz + '\bin', [rfReplaceAll, rfIgnoreCase]);
+  Result := StringReplace(Result, '$(BDS)', ARaiz, [rfReplaceAll, rfIgnoreCase]);
+end;
+
+{ Los paquetes del IDE de 32 bits del usuario, sin los desactivados (V124, por el
+  nombre del fichero: el registro no escribe igual la misma ruta). }
+function PaquetesDelIde(const AInfo: TRadStudioInfo): TArray<string>;
+begin
+  Result := [];
+  var Off := IdeBplsDesactivados32(AInfo.Version);
+  var Raiz := PrefijoSinBarra(AInfo.RootDir);
+  var Comun := BdsCommonDir(AInfo);
+  for var V in IdeValoresDeClave(AInfo.Version, 'Known Packages', False) do
+    if not MatchText(TPath.GetFileName(ConBarrasDeWindows(V.Nombre)), Off) then
+      Result := Result + [RutaDePaqueteDelIde(V.Nombre, Raiz, Comun)];
+end;
+
+function ManifiestoDeClases(const AClases: TArray<TClaseCom>): string;
+
+  function SuModelo(const AHilos: string): string;
+  begin
+    Result := '';
+    // los que entiende un manifiesto, como los escribe; el resto (Single, nada): sin atributo
+    for var M in TArray<string>.Create('Apartment', 'Both', 'Free', 'Neutral') do
+      if SameText(M, AHilos) then
+        Result := ' threadingModel="' + M + '"';
+  end;
+
+begin
+  Result := '';
+  var Nombres: TArray<string> := [];
+  for var C in AClases do
+  begin
+    var Nombre := TPath.GetFileName(C.Dll);
+    if MatchText(Nombre, Nombres) then
+      Continue;
+    Nombres := Nombres + [Nombre];
+    Result := Result + '<file name="' + XmlEscape(Nombre) + '" loadFrom="' + XmlEscape(C.Dll) + '">';
+    for var D in AClases do
+      if SameFileName(D.Dll, C.Dll) then
+        Result := Result + '<comClass clsid="' + XmlEscape(D.Clsid) + '"' + SuModelo(D.Hilos) + '/>';
+    Result := Result + '</file>';
+  end;
+  if Result <> '' then
+    Result := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+      '<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">' + Result + '</assembly>';
+end;
+
+{ De las clases ACLSIDs, las que el contenedor puede cargar si se las dan: su
+  biblioteca, en lo que el contenedor lee. La vista de 32 bits, la del ayudante. }
+function ClasesDeBibliotecaLegible(const ACLSIDs: TArray<string>): TArray<TClaseCom>;
+var
+  Expandida: array[0..MAX_PATH * 2] of Char;
+begin
+  Result := [];
+  var Reg := TRegistry.Create(KEY_READ or KEY_WOW64_32KEY);
+  try
+    Reg.RootKey := HKEY_LOCAL_MACHINE;
+    for var C in ACLSIDs do
+      if Reg.OpenKeyReadOnly('SOFTWARE\Classes\CLSID\' + C + '\InprocServer32') then
+      begin
+        var Clase: TClaseCom;
+        Clase.Clsid := C;
+        try
+          Clase.Dll := Reg.ReadString('');
+          Clase.Hilos := Reg.ReadString('ThreadingModel');
+        except
+          Clase.Dll := ''; // una clave que no es de texto: esa clase, no todas
+        end;
+        Reg.CloseKey;
+        var N := ExpandEnvironmentStrings(PChar(Clase.Dll), Expandida, Length(Expandida));
+        if (N > 0) and (N <= DWORD(Length(Expandida))) then
+          Clase.Dll := Expandida;
+        if LoLeeElContenedor(Clase.Dll) and TFile.Exists(Clase.Dll) then
+          Result := Result + [Clase];
+      end;
+  finally
+    Reg.Free;
+  end;
+end;
+
+{ Las clases COM que el contenedor no puede buscar donde estan, dadas a los
+  ayudantes de ACaja (AAyudantes, sus originales) en el manifiesto de su copia:
+  ese contexto lo crea quien crea el proceso, fuera del contenedor, que dentro
+  no puede ni CreateActCtx ni CoRegisterClassObject (acceso denegado; medido el
+  30-oct-2026). Quien las carga sigue siendo el proceso del contenedor, con lo
+  que este lee y nada mas. Sin ellas un form con un TADOQuery perdia el
+  componente y el juez del orden no lo juzgaba. Que clases, lo dice el contenedor
+  (--unreadableclasses); si el manifiesto vale, Windows al crear el proceso. Si
+  algo falla, esta generacion de la caja se queda sin manifiesto (con su aviso en
+  el log), que es solo perder esas clases. }
+procedure DaSusClasesAlContenedor(const ACaja, APath: string; const AAyudantes: TArray<string>);
+const
+  PREGUNTA_TIEMPO_MS = 30000;
+
+  // lo que responde o, si no acaba bien o ni arranca, por que
+  function Pregunta(const AExe: string; out ASalida: string): Boolean;
+  var
+    AC: TContenedor;
+    Orden: string;
+    Codigo: Cardinal;
+    Vencido: Boolean;
+  begin
+    Result := False;
+    try
+      var Pet := Default(TPeticionRender);
+      Pet.ClasesSinLeer := True;
+      ASalida := ComponeOrdenDeRender(AExe, Pet, Orden);
+      if ASalida <> '' then
+        Exit;
+      var Err := CreaContenedor(AC);
+      if Err <> 0 then
+        RaiseLastOSError(Err);
+      try
+        AC.ConVentanas := True;
+        ASalida := RunCapturedEnContenedor(Orden, ACaja, AC, PREGUNTA_TIEMPO_MS,
+          Codigo, Vencido, phConsola, EntornoSinConfiguracion(['PATH=' + APath]));
+        Result := not Vencido and (Codigo = FR_RC_OK);
+      finally
+        BorraContenedor(AC);
+      end;
+    except
+      on E: Exception do
+        ASalida := E.Message;
+    end;
+  end;
+
+  procedure PonManifiesto(const AExe: string; const ABytes: TArray<Byte>);
+  begin
+    var H := BeginUpdateResource(PChar(AExe), False);
+    Win32Check(H <> 0);
+    if not UpdateResource(H, RT_MANIFEST, MakeIntResource(1), 0, @ABytes[0], Length(ABytes)) then
+    begin
+      var Err := GetLastError;
+      EndUpdateResource(H, True);
+      RaiseLastOSError(Err);
+    end;
+    Win32Check(EndUpdateResource(H, False));
+  end;
+
+begin
+  try
+    if Length(AAyudantes) = 0 then
+      Exit;
+    var Salida: string;
+    if not Pregunta(TPath.Combine(ACaja, TPath.GetFileName(AAyudantes[0])), Salida) then
+      raise Exception.Create(Salida);
+    var Manifiesto := ManifiestoDeClases(ClasesDeBibliotecaLegible(LeeRespuestaDeRender(Salida).ClasesSinLeer));
+    if Manifiesto = '' then
+      Exit;
+    var Bytes := TEncoding.UTF8.GetBytes(Manifiesto);
+    for var A in AAyudantes do
+    begin
+      var Copia := TPath.Combine(ACaja, TPath.GetFileName(A));
+      PonManifiesto(Copia, Bytes);
+      // el juez de un manifiesto es Windows, al crear el proceso
+      if not Pregunta(Copia, Salida) then
+      begin
+        TFile.Copy(A, Copia, True);
+        TLogger.Warning(MsgFmt(SL_RENDER_CLASES_SIN_DAR_FMT, [Salida]));
+      end;
+    end;
+  except
+    on E: Exception do
+      TLogger.Warning(MsgFmt(SL_RENDER_CLASES_SIN_DAR_FMT, [E.Message]));
+  end;
+end;
+
+{ El mensaje de un fallo de disco, de camino al agente, sin nuestra casa: es lo
+  unico de ella que podria nombrar una respuesta. Solo para mensajes: un texto
+  del form la puede llevar de verdad. }
+function SinNuestraCasa(const AMensaje: string): string;
+begin
+  Result := StringReplace(AMensaje, ExcludeTrailingPathDelimiter(ServerTempDir), '(server)',
+    [rfReplaceAll, rfIgnoreCase]);
+end;
+
+const
+  PREFIJO_CAJA_DE_PAQUETES = 'render-paquetes-';
+
+var
+  GCajaDePaquetes: TObject;
+
+{ LA CAJA DE PAQUETES: los .bpl y .dll que un contenedor no leeria donde estan
+  (la carpeta publica del IDE, las de terceros; las del sistema si las lee: es
+  LoLeeElContenedor) y el propio ayudante (con DaSusClasesAlContenedor), copiados
+  a una carpeta de la casa que todos los contenedores leen y ninguno escribe. La
+  misma para todas las llamadas: su nombre es la huella de lo que lleva, asi que un paquete nuevo o
+  cambiado es otra caja y la vieja se va. Lo copia todo una vez; 102 MB, 0,4 s
+  (medido el 30-oct-2026). '' si esta, y APaquetes ya con las rutas que tiene
+  que leer el ayudante; si no, el motivo. }
+function CajaDePaquetes(const AInfo: TRadStudioInfo; out ACaja, APath: string;
+  out APaquetes: TArray<string>): string;
+var
+  Fuentes: TDictionary<string, string>;
+  Vistas, Ayudantes, PathDelServidor: TArray<string>;
+
+  // los ficheros de ACarpeta con esa mascara. Por EntradasDeCarpeta y no por
+  // WalkFiles: esto es trabajo del servidor con la instalacion, no lo que nombra
+  // un agente, y su jaula niega la casa y el IDE. Una carpeta que no se deja
+  // listar (una del PATH): la que falte sale como cualquier paquete que falta
+  function Lista(const ACarpeta, AMascara: string): TArray<string>;
+  begin
+    Result := [];
+    try
+      for var F in EntradasDeCarpeta(ACarpeta) do
+        if TPath.MatchesPattern(TPath.GetFileName(F), AMascara, False) and not EsEnlace(F) then
+          Result := Result + [F];
+    except
+    end;
+  end;
+
+  procedure Mira(const ACarpeta, AMascara: string);
+  begin
+    for var F in Lista(ACarpeta, AMascara) do
+      if not Fuentes.ContainsKey(ClaveDeRuta(TPath.GetFileName(F))) then
+        Fuentes.Add(ClaveDeRuta(TPath.GetFileName(F)), F);
+  end;
+
+  procedure MiraCarpeta(const ACarpeta: string);
+  begin
+    if (ACarpeta = '') or LoLeeElContenedor(ACarpeta) or RutaEnLista(ACarpeta, Vistas) then
+      Exit;
+    Vistas := Vistas + [ACarpeta];
+    Mira(ACarpeta, '*.bpl');
+    Mira(ACarpeta, '*.dll');
+  end;
+
+  // lo que un contenedor con el ayudante en ACarpeta encuentra por el PATH: esa
+  // carpeta y lo del PATH del servidor que el contenedor lee
+  function SuPath(const ACarpeta: string): string;
+  begin
+    Result := ACarpeta;
+    for var D in PathDelServidor do
+      if LoLeeElContenedor(D) then
+        Result := Result + ';' + D;
+  end;
+
+begin
+  Result := '';
+  ACaja := '';
+  APath := '';
+  APaquetes := PaquetesDelIde(AInfo);
+  Vistas := [];
+  Ayudantes := [];
+  Fuentes := TDictionary<string, string>.Create;
+  try
+    try
+      // los ayudantes, con los recursos de idioma que lleven a su lado
+      for var Fw in TArray<string>.Create('vcl', 'fmx') do
+      begin
+        var Nombre: string;
+        var Ayudante := FormRenderExe(Fw, Nombre);
+        Mira(ServerDir, ChangeFileExt(Nombre, '.*'));
+        if Ayudante <> '' then
+          Ayudantes := Ayudantes + [Ayudante];
+      end;
+      // donde el IDE deja lo compilado, los paquetes declarados, y lo que el
+      // PATH le da a sus dependencias (por donde las busca Windows). Un nombre
+      // repetido: el primero, como el cargador
+      var Comun := BdsCommonDir(AInfo);
+      if Comun <> '' then
+        MiraCarpeta(TPath.Combine(Comun, 'Bpl'));
+      for var P in APaquetes do
+        MiraCarpeta(TPath.GetDirectoryName(P));
+      PathDelServidor := GetEnvironmentVariable('PATH').Split([';'], TStringSplitOptions.ExcludeEmpty);
+      for var D in PathDelServidor do
+        if not LoLeeElContenedor(D) and (Length(Lista(D, '*.bpl')) > 0) then
+          MiraCarpeta(D);
+      // la generacion: nombre, tamano y fecha de lo que lleva
+      var Claves := Fuentes.Keys.ToArray;
+      TArray.Sort<string>(Claves);
+      var Sello := '';
+      for var K in Claves do
+      begin
+        var Tam: Int64;
+        var Fecha: TDateTime;
+        if HuellaDeFichero(Fuentes[K], Tam, Fecha) then
+          Sello := Sello + K + '|' + IntToStr(Tam) + '|' + FloatToStr(Fecha) + #10;
+      end;
+      ACaja := ServerTempDir(PREFIJO_CAJA_DE_PAQUETES +
+        PrincipioDeTexto(Sha256DeBytes(TEncoding.UTF8.GetBytes(Sello)), 16));
+      System.TMonitor.Enter(GCajaDePaquetes);
+      try
+        if not TDirectory.Exists(ACaja) then
+        begin
+          // entera o ninguna: se llena al lado y entra de un renombre
+          var Nueva := ACaja + '.' + FragmentoUnico;
+          CrearCarpeta(Nueva);
+          var Err := PreparaCarpetaParaLosContenedores(Nueva);
+          if Err <> 0 then
+            RaiseLastOSError(Err);
+          for var K in Claves do
+            try
+              TFile.Copy(Fuentes[K], TPath.Combine(Nueva, TPath.GetFileName(Fuentes[K])));
+            except
+              // el que no se pueda copiar sale como cualquier paquete que falta
+              on E: Exception do
+                TLogger.Warning(MsgFmt(SL_RENDER_PAQUETE_SIN_COPIAR_FMT, [Fuentes[K], E.Message]));
+            end;
+          DaSusClasesAlContenedor(Nueva, SuPath(Nueva), Ayudantes);
+          if not MoveFile(PChar(Nueva), PChar(ACaja)) then
+            RaiseLastOSError;
+          // las generaciones viejas: una en uso se queda para la proxima
+          for var D in EntradasDeCarpeta(ServerTempDir) do
+            if TPath.GetFileName(D).StartsWith(PREFIJO_CAJA_DE_PAQUETES) and not SameFileName(D, ACaja) then
+              try
+                BorraArbol(D); // sin cruzar enlaces: ver Lsp.Guard
+              except
+              end;
+        end;
+      finally
+        System.TMonitor.Exit(GCajaDePaquetes);
+      end;
+      // lo que el ayudante lee: lo del sistema donde esta, lo demas en la caja
+      for var I := 0 to High(APaquetes) do
+        if not LoLeeElContenedor(APaquetes[I]) then
+          APaquetes[I] := TPath.Combine(ACaja, TPath.GetFileName(APaquetes[I]));
+      // y sus dependencias: la caja y lo del PATH que el contenedor lee
+      APath := SuPath(ACaja);
+    except
+      on E: Exception do
+        Result := MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [SinNuestraCasa(E.Message)]);
+    end;
+  finally
+    Fuentes.Free;
+  end;
+end;
+
+{ Lo que el ayudante lee de las raices, COPIADO a AEtapa: el form (APeticion.Path,
+  a veces una propuesta en la casa), sus hermanos del mismo tipo por sus frames y
+  ancestros, y las unidades de todos, que dicen de que clase hereda cada uno. Por
+  la puerta de leer: un hermano que la sesion no lee no va, ni un enlace, como
+  no los leia el ayudante. AJunto, lo que sus literales nombran junto a el, en su
+  sitio bajo AEtapa. La propuesta del juez va la ultima, encima del form de
+  verdad de la Carpeta. Devuelve la ruta del form en AEtapa. Lanza si no puede
+  con el form. }
+function CopiaLoQueLee(const APeticion: TPeticionRender; const AEtapa: string;
+  const AJunto: TArray<string>): string;
+var
+  Hermanos: string;
+
+  procedure Copia(const AOrigen, ADestino: string);
+  begin
+    if EsEnlace(AOrigen) or not TFile.Exists(AOrigen) then
+      Exit;
+    try
+      var Bytes := LeeBytes(AOrigen, LUGARES_DEL_MOTOR);
+      CrearCarpeta(TPath.GetDirectoryName(ADestino));
+      EscribeBytes(ADestino, Bytes, ltTemporal);
+    except
+      // lo que la sesion no lee no va: para el ayudante, un fichero que no esta
+    end;
+  end;
+
+  procedure CopiaAlLado(const AOrigen: string);
+  begin
+    Copia(AOrigen, TPath.Combine(AEtapa, TPath.GetFileName(AOrigen)));
+  end;
+
+begin
+  Hermanos := TPath.GetDirectoryName(APeticion.Path);
+  if APeticion.Carpeta <> '' then
+    Hermanos := APeticion.Carpeta;
+  for var R in AJunto do
+    Copia(TPath.Combine(Hermanos, R), TPath.Combine(AEtapa, R));
+  for var F in WalkFiles(Hermanos, ['*' + ExtractFileExt(APeticion.Path)], False, False) do
+  begin
+    CopiaAlLado(F);
+    CopiaAlLado(UnidadDeDesigner(F));
+  end;
+  CopiaAlLado(UnidadDeDesigner(TPath.Combine(Hermanos, TPath.GetFileName(APeticion.Path))));
+  Result := TPath.Combine(AEtapa, TPath.GetFileName(APeticion.Path));
+  // el pedido, por su lugar: una propuesta de la casa o un form ya juzgado
+  EscribeBytes(Result, LeeBytes(APeticion.Path, LUGARES_DEL_MOTOR + [ltTemporal]), ltTemporal);
+end;
+
+{ UNA ejecucion del ayudante en su contenedor: la carpeta de esta llamada, lo que
+  lee copiado dentro, la orden sobre esas copias y, si dibujo, la imagen en
+  APeticion.Salida. Lo que dice sale ya con las rutas de verdad: ni un agente ve
+  nuestra casa ni CambioEnLoLeido relee una copia. '' o el fallo; lo demas lo
+  juzga quien llama. }
+function CorreEnSuContenedor(const APeticion: TPeticionRender; const AExe: string;
+  out ASalida: string; out ACodigo: Cardinal): string;
+var
+  AC: TContenedor;
+  Etapa, Caja, PathHijo, Orden, Origen: string;
+  Paquetes, Junto: TArray<string>;
+  Err: DWORD;
+  Vencido: Boolean;
+begin
+  Result := '';
+  ASalida := '';
+  ACodigo := 0;
+  Err := CreaContenedor(AC);
+  if Err <> 0 then
+    Exit(MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
+  AC.ConVentanas := True;
+  Etapa := NuevaCarpetaDescarga(ServerTempDir(CAPTURE_SUB_DESIGNER));
+  try
+    try
+      CrearCarpeta(Etapa);
+      Err := PreparaCarpetaDelContenedor(AC, Etapa);
+      if Err <> 0 then
+        Exit(MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
+      // el conversor (V71) no carga el form: ningun literal suyo se resuelve, y
+      // juzgarlos leeria la copia por TStyleDoc, que de un binario le pregunta a
+      // el mismo - medido con el mutante: una recursion de cientos de carpetas de
+      // descarga hasta el plazo
+      if APeticion.Convierte = '' then
+        Result := LiteralesDeRenderDenegados(APeticion, Etapa, Junto);
+      if Result <> '' then
+        Exit;
+      Result := CajaDePaquetes(DiscoverRadStudio, Caja, PathHijo, Paquetes);
+      if Result <> '' then
+        Exit;
+      var Pet := APeticion;
+      Pet.Path := CopiaLoQueLee(APeticion, Etapa, Junto);
+      Pet.Carpeta := '';
+      Pet.RaizBds := PrefijoSinBarra(DiscoverRadStudio.RootDir);
+      Pet.FicheroPaquetes := TPath.Combine(Etapa, 'paquetes.lst');
+      EscribeBytes(Pet.FicheroPaquetes, TEncoding.UTF8.GetPreamble +
+        TEncoding.UTF8.GetBytes(string.Join(#13#10, Paquetes)), ltTemporal);
+      if APeticion.Salida <> '' then
+        Pet.Salida := TPath.Combine(Etapa, TPath.GetFileName(APeticion.Salida));
+      // un estilo por fichero, ya por su puerta: lo que no se ve tampoco se lee
+      if EsRutaAbsoluta(APeticion.Estilo) then
+      begin
+        Pet.Estilo := TPath.Combine(Etapa, TPath.GetFileName(APeticion.Estilo));
+        EscribeBytes(Pet.Estilo, LeeBytes(APeticion.Estilo, LUGARES_DEL_MOTOR), ltTemporal);
+      end;
+      Result := ComponeOrdenDeRender(TPath.Combine(Caja, TPath.GetFileName(AExe)), Pet, Orden);
+      if Result <> '' then
+        Exit;
+      ASalida := RunCapturedEnContenedor(Orden, Etapa, AC, RENDER_TIEMPO_MS, ACodigo, Vencido,
+        phConsola, EntornoSinConfiguracion(['PATH=' + PathHijo]));
+      Origen := TPath.GetDirectoryName(APeticion.Path);
+      if APeticion.Carpeta <> '' then
+        Origen := APeticion.Carpeta;
+      ASalida := StringReplace(ASalida, Etapa, Origen, [rfReplaceAll, rfIgnoreCase]);
+      // un paquete o un componente que nombre su ruta: su nombre lleva la huella,
+      // ningun texto de un form la trae
+      ASalida := StringReplace(ASalida, Caja, '(packages)', [rfReplaceAll, rfIgnoreCase]);
+      if (APeticion.Salida <> '') and TFile.Exists(Pet.Salida) then
+        ColocaProducto(Pet.Salida, APeticion.Salida, ltTemporal);
+    except
+      on E: Exception do
+        Result := MsgFmt(SR_DESIGNER_RENDER_NO_ARRANCA_FMT, [TPath.GetFileName(AExe), SinNuestraCasa(E.Message)]);
+    end;
+  finally
+    BorraContenedor(AC);
+    try
+      ReclamaArbol(Etapa); // una carpeta que dejo cerrada el codigo de un paquete
+      BorraArbol(Etapa);   // sin cruzar enlaces: ver Lsp.Guard
+    except
+      // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
+    end;
+  end;
+end;
+
 function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
 var
-  Exe, Nombre, Orden, Salida, Fallo, CwdPropio: string;
+  Exe, Nombre, Salida, Fallo: string;
   Codigo: Cardinal;
   Reloj: TStopwatch;
 
@@ -1006,63 +1537,19 @@ var
 
 begin
   Result := Default(TRespuestaRender);
-  CwdPropio := '';
-  // el conversor (V71) no carga el form: ningun literal suyo se resuelve, y
-  // juzgarlos leeria la copia por TStyleDoc, que de un binario le pregunta a
-  // el mismo - medido con el mutante: una recursion de cientos de carpetas de
-  // descarga hasta el plazo
-  if APeticion.Convierte = '' then
-    Result.Fallo := LiteralesDeRenderDenegados(APeticion);
-  if Result.Fallo <> '' then
-    Exit;
   Exe := FormRenderExe(APeticion.Framework, Nombre);
   if Exe = '' then
   begin
     Result.Fallo := MsgFmt(SR_DESIGNER_SIN_RENDER_FMT, [Nombre, ServerDir('')]);
     Exit;
   end;
-  Fallo := ComponeOrdenDeRender(Exe, APeticion, Orden);
+  Reloj := TStopwatch.StartNew;
+  Fallo := CorreEnSuContenedor(APeticion, Exe, Salida, Codigo);
   if Fallo <> '' then
   begin
     Result.Fallo := Fallo;
     Exit;
   end;
-  Reloj := TStopwatch.StartNew;
-  try
-    // en la carpeta del form de verdad (la del juez que no pinta es Carpeta:
-    // su propuesta esta en el temporal del servidor): el ayudante carga el
-    // form DEL AGENTE y nada relativo suyo cae en la casa del servidor
-    // (revisor 6 del 3.11, B6). Era la carpeta del png, que desde la 1.18.2
-    // esta en nuestra casa de capturas (revisor del 2af)
-    var Cwd := TPath.GetDirectoryName(APeticion.Path);
-    if APeticion.Carpeta <> '' then
-      Cwd := APeticion.Carpeta;
-    // ...si la sesion puede ESCRIBIR alli: el codigo de diseno de los paquetes
-    // escribe RELATIVO al cwd (lo miden URenderReachDummy y su gemelo FMX), y
-    // un form de una referencia o de un ReadOnlyPaths lo llevaria a escribir
-    // donde nadie puede (revisor de la 2a mitad del 2af, M3). Ahi, una carpeta
-    // nuestra nueva y vacia, que se va al acabar
-    if EscrituraDenegada(Cwd) <> '' then
-    begin
-      CwdPropio := NuevaCarpetaDescarga(ServerTempDir(CAPTURE_SUB_DESIGNER));
-      CrearCarpeta(CwdPropio);
-      Cwd := CwdPropio;
-    end;
-    Salida := RunCapturedIn(Orden, Cwd, RENDER_TIEMPO_MS, Codigo);
-  except
-    on E: Exception do
-    begin
-      Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_NO_ARRANCA_FMT, [Nombre, E.Message]);
-    end;
-  end;
-  if CwdPropio <> '' then
-    try
-      BorraArbol(CwdPropio); // sin cruzar enlaces: ver Lsp.Guard
-    except
-      // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
-    end;
-  if Result.Fallo <> '' then
-    Exit;
   Result := LeeRespuestaDeRender(Salida);
   Result.Codigo := Codigo;
   Result.MsTotal := Reloj.ElapsedMilliseconds;
@@ -1123,8 +1610,6 @@ begin
     Result.Framework := (if EsDesignerFmx(APath) then 'fmx' else 'vcl');
   Result.Path := APath;
   Result.Bds := DiscoverRadStudio.Version;
-  Result.BdsComun := BdsCommonDir(DiscoverRadStudio);
-  Result.Desactivados := IdeBplsDesactivados32(Result.Bds);
   // form o frame lo dice EL lector de clases (RaizParaElRender): el ayudante
   // lo adivinaba con su regex. Sin .pas legible, o sin saberlo, que mire el
   var Pas := UnidadDeDesigner(APath);
@@ -1393,5 +1878,11 @@ begin
     end;
   end;
 end;
+
+initialization
+  GCajaDePaquetes := TObject.Create;
+
+finalization
+  GCajaDePaquetes.Free;
 
 end.

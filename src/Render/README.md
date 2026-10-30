@@ -28,9 +28,11 @@ one Delphi version (the `370` BPLs), like the server since 1.14.0.
 
 - The BPLs of its runtime packages (`<BDS>\bin`) on the PATH, like any exe
   built with packages. The RAD Studio installer puts that folder on the
-  MACHINE PATH, so a server running as a Windows service finds them too
-  (measured); without them Windows cannot start the renderer and the server
-  answers `DSGN-063`.
+  MACHINE PATH, and the server keeps it on the renderer's PATH; without them
+  Windows cannot start the renderer and the server answers `DSGN-063`.
+- Where the IDE is (`--bdsroot`) and which packages it may load (`--knownfile`,
+  one path per line). The server reads them from the IDE's registry and tells
+  it: inside its container the renderer cannot read the registry.
 - Nothing else. The standard palette (Standard, Additional, Win32, Dialogs,
   WinX, action bands, samples) is registered from the renderer's own `uses`,
   as the IDE does with the form it creates. Every other class — data
@@ -38,6 +40,49 @@ one Delphi version (the `370` BPLs), like the server since 1.14.0.
   Known Packages, loaded **at run time and only when the file names a class
   the palette does not know** (`--packages auto`). Installing a package in
   the IDE is all it takes for the renderer to see it.
+
+## Where it runs: its container
+
+The design code of a package reads and writes whatever a form asks it to, so
+the server always runs the renderer inside an AppContainer with no
+capabilities, one per call, with its Job Object, and never outside one: if the
+container cannot be prepared nothing is drawn (`DSGN-177`). Measured: from
+there it opens nothing of the workspace roots, of the server's folder, of the
+user's profile or of a mapped drive, and it has no network. Windows and the two
+Program Files folders it can read, as any application package can; that is why
+a form literal that names something there is refused by its text (`DSGN-115`),
+exists or not. What a literal names anywhere else is not checked at all: the
+answer must not say whether a file exists.
+
+What it needs travels to it:
+
+- **The folder of the call**, in the server's home: the form, its siblings of
+  the same type and their units, what a form literal names below the form's
+  folder if the session can read it (up to 64 MiB: a `TAnimate`'s `.avi`), and a
+  style file. The renderer's answer is translated back to the real paths, and
+  the folder goes when the call ends. A component that opens a file by its FULL
+  path does not reach it, even inside the roots: it fails as with a missing
+  file.
+- **The package box**, also in the server's home, shared by every call and
+  readable, not writable, by every container: the renderers and the `.bpl` and
+  `.dll` of the folders that hold a Known Package, of `$(BDSCOMMONDIR)\Bpl` and of
+  the PATH folders with packages, except the ones the container reads where they
+  are. It is named after what it holds, so a package added or rebuilt makes a
+  new box.
+- **The COM classes it cannot look up.** Windows keeps a few classes under a
+  registry key no container may read, while the DLL itself is readable: of 5181
+  32-bit in-process classes measured, 4, the ADO ones (`Command`, `Parameter`,
+  `Recordset`, `Error`). Without them a form with a `TADOQuery` loses the
+  component. When the box is made the renderer is asked which keys it cannot open
+  (`--unreadableclasses`); the server reads those keys and gives the classes
+  whose DLL the container reads to the box's copy of the renderers, in their
+  manifest, and Windows judges that manifest by starting them. If any of this
+  fails the copy keeps no manifest and the server logs it: those components stay
+  out of the form, reported in `ignored`. The code of the class still runs inside
+  the container, with what the container reads and nothing else.
+
+The language of the RTL's messages is Windows's: the per-exe override in
+`HKCU\Software\Embarcadero\Locales` does not reach the container.
 
 ## Command line
 
@@ -52,10 +97,11 @@ a quote, and what followed it would be another switch.
 DelphiFormRenderVcl --path <dfm> --out <png> [--state Comp.Prop=Value]* [--component Name]
                     [--style <file.vsf>] [--nonvisual on|off] [--packages auto|none|all]
                     [--root auto|form|frame] [--fidelity auto|window|print]
-                    [--bds 37.0] [--timeout ms] [--verbose]
+                    [--bds 37.0] [--bdsroot <dir>] [--knownfile <file>] [--timeout ms] [--verbose]
 DelphiFormRenderFmx --path <fmx> --out <png> [--state ...]* [--component Name]
                     [--style <file.style>|none|windows|win7|win8|win10|win11|mobile|android|ios|ios-dark|osx|linux|gnome]
-                    [--nonvisual on|off] [--packages ...] [--root ...] [--bds] [--timeout] [--verbose]
+                    [--nonvisual on|off] [--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout] [--verbose]
+DelphiFormRender*   --unreadableclasses
 ```
 
 - `--state`: a view state applied through RTTI after the form is built and
@@ -63,11 +109,11 @@ DelphiFormRenderFmx --path <fmx> --out <png> [--state ...]* [--component Name]
   `Edit1.Text=hello`. A class-typed value names a component, and an integer
   with a name (`clRed`, `crHandPoint`, `claRed`) is read by its type's own
   reader, as the form loader reads it.
-- `--writeback on` (with `--folder <dir>`): the judge of what the IDE saves.
-  No PNG: the form is loaded the same way and written by the IDE's own
-  writer (TWriter), each line as `WRITTEN=`. `--folder` is the folder of the
-  real form when `--path` is a proposal written elsewhere: its siblings
-  (frames, ancestors) and its `.pas` are read from there.
+- `--writeback on`: the judge of what the IDE saves. No PNG: the form is
+  loaded the same way and written by the IDE's own writer (TWriter), each
+  line as `WRITTEN=`. Its siblings (frames, ancestors) and its `.pas` are read
+  from next to `--path`: the server copies them there, with the proposal in
+  the place of the real form.
   `delphi_designer` `insert` and `set` ask it before writing; `--dropped` names
   the control just dropped, which gets what the designer gives it (alignment,
   tab order).
@@ -153,12 +199,12 @@ a render that waits on anything.
 
 The code the renderer loads is fixed by the machine, never by the file: its runtime BPLs,
 and - only when the file names a class the standard palette does not know - the design
-packages registered in the IDE (HKCU Known Packages, all of them, their initialization
-included; the file can trigger that load, it cannot choose or add a package). BPLs opened
+packages registered in the IDE (HKCU Known Packages, as the server lists them, their
+initialization included; the file can trigger that load, it cannot choose or add a package). BPLs opened
 for icons and platform styles are opened as data: nothing of theirs runs. TReader creates
-registered classes only; an unknown class becomes a labelled substitute. The explicit input paths
-comes from the server through its read gate: the form, its sibling .pas and .dfm/.fmx files
-in the same folder (links are skipped), a style file.
+registered classes only; an unknown class becomes a labelled substitute. Its input comes from
+the server through its read gate, copied to the folder of the call: the form, its sibling .pas
+and .dfm/.fmx files in the same folder (links are skipped), a style file.
 
 What a hostile file CAN do is feed bad values and binary blobs (pictures, image lists,
 collections) to the loaded classes and crash or stall the renderer. That is why it runs as a
@@ -166,61 +212,32 @@ process of its own, with its watchdog and the server's own time limit, and why t
 answers with the error instead of dying with it.
 
 The server checks string literals and requested view-state values before starting the
-helper, using the existing form reader and read-path gate. The requested form and its
+helper, using the existing form reader and read-path gate, by their text and for what the
+container can read (see above). The requested form and its
 examined siblings share a 16 MiB input budget; larger input is refused before decoding.
 This budget bounds the server's preliminary read, which runs outside the helper's job.
 
 **Cleanup: what is measured and what is not.** The renderer starts no
 processes of its own. Measured: its watchdog (exit code 3, in `Pruebas`) and
-the server's time limit (`RunCapturedIn` kills the renderer when it runs
-out). `RunCapturedIn` also puts it in a Job Object that kills the tree when it
-is closed; that part is best-effort (if the job cannot be created the
-renderer runs without one). A DUMMY measurement with the inner watchdog disabled
+the server's time limit (`RunCapturedEnContenedor` kills the renderer when it
+runs out). It also puts it in a Job Object that kills the tree when it is
+closed; without one the renderer does not run. A DUMMY measurement with the inner watchdog disabled
 confirmed the outer 75-second deadline, stopped parent and child, a stationary child
 counter and a responsive server. Omitting the job assignment left the child alive.
 Job creation and assignment failure paths remain unmeasured.
 
 ## Outbound network policy (operator installation)
 
-Rendering does not need network access. The operator can declare one outbound block
-rule per deployed helper, for every firewall profile and protocol. The server never
-installs or modifies firewall policy. Use the actual installation directory; a rule
-for one executable path does not cover a copy at another path or a child with a
-different executable.
-
-Example for an elevated PowerShell console, after operator review:
-
-```powershell
-$renderDir = 'C:\Delphi-mcp-Server'
-foreach ($framework in 'Vcl', 'Fmx') {
-    $program = Join-Path $renderDir ("DelphiFormRender{0}.exe" -f $framework)
-    New-NetFirewallRule -Name ("DelphiLspMcp.Render.{0}.Outbound" -f $framework) -DisplayName ("Delphi MCP renderer {0}: block outbound" -f $framework) -Program $program -Direction Outbound -Action Block -Profile Any -Protocol Any -Enabled True -PolicyStore PersistentStore
-}
-```
-
-These are program rules as documented by
-[Microsoft](https://learn.microsoft.com/en-us/powershell/module/netsecurity/new-netfirewallrule).
-Installing the declarations is not proof of enforcement: verify the effective policy
-and run a controlled request from each exact helper path, including a loopback case
-and a child-process case. Compare the endpoint counter with the rule enabled and
-with the operator-controlled rule removed. This round does not install rules or claim
-that those enforcement tests passed.
+Rendering needs no network access, and its container has none: no firewall rule is
+needed for it. The server never installs or modifies firewall policy.
 
 Third-party components remain available. Design mode avoids application event
 handlers, but loaded components still run their constructors and property setters,
-with the server's account - exactly as the IDE runs them when it opens a form. The
-components are the ones the operator installed and trusts; what the agent controls
-is the form's text, so the server judges that first: every value with the shape of
-a path goes through the jail, and one outside the roots is refused before the
-helper starts. A component that waits - a design-time connection with nothing to
-open, a package that hangs while loading - ends at the helper's budget with
-`RENDER-007` (measured 2026-10-14 with a `TFDConnection` set to `Connected = True`
-and no database to open: 60 s, nothing written, no process left). A process budget
-and program firewall rules do not by themselves restrict all of a component's
-filesystem access or its network: agents of low trust get a sandbox workspace. A
-tighter confinement of the helper (a low-integrity token, measured on 2026-10-09 to
-paint identically but refused by the service's window station in session 0) is a
-decision for a later version, not a requirement of this one.
+as the IDE runs them when it opens a form - in the container, which is what bounds
+them. A component that waits - a design-time connection with nothing to open, a
+package that hangs while loading - ends at the helper's budget with `RENDER-007`
+(measured 2026-10-14 with a `TFDConnection` set to `Connected = True` and no
+database to open: 60 s, nothing written, no process left).
 
 ## Tests, in three layers
 

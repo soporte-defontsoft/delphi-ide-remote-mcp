@@ -109,10 +109,12 @@ function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   1.10 un lanzamiento a integridad baja que fallaba se repetia SIN jaula y
   solo lo avisaba sandboxed=false). ATimedOut dice si se le mato por tiempo:
   sin eso un proceso muerto era igual que uno que fallaba al instante, mismo
-  exitCode 1 y salida vacia (medido 2026-08-25). }
+  exitCode 1 y salida vacia (medido 2026-08-25). AEntorno, si va, el bloque
+  entero del hijo (Lsp.Sandbox.EntornoSinConfiguracion). }
 function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;
   const AC: TContenedor; ATimeoutMs: Integer; out AExitCode: Cardinal;
-  out ATimedOut: Boolean; APagina: TPaginaDelHijo = phConsola): string;
+  out ATimedOut: Boolean; APagina: TPaginaDelHijo = phConsola;
+  const AEntorno: string = ''): string;
 
 implementation
 
@@ -520,7 +522,7 @@ begin
   // sin ella y solo lo decia sandboxed=false.
   if AContenedor <> nil then
     Launched := CreateProcessEnContenedor(AContenedor^, Cmd, WorkDirPtr,
-      CREATE_NO_WINDOW or CREATE_SUSPENDED, SI, PI)
+      CREATE_NO_WINDOW or CREATE_SUSPENDED, SI, PI, AEntorno)
   else
   begin
     var Env: PChar := nil;
@@ -733,13 +735,13 @@ end;
 
 function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;
   const AC: TContenedor; ATimeoutMs: Integer; out AExitCode: Cardinal;
-  out ATimedOut: Boolean; APagina: TPaginaDelHijo): string;
+  out ATimedOut: Boolean; APagina: TPaginaDelHijo; const AEntorno: string): string;
 var
   Copia: TContenedor;
 begin
   Copia := AC; // RunCore lo quiere por puntero, y AC es const
   Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, @Copia, AExitCode,
-    ATimedOut, '', APagina);
+    ATimedOut, AEntorno, APagina);
 end;
 
 { The Android staging map, measured against an IDE-written .deployproj

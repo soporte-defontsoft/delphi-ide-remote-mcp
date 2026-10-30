@@ -4,11 +4,12 @@ clave Disabled Packages) se cargaba igual en el preview, el lint y el juez de
 escritura: el renderizador leia Known Packages sin mirar la otra lista. Medido
 contra la 1.23.1 con el TChatBubble de MakerAi.UI.bpl, desactivado aqui y en
 ningun otro paquete: se dibujaba. Ahora lo dice el servidor, que ya tenia ese
-lector, con --disabled en la orden.
+lector, y desde V65 el ayudante no mira el registro: carga la lista que le da.
 
 El registro del IDE no se toca: lo desactivado aqui es de la maquina, asi que
-  D1-D3 el renderizador DE VERDAD con --disabled, y un paquete estandar del IDE
+  D1-D2 el renderizador DE VERDAD con --knownfile, y un paquete estandar del IDE
         (dclsmp370.bpl, TGauge) en vez del de esta maquina
+  D3    ...y sin --bdsroot no busca el IDE en el registro: RENDER-008
   E1    el servidor entero: PACKAGES= cuenta lo que dice el registro, leido aqui
         solo para comparar (ROJO en produccion si la maquina tiene desactivados)
 
@@ -46,7 +47,8 @@ FORM = escribe('UGauge.dfm', 'object FormGauge: TFormGauge\n  Left = 0\n  Top = 
 def ayudante(*extra):
     """Lanzado como lo lanza el servidor; las lineas CLAVE=valor de su salida."""
     p = subprocess.run([RENDER, '--path', FORM, '--out', os.path.join(BASE, 'o.png'), '--timeout', '120000',
-                        '--bds', BDS] + list(extra), capture_output=True, timeout=240, cwd=JAIL)
+                        '--bds', BDS, '--bdsroot', mc.raiz_del_ide(BDS)] + list(extra),
+                       capture_output=True, timeout=240, cwd=JAIL)
     salida = {}
     for linea in p.stdout.decode('utf-8', 'replace').replace('\r', '').split('\n'):
         clave, igual, valor = linea.partition('=')
@@ -61,16 +63,28 @@ def conocidos(paquetes):
     return int(trozos[1]) if len(trozos) == 2 and trozos[1].isdigit() else None
 
 
-c0, s0 = ayudante()
-check('D1 control: sin --disabled, el TGauge de dclsmp370.bpl se dibuja (no sale sustituido)',
-      c0 == 0 and 'TGauge' not in s0.get('SUBSTITUTED', '') and conocidos(s0.get('PACKAGES')), (c0, s0))
-c1, s1 = ayudante('--disabled', 'dclsmp370.bpl')
-check('D2 con --disabled dclsmp370.bpl, TGauge sale sustituido y hay un conocido menos',
-      c1 == 0 and 'TGauge' in s1.get('SUBSTITUTED', '') and
-      conocidos(s1.get('PACKAGES')) == conocidos(s0.get('PACKAGES')) - 1, (c1, s1, s0.get('PACKAGES')))
-c2, s2 = ayudante('--disabled', 'DCLSMP370.BPL')
-check('D3 el nombre se compara sin distinguir mayusculas, como las rutas de Windows',
-      c2 == 0 and 'TGauge' in s2.get('SUBSTITUTED', ''), (c2, s2))
+def con_lista(rutas):
+    lista = os.path.join(JAIL, 'paquetes.lst')
+    open(lista, 'w', encoding='utf-8-sig').write('\n'.join(rutas))
+    return ayudante('--knownfile', lista)
+
+
+BIN = os.path.join(mc.raiz_del_ide(BDS), 'bin')
+ESTANDAR = [os.path.join(BIN, n) for n in ('dclstd370.bpl', 'dclsmp370.bpl')]
+c0, s0 = con_lista(ESTANDAR)
+check('D1 control: con dclsmp370.bpl en la lista, el TGauge se dibuja (no sale sustituido)',
+      c0 == 0 and 'TGauge' not in s0.get('SUBSTITUTED', '') and conocidos(s0.get('PACKAGES')) == 2, (c0, s0))
+c1, s1 = con_lista(ESTANDAR[:1])
+check('D2 sin el en la lista, TGauge sale sustituido y hay un conocido menos',
+      c1 == 0 and 'TGauge' in s1.get('SUBSTITUTED', '') and conocidos(s1.get('PACKAGES')) == 1, (c1, s1))
+# el estilo de una plataforma es lo unico que le pide la carpeta del IDE: un recurso de sus bpl
+FMX = escribe('UEstilo.fmx', 'object FormE: TFormE\n  Left = 0\n  Top = 0\n  Caption = \'E\'\n'
+              '  ClientHeight = 100\n  ClientWidth = 100\nend\n')
+p = subprocess.run([os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe'), '--path', FMX, '--out',
+                    os.path.join(BASE, 'e.png'), '--timeout', '120000', '--bds', BDS, '--style', 'android'],
+                   capture_output=True, timeout=240, cwd=JAIL)
+salida = p.stdout.decode('utf-8', 'replace')
+check('D3 sin --bdsroot no busca el IDE en el registro: RENDER-008', mc.es(salida, 'SR_RENDER_SIN_IDE_FMT'), salida[:300])
 
 
 def lista(subclave):

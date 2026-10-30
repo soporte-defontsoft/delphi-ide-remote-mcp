@@ -37,6 +37,8 @@ type
     [Test] procedure OrdenUnInterruptorPorValor;
     [Test] procedure OrdenNoPasaValoresVacios;
     [Test] procedure OrdenRechazaComillasYControles;
+    [Test] procedure RutaDePaqueteConSusMacros;
+    [Test] procedure ManifiestoDeLasClases;
     [Test] procedure ExeDeCadaFramework;
     [Test] procedure CapturaDelDisenadorEsDelAgente;
     [Test] procedure CabeceraDeLasTresPalabras;
@@ -185,7 +187,9 @@ begin
     FR_WARNING + '[RENDER-016] component: there is no Z in FormPrueba.'#13#10 +
     FR_NONVISUALS + 'Timer1:TTimer,ActionList1:TActionList'#13#10 + FR_NONVISUAL + '2'#13#10 +
     FR_RECT + 'Panel1=16,140,344,41'#13#10 + FR_FIDELITY + 'print'#13#10 +
-    FR_SIZE + '400x200'#13#10 + FR_CAPTURE + 'C:\w\a.png'#13#10 + FR_MS + '17,6'#13#10);
+    FR_SIZE + '400x200'#13#10 + FR_CAPTURE + 'C:\w\a.png'#13#10 + FR_MS + '17,6'#13#10 +
+    FR_UNREADABLE_CLASS + '{1}'#13#10 + FR_UNREADABLE_CLASS + '{2}'#13#10);
+  Assert.AreEqual('{1}|{2}', string.Join('|', R.ClasesSinLeer), 'repetible, sin el fin de linea de la consola');
   Assert.AreEqual(96, R.Dpi);
   Assert.AreEqual(2, R.Sesion);
   Assert.AreEqual('none (as the VCL designer)', R.Estilo);
@@ -360,8 +364,8 @@ begin
   P.Estilo := 'android';
   P.NoVisuales := True;
   P.Bds := '37.0';
-  P.BdsComun := 'C:\Comun\37.0';
-  P.Desactivados := ['Un paquete.bpl', 'otro.bpl'];
+  P.RaizBds := 'C:\Program Files\Ide';
+  P.FicheroPaquetes := 'C:\e tapa\paquetes.lst';
   Assert.AreEqual('', ComponeOrdenDeRender('C:\s\DelphiFormRenderVcl.exe', P, O));
   Assert.IsTrue(O.StartsWith('"C:\s\DelphiFormRenderVcl.exe" '), O);
   Assert.IsTrue(O.Contains(' --path "C:\w\Form 1.dfm"'), 'un valor con espacios va entero: ' + O);
@@ -372,9 +376,8 @@ begin
   Assert.IsTrue(O.Contains(' --style "android"'), O);
   Assert.IsTrue(O.Contains(' --nonvisual on'), O);
   Assert.IsTrue(O.Contains(' --bds "37.0"'), O);
-  Assert.IsTrue(O.Contains(' --commondir "C:\Comun\37.0"'), O);
-  Assert.IsTrue(O.Contains(' --disabled "Un paquete.bpl"'), 'un valor con espacios va entero: ' + O);
-  Assert.IsTrue(O.Contains(' --disabled "otro.bpl"'), 'un --disabled por paquete: ' + O);
+  Assert.IsTrue(O.Contains(' --bdsroot "C:\Program Files\Ide"'), 'un valor con espacios va entero: ' + O);
+  Assert.IsTrue(O.Contains(' --knownfile "C:\e tapa\paquetes.lst"'), 'un valor con espacios va entero: ' + O);
   Assert.IsTrue(O.Contains(' --timeout '), 'el vigia del ayudante va siempre: ' + O);
 end;
 
@@ -389,14 +392,13 @@ begin
   P.Path := 'C:\w\F.dfm';
   P.Salida := 'C:\w\o.png';
   P.Estados := [''];
-  P.Desactivados := [''];
   Assert.AreEqual('', ComponeOrdenDeRender('C:\s\r.exe', P, O));
   Assert.IsFalse(O.Contains('--component'), O);
   Assert.IsFalse(O.Contains('--style'), O);
   Assert.IsFalse(O.Contains('--state'), O);
   Assert.IsFalse(O.Contains('--bds'), O);
-  Assert.IsFalse(O.Contains('--commondir'), O);
-  Assert.IsFalse(O.Contains('--disabled'), O);
+  Assert.IsFalse(O.Contains('--bdsroot'), O);
+  Assert.IsFalse(O.Contains('--knownfile'), O);
   Assert.IsFalse(O.Contains('""'), 'ningun valor vacio: ' + O);
   Assert.IsTrue(O.Contains(' --nonvisual off'), 'apagado por defecto: ' + O);
 end;
@@ -416,13 +418,50 @@ begin
   Assert.IsTrue(EsMsg(R, SR_DESIGNER_VALOR_CON_COMILLAS_FMT), R);
   Assert.AreEqual('', O, 'sin orden: nada que lanzar');
   P.Estados := [];
-  P.Desactivados := ['x.bpl" --out "C:\fuera\x.png'];
+  P.RaizBds := 'C:\x" --out "C:\fuera\x.png';
   Assert.IsTrue(EsMsg(ComponeOrdenDeRender('C:\s\r.exe', P, O), SR_DESIGNER_VALOR_CON_COMILLAS_FMT),
     'lo que dice el registro se juzga igual');
-  P.Desactivados := [];
+  P.RaizBds := '';
   P.Componente := 'Panel'#10'1';
   Assert.IsTrue(EsMsg(ComponeOrdenDeRender('C:\s\r.exe', P, O), SR_DESIGNER_VALOR_CON_COMILLAS_FMT),
     'un salto de linea tampoco viaja');
+end;
+
+procedure TFormRenderTests.RutaDePaqueteConSusMacros;
+const
+  RAIZ = 'C:\Ide';
+  COMUN = 'C:\Comun';
+begin
+  Assert.AreEqual('C:\Ide\bin\x.bpl', RutaDePaqueteDelIde('$(BDSBIN)\x.bpl', RAIZ, COMUN));
+  Assert.AreEqual('C:\Ide\bin\x.bpl', RutaDePaqueteDelIde('$(BDS)\bin\x.bpl', RAIZ, COMUN),
+    'la otra forma con la que el registro escribe la misma ruta');
+  Assert.AreEqual('C:\Comun\Bpl\x.bpl', RutaDePaqueteDelIde('$(bdscommondir)\Bpl\x.bpl', RAIZ, COMUN));
+  Assert.AreEqual('D:\Otro\x.bpl', RutaDePaqueteDelIde('D:/Otro/x.bpl', RAIZ, COMUN));
+  Assert.AreEqual('$(BDSCOMMONDIR)\Bpl\x.bpl', RutaDePaqueteDelIde('$(BDSCOMMONDIR)\Bpl\x.bpl', RAIZ, ''),
+    'sin valor se queda, y el paquete sale como que falta: vacia daria la raiz de la unidad');
+end;
+
+procedure TFormRenderTests.ManifiestoDeLasClases;
+
+  function Clase(const AClsid, ADll, AHilos: string): TClaseCom;
+  begin
+    Result.Clsid := AClsid;
+    Result.Dll := ADll;
+    Result.Hilos := AHilos;
+  end;
+
+const
+  CABEZA = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
+    '<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">';
+begin
+  Assert.AreEqual('', ManifiestoDeClases([]), 'sin clases, sin manifiesto');
+  Assert.AreEqual(CABEZA + '<file name="a.dll" loadFrom="C:\R&amp;D\a.dll">' +
+    '<comClass clsid="{1}" threadingModel="Both"/><comClass clsid="{2}" threadingModel="Apartment"/></file></assembly>',
+    ManifiestoDeClases([Clase('{1}', 'C:\R&D\a.dll', 'both'), Clase('{2}', 'c:\r&d\A.DLL', 'Apartment')]),
+    'una biblioteca, un <file>, por mucho que el registro la escriba de otra forma; el modelo como lo escribe un manifiesto');
+  Assert.AreEqual(CABEZA + '<file name="a.dll" loadFrom="C:\x\a.dll"><comClass clsid="{1}"/></file></assembly>',
+    ManifiestoDeClases([Clase('{1}', 'C:\x\a.dll', 'Single'), Clase('{2}', 'C:\y\a.dll', '')]),
+    'Single no es un modelo de manifiesto; de dos bibliotecas de igual nombre, la primera');
 end;
 
 procedure TFormRenderTests.ExeDeCadaFramework;

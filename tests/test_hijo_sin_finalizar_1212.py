@@ -99,6 +99,10 @@ def espera_log(srv, aguja, t=3):
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='hijo-sin-finalizar', t=180, lee_stderr=True)
 try:
+    # la caja de paquetes hecha: al hacerla, el servidor corre ayudantes de vida corta que
+    # H1 tomaria por el renderizador (V65 de la 1.24)
+    r = srv.call('delphi_designer', {'command': 'preview', 'path': DFM}, t=120)
+    check('H1 preparacion: la caja de paquetes hecha, el primer preview dibuja', not mc.rechazado(r), r[:300])
     # ---- H1: el renderizador muere a media vida, desde fuera
     antes = mc.atomos_rtl_nombres()
     resp = []

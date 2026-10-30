@@ -402,6 +402,8 @@ begin
   // el conversor del IDE no carga ningun form (V71)
   if GPeticion.Convierte <> '' then
     Exit(ConvierteComoElIde);
+  if GPeticion.ClasesSinLeer then
+    Exit(ListaClasesSinLeer);
   Result := FR_RC_OK;
   ArrancaVigia(GPeticion.TiempoMs);
   Cargador := TCargadorFmx.Create;
@@ -423,7 +425,7 @@ begin
       Cargados := 0;
       Conocidos := 0;
       if GPeticion.Paquetes = 'all' then
-        CargaPaquetesDelIde(GPeticion.Bds, Cargados, Conocidos);
+        CargaPaquetesDelIde(Cargados, Conocidos);
       Reloj := TStopwatch.StartNew;
       Cargando := True;
       F := TForm(LeeConLosPaquetes(Cargador,

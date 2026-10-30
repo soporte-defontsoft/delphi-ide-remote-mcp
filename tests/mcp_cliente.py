@@ -665,6 +665,25 @@ def idioma_rtl(exe, idioma):
             winreg.DeleteValue(k, nombre)
 
 
+def raiz_del_ide(bds='37.0'):
+    """La carpeta del IDE sin la barra final, leida del registro: lo que el
+    servidor le dice al renderizador con --bdsroot."""
+    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Software\\Embarcadero\\BDS\\%s' % bds) as k:
+        return winreg.QueryValueEx(k, 'RootDir')[0].rstrip('\\')
+
+
+def juez_en_idioma(render, form, idioma, bds='37.0'):
+    """Lo que dice el renderizador RENDER, lanzado a mano y con su RTL en ese
+    idioma, al cargar FORM como lo juzga el servidor. A mano: el idioma de un
+    exe se elige en HKCU (idioma_rtl), que dentro del contenedor no se lee y
+    alli no llegaria; dentro habla el de Windows (V65 de la 1.24)."""
+    with idioma_rtl(render, idioma):
+        p = subprocess.run([render, '--path', form, '--writeback', 'on', '--timeout', '120000', '--bds', bds,
+                            '--bdsroot', raiz_del_ide(bds)], capture_output=True, timeout=240,
+                           cwd=os.path.dirname(form))
+    return p.stdout.decode('utf-8', 'replace')
+
+
 def carpeta(nombre):
     """<raiz temporal>\\<nombre>, vacia: lo que dejo una pasada anterior no
     puede sostener a esta. Si no se puede vaciar, lo dice (no sigue encima)."""

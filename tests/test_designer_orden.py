@@ -20,7 +20,7 @@ un TToolBar, en una form heredada con [n]...).
   F2  FMX index=
   F3  FMX: un TActionList (no TFmxObject) delante de un TButton se niega
   O9-O14  los arreglos del revisor 5: un hermano con acento (A1), un fichero que
-      ya no estaba en el orden del IDE (M3), --folder trae el ancestro (M4), un
+      ya no estaba en el orden del IDE (M3), la carpeta de la llamada trae el ancestro (M4), un
       ancestro en otra carpeta (A2, DSGN-143), un PADRE sin paquete (M2), un
       bloque con hijos (B4)
   O16 el form cambia mientras juzga el renderizador: DSGN-144 (A3)
@@ -177,7 +177,7 @@ open(RARO, 'wb').write(
     b'  object Button1: TButton\r\n    Left = 8\r\n    Top = 40\r\n    TabOrder = 0\r\n  end\r\nend\r\n')
 # revisor 5: A1 (un hermano con acento: el protocolo del ayudante en ANSI lo perdia), M3 (un
 # fichero que ya no estaba en el orden del IDE), M4 (una heredada donde decide el ANCESTRO, que
-# solo llega por --folder), A2 (el ancestro en OTRA carpeta: el juez juzgaria un form a medias),
+# solo llega copiado a la carpeta de la llamada), A2 (el ancestro en OTRA carpeta: el juez juzgaria un form a medias),
 # M2 (un padre de una clase que ningun paquete carga)
 BOM = b'\xef\xbb\xbf'
 ACENTO = os.path.join(JAIL, 'UAcentoO.dfm')
@@ -333,11 +333,13 @@ open(os.path.join(JAIL, 'UNom.pas'), 'wb').write(
     b'type\r\n  TFormN = class(TForm)\r\n    Button1: TButton;\r\n    Button2: TButton;\r\n  end;\r\n\r\n'
     b'var\r\n  FormN: TFormN;\r\n\r\nimplementation\r\n\r\n{$R *.dfm}\r\n\r\nend.\r\n')
 
-# O23b (1.18.1) ...y ese salto es SOLO la propuesta: un Caption que nombra un fichero
-# de FUERA, por su ruta entera o relativa a la carpeta del form, sigue siendo DSGN-115
-# por set before= (sin este check, ampliar el salto seguia en verde: DSGN-115 solo se
-# media por preview; revisor de version de la 1.18.1)
-# (cada uno en su PROPIA carpeta: el juez lee los forms hermanos por --folder y
+# O23b (1.18.1) ...y ese salto es SOLO la propuesta. Desde V65 de la 1.24 el ayudante
+# corre en un contenedor que no lee las raices, y un Caption que nombra un fichero de
+# FUERA, por su ruta entera o relativa a la carpeta del form, se ordena: decir otra cosa
+# segun si existe era un oraculo. DSGN-115 queda para lo que el contenedor SI lee, las
+# carpetas del sistema (sin este check, solo se media por preview; revisor de version
+# de la 1.18.1)
+# (cada uno en su PROPIA carpeta: el juez lee los forms hermanos, copiados a su carpeta, y
 # juzga sus literales - uno de fuera en JAIL negaba todos los demas checks, y los
 # dos juntos hacian que el absoluto tapase al relativo: la segunda ronda de
 # revisores de la 1.18.1 lo midio)
@@ -365,6 +367,7 @@ def form_con_caption(nombre, caption):
 
 UFUERA = [form_con_caption('UFueraAbs', "'%s'" % os.path.join(FUERA, 'x.txt')),
           form_con_caption('UFueraRel', "'..\\..\\fuera\\x.txt'")]
+USISTEMA = form_con_caption('USistema', "'%s'" % os.path.join(os.environ['WINDIR'], 'win.ini'))
 
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)  # el juez es el renderizador
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='designer-orden', t=300)
@@ -422,7 +425,7 @@ try:
           not mc.fallo(r) and J(r).get('ordered') == 'ComboBox1' and
           hijos(BARRA, 'ToolBar1') == ['ComboBox1', 'ToolButton1', 'ToolButton2'], (hijos(BARRA, 'ToolBar1'), r[:400]))
     # O7 revisor 4, M1: en una form heredada un nuevo delante de los del ancestro lleva [n], y TReader
-    # coloca por el [n], no por el texto: el juez lo ve (--folder: el ancestro y el .pas de verdad)
+    # coloca por el [n], no por el texto: el juez lo ve (copiados a su carpeta: el ancestro y el .pas de verdad)
     antes = bytes_de(HIJA)
     r = dsg(HIJA, {'component': 'ButtonY', 'before': 'ButtonX'})
     check('O7 form heredada: ButtonY delante de ButtonX [0] no se sostiene (el IDE coloca por el [n]); nada escrito',
@@ -452,7 +455,7 @@ try:
     antes = bytes_de(HIJAP)
     r = dsg(HIJAP, {'component': 'ButtonN', 'before': 'Button1'})
     check('O11 heredada: un nuevo delante de un heredado no se sostiene - lo dice el ANCESTRO, que llega '
-          'por --folder (M4: sin el, el juez diria DSGN-143)',
+          'copiado a la carpeta de la llamada (M4: sin el, el juez diria DSGN-143)',
           mc.abre(r, 'SR_DESIGNER_ORDEN_EL_IDE_FMT') and bytes_de(HIJAP) == antes, r[:400])
     antes = bytes_de(HIJAQ)
     r = dsg(HIJAQ, {'component': 'ButtonN', 'before': 'Button1'})
@@ -481,12 +484,15 @@ try:
           J(r).get('ordered') == 'Button2' and orden(UNOM) == ['Button2', 'Button1'], r[:400])
     malas = []
     for f in UFUERA:
-        antes = bytes_de(f)
         r = dsg(f, {'component': 'Button2', 'before': 'Button1'})
-        if not (mc.abre(r, 'SR_DESIGNER_LITERAL_FUERA_FMT') and bytes_de(f) == antes):
+        if J(r).get('ordered') != 'Button2' or orden(f) != ['Button2', 'Button1']:
             malas.append((os.path.basename(f), r[:200]))
-    check('O23b ...pero un Caption que nombra un fichero de FUERA (por su ruta entera o relativa al form) '
-          'sigue siendo DSGN-115 por set before=, y el form no cambia', not malas, malas)
+    check('O23b ...y uno que nombra un fichero de FUERA (por su ruta entera o relativa al form) tambien '
+          'se ordena: el contenedor no lo lee, y negarlo por existir era un oraculo (V65)', not malas, malas)
+    antes = bytes_de(USISTEMA)
+    r = dsg(USISTEMA, {'component': 'Button2', 'before': 'Button1'})
+    check('O23c ...pero uno de lo que el contenedor SI lee, el sistema, es DSGN-115 por set before=, y el '
+          'form no cambia', mc.abre(r, 'SR_DESIGNER_LITERAL_FUERA_FMT') and bytes_de(USISTEMA) == antes, r[:300])
     antes = bytes_de(PADRERARO)
     r = dsg(PADRERARO, {'component': 'Label1', 'after': 'Edit1'})
     check('O13 el PADRE de una clase que ningun paquete carga: DSGN-140 nombrando al padre (M2)',

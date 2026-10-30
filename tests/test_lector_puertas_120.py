@@ -175,19 +175,13 @@ try:
           not mc.fallo(e) and not mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT') and 'X1.Foo' not in e
           and b'TabOrder = 1' in open(p, 'rb').read(), e[-600:])
 
-    # el ayudante que lanza ESTE servidor (copia_exe lo puso a su lado)
-    with mc.idioma_rtl(os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe'), 'DE'):
-        p = form('UL11', dentro=MALO + '\r\n')
-        n = linea_de(p, 'FontColor = -65536')
-        r = srv.call('delphi_designer', {'path': p, 'command': 'lint'}, t=240)
-        check('L11 con el lector en aleman: el lint dice lo que dijo el lector con su linea (%d)' % n,
-              mc.tiene(r, 'DSGN-038') and ('line %d:' % n) in r and 'Fehler beim Lesen von Edit1.FontColor' in r,
-              r[:600])
-        p = form('UL12', otro=TERCEROS)
-        e = srv.call('delphi_edit', {'path': p, 'old': '    TabOrder = 0', 'new': '    TabOrder = 1'}, t=240)
-        check('L12 ...y la clase sustituida en aleman: lo que se salta de ella no es un aviso del lector',
-              not mc.fallo(e) and not mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT') and 'X1.Foo' not in e
-              and b'TabOrder = 1' in open(p, 'rb').read(), e[-600:])
+    # el ayudante que lanza ESTE servidor (copia_exe lo puso a su lado), a mano:
+    # el idioma de un exe no se elige dentro del contenedor (V65 de la 1.24). Que
+    # el servidor lee sus partes en cualquier idioma lo mide una unitaria
+    p = form('UL11', dentro=MALO + '\r\n')
+    d = mc.juez_en_idioma(os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe'), p, 'DE')
+    check('L11 con el lector en aleman: dice lo que no cargo en aleman y partido, para que el lint le ponga su linea',
+          '|Edit1|FontColor|' in d and 'Fehler beim Lesen von Edit1.FontColor' in d, d[:600])
 finally:
     srv.cierra()
 

@@ -25,9 +25,10 @@ estaba.
   M3  delphi_styles lint: los ficheros "\\x" y "<unidad>:x" de un .rc estan;
       ni faltan ni se niegan (controles: el relativo esta, y uno que falta
       de verdad sale)
-  M4  delphi_designer set before=: un Caption "\\x" que nombra un fichero de
-      FUERA de la jaula es DSGN-115 - lo que el ayudante leeria desde la
-      carpeta del form -, y el form no cambia
+  M4  delphi_designer set before=: un Caption "\\x" que nombra el sistema, lo
+      unico de fuera que lee el contenedor del ayudante, es DSGN-115 desde la
+      unidad de su carpeta, y el form no cambia; uno de una carpeta cualquiera
+      se ordena (V65 de la 1.24)
   M5  la carpeta actual del servidor (en el repo) sale como estaba
   M6  la puerta del build juzga un search path "\\x" donde lo lee dcc, desde
       la carpeta del .dproj (en la que corre msbuild): era la unidad del
@@ -114,6 +115,17 @@ escribe(os.path.join(FORMS, 'UMedias.pas'),
         'unit UMedias;\n\ninterface\n\nuses\n  System.Classes, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls;\n\n'
         'type\n  TFormMedias = class(TForm)\n    Button1: TButton;\n    Button2: TButton;\n  end;\n\n'
         'var\n  FormMedias: TFormMedias;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n')
+# ...y otro, en su carpeta, que nombra lo que el contenedor del ayudante si lee
+DFM_SISTEMA = os.path.join(JAIL, 'FormsSis', 'USistema.dfm')
+escribe(DFM_SISTEMA,
+        'object FormSis: TFormSis\n  Left = 0\n  Top = 0\n  Caption = \'%s\'\n'
+        '  ClientHeight = 200\n  ClientWidth = 300\n  object Button1: TButton\n    Left = 8\n'
+        '    Top = 8\n    TabOrder = 0\n  end\n  object Button2: TButton\n    Left = 8\n'
+        '    Top = 40\n    TabOrder = 1\n  end\nend\n' % sin_unidad(os.path.join(os.environ['WINDIR'], 'win.ini')))
+escribe(os.path.join(JAIL, 'FormsSis', 'USistema.pas'),
+        'unit USistema;\n\ninterface\n\nuses\n  System.Classes, Vcl.Controls, Vcl.Forms, Vcl.StdCtrls;\n\n'
+        'type\n  TFormSis = class(TForm)\n    Button1: TButton;\n    Button2: TButton;\n  end;\n\n'
+        'var\n  FormSis: TFormSis;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n')
 
 ANTES_OTRA = sorted(os.listdir(OTRA))
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)
@@ -154,12 +166,16 @@ try:
           malos == [('D', 'falta.bin', '')], (malos, str(j)[:400]))
 
     # ------------------------------------------------------------------ M4
-    antes = open(DFM, 'rb').read()
+    antes = open(DFM_SISTEMA, 'rb').read()
+    r = srv.call('delphi_designer', {'command': 'set', 'path': DFM_SISTEMA, 'component': 'Button2',
+                                     'before': 'Button1'}, t=240)
+    check('M4 un Caption "\\x" que nombra el sistema: DSGN-115 (lo que el contenedor leeria desde la unidad '
+          'de su carpeta) y el form no cambia',
+          mc.abre(r, 'SR_DESIGNER_LITERAL_FUERA_FMT') and open(DFM_SISTEMA, 'rb').read() == antes, r[:300])
     r = srv.call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'Button2', 'before': 'Button1'},
                  t=240)
-    check('M4 un Caption "\\x" que nombra un fichero de FUERA: DSGN-115 (lo que el ayudante lee desde la '
-          'carpeta del form) y el form no cambia',
-          mc.abre(r, 'SR_DESIGNER_LITERAL_FUERA_FMT') and open(DFM, 'rb').read() == antes, r[:300])
+    check('M4b ...y uno que nombra una carpeta cualquiera se ordena: el contenedor no la lee (V65)',
+          mc.como_json(r).get('ordered') == 'Button2', r[:300])
 
     # ------------------------------------------------------------------ M6-M9
     # un proyecto de consola que el servidor crea, y lo que su build lee escrito a medias

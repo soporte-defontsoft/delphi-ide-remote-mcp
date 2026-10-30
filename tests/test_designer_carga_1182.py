@@ -29,13 +29,13 @@ un componente que falle en su Loaded por ese valor).
      set de Edit1.FontColor = claRed no se niega por eso (guarda)
   C6 ...y la respuesta dice que Edit1.FontColor no se juzgo (readerNote
      DSGN-159; ROJO en produccion: nada)
-  C7 con el lector en ALEMAN: FontColor = -65536 se niega (DSGN-149, con el
-     motivo en aleman) y el form intacto (ROJO en produccion: ok y el form no
-     carga)
-  C8 el control en aleman: FontColor = claRed se escribe, sin readerNote
-  C9 el lector no se pudo preguntar (un literal del form nombra un fichero
-     fuera de la jaula): el valor se escribe y readerNote lo dice (ROJO en
-     produccion: nada)
+  C7 con el lector en ALEMAN, a mano (el idioma de un exe no se elige dentro del
+     contenedor; el servidor lee sus partes en una unitaria): FontColor = -65536
+     lo dice en aleman y partido, propiedad y motivo
+  C8 el control en aleman: FontColor = claRed no dice nada
+  C9 el lector no se pudo preguntar (un literal del form nombra un fichero del
+     sistema, lo que el contenedor leeria): el valor se escribe y readerNote lo
+     dice (ROJO en produccion: nada)
 
 Uso:  python tests/test_designer_carga_1182.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -55,8 +55,8 @@ FMX = ("object FormC: TFormC\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'C'\r\n  
        "    Position.Y = 10.000000000000000000\r\n    TabOrder = 0\r\n  end\r\nend\r\n")
 EDIT2_MALO = ("  object Edit2: TEdit\r\n    FontColor = -65536\r\n    Position.X = 10.000000000000000000\r\n"
               "    Position.Y = 40.000000000000000000\r\n    TabOrder = 1\r\n  end\r\n")
-# un Text que nombra un fichero que existe FUERA de la jaula: el servidor no
-# le da el form al lector (LiteralesDeRenderDenegados)
+# un Text que nombra un fichero del sistema, lo que el contenedor leeria: el
+# servidor no le da el form al lector (LiteralesDeRenderDenegados)
 EDIT2_LITERAL = ("  object Edit2: TEdit\r\n    Text = '{ruta}'\r\n    Position.X = 10.000000000000000000\r\n"
                  "    Position.Y = 40.000000000000000000\r\n    TabOrder = 1\r\n  end\r\n")
 PAS = ("unit {u};\r\n\r\ninterface\r\n\r\nuses\r\n  System.SysUtils, System.Types, System.UITypes, "
@@ -120,24 +120,22 @@ try:
           mc.abre(nota, 'SN_DESIGNER_SET_SIN_JUZGAR_FMT') and 'Edit1.FontColor = claRed' in nota and
           'Edit2.FontColor' in nota, r[:400])
 
-    # el lector en aleman: el ayudante que lanza ESTE servidor (copia_exe lo
-    # puso a su lado)
-    with mc.idioma_rtl(os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe'), 'DE'):
-        p = form('UC7')
-        antes = open(p, 'rb').read()
-        r = srv.call('delphi_designer', {'path': p, 'command': 'set', 'component': 'Edit1', 'prop': 'FontColor',
-                                         'value': '-65536'}, t=240)
-        check('C7 con el lector en aleman: FontColor=-65536 se niega (DSGN-149, motivo en aleman) y el form intacto',
-              mc.abre(r, 'SR_DESIGNER_SET_NO_CARGA_FMT') and 'Ungültiger Eigenschaftswert' in r and
-              open(p, 'rb').read() == antes, r[:400])
-        p = form('UC8')
-        r = srv.call('delphi_designer', {'path': p, 'command': 'set', 'component': 'Edit1', 'prop': 'FontColor',
-                                         'value': 'claRed'}, t=240)
-        check('C8 el control en aleman: FontColor=claRed se escribe, sin readerNote',
-              not mc.fallo(r) and b'FontColor = claRed' in open(p, 'rb').read() and
-              'readerNote' not in mc.como_json(r), r[:300])
+    # el lector en aleman, a mano: el ayudante que lanza ESTE servidor (copia_exe
+    # lo puso a su lado)
+    RENDER = os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe')
+    p = form('UC7')
+    t = open(p, 'rb').read().replace(b'    Position.X', b'    FontColor = -65536\r\n    Position.X', 1)
+    open(p, 'wb').write(t)
+    d = mc.juez_en_idioma(RENDER, p, 'DE')
+    check('C7 con el lector en aleman: FontColor=-65536 lo dice en aleman y partido, propiedad y motivo',
+          '|Edit1|FontColor|Ungültiger Eigenschaftswert|' in d, d[:600])
+    p = form('UC8')
+    t = open(p, 'rb').read().replace(b'    Position.X', b'    FontColor = claRed\r\n    Position.X', 1)
+    open(p, 'wb').write(t)
+    d = mc.juez_en_idioma(RENDER, p, 'DE')
+    check('C8 el control en aleman: FontColor=claRed no dice nada', 'FontColor|' not in d and 'WRITTEN=' in d, d[:600])
 
-    p = form('UC9', edit2=EDIT2_LITERAL.replace('{ruta}', EXE))
+    p = form('UC9', edit2=EDIT2_LITERAL.replace('{ruta}', os.path.join(os.environ['WINDIR'], 'win.ini')))
     r = srv.call('delphi_designer', {'path': p, 'command': 'set', 'component': 'Edit1', 'prop': 'FontColor',
                                      'value': 'claRed'}, t=240)
     nota = mc.como_json(r).get('readerNote') or ''
