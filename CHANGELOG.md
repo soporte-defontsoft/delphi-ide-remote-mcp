@@ -8,6 +8,23 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.24.0] - 2026-10-31
+
+A minor version around the form designer, and the renderer inside its own
+container. `delphi_create` makes inherited forms and frames, `delphi_designer
+insert` takes a frame of the project, and `layout` measures FMX forms and gives
+a VCL form the rectangles the VCL really resolved, an inline frame and what it
+holds included. The form renderer now always runs inside an AppContainer with
+no capabilities and no network: the design code of the installed packages no
+longer runs with the service's account, and no answer says whether a file
+exists on the server. A form whose ancestor or frame lives in another folder
+of the project is drawn and judged whole, a copy beside a form no longer takes
+its place, and a package disabled in the IDE is no longer loaded. `delphi_adb
+stop` stops an app, and a device adb lists with a number can be named.
+Validated before the release through Hermes on a second machine by Qwen3.8
+Flash Next (a full test of every tool, directed tests of what changed and three
+rounds over what those found).
+
 ### Added
 
 - **`delphi_create` makes inherited forms and frames.** `ancestor` takes the class of a
