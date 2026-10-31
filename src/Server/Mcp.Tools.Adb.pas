@@ -169,8 +169,8 @@ begin
   // perdia entre una llamada y la siguiente - connect decia "connected" y
   // el devices siguiente no veia nada (medido 2026-09-23, con el movil de
   // David). start-server es idempotente y barato; fuera del job se queda.
-  RunDetached('"' + AAdb + '" start-server', 15000);
-  Result := RunCaptured('"' + AAdb + '" ' + AArgs, ATimeoutMs, AExitCode);
+  RunDetached(ComillasSinEscape(AAdb) + ' start-server', 15000);
+  Result := RunCaptured(ComillasSinEscape(AAdb) + ' ' + AArgs, ATimeoutMs, AExitCode);
 end;
 
 { Field report (EDA51): Android switches wireless debugging OFF on its own
@@ -490,7 +490,7 @@ begin
       Exit(Denied);
     if not TFile.Exists(Params.Apk) then
       Exit(NoEsFichero(Params.Apk, MsgFmt(SR_ADB_NO_EXISTE_APK_FMT, [Params.Apk])));
-    Output := RunAdb(Adb, DevArg + 'install -r "' + Params.Apk + '"',
+    Output := RunAdb(Adb, DevArg + 'install -r ' + EnComillas(Params.Apk),
       180000, ExitCode);
     Result := ResultadoAdb(Output, ExitCode);
   end
@@ -583,8 +583,7 @@ begin
       ExitCode);
     if (ExitCode <> 0) or DeviceGone(Output) then
       Exit(FalloDeAdb(Output, ExitCode)); // tambien con exit 0 (V63)
-    Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' "' +
-      Destino + '"', 60000, ExitCode);
+    Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' ' + EnComillas(Destino), 60000, ExitCode);
     // el rm, con su propio codigo: pisaba el del pull, y el fallo de abajo
     // decia el exit del rm junto a la salida del pull (V63 de la 1.23)
     var ExitRm: Cardinal;

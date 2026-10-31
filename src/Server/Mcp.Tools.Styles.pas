@@ -87,7 +87,8 @@ uses
   Lsp.Casa,
   Lsp.Sandbox,
   Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
-  Lsp.Codificacion;
+  Lsp.Codificacion,
+  Lsp.ProcessLaunch;
 
 constructor TDelphiStylesTool.Create;
 begin
@@ -1316,8 +1317,8 @@ begin
       // -x: sin la variable INCLUDE, que no es de la etapa (brcc32 busca ahi
       // un #include <x> y un fichero; un #include <x> de la carpeta sigue
       // valiendo: medido el 18-oct-2026)
-      Out := RunCapturedEnContenedor('"' + ABrcc + '" -x -fo"r.res" "' +
-        TPath.GetFileName(ARc) + '"', Etapa, AC, 120000, Code, TimedOut);
+      Out := RunCapturedEnContenedor(ComillasSinEscape(ABrcc) + ' -x -fo"r.res" ' +
+        ComillasSinEscape(TPath.GetFileName(ARc)), Etapa, AC, 120000, Code, TimedOut);
     except
       on E: EOSError do
         Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, [IntToHex(E.ErrorCode, 8), E.Message]));
@@ -1397,7 +1398,7 @@ begin
       // que diga de el, con el nombre del destino
       Inc(N);
       Hecho := TPath.Combine(Tmp, IntToStr(N) + '.bin.style');
-      Out := CorreStyleConvert(Exe, 'tobin "' + F + '" "' + Hecho + '"', Dir, 120000, Code);
+      Out := CorreStyleConvert(Exe, 'tobin ' + ComillasSinEscape(F) + ' ' + ComillasSinEscape(Hecho), Dir, 120000, Code);
       Out := Out.Replace(Hecho, Bin, [rfReplaceAll, rfIgnoreCase]);
       if Code = 0 then
       begin

@@ -96,6 +96,15 @@ function PaClientPath: string;
 function Paclient(const APaclient, AOps, AProfile: string;
   out AOutput: string; ATimeoutMs: Integer = 120000): Integer;
 
+{ LOS compositores de las operaciones de paclient: cada una es UN argumento, con
+  sus campos separados por ',' o ';', y los compone uno solo. Estaban a mano en
+  once sitios (V222; V217 juzga los campos en su puerta). }
+function PaclientGet(const ARemoto, ALocal: string): string;
+function PaclientPut(const ALocal, ACarpetaRemota: string; AFlag: Integer;
+  const ANombreRemoto: string): string;
+function PaclientRemove(const ARemotos: array of string): string;
+function PaclientPerfilNuevo(const AHost, APuerto, APassword, APlataforma: string): string;
+
 { Runs the program DEPLOYED for ADprojPath on the machine of PAServer profile
   AProfile. The remote path is DERIVED here, never taken from the caller:
   <windows user>-<profile>/<Project>/<Project> - the folder delphi_build
@@ -247,7 +256,7 @@ function Paclient(const APaclient, AOps, AProfile: string;
 var
   Exit_: Cardinal;
 begin
-  AOutput := RunCaptured(Format('"%s" %s "%s"', [APaclient, AOps, AProfile]),
+  AOutput := RunCaptured(ComillasSinEscape(APaclient) + ' ' + AOps + ' ' + ComillasSinEscape(AProfile),
     ATimeoutMs, Exit_);
   Result := Integer(Exit_);
   // el PAServer de otro Delphi, o un perfil de otra plataforma: paclient lo
@@ -255,6 +264,28 @@ begin
   var Aviso := AvisoDePaclient(AOutput);
   if Aviso <> '' then
     AOutput := AOutput.TrimRight + sLineBreak + Aviso;
+end;
+
+function PaclientGet(const ARemoto, ALocal: string): string;
+begin
+  Result := ComillasSinEscape('--get=' + ARemoto + ',' + ALocal);
+end;
+
+function PaclientPut(const ALocal, ACarpetaRemota: string; AFlag: Integer;
+  const ANombreRemoto: string): string;
+begin
+  Result := ComillasSinEscape(Format('--put=%s,%s,%d,%s', [ALocal, ACarpetaRemota, AFlag, ANombreRemoto]));
+end;
+
+function PaclientRemove(const ARemotos: array of string): string;
+begin
+  Result := ComillasSinEscape('--Remove=' + string.Join(';', ARemotos));
+end;
+
+function PaclientPerfilNuevo(const AHost, APuerto, APassword, APlataforma: string): string;
+begin
+  Result := '--local ' + ComillasSinEscape('--host=' + AHost) + ' --port=' + APuerto + ' ' +
+    ComillasSinEscape('--password=' + APassword) + ' ' + ComillasSinEscape('--platform=' + APlataforma);
 end;
 
 function JsonEsc(const S: string): string;
@@ -287,7 +318,7 @@ begin
   if Result <> '' then
     Exit;
   CrearCarpeta(ADestDir);
-  Ops := Format('"--get=%s/%s,%s"', [ProjName, ARelPath, ADestDir]);
+  Ops := PaclientGet(ProjName + '/' + ARelPath, ADestDir);
   Rc := Paclient(Pc, Ops, AProfile, Output);
   if Rc <> 0 then
     Exit(MsgFmt(SR_FETCHTARGET_FAIL_FMT, [Rc, Output.Trim]));
@@ -579,7 +610,7 @@ begin
   OutFile := TPath.Combine(ATmpDir, NombreDeLaSalida(AJobId));
   if TFile.Exists(OutFile) then
     BorraFichero(OutFile, ltTemporal); // por la puerta de borrar, con su lugar
-  Ops := Format('"--get=%s/%s,%s"', [ADeployRel, NombreDeLaSalida(AJobId), ATmpDir]);
+  Ops := PaclientGet(ADeployRel + '/' + NombreDeLaSalida(AJobId), ATmpDir);
   if (Paclient(APc, Ops, AProfile, Output) <> 0) or not TFile.Exists(OutFile) then
     Exit;
   // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
@@ -741,11 +772,11 @@ begin
   // arranco. Medido 2026-09-23 contra una maquina de la red con paclient a pelo: 6/6
   // fallos en un solo put, 6/6 bien en dos. Un viaje mas (~0,1 s) y ningun
   // orden que adivinar.
-  Ops := Format('"--put=%s,%s,0,%s"', [GuionFile, DeployRel, NombreDelTrabajo(JobId)]);
+  Ops := PaclientPut(GuionFile, DeployRel, 0, NombreDelTrabajo(JobId));
   Rc := Paclient(Pc, Ops, AProfile, Output);
   if Rc = 0 then
   begin
-    Ops := Format('"--put=%s,%s,%d,%s"', [Lanzador, DeployRel, Flag, RemotoLanzador]);
+    Ops := PaclientPut(Lanzador, DeployRel, Flag, RemotoLanzador);
     Rc := Paclient(Pc, Ops, AProfile, Output);
   end;
   BorraFichero(GuionFile, ltTemporal);
@@ -821,11 +852,10 @@ begin
   // perdia (2026-09-26: el AV de una app real solo se veia en el journal de
   // Zorin). Un nombre que no exista no es un error que importe.
   if Terminado or not AGuardaSiSigue then
-    Ops := Format('"--Remove=%s/%s;%s/%s;%s/%s"',
-      [DeployRel, NombreDeLaSalida(JobId), DeployRel, RemotoLanzador, DeployRel, MASCARA_DE_LOS_VIGIAS])
+    Ops := PaclientRemove([DeployRel + '/' + NombreDeLaSalida(JobId), DeployRel + '/' + RemotoLanzador,
+      DeployRel + '/' + MASCARA_DE_LOS_VIGIAS])
   else
-    Ops := Format('"--Remove=%s/%s;%s/%s"',
-      [DeployRel, RemotoLanzador, DeployRel, MASCARA_DE_LOS_VIGIAS]);
+    Ops := PaclientRemove([DeployRel + '/' + RemotoLanzador, DeployRel + '/' + MASCARA_DE_LOS_VIGIAS]);
   Paclient(Pc, Ops, AProfile, Output);
 
   Result.AddPair('note', MsgText(SN_REMOTERUN_NOTE));
@@ -930,7 +960,7 @@ begin
     PonFalloDelLanzador(Result, Salida, Codigo);
     // leida = borrada, como el buzon y las capturas: en el target no se
     // acumula nada que alguien ya tiene
-    Ops := Format('"--Remove=%s/%s"', [DeployRel, NombreDeLaSalida(AJobId)]);
+    Ops := PaclientRemove([DeployRel + '/' + NombreDeLaSalida(AJobId)]);
     Paclient(Pc, Ops, AProfile, Output);
     Result.AddPair('note', MsgText(SN_REMOTERUN_OUTPUT_DONE));
   end
@@ -1020,14 +1050,12 @@ begin
   if not SameText(RemotoSha, LocalSha) then
   begin
     // flag 1 = runnable: PAServer deja el fichero ejecutable en su carpeta
-    Rc := Paclient(Pc, Format('"--put=%s,%s,1,%s"',
-      [Bin, NODE_PROJECT, NODE_PROJECT]), AProfile, Output);
+    Rc := Paclient(Pc, PaclientPut(Bin, NODE_PROJECT, 1, NODE_PROJECT), AProfile, Output);
     if Rc <> 0 then
       Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
     VerLocal := TPath.Combine(TmpDir, 'node-' + LocalSha.Substring(0, 12) + '.ver');
     EscribeTexto(VerLocal, LocalSha, ltTemporal, ekUtf8);
-    Rc := Paclient(Pc, Format('"--put=%s,%s,0,%s"',
-      [VerLocal, NODE_PROJECT, NODE_SELLO]), AProfile, Output);
+    Rc := Paclient(Pc, PaclientPut(VerLocal, NODE_PROJECT, 0, NODE_SELLO), AProfile, Output);
     BorraFichero(VerLocal, ltTemporal);
     if Rc <> 0 then
       Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));

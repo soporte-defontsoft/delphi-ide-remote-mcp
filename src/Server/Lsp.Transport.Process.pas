@@ -166,7 +166,7 @@ begin
   SI.hStdError := FNulHandle;
 
   FillChar(FProcInfo, SizeOf(FProcInfo), 0);
-  CmdLine := '"' + FExePath + '"';
+  CmdLine := ComillasSinEscape(FExePath);
   UniqueString(CmdLine); // CreateProcessW may modify the buffer
 
   if not CreateProcessConHandles(CmdLine, nil,

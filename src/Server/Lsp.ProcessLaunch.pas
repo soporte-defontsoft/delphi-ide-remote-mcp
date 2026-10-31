@@ -40,6 +40,14 @@ function TrocearArgs(const AArgs: string): TArray<string>;
   Mcp.Tools.Workspace y volvio a Lsp.Guard, con su inversa, el 26-sep-2026. }
 function EnComillas(const AValor: string): string;
 
+{ UN argumento para quien NO lee la barra como escape: el programa en la linea
+  de CreateProcess y lo que lee la RTL de Delphi - paclient y nuestros ayudantes
+  -. Medido en su fuente (System.GetParamStr): una comilla abre y cierra y nada
+  mas, asi que EnComillas, que dobla la barra final, ahi cambiaria el valor. Una
+  comilla dentro no cabe: quien llama ya la nego. Un compositor por analizador:
+  estaban a mano por las unidades (V115). }
+function ComillasSinEscape(const AValor: string): string;
+
 { La ruta completa de APrograma, con su extension ('msbuild.exe'), en las
   carpetas de APath (una lista con ';', la de un entorno) como la resuelve
   Windows (SearchPath, el juez) y SOLO en ellas: sin la carpeta actual ni la
@@ -265,6 +273,11 @@ begin
   end;
   if Hay then
     Result := Result + [Actual];
+end;
+
+function ComillasSinEscape(const AValor: string): string;
+begin
+  Result := '"' + AValor + '"';
 end;
 
 function EnComillas(const AValor: string): string;

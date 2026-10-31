@@ -67,7 +67,7 @@ REGLAS = [
       # reg.exe export: la copia de una clave del IDE antes de tocarla (V10 de la 1.23)
       ('Lsp.Patch.pas', 'ExportaClaveDelIde')],
      'cada programa externo se lanza desde UN sitio conocido; uno nuevo se revisa aqui'),
-    ('lanzar el conversor de estilos', LANZA + r""".*'"' \+ A?Exe \+""",
+    ('lanzar el conversor de estilos', LANZA + r""".*ComillasSinEscape\(A?Exe\)""",
      [('Lsp.Styles.pas', 'CorreStyleConvert')],
      'CorreStyleConvert (1.16.0: defaults y tobin componian la orden a mano)'),
     ('nombre de un .profile', r"\+\s*'\.profile'",
@@ -400,6 +400,19 @@ REGLAS = [
     ('el numero de un nombre mDNS de adb leido a mano', r"Pos\(\s*'\)\.'",
      [('Lsp.Settings.pas', 'DispositivoSinNumeroMdns')],
      'DispositivoSinNumeroMdns (Lsp.Settings): lo leen BadDeviceName y AdbTargetAllowed'),
+    # una linea de orden con comillas a mano: dos analizadores, dos compositores. EnComillas para
+    # el CRT (git, adb, msbuild), ComillasSinEscape para lo que lee la RTL de Delphi y para el
+    # programa (V115). Y las operaciones de paclient, cada una con su compositor (V222)
+    ('una linea de orden con comillas a mano',
+     r"(?:RunCaptured\w*|RunDetached|RunAdb|CorreStyleConvert)\(.*'[^',]*\"[^',]*'\s*\+",
+     # el -fo"r.res" de brcc32: una constante, la que siempre se le dio
+     [('Mcp.Tools.Styles.pas', 'CompilaRcEnContenedor')],
+     'Lsp.ProcessLaunch: EnComillas (CRT) y ComillasSinEscape (RTL de Delphi, y el programa)'),
+    # el '--put="?' de Lsp.BuildRunner lee la salida de msbuild: no compone nada
+    ('una operacion de paclient compuesta a mano', r"--(?:get|put|Remove|password)=(?!\"\?)",
+     [('Lsp.RemoteRun.pas', 'PaclientGet'), ('Lsp.RemoteRun.pas', 'PaclientPut'),
+      ('Lsp.RemoteRun.pas', 'PaclientRemove'), ('Lsp.RemoteRun.pas', 'PaclientPerfilNuevo')],
+     'Lsp.RemoteRun: PaclientGet, PaclientPut, PaclientRemove y PaclientPerfilNuevo'),
     # tres decisiones de jaula sobre el mismo texto, cada una con su lector hasta la 1.24: la raiz
     # mas honda (V174), el juez de un nombre suelto (V178) y una unidad virtual bajo su letra (V171)
     ('la raiz mas honda escrita a mano', r'RutaDentroDe\([^;]*Length\(', [],
@@ -1656,7 +1669,7 @@ PLANTADO = {
     'la linea de fallo del nodo': "      Writeln('  ', NODO_NO_PUDE, ' ', Bus.Error);",
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
     'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",
-    'lanzar el conversor de estilos': "  Out := RunCapturedIn('\"' + Exe + '\" tobin', Dir, 1000, C);",
+    'lanzar el conversor de estilos': "  Out := RunCapturedIn(ComillasSinEscape(Exe) + ' tobin', Dir, 1000, C);",
     'nombre de un .profile': "  F := TPath.Combine(Dir, Nombre + '.profile');",
     'listar los perfiles a mano': "  for F in TDirectory.GetFiles(Dir, '*.profile') do",
     'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",
@@ -1729,6 +1742,8 @@ PLANTADO = {
     'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
     'la clave del IDE en el registro': "  if Reg.OpenKeyReadOnly('SOFTWARE\\Embarcadero\\BDS\\' + Ver) then",
     'el numero de un nombre mDNS de adb leido a mano': "  C := Pos(').', Nombre);",
+    'una linea de orden con comillas a mano': "  S := RunCaptured('\"' + Exe + '\" x', 1000, C);",
+    'una operacion de paclient compuesta a mano': "  Ops := '--put=' + A;",
     'la raiz mas honda escrita a mano': "  if RutaDentroDe(R, Full) and (Length(R) > Length(Mejor)) then",
     'un nombre suelto juzgado a mano': "  if TPath.GetFileName(Nombre) <> Nombre then",
     'una unidad virtual bajo su letra compuesta a mano': "  R := Letra + Copy(V, Pos(':', V), MaxInt);",

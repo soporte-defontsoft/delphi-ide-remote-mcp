@@ -566,8 +566,7 @@ begin
     Antes := FotoDe(Etapa);
     Reloj := TStopwatch.StartNew;
     try
-      AOutput := RunCapturedEnContenedor(Format('"%s"%s',
-        [TPath.Combine(Etapa, TPath.GetFileName(AExe)), AArgs]), Etapa, AC,
+      AOutput := RunCapturedEnContenedor(ComillasSinEscape(TPath.Combine(Etapa, TPath.GetFileName(AExe))) + AArgs, Etapa, AC,
         ATimeoutMs, AExitCode, ATimedOut, phAnsi); // un test de Delphi: su RTL escribe en la ANSI
     except
       on E: ETestNoConfinado do

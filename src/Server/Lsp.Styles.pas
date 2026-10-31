@@ -463,7 +463,8 @@ uses
   Lsp.Args, // PrimerTrozo: el nombre de una macro del .rc
   Lsp.Rutas, // RutaDesde: EL resolutor de una ruta leida de un fichero
   Lsp.DesignerMeta, // TRaizDeDiseno: un frame (LookupsDeDesigner)
-  Lsp.ProjectUnits; // RaizDeDesigner: EL lector de la raiz de un designer
+  Lsp.ProjectUnits, // RaizDeDesigner: EL lector de la raiz de un designer
+  Lsp.ProcessLaunch;
 
 { TStyleObj }
 
@@ -1147,7 +1148,7 @@ end;
 function CorreStyleConvert(const AExe, AArgs, ADir: string; ATimeoutMs: Integer;
   out ACode: Cardinal): string;
 begin
-  Result := RunCapturedIn('"' + AExe + '" ' + AArgs, ADir, ATimeoutMs, ACode);
+  Result := RunCapturedIn(ComillasSinEscape(AExe) + ' ' + AArgs, ADir, ATimeoutMs, ACode);
 end;
 
 const
@@ -1171,7 +1172,7 @@ begin
   Exe := StyleConverterExe;
   if Exe = '' then
     Exit(False);
-  Salida := CorreStyleConvert(Exe, 'check "' + AFichero + '"', '', 60000, Code);
+  Salida := CorreStyleConvert(Exe, 'check ' + ComillasSinEscape(AFichero), '', 60000, Code);
   if Code <> 0 then
   begin
     if Code = 1 then
@@ -1252,7 +1253,7 @@ begin
       Code: Cardinal;
     begin
       var Salida := TPath.Combine(ADir, 'escrito.style');
-      CorreStyleConvert(StyleConverterExe, 'totext "' + ACand + '" "' + Salida + '"', '', 60000, Code);
+      CorreStyleConvert(StyleConverterExe, 'totext ' + ComillasSinEscape(ACand) + ' ' + ComillasSinEscape(Salida), '', 60000, Code);
       Result := (Code = 0) and TFile.Exists(Salida);
       if Result then
         Escrito := LeeTexto(Salida, [ltTemporal]);
@@ -1431,7 +1432,7 @@ begin
     if Exe = '' then
       Exit;
     CrearCarpeta(TPath.GetDirectoryName(Cache));
-    CorreStyleConvert(Exe, 'defaults "' + Cache + '"', '', 60000, Code);
+    CorreStyleConvert(Exe, 'defaults ' + ComillasSinEscape(Cache), '', 60000, Code);
     if (Code <> 0) or not TFile.Exists(Cache) then
       Exit;
   end;

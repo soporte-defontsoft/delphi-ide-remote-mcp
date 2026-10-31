@@ -2457,7 +2457,7 @@ begin
   // like every argument that lands on this command line.
   var ProfileArg := '';
   if Target.Contains('Deploy') or (Perfil <> '') then
-    ProfileArg := ' /p:Profile="' + Perfil + '"'; // entre comillas, como Config: segunda barrera
+    ProfileArg := ' /p:Profile=' + EnComillas(Perfil); // un argumento, como Config: segunda barrera
   // Remote platforms get a deployment manifest when the project has none:
   // minimal (the project output) for PAServer targets, the full measured
   // apk staging map for Android. An IDE-written .deployproj is used as-is.
@@ -2513,7 +2513,7 @@ begin
   // job with the built .apk. The param stays for the iOS day.
   var DeviceArg := '';
   if ADeviceId.Trim <> '' then
-    DeviceArg := ' /p:DeviceId="' + ADeviceId.Trim + '"'; // la puerta ya lo juzgo (BadDeviceToken)
+    DeviceArg := ' /p:DeviceId=' + EnComillas(ADeviceId.Trim); // la puerta ya lo juzgo (BadDeviceName)
 
   // Remote platforms (Linux64...) link against a locally provisioned
   // SDK/sysroot, y desde 2026-09-20 puede haber VARIOS: un SDK = una carpeta,
@@ -2539,7 +2539,7 @@ begin
         raise Exception.Create(MsgFmt(SR_BUILD_SDK_NOEXISTE_FMT,
           [NombreDeSdk(Pedido), string.Join(', ', SdksDePlataforma(Info.Version, Plat))]));
       Pedido := Elegido;
-      SdkArg := ' /p:PlatformSDK="' + Pedido + '"';
+      SdkArg := ' /p:PlatformSDK=' + EnComillas(Pedido);
       SdkUsado := Pedido;
     end
     else if ProyectoDeclaraSdk(TPath.GetFullPath(ADprojPath), Plat, Cfg, SdkUsado) then
@@ -2572,7 +2572,7 @@ begin
           [Plat, string.Join(', ', Cand)]));
       if SdkUsado <> '' then
       begin
-        SdkArg := ' /p:PlatformSDK="' + SdkUsado + '"';
+        SdkArg := ' /p:PlatformSDK=' + EnComillas(SdkUsado);
         // Solo si nadie ha explicado ya POR QUE es ese: la rama del default
         // del IDE deja su propia nota, y pisarla convertia "lo eligio tu SDK
         // Manager" en un "hay varios, mira a ver" que no decia nada.

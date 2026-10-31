@@ -324,8 +324,7 @@ begin
     FragmentoUnico);
   try
     CrearCarpeta(Tmp);
-    Paclient(APaClient, Format('--timeout=30 "--get=/etc/os-release,%s"', [Tmp]),
-      AProfName, Salida);
+    Paclient(APaClient, '--timeout=30 ' + PaclientGet('/etc/os-release', Tmp), AProfName, Salida);
     F := TPath.Combine(Tmp, 'os-release');
     if not TFile.Exists(F) then
       Exit;
@@ -900,9 +899,8 @@ begin
       // un perfil ilegible no impide crear el nuevo
     end;
   // cualificada: la variable local PaClient tapa a la funcion (sin mayusculas)
-  ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--local "--host=' + Host + '" --port=' +
-    Port + ' "--password=' + Params.Password + '" "--platform=' + Plat + '"',
-    ProfName, Output, 30000));
+  ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient,
+    PaclientPerfilNuevo(Host, Port, Params.Password, Plat), ProfName, Output, 30000));
   if (ExitCode = 0) and TFile.Exists(ProfileFile) then
   begin
     // el asiento gemelo del IDE, con la contrasena YA cifrada por paclient;
@@ -1474,8 +1472,8 @@ begin
       DestDir := TPath.Combine(SysRoot,
         ConBarrasDeWindows(Pull.RemoteBase.TrimLeft(['/'])));
       CrearCarpeta(DestDir);
-      ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=30 "--get=' + Pattern + ',' +
-        DestDir + '"', ProfName, Output, 1200000));
+      ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=30 ' + PaclientGet(Pattern, DestDir),
+        ProfName, Output, 1200000));
       ParseCopied(Output, NFiles, NBytes);
       PullObj := TJSONObject.Create;
       Pulls.AddElement(PullObj);

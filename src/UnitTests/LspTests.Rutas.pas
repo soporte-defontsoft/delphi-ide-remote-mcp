@@ -255,6 +255,7 @@ type
     [Test] procedure LaRaizMasHondaPorLasDosFormas;
     [Test] procedure UnNombreSueltoLoJuzgaWindows;
     [Test] procedure UnaUnidadVirtualBajoSuLetra;
+    [Test] procedure LasOperacionesDePaclient;
   end;
 
 implementation
@@ -271,6 +272,8 @@ uses
   Lsp.Discovery,      // la instalacion del IDE
   Lsp.Rutas,          // EsRutaAbsoluta, RutaDesde
   Lsp.Pascal,         // EsNombreSueltoEn
+  Lsp.RemoteRun,      // los compositores de paclient
+  Lsp.ProcessLaunch,  // ComillasSinEscape
   Lsp.ProjectUnits,   // ProyectoListaUnidad (V204)
   LspTests.FormRender, // CreaUnion
   Lsp.Mascara,
@@ -1557,6 +1560,19 @@ begin
   Assert.AreEqual('D:', RutaBajoSuLetra('srvd:'));
   Assert.AreEqual('', RutaBajoSuLetra('srvd:x'));
   Assert.AreEqual('', RutaBajoSuLetra('D:\x'));
+end;
+
+// lo que paclient recibia cuando cada sitio lo escribia a mano, letra por letra (V222);
+// una barra final se queda: su lector es la RTL de Delphi y no la lee como escape (V115)
+procedure TLectoresDeJaulaTests.LasOperacionesDePaclient;
+begin
+  Assert.AreEqual('"C:\a b\"', ComillasSinEscape('C:\a b\'));
+  Assert.AreEqual('"--get=P/s.txt,C:\t"', PaclientGet('P/s.txt', 'C:\t'));
+  Assert.AreEqual('"--put=C:\a b,P,3,n"', PaclientPut('C:\a b', 'P', 3, 'n'));
+  Assert.AreEqual('"--Remove=P/a;P/b"', PaclientRemove(['P/a', 'P/b']));
+  Assert.AreEqual('"--Remove=P/a"', PaclientRemove(['P/a']));
+  Assert.AreEqual('--local "--host=h" --port=64211 "--password=p\" "--platform=Linux64"',
+    PaclientPerfilNuevo('h', '64211', 'p\', 'Linux64'));
 end;
 
 initialization

@@ -367,7 +367,8 @@ uses
   Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
   Lsp.NetDrives,    // PrefijoSinBarra y ConBarrasDeWindows: la forma de una ruta del IDE
   Lsp.Listas,
-  System.StrUtils;
+  System.StrUtils,
+  Lsp.ProcessLaunch;
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
@@ -432,7 +433,7 @@ function ComponeOrdenDeRender(const AExe: string; const APeticion: TPeticionRend
 
   function Arg(const AInterruptor, AValor: string): string;
   begin
-    Result := ' ' + AInterruptor + ' "' + AValor + '"';
+    Result := ' ' + AInterruptor + ' ' + ComillasSinEscape(AValor);
   end;
 
 begin
@@ -440,7 +441,7 @@ begin
   AOrden := '';
   if APeticion.ClasesSinLeer then
   begin
-    AOrden := '"' + AExe + '" --unreadableclasses';
+    AOrden := ComillasSinEscape(AExe) + ' --unreadableclasses';
     Exit;
   end;
   // un valor vacio no se pasa nunca: el lector de Delphi se salta un "" y
@@ -450,7 +451,7 @@ begin
     APeticion.FicheroPaquetes) + APeticion.Estados do
     if not ValorDeArgumento(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V]));
-  AOrden := '"' + AExe + '"' + Arg('--path', APeticion.Path);
+  AOrden := ComillasSinEscape(AExe) + Arg('--path', APeticion.Path);
   // el conversor (V71) ni carga ni pinta: los bytes de --path, en --out
   if APeticion.Convierte <> '' then
     AOrden := AOrden + ' --convert ' + (if APeticion.Convierte = 'text' then 'text' else 'binary') +
