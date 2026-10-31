@@ -1274,7 +1274,7 @@ end;
   del form la puede llevar de verdad. }
 function SinNuestraCasa(const AMensaje: string): string;
 begin
-  Result := StringReplace(AMensaje, ExcludeTrailingPathDelimiter(ServerTempDir), '(server)',
+  Result := StringReplace(AMensaje, PrefijoSinBarra(ServerTempDir), '(server)',
     [rfReplaceAll, rfIgnoreCase]);
 end;
 

@@ -413,4 +413,5 @@ check('R10 AlignWithMargins desplaza el rectangulo (boxes exactos)',
       and bx['PanelClient']['y'] == 56 and bx['PanelClient']['h'] == 244, o)
 
 srv.mata()
+mc.borra(BASE)  # con el servidor va su caja de paquetes: cien megas (V65 de la 1.24)
 mc.fin('layout battery')
