@@ -62,9 +62,9 @@ Resolve the identifier at a 0-based line:character position in a Delphi source f
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `kind` | string | optional | Optional: definition (default) \| declaration (jump to the interface declaration) \| implementation (= definition, the body) |
-| `line` | integer | **yes** | Zero-based line of the identifier: the "line0" of a search, references, symbols or definition hit ("line" is 1-based) |
-| `character` | integer | **yes** | Zero-based character (column) inside the identifier (a hit's "character0") |
-| `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: a position resolves in a source. What a folder's units offer: delphi_symbols. |
+| `line` | integer | **yes** | Zero-based line of the identifier (a hit's "line0") |
+| `character` | integer | **yes** | Zero-based column inside the identifier (a hit's "character0") |
+| `path` | string | **yes** | ONE Delphi source (.pas/.dpr/.dpk/.inc), not a folder (its units: delphi_symbols). |
 <!-- /contract -->
 
 ### `delphi_signature`
@@ -77,9 +77,9 @@ Signature help (parameter completion) for the call under a 0-based line:characte
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `line` | integer | **yes** | Zero-based line of the identifier: the "line0" of a search, references, symbols or definition hit ("line" is 1-based) |
+| `line` | integer | **yes** | Zero-based line of the identifier (a hit's "line0") |
 | `character` | integer | **yes** | Zero-based character INSIDE the parentheses of the call: right after its "(" or a "," (not on the routine's name) |
-| `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: a position resolves in a source. What a folder's units offer: delphi_symbols. |
+| `path` | string | **yes** | ONE Delphi source (.pas/.dpr/.dpk/.inc), not a folder (its units: delphi_symbols). |
 <!-- /contract -->
 
 ### `delphi_hover`
@@ -92,9 +92,9 @@ Type/signature information for the identifier at a 0-based line:character positi
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `line` | integer | **yes** | Zero-based line of the identifier: the "line0" of a search, references, symbols or definition hit ("line" is 1-based) |
-| `character` | integer | **yes** | Zero-based character (column) inside the identifier (a hit's "character0") |
-| `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: a position resolves in a source. What a folder's units offer: delphi_symbols. |
+| `line` | integer | **yes** | Zero-based line of the identifier (a hit's "line0") |
+| `character` | integer | **yes** | Zero-based column inside the identifier (a hit's "character0") |
+| `path` | string | **yes** | ONE Delphi source (.pas/.dpr/.dpk/.inc), not a folder (its units: delphi_symbols). |
 <!-- /contract -->
 
 ### `delphi_completion`
@@ -108,9 +108,9 @@ Code completion candidates at a 0-based line:character position (official Delphi
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `trigger` | string | optional | Optional trigger character, e.g. "." (empty = manual invocation). Only the ones the engine completes on do anything; another is said in "triggerNote" (LSP-047). |
-| `line` | integer | **yes** | Zero-based line of the identifier: the "line0" of a search, references, symbols or definition hit ("line" is 1-based) |
-| `character` | integer | **yes** | Zero-based character (column) inside the identifier (a hit's "character0") |
-| `path` | string | **yes** | A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: a position resolves in a source. What a folder's units offer: delphi_symbols. |
+| `line` | integer | **yes** | Zero-based line of the identifier (a hit's "line0") |
+| `character` | integer | **yes** | Zero-based column inside the identifier (a hit's "character0") |
+| `path` | string | **yes** | ONE Delphi source (.pas/.dpr/.dpk/.inc), not a folder (its units: delphi_symbols). |
 <!-- /contract -->
 
 ### `delphi_references`
@@ -172,7 +172,7 @@ THE DELPHI DOCUMENTATION installed with RAD Studio - the F1 help of the version 
 | `query` | string | optional | search: a concept or a class, as you would type it in the IDE help: FormatDateTime, TStringList.Sort, FMX.StdCtrls.TButton, "anonymous methods" |
 | `id` | string | optional | read: the id of a page, as a search gives it (system:System.SysUtils.FormatDateTime.htm); with #section, that section alone (its anchor or its title as the text shows it) |
 | `framework` | string | optional | search optional: vcl \| fmx - the page of that framework first, when VCL and FMX both have one (TButton, TEdit) |
-| `offset` | integer | optional | read optional: where to start in the text of the page (the nextOffset of the previous chunk) |
+| `offset` | integer | optional | The previous answer's nextOffset. read: where to go on in the page; search: the next results. |
 | `limit` | integer | optional | search optional: how many results (default 10, at most 25) |
 <!-- /contract -->
 
@@ -195,6 +195,8 @@ Search Delphi sources recursively for a text (case-insensitive; literal, or a re
 | `wholeword` | boolean | optional | true = match whole identifiers only (word boundaries) |
 | `pattern` | string | optional | Optional mask(s) instead of the Delphi set: *.style, *.md, *.rc or *.pas;*.dfm |
 | `regex` | boolean | optional | true = query is a regular expression (PCRE, case-insensitive), matched line by line: ^ and $ are the ends of a line; \w and \b only see ASCII letters. |
+| `context` | integer | optional | Lines to add around each hit, as before and after (at most 10). |
+| `exclude` | string | optional | Mask(s) of files to leave out of a folder: *_test.pas;Old*.pas |
 <!-- /contract -->
 
 ### `delphi_list`
@@ -277,7 +279,7 @@ SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keepi
 | `atline` | integer | optional | EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence (the rejection lists the valid numbers) |
 | `toline` | integer | optional | RANGE (1-based, inclusive): with this, "old" becomes the FIRST line of a range that ends here - delete:true removes it all (a whole method, without pasting it), "new" replaces it all. Refused if backwards, past the end or the whole file. |
 | `edits` | array | optional | SEVERAL edits on THIS SAME file, in a single call and ALL OR NOTHING: a JSON array [{"old":"...","new":"...","atline":12}, ...] applied IN ORDER. Each entry accepts two forms of anchor: ONE LINE (the same as a single edit) or a BLOCK of several consecutive lines in "old", searched for whole and in order (a method body in one piece). If the anchor appears more than once, break the tie with "occurrence": 1, 2... (better than "atline" inside a batch: line numbers MOVE as earlier entries add or remove lines, and "occurrence" does not: it counts on the file as it was BEFORE the batch, so if one entry changes occurrence 1, the next entry asks for 2, not for 1 again; two entries on the same line are refused). "delete": true removes the line (a BLANK one: "atline" and no "old"); and with "toline": \<number> the anchor stops being ONE line and becomes a RANGE - from the anchor's line to that one, both included - that is removed whole (delete) or replaced by "new". It is the way to drop a method without pasting it whole as an anchor. Inside a batch "toline" counts as its anchor does: with "atline", in the moved numbers too; without, it is corrected on its own; with "toline", "old" is ONE line (a block already says what it replaces: EDIT-020). If an entry fails, the file goes back byte for byte to how it was and you are told which one failed. At most 50 entries per call (EDIT-026). For a LONG line, an entry can carry "fragment" instead of "old": {"fragment":"68","new":"69","atline":12} changes only that piece of line 12 (atline mandatory, and the piece exactly once in it). If the change touches SEVERAL files, that is delphi_changeset. "edits" is the whole call: old/new/fragment/delete are another mode (EDIT-111) and atline/toline go INSIDE each entry (EDIT-115). |
-| `fragment` | string | optional | FRAGMENT mode for a LONG line: "fragment" = the exact piece to change (case-sensitive, EXACTLY ONCE in that line), "atline" = its 1-based line (MANDATORY), "new" = its replacement; the rest stays byte for byte. One line only, INSTEAD of "old", with no other mode (nor toline). |
+| `fragment` | string | optional | FRAGMENT mode for a LONG line: "fragment" = the exact piece to change (EXACTLY ONCE in that line), "atline" = its 1-based line (MANDATORY), "new" = its replacement. INSTEAD of "old", with no other mode. |
 | `delete` | boolean | optional | DELETE mode: true = remove the "old" anchored line ENTIRELY (old+new="" only blanks it). A BLANK line has no text to copy: delete + atline, without old, removes it if that line is blank. No "new" here |
 | `insert` | string | optional | INSERT mode (preferred for NEW routines/methods): "rutina-global" or "metodo". The tool places the block at the legal boundary (in a .dpr: between uses and the main begin; in a unit: before the final end./initialization); with "metodo" it also writes the class declaration. Pass code, not old/new |
 | `code` | string | optional | INSERT mode: the COMPLETE block of ONE routine (two or more: one call each, EDIT-129), signature UNQUALIFIED (procedure Save; - not procedure TOrder.Save;) + begin..end;. NEVER include end. For a method, attributes before the signature ([Test]) and directives after it (virtual; override; static;...) go to the class declaration, and the implementation goes without them, as the IDE writes it. |
@@ -313,7 +315,7 @@ MULTI-FILE TRANSACTIONS: when one change touches several files, the whole batch 
 | `new` | string | optional | stage kind=edit: the replacement text (may span several lines). A final line break is dropped; each extra one adds a blank line. Same rule for one-line and block anchors. |
 | `content` | string | optional | stage kind=create: the whole content of the new file |
 | `atline` | integer | optional | stage kind=edit optional: the 1-based line that pins the anchor when the same line appears more than once. REQUIRED for kind=delete-line. Rebased automatically against what earlier operations of the changeset did to that file. |
-| `fragment` | string | optional | FRAGMENT mode for a LONG line: "fragment" = the exact piece to change (case-sensitive, EXACTLY ONCE in that line), "atline" = its 1-based line (MANDATORY), "new" = its replacement; the rest stays byte for byte. One line only, INSTEAD of "old", with no other mode (nor toline). |
+| `fragment` | string | optional | FRAGMENT mode for a LONG line: "fragment" = the exact piece to change (EXACTLY ONCE in that line), "atline" = its 1-based line (MANDATORY), "new" = its replacement. INSTEAD of "old", with no other mode. |
 | `n` | integer | optional | unstage: number of the operation to remove, the one preview shows (0 or empty = the last one staged) |
 <!-- /contract -->
 
@@ -333,7 +335,7 @@ SAFE editing of plain-text NON-Delphi files (.md .txt .html .js .css .sql .py .b
 | `atline` | integer | optional | EDIT mode tie-break when the anchor appears on several lines: 1-based line number of the exact occurrence |
 | `toline` | integer | optional | RANGE (1-based, inclusive): with this, "old" becomes the FIRST line of a range that ends here - delete:true removes it all (a whole method, without pasting it), "new" replaces it all. Refused if backwards, past the end or the whole file. |
 | `edits` | array | optional | SEVERAL edits on THIS SAME file in ONE all-or-nothing call: a JSON array [{"old":"...","new":"...","atline":12}, ...] applied in order. An entry anchors on ONE line or on a BLOCK of consecutive lines; "occurrence": N breaks a tie (counted on the file BEFORE the batch, so it does not move like atline); "delete": true removes (a blank line: atline, no old); "toline" makes the anchor the first line of a range; "fragment" + "atline" changes a piece of a long line. If one entry fails, the file goes back byte for byte and you are told which one. At most 50 entries per call. Several files: delphi_changeset. |
-| `fragment` | string | optional | FRAGMENT mode for a LONG line: "fragment" = the exact piece to change (case-sensitive, EXACTLY ONCE in that line), "atline" = its 1-based line (MANDATORY), "new" = its replacement; the rest stays byte for byte. One line only, INSTEAD of "old", with no other mode (nor toline). |
+| `fragment` | string | optional | FRAGMENT mode for a LONG line: "fragment" = the exact piece to change (EXACTLY ONCE in that line), "atline" = its 1-based line (MANDATORY), "new" = its replacement. INSTEAD of "old", with no other mode. |
 | `delete` | boolean | optional | DELETE mode: true = remove the "old" anchored line ENTIRELY (old + an empty new only blanks it). A BLANK line has no text to copy: delete + atline, without old, removes it if that line is blank. No "new" here |
 | `create` | boolean | optional | CREATE mode: true = create a NEW file (never overwrites). UTF-8, parent directories created |
 | `content` | string | optional | CREATE mode: the initial content of the new file (may be empty) |

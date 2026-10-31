@@ -312,6 +312,11 @@ const
     '[SEARCH-006] %d file(s) larger than %d MB were not searched: %s';
 
   { pattern con un FICHERO por raiz: se ignoraba en silencio (1.22.2) }
+  SR_SEARCH_EXCLUDE_CON_FICHERO_FMT =
+    '[SEARCH-010 INVALID_PARAM] "exclude" leaves files out of a folder, and ' +
+    'root is ONE file (%s). Nothing was searched: drop exclude, or give its ' +
+    'folder as root.';
+
   SR_SEARCH_PATTERN_CON_FICHERO_FMT =
     '[SEARCH-009 INVALID_PARAM] "pattern" (%s) picks the files of a folder, ' +
     'and root is ONE file (%s) that it does not pick. Nothing was searched: ' +
@@ -560,9 +565,8 @@ const
     'shows where a text is today.';
 
   SP_LSP_FILE_PATH =
-    'A Delphi file (.pas/.dpr/.dpk/.inc) - ONE file, not a folder: a ' +
-    'position resolves in a source. What a folder''s units offer: ' +
-    'delphi_symbols.';
+    'ONE Delphi source (.pas/.dpr/.dpk/.inc), not a folder (its units: ' +
+    'delphi_symbols).';
 
   SP_SYMBOLS_PATH =
     'A Delphi file (.pas/.dpr/.dpk/.inc) for its symbols - or a FOLDER: at once, ' +
@@ -1081,10 +1085,8 @@ const
 
   SP_PATCH_FRAGMENT =
     'FRAGMENT mode for a LONG line: "fragment" = the exact piece to change ' +
-    '(case-sensitive, EXACTLY ONCE in that line), "atline" = its 1-based ' +
-    'line (MANDATORY), "new" = its replacement; the rest stays ' +
-    'byte for byte. One line only, INSTEAD of "old", with no other mode ' +
-    '(nor toline).';
+    '(EXACTLY ONCE in that line), "atline" = its 1-based line (MANDATORY), ' +
+    '"new" = its replacement. INSTEAD of "old", with no other mode.';
 
   SR_FRAG_NEEDS_ATLINE =
     '[EDIT-002 INVALID_PARAM] "fragment" needs "atline": the number (1-based, ' +
@@ -4592,8 +4594,8 @@ const
     'VCL and FMX both have one (TButton, TEdit)';
 
   SP_DOCS_OFFSET =
-    'read optional: where to start in the text of the page (the nextOffset ' +
-    'of the previous chunk)';
+    'The previous answer''s nextOffset. read: where to go on in the page; ' +
+    'search: the next results.';
 
   SP_DOCS_LIMIT =
     'search optional: how many results (default 10, at most 25)';
@@ -10549,12 +10551,10 @@ const
 
   // Descripciones que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3d, 27-sep-2026)
   SP_LSP_LINE =
-    'Zero-based line of the identifier: the "line0" of a search, ' +
-    'references, symbols or definition hit ("line" is 1-based)';
+    'Zero-based line of the identifier (a hit''s "line0")';
 
   SP_LSP_CHARACTER =
-    'Zero-based character (column) inside the identifier (a hit''s ' +
-    '"character0")';
+    'Zero-based column inside the identifier (a hit''s "character0")';
 
   // el de delphi_signature: su posicion va DENTRO de los parentesis de la
   // llamada, y con el generico su parametro decia lo contrario que su
@@ -11038,6 +11038,12 @@ const
     'Pagination: skip the first N hits of the FULL list - pass the ' +
     'previous answer''s nextOffset; walking it until hasMore=false reaches ' +
     'every hit.';
+
+  SP_WS_CONTEXT =
+    'Lines to add around each hit, as before and after (at most 10).';
+
+  SP_WS_EXCLUDE =
+    'Mask(s) of files to leave out of a folder: *_test.pas;Old*.pas';
 
   SP_WS_WHOLEWORD =
     'true = match whole identifiers only (word boundaries)';

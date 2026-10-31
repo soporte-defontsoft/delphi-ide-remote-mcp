@@ -2426,8 +2426,8 @@ try:
     # tragaban name con conventions, offset con search, title con list (20-oct-2026)
     rechazo('E168 delphi_help conventions con name: HELP-009', 'delphi_help',
             {'command': 'conventions', 'name': 'delphi_edit'}, 'INVALID_PARAM', 'SR_HELP_NO_VA_CON_COMANDO_FMT')
-    rechazo('E168 delphi_docs search con offset: DOCS-017', 'delphi_docs',
-            {'command': 'search', 'query': 'FormatDateTime', 'offset': 5}, 'INVALID_PARAM',
+    rechazo('E168 delphi_docs read con limit: DOCS-017', 'delphi_docs',
+            {'command': 'read', 'id': 'e168:NoExiste.htm', 'limit': 5}, 'INVALID_PARAM',
             'SR_DOCS_NO_VA_CON_COMANDO_FMT')
     rechazo('E168 delphi_report list con title: REPORT-013', 'delphi_report',
             {'command': 'list', 'title': 'no va con list'}, 'INVALID_PARAM', 'SR_REPORT_NO_VA_CON_COMANDO_FMT')

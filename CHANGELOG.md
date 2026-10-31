@@ -24,6 +24,13 @@ the MCP `initialize` response (`serverInfo.version`).
   with any name, and the name is still a courtesy between honest agents, as the revision
   says too. Requests with no session do not count in `sessions` of `delphi_workspace`.
   Not done: closing a response stream does not cancel the work in course, as before.
+- **`delphi_docs search` pages like every other list.** `offset` takes its `nextOffset`, and
+  the answer says `shown`, `hasMore` and `nextOffset`; it was refused (`DOCS-017`), so past
+  the first 25 results a page of the help could not be reached.
+- **`delphi_search` shows what is around a hit and leaves files out.** `context` adds up to 10
+  lines to each hit, as `before` and `after`, so a search no longer needs a `delphi_read` per
+  hit. `exclude` takes masks like `pattern`, judged the same way, and `excluded` counts what
+  it left out.
 
 ## [1.24.0] - 2026-10-31
 

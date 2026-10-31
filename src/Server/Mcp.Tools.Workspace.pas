@@ -35,6 +35,8 @@ type
     FWholeWord: Boolean;
     FPattern: string;
     FRegex: Boolean;
+    FContext: Integer;
+    FExclude: string;
   public
     [SchemaDescription(SP_WS_ROOT)]
     [Required]
@@ -55,6 +57,10 @@ type
     property Pattern: string read FPattern write FPattern;
     [SchemaDescription(SP_WS_REGEX)]
     property Regex: Boolean read FRegex write FRegex;
+    [SchemaDescription(SP_WS_CONTEXT)]
+    property Context: Integer read FContext write FContext;
+    [SchemaDescription(SP_WS_EXCLUDE)]
+    property Exclude: string read FExclude write FExclude;
   end;
 
   TDelphiListParams = class
@@ -419,6 +425,22 @@ begin
           Exit(MsgFmt(SR_SEARCH_PATTERN_CON_FICHERO_FMT, [Params.Pattern.Trim, Params.Root]));
       end;
     end;
+    // lo que se deja fuera lo elige el MISMO juez que el paseo (WalkFiles, la mascara
+    // de Windows) y el mismo lector de pattern: ninguna regla de mascaras nuestra
+    var Excluidos: TArray<string> := [];
+    if Params.Exclude.Trim <> '' then
+    begin
+      if SingleFile then
+        Exit(MsgFmt(SR_SEARCH_EXCLUDE_CON_FICHERO_FMT, [Params.Root]));
+      var MasksFuera: TArray<string>;
+      var MalFuera := MascarasDelPatron(Params.Exclude, MasksFuera);
+      if MalFuera <> '' then
+        Exit(MalFuera);
+      Excluidos := WalkFiles(Params.Root, MasksFuera);
+      TArray.Sort<string>(Excluidos);
+    end;
+    var FueraContados := 0;
+    var Contexto := EnsureRange(Params.Context, 0, 10);
     var Targets: TArray<string> := [];
     if SingleFile then
       Targets := [Params.Root]
@@ -440,6 +462,12 @@ begin
     var Grandes: TArray<string> := [];
     for F in Targets do
       begin
+        var EnFuera: Integer;
+        if TArray.BinarySearch<string>(Excluidos, F, EnFuera) then
+        begin
+          Inc(FueraContados);
+          Continue;
+        end;
         // el vault es de las tools vault_*: se esconde CONTADO (H6 de Fable)
         if not SingleFile and InVault(F) then
         begin
@@ -538,6 +566,17 @@ begin
                 Entry.AddPair('line0', TJSONNumber.Create(I));
                 Entry.AddPair('character0', TJSONNumber.Create(P - 1));
                 Entry.AddPair('text', LineText);
+                if Contexto > 0 then
+                begin
+                  var Antes := TJSONArray.Create;
+                  for var K := System.Math.Max(0, I - Contexto) to I - 1 do
+                    Antes.Add(Lines[K]);
+                  Entry.AddPair('before', Antes);
+                  var Despues := TJSONArray.Create;
+                  for var K := I + 1 to System.Math.Min(High(Lines), I + Contexto) do
+                    Despues.Add(Lines[K]);
+                  Entry.AddPair('after', Despues);
+                end;
               end;
               Break; // one hit per line is enough
             end;
@@ -547,6 +586,8 @@ begin
       end;
     Pag.Report(Return);
     Return.AddPair('filesScanned', TJSONNumber.Create(FilesScanned));
+    if FueraContados > 0 then
+      Return.AddPair('excluded', TJSONNumber.Create(FueraContados));
     if Length(Ilegibles) > 0 then
       Return.AddPair('unreadableNote', MsgFmt(SN_SEARCH_ILEGIBLES_FMT,
         [Length(Ilegibles), string.Join(', ', Copy(Ilegibles, 0, 5))]));
@@ -558,7 +599,7 @@ begin
     // tercera ronda)
     // ...y los que casaron pero no se dejaron leer (SEARCH-003) SI casaron: la
     // mascara estaba bien (septima revision)
-    if (FilesScanned = 0) and (Length(Ilegibles) = 0) and
+    if (FilesScanned = 0) and (Length(Ilegibles) = 0) and (FueraContados = 0) and
        (Params.Pattern.Trim <> '') and not SingleFile then
       // enmascarada como lo demas que compone esta tool de eco (su vault_search
       // hermana enseno C:\ con un patron srvd:\, revisor de B-9)

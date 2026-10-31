@@ -95,7 +95,7 @@ end;
 function Busca(const Params: TDelphiDocsParams; const AFramework: string;
   const AAyudas: TArray<TAyudaInstalada>): string;
 var
-  Total, Limite, Abiertas: Integer;
+  Total, Abiertas: Integer;
   Res: TArray<TResultadoDoc>;
   Ret: TJSONObject;
   Arr: TJSONArray;
@@ -103,11 +103,10 @@ begin
   // sin palabras (vacia, o solo comillas y signos) no hay consulta
   if Length(PalabrasDeConsulta(Params.Query)) = 0 then
     Exit(MsgText(SR_DOCS_SIN_CONSULTA));
-  Limite := Params.Limit;
-  if Limite <= 0 then
-    Limite := 10;
-  Limite := Min(Limite, 25);
-  Res := BuscaEnLaAyuda(AAyudas, Params.Query, AFramework, Limite, Total, Abiertas);
+  // la pagina: limit por defecto 10 y como mucho 25 (TPagina, la de las listas);
+  // la consulta trae hasta donde acaba, porque el orden es de toda la lista
+  var Pag := PaginaDe(Params.Offset, Params.Limit, 10, 25);
+  Res := BuscaEnLaAyuda(AAyudas, Params.Query, AFramework, Pag.Desde + Pag.Max, Total, Abiertas);
   if Length(Res) = 0 then
     if Abiertas = 0 then
       Exit(MsgText(SR_DOCS_NINGUNA_ABRE))
@@ -118,9 +117,12 @@ begin
     Ret.AddPair('query', Eco(Params.Query.Trim));
     Arr := TJSONArray.Create;
     for var R in Res do
-      Arr.AddElement(TJSONObject.Create.AddPair('id', R.Id).AddPair('title', R.Titulo));
+      if Pag.Entra then
+        Arr.AddElement(TJSONObject.Create.AddPair('id', R.Id).AddPair('title', R.Titulo));
     Ret.AddPair('results', Arr);
-    Ret.AddPair('total', TJSONNumber.Create(Total));
+    // total: lo que cuenta la ayuda, que sabe mas que lo recorrido hasta aqui
+    Pag.Total := System.Math.Max(Total, Pag.Total);
+    Pag.Report(Ret);
     Ret.AddPair('note', MsgText(SN_DOCS_BUSQUEDA));
     Result := Ret.ToJSON;
   finally
@@ -255,13 +257,12 @@ begin
   if not MatchText(Cmd, ['search', 'read']) then
     Exit(MsgText(SR_DOCS_CMD));
   // lo que no es del comando se dice (Lsp.Guard.ParametroQueNoVa), como en las
-  // demas tools de varios comandos: offset en un search se ignoraba en
-  // silencio (20-oct-2026). Sin command y con id, el query de al lado se
+  // demas tools de varios comandos. Sin command y con id, el query de al lado se
   // tolera: la descripcion lo promete. limit=10 es su defecto: un cliente que
   // rellene los defectos del esquema no lo "envia"
   var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(Cmd, [
-      'search', 'query framework limit',
+      'search', 'query framework limit offset',
       'read', IfThen(Params.Command.Trim = '', 'id offset query', 'id offset')],
     ['query', Params.Query, '', 'id', Params.Id, '', 'framework', Params.Framework, '',
      'offset', IfThen(Params.Offset <> 0, IntToStr(Params.Offset)), '',
