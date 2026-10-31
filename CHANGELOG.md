@@ -31,6 +31,13 @@ the MCP `initialize` response (`serverInfo.version`).
   lines to each hit, as `before` and `after`, so a search no longer needs a `delphi_read` per
   hit. `exclude` takes masks like `pattern`, judged the same way, and `excluded` counts what
   it left out.
+- **`delphi_git` takes six more operations, by fields as always.** `diff format=name-only`;
+  `log grep` (the commit message, as text, ignoring case); `add action=update` (every tracked
+  file that changed, or only `paths`); `commit action=amend` (with `message` or keeping the one
+  it has); `fetch action=prune`; `clone branch`. Two refusals keep them from destroying
+  anything: `GIT-086` when a remote already has the commit to amend, and `GIT-087` when a
+  refspec writes outside `refs/remotes`, where prune would delete local branches (measured with
+  plain git: it took the current branch too).
 
 ### Fixed
 

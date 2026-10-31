@@ -889,14 +889,15 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 | `paths` | array | optional | Files or folders of this repo, a LIST (relative to it or absolute): status, diff, log, show, add, restore, untrack, stash push. |
 | `to` | string | optional | diff, log: the other end of the range that starts at ref. |
 | `staged` | boolean | optional | diff: what is staged for the next commit. |
-| `format` | string | optional | diff: stat \| shortstat \| words. log: oneline (default) \| dated (hash, date, subject) \| full. |
+| `format` | string | optional | diff: stat \| shortstat \| name-only \| words. log: oneline (default) \| dated (hash, date, subject) \| full. |
 | `context` | integer | optional | diff: lines of context around each change (1 or more). |
 | `count` | integer | optional | log: how many commits (default 20). |
 | `search` | string | optional | log: only the commits that add or remove this text. |
+| `grep` | string | optional | log: only the commits whose message contains this. |
 | `patch` | boolean | optional | show: the whole diff, not only the stat. |
-| `branch` | string | optional | switch (create=true: a new name), merge, pull. |
+| `branch` | string | optional | switch (create=true: a new name), merge, pull, clone. |
 | `remote` | string | optional | The name of a remote of this repo: pull, fetch, push, ls-remote. |
-| `action` | string | optional | stash: push (default) \| pop \| list. worktree: add \| list \| remove. merge: abort. |
+| `action` | string | optional | stash: push (default) \| pop \| list. worktree: add \| list \| remove. merge: abort. add: update. commit: amend (not of what a remote has). fetch: prune. |
 | `name` | string | optional | tag: the new tag (none = list them). config: user.name \| user.email (no message = read the value a commit would use). |
 | `create` | boolean | optional | switch: true = create the branch and move to it (git switch -c). Refused with any other command (GIT-038). |
 | `message` | string | optional | commit: the message. tag: makes it annotated. stash push: its label. config: the value (none = read the current one). clone: the repository URL. |

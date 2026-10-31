@@ -7909,6 +7909,24 @@ const
     '[GIT-072 INVALID_PARAM] format="%s" does not go with %s: it takes ' +
     '%s. Nothing was done.';
 
+  { add, commit y fetch tienen UNA accion cada uno }
+  SR_GIT_ACTION_NO_VA_FMT =
+    '[GIT-085 INVALID_PARAM] action="%s" does not go with %s: it takes ' +
+    '%s. Nothing was done.';
+
+  { commit action=amend de un commit que un remoto ya tiene: la historia que
+    otros ven no se reescribe, y push no lo mandaria luego }
+  SR_GIT_AMEND_YA_ENVIADO =
+    '[GIT-086 DENIED] amend does not run: a remote of this repo already has ' +
+    'that commit, or git could not say that it does not. Make a new commit. ' +
+    'Nothing was done.';
+
+  { fetch action=prune con un refspec que escribe fuera de refs/remotes }
+  SR_GIT_PRUNE_RAMAS_FMT =
+    '[GIT-087 DENIED] prune does not run: this repo fetches with "%s", and ' +
+    'prune would delete every ref that refspec writes to and the remote does ' +
+    'not have, local branches included. Nothing was done.';
+
   SR_GIT_TO_SIN_REF =
     '[GIT-073 INVALID_PARAM] "to" is the other end of a range: it goes ' +
     'with "ref". Nothing was done.';
@@ -9026,7 +9044,7 @@ const
 
   SR_GIT_ADD_NEEDS_PATHS =
     '[GIT-022 INVALID_PARAM] add needs "paths": the files or folders to ' +
-    'stage (["."] = everything).';
+    'stage (["."] = everything), or action=update for every tracked file that changed.';
 
   SR_GIT_CLONE_NEEDS_REPOSITORY_URL =
     '[GIT-023 INVALID_PARAM] Clone needs the repository URL in the ' +
@@ -11120,7 +11138,7 @@ const
     'diff: what is staged for the next commit.';
 
   SP_GIT_FORMAT =
-    'diff: stat | shortstat | words. log: oneline (default) | dated ' +
+    'diff: stat | shortstat | name-only | words. log: oneline (default) | dated ' +
     '(hash, date, subject) | full.';
 
   SP_GIT_CONTEXT =
@@ -11132,18 +11150,22 @@ const
   SP_GIT_SEARCH =
     'log: only the commits that add or remove this text.';
 
+  SP_GIT_GREP =
+    'log: only the commits whose message contains this.';
+
   SP_GIT_PATCH =
     'show: the whole diff, not only the stat.';
 
   SP_GIT_BRANCH =
-    'switch (create=true: a new name), merge, pull.';
+    'switch (create=true: a new name), merge, pull, clone.';
 
   SP_GIT_REMOTE =
     'The name of a remote of this repo: pull, fetch, push, ls-remote.';
 
   SP_GIT_ACTION =
     'stash: push (default) | pop | list. worktree: add | list | remove. ' +
-    'merge: abort.';
+    'merge: abort. add: update. commit: amend (not of what a remote has). ' +
+    'fetch: prune.';
 
   SP_GIT_NAME =
     'tag: the new tag (none = list them). config: user.name | user.email ' +

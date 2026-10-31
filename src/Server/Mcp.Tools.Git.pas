@@ -40,6 +40,7 @@ type
     FContext: Integer;
     FCount: Integer;
     FSearch: string;
+    FGrep: string;
     FPatch: Boolean;
     FBranch: string;
     FRemote: string;
@@ -76,6 +77,9 @@ type
     [SchemaDescription(SP_GIT_SEARCH)]
     [Contenido]
     property Search: string read FSearch write FSearch;
+    [SchemaDescription(SP_GIT_GREP)]
+    [Contenido]
+    property Grep: string read FGrep write FGrep;
     [SchemaDescription(SP_GIT_PATCH)]
     property Patch: Boolean read FPatch write FPatch;
     [SchemaDescription(SP_GIT_BRANCH)]
@@ -1405,6 +1409,48 @@ begin
     Result := Result + MsgFmt(SN_GIT_PAGINA_FMT, [ADesde + 1, K, Length(Lineas), K]);
 end;
 
+{ La accion de un comando que solo tiene una: '' si no la dan o es esa; si no,
+  GIT-085 con la suya. }
+function AccionDenegada(const ACmd, AAccion, ALaSuya: string): string;
+begin
+  Result := '';
+  if (AAccion.Trim <> '') and not SameText(AAccion.Trim, ALaSuya) then
+    Result := MsgFmt(SR_GIT_ACTION_NO_VA_FMT, [AAccion.Trim, ACmd, ALaSuya]);
+end;
+
+{ Si algun remoto de este repo, por lo que el repo sabe, ya tiene HEAD. Lo dice
+  git; si no contesta, se toma por si: enmendar es lo que se puede dejar para
+  despues con un commit nuevo. }
+function HeadYaEnviado(const ARepo, AFijado: string): Boolean;
+var
+  Lineas: TArray<string>;
+begin
+  Result := not GitContesta(ARepo, AFijado, 'branch -r --contains HEAD', Lineas) or
+    (Length(Lineas) > 0);
+end;
+
+{ fetch --prune borra lo que el remoto no tiene de todo aquello a lo que su
+  refspec escribe. Con uno que escribe fuera de refs/remotes eso son ramas
+  locales: medido con git a pelo el 31-oct-2026, +refs/heads/*:refs/heads/* se
+  llevo una rama solo local y la rama en curso. Devuelve el refspec, o '' si
+  no hay ninguno asi (sin ninguno, git sale con 1 y no hay nada que podar). }
+function RefspecQuePodariaRamas(const ARepo, AFijado: string): string;
+var
+  Lineas: TArray<string>;
+  L: string;
+  P: Integer;
+begin
+  Result := '';
+  if not GitContesta(ARepo, AFijado, 'config --get-regexp ' + EnComillas('^remote\..*\.fetch$'), Lineas) then
+    Exit;
+  for L in Lineas do
+  begin
+    P := L.LastIndexOf(':');
+    if (P >= 0) and not L.Substring(P + 1).StartsWith('refs/remotes/') then
+      Exit(L.Substring(L.IndexOf(' ') + 1));
+  end;
+end;
+
 { Lo que una operacion que REESCRIBE el arbol tocaria, por el juez que lo sabe
   -git- y no por una lista nuestra (regla 6; 2x de la 1.18.2): se le piden los
   ficheros que cambiaria (diff --name-only HEAD <destino>, o stash show para un
@@ -1592,12 +1638,12 @@ begin
   var SobraGit := ParametroQueNoVa(ModoGit, [
       'status', 'paths offset',
       'diff', 'paths ref to staged format context offset',
-      'log', 'paths ref to format count search offset',
+      'log', 'paths ref to format count search grep offset',
       'show', 'paths ref patch offset',
-      'branch', 'offset', 'add', 'paths', 'restore', 'paths', 'untrack', 'paths',
-      'commit', 'message',
-      'pull', 'remote branch', 'fetch', 'remote', 'push', 'remote ref',
-      'ls-remote', 'remote offset', 'init', '', 'clone', 'message',
+      'branch', 'offset', 'add', 'paths action', 'restore', 'paths', 'untrack', 'paths',
+      'commit', 'message action',
+      'pull', 'remote branch', 'fetch', 'remote action', 'push', 'remote ref',
+      'ls-remote', 'remote offset', 'init', '', 'clone', 'message branch',
       'config', 'name message', 'merge', 'branch action', 'switch', 'branch create',
       'tag', 'name ref message offset',
       'stash push', 'action paths message', 'stash pop', 'action',
@@ -1609,7 +1655,7 @@ begin
      'staged', IfThen(Params.Staged, 'true'), '', 'format', Params.Format, '',
      'context', IfThen(Params.Context <> 0, IntToStr(Params.Context)), '',
      'count', IfThen(Params.Count <> 0, IntToStr(Params.Count)), '',
-     'search', Params.Search, '', 'patch', IfThen(Params.Patch, 'true'), '',
+     'search', Params.Search, '', 'grep', Params.Grep, '', 'patch', IfThen(Params.Patch, 'true'), '',
      'branch', Params.Branch, '', 'remote', Params.Remote, '',
      'action', Params.Action, '', 'name', Params.Name, '',
      'message', Params.Message, '', 'path', Params.Path, '',
@@ -1760,13 +1806,14 @@ begin
   else if Cmd = 'diff' then
   begin
     var Forma := '';
-    case IndexText(Params.Format.Trim, ['', 'stat', 'shortstat', 'words']) of
+    case IndexText(Params.Format.Trim, ['', 'stat', 'shortstat', 'words', 'name-only']) of
       0: ;
       1: Forma := ' --stat';
       2: Forma := ' --shortstat';
       3: Forma := ' --word-diff';
+      4: Forma := ' --name-only';
     else
-      Exit(MsgFmt(SR_GIT_FORMATO_FMT, [Params.Format.Trim, 'diff', 'stat, shortstat, words']));
+      Exit(MsgFmt(SR_GIT_FORMATO_FMT, [Params.Format.Trim, 'diff', 'stat, shortstat, name-only, words']));
     end;
     GitArgs := 'diff' + IfThen(Params.Staged, ' --staged') + Forma;
     if Params.Context > 0 then
@@ -1793,6 +1840,9 @@ begin
     // el texto que se busca, CONTENIDO: un solo argumento pegado a -S
     if Params.Search <> '' then
       RestoDelLog := RestoDelLog + ' ' + EnComillas('-S' + Params.Search);
+    // ...y el del mensaje: texto (-F), como todo lo que se busca aqui
+    if Params.Grep <> '' then
+      RestoDelLog := RestoDelLog + ' -F -i ' + EnComillas('--grep=' + Params.Grep);
     if Hasta <> '' then
       RestoDelLog := RestoDelLog + ' ' + EnComillas(Desde + '..' + Hasta)
     else if Desde <> '' then
@@ -1813,14 +1863,24 @@ begin
     GitArgs := 'branch -vv'
   else if Cmd = 'add' then
   begin
-    if Length(Lista) = 0 then
+    Result := AccionDenegada(Cmd, Params.Action, 'update');
+    if Result <> '' then
+      Exit;
+    var Seguidos := Params.Action.Trim <> '';
+    if (Length(Lista) = 0) and not Seguidos then
       Exit(MsgText(SR_GIT_ADD_NEEDS_PATHS));
-    GitArgs := 'add' + Rutas + LoNuestroFuera;
+    GitArgs := 'add' + IfThen(Seguidos, ' -u') + Cola + LoNuestroFuera;
   end
   else if Cmd = 'commit' then
   begin
-    if Params.Message.Trim = '' then
+    Result := AccionDenegada(Cmd, Params.Action, 'amend');
+    if Result <> '' then
+      Exit;
+    var Enmienda := Params.Action.Trim <> '';
+    if (Params.Message.Trim = '') and not Enmienda then
       Exit(MsgText(SR_GIT_COMMIT_NEEDS_MESSAGE));
+    if Enmienda and HeadYaEnviado(Repo, Fijado) then
+      Exit(MsgText(SR_GIT_AMEND_YA_ENVIADO));
     // -F <file>: the message reaches git byte-exact. Embedding it in the
     // command line mangled double quotes (measured in the field: " -> '').
     // Temporal DEL SERVIDOR, y de los que importan: lleva el mensaje que
@@ -1829,11 +1889,17 @@ begin
     // que estar donde lo vea cualquiera. Por el nombrador (Lsp.Casa).
     // la carpeta, la del nombre que da EL nombrador (su subcarpeta de la casa
     // vivia a mano aqui y en el tag: H9 de Fable)
-    MsgFile := NombreDeMensajeGit;
-    CrearCarpeta(ExtractFileDir(MsgFile));
-    // por la puerta de escribir, con el temporal como lugar: UTF-8 sin BOM
-    EscribeTexto(MsgFile, Params.Message, ltTemporal, ekUtf8);
-    GitArgs := 'commit -F ' + EnComillas(MsgFile);
+    GitArgs := 'commit' + IfThen(Enmienda, ' --amend');
+    if Params.Message.Trim = '' then
+      GitArgs := GitArgs + ' --no-edit'
+    else
+    begin
+      MsgFile := NombreDeMensajeGit;
+      CrearCarpeta(ExtractFileDir(MsgFile));
+      // por la puerta de escribir, con el temporal como lugar: UTF-8 sin BOM
+      EscribeTexto(MsgFile, Params.Message, ltTemporal, ekUtf8);
+      GitArgs := GitArgs + ' -F ' + EnComillas(MsgFile);
+    end;
   end
   else if Cmd = 'clone' then
   begin
@@ -1852,6 +1918,11 @@ begin
     // carpeta O fichero .git: clonar en un worktree enlazado no es clonar
     if TieneGit(Repo) then
       Exit(MsgFmt(SR_GIT_YA_ES_REPOSITORIO_FMT, [Repo]));
+    // la rama o el tag que deja, un nombre que git admite; se le pregunta desde
+    // lo que ya existe, que el destino aun no
+    Result := NombreDenegado(PrimerAncestroQueExiste(Repo), '', 'branch', Params.Branch);
+    if Result <> '' then
+      Exit;
     // El destino se crea AQUI, pasadas todas las negativas: un rechazo no
     // deja nada, y si el clone falla se quita solo si lo creo el.
     if not TDirectory.Exists(Repo) then
@@ -1864,7 +1935,9 @@ begin
     // "--" separator guarantees the URL is a POSITIONAL, never parsed as an
     // option, whatever it contains (field round 9). Primero los objetos:
     // ningun filtro ve un endpoint aun sin juzgar.
-    GitArgs := Format('clone --no-checkout -- %s .', [EnComillas(Url)]);
+    GitArgs := 'clone --no-checkout' +
+      IfThen(Params.Branch.Trim <> '', ' --branch ' + EnComillas(Params.Branch.Trim)) +
+      ' -- ' + EnComillas(Url) + ' .';
   end
   else if Cmd = 'pull' then
   begin
@@ -1884,7 +1957,19 @@ begin
     SeQuitan := [Raiz]; // reescribe el arbol: puede quitar carpetas
   end
   else if Cmd = 'fetch' then
-    GitArgs := 'fetch' + IfThen(Params.Remote.Trim <> '', ' ' + EnComillas(Params.Remote.Trim))
+  begin
+    Result := AccionDenegada(Cmd, Params.Action, 'prune');
+    if Result <> '' then
+      Exit;
+    if Params.Action.Trim <> '' then
+    begin
+      var Refspec := RefspecQuePodariaRamas(Repo, Fijado);
+      if Refspec <> '' then
+        Exit(MsgFmt(SR_GIT_PRUNE_RAMAS_FMT, [Refspec]));
+    end;
+    GitArgs := 'fetch' + IfThen(Params.Action.Trim <> '', ' --prune') +
+      IfThen(Params.Remote.Trim <> '', ' ' + EnComillas(Params.Remote.Trim));
+  end
   else if Cmd = 'init' then
     GitArgs := 'init'
   else if Cmd = 'config' then

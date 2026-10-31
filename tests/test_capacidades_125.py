@@ -7,10 +7,12 @@ mismo juez de mascaras que el paseo.
 V42: delphi_desktop con el PAServer caido, sin parametro nuevo: paclient se rinde solo y --timeout no lo acorta
 (medido: 21 s contra una IP que no contesta, con y sin el), asi que lo que sobraba era lo nuestro: subir el nodo
 despues de saber que no hay conexion, y retener a los demas perfiles mientras tanto. Contra paclient_stub, sin red.
+V45: delphi_git por campos: format name-only, log grep, add/commit/fetch action, clone branch. La enmienda de un
+commit que un remoto ya tiene se niega.
 
 Usage:  python tests/test_capacidades_125.py [path-to-DelphiLspMcp.exe]
 """
-import glob, json, os, shutil, threading, time
+import functools, glob, http.server, json, os, shutil, subprocess, threading, time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -25,7 +27,7 @@ with open(os.path.join(RAIZ, 'UDos_test.pas'), 'w', newline='') as f:
 with open(os.path.join(RAIZ, 'Vieja.pas'), 'w', newline='') as f:
     f.write('unit Vieja;\r\n// AGUJA\r\nend.\r\n')
 
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': RAIZ}), nombre='capacidades')
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': RAIZ, 'DELPHI_MCP_GIT_REMOTES': '127.0.0.1'}), nombre='capacidades')
 call = srv.call
 
 
@@ -78,6 +80,125 @@ try:
     check('V44 exclude con UN fichero por raiz: SEARCH-010', mc.es(t, 'SR_SEARCH_EXCLUDE_CON_FICHERO_FMT'), t[:200])
     d = json.loads(call('delphi_search', {'root': RAIZ, 'query': 'AGUJA', 'exclude': '*.pas', 'pattern': '*.pas'}))
     check('V44 todo fuera: no dice que la mascara no casa', d.get('excluded') == 3 and 'maskNote' not in d, d)
+
+    # V45 - delphi_git por campos
+    REPO = os.path.join(RAIZ, 'g')
+    os.makedirs(os.path.join(REPO, 'sub'))
+
+
+    def git(cmd, **kw):
+        return call('delphi_git', dict({'repo': REPO, 'command': cmd}, **kw))
+
+
+    def crudo(*args, cwd=REPO):
+        return subprocess.run(['git'] + list(args), cwd=cwd, capture_output=True, text=True).stdout.strip()
+
+
+    def escribe(nombre, texto):
+        with open(os.path.join(REPO, nombre), 'w') as f:
+            f.write(texto)
+
+
+    git('init')
+    git('config', name='user.name', message='Bateria')
+    git('config', name='user.email', message='bateria@example.com')
+    escribe('a.txt', 'uno\n')
+    escribe(os.path.join('sub', 'b.txt'), 'uno\n')
+    git('add', paths=['.'])
+    git('commit', message='Primero con AGUJA')
+    escribe('a.txt', 'dos\n')
+    git('add', paths=['a.txt'])
+    git('commit', message='Segundo')
+
+    # format name-only
+    escribe('a.txt', 'tres\n')
+    t = git('diff', format='name-only')
+    check('V45 diff format=name-only: los nombres, sin el cambio', 'a.txt' in t and '@@' not in t and 'tres' not in t, t[:300])
+    t = git('diff', format='xx')
+    check('V45 un format que no va lo dice, name-only incluido', mc.es(t, 'SR_GIT_FORMATO_FMT') and 'name-only' in t, t[:200])
+    # log grep
+    t = git('log', grep='aguja')
+    check('V45 log grep: por el mensaje, sin distinguir mayusculas', 'Primero con AGUJA' in t and 'Segundo' not in t, t[:300])
+    t = git('log', grep='AG.JA')
+    check('V45 log grep es texto, no una expresion', 'Primero' not in t, t[:300])
+    t = git('log', grep='x" --output=fuera.txt "')
+    check('V45 log grep con comillas sigue siendo un solo argumento', not os.path.exists(os.path.join(REPO, 'fuera.txt')), t[:300])
+    t = git('status', grep='x')
+    check('V45 grep no va con otro comando', mc.es(t, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), t[:200])
+    # add action=update
+    escribe('nuevo.txt', 'x\n')
+    t = git('add')
+    check('V45 add sin paths ni action sigue pidiendo paths', mc.es(t, 'SR_GIT_ADD_NEEDS_PATHS'), t[:200])
+    t = git('add', action='xx')
+    check('V45 add con otra action: GIT-085', mc.es(t, 'SR_GIT_ACTION_NO_VA_FMT') and 'update' in t, t[:200])
+    t = git('add', action='update')
+    st = crudo('status', '--porcelain')
+    check('V45 add action=update: lo seguido que cambio, lo nuevo no', 'M  a.txt' in st and '?? nuevo.txt' in st, (st, t[:200]))
+    crudo('reset', '-q')
+    escribe(os.path.join('sub', 'b.txt'), 'dos\n')
+    t = call('delphi_git', {'repo': os.path.join(REPO, 'sub'), 'command': 'add', 'action': 'update'})
+    st = crudo('status', '--porcelain')
+    check('V45 add action=update desde una subcarpeta: el repo entero', 'M  a.txt' in st and 'M  sub/b.txt' in st, (st, t[:200]))
+    crudo('reset', '-q')
+    crudo('checkout', '-q', '--', 'sub/b.txt')
+    t = git('add', action='update', paths=['a.txt'])
+    check('V45 add action=update con paths: solo esos', 'M  a.txt' in crudo('status', '--porcelain'), t[:200])
+    # commit action=amend
+    antes = crudo('rev-list', '--count', 'HEAD')
+    t = git('commit', action='amend')
+    check('V45 amend sin message: con lo preparado y el mismo mensaje',
+          crudo('rev-list', '--count', 'HEAD') == antes and crudo('log', '-1', '--format=%s') == 'Segundo' and
+          crudo('show', 'HEAD:a.txt').strip() == 'tres', (t[:200], crudo('log', '-2', '--oneline')))
+    t = git('commit', action='amend', message='Segundo, corregido')
+    check('V45 amend con message: lo cambia', crudo('rev-list', '--count', 'HEAD') == antes and crudo('log', '-1', '--format=%s') == 'Segundo, corregido', t[:200])
+    t = git('commit', action='xx', message='m')
+    check('V45 commit con otra action: GIT-085', mc.es(t, 'SR_GIT_ACTION_NO_VA_FMT') and 'amend' in t, t[:200])
+    t = git('commit')
+    check('V45 commit sin message ni amend sigue pidiendolo', mc.es(t, 'SR_GIT_COMMIT_NEEDS_MESSAGE'), t[:200])
+    # la enmienda de lo que un remoto ya tiene
+    cabeza = crudo('rev-parse', 'HEAD')
+    crudo('update-ref', 'refs/remotes/origin/main', 'HEAD')
+    t = git('commit', action='amend', message='no')
+    check('V45 amend de un commit que un remoto tiene: GIT-086, y el commit sigue', mc.es(t, 'SR_GIT_AMEND_YA_ENVIADO') and crudo('rev-parse', 'HEAD') == cabeza, t[:300])
+    crudo('update-ref', '-d', 'refs/remotes/origin/main')
+
+    # fetch action=prune y clone branch, contra un remoto de verdad
+    BARE = os.path.join(RAIZ, 'rem.git')
+    crudo('init', '-q', '--bare', BARE)
+    crudo('remote', 'add', 'origin', BARE)
+    crudo('push', '-q', 'origin', 'HEAD:refs/heads/principal', 'HEAD:refs/heads/vieja')
+    t = git('fetch', remote='origin')
+    check('V45 control: fetch trae las ramas', 'origin/vieja' in crudo('branch', '-r'), t[:200])
+    crudo('update-ref', '-d', 'refs/heads/vieja', cwd=BARE)
+    t = git('fetch', remote='origin')
+    check('V45 fetch sin prune la deja', 'origin/vieja' in crudo('branch', '-r'), t[:200])
+    t = git('fetch', remote='origin', action='xx')
+    check('V45 fetch con otra action: GIT-085', mc.es(t, 'SR_GIT_ACTION_NO_VA_FMT') and 'prune' in t, t[:200])
+    t = git('fetch', remote='origin', action='prune')
+    ramas = crudo('branch', '-r')
+    check('V45 fetch action=prune la quita, y la otra sigue', 'origin/vieja' not in ramas and 'origin/principal' in ramas, (t[:200], ramas))
+    # un refspec de espejo: --prune borraria ramas LOCALES que el remoto no tiene
+    crudo('branch', 'solo-aqui')
+    crudo('config', '--add', 'remote.origin.fetch', '+refs/heads/*:refs/heads/*')
+    t = git('fetch', remote='origin', action='prune')
+    check('V45 prune con un refspec que escribe en ramas locales: GIT-087, y la rama sigue',
+          mc.es(t, 'SR_GIT_PRUNE_RAMAS_FMT') and 'solo-aqui' in crudo('branch'), (t[:300], crudo('branch')))
+    crudo('config', '--unset', 'remote.origin.fetch', r'\+refs/heads/\*:refs/heads/\*')
+    crudo('update-ref', 'refs/heads/otra', cabeza, cwd=BARE)
+    crudo('update-server-info', cwd=BARE)
+    web = http.server.ThreadingHTTPServer(('127.0.0.1', 0), functools.partial(
+        type('Callado', (http.server.SimpleHTTPRequestHandler,), {'log_message': lambda *a: None}), directory=RAIZ))
+    threading.Thread(target=web.serve_forever, daemon=True).start()
+    URL = 'http://127.0.0.1:%d/rem.git' % web.server_port
+    CL = os.path.join(RAIZ, 'cl')
+    t = call('delphi_git', {'repo': CL, 'command': 'clone', 'message': URL, 'branch': 'otra'})
+    check('V45 clone branch: esa rama, con el arbol', os.path.exists(os.path.join(CL, 'a.txt')) and crudo('branch', '--show-current', cwd=CL) == 'otra', t[:300])
+    CL2 = os.path.join(RAIZ, 'cl2')
+    t = call('delphi_git', {'repo': CL2, 'command': 'clone', 'message': URL, 'branch': 'no..vale'})
+    check('V45 clone con un nombre que git no admite: su negativa, sin carpeta', mc.es(t, 'SR_GIT_NOMBRE_NO_VALE_FMT') and not os.path.exists(CL2), t[:300])
+    t = call('delphi_git', {'repo': CL2, 'command': 'clone', 'message': URL, 'branch': 'noexiste'})
+    check('V45 clone de una rama que no esta: lo dice git, sin carpeta', 'noexiste' in t and not os.path.exists(CL2), t[:300])
+    web.shutdown()
 finally:
     srv.mata()
 
