@@ -375,6 +375,25 @@ begin
     if N > 0 then
       Blockers.Add(MsgFmt(SR_RENAME_COLLISION_FMT, [ANewName, N]));
 
+    // 5. ...y una unidad que NO escribe: si usa las dos y la renombrada va
+    // detras, sus llamadas cambian de destino y compila igual (V132b de la 1.25;
+    // medido con dcc: gana la ultima del uses)
+    if (PathDenied(DefPath) = '') and not MismoIdentificador(Ident, ANewName) then
+    begin
+      var Carpetas: TArray<string> := nil;
+      if Result.GetValue('scope') is TJSONArray then
+        for var V in TJSONArray(Result.GetValue('scope')) do
+          Carpetas := Carpetas + [V.Value];
+      var Cambian := UsosQueCambiariaDeDestino(AFilePath, DefPath, Ident, ANewName, Touched.ToArray, Carpetas);
+      if Cambian.Count > 0 then
+      begin
+        Blockers.Add(MsgFmt(SR_RENAME_CAMBIA_DESTINO_FMT, [Cambian.Count, ANewName]));
+        Result.AddPair('retargeted', Cambian);
+      end
+      else
+        Cambian.Free;
+    end;
+
     Files := Touched.Count;
     // filesTouched: en ESTA respuesta 'files' es tambien la lista de cada
     // carpeta de changes (el organizador), y aqui era un numero (1.15.0)

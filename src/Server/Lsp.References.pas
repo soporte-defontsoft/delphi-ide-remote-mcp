@@ -45,6 +45,16 @@ function FindDelphiReferences(const AFilePath: string;
 function UsosEnDisenadores(const AFilePath, AIdent: string;
   const AUnidades: TArray<string>; out AIlegibles: TArray<string>): TArray<TCandidate>;
 
+{ Los usos de ANuevo que cambiarian de destino si AIdent, de ADefPath, pasara a
+  llamarse asi: en una unidad que no se escribe (AEscritos) de ACarpetas, un
+  nombre sin calificar que hoy resuelve a una global de otra unidad, cuando la
+  de ADefPath va DESPUES en lo que ese codigo ve de sus uses: compila, y llama a
+  otra cosa. Lista de usos (path, line, line0, character0, text, resolvedTo); vacia si
+  AIdent no es una global de su interface. Lo que el motor no sabe resolver
+  cuenta (rename es estricto a proposito). }
+function UsosQueCambiariaDeDestino(const AFilePath, ADefPath, AIdent, ANuevo: string;
+  const AEscritos, ACarpetas: TArray<string>): TJSONArray;
+
 const
   // los campos de un uso (references, rename_symbol) que son la LINEA del
   // fichero tal cual: contenido, no van enmascarados (Lsp.Mascara.
@@ -1431,6 +1441,161 @@ begin
   finally
     Lineas.Free;
     Lista.Free;
+  end;
+end;
+
+{ Si AIdent es de lo que APath ensena a quien la usa: un hijo directo de su
+  seccion interface en el arbol del motor (un metodo cuelga de su clase, y una
+  rutina solo de implementation no esta). Lo que el motor no dice, cuenta. }
+function EnSuInterface(AClient: TLspClient; const APath, AIdent: string): Boolean;
+begin
+  Result := True;
+  try
+    var Simbolos := AClient.DocumentSymbols(TLspClient.PathToUri(APath));
+    try
+      if (Simbolos = nil) or not (Simbolos.GetValue('result') is TJSONArray) then
+        Exit;
+      for var V in TJSONArray(Simbolos.GetValue('result')) do
+        if (V is TJSONObject) and SameText(TJSONObject(V).GetValue<string>('name', ''), 'interface') then
+        begin
+          Result := False;
+          var Hijos := SymChildren(TJSONObject(V));
+          if Hijos <> nil then
+            for var H in Hijos do
+              if (H is TJSONObject) and MismoIdentificador(
+                 TRegEx.Match(TJSONObject(H).GetValue<string>('name', ''), PATRON_IDENT).Value, AIdent) then
+                Exit(True);
+          Exit;
+        end;
+    finally
+      Simbolos.Free;
+    end;
+  except
+    // sigue contando: esto no puede tumbar el rename
+  end;
+end;
+
+function UsosQueCambiariaDeDestino(const AFilePath, ADefPath, AIdent, ANuevo: string;
+  const AEscritos, ACarpetas: TArray<string>): TJSONArray;
+const
+  TOPE_FICHEROS = 20;
+  TOPE_POR_FICHERO = 5;
+var
+  Session: TLspSession;
+  Client: TLspClient;
+  Settings, Texto, Enc, Unidad, Patron: string;
+  Vistos: TArray<string>;
+  Salida: TJSONArray;
+
+  function PosicionEn(const AUses: TArray<string>; const AResolutor: TResolutorDeUnidades;
+    const ANombre: string): Integer;
+  begin
+    Result := -1;
+    for var K := 0 to High(AUses) do
+      if AResolutor.MismaUnidad(AUses[K], ANombre) then
+        Result := K;
+  end;
+
+  { True si este uso cambiaria de destino: queda apuntado en Salida }
+  function MiraElUso(const AFile, ALinea: string; ALine, ACol: Integer; AEnInterface: Boolean): Boolean;
+  begin
+    Result := False;
+    var Ves := UsesEnOrden(Texto, AEnInterface);
+    var Resolutor := ResolutorDeUnidades(AFile);
+    var PosNueva := PosicionEn(Ves, Resolutor, Unidad);
+    if PosNueva < 0 then
+      Exit; // no ve la unidad renombrada: sigue con lo suyo
+    var Pending: Boolean;
+    var Resp := Client.DefinitionResolved(TLspClient.PathToUri(AFile), ALine, ACol + 1, Pending);
+    var Destino := '';
+    try
+      var Uri: string;
+      var LineaDef: Integer;
+      if DefinitionLocation(Resp, Uri, LineaDef) then
+        Destino := TLspClient.UriToPath(Uri);
+    finally
+      Resp.Free;
+    end;
+    if Destino <> '' then
+    begin
+      if SameFileName(Destino, AFile) then
+        Exit; // una declaracion suya gana a cualquier uses
+      // un miembro heredado no va por los uses; lo que hoy va por ellos, si la
+      // renombrada queda delante, se queda como esta
+      Session.AbreEn(Client, Destino);
+      if not EnSuInterface(Client, Destino, ANuevo) then
+        Exit;
+      if PosicionEn(Ves, Resolutor, TPath.GetFileNameWithoutExtension(Destino)) > PosNueva then
+        Exit;
+    end;
+    var Uso := TJSONObject.Create;
+    Salida.AddElement(Uso);
+    Uso.AddPair('path', AFile);
+    Uso.AddPair('line', TJSONNumber.Create(ALine + 1));
+    Uso.AddPair('line0', TJSONNumber.Create(ALine));
+    Uso.AddPair('character0', TJSONNumber.Create(ACol));
+    Uso.AddPair('text', ALinea);
+    if Destino <> '' then
+      Uso.AddPair('resolvedTo', Destino);
+    Result := True;
+  end;
+
+begin
+  Salida := TJSONArray.Create;
+  Result := Salida;
+  try
+    Session := TLspSession.Instance;
+    Client := Session.AcquireFor(TPath.GetFullPath(AFilePath), Settings);
+    Session.AbreEn(Client, ADefPath);
+    if not EnSuInterface(Client, ADefPath, AIdent) then
+      Exit;
+    Unidad := TPath.GetFileNameWithoutExtension(ADefPath);
+    Patron := '(?i)' + PatronIdentEntero(ANuevo);
+    Vistos := nil;
+    for var D in ACarpetas do
+      for var F in WalkBajoLaRaiz(D, MascarasDe(SOURCE_EXTS)) do
+      begin
+        if Salida.Count >= TOPE_FICHEROS then
+          Exit;
+        if RutaEnLista(F, Vistos) or RutaEnLista(F, AEscritos) then
+          Continue;
+        Vistos := Vistos + [F];
+        try
+          Texto := PatchLoadText(F, Enc);
+        except
+          Continue; // references ya lo cuenta como sin leer (RENAME-022)
+        end;
+        var Codigo := CodigoPascal(Texto);
+        if not TRegEx.IsMatch(Codigo, Patron) then
+          Continue;
+        Session.AbreEn(Client, F);
+        var Lineas := SplitToLines(Codigo);
+        var Reales := SplitToLines(Texto);
+        var EnInterface := True;
+        var Mirados := 0;
+        var Hecho := False;
+        for var I := 0 to High(Lineas) do
+        begin
+          if EnInterface and TRegEx.IsMatch(Lineas[I], '(?i)(?<![\w.])implementation\b') then
+            EnInterface := False;
+          for var M in TRegEx.Matches(Lineas[I], Patron) do
+          begin
+            // calificado (UCalc.Sumar, X.Sumar): no va por los uses
+            if Copy(Lineas[I], 1, M.Index - 1).TrimRight.EndsWith('.') then
+              Continue;
+            Inc(Mirados);
+            Hecho := (Mirados > TOPE_POR_FICHERO) or
+              MiraElUso(F, Reales[I].TrimRight([#13, #10]), I, M.Index - 1, EnInterface);
+            if Hecho then
+              Break;
+          end;
+          if Hecho then
+            Break;
+        end;
+      end;
+  except
+    Salida.Free;
+    raise;
   end;
 end;
 

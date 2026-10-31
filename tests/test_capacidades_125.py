@@ -15,6 +15,9 @@ V41: delphi_changeset stage con ops: varias operaciones en una llamada, todas o 
 puerta que una suelta (una ruta de dentro de ops no tiene otra).
 V12: delphi_build da los hints en su lista, sin gastar de mas: nada en quiet, sin repetirlos en la cola, con tope y
 cuenta.
+V132b: delphi_rename_symbol niega si una unidad que no escribe cambiaria de destino en silencio: la que usa las dos,
+con la renombrada DESPUES (medido con dcc: gana la ultima del uses, y las de implementation van despues), una global
+del interface. Ni un metodo, ni una rutina solo de implementation, ni una declaracion local, ni un nombre calificado.
 
 Usage:  python tests/test_capacidades_125.py [path-to-DelphiLspMcp.exe]
 """
@@ -321,6 +324,70 @@ try:
     h = j.get('hints') or []
     check('V12 con muchos: su tope y la cuenta de todos', len(h) == 50 and j.get('hintsTotal') == 60, (len(h), j.get('hintsTotal')))
     check('V12 ...y los que no caben tampoco van a la cola', 'H2077' not in (j.get('outputTail') or ''), (j.get('outputTail') or '')[:300])
+
+    # V132b - la tercera unidad del rename
+    RN = os.path.join(RAIZ, 'rn')
+    call('delphi_create', {'kind': 'project-console', 'name': 'Rn', 'dir': RN})
+    RDPR = os.path.join(RN, 'Rn.dpr')
+
+
+    def unit(nombre, de_int='', uses_int='', uses_imp='', cuerpo=''):
+        with open(os.path.join(RN, nombre + '.pas'), 'w', newline='') as f:
+            f.write('unit %s;\r\n\r\ninterface\r\n\r\n%s%s\r\nimplementation\r\n\r\n%s%s\r\nend.\r\n' % (
+                nombre, 'uses\r\n  %s;\r\n\r\n' % uses_int if uses_int else '', de_int,
+                'uses\r\n  %s;\r\n\r\n' % uses_imp if uses_imp else '', cuerpo))
+
+
+    PIDE = 'procedure Pide;\r\nbegin\r\n  Sumar;\r\nend;\r\n'
+    unit('UCalc', 'procedure Sumar;\r\n', cuerpo='procedure Sumar;\r\nbegin\r\nend;\r\n')
+    unit('UPatch', 'procedure MarcarNuevo;\r\n\r\ntype\r\n  TC = class\r\n    procedure Otro;\r\n  end;\r\n',
+         cuerpo='procedure MarcarNuevo;\r\nbegin\r\nend;\r\n\r\nprocedure Oculto;\r\nbegin\r\nend;\r\n\r\nprocedure TC.Otro;\r\nbegin\r\nend;\r\n')
+    unit('UCambia', uses_int='UCalc, UPatch', cuerpo=PIDE)
+    unit('UCambiaImp', uses_int='UCalc', uses_imp='UPatch', cuerpo=PIDE)
+    unit('USeQueda', uses_int='UPatch, UCalc', cuerpo=PIDE)
+    unit('USeQuedaImp', uses_int='UPatch', uses_imp='UCalc', cuerpo=PIDE)
+    unit('ULocal', uses_int='UCalc, UPatch', cuerpo='procedure Sumar;\r\nbegin\r\nend;\r\n\r\n' + PIDE)
+    unit('UCalificada', uses_int='UCalc, UPatch', cuerpo='procedure Pide;\r\nbegin\r\n  UCalc.Sumar;\r\nend;\r\n')
+    unit('USinOtra', uses_int='UPatch', cuerpo='procedure Pide;\r\nbegin\r\n  UPatch.MarcarNuevo;\r\nend;\r\n')
+    with open(RDPR, encoding='utf-8-sig', newline='') as f:
+        DE_RDPR = f.read()
+    NOMBRES = ['UCalc', 'UPatch', 'UCambia', 'UCambiaImp', 'USeQueda', 'USeQuedaImp', 'ULocal', 'UCalificada', 'USinOtra']
+    with open(RDPR, 'w', encoding='utf-8', newline='') as f:
+        f.write(DE_RDPR.replace('uses\r\n', 'uses\r\n  %s,\r\n' % ', '.join("%s in '%s.pas'" % (n, n) for n in NOMBRES), 1))
+    UPATCH = os.path.join(RN, 'UPatch.pas')
+
+
+    def renombra(ident, nuevo='Sumar', modo='preview'):
+        lineas = open(UPATCH, newline='').read().split('\r\n')
+        i = next(k for k, l in enumerate(lineas) if ident in l and ('procedure' in l or 'TC.' in l))
+        return mc.como_json(call('delphi_rename_symbol', {'path': UPATCH, 'line': i, 'character': lineas[i].index(ident) + 1,
+                                                          'newname': nuevo, 'mode': modo}, t=240))
+
+
+    j = renombra('MarcarNuevo')
+    bl = ' '.join(j.get('blockers', []))
+    cambia = sorted(os.path.basename(x.get('path', '')) for x in j.get('retargeted', []))
+    check('V132b una global que tomaria los usos de otra unidad: RENAME-023, con los que cambian de destino',
+          j.get('applicable') is False and mc.es(bl, 'SR_RENAME_CAMBIA_DESTINO_FMT') and cambia == ['UCambia.pas', 'UCambiaImp.pas'], str(j)[:700])
+    check('V132b ...y dice a donde resuelven hoy', all('UCalc' in x.get('resolvedTo', '') for x in j.get('retargeted', [])) and j.get('retargeted'), str(j.get('retargeted'))[:400])
+    j = renombra('Otro')
+    check('V132b un metodo no entra en el ambito de nadie: sin RENAME-023', not mc.es(' '.join(j.get('blockers', [])), 'SR_RENAME_CAMBIA_DESTINO_FMT') and j.get('applicable') is True, str(j)[:500])
+    j = renombra('Oculto')
+    check('V132b una rutina solo de implementation tampoco', not mc.es(' '.join(j.get('blockers', [])), 'SR_RENAME_CAMBIA_DESTINO_FMT'), str(j)[:500])
+    j = renombra('MarcarNuevo', 'NombreLibre')
+    check('V132b un nombre que nadie usa: aplicable', j.get('applicable') is True and 'retargeted' not in j, str(j)[:500])
+    # sin las dos que cambian, el rename es aplicable y compila: los demas siguen con su destino
+    for n in ('UCambia', 'UCambiaImp'):
+        os.remove(os.path.join(RN, n + '.pas'))
+    with open(RDPR, encoding='utf-8-sig', newline='') as f:
+        d_ = f.read()
+    with open(RDPR, 'w', encoding='utf-8', newline='') as f:
+        f.write(d_.replace("UCambia in 'UCambia.pas', UCambiaImp in 'UCambiaImp.pas', ", ''))
+    j = renombra('MarcarNuevo')
+    check('V132b sin ellas: aplicable', j.get('applicable') is True and 'retargeted' not in j, str(j)[:600])
+    j = renombra('MarcarNuevo', modo='apply')
+    b = mc.como_json(call('delphi_build', {'project': os.path.join(RN, 'Rn.dproj'), 'platform': 'Win64', 'config': 'Debug'}, t=180))
+    check('V132b ...y lo que queda compila (el juez de que no era colision)', b.get('success') is True, str(b)[:500])
 finally:
     srv.mata()
 

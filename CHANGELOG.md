@@ -51,6 +51,12 @@ the MCP `initialize` response (`serverInfo.version`).
   the project named in its settings, and that file does not have to exist. Such a unit is linted
   with its own settings, per folder, and nothing is written in the workspace. Each folder costs
   an engine, inside `MaxEngines`. `LSP-046` is gone.
+- **`delphi_rename_symbol` refuses when a unit it does not write would silently change target**
+  (`RENAME-023`, `retargeted`). With a global of the interface, if another unit uses both and the
+  renamed one comes later in its uses, a call that resolves elsewhere today would take the new
+  symbol, and it compiles (measured with dcc: the last of the uses wins, those of `implementation`
+  count after those of `interface`). A method, a routine only in `implementation`, a local
+  declaration or a qualified call do not count.
 
 ### Fixed
 

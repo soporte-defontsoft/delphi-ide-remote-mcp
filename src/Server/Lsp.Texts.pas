@@ -4410,8 +4410,8 @@ const
     '(form bindings break), a hit inside a ' +
     'string literal (FindComponent/RTTI/StyleLookup by name), a symbol ' +
     'defined outside the workspace (RTL/components) or the new name already ' +
-    'in the code of the files it writes (a unit it does not write is not ' +
-    'looked at) = applicable=false with the reasons, and apply writes ' +
+    'in the code of the files it writes, or a unit it does not write whose calls would silently ' +
+    'change target = applicable=false with the reasons, and apply writes ' +
     'nothing. It renames CODE only: a mention in a comment keeps the old ' +
     'name (on an occurrence''s line too) and is reported as a warning for ' +
     'you to look at. Rebuild afterwards.';
@@ -4520,8 +4520,15 @@ const
   SR_RENAME_COLLISION_FMT =
     '[RENAME-021 DENIED] The new name "%s" already appears %d times in ' +
     'the code of the files this rename writes (comments and strings do not ' +
-    'count): possible collision or homonym. Only those files are looked at: ' +
-    'a unit it does not write that uses both names is not.';
+    'count): possible collision or homonym. Only those files are looked at here: ' +
+    'a unit it does not write is RENAME-023.';
+
+  { V132b de la 1.25: la tercera unidad, medida con dcc }
+  SR_RENAME_CAMBIA_DESTINO_FMT =
+    '[RENAME-023 DENIED] In %d file(s) this rename does not write ("retargeted"), ' +
+    'a call to "%s" resolves today to another unit, and the renamed symbol''s unit comes ' +
+    'later in their uses, so it would take those calls over; it still compiles. Qualify ' +
+    'those calls with their unit, or pick another name.';
 
   SN_RENAME_DESIGNER_HIT_FMT =
     '[RENAME-005] %d occurrences in %s';

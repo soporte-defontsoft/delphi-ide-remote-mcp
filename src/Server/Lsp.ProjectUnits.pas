@@ -240,6 +240,12 @@ type
   por los ambitos. No lanza: lo que no se lee no cuenta. }
 function ResolutorDeUnidades(const AFuente: string; const ADeUnFichero: string = ''): TResolutorDeUnidades;
 
+{ Las unidades de los uses de un fuente (AText), en el orden en que dcc las
+  mira: las de interface y luego las de implementation; la ULTIMA gana cuando
+  dos declaran un mismo nombre (medido con dcc, V132b de la 1.25). Con
+  ASoloInterface, lo que ve el codigo del interface. De un .dpr, la suya. }
+function UsesEnOrden(const AText: string; ASoloInterface: Boolean = False): TArray<string>;
+
 { adduses de delphi_edit: nombres de unit al uses de una seccion (interface o
   implementation) de un .pas; la clausula la escribe el motor. }
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
@@ -2952,6 +2958,29 @@ begin
   PosOtra := FinDeSeccion(ABlank, AOtra);
   if PosOtra > 0 then
     Result := FindUses(AText, PosOtra);
+end;
+
+function UsesEnOrden(const AText: string; ASoloInterface: Boolean): TArray<string>;
+
+  function DeLaClausula(const U: TUsesClause): TArray<string>;
+  begin
+    Result := nil;
+    if U.Found then
+      for var E in U.Entries do
+        Result := Result + [EntryUnitName(E)];
+  end;
+
+begin
+  var Blank := CodigoPascal(AText);
+  var PosInt := FinDeSeccion(Blank, 'interface');
+  if PosInt = 0 then
+    Exit(DeLaClausula(FindUses(AText)));
+  Result := DeLaClausula(FindUses(AText, PosInt));
+  if ASoloInterface then
+    Exit;
+  var PosImp := FinDeSeccion(Blank, 'implementation');
+  if PosImp > 0 then
+    Result := Result + DeLaClausula(FindUses(AText, PosImp));
 end;
 
 { El nucleo de adduses sobre un TEXTO (ver AddUsesToUnit): estaba dentro de
