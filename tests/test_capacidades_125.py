@@ -484,7 +484,7 @@ try:
                 + '  I := I + 1;\r\n' * 450 + 'end;\r\n\r\nend.\r\n')
     ULOC = os.path.join(LC, 'ULoc.pas')
     TEXTO_LOC = ('unit ULoc;\r\n\r\ninterface\r\n\r\nprocedure Uno;\r\nprocedure Dos(I: Integer);\r\n\r\nimplementation\r\n\r\nvar\r\n  Otro: Integer;\r\n\r\n'
-                 'procedure Uno;\r\nvar\r\n  I, J: Integer;\r\n\r\n  procedure Dentro;\r\n  begin\r\n    I := 2; // I\r\n  end;\r\n\r\nbegin\r\n  I := 1;\r\n  J := I;\r\n  Dentro;\r\nend;\r\n\r\n'
+                 "procedure Uno;\r\nvar\r\n  I, J: Integer;\r\n\r\n  procedure Dentro;\r\n  begin\r\n    I := 2; // I\r\n  end;\r\n\r\nbegin\r\n  I := 1;\r\n  J := I + Length('I');\r\n  Dentro;\r\nend;\r\n\r\n"
                  'procedure Dos(I: Integer);\r\nvar\r\n  J: Integer;\r\nbegin\r\n  J := I;\r\n  Otro := J;\r\nend;\r\n\r\nprocedure Tres;\r\nvar\r\n  I: Integer;\r\nbegin\r\n  I := 1;\r\n  Otro := I;\r\nend;\r\n\r\nend.\r\n')
     with open(ULOC, 'w', newline='') as f:
         f.write(TEXTO_LOC)
@@ -509,6 +509,7 @@ try:
     j = renombra_local('I, J: Integer', 'I', 'Cuenta')
     check('V40 una local: aplicable, solo en su rutina, con las de la anidada (su declaracion y tres usos)', j.get('applicable') is True and j.get('occurrences') == 4 and j.get('filesTouched') == 1, str(j)[:700])
     check('V40 ...y dice su alcance, sin homonimos de otras rutinas ni de otras unidades', j.get('localTo', {}).get('routine') == 'Uno' and 'lookalikes' not in j and j.get('filesScanned') == 1, str(j)[:500])
+    check('V40 una cadena con su nombre no bloquea: a una local no se llega por ahi, y se avisa', not any(mc.es(b, 'SR_RENAME_STRINGS_FMT') for b in j.get('blockers', [])) and j.get('mentionsCount', 0) >= 1, str(j)[:500])
     j = renombra_local('I, J: Integer', 'I', 'Otro')
     check('V40 un nombre libre en su rutina pero usado fuera: aplicable', j.get('applicable') is True, str(j)[:500])
     j = renombra_local('I, J: Integer', 'I', 'J')
@@ -522,7 +523,7 @@ try:
     with open(ULOC, newline='') as f:
         final = f.read()
     check('V40 apply: la de Uno y la anidada; Dos y Tres como estaban', 'Cuenta, J: Integer' in final and 'Cuenta := 2; // I' in final and 'Cuenta := 1;' in final and
-          'J := Cuenta;' in final and 'procedure Dos(I: Integer);' in final and final.count('  I: Integer;') == 1 and 'Otro := I;' in final, final[:700])
+          "J := Cuenta + Length('I');" in final and 'procedure Dos(I: Integer);' in final and final.count('  I: Integer;') == 1 and 'Otro := I;' in final, final[:700])
     b = mc.como_json(call('delphi_build', {'project': os.path.join(LC, 'Lc.dproj'), 'platform': 'Win64', 'config': 'Debug'}, t=180))
     check('V40 ...y compila', b.get('success') is True, str(b)[:500])
 finally:

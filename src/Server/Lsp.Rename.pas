@@ -376,7 +376,9 @@ begin
       for var D in DsgIlegibles do
         IleArr.Add(D);
     end;
-    if StringHits > 0 then
+    // (a una local no se llega por su nombre en una cadena: ni RTTI ni
+    // FindComponent; se queda en el aviso de las menciones)
+    if (StringHits > 0) and not EsLocal then
       Blockers.Add(MsgFmt(SR_RENAME_STRINGS_FMT, [StringHits]));
 
     // 4. collision: the new name already lives in an affected file - en su
