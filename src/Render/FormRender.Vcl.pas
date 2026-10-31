@@ -548,9 +548,8 @@ begin
         end, Raiz, Cargados, Conocidos));
       Cargando := False;
       MsCarga := Reloj.ElapsedMilliseconds;
-      Responde(FR_ROOT, Format('%s:%s:%s', [Raiz.Name, Cabecera(GPeticion.Path).Clase,
-        (if Raiz is TFrame then 'frame' else 'form')]));
-      Responde(FR_PACKAGES, Format('%d/%d', [Cargados, Conocidos]));
+      RespondeRaiz(Raiz.Name, Cabecera(GPeticion.Path).Clase, Raiz is TFrame);
+      RespondePaquetes(Cargados, Conocidos);
       Responde(FR_COMPONENTS, IntToStr(Raiz.ComponentCount));
       RespondeLoLeido(Cargador);
       YaLeido := True;
@@ -585,7 +584,7 @@ begin
       end;
       if GPeticion.Componente <> '' then
         if RectDe(F, Raiz, GPeticion.Componente, R) then
-          Responde(FR_RECT, Format('%s=%d,%d,%d,%d', [GPeticion.Componente, R.Left, R.Top, R.Width, R.Height]))
+          RespondeRect(GPeticion.Componente, R.Left, R.Top, R.Width, R.Height)
         else
           Aviso(MsgFmt(SN_RENDER_SIN_COMPONENTE_FMT, [GPeticion.Componente, Raiz.Name]));
       if GPeticion.Cajas then
@@ -594,9 +593,9 @@ begin
         GuardaPng(Bmp, GPeticion.Salida);
       MsPintado := Reloj.ElapsedMilliseconds;
       Responde(FR_FIDELITY, Usado);
-      Responde(FR_SIZE, Format('%dx%d', [Bmp.Width, Bmp.Height]));
+      RespondeTamano(Bmp.Width, Bmp.Height);
       Responde(FR_CAPTURE, GPeticion.Salida);
-      Responde(FR_MS, Format('%d,%d', [MsCarga, MsPintado]));
+      RespondeMs(MsCarga, MsPintado);
     except
       on E: Exception do
         Result := RespondeFallo(E, Cargador, Cargando, YaLeido);

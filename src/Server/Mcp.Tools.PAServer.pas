@@ -356,8 +356,7 @@ var
   M: TMatch;
 begin
   Result := '';
-  for D in TArray<string>.Create('lib\x86_64-linux-gnu', 'lib64',
-    'usr\lib\x86_64-linux-gnu', 'usr\lib64') do
+  for D in CarpetasDeLibc do
   begin
     F := TPath.Combine(TPath.Combine(ASysRoot, D), 'libc.so.6');
     if not TFile.Exists(F) then
@@ -373,26 +372,6 @@ begin
       // un libc ilegible no es motivo para abortar: se queda sin dato
     end;
   end;
-end;
-
-{ Dos distros dentro del mismo sysroot: el arbol de Debian y el de Red Hat a la
-  vez. Se detecta por las carpetas, que es lo que el linker acaba viendo. }
-function SysrootMezclado(const ASysRoot: string): Boolean;
-
-  function HayLibc(const ARel: string): Boolean;
-  begin
-    Result := TFile.Exists(TPath.Combine(TPath.Combine(ASysRoot, ARel),
-      'libc.so.6'));
-  end;
-
-begin
-  // DOS libc.so.6, uno en cada arbol. Mirar si EXISTEN las dos carpetas no
-  // vale: un Ubuntu trae /lib64 y /usr/lib64 con el cargador dentro y nada
-  // mas, asi que el primer sysroot limpio que bajo el get-sdk nuevo se acuso
-  // a si mismo de estar mezclado (medido 2026-09-20 con el del Zorin).
-  Result := (HayLibc('lib\x86_64-linux-gnu') or
-             HayLibc('usr\lib\x86_64-linux-gnu')) and
-            (HayLibc('lib64') or HayLibc('usr\lib64'));
 end;
 
 { La ficha que queda DENTRO del sysroot: de donde salio y con que. Es lo que
@@ -761,8 +740,7 @@ begin
   Result := False;
   ACopiaAsiento := '';
   ACopiaDefault := '';
-  Fichero := TPath.Combine(TPath.Combine(
-    SinBarraFinal(ARootDir), 'bin'), PLATAFORMA_DE_GETSDK + '.defaultsdkpaths');
+  Fichero := TPath.Combine(BinDelIde(ARootDir), PLATAFORMA_DE_GETSDK + '.defaultsdkpaths');
   if not TFile.Exists(Fichero) then
     Exit;
   Xml := LeeTexto(Fichero, [ltIde]);

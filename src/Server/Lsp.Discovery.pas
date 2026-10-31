@@ -198,6 +198,17 @@ function CarpetaDeSdk(const AVersion, ANombre: string): string;
   compruebe). Lo componian a mano el escaner de sysroots mezclados, la ficha
   de profiles y reseat-sdk, y la puerta de leer iba a por la cuarta. }
 function SysrootDeSdk(const AVersion, AXml: string): string;
+{ Las carpetas de un sysroot donde vive su libc.so.6: las de la familia de
+  Debian, las de la de Red Hat, juntas. Las tenian escritas VersionDeGlibc y los
+  dos que miran si esta mezclado (P8 del revisor). }
+function CarpetasDeLibc: TArray<string>;
+{ Dos distros dentro del mismo sysroot: el arbol de Debian y el de Red Hat a la
+  vez, que es lo que dejaba el get-sdk de antes de 2026-09-20. DOS libc.so.6, uno
+  en cada arbol: la unica senal fiable de que dos maquinas escribieron en la
+  misma carpeta. Que existan a la vez /lib64 y /usr/lib/x86_64-linux-gnu NO lo
+  es: un Ubuntu trae /lib64 con el cargador dentro y nada mas, y mirando
+  carpetas se acusaba de mezcla a un sysroot limpio (medido 2026-09-20). }
+function SysrootMezclado(const ASysRoot: string): Boolean;
 
 { Los campos de CONEXION de un perfil del IDE (Profile_host, Profile_port,
   Profile_platform y Profile_password, esta ya cifrada por paclient), leidos
@@ -326,6 +337,11 @@ function IdeKnownPackages(const AVersion: string): TArray<TIdePackage>;
   desactivados: los de SU lista, sin la x64 que IdeKnownPackages junta para
   listar. Lo que no debe cargar quien hace de ese IDE (el renderizador). }
 function IdeBplsDesactivados32(const AVersion: string): TArray<string>;
+{ Si el valor de una clave de paquetes del IDE (la ruta de un .bpl) es uno de los
+  de esa lista: por el nombre del fichero, que el registro no escribe igual la
+  misma ruta, y por LA clave de una ruta (P22 del revisor: aqui se comparaba
+  con el pliegue del idioma y en IdeKnownPackages con esta). }
+function EsBplDesactivado(const AValor: string; const ADesactivados: TArray<string>): Boolean;
 
 type
   TValorIde = record
@@ -538,9 +554,9 @@ var
   F, N: string;
 begin
   Result := '';
-  if not TDirectory.Exists(ARootDir + 'bin') then
+  if not TDirectory.Exists(BinDelIde(ARootDir)) then
     Exit;
-  for F in TDirectory.GetFiles(ARootDir + 'bin', 'dcc32*.dll') do
+  for F in TDirectory.GetFiles(BinDelIde(ARootDir), 'dcc32*.dll') do
   begin
     N := LowerCase(TPath.GetFileName(F));
     if (Length(N) = 12) and CharInSet(N[6], ['0'..'9']) and
@@ -581,10 +597,10 @@ begin
       Info := Default(TRadStudioInfo);
       Info.Version := Ver;
       Info.RootDir := IncludeTrailingPathDelimiter(RootDir);
-      Exe := Info.RootDir + 'bin\DelphiLSP.exe';
+      Exe := TPath.Combine(BinDelIde(Info.RootDir), 'DelphiLSP.exe');
       if FileExists(Exe) then
         Info.DelphiLspExe := Exe;
-      Bat := Info.RootDir + 'bin\rsvars.bat';
+      Bat := TPath.Combine(BinDelIde(Info.RootDir), 'rsvars.bat');
       if FileExists(Bat) then
         Info.RsVarsBat := Bat;
       // como se llama a si misma: Personalities (valor por defecto "RAD
@@ -604,7 +620,7 @@ begin
           Info.InstalledUpdate := Reg.ReadString('Main Product Update').Trim;
         Reg.CloseKey;
       end;
-      InfoDelExe(Info.RootDir + 'bin\bds.exe', Info.Edition, Info.Build);
+      InfoDelExe(TPath.Combine(BinDelIde(Info.RootDir), 'bds.exe'), Info.Edition, Info.Build);
       Info.SufijoCompilador := SufijoDelCompilador(Info.RootDir);
       AMap.Add(Ver, Info);
     end;
@@ -623,7 +639,7 @@ end;
 
 function PlataformaDelIde(const ARootDir: string): string;
 begin
-  if not FileExists(TPath.Combine(TPath.Combine(ARootDir, 'bin'), 'bds.exe')) and
+  if not FileExists(TPath.Combine(BinDelIde(ARootDir), 'bds.exe')) and
      FileExists(TPath.Combine(TPath.Combine(ARootDir, 'bin64'), 'bds.exe')) then
     Result := 'Win64'
   else
@@ -932,6 +948,11 @@ begin
   end;
 end;
 
+function NombreDeBpl(const AValor: string): string;
+begin
+  Result := TPath.GetFileName(ConBarrasDeWindows(AValor));
+end;
+
 function IdeKnownPackages(const AVersion: string): TArray<TIdePackage>;
 var
   Map: TDictionary<string, TIdePackage>;
@@ -950,7 +971,7 @@ var
     begin
       // The value NAME is the bpl path ($(BDSBIN)\dclx370.bpl or absolute);
       // the DATA is the description the IDE shows.
-      FileKey := TPath.GetFileName(ConBarrasDeWindows(V.Nombre));
+      FileKey := NombreDeBpl(V.Nombre);
       if FileKey = '' then
         Continue;
       if AsNames then
@@ -1007,7 +1028,12 @@ function IdeBplsDesactivados32(const AVersion: string): TArray<string>;
 begin
   Result := nil;
   for var V in IdeValoresDeClave(AVersion, 'Disabled Packages', False) do
-    Result := Result + [TPath.GetFileName(ConBarrasDeWindows(V.Nombre))];
+    Result := Result + [ClaveDeRuta(NombreDeBpl(V.Nombre))];
+end;
+
+function EsBplDesactivado(const AValor: string; const ADesactivados: TArray<string>): Boolean;
+begin
+  Result := MatchStr(ClaveDeRuta(NombreDeBpl(AValor)), ADesactivados);
 end;
 
 function IdeValoresDeClave(const AVersion, ASubKey: string;
@@ -1287,6 +1313,29 @@ begin
   if Result.Contains('$(BDSPLATFORMSDKSDIR)') then
     Result := Result.Replace('$(BDSPLATFORMSDKSDIR)', IdeSdksDir(AVersion),
       [rfIgnoreCase]);
+end;
+
+const
+  LIBC_DEBIAN: array[0..1] of string = ('lib\x86_64-linux-gnu', 'usr\lib\x86_64-linux-gnu');
+  LIBC_REDHAT: array[0..1] of string = ('lib64', 'usr\lib64');
+
+function CarpetasDeLibc: TArray<string>;
+begin
+  Result := [LIBC_DEBIAN[0], LIBC_DEBIAN[1], LIBC_REDHAT[0], LIBC_REDHAT[1]];
+end;
+
+function SysrootMezclado(const ASysRoot: string): Boolean;
+
+  function HayLibc(const ACarpetas: array of string): Boolean;
+  begin
+    Result := False;
+    for var C in ACarpetas do
+      if TFile.Exists(TPath.Combine(TPath.Combine(ASysRoot, C), 'libc.so.6')) then
+        Exit(True);
+  end;
+
+begin
+  Result := HayLibc(LIBC_DEBIAN) and HayLibc(LIBC_REDHAT);
 end;
 
 function CamposDePerfil(const AXml: string): TCamposDePerfil;

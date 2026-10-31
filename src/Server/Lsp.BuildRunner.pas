@@ -1677,15 +1677,7 @@ begin
     Exit;
   if Raiz.Contains('$(') then
     Exit; // con macros sin expandir no se puede mirar el disco
-  // DOS libc.so.6, uno en cada arbol: la unica senal fiable de que dos
-  // maquinas escribieron en la misma carpeta. Que existan a la vez /lib64 y
-  // /usr/lib/x86_64-linux-gnu NO lo es - un Ubuntu trae /lib64 con el
-  // cargador dentro y nada mas, y mirando carpetas se acusaba de mezcla a un
-  // sysroot recien traido y perfectamente limpio (medido 2026-09-20).
-  if (TFile.Exists(TPath.Combine(Raiz, 'lib\x86_64-linux-gnu\libc.so.6')) or
-      TFile.Exists(TPath.Combine(Raiz, 'usr\lib\x86_64-linux-gnu\libc.so.6'))) and
-     (TFile.Exists(TPath.Combine(Raiz, 'lib64\libc.so.6')) or
-      TFile.Exists(TPath.Combine(Raiz, 'usr\lib64\libc.so.6'))) then
+  if SysrootMezclado(Raiz) then
     Result := Raiz;
 end;
 
@@ -1785,10 +1777,8 @@ var
       end;
       if Vars.IndexOfName(Nombre) >= 0 then
         V := Vars.Values[Nombre]
-      else if (Nombre <> '') and not StartsText('DELPHI_MCP_', Nombre) then
-        V := GetEnvironmentVariable(Nombre)
       else
-        V := '';
+        V := VariableQueVeElBuild(Nombre);
       Result := Copy(Result, 1, P - 1) + V + Copy(Result, Q + 1, MaxInt);
       P := Pos('$(', Result, P + Length(V));
     end;

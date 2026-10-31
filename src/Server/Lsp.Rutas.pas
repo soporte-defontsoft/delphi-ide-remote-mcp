@@ -174,6 +174,10 @@ function EsRutaAbsoluta(const AValue: string): Boolean;
   desde la del fichero que lo escribe -. Vacia, ABase. }
 function RutaDesde(const ABase, AValor: string; const ACarpetaActual: string = ''): string;
 
+{ La carpeta bin de una instalacion del IDE, con o sin barra en ARaiz: la
+  componian a mano doce sitios, tres formas (P25 del revisor). }
+function BinDelIde(const ARaiz: string): string;
+
 { Una ruta A MEDIAS: "\x" (o "/x"), la raiz de la unidad ACTUAL de quien la
   lea, o "X:y", la carpeta actual de esa unidad. Ni completa ni relativa a
   una carpeta: TPath.IsPathRooted la da por completa. La regla de RutaDesde,
@@ -726,6 +730,11 @@ function EsRutaAMedias(const AValor: string): Boolean;
 begin
   Result := (AValor <> '') and not EsRutaAbsoluta(AValor) and
     (CharInSet(AValor[1], ['\', '/']) or ((Length(AValor) >= 2) and (AValor[2] = ':')));
+end;
+
+function BinDelIde(const ARaiz: string): string;
+begin
+  Result := TPath.Combine(ARaiz, 'bin');
 end;
 
 function RutaDesde(const ABase, AValor, ACarpetaActual: string): string;

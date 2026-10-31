@@ -264,7 +264,8 @@ uses
   Lsp.Identidad,
   Lsp.Lugares,
   Lsp.Mascara,
-  Lsp.DesignerForma;
+  Lsp.DesignerForma,
+  Lsp.Sandbox;
 
 const
   // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo
@@ -985,10 +986,9 @@ begin
     Result := GetEnvironmentVariable('USERNAME');
   if GetEnvironmentVariable('USERDOMAIN') <> '' then
     Result := GetEnvironmentVariable('USERDOMAIN') + '\' + Result;
-  // Dos senales, porque ninguna depende del idioma de Windows a la vez: el
-  // nombre de la cuenta y donde cae su perfil.
-  AEsSistema := Result.EndsWith('\SYSTEM', True) or SameText(Result, 'SYSTEM') or
-    SinMayusculas(GetEnvironmentVariable('USERPROFILE')).EndsWith('\config\systemprofile');
+  // el juez es el SID, que no depende del idioma de Windows ni del entorno
+  // (P11 del revisor: por el nombre de la cuenta y el texto de USERPROFILE)
+  AEsSistema := SidDeEstaCuenta = SID_DE_LOCALSYSTEM;
 end;
 
 { En que MAQUINA corre ESTE proceso. Con dos servidores del mismo nombre y

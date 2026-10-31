@@ -822,10 +822,7 @@ begin
             // whatever arrived, so the same source produced a CRLF file one
             // way and an LF one the other (measured 2026-08-25). One project,
             // one convention.
-            // con el normalizador de todos (un CR suelto tambien es salto)
-            Op.Content := ConSalto(AContent, #13#10);
-            if (Op.Content <> '') and not TieneSaltoFinal(Op.Content) then
-              Op.Content := Op.Content + #13#10;
+            Op.Content := TextoQueNace(AContent, #13#10);
             if WillExist(C, Op.Path) then
               Exit(MsgFmt(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
           end;

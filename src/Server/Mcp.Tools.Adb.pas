@@ -308,13 +308,7 @@ begin
   // UN dispositivo (adb -s): discover, devices, connect y disconnect lo
   // callaban (Opus en Hermes, 1.22.1)
   var Suyos, VaCon: string;
-  var Sobra := ParametroQueNoVa(IfThen(Cmd = '', 'devices', Cmd), [
-      'discover', '', 'devices', '',
-      'logcat', 'filter lines out device',
-      'connect', 'address', 'disconnect', 'address',
-      'install', 'apk device', 'run', 'app device', 'stop', 'app device',
-      'screenshot', 'out inline maxwidth device',
-      'tap', 'x y frame device', 'key', 'key device'],
+  var Sobra := ParametroQueNoVa(IfThen(Cmd = '', 'devices', Cmd), ADB_CAMPOS,
     ['device', Params.Device, '',
      'address', Params.Address, '', 'apk', Params.Apk, '', 'app', Params.App, '',
      'out', Params.Out, '', 'x', Params.X, '', 'y', Params.Y, '', 'key', Params.Key, '',

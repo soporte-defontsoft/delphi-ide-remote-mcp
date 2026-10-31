@@ -100,9 +100,21 @@ procedure PurgaContenedoresHuerfanos;
 procedure EnterSpawn;
 procedure LeaveSpawn;
 
+const
+  { El SID de LocalSystem: "S-1-5-18", en cualquier idioma de Windows. }
+  SID_DE_LOCALSYSTEM = 'S-1-5-18';
+
+{ El SID de la cuenta de este proceso, leido de su token ('' si no se pudo). }
+function SidDeEstaCuenta: string;
+
 { Un solo lector del entorno: sin secretos del servidor y con ajustes fijos
   del hijo. No modifica el entorno del servidor ni carreras entre llamadas. }
 function EntornoSinConfiguracion(const AFijas: TArray<string> = nil): string;
+
+{ Lo que msbuild ve de una variable del entorno del servidor: su valor, y las
+  de la configuracion (DELPHI_MCP_*), que no le llegan, vacias. Lo preguntaban
+  dos, y uno no las quitaba: EL prefijo, aqui (P5 del revisor). }
+function VariableQueVeElBuild(const ANombre: string): string;
 
 implementation
 
@@ -114,6 +126,9 @@ uses
   Lsp.Texts,
   Lsp.ProcessLaunch,
   Lsp.Casa; // ServerDir y ClaveDeCarpeta: la marca de esta casa
+
+const
+  PREFIJO_DE_CONFIGURACION = 'DELPHI_MCP_';
 
 var
   GSpawnLock: TObject;
@@ -213,6 +228,13 @@ begin
   end;
 end;
 
+function VariableQueVeElBuild(const ANombre: string): string;
+begin
+  Result := '';
+  if (ANombre <> '') and not StartsText(PREFIJO_DE_CONFIGURACION, ANombre) then
+    Result := GetEnvironmentVariable(ANombre);
+end;
+
 { El bloque de entorno de este proceso sin las DELPHI_MCP_* (Unicode, cada
   variable terminada en nulo y un nulo mas al final, como lo pide
   CreateProcess). La temporal NO se toca: el AppContainer sobrescribe TMP/TEMP
@@ -238,7 +260,7 @@ begin
       while Q^ <> #0 do
       begin
         Linea := Q;
-        Sustituida := StartsText('DELPHI_MCP_', Linea);
+        Sustituida := StartsText(PREFIJO_DE_CONFIGURACION, Linea);
         for var Fija in AFijas do
           if StartsText(Copy(Fija, 1, Pos('=', Fija)), Linea) then
             Sustituida := True;

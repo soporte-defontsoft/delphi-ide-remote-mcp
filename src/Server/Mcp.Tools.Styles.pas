@@ -1382,7 +1382,7 @@ begin
   if Rc <> '' then
   begin
     Res := TPath.ChangeExtension(Rc, '.res');
-    Brcc := TPath.Combine(DiscoverRadStudio.RootDir, 'bin\brcc32.exe');
+    Brcc := TPath.Combine(BinDelIde(DiscoverRadStudio.RootDir), 'brcc32.exe');
   end;
   Motivo := DerivadosDenegados(Files, Dir, Rc, Res, Brcc);
   if Motivo <> '' then

@@ -1132,7 +1132,7 @@ begin
   Result := ConBarrasDeWindows(AValor);
   if AComun <> '' then
     Result := StringReplace(Result, '$(BDSCOMMONDIR)', AComun, [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, '$(BDSBIN)', ARaiz + '\bin', [rfReplaceAll, rfIgnoreCase]);
+  Result := StringReplace(Result, '$(BDSBIN)', BinDelIde(ARaiz), [rfReplaceAll, rfIgnoreCase]);
   Result := StringReplace(Result, '$(BDS)', ARaiz, [rfReplaceAll, rfIgnoreCase]);
 end;
 
@@ -1145,7 +1145,7 @@ begin
   var Raiz := PrefijoSinBarra(AInfo.RootDir);
   var Comun := BdsCommonDir(AInfo);
   for var V in IdeValoresDeClave(AInfo.Version, 'Known Packages', False) do
-    if not MatchText(TPath.GetFileName(ConBarrasDeWindows(V.Nombre)), Off) then
+    if not EsBplDesactivado(V.Nombre, Off) then
       Result := Result + [RutaDePaqueteDelIde(V.Nombre, Raiz, Comun)];
 end;
 

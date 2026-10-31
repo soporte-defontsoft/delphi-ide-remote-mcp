@@ -861,9 +861,12 @@ function NegativaDePlataforma(const ARaw: string): string;
 function ValidOutputFolder(const AFolder: string; out AClean: string): Boolean;
 
 const
-  { The platforms paclient.exe accepts for --platform= (its own help lists
-    exactly these). Narrower than CanonicalPlatform - Android deploys without
-    PAServer. One definition, shared by the gate and delphi_paserver. }
+  { LISTA QUE IMITA A UN JUEZ, declarada: the platforms paclient.exe accepts
+    for --platform=. Its own help lists exactly these (measured 2026-10-31), but
+    it answers only in prose, so asking it would be more fragile than this. A
+    platform an update adds is refused here until it is written down. Narrower
+    than CanonicalPlatform - Android deploys without PAServer. One definition,
+    shared by the gate and delphi_paserver. }
   PACLIENT_PLATFORMS: array[0..4] of string =
     ('Win32', 'Win64', 'WinARM64EC', 'OSX64', 'Linux64');
 
@@ -1188,7 +1191,8 @@ uses
   Lsp.Patch, // LeeTexto: la puerta de leer (el .dproj y sus Import, en la jaula)
   Lsp.Rutas, // RutaDesde: EL resolutor de una ruta leida de un fichero
   System.Character,
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Sandbox;
 
 { El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
   entre comillas: un Condition="'$(A)'>'1'" no la cierra. 0 si no hay. }
@@ -3021,7 +3025,7 @@ begin
           Result.Estado := eDudosa
         else if Banderas.TryGetValue(ANombre, Result.Valor) then
           Result.Estado := eSabida
-        else if MatchText(ANombre, AExternas) or (GetEnvironmentVariable(ANombre) <> '') then
+        else if MatchText(ANombre, AExternas) or (VariableQueVeElBuild(ANombre) <> '') then
           Result.Estado := eDesconocida
         else if Definidas.IndexOf(ANombre) >= 0 then
           Result.Estado := eSabida
@@ -4659,7 +4663,7 @@ var
 begin
   Ejecutados := [];
   Leidos := [];
-  if (ARaizDelIde = '') or not Recorre(TPath.Combine(ARaizDelIde, 'bin\CodeGear.Delphi.Targets'), 0) then
+  if (ARaizDelIde = '') or not Recorre(TPath.Combine(BinDelIde(ARaizDelIde), 'CodeGear.Delphi.Targets'), 0) then
     Exit(EventosDeBuild);
   Result := Ejecutados;
 end;

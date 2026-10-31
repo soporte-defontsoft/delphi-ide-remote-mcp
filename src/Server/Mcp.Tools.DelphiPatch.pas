@@ -272,16 +272,14 @@ begin
     Result := WriteTargetDenied(Params.Path);
     if Result <> '' then
       Exit;
-    Exit(AddUsesToUnit(TPath.GetFullPath(Params.Path),
-      Params.AddUses.Split([';', ','], TStringSplitOptions.ExcludeEmpty), Params.Section));
+    Exit(AddUsesToUnit(TPath.GetFullPath(Params.Path), NombresDeUnidades(Params.AddUses), Params.Section));
   end;
   if Params.RemoveUses.Trim <> '' then
   begin
     Result := WriteTargetDenied(Params.Path);
     if Result <> '' then
       Exit;
-    Exit(RemoveUsesFromUnit(TPath.GetFullPath(Params.Path),
-      Params.RemoveUses.Split([';', ','], TStringSplitOptions.ExcludeEmpty), Params.Section));
+    Exit(RemoveUsesFromUnit(TPath.GetFullPath(Params.Path), NombresDeUnidades(Params.RemoveUses), Params.Section));
   end;
   // un ancla de VARIAS lineas es un BLOQUE: la tanda de una entrada, como en
   // edits (Lsp.Patch.TandaDeUnBloque, EDIT-001 de la 1.20)

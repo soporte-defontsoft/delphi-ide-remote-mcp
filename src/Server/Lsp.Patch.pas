@@ -311,6 +311,14 @@ function ReescribeConSusSaltos(const AAntes, ANuevo: string): string;
   y el create del changeset solo miraba CRLF y LF: "uno\rdos\r" salia
   "uno\rdos\r\r\n" (novena revision). }
 function ConSalto(const AText, ASalto: string): string;
+{ El texto con que nace un fichero: ConSalto y, si no esta vacio, acabado en un
+  salto. Estaba escrito cuatro veces: el create de un changeset, createunit y la
+  unit y el .inc de delphi_create (V215). delphi_textedit no lo llama: escribe
+  lo que le dan, sin anadirle el final. }
+function TextoQueNace(const AText, ASalto: string): string;
+{ Una unit vacia, la del IDE, con ese salto: createunit y delphi_create la
+  escribian cada uno (P9 del revisor). }
+function EsqueletoDeUnit(const AUnitName, ASalto: string): string;
 
 { Si el texto lleva algun salto de linea (CR o LF): la pregunta "un ancla es
   UNA linea" de DoEdit, DoEditLine, FragmentoALinea y el stage de un changeset
@@ -2411,6 +2419,18 @@ begin
   Result := AText.Replace(#13#10, #10).Replace(#13, #10);
   if ASalto <> #10 then
     Result := Result.Replace(#10, ASalto);
+end;
+
+function TextoQueNace(const AText, ASalto: string): string;
+begin
+  Result := ConSalto(AText, ASalto);
+  if (Result <> '') and not TieneSaltoFinal(Result) then
+    Result := Result + ASalto;
+end;
+
+function EsqueletoDeUnit(const AUnitName, ASalto: string): string;
+begin
+  Result := ConSalto(Format('unit %s;'#10#10'interface'#10#10'implementation'#10#10'end.'#10, [AUnitName]), ASalto);
 end;
 
 function EsDelMotorPascal(const APath: string): Boolean;
@@ -4961,18 +4981,14 @@ begin
           // have beats a create + N anchored patches). EOL normalized to
           // CRLF - the JSON channel often arrives LF-only - and the result
           // is audited below like any other write.
-          Skel := ConSalto(A.Content, SaltoPedido(A.Eol));
-          if not Skel.EndsWith(#10) then
-            Skel := Skel + SaltoPedido(A.Eol);
+          Skel := TextoQueNace(A.Content, SaltoPedido(A.Eol));
           Note := MsgText(SF_EDIT_CONTENIDO_APORTADO);
         end
         else
         begin
-          Skel := Format('unit %s;'#13#10#13#10'interface'#13#10#13#10 +
-            'implementation'#13#10#13#10'end.'#13#10, [UnitName]);
           // eol=lf tambien sin content: decia "LF" y escribia CRLF
           // (verificacion de la tercera ronda)
-          Skel := ConSalto(Skel, SaltoPedido(A.Eol));
+          Skel := EsqueletoDeUnit(UnitName, SaltoPedido(A.Eol));
           Note := MsgText(SF_EDIT_ESQUELETO_ESTANDAR_IDE);
         end;
         CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));

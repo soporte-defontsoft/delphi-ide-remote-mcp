@@ -826,6 +826,19 @@ procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string;
 function ParametroQueNoVa(const AModo: string; const ATabla, AEnviados: array of string;
   out ASuyos, AVaCon: string): string;
 
+const
+  { Los campos de cada comando de delphi_adb, la tabla de ParametroQueNoVa: la
+    leen la tool y la puerta (AdbArgDenied). Los que llevan device hablan con UN
+    dispositivo, y la puerta exige que se nombre: un comando nuevo se escribe
+    una vez (P6 del revisor: eran dos listas). }
+  ADB_CAMPOS: array[0..21] of string = (
+    'discover', '', 'devices', '',
+    'logcat', 'filter lines out device',
+    'connect', 'address', 'disconnect', 'address',
+    'install', 'apk device', 'run', 'app device', 'stop', 'app device',
+    'screenshot', 'out inline maxwidth device',
+    'tap', 'x y frame device', 'key', 'key device');
+
 { '' salvo que APath sea un FICHERO con el atributo de solo lectura: su
   negativa (SYS-029). Para quien SUSTITUYE el contenido de un fichero
   (AtomicWrite, delphi_upload): renombrarlo o borrarlo si se puede con el
@@ -1666,10 +1679,17 @@ begin
   // que casualmente es el unico conectado - se nombra o nada. Va tras las
   // reglas de formato para que el error mas util conteste primero. Desde
   // v0.98 la lista es del workspace y vacia = ninguno: sin excepcion.
-  if (ArgStr(AArguments, 'device').Trim = '') and
-     MatchText(Trim(ArgStr(AArguments, 'command')),
-       ['install', 'run', 'stop', 'tap', 'key', 'logcat', 'screenshot']) then
-    Exit(MsgText(SR_ADB_ALLOWLIST_DEVICE));
+  if (ArgStr(AArguments, 'device').Trim = '') then
+  begin
+    var Cmd := Trim(ArgStr(AArguments, 'command'));
+    var I := 0;
+    while I < High(ADB_CAMPOS) do
+    begin
+      if SameText(ADB_CAMPOS[I], Cmd) and MatchText('device', ADB_CAMPOS[I + 1].Split([' '])) then
+        Exit(MsgText(SR_ADB_ALLOWLIST_DEVICE));
+      Inc(I, 2);
+    end;
+  end;
 end;
 
 { delphi_build's platform/config/target reach msbuild's command line. Until

@@ -221,6 +221,14 @@ function RutaDeComponente(ARaiz, AComp: TComponent): string;
 { EL escritor de BOX=, el que lee Lsp.FormRender.LeeRespuestaDeRender }
 procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean;
   const AContenido: string = '');
+{ Los escritores de ROOT=, PACKAGES=, RECT=, SIZE= y MS=, los que lee
+  Lsp.FormRender.LeeRespuestaDeRender: cada renderizador los escribia a mano, y
+  si uno deriva el lector deja los campos vacios sin decir nada (P7 del revisor). }
+procedure RespondeRaiz(const ANombre, AClase: string; AEsFrame: Boolean);
+procedure RespondePaquetes(ACargados, AConocidos: Integer);
+procedure RespondeRect(const ANombre: string; AX, AY, AAncho, AAlto: Integer);
+procedure RespondeTamano(AAncho, AAlto: Integer);
+procedure RespondeMs(ACarga, APintado: Int64);
 { Lo que el cargador dice de lo leido, igual en los dos renderizadores:
   SUBSTITUTED=, IGNORED=, WARNING=, PARTIAL= y READ= }
 procedure RespondeLoLeido(ACargador: TCargador);
@@ -570,6 +578,31 @@ procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlt
   const AContenido: string);
 begin
   Responde(FR_BOX, Format('%s|%s|%s|%d,%d,%d,%d|%d|%s', [ARuta, AClase, APadre, AX, AY, AAncho, AAlto, Ord(AVisible), AContenido]));
+end;
+
+procedure RespondeRaiz(const ANombre, AClase: string; AEsFrame: Boolean);
+begin
+  Responde(FR_ROOT, Format('%s:%s:%s', [ANombre, AClase, (if AEsFrame then 'frame' else 'form')]));
+end;
+
+procedure RespondePaquetes(ACargados, AConocidos: Integer);
+begin
+  Responde(FR_PACKAGES, Format('%d/%d', [ACargados, AConocidos]));
+end;
+
+procedure RespondeRect(const ANombre: string; AX, AY, AAncho, AAlto: Integer);
+begin
+  Responde(FR_RECT, Format('%s=%d,%d,%d,%d', [ANombre, AX, AY, AAncho, AAlto]));
+end;
+
+procedure RespondeTamano(AAncho, AAlto: Integer);
+begin
+  Responde(FR_SIZE, Format('%dx%d', [AAncho, AAlto]));
+end;
+
+procedure RespondeMs(ACarga, APintado: Int64);
+begin
+  Responde(FR_MS, Format('%d,%d', [ACarga, APintado]));
 end;
 
 function ListaClasesSinLeer: Integer;

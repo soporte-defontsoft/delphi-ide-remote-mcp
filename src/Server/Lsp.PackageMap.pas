@@ -24,7 +24,8 @@ uses
   System.IOUtils,
   System.SyncObjs,
   System.Generics.Collections,
-  Lsp.Pascal; // ClaveDeIdentificador: el nombre de una unit, plegado entero
+  Lsp.Pascal, // ClaveDeIdentificador: el nombre de una unit, plegado entero
+  Lsp.Rutas;  // BinDelIde
 
 const
   // no esta en Winapi.Windows: el modulo se mapea como imagen de recursos,
@@ -70,7 +71,7 @@ var
 begin
   GMapa.Clear;
   GRoot := ARootDir;
-  Bin := TPath.Combine(ARootDir, 'bin');
+  Bin := BinDelIde(ARootDir);
   if not TDirectory.Exists(Bin) then
     Exit;
   for F in TDirectory.GetFiles(Bin, '*.bpl') do

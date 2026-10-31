@@ -65,17 +65,17 @@ uses
   Lsp.Rutas,
   Lsp.DesignerMeta, // TRaizDeDiseno: lo que es la raiz que se crea
   System.Generics.Collections,
-  Lsp.Discovery;
+  Lsp.Discovery,
+  Lsp.ConfigFabricator;
 
 const
   CRLF = #13#10;
   // los ambitos de unidad de un proyecto nuevo, como los reparte el IDE (la
   // nota, en el .dproj de abajo; medidos en los Samples de la 37.0): los de
-  // todas las plataformas, los de la VCL y los de Windows (Win32 con Bde).
+  // todas las plataformas y los de Windows (Lsp.ConfigFabricator: AMBITOS_BASE,
+  // AMBITOS_WIN64), los de la VCL y Win32 con Bde.
   // UNA lista para el .dproj que se crea y para el juez de un nombre de unit
-  AMBITOS_BASE = 'System;Xml;Data;Datasnap;Web;Soap;';
   AMBITOS_VCL = 'Vcl;Vcl.Imaging;Vcl.Touch;Vcl.Samples;Vcl.Shell;';
-  AMBITOS_WIN64 = 'Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;';
   AMBITOS_WIN32 = AMBITOS_WIN64 + 'Bde;';
   // El ProjectVersion que escribe el IDE de la casa al crear un proyecto (13.1
   // = 20.4; el 13.2 escribe 20.5 y sube el 20.4 al abrir, quitando ademas las
@@ -1213,16 +1213,10 @@ begin
     Result := ContenidoDeUnitNoValido(AUnitName, ABody);
     if Result <> '' then
       Exit;
-    ABody := ConSalto(ABody, CRLF); // el normalizador de todos (Lsp.Patch)
-    if not ABody.EndsWith(CRLF) then
-      ABody := ABody + CRLF;
+    ABody := TextoQueNace(ABody, CRLF);
   end
   else
-    ABody :=
-      'unit ' + AUnitName + ';' + CRLF + CRLF +
-      'interface' + CRLF + CRLF +
-      'implementation' + CRLF + CRLF +
-      'end.' + CRLF;
+    ABody := EsqueletoDeUnit(AUnitName, CRLF);
 end;
 
 { Un fuente SUELTO en una carpeta ABSOLUTA de la jaula, que ningun proyecto
@@ -1329,9 +1323,7 @@ begin
     Nombre := TPath.ChangeExtension(Nombre, '').TrimRight(['.']);
   if AContent.Trim = '' then
     Exit(MsgText(SR_CREATE_INCLUDE_CONTENT));
-  Body := ConSalto(AContent, CRLF);
-  if not Body.EndsWith(CRLF) then
-    Body := Body + CRLF;
+  Body := TextoQueNace(AContent, CRLF);
   Dir := ADir;
   if ADprPath.Trim <> '' then
   begin

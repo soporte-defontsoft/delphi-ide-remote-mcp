@@ -245,8 +245,7 @@ begin
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit;
-  P := TPath.Combine(TPath.Combine(
-    SinBarraFinal(Info.RootDir), 'bin'), 'paclient.exe');
+  P := TPath.Combine(BinDelIde(Info.RootDir), 'paclient.exe');
   if TFile.Exists(P) then
     Result := P;
 end;

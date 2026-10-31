@@ -41,6 +41,39 @@ LANZA = r'\b(?:RunCaptured(?:In|EnContenedor)?|RunDetached|CreateProcess\w*|Shel
 
 # (nombre, formato, casas: [(fichero, funcion o '*' = todo el fichero)], por que)
 REGLAS = [
+    # seccion 6 de la 1.25, revisor del paisaje del 31-oct: formatos que estaban a mano en dos o mas sitios
+    ('un fichero que nace acabado en salto a mano', r"\.EndsWith\(\s*(?:CRLF|#10|#13#10)\s*\)",
+     [('Lsp.Patch.pas', 'TieneSaltoFinal'),
+      # otra pregunta: anadir a una nota del vault, no nacer
+      ('Mcp.Tools.Vault.pas', 'TVaultAppendTool.ExecuteWithParams')],
+     'TextoQueNace (Lsp.Patch, V215): createunit, delphi_create y el create de un changeset'),
+    ('una unit vacia compuesta a mano', r"'unit %s;'#",
+     [('Lsp.Patch.pas', 'EsqueletoDeUnit')], 'EsqueletoDeUnit (Lsp.Patch, P9)'),
+    ('la carpeta bin del IDE a mano', r"(?:\+\s*|,\s*)'\\?bin(?:\\[^']*)?'",
+     [('Lsp.Rutas.pas', 'BinDelIde'),
+      # el ayudante del render no compila Lsp.Rutas; el bin del apk es otra carpeta
+      ('FormRender.Fmx.pas', 'AplicaEstilo'), ('Lsp.Dproj.pas', 'PaqueteDeAndroid')],
+     'BinDelIde (Lsp.Rutas, P25)'),
+    ('donde vive la libc de un sysroot a mano', r"lib\\x86_64-linux-gnu|'libc\.so\.6'",
+     [('Lsp.Discovery.pas', '*'), ('Mcp.Tools.PAServer.pas', 'VersionDeGlibc'),
+      # otra pregunta: las carpetas de biblioteca del .sdk, en el orden en que las mira el linker
+      ('Mcp.Tools.PAServer.pas', 'GetSdk')],
+     'CarpetasDeLibc y SysrootMezclado (Lsp.Discovery, P8)'),
+    ('LocalSystem por el nombre de la cuenta', r"'\\?SYSTEM'|(?i:systemprofile)",
+     [], 'SidDeEstaCuenta = SID_DE_LOCALSYSTEM (Lsp.Sandbox, P11): el juez es el SID'),
+    ('una lista de units de quien llama cortada a mano', r"\.Split\(\s*\[\s*';'\s*,\s*','",
+     [('Lsp.ProjectUnits.pas', 'NombresDeUnidades')],
+     'NombresDeUnidades (Lsp.ProjectUnits, P13)'),
+    ('el prefijo de la configuracion a mano', r"'DELPHI_MCP_'",
+     [('Lsp.Sandbox.pas', 'VariableQueVeElBuild')],
+     'VariableQueVeElBuild y EntornoSinConfiguracion (Lsp.Sandbox, P5): lo que msbuild ve del entorno'),
+    ('los comandos de adb con dispositivo en otra lista', r"'install'\s*,\s*'run'\s*,\s*'stop'", [],
+     'ADB_CAMPOS (Lsp.Guard, P6): la tabla de la tool y de la puerta'),
+    ('una linea del pintado del ayudante a mano', r"\bResponde\(\s*FR_(?:ROOT|PACKAGES|RECT|SIZE|MS)\b",
+     [('FormRender.Comun.pas', 'RespondeRaiz'), ('FormRender.Comun.pas', 'RespondePaquetes'),
+      ('FormRender.Comun.pas', 'RespondeRect'), ('FormRender.Comun.pas', 'RespondeTamano'),
+      ('FormRender.Comun.pas', 'RespondeMs')],
+     'RespondeRaiz, RespondePaquetes, RespondeRect, RespondeTamano y RespondeMs (FormRender.Comun, P7)'),
     # V60 de la 1.25: la identidad y la version de una peticion moderna las lee UNO, el de
     # los dos transportes; un segundo lector es una segunda puerta a quien eres
     ('el _meta del protocolo moderno leido a mano', r'\bMETA_MCP_(?:VERSION|CLIENTE|CAPACIDADES)\b',
@@ -1650,6 +1683,15 @@ check('las fuentes del grupo se leen (83 unidades el 6-oct-2026: al menos 70)', 
 # el MUTANTE de cada regla: una copia plantada, fuera de su casa, que la
 # regla tiene que cazar (y un comentario con el formato, que NO)
 PLANTADO = {
+    'un fichero que nace acabado en salto a mano': "  if not Body.EndsWith(CRLF) then X := 1;",
+    'una unit vacia compuesta a mano': "  S := Format('unit %s;'#13#10, [N]);",
+    'la carpeta bin del IDE a mano': "  P := TPath.Combine(Raiz, 'bin');",
+    'donde vive la libc de un sysroot a mano': "  F := TPath.Combine(Raiz, 'lib\\x86_64-linux-gnu');",
+    'LocalSystem por el nombre de la cuenta': "  if SameText(Cuenta, 'SYSTEM') then X := 1;",
+    'una lista de units de quien llama cortada a mano': "  N := L.Split([';', ','], TStringSplitOptions.ExcludeEmpty);",
+    'el prefijo de la configuracion a mano': "  if StartsText('DELPHI_MCP_', N) then X := 1;",
+    'los comandos de adb con dispositivo en otra lista': "  if MatchText(C, ['install', 'run', 'stop']) then X := 1;",
+    'una linea del pintado del ayudante a mano': "  Responde(FR_SIZE, Format('%dx%d', [W, H]));",
     'el _meta del protocolo moderno leido a mano': "  N := CampoDeTexto(Meta.GetValue(META_MCP_CLIENTE), 'name');",
     'la identidad propia compuesta a mano': "  TCurrentAgent := SESION_SIN_NOMBRE + FragmentoUnico;",
     'elegir el grupo de un build a mano': "  if GrupoConCondicion(Xml, GroupCondition(Plat), G) then",
@@ -2206,6 +2248,10 @@ def negra_declarada(texto,funcion):
         if inicio>=0 and antes.endswith('}') and 'LISTA NEGRA' in antes[inicio:]:
             return True
     return False
+# Una lista que imita a un juez que solo contesta en prosa (P21): se declara, y solo puede encoger
+TEXTO_DPROJ = next(t for f, t in TEXTOS if os.path.basename(f) == 'Lsp.Dproj.pas')
+check('deuda declarada Lsp.Dproj PACLIENT_PLATFORMS',
+      re.search(r"\{ LISTA QUE IMITA A UN JUEZ[^}]*\}\s*PACLIENT_PLATFORMS", TEXTO_DPROJ) is not None)
 for fichero,funcion in LISTAS_NEGRAS:
     texto=next(t for f,t in TEXTOS if os.path.basename(f)==fichero)
     check('deuda declarada '+fichero+' '+funcion,negra_declarada(texto,funcion))

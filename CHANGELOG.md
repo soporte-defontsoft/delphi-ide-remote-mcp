@@ -64,6 +64,12 @@ the MCP `initialize` response (`serverInfo.version`).
   candidates, and those of other routines blocked the rename as homonyms. The candidates inside are
   still judged by the engine; a parameter is not a local, its header lives in two places.
 
+### Changed
+
+- `delphi_edit` `adduses` and `removeuses` read their list like `add-requires` does: `;`, `,` or a blank separates names. `"A B"` was refused as one invalid unit name.
+- The account warning of `delphi_workspace` asks the process token whether the server runs as LocalSystem (SID `S-1-5-18`), so it no longer depends on the name of the account or on `USERPROFILE`.
+- Rules that were written in several places now live in one: the text a new file is born with, the empty unit skeleton, the IDE's `bin` folder, where a sysroot keeps its `libc.so.6` and whether it mixes two distros, which `delphi_adb` commands need a named device, how a disabled IDE package is matched, what msbuild sees of the server's environment, and the lines the form renderers write to the server. No result changes.
+
 ### Fixed
 
 - **`delphi_desktop` against a PAServer that does not answer costs one wait, and only that

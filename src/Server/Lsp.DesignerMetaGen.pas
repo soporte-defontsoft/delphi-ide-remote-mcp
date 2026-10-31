@@ -1410,7 +1410,7 @@ var
   Sufijo: string;
   Vistas: TList<string>;
 begin
-  for var NS in DEFAULT_NAMESPACES.Split([';']) do
+  for var NS in DEFAULT_NAMESPACES.Split([';'], TStringSplitOptions.ExcludeEmpty) do
     if FUnidades.ContainsKey(ClaveDeIdentificador(NS) + '.' + L) then
       Exit(ClaveDeIdentificador(NS) + '.' + L);
   Result := '';
@@ -2762,7 +2762,7 @@ begin
       end;
       Break;
     end;
-  V := VersionDeFichero(TPath.Combine(TPath.Combine(AInfo.RootDir, 'bin'), 'dcc32.exe'));
+  V := VersionDeFichero(TPath.Combine(BinDelIde(AInfo.RootDir), 'dcc32.exe'));
   if V.CountChar('.') >= 1 then
   begin
     var Partes := V.Split(['.']);

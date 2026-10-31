@@ -246,6 +246,10 @@ function ResolutorDeUnidades(const AFuente: string; const ADeUnFichero: string =
   ASoloInterface, lo que ve el codigo del interface. De un .dpr, la suya. }
 function UsesEnOrden(const AText: string; ASoloInterface: Boolean = False): TArray<string>;
 
+{ UNA lista de nombres de unit de quien llama, cortada por ; , o blanco: adduses
+  y removeuses no cortaban por el blanco y requires si (P13 del revisor). }
+function NombresDeUnidades(const ALista: string): TArray<string>;
+
 { adduses de delphi_edit: nombres de unit al uses de una seccion (interface o
   implementation) de un .pas; la clausula la escribe el motor. }
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
@@ -2720,13 +2724,12 @@ begin
   Nombres := TStringList.Create;
   Nuevos := TStringList.Create;
   try
-    for N in ANames.Split([';', ',', ' ']) do
-      if N.Trim <> '' then
-      begin
-        if not EsIdentificador(N.Trim, True) then
-          Exit(MsgFmt(SR_REQUIRES_BAD_NAME_FMT, [N.Trim]));
-        Nombres.Add(N.Trim);
-      end;
+    for N in NombresDeUnidades(ANames) do
+    begin
+      if not EsIdentificador(N, True) then
+        Exit(MsgFmt(SR_REQUIRES_BAD_NAME_FMT, [N]));
+      Nombres.Add(N);
+    end;
     if Nombres.Count = 0 then
       Exit(MsgText(SR_REQUIRES_NEED_NAMES));
     EnterFileEdit;
@@ -4761,6 +4764,14 @@ begin
   finally
     LeaveFileEdit;
   end;
+end;
+
+function NombresDeUnidades(const ALista: string): TArray<string>;
+begin
+  Result := [];
+  for var N in ALista.Split([';', ',', ' ', #9], TStringSplitOptions.ExcludeEmpty) do
+    if N.Trim <> '' then
+      Result := Result + [N.Trim];
 end;
 
 end.

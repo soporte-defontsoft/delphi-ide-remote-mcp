@@ -37,18 +37,23 @@ type
   ELspConfigFabricator = class(Exception);
 
 const
-  { Los prefijos de unidad (unit scope names) del compilador cuando un
-    proyecto no dice los suyos: con ellos 'Classes' es System.Classes. Los
-    usa tambien el generador de las tablas del disenador para los uses sin
-    prefijo del fuente de terceros (Lsp.DesignerMetaGen): una lista, dos
-    lectores. }
-  DEFAULT_NAMESPACES =
-    'Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;' +
-    'System;Xml;Data;Datasnap;Web;Soap';
+  { Los ambitos de unidad que el IDE reparte a un proyecto nuevo, sin los de
+    la VCL (medidos en los Samples de la 37.0): los de todas las plataformas y
+    los de Windows. UNA lista para el .dproj que se crea (Lsp.Scaffold) y para
+    lo de abajo. }
+  AMBITOS_BASE = 'System;Xml;Data;Datasnap;Web;Soap;';
+  AMBITOS_WIN64 = 'Winapi;System.Win;Data.Win;Datasnap.Win;Web.Win;Soap.Win;Xml.Win;';
+  { POLITICA DE LA CASA, no del compilador: dcc sin -NS no tiene ninguno, y
+    'uses Classes' da F2613 (medido el 31-oct-2026, dcc32 y dcc64; msbuild le
+    pasa $(DCC_Namespace) y nada mas). Son los que se suponen cuando un
+    proyecto no dice los suyos, con ellos 'Classes' es System.Classes, y los
+    del generador de las tablas del disenador para los uses sin prefijo del
+    fuente de terceros (Lsp.DesignerMetaGen). }
+  DEFAULT_NAMESPACES = AMBITOS_WIN64 + AMBITOS_BASE;
 
 { LOS AMBITOS de unidad con los que compila un proyecto (AXml, su .dproj) en
-  APlat/ACfg: su DCC_Namespace efectivo, separado por ';', o los del
-  compilador si no dice ninguno (DEFAULT_NAMESPACES). EL lector: lo leia a
+  APlat/ACfg: su DCC_Namespace efectivo, separado por ';', o los de la
+  casa si no dice ninguno (DEFAULT_NAMESPACES). EL lector: lo leia a
   mano el fabricante de ajustes del motor, y lo pregunta tambien el juez de
   "es la misma unidad" de un uses (Lsp.ProjectUnits, V79 de la 1.23.1). }
 function AmbitosDelProyecto(const AXml, APlat, ACfg: string): string;
@@ -718,7 +723,7 @@ function AmbitosDelProyecto(const AXml, APlat, ACfg: string): string;
 begin
   Result := ListaDeNombres(EffectiveProperty(AXml, 'DCC_Namespace', APlat, ACfg));
   if Result = '' then
-    Result := DEFAULT_NAMESPACES;
+    Result := ListaDeNombres(DEFAULT_NAMESPACES);
 end;
 
 function AliasDelProyecto(const AXml, APlat, ACfg: string): string;
