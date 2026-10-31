@@ -517,7 +517,7 @@ begin
         end;
         Break;
       end;
-      Dec(Caben, Length(L) + Length(sLineBreak));
+      Dec(Caben, Length(L) + 1);
       Dec(Desde);
     end;
     Result.Mostradas := Dicen.Count - Desde;
@@ -528,7 +528,7 @@ begin
       for var I := Desde to Dicen.Count - 1 do
       begin
         if I > Desde then
-          Sb.Append(sLineBreak);
+          Sb.Append(#10);
         Sb.Append(Dicen[I]);
       end;
       Result.Texto := Sb.ToString;

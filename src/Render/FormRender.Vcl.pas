@@ -527,13 +527,12 @@ begin
           raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, ['style ' + GPeticion.Estilo]));
         TStyleManager.SetStyle(TStyleManager.LoadFromFile(GPeticion.Estilo));
         Designing := False;
-        Responde(FR_STYLE, TStyleManager.ActiveStyle.Name + ' (' + ExtractFileName(GPeticion.Estilo) +
-          '; the form is not in design mode: VCL styles do not apply to designed controls)');
+        Responde(FR_STYLE, MsgFmt(SF_RENDER_ESTILO_VCL_FMT, [TStyleManager.ActiveStyle.Name, ExtractFileName(GPeticion.Estilo)]));
       end
       else
       begin
         Designing := True;
-        Responde(FR_STYLE, 'none (as the VCL designer)');
+        Responde(FR_STYLE, MsgText(SF_RENDER_SIN_ESTILO_VCL));
       end;
       Reloj := TStopwatch.StartNew;
       Cargando := True;

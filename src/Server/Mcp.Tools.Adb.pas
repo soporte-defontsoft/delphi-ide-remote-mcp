@@ -495,7 +495,7 @@ begin
       var Cola := ColaDeSalida(Txt, LINEAS_DE_SALIDA);
       Result := Cola.Texto;
       if Cola.Cortada then
-        Result := MsgFmt(SN_ADB_TAIL_FMT, [Cola.Total, Cola.Mostradas]) + sLineBreak + Result;
+        Result := MsgFmt(SN_ADB_TAIL_FMT, [Cola.Total, Cola.Mostradas]) + #10 + Result;
     end;
   end
   else if (Cmd = 'connect') or (Cmd = 'disconnect') then

@@ -205,6 +205,9 @@ function PatronInicioDeRutina(AConProperty: Boolean = False): string;
 // primero (letra ASCII, '_' o no ASCII) y los demas (tambien un digito)
 function EsLetraDeIdent(C: Char): Boolean;
 function EsCaracterDeIdent(C: Char): Boolean;
+// Donde empieza (1-based) el identificador que acaba en la posicion AHasta de
+// ATexto: AHasta + 1 si ahi no hay ninguno
+function InicioDelIdentificador(const ATexto: string; AHasta: Integer): Integer;
 // S entero es UN identificador; con APuntos, uno o varios unidos por puntos
 // (el nombre de una unit con su espacio de nombres)
 function EsIdentificador(const S: string; APuntos: Boolean = False): Boolean;
@@ -338,6 +341,13 @@ end;
 function EsLetraDeIdent(C: Char): Boolean;
 begin
   Result := CharInSet(C, ['A'..'Z', 'a'..'z', '_']) or ((Ord(C) >= $80) and not C.IsSurrogate);
+end;
+
+function InicioDelIdentificador(const ATexto: string; AHasta: Integer): Integer;
+begin
+  Result := AHasta + 1;
+  while (Result > 1) and EsCaracterDeIdent(ATexto[Result - 1]) do
+    Dec(Result);
 end;
 
 function EsCaracterDeIdent(C: Char): Boolean;

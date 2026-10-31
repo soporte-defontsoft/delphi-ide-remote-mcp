@@ -629,7 +629,7 @@ var
         QuitaCarpetasCreadas(TPath.GetDirectoryName(Copias[I]), Ancestros[I]);
       except
         on E: Exception do
-          Result := Result + IfThen(Result <> '', #10) + '  ' + Rutas[I] + ': ' + E.Message.Trim;
+          AnadeLineaDeRuta(Result, Rutas[I], E.Message.Trim);
       end;
   end;
 
@@ -846,8 +846,8 @@ begin
   end;
   Result := '';
   for var I := 0 to High(Rutas) do
-    Result := Result + IfThen(Result <> '', #10) + MsgFmt(SK_FILE_BORRADO_PAPELERA_FMT,
-      [TPath.GetFileName(SinBarraFinal(Rutas[I])), Copias[I]]);
+    AnadeLinea(Result, MsgFmt(SK_FILE_BORRADO_PAPELERA_FMT,
+      [TPath.GetFileName(SinBarraFinal(Rutas[I])), Copias[I]]));
   // un lote, de una llamada (V67)
   if Comodin then
     Result := Result + NotaDeRecuperarLote(Params.Path, Copias);
@@ -952,7 +952,7 @@ var
         end;
       except
         on E: Exception do
-          Result := Result + IfThen(Result <> '', #10) + '  ' + Hechos[I].Destino + ': ' + E.Message.Trim;
+          AnadeLineaDeRuta(Result, Hechos[I].Destino, E.Message.Trim);
       end;
     for var I := 0 to High(Copias) do
       QuitaCopiaDeSeguridad(Copias[I], AncestrosCopia[I]);
@@ -1237,9 +1237,9 @@ begin
   Result := '';
   for var P in Pasos do
     if Params.Copy then
-      Result := Result + IfThen(Result <> '', #10) + MsgFmt(SK_MOVE_COPIADO_FMT, [P.Origen, P.Destino])
+      AnadeLinea(Result, MsgFmt(SK_MOVE_COPIADO_FMT, [P.Origen, P.Destino]))
     else
-      Result := Result + IfThen(Result <> '', #10) + MsgFmt(SK_MOVE_MOVIDO_FMT, [P.Origen, P.Destino]);
+      AnadeLinea(Result, MsgFmt(SK_MOVE_MOVIDO_FMT, [P.Origen, P.Destino]));
   // un fichero con extension que llega a un dest sin ella: dest es la ruta
   // final, y quien lo pide solia querer una carpeta (V139 de la 1.23.1)
   if (Length(Pasos) = 1) and (ExtractFileExt(Pasos[0].Origen) <> '') and

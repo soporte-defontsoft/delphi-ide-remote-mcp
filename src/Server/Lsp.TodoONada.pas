@@ -380,7 +380,7 @@ begin
       end;
       if Motivo <> '' then
       begin
-        Result := Result + IfThen(Result <> '', #10, '') + '  ' + FRutas[I] + ': ' + Motivo;
+        AnadeLineaDeRuta(Result, FRutas[I], Motivo);
         if Pasada = 0 then
           NoVolvio := True;
       end;

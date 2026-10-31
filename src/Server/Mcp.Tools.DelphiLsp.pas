@@ -1686,9 +1686,7 @@ begin
       // una columna buena; V169 de la 1.23.1, medido). Las letras, por la
       // regla de la casa (EsCaracterDeIdent). 1-based: LineTxt[EffChar] es la
       // letra de antes del cursor
-      var Ini := Min(EffChar, Length(LineTxt));
-      while (Ini >= 1) and EsCaracterDeIdent(LineTxt[Ini]) do
-        Dec(Ini);
+      var Ini := InicioDelIdentificador(LineTxt, Min(EffChar, Length(LineTxt))) - 1;
       // ...tras un punto (o escribiendo un miembro tras el): el prefijo filtra
       var TrasPunto := (Ini >= 1) and (LineTxt[Ini] = '.');
       if not TrasPunto then
@@ -1718,10 +1716,8 @@ begin
   begin
     var T := Lines[Params.Line];
     var Hasta := Min(EffChar, Length(T));
-    var K := Hasta;
-    while (K >= 1) and EsCaracterDeIdent(T[K]) do
-      Dec(K);
-    Prefijo := Copy(T, K + 1, Hasta - K);
+    var K := InicioDelIdentificador(T, Hasta);
+    Prefijo := Copy(T, K, Hasta - K + 1);
     // un numero no es un nombre a medias
     if (Prefijo <> '') and not EsLetraDeIdent(Prefijo[1]) then
       Prefijo := '';

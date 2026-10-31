@@ -12031,6 +12031,14 @@ const
   SN_VAULT_CABECERA_NOTA_FMT =
     '[VAULT-039] # %s (%d lines)';
 
+  { %0:s: la carpeta del vault }
+  SL_VAULT_SEMBRADO_FMT =
+    'Vault: empty folder at "%0:s" seeded with the starter templates ' +
+    '(rules, index, write guide and an example project). Edit MEMORY.md and ' +
+    'VAULT-INSTRUCTIONS.md to make it yours.';
+  { %0:s: la carpeta del vault; %1:s: el motivo }
+  SL_VAULT_SIN_SEMBRAR_FMT =
+    'Vault: could not create the starter vault at "%0:s" (%1:s).';
   SL_VAULT_APPEND_FMT =
     'vault_append: %s';
 
@@ -12939,6 +12947,12 @@ function MsgExcepcion(const AClase, AMensaje: string): string;
 function EsRechazo(const AText: string): Boolean;
 { Cualquier resultado de error, INTERNAL incluido. }
 function EsFallo(const AText: string): Boolean;
+{ Una linea mas de una respuesta: EL separador de lo que se le contesta al
+  agente (estaba escrito 17 veces, con #10 unas y con sLineBreak otras; V220). }
+procedure AnadeLinea(var ATexto: string; const ALinea: string);
+{ ...y la de lo que le paso a una ruta, sangrada: la de SYS-018 y la de un
+  aviso de un lote. }
+procedure AnadeLineaDeRuta(var ATexto: string; const ARuta, AMotivo: string);
 { True si AText EMPIEZA por la etiqueta de la constante AMsg: "este
   resultado ES ese mensaje" (un eco que venga detras no cuenta). }
 function EsMsg(const AText, AMsg: string): Boolean;
@@ -13097,6 +13111,18 @@ end;
 function MsgExcepcion(const AClase, AMensaje: string): string;
 begin
   Result := MsgEnvuelve(SR_FALLO_INTERNO_FMT, AMensaje, [AClase, AMensaje]);
+end;
+
+procedure AnadeLinea(var ATexto: string; const ALinea: string);
+begin
+  if ATexto <> '' then
+    ATexto := ATexto + #10;
+  ATexto := ATexto + ALinea;
+end;
+
+procedure AnadeLineaDeRuta(var ATexto: string; const ARuta, AMotivo: string);
+begin
+  AnadeLinea(ATexto, '  ' + ARuta + ': ' + AMotivo);
 end;
 
 function EsRechazo(const AText: string): Boolean;

@@ -920,8 +920,7 @@ begin
     // todas estaban: lo de siempre, una linea por carpeta
     Result := '';
     for P in YaEstaban do
-      Result := Result + IfThen(Result = '', '', sLineBreak) +
-        MsgFmt(SN_CONFIG_PATH_PRESENT_FMT, [P, Etiqueta]);
+      AnadeLinea(Result, MsgFmt(SN_CONFIG_PATH_PRESENT_FMT, [P, Etiqueta]));
     Exit;
   end;
   Crudo := string.Join(';', Nuevos) + ';';
@@ -1019,8 +1018,7 @@ begin
       // le costo dos turnos)
       Result := '';
       for P in NoEstaban do
-        Result := Result + IfThen(Result = '', '', sLineBreak) +
-          MsgFmt(SN_CONFIG_PATH_ABSENT_FMT, [P, Etiqueta]);
+        AnadeLinea(Result, MsgFmt(SN_CONFIG_PATH_ABSENT_FMT, [P, Etiqueta]));
       // ...una ENTRADA de ese search path, con la regla con la que se quita
       // (Pedida): como texto, lib casaba con lib2 o con C:\x\lib\y (revisor
       // Opus de la 1.22.0, H7). Aqui ninguna estaba: las pedidas son NoEstaban.
@@ -2329,8 +2327,7 @@ begin
           if Params.Sdk.Trim <> '' then
             Pega := SetSdk(Proj, Params.Platform, Params.Sdk);
           if (Params.Profile.Trim <> '') and not EsFallo(Pega) then
-            Pega := string.Join(sLineBreak, [Pega,
-              SetProfile(Proj, Params.Platform, Params.Profile)]).Trim;
+            AnadeLinea(Pega, SetProfile(Proj, Params.Platform, Params.Profile));
         except
           on E: Exception do
             Pega := MsgExcepcion(E.ClassName, E.Message);

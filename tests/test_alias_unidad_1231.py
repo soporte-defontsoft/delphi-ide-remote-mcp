@@ -17,10 +17,12 @@ IntToStr answered LSP-029 null.
 
 A1 is RED against the build before (pass its exe as argument); A2 and A3 are
 green with both (A3 guards the line: the build before did not read the alias).
+A4: the engine (always Windows) carries exactly what the installation's targets
+say (V160i, 1.25: the list was copied by hand; green with both).
 
 Usage:  python tests/test_alias_unidad_1231.py [path-to-DelphiLspMcp.exe]
 """
-import json, os
+import json, os, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -87,6 +89,17 @@ hover(dpr3)
 o = opciones(dpr3)
 check('A3 un alias que no es Nombre=Destino no llega a la linea del motor (ni su -U)',
       o != '' and '-UC:/fuera' not in o and 'Malo=' not in o, o[:300])
+
+# ---------------------------------------------------------------- A4 (V160i, 1.25)
+# los de siempre, los que dice la instalacion (CodeGear.Common.Targets); que no
+# se copien a mano lo vigila test_paisaje
+rf = mc.raiz_ide(S.call)
+targets = open(os.path.join(rf, 'bin', 'CodeGear.Common.Targets'), encoding='utf-8-sig', errors='replace').read()
+exterior = re.search(r'<UnitAliases>([^<]+)</UnitAliases>', targets).group(1)
+windows = re.search(r"<UnitAliases Condition=\"[^\"]*cWin32Platform[^\"]*\">\$\(UnitAliases\);([^<]+)</UnitAliases>", targets).group(1)
+o = opciones(dpr2)
+check('A4 Win32/Win64: -A lleva exactamente lo que dicen los targets',
+      re.search(r' -A' + re.escape(exterior + ';' + windows) + r'(\s|$)', o) is not None, o[:300])
 
 S.cierra()
 mc.borra(BASE)

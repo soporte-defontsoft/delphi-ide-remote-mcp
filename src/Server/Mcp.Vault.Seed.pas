@@ -55,6 +55,7 @@ uses
   System.IOUtils,
   System.Types,
   Lsp.Guard,
+  Lsp.Texts,
   Lsp.Patch,          // EscribeTexto: la puerta de escribir
   Lsp.Codificacion,   // ekUtf8
   Lsp.NetDrives;      // CrearCarpeta: crear la carpeta tolerando la carrera
@@ -332,14 +333,11 @@ begin
     for var I := 0 to High(Notas) do
       WriteNote(TPath.Combine(Root, Notas[I]), Textos[I]);
 
-    GNote := 'Vault: empty folder at "' + Root + '" seeded with the starter ' +
-      'templates (rules, index, write guide and an example project). Edit ' +
-      'MEMORY.md and VAULT-INSTRUCTIONS.md to make it yours.';
+    GNote := MsgFmt(SL_VAULT_SEMBRADO_FMT, [Root]);
     Result := True;
   except
     on E: Exception do
-      GNote := 'Vault: could not create the starter vault at "' + APath +
-        '" (' + E.Message + ').';
+      GNote := MsgFmt(SL_VAULT_SIN_SEMBRAR_FMT, [APath, E.Message]);
   end;
 end;
 

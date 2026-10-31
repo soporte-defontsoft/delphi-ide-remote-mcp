@@ -19,7 +19,7 @@ field, like the paserver battery does.
 Usage:  python tests/test_deploy_adb.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Scaffolds into %TEMP%\\delphi-mcp-tests\\deploy-adb.
 """
-import json, os
+import glob, json, os, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -415,6 +415,14 @@ check('deploy Android: siembra AndroidManifest.template.xml (semilla ObjRepos)',
 fdproj = open(os.path.join(FDIR, 'DeployFmx.dproj'), encoding='utf-8-sig').read()
 check('dproj Android: fallback VerInfo (package/minSdk) condicionado a vacio',
       'minSdkVersion' in fdproj and "'$(VerInfo_Keys)'==''" in fdproj, fdproj[-600:])
+# los numeros, los que trae el paquete de Android del IDE (ponia targetSdkVersion=35 con el IDE en 36)
+_bpls = glob.glob(os.path.join(mc.raiz_ide(srv.call), 'bin', 'IDEAndroidPlatform*.bpl'))
+if _bpls:
+    _sdk = open(_bpls[0], 'rb').read().decode('utf-16-le', 'replace')
+    _esperado = '%s;%s' % (re.search(r'minSdkVersion=\d+', _sdk).group(0), re.search(r'targetSdkVersion=\d+', _sdk).group(0))
+    check('dproj Android: minSdk y targetSdk, los del paquete de Android del IDE', _esperado in fdproj, _esperado + ' / ' + fdproj[-600:])
+else:
+    print('NOTA: la instalacion no trae IDEAndroidPlatform*.bpl: los numeros del SDK no se miden')
 check('dproj Android: import del deployproj presente',
       'MSBuildProjectName).deployproj' in fdproj, fdproj[-400:])
 try:

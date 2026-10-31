@@ -829,6 +829,32 @@ check('insert en un .dpr: detras del uses de verdad, no dentro del comentado',
       mc.abre(out, 'SK_EDIT_INSERT_RUTINA_DPR_FMT') and
       '{\r\nuses antiguos: ninguno;\r\n}\r\n' in _src and
       'uses\r\n  System.SysUtils;\r\n\r\nprocedure P;' in _src, out[:200] + ' | ' + _src)
+# .dpr con el uses partido en ramas: la rutina detras de la clausula ENTERA, por
+# EL lector (FindUses); caia dentro de la primera rama y con la otra no existia (V220)
+DPRR = os.path.join(DIR, 'ConRamas.dpr')
+open(DPRR, 'wb').write(CRLF.join(['program ConRamas;', '', '{$APPTYPE CONSOLE}', '', 'uses', '  {$IFDEF WIN64}',
+                                  '  System.SysUtils;', '  {$ELSE}', '  System.Classes;', '  {$ENDIF}', '',
+                                  'begin', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DPRR, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+_src = open(DPRR, 'rb').read().decode('ascii')
+check('insert en un .dpr con el uses en ramas: detras del {$ENDIF}, fuera de las ramas',
+      mc.abre(out, 'SK_EDIT_INSERT_RUTINA_DPR_FMT') and
+      _src.index('{$ENDIF}') < _src.index('procedure P;') < _src.index('begin\r\nend.'), out[:200] + ' | ' + _src)
+# ...y con codigo detras del {$ENDIF} en esa linea, negado: caeria dentro del programa
+DPRE = os.path.join(DIR, 'RamasEnLinea.dpr')
+open(DPRE, 'wb').write(CRLF.join(['program RamasEnLinea;', 'uses', '  {$IFDEF WIN64}', '  System.SysUtils;', '  {$ELSE}',
+                                  '  System.Classes;', '  {$ENDIF} begin', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DPRE, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+check('insert en un .dpr con begin detras del {$ENDIF}: negado, sin escribir',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_ENCUENTRO_FINAL_CABECERA_USES') and
+      b'procedure P' not in open(DPRE, 'rb').read(), out[:200])
+# ...y un 'uses A; begin end.' de una linea se niega: la rutina caeria tras el end.
+DPRL = os.path.join(DIR, 'UsesEnLinea.dpr')
+open(DPRL, 'wb').write(CRLF.join(['program UsesEnLinea;', 'uses System.SysUtils; begin end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": DPRL, "insert": "rutina-global", "code": "procedure P;\nbegin\nend;"})
+check('insert en un .dpr con uses y begin en la misma linea: negado, sin escribir',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_ENCUENTRO_FINAL_CABECERA_USES') and
+      b'procedure P' not in open(DPRL, 'rb').read(), out[:200])
 # .dpr SIN uses y con la cabecera partida en dos lineas: EL lector de la cabecera
 # (Lsp.Pascal.CabeceraDeFuente) la encuentra; la regla de antes la queria en una
 # sola linea acabada en ';' y negaba (inventario del 10-oct-2026)

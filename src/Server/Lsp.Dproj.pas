@@ -4306,8 +4306,7 @@ end;
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
 var
   Xml, Dir, Base, D, Cand, Ext, Artifact, Nombre: string;
-  ArtifactExts, Nombres: TArray<string>;
-  Dirs: TList<string>;
+  ArtifactExts, Nombres, Dirs: TArray<string>;
   Best: string;
   BestTime, T: TDateTime;
 
@@ -4353,40 +4352,35 @@ begin
       Nombres := Nombres + [Base + Ext];
   Best := '';
   BestTime := 0;
-  Dirs := TList<string>.Create;
-  try
-    for D in AllTagValues(Xml, 'DCC_ExeOutput') do
-      Dirs.Add(D.Trim);
-    for D in AllTagValues(Xml, 'DCC_BplOutput') do
-      Dirs.Add(D.Trim);
-    Dirs.Add(IDE_OUTPUT_DEFAULT); // the IDE default when unset
-    for D in Dirs do
+  // Las carpetas de ESTE build, por EL compositor y EL evaluador: se miraban
+  // TODOS los DCC_ExeOutput del .dproj y ganaba el mas nuevo, y con una carpeta
+  // literal por configuracion delphi_test nobuild de Release corria el binario
+  // de Debug y daba sus numeros como de Release (V160f, medido el 31-oct-2026)
+  Dirs := [SalidaDelBinario(Xml, Dir, Base, APlatform, AConfig),
+    Expand(EffectiveProperty(Xml, 'DCC_BplOutput', APlatform, AConfig).Trim)];
+  for D in Dirs do
+  begin
+    if (D = '') or D.Contains('$(') then
+      Continue; // still macro-based: not resolvable here
+    // donde la deja msbuild, que corre en la carpeta del .dproj (EL resolutor)
+    Cand := RutaDesde(Dir, D);
+    if Cand = '' then
+      Continue;
+    for Nombre in Nombres do
     begin
-      Cand := Expand(D);
-      if (Cand = '') or Cand.Contains('$(') then
-        Continue; // still macro-based: not resolvable here
-      // donde la deja msbuild, que corre en la carpeta del .dproj (EL resolutor)
-      Cand := RutaDesde(Dir, Cand);
-      if Cand = '' then
-        Continue;
-      for Nombre in Nombres do
+      // (Android: lib<Project>.so por el nombrador; buscando <Project>.so el
+      // build contestaba exito sin "output", field round 8)
+      Artifact := TPath.Combine(Cand, Nombre);
+      if TFile.Exists(Artifact) then
       begin
-        // (Android: lib<Project>.so por el nombrador; buscando <Project>.so el
-        // build contestaba exito sin "output", field round 8)
-        Artifact := TPath.Combine(Cand, Nombre);
-        if TFile.Exists(Artifact) then
+        T := TFile.GetLastWriteTime(Artifact);
+        if (Best = '') or (T > BestTime) then
         begin
-          T := TFile.GetLastWriteTime(Artifact);
-          if (Best = '') or (T > BestTime) then
-          begin
-            Best := Artifact;
-            BestTime := T;
-          end;
+          Best := Artifact;
+          BestTime := T;
         end;
       end;
     end;
-  finally
-    Dirs.Free;
   end;
   Result := Best;
 end;

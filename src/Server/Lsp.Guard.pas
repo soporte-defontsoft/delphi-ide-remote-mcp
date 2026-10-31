@@ -4459,10 +4459,12 @@ function MovidoDenegado(const AOrigen, ADestino: string): string;
 var
   UO, UD: string;
 begin
-  Result := PathDenied(AOrigen);
+  // LA pregunta de escribir, con el modo de solo lectura: el juez de lo que
+  // mueve MueveArbol y MezclaArbol no lo preguntaba (V220)
+  Result := EscrituraDenegada(AOrigen);
   if Result <> '' then
     Exit;
-  Result := PathDenied(ADestino);
+  Result := EscrituraDenegada(ADestino);
   if Result <> '' then
     Exit;
   Result := ProtegidoDenegado(AOrigen);
@@ -4607,8 +4609,7 @@ begin
         RaiseLastOSError;
     except
       on E: Exception do
-        Result := Result + IfThen(Result <> '', #10) + '  ' +
-          IfThen(AHechos[I].A <> '', AHechos[I].A, AHechos[I].De) + ': ' + E.Message.Trim;
+        AnadeLineaDeRuta(Result, IfThen(AHechos[I].A <> '', AHechos[I].A, AHechos[I].De), E.Message.Trim);
     end;
 end;
 

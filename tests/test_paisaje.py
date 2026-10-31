@@ -48,6 +48,12 @@ REGLAS = [
       ('Mcp.Tools.Vault.pas', 'TVaultAppendTool.ExecuteWithParams')],
      'TextoQueNace (Lsp.Patch, V215): createunit, delphi_create y el create de un changeset'),
     ('una lista vacia dicha a mano', r"'\(none\)'", [], 'ONinguno (Lsp.Texts)'),
+    ('una linea de respuesta a mano', r"IfThen\(\s*\w+\s*<>\s*''\s*,\s*#10\s*(?:,\s*''\s*)?\)", [],
+     'AnadeLinea y AnadeLineaDeRuta (Lsp.Texts, V220)'),
+    ('los alias de siempre copiados', r"WinTypes=|Generics\.Collections=", [],
+     'los dice el UnitAliases de CodeGear.Common.Targets (AliasDelProyecto, V160i)'),
+    ('los numeros del SDK de Android a mano', r"SdkVersion=\d", [('Lsp.BuildRunner.pas', 'SdkDeAndroidDelIde')],
+     'los dice el paquete de Android del IDE (SdkDeAndroidDelIde, V220)'),
     ('una unit vacia compuesta a mano', r"'unit %s;'#",
      [('Lsp.Patch.pas', 'EsqueletoDeUnit')], 'EsqueletoDeUnit (Lsp.Patch, P9)'),
     ('la carpeta bin del IDE a mano', r"(?:\+\s*|,\s*)'\\?bin(?:\\[^']*)?'",
@@ -1101,9 +1107,13 @@ REGLAS = [
     r"\bFileOpen\s*\(|\bCreateFile\w*\s*\([^;]*GENERIC_READ|"
     # y lo que Windows abre por la RUTA para leer sus recursos (V47 de la 1.23): un
     # modulo como DATOS y el recurso de version de un exe
-    r"\bLoadLibraryEx\w*\s*\([^;]*LOAD_LIBRARY_AS_(?:DATAFILE|IMAGE_RESOURCE)|\bGetFileVersionInfo\w*\s*\(",
+    r"\bLoadLibraryEx\w*\s*\([^;]*LOAD_LIBRARY_AS_(?:DATAFILE|IMAGE_RESOURCE)|\bGetFileVersionInfo\w*\s*\(|"
+    # ...y un .chm, que abre itss.dll por la ruta (V220)
+    r"\.StgOpenStorage\s*\(",
      # excepciones DECLARADAS, cada una con su motivo; solo pueden encoger
-     [# settings.ini: su lector es Lsp.Settings y no es lugar de ninguna puerta (C1)
+     [# la ayuda de la instalacion, que encuentra el servidor (Lsp.Docs), no la nombra el agente
+      ('Lsp.Chm.pas', 'TChm.Create'),
+      # settings.ini: su lector es Lsp.Settings y no es lugar de ninguna puerta (C1)
       ('Lsp.Settings.pas', 'ComprobarDuplicadosIni'), ('Lsp.Settings.pas', 'LoadSecurity'),
       ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'), ('Lsp.Settings.pas', 'BytesDelIni'),
       # LA puerta (LeeBytes, y su trozo LeeTrozoDeBytes: V80 de la 1.23.1) y el
@@ -1861,6 +1871,9 @@ PLANTADO = {
     'fijar la pagina ANSI': "  UsaPaginaAnsi(1251);",
     'las listas crudas de los sitios': "  for R in WorkspaceRoots do",
     'la zona de biblioteca cruda': "  for R in LibraryRoots do",
+    'una linea de respuesta a mano': "  Result := Result + IfThen(Result <> '', #10, '') + Linea;",
+    'los alias de siempre copiados': "  ALIAS = 'WinTypes=Winapi.Windows';",
+    'los numeros del SDK de Android a mano': "  SDK = 'targetSdkVersion=35';",
     'leer sin la puerta': "  Xml := TFile.ReadAllText(Dproj);",
     'escribir sin la puerta': "  TFile.WriteAllText(Ruta, Texto, TEncoding.UTF8);",
     'borrar sin la puerta': "  TFile.Delete(Ruta);",

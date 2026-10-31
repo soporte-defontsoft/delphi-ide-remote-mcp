@@ -744,7 +744,7 @@ begin
   // casa del servidor (CopiaArbol, mas abajo): esa carpeta se LEE, asi que
   // tiene que estar DENTRO de las raices, por la jaula. Con build lo garantiza
   // SalidaDenegada sobre la carpeta de salida; con nobuild=true, Exe sale de
-  // ResolveBuildOutput (cualquier DCC_ExeOutput, sin juez), y uno fuera de las
+  // ResolveBuildOutput (el DCC_ExeOutput de este build, sin juez), y uno fuera de las
   // raices nombraba el binario, lo fechaba, COPIABA su carpeta a la casa del
   // servidor y lo corria (V160b de la 1.23.1, medido). EL mismo juez de lectura
   // de la jaula que los <Import> del escaneo (LugarDeLecturaDenegado [ltJaula]).

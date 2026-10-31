@@ -70,10 +70,14 @@ the MCP `initialize` response (`serverInfo.version`).
 - The account warning of `delphi_workspace` asks the process token whether the server runs as LocalSystem (SID `S-1-5-18`), so it no longer depends on the name of the account or on `USERPROFILE`.
 - An agent's mailbox and report folder are its name in lower case, so `a--b` and `a-b`, two agents for the trash, no longer read and delete each other's mail.
 - Rules that were written in several places now live in one: the text a new file is born with, the empty unit skeleton, the IDE's `bin` folder, where a sysroot keeps its `libc.so.6` and whether it mixes two distros, which `delphi_adb` commands need a named device, how a disabled IDE package is matched, what msbuild sees of the server's environment, and the lines the form renderers write to the server. No result changes.
+- The standard unit aliases the engine gets come from the installation's `CodeGear.Common.Targets`, where they were a copy of that list. Answers of several lines use one line break, LF: some used CRLF.
 
 ### Fixed
 
 - `delphi_changeset` refuses `delete` and `move` of a link when staging (CHSET-036): undoing a batch that failed turned a link into a plain file with its target's content, while the answer said every file was back byte for byte. `delphi_delete` and `delphi_move` handle the link itself.
+- `delphi_test` with `nobuild` runs the binary of the configuration it was asked for. With a literal output folder per configuration, the newest binary won: Release ran the Debug binary and reported its results as Release's. The `output` of `delphi_build` reads the same output folder, the one of that build.
+- `delphi_edit` `insert=rutina-global` in a `.dpr` whose `uses` is split in `{$IFDEF}` branches places the routine after the whole clause. It landed inside the first branch, so with the other branch active the routine did not exist.
+- An Android project with no version keys gets the `minSdkVersion` and `targetSdkVersion` of the installed IDE, read from its Android package (36 on 37.0), where the server wrote a fixed 35.
 
 - **`delphi_desktop` against a PAServer that does not answer costs one wait, and only that
   profile's.** `paclient` gives up by itself (21 s against an address that does not answer,

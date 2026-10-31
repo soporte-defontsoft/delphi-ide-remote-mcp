@@ -79,7 +79,8 @@ try:
     shutil.copy(EXE, os.path.join(FUERA, 'TP2.exe'))
     # DCC_ExeOutput = la carpeta de FUERA (absoluta); el proyecto NO se construye
     t = lee(p1)
-    i = t.index('<PropertyGroup')
+    # delante del primer Import: la ultima que msbuild lee, la que vale para el build
+    i = t.index('<Import ')
     t = t[:i] + ('<PropertyGroup><DCC_ExeOutput>%s</DCC_ExeOutput></PropertyGroup>\r\n    '
                  % FUERA.rstrip('\\')) + t[i:]
     escribe(p1, t)
@@ -89,6 +90,31 @@ try:
           mc.rechazado(r1) and mc.es(r1, 'SR_TEST_BINARY_FUERA_FMT')
           and j1.get('binary') is None and j1.get('sandboxed') is None,
           r1[:300])
+
+    # --- A3-A5 (V160f, 1.25): una carpeta literal por configuracion ---
+    d3 = os.path.join(J, 'dos')
+    assert mc.abre(S.call('delphi_create', {'kind': 'project-test', 'name': 'TP3', 'dir': d3}),
+                   'SK_CREATE_CREADO_PROYECTO_FMT')
+    p3 = os.path.join(d3, 'TP3.dproj')
+    for cfg, sal in (('Debug', 'dbg'), ('Release', 'rel')):
+        rc = S.call('delphi_config', {'command': 'set-property', 'project': p3, 'config': cfg,
+                                      'name': 'DCC_ExeOutput', 'value': sal})
+        assert not mc.fallo(rc), rc[:300]
+    rb = S.call('delphi_build', {'project': p3, 'config': 'Debug'}, 300)
+    assert mc.como_json(rb).get('success'), rb[:300]
+    r3 = S.call('delphi_test', {'project': p3, 'config': 'Release', 'nobuild': True}, 300)
+    check('A3 nobuild de una config sin construir, con el binario de OTRA al lado: no corre el de la otra',
+          mc.rechazado(r3) and mc.es(r3, 'SR_TEST_NOBINARY_NOBUILD'), r3[:300])
+    rb = S.call('delphi_build', {'project': p3, 'config': 'Release'}, 300)
+    assert mc.como_json(rb).get('success'), rb[:300]
+    rb = S.call('delphi_build', {'project': p3, 'config': 'Debug'}, 300)
+    assert mc.como_json(rb).get('success'), rb[:300]
+    r4 = S.call('delphi_test', {'project': p3, 'config': 'Release', 'nobuild': True}, 300)
+    check('A4 nobuild de Release con el de Debug mas nuevo: corre el de Release',
+          mc.real(mc.como_json(r4).get('binary', '')).lower().endswith('\\rel\\tp3.exe'), r4[:300])
+    r5 = S.call('delphi_test', {'project': p3, 'config': 'Debug', 'nobuild': True}, 300)
+    check('A5 control: nobuild de Debug corre el de Debug',
+          mc.real(mc.como_json(r5).get('binary', '')).lower().endswith('\\dbg\\tp3.exe'), r5[:300])
 finally:
     S.cierra()
     subprocess.run(['subst', L + ':', '/d'], capture_output=True)

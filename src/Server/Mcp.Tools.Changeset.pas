@@ -160,7 +160,7 @@ begin
         Exit(Negativa);
       end;
       // lo que vale para todas, una vez: con 50 eran 18 KB de lo mismo (medido en vivo)
-      Result := Result + IfThen(Result <> '', #10) + Linea.Replace(MsgText(SF_CHANGESET_TRAS_STAGED), '');
+      AnadeLinea(Result, Linea.Replace(MsgText(SF_CHANGESET_TRAS_STAGED), ''));
     end;
     Result := Result + MsgText(SF_CHANGESET_TRAS_STAGED);
   finally
@@ -208,11 +208,11 @@ begin
       // un .style: lo que dice FMX, la nota de textedit (V173f de la 1.23.1)
       var Nota := NotaDeEstiloFmx(F.Ruta, '').Trim;
       if Nota <> '' then
-        Avisos := Avisos + IfThen(Avisos <> '', #10, '') + Format('  %s: %s', [MaskDriveText('', F.Ruta), Nota]);
+        AnadeLineaDeRuta(Avisos, MaskDriveText('', F.Ruta), Nota);
     end
     else
       for var L in AvisosDelLector(F.Ruta, F.Antes) do
-        Avisos := Avisos + IfThen(Avisos <> '', #10, '') + Format('  %s: %s', [MaskDriveText('', F.Ruta), L]);
+        AnadeLineaDeRuta(Avisos, MaskDriveText('', F.Ruta), L);
   if Avisos <> '' then
     Result := Result + #10 + IfThen(HasMsg(Result, SN_CHANGESET_AVISOS_FMT), Avisos,
       MsgFmt(SN_CHANGESET_AVISOS_FMT, [Avisos]));

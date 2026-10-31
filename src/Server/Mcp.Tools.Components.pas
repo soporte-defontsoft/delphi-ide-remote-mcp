@@ -269,13 +269,13 @@ begin
         [Shown, Info.Version,
          IfThen(Filter <> '', MsgFmt(SF_COMP_CON_FILTRO_FMT, [Filter]), ''),
          IfThen(Off > 0, MsgFmt(SF_COMP_DESHABILITADOS_FMT, [Off]), '')]) +
-        sLineBreak + sLineBreak + Sb.ToString.TrimRight;
+        #10#10 + Sb.ToString.TrimRight;
     if (Carpetas <> nil) and (Carpetas.Count > 0) then
-      Result := Result + IfThen(Result <> '', sLineBreak + sLineBreak) +
+      Result := Result + IfThen(Result <> '', #10#10) +
         MsgFmt(SN_COMPONENTS_PATH_HEAD_FMT, [Carpetas.Count, Filter]) +
-        sLineBreak + LineasDeCarpetas(Carpetas).TrimRight;
+        #10 + LineasDeCarpetas(Carpetas).TrimRight;
     if Shown > 0 then
-      Result := Result + sLineBreak + sLineBreak + MsgText(SN_COMPONENTS_NOTE);
+      Result := Result + #10#10 + MsgText(SN_COMPONENTS_NOTE);
   finally
     Carpetas.Free;
     Sb.Free;

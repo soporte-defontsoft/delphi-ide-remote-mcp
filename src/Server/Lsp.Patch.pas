@@ -3143,6 +3143,17 @@ begin
     raise Exception.Create(MsgFmt(SR_IDE_CLAVE_SIN_COPIA_FMT, [AClave, Salida.Trim]));
 end;
 
+{ La copia previa de una clave del IDE (AClave, la de AVersion y ASubclave), antes
+  de escribirla o de borrarla. }
+function CopiaDeClaveDelIde(const AVersion, ASubclave, AClave: string): string;
+begin
+  Result := GuardaCopiaDelIde(FicheroDeClaveDelIde(AVersion, ASubclave),
+    procedure(ACopia: string)
+    begin
+      ExportaClaveDelIde(AClave, ACopia);
+    end);
+end;
+
 { La clave abierta en R ya dice AValores: cada uno esta, con su tipo y su dato. }
 function ClaveYaDice(R: TRegistry; const AValores: array of TValorDelIde): Boolean;
 begin
@@ -3180,11 +3191,7 @@ begin
       if ClaveYaDice(R, AValores) then
         Exit;
       R.CloseKey;
-      Result := GuardaCopiaDelIde(FicheroDeClaveDelIde(AVersion, ASubclave),
-        procedure(ACopia: string)
-        begin
-          ExportaClaveDelIde(Clave, ACopia);
-        end);
+      Result := CopiaDeClaveDelIde(AVersion, ASubclave, Clave);
     end;
     if not R.OpenKey('\' + Clave, True) then
       raise Exception.Create(MsgFmt(SR_IDE_CLAVE_NO_ESCRITA_FMT, [Clave]));
@@ -3211,11 +3218,7 @@ begin
     R.RootKey := HKEY_CURRENT_USER;
     if not R.KeyExists('\' + Clave) then
       Exit;
-    Result := GuardaCopiaDelIde(FicheroDeClaveDelIde(AVersion, ASubclave),
-      procedure(ACopia: string)
-      begin
-        ExportaClaveDelIde(Clave, ACopia);
-      end);
+    Result := CopiaDeClaveDelIde(AVersion, ASubclave, Clave);
     if not R.DeleteKey('\' + Clave) then
       raise Exception.Create(MsgFmt(SR_IDE_CLAVE_NO_ESCRITA_FMT, [Clave]));
   finally
@@ -5430,22 +5433,19 @@ begin
         begin
           if A.Insert = 'metodo' then
             Exit(MsgText(SR_EDIT_INSERT_METODO_APLICA_DPR));
-          var IUses := -1;
           var IAfter := -1;
-          for I := 0 to High(Lines) do
-            if TRegEx.IsMatch(Codigo[I], '^[ \t]*uses\b', [roIgnoreCase]) then
-            begin
-              IUses := I;
-              Break;
-            end;
-          if IUses >= 0 then
+          // EL lector de la clausula, hasta donde acaba ENTERA: la regex de una
+          // linea que empezaba por uses y la primera que acabase en ';' metian
+          // la rutina dentro de una rama {$IFDEF} del uses (V220; medido)
+          var FinDeUses := FinDelUsesDelPrograma(Text);
+          if FinDeUses > 0 then
           begin
-            for I := IUses to High(Lines) do
-              if Codigo[I].TrimRight.EndsWith(';') then
-              begin
-                IAfter := I;
-                Break;
-              end;
+            IAfter := LineaDePosicion(VistaTexto, FinDeUses) - 1;
+            // con codigo detras en esa linea ('uses A; begin end.') caeria tras
+            // el end.: se niega (un {$ENDIF} en la vista del codigo es blanco)
+            var Cola := Codigo[IAfter].TrimRight;
+            if (Cola <> '') and not Cola.EndsWith(';') then
+              IAfter := -1;
           end
           else
           begin

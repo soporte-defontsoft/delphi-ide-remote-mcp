@@ -250,6 +250,9 @@ function UsesEnOrden(const AText: string; ASoloInterface: Boolean = False): TArr
   y removeuses no cortaban por el blanco y requires si (P13 del revisor). }
 function NombresDeUnidades(const ALista: string): TArray<string>;
 
+{ Donde acaba ENTERO el uses de un programa (ADpr, su texto): el indice de su
+  ';' o, partido en ramas, el del condicional que las cierra. 0 si no tiene. }
+function FinDelUsesDelPrograma(const ADpr: string): Integer;
 { adduses de delphi_edit: nombres de unit al uses de una seccion (interface o
   implementation) de un .pas; la clausula la escribe el motor. }
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
@@ -1208,6 +1211,14 @@ begin
     end;
     Inc(I);
   end;
+end;
+
+function FinDelUsesDelPrograma(const ADpr: string): Integer;
+begin
+  var U := FindUses(ADpr);
+  Result := 0;
+  if U.Found then
+    Result := U.FinRamas;
 end;
 
 // Leading comments/directives of an entry (kept when the entry is dropped so
@@ -4237,17 +4248,15 @@ begin
       Result := MsgFmt(SN_REFERENCIAS_CRUZAN_FMT, [Texto]);
   end;
   if Length(Saltadas) > 0 then
-    Result := Result + IfThen(Result <> '', #10, '') +
-      MsgFmt(SN_REUBICA_SALTADAS_FMT, [string.Join('; ', Saltadas)]);
+    AnadeLinea(Result, MsgFmt(SN_REUBICA_SALTADAS_FMT, [string.Join('; ', Saltadas)]));
   if Length(NoLlegan) > 0 then
-    Result := Result + IfThen(Result <> '', #10, '') +
-      MsgFmt(SN_REUBICA_NO_LLEGA_FMT, [string.Join('; ', NoLlegan)]);
+    AnadeLinea(Result, MsgFmt(SN_REUBICA_NO_LLEGA_FMT, [string.Join('; ', NoLlegan)]));
   if Length(Ilegibles) > 0 then
   begin
     var Texto := string.Join('; ', Copy(Ilegibles, 0, TOPE));
     if Length(Ilegibles) > TOPE then
       Texto := Texto + MsgFmt(SF_FILE_Y_MAS_FMT, [Length(Ilegibles) - TOPE]);
-    Result := Result + IfThen(Result <> '', #10, '') + MsgFmt(SN_REFERENCIAS_ILEGIBLES_FMT, [Texto]);
+    AnadeLinea(Result, MsgFmt(SN_REFERENCIAS_ILEGIBLES_FMT, [Texto]));
   end;
 end;
 

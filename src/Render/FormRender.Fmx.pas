@@ -123,17 +123,17 @@ end;
 function RecursoDePlataforma(const ANombre: string; out ABpl, ARecurso: string): Boolean;
 const
   TABLA: array[0..10, 0..2] of string = (
-    ('win7', 'fmx370.bpl', 'WIN7STYLE'), ('win8', 'fmx370.bpl', 'WIN8STYLE'),
-    ('win10', 'fmx370.bpl', 'WIN10STYLE'), ('win11', 'fmx370.bpl', 'WIN11STYLE'),
-    ('mobile', 'fmx370.bpl', 'MOBILEPREVIEWSTYLE'),
-    ('android', 'fmxdesigner370.bpl', 'ANDROIDSTYLE'), ('ios', 'fmxdesigner370.bpl', 'IOSSTYLE'),
-    ('ios-dark', 'fmxdesigner370.bpl', 'IOS15DARKSTYLE'), ('osx', 'fmxdesigner370.bpl', 'OSXSTYLE'),
-    ('linux', 'fmxdesigner370.bpl', 'UBUNTUSTYLE'), ('gnome', 'fmxdesigner370.bpl', 'GNOMESTYLE'));
+    ('win7', 'fmx', 'WIN7STYLE'), ('win8', 'fmx', 'WIN8STYLE'),
+    ('win10', 'fmx', 'WIN10STYLE'), ('win11', 'fmx', 'WIN11STYLE'),
+    ('mobile', 'fmx', 'MOBILEPREVIEWSTYLE'),
+    ('android', 'fmxdesigner', 'ANDROIDSTYLE'), ('ios', 'fmxdesigner', 'IOSSTYLE'),
+    ('ios-dark', 'fmxdesigner', 'IOS15DARKSTYLE'), ('osx', 'fmxdesigner', 'OSXSTYLE'),
+    ('linux', 'fmxdesigner', 'UBUNTUSTYLE'), ('gnome', 'fmxdesigner', 'GNOMESTYLE'));
 begin
   for var I := Low(TABLA) to High(TABLA) do
     if SameText(TABLA[I, 0], ANombre) then
     begin
-      ABpl := TABLA[I, 1].Replace('370', GPeticion.Bds.Replace('.', ''));
+      ABpl := TABLA[I, 1] + GPeticion.Bds.Replace('.', '') + '.bpl';
       ARecurso := TABLA[I, 2];
       Exit(True);
     end;
@@ -181,7 +181,7 @@ begin
   if GPeticion.Estilo = '' then
   begin
     if AForm.StyleBook = nil then
-      Exit('none (the form has no StyleBook: Windows default, as the designer)');
+      Exit(MsgText(SF_RENDER_ESTILO_SIN_STYLEBOOK));
     if EstilosConContenido(AForm.StyleBook) = 0 then
       Exit(MsgFmt(SF_RENDER_ESTILO_PROPIO_VACIO_FMT, [AForm.StyleBook.Name, AForm.StyleBook.Styles.Count]));
     Exit(MsgFmt(SF_RENDER_ESTILO_PROPIO_FMT, [AForm.StyleBook.Name, AForm.StyleBook.Styles.Count]));
@@ -190,7 +190,7 @@ begin
   if SameText(GPeticion.Estilo, 'none') or SameText(GPeticion.Estilo, 'windows') then
   begin
     AForm.StyleBook := nil;
-    Exit(MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, ['none (Windows default, as the designer)', Lleva]));
+    Exit(MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, [MsgText(SF_RENDER_ESTILO_WINDOWS), Lleva]));
   end;
   if TFile.Exists(GPeticion.Estilo) then
   begin

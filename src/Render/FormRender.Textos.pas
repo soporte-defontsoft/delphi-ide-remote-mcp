@@ -136,6 +136,18 @@ const
     'them): the platform default is drawn, and the app runs with it too ' +
     'unless its code loads a style';
 
+  SF_RENDER_ESTILO_SIN_STYLEBOOK =
+    'none (the form has no StyleBook: Windows default, as the designer)';
+
+  SF_RENDER_ESTILO_WINDOWS =
+    'none (Windows default, as the designer)';
+
+  SF_RENDER_ESTILO_VCL_FMT =
+    '%s (%s; the form is not in design mode: VCL styles do not apply to designed controls)';
+
+  SF_RENDER_SIN_ESTILO_VCL =
+    'none (as the VCL designer)';
+
   SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT =
     '%s - for this image only: the form itself carries %s';
 

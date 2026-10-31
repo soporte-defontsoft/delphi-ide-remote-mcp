@@ -65,7 +65,7 @@ function AmbitosDelProyecto(const AXml, APlat, ACfg: string): string;
   DCC_UnitAlias Legacy=System.SysUtils, dcc compilaba uses Legacy y hover no
   resolvia nada de ella (V119 de la 1.23.1, medido). El hermano de
   AmbitosDelProyecto. }
-function AliasDelProyecto(const AXml, APlat, ACfg: string): string;
+function AliasDelProyecto(const AXml, APlat, ACfg, ARaizDelIde: string): string;
 
 { The project (main source, a path) a settings file names in
   settings.project; '' when the file cannot be read or names none. The
@@ -145,13 +145,6 @@ uses
   Lsp.Casa,   // la casa del servidor (EscribeEnCasaDelServidor vive en Lsp.Patch)
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Rutas;  // RutaDesde: EL resolutor de una ruta leida de un fichero
-
-const
-  STANDARD_ALIASES =
-    'Generics.Collections=System.Generics.Collections;' +
-    'Generics.Defaults=System.Generics.Defaults;' +
-    'WinTypes=Winapi.Windows;WinProcs=Winapi.Windows;' +
-    'DbiTypes=BDE;DbiProcs=BDE;DbiErrs=BDE';
 
 { AllTagValues / XmlUnescape now live in Lsp.Dproj (shared); MergeProperty is
   gone: the value of ONE build is EffectiveProperty (1.22.0). }
@@ -626,7 +619,10 @@ begin
   Namespaces := AmbitosDelProyecto(Xml, Plat, Cfg);
 
   PathsJoined := string.Join(';', UnitPaths);
-  Opts := '--no-config -A' + AliasDelProyecto(Xml, Plat, Cfg);
+  Opts := '--no-config';
+  var Alias := AliasDelProyecto(Xml, Plat, Cfg, AInfo.RootDir);
+  if Alias <> '' then
+    Opts := Opts + ' -A' + Alias;
   if Defines <> '' then
     Opts := Opts + ' -D' + Defines;
   Opts := Opts + ' -NS' + Namespaces + ';';
@@ -726,7 +722,7 @@ begin
     Result := ListaDeNombres(DEFAULT_NAMESPACES);
 end;
 
-function AliasDelProyecto(const AXml, APlat, ACfg: string): string;
+function AliasDelProyecto(const AXml, APlat, ACfg, ARaizDelIde: string): string;
 var
   P: Integer;
   Nombre, Destino: string;
@@ -748,7 +744,13 @@ begin
     if EsIdentificador(Nombre, True) and EsIdentificador(Destino, True) then
       Result := Result + Nombre + '=' + Destino + ';';
   end;
-  Result := Result + STANDARD_ALIASES;
+  // ...y los de siempre, los que dice su instalacion, por EL evaluador: estaban
+  // copiados a mano (V160i de la 1.25; regla 6). Sin leerlos, los del proyecto
+  try
+    Result := Result + EffectiveProperty(LeeTexto(TPath.Combine(BinDelIde(ARaizDelIde),
+      'CodeGear.Common.Targets'), [ltIde]), 'UnitAliases', APlat, ACfg).Trim;
+  except
+  end;
 end;
 
 initialization

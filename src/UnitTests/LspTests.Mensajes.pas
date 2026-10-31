@@ -187,13 +187,13 @@ end;
 procedure TColaDeSalidaTests.LasUltimasYLaCuenta;
 begin
   var C := ColaDeSalida(Lineas(1, 10), 3);
-  Assert.AreEqual('L8'#13#10'L9'#13#10'L10', C.Texto);
+  Assert.AreEqual('L8'#10'L9'#10'L10', C.Texto);
   Assert.AreEqual(10, C.Total);
   Assert.AreEqual(3, C.Mostradas);
   Assert.IsTrue(C.Cortada, 'faltan siete');
   // las que caben van todas, sin la fantasma del salto final
   C := ColaDeSalida(Lineas(1, 3), 3);
-  Assert.AreEqual('L1'#13#10'L2'#13#10'L3', C.Texto);
+  Assert.AreEqual('L1'#10'L2'#10'L3', C.Texto);
   Assert.IsFalse(C.Cortada, 'enteras');
 end;
 
@@ -201,7 +201,7 @@ procedure TColaDeSalidaTests.SinFiltroVanLasVacias;
 begin
   // la salida que ES la respuesta (logcat, remote-run) va como salio
   var C := ColaDeSalida('a'#13#10#13#10'b  '#13'c', 10);
-  Assert.AreEqual('a'#13#10#13#10'b'#13#10'c', C.Texto, 'la vacia va; el blanco final no; el CR suelto es salto');
+  Assert.AreEqual('a'#10#10'b'#10'c', C.Texto, 'la vacia va; el blanco final no; el CR suelto es salto');
   Assert.AreEqual(4, C.Total);
 end;
 
@@ -214,7 +214,7 @@ begin
         ALinea := 'X';
       Result := ALinea <> '';
     end);
-  Assert.AreEqual('X'#13#10'b', C.Texto);
+  Assert.AreEqual('X'#10'b', C.Texto);
   Assert.AreEqual(3, C.Total, 'la vacia no cuenta');
   Assert.IsTrue(C.Cortada);
 end;

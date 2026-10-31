@@ -214,8 +214,7 @@ begin
   S := ACol + 1;
   if (S < 1) or (S > Length(ALineText)) or not EsCaracterDeIdent(ALineText[S]) then
     Exit('');
-  while (S > 1) and EsCaracterDeIdent(ALineText[S - 1]) do
-    Dec(S);
+  S := InicioDelIdentificador(ALineText, S);
   E := ACol + 1;
   while (E < Length(ALineText)) and EsCaracterDeIdent(ALineText[E + 1]) do
     Inc(E);

@@ -803,11 +803,31 @@ const
     '%s    <VerInfo_Keys Condition="''$(VerInfo_Keys)''==''''">package=com.embarcadero.$(MSBuildProjectName);' +
     'label=$(MSBuildProjectName);versionCode=1;versionName=1.0.0;persistent=False;' +
     'restoreAnyVersion=False;installLocation=auto;largeHeap=False;theme=TitleBar;' +
-    'hardwareAccelerated=true;apiKey=;minSdkVersion=23;targetSdkVersion=35</VerInfo_Keys>' + sLineBreak +
+    'hardwareAccelerated=true;apiKey=;%s</VerInfo_Keys>' + sLineBreak +
     '%s    <VerInfo_IncludeVerInfo Condition="''$(VerInfo_IncludeVerInfo)''==''''">true</VerInfo_IncludeVerInfo>' + sLineBreak +
     '%s    <EnabledSysJars Condition="''$(EnabledSysJars)''==''''">%s</EnabledSysJars>' + sLineBreak +
     '%s    <BT_BuildType Condition="''$(BT_BuildType)''==''''">Debug</BT_BuildType>' + sLineBreak +
     '%s</PropertyGroup>';
+
+{ El minSdkVersion y el targetSdkVersion con que el IDE estrena un proyecto de
+  Android: los lleva su paquete de la plataforma, y aqui ponia 35 con el IDE en
+  36 (medido el 31-oct-2026 en IDEAndroidPlatform370.bpl). Sin ese paquete, los
+  medidos. }
+function SdkDeAndroidDelIde(const ARaiz: string): string;
+begin
+  Result := 'minSdkVersion=23;targetSdkVersion=36';
+  try
+    for var B in TDirectory.GetFiles(BinDelIde(ARaiz), 'IDEAndroidPlatform*.bpl') do
+    begin
+      var Texto := TEncoding.Unicode.GetString(LeeBytes(B, [ltIde]));
+      var Minimo := TRegEx.Match(Texto, 'minSdkVersion=\d+');
+      var Objetivo := TRegEx.Match(Texto, 'targetSdkVersion=\d+');
+      if Minimo.Success and Objetivo.Success then
+        Exit(Minimo.Value + ';' + Objetivo.Value);
+    end;
+  except
+  end;
+end;
 
 { La cabecera del manifiesto que genera el servidor, la del IDE: el Import
   de CodeGear.Deployment.targets y su ProjectFileVersion (estaba escrita dos
@@ -1035,7 +1055,8 @@ begin
     // justo delante del ancla (con el ancla lo primero de su linea, igual que
     // al principio de la linea; con algo delante, no se mete antes de ello)
     Dproj := Copy(Dproj, 1, P - 1) +
-      Format(ANDROID_PROPS, [XmlAtributo('Condition', DeployGroupCondition(APlat)), Indent, Indent, Indent,
+      Format(ANDROID_PROPS, [XmlAtributo('Condition', DeployGroupCondition(APlat)), Indent,
+        SdkDeAndroidDelIde(ABdsRoot), Indent, Indent,
         XmlEscape(Jars), Indent,
         Indent]) + sLineBreak + Indent + Copy(Dproj, P, MaxInt);
     Changed := True;

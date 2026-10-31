@@ -419,7 +419,7 @@ begin
           // (el juicio de un form no va aqui: lo hace el commit una vez por
           // form, al final, H6)
           for var LA in AvisosDelMotor(R) do
-            AAvisos := AAvisos + IfThen(AAvisos <> '', #10, '') + LA;
+            AnadeLinea(AAvisos, LA);
       end;
     opCreate:
       begin
@@ -1121,8 +1121,7 @@ begin
               Ok := ApplyOneConAvisos(Op, Err, AvisosPaso, CopiaPaso);
               if Ok and (AvisosPaso <> '') then
                 for var LA in LineasDelTexto(AvisosPaso) do
-                  AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') +
-                    Format('  %s: %s', [MaskDriveText('', Op.Path), LA]);
+                  AnadeLineaDeRuta(AvisosTodos, MaskDriveText('', Op.Path), LA);
               // contar las lineas de DESPUES tambien lee el fichero, y otro
               // proceso lo puede tener: dentro del mismo try, o la excepcion
               // salia sin deshacer nada (tercera revision, medido)
@@ -1270,8 +1269,7 @@ begin
               if EsForm then
                 TextoAntes := TextoDeLaFoto(Foto, FPath);
               for var LJ in JuicioDeLoEscrito(FPath, TextoF, EncF, Escritos, TextoAntes) do
-                AvisosTodos := AvisosTodos + IfThen(AvisosTodos <> '', #10, '') + '  ' +
-                  IfThen(EsForm, MaskDriveText('', FPath) + ': ', '') + LJ;
+                AnadeLinea(AvisosTodos, '  ' + IfThen(EsForm, MaskDriveText('', FPath) + ': ', '') + LJ);
             except
               // un form que no se relee no tumba un lote ya escrito
             end;

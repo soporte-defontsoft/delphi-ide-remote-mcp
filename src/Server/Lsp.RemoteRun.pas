@@ -262,7 +262,7 @@ begin
   // dice en crudo; viaja con su salida, que cada llamador ya ensena
   var Aviso := AvisoDePaclient(AOutput);
   if Aviso <> '' then
-    AOutput := AOutput.TrimRight + sLineBreak + Aviso;
+    AOutput := AOutput.TrimRight + #10 + Aviso;
 end;
 
 function PaclientGet(const ARemoto, ALocal: string): string;
