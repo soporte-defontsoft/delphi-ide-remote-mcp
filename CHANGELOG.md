@@ -19,6 +19,10 @@ the MCP `initialize` response (`serverInfo.version`).
   Now it writes the `inline` block as the IDE does, with its field and its unit in the
   `uses`.
 
+- **`delphi_adb stop` stops an app.** Only `key=back` existed, which does not close a hung
+  app. It force-stops what `run` can start, a Delphi FMX app, by the activity the device
+  says it launches; any other package is refused (`ADB-033`) and left running. Checked on a
+  device only for the refusal: no FMX app was installed to stop.
 - **`delphi_designer layout` measures FMX forms.** It refused them (`DSGN-027`). Now the
   renderer lays the form out and says where each control ends up: `boxes`, what has a zero
   side and what sticks out of its parent. What overlaps is listed and does not take `clean`

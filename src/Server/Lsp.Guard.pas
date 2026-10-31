@@ -1651,7 +1651,7 @@ begin
   // v0.98 la lista es del workspace y vacia = ninguno: sin excepcion.
   if (ArgStr(AArguments, 'device').Trim = '') and
      MatchText(Trim(ArgStr(AArguments, 'command')),
-       ['install', 'run', 'tap', 'key', 'logcat', 'screenshot']) then
+       ['install', 'run', 'stop', 'tap', 'key', 'logcat', 'screenshot']) then
     Exit(MsgText(SR_ADB_ALLOWLIST_DEVICE));
 end;
 

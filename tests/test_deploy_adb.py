@@ -488,6 +488,10 @@ out = ro.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X",
                              "device": "127.0.0.1"})
 check('readonly: run rechazado (ejecutar en el dispositivo es write)',
       mc.rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT'), out[:250])
+out = ro.call('delphi_adb', {"command": "stop", "app": "com.embarcadero.X",
+                             "device": "127.0.0.1"})
+check('readonly: stop rechazado (V64: parar una app es write)',
+      mc.rechazado(out) and mc.es(out, 'SR_READ_ONLY_FMT'), out[:250])
 # screenshot sin out= MIRA: la captura es trabajo nuestro, en la casa del
 # servidor y no en la jaula (2af), y la juzgan los dispositivos permitidos;
 # con out= escribe un fichero de la jaula y se niega a la entrada (2ab de la
@@ -547,6 +551,9 @@ noal = Server()
 out = noal.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X"})
 check('sin lista: comando con device implicito RECHAZADO (fail closed)',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_DEVICE') and 'AdbAllowedDevices' in out, out[:250])
+out = noal.call('delphi_adb', {"command": "stop", "app": "com.embarcadero.X"})
+check('sin lista: stop con device implicito, igual (V64)',
+      mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_DEVICE'), out[:250])
 out = noal.call('delphi_adb', {"command": "connect", "address": "192.0.2.163:5555"})
 check('sin lista: hasta un connect explicito se rechaza (lista vacia = nada)',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_FMT'), out[:250])

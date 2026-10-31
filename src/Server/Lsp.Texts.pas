@@ -2889,7 +2889,7 @@ const
     'Android devices for remote development: phones/tablets hang off THIS ' +
     'server (USB or wifi adb) while you program from anywhere. Each ' +
     'subcommand is in "command"; discover gives the ip:port of what ' +
-    'announces wireless debugging (no address to know up front), and ' +
+    'announces wireless debugging, and ' +
     'connect attaches it (Android 11+: pair it once first). The ' +
     'adb used is the one of the IDE''s own Android SDK. Building the .apk ' +
     'is delphi_build target=Deploy (the deployment manifest is generated ' +
@@ -2903,7 +2903,7 @@ const
     'ip:port) | devices (attached devices; default) | connect (over the ' +
     'network: address) | disconnect (address) | install (an .apk: apk, ' +
     'device) | run (launch an installed app: app, device - the IDE''s ' +
-    'Deploy and Run) | logcat (the device log, bounded: device, optional ' +
+    'Deploy and Run) | stop (force-stop what run starts: app, device) | logcat (the device log, bounded: device, optional ' +
     'filter and lines) | screenshot (the screen, in this answer: device, ' +
     'optional out) | tap (x, y measured on a screenshot, device) | key (a ' +
     'navigation key: key, device)';
@@ -2918,8 +2918,8 @@ const
   SP_ADB_APK =
     'Path of the .apk to install (inside the workspace)';
   SP_ADB_APP =
-    'run: package name of the installed app to launch (e.g. ' +
-    'com.embarcadero.MyApp - the build/install results state it)';
+    'run, stop: its package name (com.embarcadero.MyApp: the build and install ' +
+    'results state it)';
   SP_ADB_OUT =
     'screenshot, optional: where the capture lands' +
     SP_CAPTURE_OUT_RULE +
@@ -3103,7 +3103,7 @@ const
     'the server converts.';
 
   SR_ADB_NEED_APP =
-    '[ADB-013 INVALID_PARAM] run needs "app" (the installed package name, e.g. ' +
+    '[ADB-013 INVALID_PARAM] This command needs "app" (the installed package name, e.g. ' +
     'com.embarcadero.MyApp - the build and install results declare it).';
 
   SR_ADB_APP_FMT =
@@ -3113,6 +3113,14 @@ const
   { run: el paquete se ELIGE entre los que el dispositivo tiene instalados
     (pm list packages) y a am start va el nombre que da el dispositivo: lo
     tecleado no viaja (V8 de la 1.23). %s = lo pedido. }
+  { stop solo para lo que run arranca: una app FMX de Delphi (V64 de la 1.24) }
+  SR_ADB_STOP_NO_ES_FMX_FMT =
+    '[ADB-033 DENIED] %s was not stopped: stop is for what run starts, a Delphi FMX app, ' +
+    'and the device does not launch this one by that activity.';
+  SK_ADB_PARADA_FMT =
+    '[ADB-034] STOPPED %s. It is the same as Force stop in its settings: nothing of it ' +
+    'runs until something starts it (command=run).';
+
   SR_ADB_APP_NO_INSTALADA_FMT =
     '[ADB-029 NOT_FOUND] "%s" is not installed on that device: its package ' +
     'manager does not list it. Install the .apk with command=install, or name ' +

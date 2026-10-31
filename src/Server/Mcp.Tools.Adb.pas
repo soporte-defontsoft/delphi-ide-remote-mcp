@@ -241,6 +241,8 @@ begin
 end;
 
 const
+  // la actividad de toda app FMX de Delphi: la plantilla del AndroidManifest la nombra
+  ACTIVIDAD_FMX = 'com.embarcadero.firemonkey.FMXNativeActivity';
   // command=key: the whole vocabulary - fixed navigation keys, no free
   // keycodes, no text injection.
   KEY_NAMES: array[0..9] of string = ('back', 'home', 'enter', 'appswitch',
@@ -294,7 +296,7 @@ begin
       'discover', '', 'devices', '',
       'logcat', 'filter lines out device',
       'connect', 'address', 'disconnect', 'address',
-      'install', 'apk device', 'run', 'app device',
+      'install', 'apk device', 'run', 'app device', 'stop', 'app device',
       'screenshot', 'out inline maxwidth device',
       'tap', 'x y frame device', 'key', 'key device'],
     ['device', Params.Device, '',
@@ -507,12 +509,36 @@ begin
     var App := PaqueteInstalado(Output, Params.App.Trim);
     if App = '' then
       Exit(MsgFmt(SR_ADB_APP_NO_INSTALADA_FMT, [Params.App.Trim]));
-    Output := RunAdb(Adb, DevArg + 'shell am start -n ' + App +
-      '/com.embarcadero.firemonkey.FMXNativeActivity', 30000, ExitCode);
+    Output := RunAdb(Adb, DevArg + 'shell am start -n ' + App + '/' + ACTIVIDAD_FMX, 30000, ExitCode);
     // am start sale con 0 aunque no arranque (la actividad no existe: no es
     // una app Delphi FMX): lo dicen sus palabras (NoLoHizoConCero, V63)
     if (ExitCode = 0) and NoLoHizoConCero('am start', Output) then
       Exit(MsgFmt(SR_ADB_RUN_FALLO_FMT, [App, Output.Trim]));
+    Result := ResultadoAdb(Output, ExitCode);
+  end
+  else if Cmd = 'stop' then
+  begin
+    if Params.App.Trim = '' then
+      Exit(MsgText(SR_ADB_NEED_APP));
+    // lo unico que para una app colgada (key=back no la cierra; V64 de la 1.24), y
+    // solo lo que run puede arrancar: la actividad de una app FMX, la que dice el
+    // dispositivo. Nada de los Ajustes ni de lo que el usuario tenga abierto. El
+    // nombre, el que da el, como en run
+    Output := RunAdb(Adb, DevArg + 'shell pm list packages', 30000, ExitCode);
+    if ExitCode <> 0 then
+      Exit(ResultadoAdb(Output, ExitCode));
+    var App := PaqueteInstalado(Output, Params.App.Trim);
+    if App = '' then
+      Exit(MsgFmt(SR_ADB_APP_NO_INSTALADA_FMT, [Params.App.Trim]));
+    Output := RunAdb(Adb, DevArg + 'shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER ' + App,
+      30000, ExitCode);
+    if ExitCode <> 0 then
+      Exit(ResultadoAdb(Output, ExitCode));
+    if not Output.Contains(App + '/' + ACTIVIDAD_FMX) then
+      Exit(MsgFmt(SR_ADB_STOP_NO_ES_FMX_FMT, [App]));
+    Output := RunAdb(Adb, DevArg + 'shell am force-stop ' + App, 30000, ExitCode);
+    if ExitCode = 0 then
+      Exit(MsgFmt(SK_ADB_PARADA_FMT, [App]));
     Result := ResultadoAdb(Output, ExitCode);
   end
   else if Cmd = 'screenshot' then
