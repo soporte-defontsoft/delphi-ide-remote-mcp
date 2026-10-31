@@ -2097,8 +2097,6 @@ class VigilanteDeEscritorio:
         k32.OpenProcess.restype = ctypes.c_void_p
         k32.QueryFullProcessImageNameW.argtypes = [ctypes.c_void_p, ctypes.c_uint32, ctypes.c_wchar_p,
                                                    ctypes.POINTER(ctypes.c_uint32)]
-        nombres = {}
-        principales = {}
         u32.GetWindowTextW.argtypes = [ctypes.c_void_p, ctypes.c_wchar_p, ctypes.c_int]
 
         def apunta(hwnd, pid, tid, cls):
@@ -2106,30 +2104,37 @@ class VigilanteDeEscritorio:
                 return
             tit = ctypes.create_unicode_buffer(128)
             u32.GetWindowTextW(hwnd, tit, 128)
-            if pid not in principales:
-                principales[pid] = hilo_principal(pid)
             self.detalles[hwnd] = dict(
-                muestra=self.muestras, exe=nombres.get(pid, ''), pid=pid, clase=cls, titulo=tit.value, hilo=tid,
-                es_principal=(tid == principales[pid]),
+                muestra=self.muestras, exe=nombre_de(pid), pid=pid, clase=cls, titulo=tit.value, hilo=tid,
+                es_principal=(tid == hilo_principal(pid)),
                 ex='%08X' % (u32.GetWindowLongW(hwnd, -20) & 0xFFFFFFFF))
 
+        def nombre_de(pid):
+            # El exe se pregunta CADA vez, nunca por una cache por pid: Windows
+            # reutiliza los pid, y el nombre de un renderizador muerto se le
+            # colgaba al proceso que heredaba su numero. Release check del
+            # 31-oct-2026: MuestrasEstilos.exe (un FMX ajeno, en marcha dos
+            # minutos con el pid de un renderizador anterior) conto 1087
+            # muestras como ventana del renderizador; lo delato su titulo, que
+            # CreateAppHandle compone con el nombre del exe. Solo se pregunta
+            # por las ventanas VISIBLES y por la del primer plano: pocas.
+            n = ''
+            h = k32.OpenProcess(0x1000, False, pid)
+            if h:
+                b = ctypes.create_unicode_buffer(1024)
+                s = ctypes.c_uint32(1024)
+                if k32.QueryFullProcessImageNameW(h, 0, b, ctypes.byref(s)):
+                    n = os.path.basename(b.value)
+                k32.CloseHandle(h)
+            return n
+
         def de_render(pid):
-            if pid not in nombres:
-                n = ''
-                h = k32.OpenProcess(0x1000, False, pid)
-                if h:
-                    b = ctypes.create_unicode_buffer(1024)
-                    s = ctypes.c_uint32(1024)
-                    if k32.QueryFullProcessImageNameW(h, 0, b, ctypes.byref(s)):
-                        n = os.path.basename(b.value)
-                    k32.CloseHandle(h)
-                nombres[pid] = n
-            return nombres[pid].lower().startswith('delphiformrender')
+            return nombre_de(pid).lower().startswith('delphiformrender')
 
         def cb(hwnd, _lp):
             pid = ctypes.c_uint32()
             tid = u32.GetWindowThreadProcessId(hwnd, ctypes.byref(pid))
-            if de_render(pid.value) and u32.IsWindowVisible(hwnd):
+            if u32.IsWindowVisible(hwnd) and de_render(pid.value):
                 cls = ctypes.create_unicode_buffer(64)
                 u32.GetClassNameW(hwnd, cls, 64)
                 if cls.value == '#32770':
