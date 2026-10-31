@@ -395,6 +395,11 @@ REGLAS = [
      [('Lsp.Discovery.pas', 'ClaveDelIde')],
      'ClaveDelIde (Lsp.Discovery): la raiz, la de una version o una subclave; quien la quiera '
      'absoluta le pone la barra delante'),
+    # el numero que adb pone a un nombre mDNS repetido: adb no tiene una orden que lo diga, asi
+    # que es gramatica nuestra, UNA; la puerta y la lista del workspace preguntan lo mismo (V223)
+    ('el numero de un nombre mDNS de adb leido a mano', r"Pos\(\s*'\)\.'",
+     [('Lsp.Settings.pas', 'DispositivoSinNumeroMdns')],
+     'DispositivoSinNumeroMdns (Lsp.Settings): lo leen BadDeviceName y AdbTargetAllowed'),
     # el esquema de una direccion de git: git no tiene una orden que diga como la lee sin
     # conectarse, asi que es gramatica nuestra, UNA y calcada de la suya (url.c is_urlschemechar;
     # el '://' en cualquier sitio, como el strstr de connect.c). La leian dos lectores, uno que
@@ -1714,6 +1719,7 @@ PLANTADO = {
         "  for var Mt in TRegEx.Matches(T, '(?is)RegisterClass\\s*\\((.*?)\\)\\s*;') do",
     'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
     'la clave del IDE en el registro': "  if Reg.OpenKeyReadOnly('SOFTWARE\\Embarcadero\\BDS\\' + Ver) then",
+    'el numero de un nombre mDNS de adb leido a mano': "  C := Pos(').', Nombre);",
     'el esquema de una direccion de git leido a mano': "  if Pos('://', Url) > 0 then",
     'la rama absoluta de una entrada de sitio': "  Full := TPath.GetFullPath(RaizSiUnidad(V));",
     'el significado de old/new': "  A.HasNew := (ANew <> '') or A.HasOld;",

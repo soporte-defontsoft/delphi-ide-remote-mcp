@@ -330,6 +330,7 @@ function TodosLosVaults: TArray<string>;
 function VaultModoEscritura: Boolean;
 function SitiosQueNoSeTocan: TArray<string>;
 function AdbTargetAllowed(const ATarget: string): Boolean;
+function DispositivoSinNumeroMdns(const ATarget: string): string;
 
 { Las raices de ESCRITURA de todos los workspaces declarados, en el orden
   del settings.ini, y las del modo local de lanzamiento: lo que entra en la
@@ -1997,6 +1998,28 @@ begin
   Result := False;
 end;
 
+{ El nombre mDNS de un dispositivo sin el " (N)" que adb le pone cuando lo ve
+  repetido: "adb-X (2)._adb-tls-connect._tcp" -> "adb-X._adb-tls-connect._tcp".
+  El numero lo pone adb, no es del dispositivo, asi que la lista del workspace
+  lo reconoce sin el; pero adb solo acepta en -s el nombre entero (medido con
+  una tablet: ni sin el numero ni con el serial). Sin esa forma, el texto tal
+  cual. adb no tiene una orden que lo diga: esta es LA gramatica nuestra de ese
+  sufijo. }
+function DispositivoSinNumeroMdns(const ATarget: string): string;
+var
+  Abre, Cierra: Integer;
+begin
+  Result := ATarget;
+  Abre := Pos(' (', ATarget);
+  Cierra := Pos(').', ATarget);
+  if (Abre < 2) or (Cierra <= Abre + 2) then
+    Exit;
+  for var C in Copy(ATarget, Abre + 2, Cierra - Abre - 2) do
+    if not CharInSet(C, ['0'..'9']) then
+      Exit;
+  Result := Copy(ATarget, 1, Abre - 1) + Copy(ATarget, Cierra + 1);
+end;
+
 { The adb device allowlist ([Adb] AllowedDevices / DELPHI_MCP_ADB_DEVICES,
   semicolon list): when configured, the ONLY devices this server will
   address - outside it, nothing, at BOTH access levels (David's rule). An
@@ -2020,7 +2043,8 @@ begin
   P := Pos(':', ATarget);
   if P > 0 then
     Host := Copy(ATarget, 1, P - 1);
-  Result := NombreEnLaLista(ATarget, Lista) or NombreEnLaLista(Host, Lista);
+  Result := NombreEnLaLista(ATarget, Lista) or NombreEnLaLista(Host, Lista) or
+    NombreEnLaLista(DispositivoSinNumeroMdns(ATarget), Lista);
 end;
 
 function EsComodinDeLista(const AEntrada: string): Boolean;

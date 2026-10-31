@@ -1600,6 +1600,14 @@ begin
         Exit(True);
 end;
 
+{ El nombre de un dispositivo, que puede ser el mDNS que adb numera ("adb-X
+  (2)._adb-tls-connect._tcp"): la misma regla sobre el nombre sin el numero, y
+  el tope sobre el entero. address no pasa por aqui: es ip:port. True = refuse. }
+function BadDeviceName(const V: string): Boolean;
+begin
+  Result := (Length(V) > 64) or BadDeviceToken(DispositivoSinNumeroMdns(V));
+end;
+
 { delphi_adb's address/device land on the adb command line. Same lesson as
   git/build/paserver: one vetting place for both access levels. The apk path
   is a filesystem argument vetted by the tool through ReadPathDenied. }
@@ -1620,7 +1628,7 @@ begin
   V := ArgStr(AArguments, 'device').Trim;
   if V <> '' then
   begin
-    if BadDeviceToken(V) then
+    if BadDeviceName(V) then
       Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
     if not AdbTargetAllowed(V) then
       Exit(MsgFmt(SR_ADB_ALLOWLIST_FMT, [V]));
@@ -1691,7 +1699,7 @@ begin
   // "deviceid" is an adb serial reaching msbuild (/p:DeviceId=) - the same
   // rule as delphi_adb's address/device.
   V := ArgStr(AArguments, 'deviceid').Trim;
-  if (V <> '') and BadDeviceToken(V) then
+  if (V <> '') and BadDeviceName(V) then
     Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
   // "sdk" reaches msbuild's line (/p:PlatformSDK=): a file NAME, never a
   // path and never a metacharacter (audit 2026-09-25). The build also

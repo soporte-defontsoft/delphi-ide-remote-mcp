@@ -541,7 +541,8 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   (`delphi_delete` the probe, then `delphi_move` the copy back).
 - **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist —
   `AdbAllowedDevices=192.0.2.163;SERIAL123` (a `;` or `,` list; an IP entry covers whatever
-  port wifi debugging negotiates, a USB serial is listed as-is). Devices outside the
+  port wifi debugging negotiates, a USB serial is listed as-is, and a device adb lists by its
+  mDNS name is listed by that name, without the ` (2)` adb adds when it sees it twice). Devices outside the
   workspace's list are refused at **both** access levels, every device-addressing command
   must name its `device` explicitly (an implicit target could be an unlisted device that
   happens to be the only one attached) — and, like every list since v0.98, **absent means

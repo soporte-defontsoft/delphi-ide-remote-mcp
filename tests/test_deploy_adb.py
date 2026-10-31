@@ -545,6 +545,38 @@ check('allowlist: device fuera de lista rechazado TAMBIEN en comando read',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_FMT'), out[:250])
 al.cierra()
 
+# V223: adb numera un nombre mDNS repetido ("adb-X (2)._adb-tls-connect._tcp") y solo acepta
+# ese nombre entero en -s (medido con la tablet: ni sin sufijo ni con el serial). Se nombra
+# como lo lista devices y la lista del workspace lo reconoce sin el numero. El nombre llega a
+# adb como UN argumento: lo dice su "device '...' not found" con el nombre entero.
+NOMBRE_MDNS = 'adb-SERIE-AbCdEf (2)._adb-tls-connect._tcp'
+md = Server(env={'DELPHI_MCP_ADB_DEVICES': 'adb-SERIE-AbCdEf._adb-tls-connect._tcp'})
+out = md.call('delphi_adb', {"command": "logcat", "device": NOMBRE_MDNS, "lines": "5"}, t=60)
+check('V223 un nombre mDNS numerado pasa la puerta y llega entero a adb (ROJA: ADB-018)',
+      not mc.es(out, 'SR_ADB_TARGET_FMT') and not mc.es(out, 'SR_ADB_ALLOWLIST_FMT')
+      and mc.llego_a_adb(out) and NOMBRE_MDNS in out, out[:300])
+out = md.call('delphi_adb', {"command": "logcat", "device": 'adb-SERIE-AbCdEf._adb-tls-connect._tcp', "lines": "5"}, t=60)
+check('V223 sin el numero, como siempre: pasa la puerta',
+      not mc.es(out, 'SR_ADB_TARGET_FMT') and not mc.es(out, 'SR_ADB_ALLOWLIST_FMT') and mc.llego_a_adb(out), out[:300])
+out = md.call('delphi_adb', {"command": "logcat", "device": 'adb-OTRO-AbCdEf (2)._adb-tls-connect._tcp', "lines": "5"})
+check('V223 otro nombre numerado, fuera de la lista: rechazado',
+      mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_FMT'), out[:300])
+for malo in ['adb-SERIE-AbCdEf (2)&calc._adb-tls-connect._tcp', 'adb-SERIE-AbCdEf (a)._adb-tls-connect._tcp',
+             'adb-SERIE-AbCdEf ()._adb-tls-connect._tcp', 'adb-SERIE-AbCdEf (2) (3)._adb-tls-connect._tcp',
+             'adb-SERIE-AbCdEf  (2)._adb-tls-connect._tcp', 'adb-SERIE-AbCdEf (2)_adb-tls-connect._tcp',
+             '-x (2)._adb-tls-connect._tcp', ' (2)._adb-tls-connect._tcp', 'adb-SERIE-AbCdEf (2).x y',
+             'adb-SERIE-AbCdEf (2)." -s otro']:
+    out = md.call('delphi_adb', {"command": "logcat", "device": malo, "lines": "5"})
+    check('V223 lo que no tiene esa forma sigue negado: %r' % malo,
+          mc.rechazado(out) and (mc.es(out, 'SR_ADB_TARGET_FMT') or mc.es(out, 'SR_ADB_ALLOWLIST_FMT')), out[:300])
+out = md.call('delphi_adb', {"command": "logcat", "device": 'adb-SERIE-AbCdEf (2)._adb-tls-connect._tcp' + 'x' * 30, "lines": "5"})
+check('V223 el tope de longitud cuenta el nombre entero',
+      mc.rechazado(out) and mc.es(out, 'SR_ADB_TARGET_FMT'), out[:300])
+out = md.call('delphi_adb', {"command": "connect", "address": NOMBRE_MDNS})
+check('V223 address sigue siendo ip:port: el nombre numerado no vale ahi',
+      mc.rechazado(out) and mc.es(out, 'SR_ADB_TARGET_FMT'), out[:300])
+md.cierra()
+
 # v0.98: SIN lista ya no hay barra libre - ausente = NINGUN dispositivo,
 # como toda lista por workspace. El unico fail-open del adb, cerrado.
 noal = Server()

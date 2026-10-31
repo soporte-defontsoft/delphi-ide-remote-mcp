@@ -97,6 +97,7 @@ uses
   Lsp.Dproj,
   Lsp.Guard,
   Lsp.Patch,     // ColocaProducto / ColocaContenido: un out= se coloca con la puerta, sellando lo que habia
+  Lsp.ProcessLaunch, // EnComillas: un valor en una linea de orden
   Lsp.Png,       // TamanoPngBytes: LA cabecera de un PNG
   Lsp.InlineImages, // DeliverCapture: la entrega de una captura, la de toda la casa
   Lsp.BuildRunner,
@@ -312,10 +313,11 @@ begin
   if Adb = '' then
     Exit(MsgText(SR_ADB_NO_SDK));
   // a serial goes BEFORE the subcommand (adb -s <serial> <cmd>). The gate
-  // already vetted the device token.
+  // already vetted the device token. Entre comillas: un nombre mDNS numerado
+  // lleva un blanco ("adb-X (2)._adb-tls-connect._tcp").
   DevArg := '';
   if Params.Device.Trim <> '' then
-    DevArg := '-s ' + Params.Device.Trim + ' ';
+    DevArg := '-s ' + EnComillas(Params.Device.Trim) + ' ';
   if Cmd = 'discover' then
   begin
     // mDNS: the devices ANNOUNCING wireless debugging, each with its ip:port.

@@ -21,8 +21,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - **`delphi_adb stop` stops an app.** Only `key=back` existed, which does not close a hung
   app. It force-stops what `run` can start, a Delphi FMX app, by the activity the device
-  says it launches; any other package is refused (`ADB-033`) and left running. Checked on a
-  device only for the refusal: no FMX app was installed to stop.
+  says it launches; any other package is refused (`ADB-033`) and left running.
 - **`delphi_designer layout` measures FMX forms.** It refused them (`DSGN-027`). Now the
   renderer lays the form out and says where each control ends up: `boxes`, what has a zero
   side and what sticks out of its parent. What overlaps is listed and does not take `clean`
@@ -44,6 +43,11 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- **`delphi_adb` can name a device adb lists with a number.** Over wireless debugging adb can
+  list `adb-X (2)._adb-tls-connect._tcp`, and it accepts only that whole name. The gate refused
+  the space and the parentheses (`ADB-018`), so that device could not be named at all, though
+  `ADB-018` itself says to use what `devices` lists. It now goes as listed, and
+  `AdbAllowedDevices` recognizes it by the name without the number.
 - **Several answers said what they did not mean.** `delphi_move` of a file to a folder
   that exists answered `LSP-016`, which sends you to `delphi_list`; now `MOVE-026` gives
   the final path to use. `MOVE-025` says parent folders are created, and `EDIT-019` says

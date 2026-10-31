@@ -2911,7 +2911,7 @@ const
     'ip:port of the device for connect/disconnect (from command=discover, ' +
     'or the device''s wireless-debugging screen)';
   SP_ADB_DEVICE =
-    'Device serial or ip:port (from command=devices). REQUIRED for every ' +
+    'Device serial, ip:port or name, as command=devices lists it. REQUIRED for every ' +
     'command that touches a device, and it must be in the workspace''s ' +
     'AdbAllowedDevices: the device is named, never implied, even when only ' +
     'one is attached.';
