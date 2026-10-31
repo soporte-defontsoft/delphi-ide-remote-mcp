@@ -13,6 +13,8 @@ V46: los nombres que un agente manda a delphi_build (friccion de Hermes del 22-o
 tabla de alias de siempre, sin coste en el contrato.
 V41: delphi_changeset stage con ops: varias operaciones en una llamada, todas o ninguna, y cada una por la misma
 puerta que una suelta (una ruta de dentro de ops no tiene otra).
+V12: delphi_build da los hints en su lista, sin gastar de mas: nada en quiet, sin repetirlos en la cola, con tope y
+cuenta.
 
 Usage:  python tests/test_capacidades_125.py [path-to-DelphiLspMcp.exe]
 """
@@ -284,6 +286,41 @@ try:
     t = cs('stage', id=ID, kind='edit', path=A, old='dos', new='DOS')
     check('V41 control: stage suelto sigue igual', not mc.fallo(t) and mc.es(t, 'SN_CHANGESET_STAGED_FMT'), t[:300])
     cs('rollback', id=ID)
+
+    # V12 - los hints de delphi_build
+    call('delphi_create', {'kind': 'project-console', 'name': 'Pistas', 'dir': os.path.join(RAIZ, 'pistas')})
+    DPR = os.path.join(RAIZ, 'pistas', 'Pistas.dpr')
+    PROY = os.path.join(RAIZ, 'pistas', 'Pistas.dproj')
+    with open(DPR, newline='') as f:
+        LIMPIO = f.read()
+
+
+    def con_rutinas(n):
+        rutinas = ''.join('procedure P%d;\r\nvar\r\n  X: Integer;\r\nbegin\r\n  X := %d;\r\nend;\r\n\r\n' % (i, i) for i in range(n))
+        with open(DPR, 'w', newline='') as f:
+            f.write(LIMPIO.replace('begin', rutinas + 'begin', 1))
+
+
+    def compila(verbosidad):
+        return mc.como_json(call('delphi_build', {'project': PROY, 'platform': 'Win64', 'config': 'Debug', 'verbosity': verbosidad}, t=180))
+
+
+    j = compila('normal')
+    check('V12 sin hints, sin lista', j.get('success') is True and 'hints' not in j, str(j)[:300])
+    con_rutinas(1)
+    j = compila('normal')
+    h = j.get('hints') or []
+    check('V12 normal: el hint en su lista, con su sitio', len(h) == 1 and 'H2077' in h[0] and 'Pistas.dpr(' in h[0] and 'hintsTotal' not in j, str(j)[:400])
+    check('V12 ...ni entre los warnings ni repetido en la cola', not any('H2077' in w for w in j.get('warnings', [])) and 'H2077' not in (j.get('outputTail') or ''), str(j)[:400])
+    j = compila('quiet')
+    check('V12 quiet: nada, ni lista ni cola', j.get('success') is True and 'hints' not in j and 'H2077' not in json.dumps(j), str(j)[:400])
+    j = compila('verbose')
+    check('V12 verbose: tambien en su lista', any('H2077' in x for x in j.get('hints') or []), str(j)[:300])
+    con_rutinas(60)
+    j = compila('normal')
+    h = j.get('hints') or []
+    check('V12 con muchos: su tope y la cuenta de todos', len(h) == 50 and j.get('hintsTotal') == 60, (len(h), j.get('hintsTotal')))
+    check('V12 ...y los que no caben tampoco van a la cola', 'H2077' not in (j.get('outputTail') or ''), (j.get('outputTail') or '')[:300])
 finally:
     srv.mata()
 

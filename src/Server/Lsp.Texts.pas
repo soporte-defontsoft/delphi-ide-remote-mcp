@@ -228,7 +228,7 @@ const
   // respuesta no lleva la clave (nunca un 0 que seria mentira).
   SP_BUILD_VERBOSITY =
     'quiet (DEFAULT: errors + the summary - cheapest for "does it still ' +
-    'compile"; warnings are not even asked for) | normal (warnings and ' +
+    'compile"; warnings are not even asked for) | normal (warnings, hints and ' +
     'msbuild milestones) | verbose (everything, the whole linker command ' +
     'line included - when a quiet error is not clear enough). It sets ' +
     'msbuild''s own verbosity: quiet asks for less, it does not just hide ' +

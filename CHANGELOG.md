@@ -43,6 +43,9 @@ the MCP `initialize` response (`serverInfo.version`).
 - **`delphi_changeset stage` takes several operations in one call.** `ops` is a list of the
   fields one `stage` takes; all are staged or none, and each goes through the same checks as one
   sent alone. A batch of N files costs four calls instead of N+3.
+- **`delphi_build` lists the compiler's hints in `hints`**, read by the same reader as `warnings`:
+  they only came inside `outputTail`. Nothing in `quiet`, no key when there are none, no repeat
+  in the tail, and at most 50 with `hintsTotal` saying how many there were.
 
 ### Fixed
 

@@ -2211,11 +2211,14 @@ end;
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile, ADeviceId: string; ATimeoutMs: Integer;
   const ASdk, AVerbosity: string): TJSONObject;
+const
+  TOPE_HINTS = 50; // cuantos van en hints[]; hintsTotal dice los demas
 var
   Info: TRadStudioInfo;
   Output, Line, Plat, Cfg, Target: string;
   ExitCode: DWORD;
-  Errors, Warnings: TJSONArray;
+  Errors, Warnings, Hints: TJSONArray;
+  HintsTotal: Integer;
   EsPaquete: Boolean;
   EventosSaltados: Boolean; // eventos pre/post build vaciados en este build
   EventosAvisados: Boolean; // ...y alguno lo habria ejecutado el IDE (V18)
@@ -2689,6 +2692,8 @@ begin
 
   Errors := TJSONArray.Create;
   Warnings := TJSONArray.Create;
+  Hints := TJSONArray.Create;
+  HintsTotal := 0;
   // Lo mismo que entra en errors[]/warnings[], apuntado aparte para que la
   // cola no lo repita.
   YaDicho := TStringList.Create;
@@ -2714,6 +2719,16 @@ begin
   else if Line.Contains(': warning ') or Line.Contains(' warning W') then
   begin
     Warnings.Add(Line.Trim);
+    YaDicho.Add(Line.Trim);
+  end
+  // los hints, por este mismo lector: dcc escribe "Hint warning H2077". Con su
+  // tope y su cuenta, y fuera de la cola aunque no quepan: son lo que mas se
+  // repite de un build y los paga el contexto del agente (David, 15-oct-2026)
+  else if Line.Contains(' warning H') or Line.Contains(': hint ') then
+  begin
+    Inc(HintsTotal);
+    if Hints.Count < TOPE_HINTS then
+      Hints.Add(Line.Trim);
     YaDicho.Add(Line.Trim);
   end;
   end;
@@ -2818,6 +2833,15 @@ begin
       Warnings.Free
     else
       Result.AddPair('warnings', Warnings);
+    // ...y hints solo si los hay: nada que pagar en el build normal sin ninguno
+    if SameText(AVerbosity, 'quiet') or (Hints.Count = 0) then
+      Hints.Free
+    else
+    begin
+      Result.AddPair('hints', Hints);
+      if HintsTotal > Hints.Count then
+        Result.AddPair('hintsTotal', TJSONNumber.Create(HintsTotal));
+    end;
     // W1033 en un paquete: units de OTROS paquetes compiladas dentro del
     // nuestro. El IDE ensena la lista y pregunta si anadir esos paquetes al
     // requires (David, 2026-09-23); aqui va la lista, con el paquete de cada
