@@ -1289,7 +1289,7 @@ begin
     var Idx := IndexStr(ARemoto.Trim, Nombres);
     if Idx < 0 then
       Exit(MsgFmt(SR_GIT_REMOTO_NO_ESTA_FMT, [ARemoto.Trim,
-        IfThen(Length(Nombres) = 0, '(none)', string.Join(', ', Nombres))]));
+        ONinguno(string.Join(', ', Nombres))]));
     Mirar := [Nombres[Idx]];
   end
   else

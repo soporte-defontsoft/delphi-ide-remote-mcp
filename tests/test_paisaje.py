@@ -47,6 +47,7 @@ REGLAS = [
       # otra pregunta: anadir a una nota del vault, no nacer
       ('Mcp.Tools.Vault.pas', 'TVaultAppendTool.ExecuteWithParams')],
      'TextoQueNace (Lsp.Patch, V215): createunit, delphi_create y el create de un changeset'),
+    ('una lista vacia dicha a mano', r"'\(none\)'", [], 'ONinguno (Lsp.Texts)'),
     ('una unit vacia compuesta a mano', r"'unit %s;'#",
      [('Lsp.Patch.pas', 'EsqueletoDeUnit')], 'EsqueletoDeUnit (Lsp.Patch, P9)'),
     ('la carpeta bin del IDE a mano', r"(?:\+\s*|,\s*)'\\?bin(?:\\[^']*)?'",
@@ -1684,6 +1685,7 @@ check('las fuentes del grupo se leen (83 unidades el 6-oct-2026: al menos 70)', 
 # regla tiene que cazar (y un comentario con el formato, que NO)
 PLANTADO = {
     'un fichero que nace acabado en salto a mano': "  if not Body.EndsWith(CRLF) then X := 1;",
+    'una lista vacia dicha a mano': "  L := IfThen(X = '', '(none)', X);",
     'una unit vacia compuesta a mano': "  S := Format('unit %s;'#13#10, [N]);",
     'la carpeta bin del IDE a mano': "  P := TPath.Combine(Raiz, 'bin');",
     'donde vive la libc de un sysroot a mano': "  F := TPath.Combine(Raiz, 'lib\\x86_64-linux-gnu');",
