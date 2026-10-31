@@ -4918,9 +4918,9 @@ const
     'missing; that is ALWAYS my failure, report it with delphi_report. A ' +
     'success declares no outcome. The same four codes are in ' +
     'structuredContent.code.'#10#10 +
-    '12. WHO YOU ARE. You identify yourself ONCE, in the handshake, with ' +
-    'clientInfo.name; the server binds it to your session and from then ' +
-    'on knows who you are in every request without you repeating it. ' +
+    '12. WHO YOU ARE. You identify yourself with clientInfo.name: once, in ' +
+    'the handshake, and the server binds it to your session; or, in protocol ' +
+    '2026-07-28, which has none, in each request (your client does it). ' +
     'With that: delphi_messages reads YOUR mail without typing the id, ' +
     'and what YOU send to the trash only you can purge (another agent ' +
     'that tries gets a DENIED). It is not a password: the token is ' +
@@ -12728,6 +12728,25 @@ const
   SR_SYS_METODO_NO_TEXTO =
     '[SYS-032 INVALID_PARAM] "method" has to be the name of a method, ' +
     'as a string. Nothing was done.';
+
+  { El protocolo 2026-07-28 (V60 de la 1.25): cada peticion lleva su version y
+    las capacidades del cliente en su _meta, y por HTTP las repite en cabeceras. }
+  SR_SYS_META_FALTA_FMT =
+    '[SYS-035 INVALID_PARAM] This request has no "%s" in params._meta, which ' +
+    'protocol 2026-07-28 requires on every request. Nothing was done.';
+
+  SR_SYS_VERSION_NO_SOPORTADA_FMT =
+    '[SYS-036 INVALID_PARAM] Protocol version "%s" is not supported here: ' +
+    '2026-07-28 on every request, or the initialize handshake for the earlier ' +
+    'ones. Nothing was done.';
+
+  SR_SYS_CABECERA_FALTA_FMT =
+    '[SYS-037 INVALID_PARAM] HTTP header %s is required on this request. ' +
+    'Nothing was done.';
+
+  SR_SYS_CABECERA_DISTINTA_FMT =
+    '[SYS-038 INVALID_PARAM] HTTP header %s does not match the request body. ' +
+    'Nothing was done.';
 
   SR_SYS_RECURSO_NO_EXISTE_FMT =
     '[SYS-022 NOT_FOUND] Resource "%s" does not exist (resources/list ' +

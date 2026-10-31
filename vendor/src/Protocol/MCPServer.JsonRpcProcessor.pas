@@ -10,6 +10,15 @@ uses
   MCPServer.Logger;
 
 type
+  { [local change] Lo que una peticion dice de si misma en el protocolo sin
+    handshake (V60 de la 1.25). Es: se sirve sin estado. Un initialize elige la
+    era de la sesion, y una version anterior en _meta es de esa era tambien;
+    server/discover solo existe en esta, traiga lo que traiga. }
+  TPeticionModerna = record
+    Es, ConCapacidades: Boolean;
+    Version, Cliente, Metodo, Nombre: string;
+  end;
+
   TMCPJsonRpcProcessor = class
   private
     FManagerRegistry: IMCPManagerRegistry;
@@ -17,7 +26,9 @@ type
     class function CreateJSONResponse(const RequestID: TValue): TJSONObject;
     class procedure AddRequestIDToResponse(Response: TJSONObject; const RequestID: TValue);
     class function ExecuteMethodCall(ManagerRegistry: IMCPManagerRegistry; const MethodName: string; Params: TJSONObject): TValue;
-    class function CreateErrorResponse(const RequestID: TValue; ErrorCode: Integer; const ErrorMessage: string): string;
+    class function CreateErrorResponse(const RequestID: TValue; ErrorCode: Integer; const ErrorMessage: string;
+      AData: TJSONObject = nil): string;
+    class procedure AnotaModerno(AResultado: TJSONObject; const AMetodo: string);
     class function IdValido(IdValue: TJSONValue): Boolean;
   public
     constructor Create(ManagerRegistry: IMCPManagerRegistry);
@@ -34,6 +45,9 @@ type
       respuesta del cliente oia 202 por HTTP y SYS-032 por stdio; un
       objeto vacio no oia nada y un lote vacio un 202 (octava revision). }
     class function NoSeContesta(AValor: TJSONValue): Boolean;
+    { [local change] UN lector del _meta moderno, el de los dos transportes. }
+    class function LeeModerna(AValor: TJSONValue): TPeticionModerna;
+    class function LeeModernaDeTexto(const ACuerpo: string): TPeticionModerna;
   end;
 
 const
@@ -43,6 +57,10 @@ const
   JSONRPC_INVALID_PARAMS = -32602;
   JSONRPC_INTERNAL_ERROR = -32603;
   JSONRPC_RESOURCE_NOT_FOUND = -32002; // [local change] el de MCP
+  // [local change] los que la revision 2026-07-28 reserva con su significado
+  JSONRPC_HEADER_MISMATCH = -32020;
+  JSONRPC_MISSING_CLIENT_CAPABILITY = -32021;
+  JSONRPC_UNSUPPORTED_VERSION = -32022;
 
 type
   { [local change 2026-09-27] Un metodo que no existe: su CLASE decide el
@@ -55,6 +73,7 @@ type
 implementation
 
 uses
+  MCPServer.CoreManager, // [local change] el serverInfo de cada resultado moderno
   Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
 
 { TMCPJsonRpcProcessor }
@@ -152,6 +171,84 @@ begin
         Exit(False);
 end;
 
+class function TMCPJsonRpcProcessor.LeeModerna(AValor: TJSONValue): TPeticionModerna;
+const
+  // las versiones del handshake: las que trae una peticion de la sesion
+  ERA_DEL_HANDSHAKE: array[0..3] of string = ('2024-11-05', '2025-03-26', '2025-06-18', '2025-11-25');
+var
+  Params, Meta: TJSONValue;
+begin
+  Result := Default(TPeticionModerna);
+  if not (AValor is TJSONObject) then
+    Exit;
+  Result.Metodo := CampoDeTexto(AValor, 'method');
+  if Result.Metodo = 'initialize' then
+    Exit;
+  Params := TJSONObject(AValor).GetValue('params');
+  if Params is TJSONObject then
+  begin
+    Result.Nombre := CampoDeTexto(Params, 'name');
+    if Result.Nombre = '' then
+      Result.Nombre := CampoDeTexto(Params, 'uri');
+    Meta := TJSONObject(Params).GetValue('_meta');
+    if Meta is TJSONObject then
+    begin
+      Result.Version := CampoDeTexto(Meta, META_MCP_VERSION);
+      Result.ConCapacidades := TJSONObject(Meta).GetValue(META_MCP_CAPACIDADES) is TJSONObject;
+      Result.Cliente := CampoDeTexto(TJSONObject(Meta).GetValue(META_MCP_CLIENTE), 'name');
+    end;
+  end;
+  Result.Es := (Result.Metodo = 'server/discover') or (Result.Version <> '');
+  for var V in ERA_DEL_HANDSHAKE do
+    if (Result.Version = V) and (Result.Metodo <> 'server/discover') then
+      Result.Es := False;
+end;
+
+class function TMCPJsonRpcProcessor.LeeModernaDeTexto(const ACuerpo: string): TPeticionModerna;
+var
+  V: TJSONValue;
+begin
+  V := nil;
+  try
+    try
+      V := TJSONObject.ParseJSONValue(ACuerpo);
+    except
+      V := nil; // lo que no se lee lo contesta ProcessRequest
+    end;
+    Result := LeeModerna(V);
+  finally
+    V.Free;
+  end;
+end;
+
+{ [local change] Lo que la revision pide en cada resultado: resultType, el
+  serverInfo y, en los que se pueden guardar, cuanto y para quien. private: lo que
+  se ve depende del token. Cinco minutos en las listas: no cambian con el servidor
+  en marcha y un despliegue se nota solo; lo que lee resources/read, siempre al dia. }
+class procedure TMCPJsonRpcProcessor.AnotaModerno(AResultado: TJSONObject; const AMetodo: string);
+const
+  LISTAS_TTL_MS = 300000;
+var
+  Meta: TJSONValue;
+begin
+  AResultado.AddPair('resultType', 'complete');
+  Meta := AResultado.GetValue('_meta');
+  if not (Meta is TJSONObject) then
+  begin
+    Meta := TJSONObject.Create;
+    AResultado.AddPair('_meta', Meta);
+  end;
+  TJSONObject(Meta).AddPair(META_MCP_SERVIDOR, TMCPCoreManager.ServerInfo);
+  if AMetodo = 'resources/read' then
+    AResultado.AddPair('ttlMs', TJSONNumber.Create(0))
+  else if (AMetodo = 'server/discover') or (AMetodo = 'tools/list') or (AMetodo = 'prompts/list') or
+          (AMetodo = 'resources/list') or (AMetodo = 'resources/templates/list') then
+    AResultado.AddPair('ttlMs', TJSONNumber.Create(LISTAS_TTL_MS))
+  else
+    Exit;
+  AResultado.AddPair('cacheScope', 'private');
+end;
+
 class function TMCPJsonRpcProcessor.CreateJSONResponse(const RequestID: TValue): TJSONObject;
 begin
   Result := TJSONObject.Create;
@@ -191,7 +288,7 @@ begin
 end;
 
 class function TMCPJsonRpcProcessor.CreateErrorResponse(const RequestID: TValue;
-  ErrorCode: Integer; const ErrorMessage: string): string;
+  ErrorCode: Integer; const ErrorMessage: string; AData: TJSONObject = nil): string;
 var
   ErrorObj: TJSONObject;
   JSONResponse: TJSONObject;
@@ -202,6 +299,8 @@ begin
     JSONResponse.AddPair('error', ErrorObj);
     ErrorObj.AddPair('code', TJSONNumber.Create(ErrorCode));
     ErrorObj.AddPair('message', ErrorMessage);
+    if Assigned(AData) then
+      ErrorObj.AddPair('data', AData); // se la queda la respuesta
     Result := JSONResponse.ToJSON;
   finally
     JSONResponse.Free;
@@ -220,8 +319,10 @@ var
   ParamsValue: TJSONValue;
   RequestID: TValue;
   Valor: TJSONValue;
+  Moderna: TPeticionModerna;
 begin
   Result := '';
+  Moderna := Default(TPeticionModerna);
   JSONRequest := nil;
   JSONResponse := nil;
   Valor := nil;
@@ -267,6 +368,33 @@ begin
         Exit(CreateErrorResponse(TValue.Empty, JSONRPC_INVALID_REQUEST,
           MsgText(SR_SYS_ID_NO_VALIDO)));
 
+      // [local change] sin estado: lo que hace falta para contestar viene en cada
+      // peticion, y lo que falta o no se habla se dice aqui, igual en los dos transportes
+      Moderna := LeeModerna(JSONRequest);
+      if Moderna.Es then
+      begin
+        if Moderna.Version = '' then
+          Exit(CreateErrorResponse(RequestID, JSONRPC_INVALID_PARAMS,
+            MsgFmt(SR_SYS_META_FALTA_FMT, [META_MCP_VERSION])));
+        if Moderna.Version <> MCP_PROTOCOLO_MODERNO then
+        begin
+          var Datos := TJSONObject.Create;
+          var Hay := TJSONArray.Create;
+          Hay.Add(MCP_PROTOCOLO_MODERNO);
+          Hay.Add(MCP_PROTOCOL_VERSION);
+          Datos.AddPair('supported', Hay);
+          Datos.AddPair('requested', Moderna.Version);
+          Exit(CreateErrorResponse(RequestID, JSONRPC_UNSUPPORTED_VERSION,
+            MsgFmt(SR_SYS_VERSION_NO_SOPORTADA_FMT, [Moderna.Version]), Datos));
+        end;
+        if not Moderna.ConCapacidades then
+          Exit(CreateErrorResponse(RequestID, JSONRPC_INVALID_PARAMS,
+            MsgFmt(SR_SYS_META_FALTA_FMT, [META_MCP_CAPACIDADES])));
+        // lo que la revision retira, en esta era no existe
+        if (MethodName = 'ping') or (MethodName = 'logging/setLevel') then
+          raise EMetodoNoExiste.Create(MsgFmt(SR_SYS_METODO_NO_EXISTE_FMT, [MethodName]));
+      end;
+
       JSONResponse := CreateJSONResponse(RequestID);
 
       ParamsValue := JSONRequest.GetValue('params');
@@ -279,7 +407,11 @@ begin
       if not ExecuteResult.IsEmpty then
       begin
         if ExecuteResult.IsType<TJSONObject> then
-          JSONResponse.AddPair('result', ExecuteResult.AsType<TJSONObject>)
+        begin
+          if Moderna.Es then
+            AnotaModerno(ExecuteResult.AsType<TJSONObject>, MethodName);
+          JSONResponse.AddPair('result', ExecuteResult.AsType<TJSONObject>);
+        end
         else if ExecuteResult.IsType<string> then
           JSONResponse.AddPair('result', ExecuteResult.AsString)
         else
@@ -289,7 +421,12 @@ begin
         // [local change 2026-09-28] una PETICION siempre lleva result o
         // error (JSON-RPC 2.0): notifications/initialized con id contestaba
         // {"jsonrpc","id"} sin result (novena revision, M2)
-        JSONResponse.AddPair('result', TJSONObject.Create);
+      begin
+        var Vacio := TJSONObject.Create;
+        JSONResponse.AddPair('result', Vacio);
+        if Moderna.Es then
+          AnotaModerno(Vacio, MethodName);
+      end;
 
       Result := JSONResponse.ToJSON;
 
@@ -308,7 +445,8 @@ begin
         else if E is EMetodoNoExiste then
           ErrorCode := JSONRPC_METHOD_NOT_FOUND
         else if E is ERecursoNoExiste then
-          ErrorCode := JSONRPC_RESOURCE_NOT_FOUND
+          // la revision 2026-07-28 retira -32002: en su era, -32602
+          ErrorCode := (if Moderna.Es then JSONRPC_INVALID_PARAMS else JSONRPC_RESOURCE_NOT_FOUND)
         else if EsFalloDelLlamador(E) then // la misma regla que ToolsManager
           ErrorCode := JSONRPC_INVALID_PARAMS;
 

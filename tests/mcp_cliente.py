@@ -30,6 +30,28 @@ RAIZ = os.path.join(tempfile.gettempdir(), 'delphi-mcp-tests')
 # produccion. Bajo RAIZ, que run_all vacia al empezar
 CACHE_BATERIAS = os.path.join(RAIZ, '_cache_servidor')
 PROTOCOLO = '2025-06-18'
+# El protocolo sin handshake ni sesiones (V60 de la 1.25): cada peticion lleva su version,
+# sus capacidades y su nombre en _meta, y por HTTP repite version, metodo y nombre en cabeceras.
+PROTOCOLO_MODERNO = '2026-07-28'
+META_VERSION = 'io.modelcontextprotocol/protocolVersion'
+META_CLIENTE = 'io.modelcontextprotocol/clientInfo'
+META_CAPACIDADES = 'io.modelcontextprotocol/clientCapabilities'
+META_SERVIDOR = 'io.modelcontextprotocol/serverInfo'
+
+
+def params_modernos(params=None, nombre='bateria', version=PROTOCOLO_MODERNO, capacidades=True):
+    """Los params de una peticion moderna, con su _meta. nombre=None no se presenta;
+    version=None o capacidades=False dejan fuera ese campo (lo que falta se niega)."""
+    p = dict(params or {})
+    meta = {}
+    if version is not None:
+        meta[META_VERSION] = version
+    if capacidades:
+        meta[META_CAPACIDADES] = {}
+    if nombre is not None:
+        meta[META_CLIENTE] = {'name': nombre, 'version': '1'}
+    p['_meta'] = meta
+    return p
 
 
 # ---------------------------------------------------------------- carpeta
@@ -1713,6 +1735,10 @@ class Stdio:
                 return m
         return None
 
+    def moderna(self, method, params=None, nombre='bateria', version=PROTOCOLO_MODERNO, capacidades=True, t=None):
+        """Una peticion del protocolo moderno por stdio: el mensaje de respuesta."""
+        return self.request(method, params_modernos(params, nombre, version, capacidades), t)
+
     def inicializa(self, nombre='bateria', capacidades=None):
         self.send({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
             "protocolVersion": self.protocolo, "capabilities": capacidades or {},
@@ -1893,6 +1919,25 @@ class Http:
         if isinstance(st, int) and st >= 400:
             return {'error': {'httpStatus': st, 'body': raw[:300]}}
         return None
+
+    def moderna(self, method, params=None, nombre='bateria', version=PROTOCOLO_MODERNO, capacidades=True,
+                sin=(), cabeceras=None, sid=None, t=None):
+        """Una peticion del protocolo moderno, sin sesion: (status, cabeceras, mensaje).
+        sin: las cabeceras que no se mandan; cabeceras: las que se cambian o se anaden."""
+        with self._lock:
+            self.rid += 1
+            rid = self.rid
+        p = params_modernos(params, nombre, version, capacidades)
+        h = {'MCP-Protocol-Version': version or PROTOCOLO_MODERNO, 'Mcp-Method': method}
+        destino = p.get('name', p.get('uri'))
+        if method in ('tools/call', 'resources/read', 'prompts/get') and destino:
+            h['Mcp-Name'] = destino
+        h.update(cabeceras or {})
+        for c in sin:
+            h.pop(c, None)
+        st, hs, raw = post(self.url, {'jsonrpc': '2.0', 'id': rid, 'method': method, 'params': p}, self.token,
+                           sid, ACCEPT_STREAMABLE, self.t if t is None else t, h)
+        return st, hs, next((m for m in self.mensajes(raw) if m.get('id') == rid), None)
 
     def call_msg(self, name, args, t=None, sid=PROPIA):
         return self.request('tools/call', {"name": name, "arguments": args}, t, sid)

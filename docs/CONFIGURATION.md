@@ -561,7 +561,8 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   update may need one day. Declared, never deduced (the startup log shows the update each
   installer recorded, as a hint). A value that is not `number.number` is ignored with a
   warning; absent = none declared.
-- **`[Server] SessionTimeoutMinutes`** (or `DELPHI_MCP_SESSION_TIMEOUT_MINUTES`): an HTTP
+- **`[Server] SessionTimeoutMinutes`** (or `DELPHI_MCP_SESSION_TIMEOUT_MINUTES`): only for
+  clients that use `initialize` (protocol 2026-07-28 has no sessions). An HTTP
   session that sits idle longer than this (default 720 minutes; 0 = never) expires, and the
   next request on it answers 404 with the reason so the client re-initializes - the
   streamable-HTTP contract, and the same answer an id this process never issued gets

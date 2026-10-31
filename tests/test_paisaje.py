@@ -41,6 +41,15 @@ LANZA = r'\b(?:RunCaptured(?:In|EnContenedor)?|RunDetached|CreateProcess\w*|Shel
 
 # (nombre, formato, casas: [(fichero, funcion o '*' = todo el fichero)], por que)
 REGLAS = [
+    # V60 de la 1.25: la identidad y la version de una peticion moderna las lee UNO, el de
+    # los dos transportes; un segundo lector es una segunda puerta a quien eres
+    ('el _meta del protocolo moderno leido a mano', r'\bMETA_MCP_(?:VERSION|CLIENTE|CAPACIDADES)\b',
+     [('MCPServer.Types.pas', '*'), ('MCPServer.JsonRpcProcessor.pas', 'LeeModerna'),
+      ('MCPServer.JsonRpcProcessor.pas', 'ProcessRequest')],
+     'UN lector del _meta de 2026-07-28 (TMCPJsonRpcProcessor.LeeModerna), para HTTP y stdio'),
+    ('la identidad propia compuesta a mano', r'\bSESION_SIN_NOMBRE\s*\+',
+     [('Lsp.Identidad.pas', 'IdentidadPropia')],
+     'quien no da un nombre que valga tiene la suya, nunca la del operador (V111, V159, V60): una casa'),
     ('lanzar paclient', LANZA + r'.*(?i:pa_?client|\bA?Pc\b)',
      [('Lsp.RemoteRun.pas', 'Paclient')],
      'UN helper para todo lo que habla con un PAServer (1.16.0: cinco a mano)'),
@@ -1641,6 +1650,8 @@ check('las fuentes del grupo se leen (83 unidades el 6-oct-2026: al menos 70)', 
 # el MUTANTE de cada regla: una copia plantada, fuera de su casa, que la
 # regla tiene que cazar (y un comentario con el formato, que NO)
 PLANTADO = {
+    'el _meta del protocolo moderno leido a mano': "  N := CampoDeTexto(Meta.GetValue(META_MCP_CLIENTE), 'name');",
+    'la identidad propia compuesta a mano': "  TCurrentAgent := SESION_SIN_NOMBRE + FragmentoUnico;",
     'elegir el grupo de un build a mano': "  if GrupoConCondicion(Xml, GroupCondition(Plat), G) then",
     'un ItemGroup de despliegue compuesto a mano': "  B := '    <ItemGroup ' + XmlAtributo('Condition', C) + '>';",
     'una DCCReference compuesta a mano': "  R := '        <DCCReference ' + XmlAtributo('Include', I) + '/>';",

@@ -121,10 +121,14 @@ VM).
 ## Any other MCP client (Hermes, custom agents, SDKs)
 
 - **stdio**: spawn `DelphiLspMcp.exe`; JSON-RPC 2.0, one message per line,
-  MCP protocol `2025-06-18`. Logs go to stderr, protocol to stdout.
+  MCP protocols `2026-07-28` and `2025-06-18`. Logs go to stderr, protocol to stdout.
 - **HTTP**: POST JSON-RPC to `http://HOST:PORT/mcp` with
   `Authorization: Bearer <token>` and `Accept: application/json`.
-  `initialize` → `notifications/initialized` → `tools/list` / `tools/call`.
+  `initialize` → `notifications/initialized` → `tools/list` / `tools/call`, with the
+  session it gives you. Or, in `2026-07-28`, no handshake: each request carries
+  `io.modelcontextprotocol/protocolVersion` and `clientCapabilities` in `_meta`, your
+  `clientInfo` too (it is your identity), and the headers `MCP-Protocol-Version`,
+  `Mcp-Method` and, on what names a tool or resource, `Mcp-Name`.
 
 The test batteries under `tests/` are minimal working MCP clients in plain
 Python stdlib — use them as reference implementations for both transports.

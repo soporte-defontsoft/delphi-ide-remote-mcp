@@ -8,6 +8,23 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- **The server speaks MCP 2026-07-28, next to the sessions it already had.** That revision
+  removes the handshake and the sessions. `server/discover` now answers with the versions
+  spoken, the capabilities and the instructions, where it answered `-32601` and the clients
+  fell back. A request with that version in its `_meta` is served with no session: its
+  headers and required fields are judged (`SYS-035` to `SYS-038`, with the codes and HTTP
+  statuses the revision names), and its results carry `resultType`, `serverInfo` and, on the
+  ones a client may keep, `ttlMs` and `cacheScope`. An `initialize` still opens a session
+  that works as it did, on the same endpoint. Your identity there is the `clientInfo.name`
+  of each request: with no name, or one that sanitizes to nothing, a request gets an identity
+  of its own and never the operator's, so what it sends to the trash cannot be purged by
+  the next one. This opens nothing new: a holder of the token could already `initialize`
+  with any name, and the name is still a courtesy between honest agents, as the revision
+  says too. Requests with no session do not count in `sessions` of `delphi_workspace`.
+  Not done: closing a response stream does not cancel the work in course, as before.
+
 ## [1.24.0] - 2026-10-31
 
 A minor version around the form designer, and the renderer inside its own

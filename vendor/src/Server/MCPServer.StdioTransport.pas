@@ -25,6 +25,7 @@ type
 implementation
 
 uses
+  Lsp.Identidad, // [local change] el nombre de una peticion moderna
   Lsp.Texts; // [local change 2026-09-28] MsgExcepcion
 
 { TMCPStdioTransport }
@@ -69,6 +70,13 @@ begin
 
       // [local change] secrets in arguments never reach the log
       TLogger.Info('Received: ' + MaskSecretValues(InputLine));
+
+      // [local change] sin handshake el nombre viene en cada peticion, y sin el
+      // un proceso stdio sigue siendo del operador que lo lanzo (la regla de
+      // Lsp.Identidad); una peticion de la sesion conserva el de su initialize
+      var Moderna := TMCPJsonRpcProcessor.LeeModernaDeTexto(InputLine);
+      if Moderna.Es then
+        SetThreadIdentity(Moderna.Cliente);
 
       Response := FJsonRpcProcessor.ProcessRequest(InputLine, '');
 

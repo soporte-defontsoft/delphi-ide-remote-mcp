@@ -69,7 +69,6 @@ Stabilizing what is there, not adding to it:
 - Lighter for small models: a second pass over the tool descriptions, measured against a small local model
 - The jail measured, not only declared: the protections that need a privilege measured in the suite, and fewer rules of our own where a real judge can answer
 - A more restricted token (LPAC) for the resource compiler of `delphi_styles build`: measured on 2026-10-24 that it would not lift the styles-folder rule of 1.21.0 (`STYLE-052`), since `C:\Windows` and `Program Files` grant read to restricted application packages as well - whether it is still worth it is open
-- Speaking MCP 2026-07-28: that revision removes the handshake and the sessions an agent's identity rests on here, so that comes first. Nothing breaks today: the clients measured fall back to `initialize`
 
 ## Open
 

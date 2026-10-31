@@ -91,6 +91,7 @@ type
     procedure HandlePostRequest(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo);
     procedure HandlePostRequestSSE(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const SessionID: string);
     procedure HandlePostRequestJSON(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const SessionID: string);
+    procedure HandlePostRequestModerno(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const APeticion: TPeticionModerna);
     function GetNextEventID: string;
     function AcceptsSSE(const AcceptHeader: string): Boolean;
   public
@@ -133,6 +134,7 @@ implementation
 uses
   MCPServer.Resource.Server,
   MCPServer.CoreManager,
+  Lsp.Base64, // [local change] el valor de una cabecera Mcp-Name en Base64
   Lsp.Identidad, // [local change] per-session agent identity and the session registry
   Lsp.Texts, // [local change] the 404 texts of a dead session
   Lsp.Settings, // [local change] tokens, BindIP and the session timeout (settings.ini)
@@ -199,6 +201,49 @@ begin
   end;
 end;
 
+// [local change] Las cabeceras de una peticion moderna (V60 de la 1.25): la revision
+// 2026-07-28 repite version, metodo y nombre fuera del cuerpo, para quien enruta sin
+// leerlo, y manda negar lo que no coincide. '' si valen; si no, el motivo.
+function CabecerasModernasDicen(RequestInfo: TIdHTTPRequestInfo;
+  const APeticion: TPeticionModerna): string;
+const
+  CAB_VERSION = 'MCP-Protocol-Version';
+  CAB_METODO = 'Mcp-Method';
+  CAB_NOMBRE = 'Mcp-Name';
+  B64_ABRE = '=?base64?';
+  B64_CIERRA = '?=';
+var
+  Valor: string;
+  Bytes: TArray<Byte>;
+begin
+  Valor := RequestInfo.RawHeaders.Values[CAB_VERSION];
+  if Valor = '' then
+    Exit(MsgFmt(SR_SYS_CABECERA_FALTA_FMT, [CAB_VERSION]));
+  if Valor <> APeticion.Version then
+    Exit(MsgFmt(SR_SYS_CABECERA_DISTINTA_FMT, [CAB_VERSION]));
+  Valor := RequestInfo.RawHeaders.Values[CAB_METODO];
+  if Valor = '' then
+    Exit(MsgFmt(SR_SYS_CABECERA_FALTA_FMT, [CAB_METODO]));
+  if Valor <> APeticion.Metodo then
+    Exit(MsgFmt(SR_SYS_CABECERA_DISTINTA_FMT, [CAB_METODO]));
+  Result := '';
+  if ((APeticion.Metodo <> 'tools/call') and (APeticion.Metodo <> 'resources/read') and
+      (APeticion.Metodo <> 'prompts/get')) or (APeticion.Nombre = '') then
+    Exit;
+  Valor := RequestInfo.RawHeaders.Values[CAB_NOMBRE];
+  if Valor = '' then
+    Exit(MsgFmt(SR_SYS_CABECERA_FALTA_FMT, [CAB_NOMBRE]));
+  if Valor.StartsWith(B64_ABRE) and Valor.EndsWith(B64_CIERRA) then
+  begin
+    if Base64ToBytes(Copy(Valor, Length(B64_ABRE) + 1,
+         Length(Valor) - Length(B64_ABRE) - Length(B64_CIERRA)), CAB_NOMBRE, Bytes) <> '' then
+      Exit(MsgFmt(SR_SYS_CABECERA_DISTINTA_FMT, [CAB_NOMBRE]));
+    Valor := TEncoding.UTF8.GetString(Bytes);
+  end;
+  if Valor <> APeticion.Nombre then
+    Result := MsgFmt(SR_SYS_CABECERA_DISTINTA_FMT, [CAB_NOMBRE]);
+end;
+
 // [local change] Issued session ids. The upstream server echoes whatever
 // Mcp-Session-Id a client sends and never checks it, so a client that
 // persists its session across a SERVER RESTART keeps using a dead id and is
@@ -210,30 +255,6 @@ end;
 // identity (this unit kept a second ring of ids
 // until then: two writers for one thing), and a session also EXPIRES there
 // after SessionTimeoutMinutes idle.
-
-// [local change 2026-09-28] Is this request the handshake? By its "method",
-// not by the word anywhere in the body: arguments:{"command":"initialize"}
-// got a tool run on a dead session past the 404 gate (fifth review).
-function EsPeticionInitialize(const ARequestBody: string): Boolean;
-var
-  V: TJSONValue;
-begin
-  Result := False;
-  V := nil;
-  try
-    try
-      V := TJSONObject.ParseJSONValue(ARequestBody);
-      if V is TJSONObject then
-      begin
-        Result := CampoDeTexto(V, 'method') = 'initialize'; // el lector de todos
-      end;
-    except
-      Result := False;
-    end;
-  finally
-    V.Free;
-  end;
-end;
 
 // [local change] Bind the handshake's clientInfo.name to the session id the
 // server just issued, so later calls on that session carry an identity the
@@ -322,6 +343,7 @@ const
   HTTP_OK = 200;
   HTTP_ACCEPTED = 202;
   HTTP_NO_CONTENT = 204;
+  HTTP_BAD_REQUEST = 400;
   HTTP_NOT_FOUND = 404;
   HTTP_METHOD_NOT_ALLOWED = 405;
   HTTP_NOT_ACCEPTABLE = 406;
@@ -342,6 +364,38 @@ const
   SSE_DATA_PREFIX = 'data: ';
   SSE_ID_PREFIX = 'id: ';
   SSE_MESSAGE_TERMINATOR = #10#10;
+
+// [local change] El estado HTTP de una respuesta moderna: los errores del protocolo
+// no son un 200 (un -32602 de una tool, en cambio, sigue siendolo).
+function EstadoHttpModerno(const APeticion: TPeticionModerna; const ARespuesta: string): Integer;
+var
+  V, E: TJSONValue;
+  Codigo: Integer;
+begin
+  Result := HTTP_OK;
+  // un resultado grande (una captura) no se vuelve a leer entero para nada
+  if Pos('"error"', ARespuesta) = 0 then
+    Exit;
+  V := TJSONObject.ParseJSONValue(ARespuesta);
+  try
+    if not (V is TJSONObject) then
+      Exit;
+    E := TJSONObject(V).GetValue('error');
+    if not (E is TJSONObject) or not TJSONObject(E).TryGetValue<Integer>('code', Codigo) then
+      Exit;
+    case Codigo of
+      JSONRPC_METHOD_NOT_FOUND:
+        Result := HTTP_NOT_FOUND;
+      JSONRPC_HEADER_MISMATCH, JSONRPC_MISSING_CLIENT_CAPABILITY, JSONRPC_UNSUPPORTED_VERSION:
+        Result := HTTP_BAD_REQUEST;
+      JSONRPC_INVALID_PARAMS:
+        if (APeticion.Version = '') or not APeticion.ConCapacidades then
+          Result := HTTP_BAD_REQUEST;
+    end;
+  finally
+    V.Free;
+  end;
+end;
 
 { TMCPIdHTTPServer }
 
@@ -639,7 +693,7 @@ begin
   ResponseInfo.CustomHeaders.Values['Access-Control-Allow-Origin'] := AllowedOrigin;
   ResponseInfo.CustomHeaders.Values['Access-Control-Allow-Methods'] := 'POST, GET, OPTIONS';
   ResponseInfo.CustomHeaders.Values['Access-Control-Allow-Headers'] :=
-    'Accept, Content-Type, Last-Event-ID, Mcp-Protocol-Version, Mcp-Session-Id';
+    'Accept, Content-Type, Last-Event-ID, Mcp-Protocol-Version, Mcp-Session-Id, Mcp-Method, Mcp-Name';
   ResponseInfo.CustomHeaders.Values['Access-Control-Expose-Headers'] := 'Mcp-Session-Id';
   ResponseInfo.CustomHeaders.Values['Access-Control-Max-Age'] := CORS_MAX_AGE.ToString;
 end;
@@ -701,6 +755,8 @@ var
   JSONRequest: TJSONValue;
   RequestBody: string;
   SessionID: string;
+  Moderna: TPeticionModerna;
+  SinSesion: Boolean;
 begin
   RequestBody := '';
   if Assigned(RequestInfo.PostStream) and (RequestInfo.PostStream.Size > 0) then
@@ -715,13 +771,22 @@ begin
   SessionID := RequestInfo.RawHeaders.Values['Mcp-Session-Id'];
   if SessionID <> '' then
     TLogger.Info('Session ID from header: ' + SessionID);
+  // [local change] la revision 2026-07-28 no tiene sesiones: una peticion suya (por su
+  // _meta, o por su cabecera aunque el _meta falte, y entonces se le dice) no pasa
+  // por esta puerta, y la cabecera de una sesion se ignora. Un initialize elige la era
+  // de la sesion, venga como venga.
+  Moderna := TMCPJsonRpcProcessor.LeeModernaDeTexto(RequestBody);
+  SinSesion := (Moderna.Metodo <> 'initialize') and (Moderna.Es or
+    (RequestInfo.RawHeaders.Values['MCP-Protocol-Version'] = MCP_PROTOCOLO_MODERNO));
   // [local change] an id this process never issued is a DEAD session (most
   // often: the client persisted it and the server was restarted), and so is
   // one that sat idle longer than SessionTimeoutMinutes. Say so with 404,
   // the answer the streamable-HTTP contract defines, so the client
   // re-initializes instead of working against a ghost. An initialize
   // request carrying a stale id is welcome: it is the fix.
-  if not EsPeticionInitialize(RequestBody) and
+  // (por su "method", no por la palabra en el cuerpo: arguments:{"command":"initialize"}
+  // pasaba la puerta con una sesion muerta; quinta revision)
+  if not SinSesion and (Moderna.Metodo <> 'initialize') and
      SesionMuertaContesta(SessionID, RequestBody, ResponseInfo) then
     Exit;
 
@@ -737,8 +802,15 @@ begin
     begin
       TLogger.Info('Request contains only notifications/responses, returning 202 Accepted');
       ResponseInfo.ResponseNo := HTTP_ACCEPTED;
-      AnunciaSesion(ResponseInfo, '', '', SessionID);
+      if not SinSesion then
+        AnunciaSesion(ResponseInfo, '', '', SessionID);
       SinCuerpo(ResponseInfo);
+      Exit;
+    end;
+
+    if SinSesion then
+    begin
+      HandlePostRequestModerno(RequestInfo, ResponseInfo, RequestBody, Moderna);
       Exit;
     end;
 
@@ -821,6 +893,35 @@ end;
 function TMCPIdHTTPServer.AcceptsSSE(const AcceptHeader: string): Boolean;
 begin
   Result := Pos('text/event-stream', AcceptHeader) > 0;
+end;
+
+{ [local change] Una peticion de la revision 2026-07-28: quien es lo dice ella, nada se
+  recuerda ni se anuncia, y la respuesta es un JSON (un cliente los acepta los dos, y
+  sin flujo que reanudar el SSE de una sola respuesta no aporta nada). }
+procedure TMCPIdHTTPServer.HandlePostRequestModerno(RequestInfo: TIdHTTPRequestInfo;
+  ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const APeticion: TPeticionModerna);
+var
+  Cuerpo, Fallo: string;
+begin
+  TLogger.Info('Handling POST request without a session (protocol ' + MCP_PROTOCOLO_MODERNO + ')');
+  Fallo := CabecerasModernasDicen(RequestInfo, APeticion);
+  if Fallo <> '' then
+    Cuerpo := TMCPJsonRpcProcessor.ErrorParaElCuerpo(RequestBody, JSONRPC_HEADER_MISMATCH, Fallo)
+  else
+  begin
+    SetThreadIdentityByRequest(APeticion.Cliente);
+    try
+      Cuerpo := FJsonRpcProcessor.ProcessRequest(RequestBody, '');
+    finally
+      ClearThreadIdentity;
+    end;
+  end;
+  ResponseInfo.ContentType := 'application/json';
+  ResponseInfo.CustomHeaders.Values['Connection'] := 'keep-alive';
+  ResponseInfo.ContentStream := TStringStream.Create(Cuerpo, TEncoding.UTF8);
+  ResponseInfo.FreeContentStream := True;
+  ResponseInfo.ResponseNo := EstadoHttpModerno(APeticion, Cuerpo);
+  TLogger.Info('Response: ' + Cuerpo);
 end;
 
 procedure TMCPIdHTTPServer.HandlePostRequestSSE(RequestInfo: TIdHTTPRequestInfo;

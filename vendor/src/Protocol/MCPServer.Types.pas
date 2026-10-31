@@ -9,6 +9,13 @@ uses
 
 const
   MCP_PROTOCOL_VERSION = '2025-06-18';
+  // [local change] la revision sin handshake ni sesiones (V60 de la 1.25): cada
+  // peticion lleva estos campos en su _meta; el servidor habla las dos eras
+  MCP_PROTOCOLO_MODERNO = '2026-07-28';
+  META_MCP_VERSION = 'io.modelcontextprotocol/protocolVersion';
+  META_MCP_CLIENTE = 'io.modelcontextprotocol/clientInfo';
+  META_MCP_CAPACIDADES = 'io.modelcontextprotocol/clientCapabilities';
+  META_MCP_SERVIDOR = 'io.modelcontextprotocol/serverInfo';
 
 type
   OptionalAttribute = class(TCustomAttribute)

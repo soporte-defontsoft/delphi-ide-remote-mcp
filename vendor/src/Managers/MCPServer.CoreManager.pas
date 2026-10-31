@@ -27,6 +27,11 @@ type
     // vez podian llevarse el MISMO id (medido: 10 de 150 rondas con 4) - un
     // agente leia y borraba el buzon del otro. El id vive en Initialize.
     FSettings: TMCPSettings;
+    // [local change] quien es este servidor, para el serverInfo de cada resultado
+    // de la era sin sesion, que se compone fuera de cualquier instancia
+    class var FNombre, FVersion, FHost: string;
+    class function Capacidades: TJSONObject;
+    class procedure AnadeInstrucciones(AResultado: TJSONObject);
   public
     class var Instructions: TMCPInstructionsFunc; // [local change]
     class var DeclarePrompts: Boolean;            // [local change]
@@ -38,6 +43,8 @@ type
     
     function Initialize(const Params: TJSONObject): TValue;
     function Ping: TValue;
+    function Discover: TValue; // [local change] server/discover (2026-07-28)
+    class function ServerInfo: TJSONObject; // [local change] de quien lo pide
   end;
 
 implementation
@@ -52,6 +59,9 @@ constructor TMCPCoreManager.Create(ASettings: TMCPSettings);
 begin
   inherited Create;
   FSettings := ASettings;
+  FNombre := FSettings.ServerName;
+  FVersion := FSettings.ServerVersion;
+  FHost := FSettings.MachineName;
 end;
 
 function TMCPCoreManager.GetCapabilityName: string;
@@ -63,7 +73,8 @@ function TMCPCoreManager.HandlesMethod(const Method: string): Boolean;
 begin
   Result := (Method = 'initialize') or 
             (Method = 'notifications/initialized') or
-            (Method = 'ping');
+            (Method = 'ping') or
+            (Method = 'server/discover');
 end;
 
 function TMCPCoreManager.ExecuteMethod(const Method: string; const Params: TJSONObject): TValue;
@@ -77,20 +88,103 @@ begin
   end
   else if Method = 'ping' then
     Result := Ping
+  else if Method = 'server/discover' then
+    Result := Discover
   else
     raise Exception.Create(MsgFmt(SE_SYS_METODO_NO_ATENDIDO_FMT, [Method, GetCapabilityName]));
 end;
 
+class function TMCPCoreManager.ServerInfo: TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  Result.AddPair('name', FNombre);
+  Result.AddPair('version', FVersion);
+  // [local change] the machine this server runs on: two servers of the same
+  // name and version answer with nothing else that tells them apart
+  if FHost <> '' then
+    Result.AddPair('host', FHost);
+end;
+
+{ [local change] Lo que el servidor sabe hacer: lo dicen initialize y server/discover. }
+class function TMCPCoreManager.Capacidades: TJSONObject;
+var
+  ResourcesCap: TJSONObject;
+  ToolsCap: TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  ToolsCap := TJSONObject.Create;
+  Result.AddPair('tools', ToolsCap);
+{$IF COMPILERVERSION <= 29}
+  ToolsCap.AddPair('supportsProgress', TJSONFalse.Create);
+  ToolsCap.AddPair('supportsCancellation', TJSONFalse.Create);
+{$ELSE}
+  ToolsCap.AddPair('supportsProgress', TJSONBool.Create(False));
+  ToolsCap.AddPair('supportsCancellation', TJSONBool.Create(False));
+{$ENDIF}
+
+  ResourcesCap := TJSONObject.Create;
+  Result.AddPair('resources', ResourcesCap);
+{$IF COMPILERVERSION <= 29}
+  ResourcesCap.AddPair('subscribe', TJSONFalse.Create);
+  ResourcesCap.AddPair('listChanged', TJSONFalse.Create);
+{$ELSE}
+  ResourcesCap.AddPair('subscribe', TJSONBool.Create(False));
+  ResourcesCap.AddPair('listChanged', TJSONBool.Create(False));
+{$ENDIF}
+
+  // [local change] prompts capability, when the host registered a manager
+  if DeclarePrompts then
+  begin
+    var PromptsCap := TJSONObject.Create;
+    Result.AddPair('prompts', PromptsCap);
+{$IF COMPILERVERSION <= 29}
+    PromptsCap.AddPair('listChanged', TJSONFalse.Create);
+{$ELSE}
+    PromptsCap.AddPair('listChanged', TJSONBool.Create(False));
+{$ENDIF}
+  end;
+end;
+
+{ [local change] server instructions handed to the model at connect time }
+class procedure TMCPCoreManager.AnadeInstrucciones(AResultado: TJSONObject);
+begin
+  if Assigned(Instructions) then
+  begin
+    var Text := Instructions();
+    if Text <> '' then
+      AResultado.AddPair('instructions', Text);
+  end;
+end;
+
+{ [local change] Las versiones que se hablan, las capacidades y las instrucciones,
+  sin sesion ni nada que recordar. resultType, serverInfo y las pistas de cache los
+  pone quien anota cada resultado de esta era (TMCPJsonRpcProcessor.AnotaModerno). }
+function TMCPCoreManager.Discover: TValue;
+var
+  ResultJSON: TJSONObject;
+  Versiones: TJSONArray;
+begin
+  ResultJSON := TJSONObject.Create;
+  try
+    Versiones := TJSONArray.Create;
+    ResultJSON.AddPair('supportedVersions', Versiones);
+    Versiones.Add(MCP_PROTOCOLO_MODERNO);
+    Versiones.Add(MCP_PROTOCOL_VERSION);
+    ResultJSON.AddPair('capabilities', Capacidades);
+    AnadeInstrucciones(ResultJSON);
+    Result := TValue.From<TJSONObject>(ResultJSON);
+  except
+    ResultJSON.Free;
+    raise;
+  end;
+end;
+
 function TMCPCoreManager.Initialize(const Params: TJSONObject): TValue;
 var
-  Capabilities: TJSONObject;
   ClientInfo: TJSONObject;
   ClientName: TJSONValue;
   ClientVersion: TJSONValue;
-  ResourcesCap: TJSONObject;
   ResultJSON: TJSONObject;
-  ServerInfo: TJSONObject;
-  ToolsCap: TJSONObject;
 begin
   TLogger.Info('MCP Initialize called');
   // [local change 2026-09-26] Se asignaban solo si llegaba clientInfo, y
@@ -128,59 +222,13 @@ begin
   try
     ResultJSON.AddPair('protocolVersion', MCP_PROTOCOL_VERSION);
     
-    Capabilities := TJSONObject.Create;
-    ResultJSON.AddPair('capabilities', Capabilities);
-    
-    ToolsCap := TJSONObject.Create;
-    Capabilities.AddPair('tools', ToolsCap);
-{$IF COMPILERVERSION <= 29}
-    ToolsCap.AddPair('supportsProgress', TJSONFalse.Create);
-    ToolsCap.AddPair('supportsCancellation', TJSONFalse.Create);
-{$ELSE}
-    ToolsCap.AddPair('supportsProgress', TJSONBool.Create(False));
-    ToolsCap.AddPair('supportsCancellation', TJSONBool.Create(False));
-{$ENDIF}
-    
-    ResourcesCap := TJSONObject.Create;
-    Capabilities.AddPair('resources', ResourcesCap);
-{$IF COMPILERVERSION <= 29}
-    ResourcesCap.AddPair('subscribe', TJSONFalse.Create);
-    ResourcesCap.AddPair('listChanged', TJSONFalse.Create);
-{$ELSE}
-    ResourcesCap.AddPair('subscribe', TJSONBool.Create(False));
-    ResourcesCap.AddPair('listChanged', TJSONBool.Create(False));
-{$ENDIF}
-    
-    // [local change] prompts capability, when the host registered a manager
-    if DeclarePrompts then
-    begin
-      var PromptsCap := TJSONObject.Create;
-      Capabilities.AddPair('prompts', PromptsCap);
-{$IF COMPILERVERSION <= 29}
-      PromptsCap.AddPair('listChanged', TJSONFalse.Create);
-{$ELSE}
-      PromptsCap.AddPair('listChanged', TJSONBool.Create(False));
-{$ENDIF}
-    end;
+    ResultJSON.AddPair('capabilities', Capacidades);
 
     ResultJSON.AddPair('sessionId', SesionId);
 
-    ServerInfo := TJSONObject.Create;
     ResultJSON.AddPair('serverInfo', ServerInfo);
-    ServerInfo.AddPair('name', FSettings.ServerName);
-    ServerInfo.AddPair('version', FSettings.ServerVersion);
-    // [local change] the machine this server runs on: two servers of the same
-    // name and version answer with nothing else that tells them apart
-    if FSettings.MachineName <> '' then
-      ServerInfo.AddPair('host', FSettings.MachineName);
 
-    // [local change] server instructions handed to the model at connect time
-    if Assigned(Instructions) then
-    begin
-      var Text := Instructions();
-      if Text <> '' then
-        ResultJSON.AddPair('instructions', Text);
-    end;
+    AnadeInstrucciones(ResultJSON);
     
     TLogger.Info('Created new MCP session: ' + SesionId);
     

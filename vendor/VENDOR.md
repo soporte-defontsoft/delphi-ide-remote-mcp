@@ -15,7 +15,9 @@ Local changes (each marked "[local change]" in the code, most with its date):
   initialize (a shared field gave two concurrent clients the same id);
   clientInfo read only as an object, its name through the shared text
   reader; the client name bound to the new session and thread
-  (Lsp.Identidad); serverInfo.host.
+  (Lsp.Identidad); serverInfo.host; server/discover (protocol 2026-07-28),
+  with one composer of capabilities, serverInfo and instructions for it and
+  initialize.
 - src/Managers/MCPServer.ResourcesManager.pas: resources/read reads "uri"
   through the shared text reader and refuses a missing, null or non-text
   one; an unknown URI is -32002, not a success with the error inside.
@@ -40,7 +42,9 @@ Local changes (each marked "[local change]" in the code, most with its date):
   responses), shared by HTTP and stdio; bad requests sorted into -32700 and
   -32600 with their label; a non-integer numeric id no longer raises; a
   request whose method returns nothing gets "result": {}; messages from the
-  catalog.
+  catalog; protocol 2026-07-28: LeeModerna (one reader of the _meta), version
+  and required fields judged for both transports, and AnotaModerno (resultType,
+  serverInfo and the cache hints of each result).
 - src/Protocol/MCPServer.Schema.Generator.pas: GetPropertyJsonName (trailing
   underscores stripped: ClassName_ publishes as classname) and
   IsRequiredProperty public, and a property is required only with
@@ -57,8 +61,9 @@ Local changes (each marked "[local change]" in the code, most with its date):
   null means "not provided"; unparsable numbers and booleans refused
   instead of turned into 0/False; messages from the catalog.
 - src/Protocol/MCPServer.Types.pas: RequiredAttribute (parameters are
-  optional by default), SchemaDefaultAttribute, and BearerToken, the one
-  reader of a Bearer header (scheme case-insensitive).
+  optional by default), SchemaDefaultAttribute, BearerToken, the one
+  reader of a Bearer header (scheme case-insensitive), and the version and
+  _meta keys of protocol 2026-07-28.
 - src/Server/MCPServer.IdHTTPServer.pas: USE_TAURUS_TLS disabled (standard
   Indy SSL, no TaurusTLS dependency; SSL off by default); two-tier Bearer
   auth (AuthToken read-write, ReadOnlyToken, AnonymousReadOnly; with any
@@ -73,7 +78,10 @@ Local changes (each marked "[local change]" in the code, most with its date):
   helper that announces the session id; body-less responses with
   ContentLength 0; 202 by the processor's NoSeContesta; a GET for an SSE
   stream gets 405; request bodies logged masked; the thread runs as the
-  session's identity. It uses the host units Lsp.Identidad, Lsp.Texts and
+  session's identity; a request of protocol 2026-07-28 skips the session
+  gate, has its headers judged (Mcp-Name in Base64 too), runs as the name it
+  carries and gets a JSON answer with the status the revision names. It uses
+  the host units Lsp.Base64, Lsp.Identidad, Lsp.Texts and
   Lsp.Settings.
 - src/Server/MCPServer.StdioTransport.pas: stdin and stdout set to UTF-8
   (accents arrived as mojibake); lines logged masked; error responses with

@@ -39,9 +39,17 @@ interface
   initialize - the server/discover probe and others, measured in production)
   gets its own in SetThreadIdentityBySession. It was '', the operator's, which
   under HTTP let it bypass confinement and purge anyone's trash (V111 and V159
-  of 1.23.1, measured; David: "identidad propia, nunca el operador"). }
+  of 1.23.1, measured; David: "identidad propia, nunca el operador").
+
+  El protocolo 2026-07-28 no tiene handshake ni sesiones: el nombre viene en
+  cada peticion (SetThreadIdentityByRequest). No abre ninguna puerta: con el
+  token ya se podia hacer initialize con cualquier nombre (BindSessionIdentity
+  no comprueba quien lo usa), y la revision dice lo mismo que esta nota, que
+  clientInfo no es para decisiones de seguridad. Lo que no cambia: por HTTP la
+  identidad nunca es la vacia. }
 procedure BindSessionIdentity(const ASessionId, AName: string);
 procedure SetThreadIdentityBySession(const ASessionId: string);
+procedure SetThreadIdentityByRequest(const AName: string); // HTTP sin sesion: el nombre de la peticion
 procedure SetThreadIdentity(const AName: string); // stdio: one process, one name
 procedure ClearThreadIdentity;
 function CurrentAgent: string;               // '' = unknown
@@ -107,6 +115,13 @@ const
   MINUTOS_POR_DIA = 1440;
   // la identidad de una sesion HTTP sin nombre: el prefijo y FragmentoUnico
   SESION_SIN_NOMBRE = 'session-';
+
+{ La identidad de quien no da un nombre que valga: la suya, unica, nunca la vacia
+  del operador (V111 y V159 de la 1.23.1). }
+function IdentidadPropia: string;
+begin
+  Result := SESION_SIN_NOMBRE + FragmentoUnico;
+end;
 
 { Bajo GIdentLock. -1 = no esta. }
 function IndiceDeSesion(const AId: string): Integer;
@@ -184,7 +199,7 @@ begin
       // papelera de todos (V111 de la 1.23.1, medido). La SUYA, unica, como un
       // nombre mas; nunca la de otro (David: "identidad propia")
       if S.Nombre = '' then
-        S.Nombre := SESION_SIN_NOMBRE + FragmentoUnico;
+        S.Nombre := IdentidadPropia;
       S.UltimoUso := Now;
       GSesiones.Add(S);
       // lleno: se va la que lleva MAS tiempo sin usarse, no la mas vieja (una
@@ -284,8 +299,15 @@ begin
   // (reservada para stdio, el operador). Un 400 aqui rompia server/discover
   // (David: "identidad propia, nunca el operador"; V159 de la 1.23.1).
   if Nombre = '' then
-    Nombre := SESION_SIN_NOMBRE + FragmentoUnico;
+    Nombre := IdentidadPropia;
   TCurrentAgent := Nombre;
+end;
+
+procedure SetThreadIdentityByRequest(const AName: string);
+begin
+  TCurrentAgent := SanitizeAgent(AName);
+  if TCurrentAgent = '' then
+    TCurrentAgent := IdentidadPropia;
 end;
 
 procedure SetThreadIdentity(const AName: string);

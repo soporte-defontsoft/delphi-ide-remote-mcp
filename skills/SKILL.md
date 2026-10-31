@@ -12,12 +12,13 @@ on your side.
 
 ## First contact (always, in this order)
 
-**Before the first call: identify yourself.** Your `clientInfo.name` in the
-MCP handshake is your identity here: the mailbox, the trash purge and the
+**Before the first call: identify yourself.** Your `clientInfo.name`, in the
+MCP handshake or on each request of protocol 2026-07-28, which has no handshake,
+is your identity here: the mailbox, the trash purge and the
 sessions list use it. Set it to your agent id (e.g. `hermes`). If your client
 cannot set it (it says `mcp` or a generic name), pass `agent=<your id>` in
-`delphi_report` and `delphi_messages` on EVERY call: `agent=` wins over the
-handshake.
+`delphi_report` and `delphi_messages` on EVERY call: `agent=` wins over
+it. With no name, each request of that protocol is a stranger to the one before.
 
 1. `delphi_workspace` - your allowed roots, your access level, WHICH
    Delphi you are working with (`activeDelphiName` "RAD Studio 13",
@@ -482,7 +483,8 @@ list (e.g. `fragment`) still travels if you send it; the contract you can
 trust is `delphi_help command=tool name=<tool>` (`HELP-010`: that tool exists,
 but not for this session). A 404 on your session id
 also happens when the session expired by inactivity (`[Server]
-SessionTimeoutMinutes`, default 720): re-initialize, it is not a failure.
+SessionTimeoutMinutes`, default 720): re-initialize, it is not a failure
+(protocol 2026-07-28 has no sessions, so none of this applies).
 
 ## When you hit a wall
 
