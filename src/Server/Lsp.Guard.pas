@@ -1802,7 +1802,7 @@ end;
 function ApplyArgAliases(const AToolName: string; AArguments: TJSONObject): string;
 const
   // tool, alias, real
-  Aliases: array [0 .. 25, 0 .. 2] of string = (
+  Aliases: array [0 .. 27, 0 .. 2] of string = (
     // "path" is what almost every other tool calls it; delphi_list calls it
     // "root" and delphi_projects too. Each spelling cost a wasted call
     // (measured 2026-08-25), and the fix is free: accept both.
@@ -1840,7 +1840,11 @@ const
     // delphi_config, y era "name" en delphi_paserver: el mismo concepto con
     // dos nombres (Hermes, validacion de la 1.16.0, PAS-051). Se llama
     // "profile" en todas desde la 1.17.0; el nombre viejo sigue valiendo.
-    ('delphi_paserver', 'name', 'profile'));
+    ('delphi_paserver', 'name', 'profile'),
+    // Lo que un agente manda a delphi_build sin mirar (Hermes, 22-oct-2026: dos
+    // SYS-015 seguidos). No cuestan nada en el contrato: V46 de la 1.25.
+    ('delphi_build', 'configuration', 'config'),
+    ('delphi_build', 'command', 'target'));
 var
   I: Integer;
   P: TJSONPair;

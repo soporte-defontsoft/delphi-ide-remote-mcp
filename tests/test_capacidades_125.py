@@ -9,6 +9,8 @@ V42: delphi_desktop con el PAServer caido, sin parametro nuevo: paclient se rind
 despues de saber que no hay conexion, y retener a los demas perfiles mientras tanto. Contra paclient_stub, sin red.
 V45: delphi_git por campos: format name-only, log grep, add/commit/fetch action, clone branch. La enmienda de un
 commit que un remoto ya tiene se niega.
+V46: los nombres que un agente manda a delphi_build (friccion de Hermes del 22-oct): configuration y command, por la
+tabla de alias de siempre, sin coste en el contrato.
 
 Usage:  python tests/test_capacidades_125.py [path-to-DelphiLspMcp.exe]
 """
@@ -199,6 +201,20 @@ try:
     t = call('delphi_git', {'repo': CL2, 'command': 'clone', 'message': URL, 'branch': 'noexiste'})
     check('V45 clone de una rama que no esta: lo dice git, sin carpeta', 'noexiste' in t and not os.path.exists(CL2), t[:300])
     web.shutdown()
+
+    # V46 - los nombres que Hermes mando a delphi_build
+    t = call('delphi_create', {'kind': 'project-console', 'name': 'Alias', 'dir': os.path.join(RAIZ, 'alias')})
+    DPROJ = os.path.join(RAIZ, 'alias', 'Alias.dproj')
+    check('V46 fixture: el proyecto', os.path.exists(DPROJ), t[:200])
+    t = call('delphi_build', {'project': DPROJ, 'command': 'build', 'configuration': 'Release', 'platform': 'Win64'}, t=180)
+    check('V46 build con command y configuration: compila, en esa configuracion',
+          mc.como_json(t).get('success') is True and os.path.exists(os.path.join(RAIZ, 'alias', 'Win64', 'Release', 'Alias.exe')), t[:300])
+    t = call('delphi_build', {'project': DPROJ, 'configuration': 'NoExiste', 'platform': 'Win64'}, t=60)
+    check('V46 configuration llega a su juez: una que el proyecto no declara se niega', 'NoExiste' in t and mc.como_json(t).get('success') is not True, t[:300])
+    t = call('delphi_build', {'project': DPROJ, 'configuration': 'Release', 'config': 'Debug'}, t=60)
+    check('V46 el alias con otro valor que el real: la negativa de siempre', mc.es(t, 'SR_ARG_ALIAS_OTRO_VALOR_FMT'), t[:300])
+    d = json.loads(call('delphi_list', {'path': RAIZ, 'pattern': 'UNo.pas'}))
+    check('V46 control: path ya valia en delphi_list', d.get('total', 0) >= 1 or d.get('folders'), d)
 finally:
     srv.mata()
 

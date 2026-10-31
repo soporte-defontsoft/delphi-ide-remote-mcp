@@ -38,6 +38,8 @@ the MCP `initialize` response (`serverInfo.version`).
   anything: `GIT-086` when a remote already has the commit to amend, and `GIT-087` when a
   refspec writes outside `refs/remotes`, where prune would delete local branches (measured with
   plain git: it took the current branch too).
+- **`delphi_build` takes `configuration` and `command` as other names of `config` and `target`**,
+  what agents send without looking; each one cost a call.
 
 ### Fixed
 
