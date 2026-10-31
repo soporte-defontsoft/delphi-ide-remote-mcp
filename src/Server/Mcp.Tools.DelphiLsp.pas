@@ -1416,9 +1416,14 @@ begin
     // cadena seguia desde ahi; la declaracion de un campo es el campo (V181 de
     // la 1.23.1). Si corrige, devuelve otra respuesta y Crudo ya no existe
     var DefResp := DefinicionCorregida(Crudo, Params.Path, Params.Line, Params.Character, '', Client);
-    var Corregida := DefResp <> Crudo;
+    // ...y solo si la respuesta es el propio cursor la cadena se acaba: la
+    // cabecera de una rutina en varias lineas (V224) es el CUERPO, y de ahi sigue
+    // a su declaracion (test_workspace_tools, cazado el 31-oct-2026)
     var DefLoc: TLoc;
-    if ParseLoc(DefResp.GetValue('result'), DefLoc) then
+    var HayDef := ParseLoc(DefResp.GetValue('result'), DefLoc);
+    var Corregida := (DefResp <> Crudo) and HayDef and (DefLoc.Line = Params.Line) and
+      SameFileName(TLspClient.UriToPath(DefLoc.Uri), TPath.GetFullPath(Params.Path));
+    if HayDef then
     begin
       var TgtPath := TLspClient.UriToPath(DefLoc.Uri);
       // FUERA de lo que esta sesion puede leer: ni se lee (RoutineIdentCol
