@@ -186,7 +186,10 @@ function EsCarpetaDescarga(const ANombre: string): Boolean;
   cifras ASCII, el resto se junta en un guion, 40 como mucho, minusculas.
   Nada del valor crudo llega al sistema de ficheros. Uno solo: estaba
   copiado identico en Mcp.Tools.Messages y Mcp.Tools.Report (25-sep-2026). }
-function Slug(const S: string): string;
+function Slug(const S: string; const AConservar: string = ''): string;
+{ La carpeta de un agente: Slug, sin juntar lo que su nombre separa (SanitizeAgent
+  admite '.' y '_'): con Slug a secas, a.b, a_b y a-b compartian buzon. }
+function SlugDeAgente(const S: string): string;
 
 { El nombre de la carpeta de copias ('__delphi-patch'), para quien tenga que
   reconocerla. Estaba declarada DOS veces, en Lsp.Patch y en Mcp.Tools.FileOps. }
@@ -272,7 +275,7 @@ end;
 
 function ServerCacheDir(const ASub: string): string;
 begin
-  Result := TPath.Combine(GetEnvironmentVariable('LOCALAPPDATA'), 'DelphiLspMcp');
+  Result := TPath.Combine(DatosDelUsuario('LOCALAPPDATA'), 'DelphiLspMcp');
   if ASub <> '' then
     Result := TPath.Combine(Result, ASub);
 end;
@@ -300,12 +303,12 @@ begin
   Result := BUZON_PREFIJO_WORKSPACE + Result;
 end;
 
-{ <ARaiz>\<la carpeta del workspace de la sesion>[\<Slug(AAgente)>] }
+{ <ARaiz>\<la carpeta del workspace de la sesion>[\<SlugDeAgente(AAgente)>] }
 function Buzon(const ARaiz, AAgente: string): string;
 begin
   Result := TPath.Combine(ARaiz, CarpetaDeWorkspace(CurrentWorkspaceName));
-  if Slug(AAgente) <> '' then
-    Result := TPath.Combine(Result, Slug(AAgente));
+  if SlugDeAgente(AAgente) <> '' then
+    Result := TPath.Combine(Result, SlugDeAgente(AAgente));
 end;
 
 function BuzonDeMensajes(const AAgente: string): string;
@@ -419,7 +422,12 @@ begin
     FRAGMENTO_UNICO_PATRON + '$', [roIgnoreCase]);
 end;
 
-function Slug(const S: string): string;
+function SlugDeAgente(const S: string): string;
+begin
+  Result := Slug(S, '._');
+end;
+
+function Slug(const S: string; const AConservar: string): string;
 var
   C, Prev: Char;
 begin
@@ -427,7 +435,7 @@ begin
   Prev := '-';
   for C in S do
   begin
-    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) or (Pos(C, AConservar) > 0) then
     begin
       Result := Result + C;
       Prev := C;
@@ -440,7 +448,8 @@ begin
     if Length(Result) >= 40 then
       Break;
   end;
-  Result := SinMayusculas(Result.Trim(['-']));
+  // (un '.' de los extremos tampoco: Windows lo recorta, y '..' no es un nombre)
+  Result := SinMayusculas(Result.Trim(['-', '.']));
 end;
 
 function NombreDeMutex(const AClave: string): string;

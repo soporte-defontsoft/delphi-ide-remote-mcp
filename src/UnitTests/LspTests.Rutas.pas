@@ -256,6 +256,9 @@ type
     [Test] procedure UnNombreSueltoLoJuzgaWindows;
     [Test] procedure UnaUnidadVirtualBajoSuLetra;
     [Test] procedure LasOperacionesDePaclient;
+    [Test] procedure LoProtegidoNoDependeDelEntorno;
+    [Test] procedure LasCarpetasDeUnPath;
+    [Test] procedure ElBuzonNoJuntaLoQueElNombreSepara;
   end;
 
 implementation
@@ -925,7 +928,8 @@ begin
     for var V in TArray<string>.Create('', 'relativa', '\sin-unidad') do
     begin
       SetEnvironmentVariable('LOCALAPPDATA', PChar(V));
-      Assert.AreEqual(2, Integer(Length(CarpetasDeLaCasa)), V);
+      // sin ella contesta Windows: nunca relativa (V216)
+      Assert.IsTrue(EsRutaAbsoluta(ServerCacheDir) or (Length(CarpetasDeLaCasa) = 2), V);
       for var C in CarpetasDeLaCasa do
         Assert.IsTrue(EsRutaAbsoluta(C), C);
     end;
@@ -1573,6 +1577,48 @@ begin
   Assert.AreEqual('"--Remove=P/a"', PaclientRemove(['P/a']));
   Assert.AreEqual('--local "--host=h" --port=64211 "--password=p\" "--platform=Linux64"',
     PaclientPerfilNuevo('h', '64211', 'p\', 'Linux64'));
+end;
+
+procedure TLectoresDeJaulaTests.LoProtegidoNoDependeDelEntorno;
+var
+  Dir: array [0 .. MAX_PATH] of Char;
+  Sistema: string;
+begin
+  SetString(Sistema, Dir, GetWindowsDirectory(Dir, Length(Dir)));
+  var AntesWin := GetEnvironmentVariable('WINDIR');
+  var AntesPerfil := GetEnvironmentVariable('USERPROFILE');
+  try
+    SetEnvironmentVariable('WINDIR', nil);
+    SetEnvironmentVariable('USERPROFILE', nil);
+    // una pregunta, nada se borra: sin el entorno, la puerta sigue negando
+    Assert.IsTrue(CarpetasDelSistema[0] <> '', 'Windows lo dice');
+    Assert.IsTrue(SameFileName(CarpetasDelSistema[0], Sistema), Sistema);
+    Assert.IsTrue(BorradoDenegado(Sistema) <> '', 'Windows, sin WINDIR');
+    // en el contenedor de delphi_test Windows no dice el perfil, y aqui tampoco queda entorno
+    if PerfilDelUsuario <> '' then
+      Assert.IsTrue(BorradoDenegado(PerfilDelUsuario) <> '', 'el perfil, sin USERPROFILE');
+  finally
+    SetEnvironmentVariable('WINDIR', PChar(AntesWin));
+    SetEnvironmentVariable('USERPROFILE', PChar(AntesPerfil));
+  end;
+end;
+
+procedure TLectoresDeJaulaTests.LasCarpetasDeUnPath;
+begin
+  Assert.AreEqual('C:\a|C:\b c|D:/d|\\nas\tools|\\nas\tools\x',
+    string.Join('|', CarpetasDelPath('C:\a; "C:\b c" ;;.;relativa;\sin;C:sin;D:/d;\\nas\tools;\\nas\tools\x;C:')));
+  Assert.AreEqual(0, Integer(Length(CarpetasDelPath(''))));
+end;
+
+procedure TLectoresDeJaulaTests.ElBuzonNoJuntaLoQueElNombreSepara;
+begin
+  Assert.AreEqual('a.b', SlugDeAgente('a.b'));
+  Assert.AreEqual('a_b', SlugDeAgente('A_B'));
+  Assert.AreEqual('a-b', SlugDeAgente('a-b'));
+  Assert.AreEqual('hermes-30', SlugDeAgente('Hermes 30'), 'un nombre sin punto ni guion bajo, en la carpeta de siempre');
+  Assert.AreEqual('', SlugDeAgente('..'));
+  Assert.AreEqual('x', SlugDeAgente('..\x..'));
+  Assert.AreEqual('a-b', Slug('a.b'), 'el titulo de un informe sigue igual');
 end;
 
 initialization

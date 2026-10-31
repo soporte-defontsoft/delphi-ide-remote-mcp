@@ -181,8 +181,8 @@ begin
   var Dirs := TDirectory.GetDirectories(Box);
   TArray.Sort<string>(Dirs);
   for var D in Dirs do
-    // la carpeta de un agente es su Slug: otra cosa no la escribe la tool
-    if Slug(TPath.GetFileName(D)) = LowerCase(TPath.GetFileName(D)) then
+    // la carpeta de un agente es su SlugDeAgente: otra cosa no la escribe la tool
+    if SlugDeAgente(TPath.GetFileName(D)) = LowerCase(TPath.GetFileName(D)) then
       Anade(D, TPath.Combine('.', TPath.GetFileName(D)));
 end;
 
@@ -236,7 +236,7 @@ begin
   if (Length(Partes) = 1) and EsNombreDeInforme(Partes[0]) then
     Result := TPath.Combine(BuzonDeInformes, Partes[0])
   else if (Length(Partes) = 2) and (Partes[0] <> '') and
-     (Slug(Partes[0]) = LowerCase(Partes[0])) and EsNombreDeInforme(Partes[1]) then
+     (SlugDeAgente(Partes[0]) = LowerCase(Partes[0])) and EsNombreDeInforme(Partes[1]) then
     Result := TPath.Combine(BuzonDeInformes(Partes[0]), Partes[1]);
 end;
 
@@ -326,7 +326,7 @@ begin
   // is what keeps this a server-generated path: nothing of the raw client
   // value reaches the filesystem. Empty (or slugged-to-empty) = the root
   // reports folder, exactly as before the parameter existed.
-  Agent := Slug(Params.Agent);
+  Agent := SlugDeAgente(Params.Agent);
 
   // el buzon del workspace de la sesion, y dentro el del agente
   Dir := BuzonDeInformes(Agent);

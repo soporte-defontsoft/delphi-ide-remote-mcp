@@ -102,7 +102,7 @@ begin
   // El correo del que PREGUNTA, y solo el suyo. Antes solo se anunciaba el
   // buzon "para todos"; desde que no existe (David, 25-sep-2026) el aviso es
   // el del propio agente, que puede leerlo y apagarlo.
-  Agent := Slug(CurrentAgent);
+  Agent := SlugDeAgente(CurrentAgent);
   if Agent = '' then
     Exit;
   N := Length(PendingIn(BuzonDeMensajes(Agent)));
@@ -176,9 +176,9 @@ begin
   // session, so the box knows who is asking. An explicit agent= still wins
   // (an operator reading a specific box, an agent whose name differs from its
   // id), but the common case - "read my mail" - needs no argument now.
-  Agent := Slug(Params.Agent);
+  Agent := SlugDeAgente(Params.Agent);
   if Agent = '' then
-    Agent := Slug(CurrentAgent);
+    Agent := SlugDeAgente(CurrentAgent);
   if Agent = '' then
     Exit(MsgText(SN_MESSAGES_NONE_NO_AGENT));
   // UN buzon por agente y ninguno "para todos" (David, 25-sep-2026): un aviso

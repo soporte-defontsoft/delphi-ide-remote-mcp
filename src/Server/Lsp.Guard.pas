@@ -410,11 +410,6 @@ procedure PurgaAlPasar(const ATrashDir: string);
   __: es la tercera barrera de BorradoDenegado. }
 function CarpetasDesechables: TArray<string>;
 
-{ Windows y los dos Archivos de programa: las carpetas del sistema, por lo que
-  dice el entorno del servidor. Son tambien las unicas de una maquina que un
-  contenedor sin capacidades puede leer (medido el 30-oct-2026, por sus DACL y
-  abriendo: C:\, ProgramData, Users, D:\, la casa y N: no). }
-function CarpetasDelSistema: TArray<string>;
 
 { LOS sitios que un borrado o una mudanza nunca pueden SER ni CONTENER: toda
   raiz de workspace (de escritura y de referencia, de cualquier workspace, y
@@ -3491,17 +3486,12 @@ begin
   Result := [TempFolderName, TrashFolderName];
 end;
 
-function CarpetasDelSistema: TArray<string>;
-begin
-  Result := [GetEnvironmentVariable('WINDIR'), GetEnvironmentVariable('ProgramFiles'),
-    GetEnvironmentVariable('ProgramFiles(x86)')];
-end;
 
 function LugaresProtegidos: TArray<string>;
 begin
   LoadSecurity;
   Result := RaicesDelModoLocal + SitiosQueNoSeTocan + [ServerDir] + CarpetasDelSistema +
-    [GetEnvironmentVariable('USERPROFILE')] + RaicesDeLosWorkspaces;
+    [PerfilDelUsuario] + RaicesDeLosWorkspaces;
 end;
 
 { La ruta de un enlace se juzga por DONDE ESTA, no por adonde apunta: la ruta

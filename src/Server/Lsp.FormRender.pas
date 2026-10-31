@@ -1430,7 +1430,7 @@ begin
         MiraCarpeta(TPath.Combine(Comun, 'Bpl'));
       for var P in APaquetes do
         MiraCarpeta(TPath.GetDirectoryName(P));
-      PathDelServidor := GetEnvironmentVariable('PATH').Split([';'], TStringSplitOptions.ExcludeEmpty);
+      PathDelServidor := CarpetasDelPath(GetEnvironmentVariable('PATH'));
       for var D in PathDelServidor do
         if not LoLeeElContenedor(D) and (Length(Lista(D, '*.bpl')) > 0) then
           MiraCarpeta(D);

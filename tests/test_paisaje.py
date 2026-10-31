@@ -402,6 +402,10 @@ REGLAS = [
     ('el numero de un nombre mDNS de adb leido a mano', r"Pos\(\s*'\)\.'",
      [('Lsp.Settings.pas', 'DispositivoSinNumeroMdns')],
      'DispositivoSinNumeroMdns (Lsp.Settings): lo leen BadDeviceName y AdbTargetAllowed'),
+    # lo que Windows contesta no se lee del entorno: con uno recortado, la proteccion desaparecia
+    ('una carpeta del sistema leida del entorno',
+     r"GetEnvironmentVariable\(\s*'(?:WINDIR|SystemRoot|ProgramFiles[^']*|LOCALAPPDATA|APPDATA)'", [],
+     'CarpetasDelSistema, PerfilDelUsuario y DatosDelUsuario (Lsp.Rutas): su API; el entorno, solo en lo que el operador cambia'),
     # una linea de orden con comillas a mano: dos analizadores, dos compositores. EnComillas para
     # el CRT (git, adb, msbuild), ComillasSinEscape para lo que lee la RTL de Delphi y para el
     # programa (V115). Y las operaciones de paclient, cada una con su compositor (V222)
@@ -1745,6 +1749,7 @@ PLANTADO = {
     'la clave del IDE en el registro': "  if Reg.OpenKeyReadOnly('SOFTWARE\\Embarcadero\\BDS\\' + Ver) then",
     'el numero de un nombre mDNS de adb leido a mano': "  C := Pos(').', Nombre);",
     'una linea de orden con comillas a mano': "  S := RunCaptured(Format('\"%s\" x', [Exe]), 1000, C);",
+    'una carpeta del sistema leida del entorno': "  W := GetEnvironmentVariable('WINDIR');",
     'una operacion de paclient compuesta a mano': "  Ops := '--put=' + A;",
     'la raiz mas honda escrita a mano': "  if RutaDentroDe(R, Full) and (Length(R) > Length(Mejor)) then",
     'un nombre suelto juzgado a mano': "  if TPath.GetFileName(Nombre) <> Nombre then",

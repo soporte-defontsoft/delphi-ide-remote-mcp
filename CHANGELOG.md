@@ -120,7 +120,16 @@ the MCP `initialize` response (`serverInfo.version`).
 - **The device names Windows documents are all refused in a path.** `GUARD-027`
   missed `COM0`, `LPT0`, `COM` and `LPT` with a superscript 1-3, `CONIN$` and
   `CONOUT$`: a file with one of those names could be created here and then not open
-  on another Windows.
+  on another Windows. Like `COM1` before them, an existing file with one of those names
+  cannot be read, renamed or deleted through the tools either: that goes by hand.
+- **The places a server protects no longer depend on its environment.** The Windows folder,
+  `Program Files` and the user's profile were read from `WINDIR`, `ProgramFiles` and
+  `USERPROFILE`: launched by a client that does not pass them, the protection was simply not
+  there, and with no `LOCALAPPDATA` the server's cache fell in the launcher's folder. Windows
+  answers now; `LOCALAPPDATA` and `APPDATA` still win when they hold an absolute path.
+- **Two agents named `a.b` and `a-b` no longer share a mailbox.** A name with a `.` or a `_`
+  now has its own folder for messages, reports and captures; what such an agent had pending
+  stays in the old folder.
 - **A package disabled in the IDE is no longer loaded to draw or judge a form.**
   `delphi_designer` preview, lint and the check of what the IDE would save loaded
   every package in the IDE's Known Packages, without looking at Disabled Packages:

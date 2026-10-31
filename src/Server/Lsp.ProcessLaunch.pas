@@ -59,6 +59,10 @@ function ComillasSinEscape(const AValor: string): string;
   lo ejecutaba el servidor con la cuenta del servicio, sin contenedor (2an de
   la 1.18.2, medido el 13-oct contra produccion). }
 function ProgramaEnPath(const APrograma, APath: string): string;
+{ LAS carpetas de una lista como PATH: sin comillas ni blancos, y solo las absolutas
+  (con unidad o \\servidor\recurso): una relativa ('.', una entrada vacia) se
+  resolveria contra la carpeta actual. Eran dos lectores, y el otro partia sin mas. }
+function CarpetasDelPath(const APath: string): TArray<string>;
 
 { Saca la carpeta actual de la busqueda de DLL de este proceso y de TODOS sus
   hijos y nietos, que lo heredan. msbuild pone a sus tareas en la carpeta del
@@ -335,20 +339,7 @@ begin
   // un NOMBRE, no una ruta: una ruta no se busca
   if (APrograma = '') or (APrograma.IndexOfAny(['\', '/', ':']) >= 0) then
     Exit;
-  // solo carpetas ABSOLUTAS (con unidad o \\servidor\recurso): una relativa
-  // ('.', una entrada vacia) se resolveria contra la carpeta actual
-  Lista := '';
-  for var Dir in APath.Split([';']) do
-  begin
-    var D := Dir.Trim([' ', #9, '"']);
-    if (D <> '') and (ExtractFileDrive(D) <> '') and (D.Length > Length(ExtractFileDrive(D))) and
-       CharInSet(D[Length(ExtractFileDrive(D)) + 1], ['\', '/']) then
-    begin
-      if Lista <> '' then
-        Lista := Lista + ';';
-      Lista := Lista + D;
-    end;
-  end;
+  Lista := string.Join(';', CarpetasDelPath(APath));
   if Lista = '' then
     Exit;
   SetLength(Result, 32767);
@@ -356,6 +347,19 @@ begin
   if (N = 0) or (N >= DWORD(Length(Result))) then
     Exit('');
   SetLength(Result, N);
+end;
+
+function CarpetasDelPath(const APath: string): TArray<string>;
+begin
+  Result := [];
+  for var Dir in APath.Split([';']) do
+  begin
+    var D := Dir.Trim([' ', #9, '"']);
+    var Unidad := ExtractFileDrive(D);
+    if (Unidad <> '') and (D.StartsWith('\\') or
+       ((D.Length > Unidad.Length) and CharInSet(D[Unidad.Length + 1], ['\', '/']))) then
+      Result := Result + [D];
+  end;
 end;
 
 procedure SacaLaCarpetaActualDeLasDll;

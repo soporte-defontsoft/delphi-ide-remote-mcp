@@ -1191,7 +1191,7 @@ end;
 function IdeProfilesDir(const AVersion: string): string;
 begin
   Result := TPath.Combine(TPath.Combine(TPath.Combine(
-    GetEnvironmentVariable('APPDATA'), 'Embarcadero'), 'BDS'), AVersion);
+    DatosDelUsuario('APPDATA'), 'Embarcadero'), 'BDS'), AVersion);
 end;
 
 function RutaDePerfil(const AVersion, AName: string): string;

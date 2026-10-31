@@ -81,6 +81,19 @@ function RutaDentroDe(const AContenedor, ARuta: string): Boolean;
 function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
 type
   TFormaDeRaiz = reference to function(const ARaiz: string): string;
+{ Las carpetas del sistema y del usuario, como las contesta Windows: su API, nunca el
+  entorno (WINDIR, ProgramFiles, USERPROFILE). Con un entorno recortado, un cliente
+  stdio que no los pase, la entrada salia vacia y esa proteccion desaparecia en
+  silencio. '' en lo que Windows no conteste. CarpetasDelSistema, Windows y los dos
+  Archivos de programa, son tambien las unicas de una maquina que un contenedor sin
+  capacidades puede leer (medido el 30-oct-2026, por sus DACL y abriendo: C:\,
+  ProgramData, Users, D:\, la casa y N: no). }
+function CarpetasDelSistema: TArray<string>;
+function PerfilDelUsuario: string;
+{ Una carpeta de datos del usuario: LOCALAPPDATA o APPDATA del entorno si es una ruta
+  absoluta (el operador y las baterias la cambian a proposito), y si no la que dice
+  Windows: vacia, ServerCacheDir quedaba relativa a la carpeta de quien lanza (V216). }
+function DatosDelUsuario(const AVariable: string): string;
 { LA raiz MAS HONDA de ARaices que contiene ARuta, en la forma AForma con la
   que se compara; '' si ninguna. La mas larga y no la primera que casa: con
   raices anidadas el confinamiento dependia del ORDEN en que se declararon (V167
@@ -217,7 +230,10 @@ uses
   System.StrUtils,
   System.IOUtils,
   Lsp.Reparse,          // DatosDeReparse: lo que guarda un enlace
-  Lsp.NetDrives;        // RaizSiUnidad, SinBarraFinal, PrefijoSinBarra, ConBarrasDeWindows
+  Lsp.NetDrives,        // RaizSiUnidad, SinBarraFinal, PrefijoSinBarra, ConBarrasDeWindows
+  Winapi.ShlObj,
+  Winapi.KnownFolders,
+  Winapi.ActiveX;
 
 function Ancestros(const ARuta: string; ATope: Integer): TArray<string>;
 var
@@ -589,6 +605,42 @@ begin
     (AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0);
 end;
 
+function CarpetaConocida(const AId: TGUID): string;
+var
+  P: PWideChar;
+begin
+  Result := '';
+  P := nil;
+  if Succeeded(SHGetKnownFolderPath(AId, 0, 0, P)) then
+    Result := P;
+  CoTaskMemFree(P);
+end;
+
+var
+  // una vez: no cambian, y las preguntan la puerta de escribir y cada literal de un form
+  GCarpetasDelSistema: TArray<string>;
+  GPerfilDelUsuario: string;
+
+function CarpetasDelSistema: TArray<string>;
+begin
+  Result := GCarpetasDelSistema;
+end;
+
+function PerfilDelUsuario: string;
+begin
+  Result := GPerfilDelUsuario;
+  // dentro de un contenedor no la contesta (medido): nunca menos que antes
+  if Result = '' then
+    Result := GetEnvironmentVariable('USERPROFILE');
+end;
+
+function DatosDelUsuario(const AVariable: string): string;
+begin
+  Result := GetEnvironmentVariable(AVariable);
+  if not EsRutaAbsoluta(Result) then
+    Result := CarpetaConocida(if SameText(AVariable, 'APPDATA') then FOLDERID_RoamingAppData else FOLDERID_LocalAppData);
+end;
+
 function RaizMasHonda(const ARaices: TArray<string>; const ARuta: string;
   const AForma: TFormaDeRaiz; const ARutaComoLlega: string): string;
 begin
@@ -744,5 +796,10 @@ function EsUnc(const APath: string): Boolean;
 begin
   Result := ConBarrasDeWindows(APath).StartsWith('\\') and not EsPrefijoDeDispositivo(APath);
 end;
+
+initialization
+  GCarpetasDelSistema := [CarpetaConocida(FOLDERID_Windows), CarpetaConocida(FOLDERID_ProgramFiles),
+    CarpetaConocida(FOLDERID_ProgramFilesX86)];
+  GPerfilDelUsuario := CarpetaConocida(FOLDERID_Profile);
 
 end.
