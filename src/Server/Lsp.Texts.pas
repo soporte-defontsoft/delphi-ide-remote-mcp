@@ -5604,10 +5604,16 @@ const
     'live in that RAD Studio''s bin folder, which has to be on the PATH of ' +
     'the account the server runs as.';
 
+  // tambien lo de Windows y Program Files, que el agente puede leer y el contenedor
+  // del renderizador lee solo: por su texto, exista o no (V65 de la 1.24; el dirigido
+  // de Hermes leyo "outside the allowed read locations" de una carpeta legible)
   SR_DESIGNER_LITERAL_FUERA_FMT =
-    '[DSGN-115 DENIED] Property %s names a path outside the allowed ' +
-    'read locations. Nothing was rendered. Keep referenced files in an allowed ' +
-    'read location; the property value is never shown.';
+    '[DSGN-115 DENIED] Property %s names a path the renderer may not read: ' +
+    'outside your read locations, or under Windows or Program Files, which its ' +
+    'container reads on its own - such a literal is refused by its text, whether ' +
+    'the file exists or not. Nothing was rendered. Keep referenced files in the ' +
+    'form''s folder or below it (they travel with the form); the property value ' +
+    'is never shown.';
 
   SR_DESIGNER_LITERAL_NO_VERIFICABLE =
     '[DSGN-116 DENIED] The form strings could not be checked before rendering. ' +
@@ -6910,7 +6916,9 @@ const
     'TScrollBox may have larger content on purpose. In "boxes" you get ' +
     'the resolved rectangle of each control in form coordinates: that is ' +
     'where each thing ends up, so you can place the next one without ' +
-    'seeing the screen: with boxesFrom=renderer, as the VCL really placed it. What ' +
+    'seeing the screen: with boxesFrom=renderer, as the VCL really placed it, and ' +
+    'with what the text does not list - an inline frame and what is inside it -, ' +
+    'listed and not judged. What ' +
     'I judge comes from the text and is approximate: I take a container''s usable ' +
     'area as its Width/Height, and Anchors (which govern RESIZING) is ' +
     'not what I measure.';

@@ -734,6 +734,27 @@ begin
   Result := CorreRender(Pet);
 end;
 
+{ UNA caja de "boxes", con la misma forma para sus tres fuentes (el texto de un form
+  VCL, el renderizador en FMX y lo que el renderizador anade al texto VCL): align
+  solo cuando se sabe (el texto), visible solo cuando lo dijo el renderizador. }
+function CajaJson(const ANombre, AClase, AAlign: string; AConAlign: Boolean; const APadre: string;
+  AX, AY, AW, AH, ALinea, AVisible: Integer): TJSONObject;
+begin
+  Result := TJSONObject.Create;
+  Result.AddPair('name', ANombre);
+  Result.AddPair('class', AClase);
+  if AConAlign then
+    Result.AddPair('align', AAlign);
+  Result.AddPair('parent', APadre);
+  Result.AddPair('x', TJSONNumber.Create(AX));
+  Result.AddPair('y', TJSONNumber.Create(AY));
+  Result.AddPair('w', TJSONNumber.Create(AW));
+  Result.AddPair('h', TJSONNumber.Create(AH));
+  if AVisible >= 0 then
+    Result.AddPair('visible', TJSONBool.Create(AVisible = 1));
+  Result.AddPair('line', TJSONNumber.Create(ALinea));
+end;
+
 { La linea del objeto ANombre en el form, 0 si es de dentro de un frame o no esta }
 function LineaDeObjeto(AObj: TStyleObj; const ANombre: string): Integer;
 begin
@@ -801,17 +822,7 @@ begin
             Padre.H := R.Alto;
             Padre.Visible := True;
           end;
-          var Bx := TJSONObject.Create;
-          Bx.AddPair('name', C.Ruta);
-          Bx.AddPair('class', C.Clase);
-          Bx.AddPair('parent', Padre.Ruta);
-          Bx.AddPair('x', TJSONNumber.Create(C.X));
-          Bx.AddPair('y', TJSONNumber.Create(C.Y));
-          Bx.AddPair('w', TJSONNumber.Create(C.W));
-          Bx.AddPair('h', TJSONNumber.Create(C.H));
-          Bx.AddPair('visible', TJSONBool.Create(C.Visible));
-          Bx.AddPair('line', TJSONNumber.Create(Linea));
-          Boxes.AddElement(Bx);
+          Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False, Padre.Ruta, C.X, C.Y, C.W, C.H, Linea, Ord(C.Visible)));
           if not C.Visible or not Padre.Visible then
             Continue;
           if (C.W = 0) or (C.H = 0) then
@@ -1095,17 +1106,8 @@ var
     // next control without seeing the screen.
     for K := 0 to Cnt - 1 do
     begin
-      var Bx := TJSONObject.Create;
-      Bx.AddPair('name', Kids[K].Nm);
-      Bx.AddPair('class', Kids[K].Cls);
-      Bx.AddPair('align', Kids[K].Align);
-      Bx.AddPair('parent', AWhere);
-      Bx.AddPair('x', TJSONNumber.Create(AAbsX + Kids[K].X1));
-      Bx.AddPair('y', TJSONNumber.Create(AAbsY + Kids[K].Y1));
-      Bx.AddPair('w', TJSONNumber.Create(Kids[K].X2 - Kids[K].X1));
-      Bx.AddPair('h', TJSONNumber.Create(Kids[K].Y2 - Kids[K].Y1));
-      Bx.AddPair('line', TJSONNumber.Create(Kids[K].Line));
-      Boxes.AddElement(Bx);
+      Boxes.AddElement(CajaJson(Kids[K].Nm, Kids[K].Cls, Kids[K].Align, True, AWhere, AAbsX + Kids[K].X1,
+        AAbsY + Kids[K].Y1, Kids[K].X2 - Kids[K].X1, Kids[K].Y2 - Kids[K].Y1, Kids[K].Line, -1));
     end;
 
     // overlap: any two whose rectangles share area, decoration/alCustom/
@@ -1240,6 +1242,25 @@ begin
               Bx.AddPair('h', TJSONNumber.Create(C.H));
               Break;
             end;
+        // lo que el texto no lista -un frame inline y lo que lleva dentro- entra con lo
+        // que el renderizador midio, con la linea de su bloque si lo tiene (0 dentro de
+        // un frame): se lista y no se juzga (dirigido de Hermes de la 1.24, punto 4)
+        for var C in Medido.Cajas do
+        begin
+          if not C.Visible then
+            Continue;
+          var Esta := False;
+          for var B := 0 to Boxes.Count - 1 do
+            if SameText(C.Ruta, (Boxes.Items[B] as TJSONObject).GetValue<string>('name')) then
+            begin
+              Esta := True;
+              Break;
+            end;
+          if not Esta then
+            Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False,
+              (if C.Padre = '' then Doc.Root.ObjName else C.Padre), C.X, C.Y, C.W, C.H,
+              LineaDeObjeto(Doc.Root, C.Ruta), -1));
+        end;
         Ret.AddPair('boxesFrom', 'renderer');
       end
       else

@@ -67,6 +67,10 @@ type
     // forms del proyecto, de otra carpeta, de las clases que el ayudante dijo que le
     // faltaban (ancestros y frames, V120b de la 1.24). Lo pone CorreRender
     Lejanos: TArray<string>;
+    // la unidad del form como QUEDARA, para el juez de un insert: su uses nombra ya
+    // el frame que se mete, y sin el la regla de la copia sola (FicheroDeClase del
+    // ayudante) no lo toma (dirigido de Hermes de la 1.24, punto 2). Lo pone JuezDelIde
+    UnidadPropuesta: string;
   end;
 
   { Una propiedad que el lector se salto (IGNORED=, el OnError de TReader que
@@ -282,7 +286,8 @@ function ManifiestoDeClases(const AClases: TArray<TClaseCom>): string;
   form (TPeticionRender.Soltado). }
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
   out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
-  out AError: string; out AParada: TIgnorada; const ASoltado: string = ''): string;
+  out AError: string; out AParada: TIgnorada; const ASoltado: string = '';
+  const AUnidad: string = ''): string;
 
 { EL JUEZ de las propiedades de UN componente (1.22.1): ATexto, un form
   PROPUESTO para APath, cargado y escrito como lo guarda el IDE (el de
@@ -1573,6 +1578,10 @@ begin
   Result := TPath.Combine(AEtapa, TPath.GetFileName(APeticion.Path));
   // el pedido, por su lugar: una propuesta de la casa o un form ya juzgado
   EscribeBytes(Result, LeeBytes(APeticion.Path, LUGARES_DEL_MOTOR + [ltTemporal]), ltTemporal);
+  // y su unidad como quedara, encima de la de verdad
+  if APeticion.UnidadPropuesta <> '' then
+    EscribeBytes(TPath.Combine(AEtapa, TPath.GetFileName(APeticion.UnidadPropuesta)),
+      LeeBytes(APeticion.UnidadPropuesta, [ltTemporal]), ltTemporal);
 end;
 
 { UNA ejecucion del ayudante en su contenedor: la carpeta de esta llamada, lo que
@@ -1904,7 +1913,7 @@ end;
   si ni se pudo escribir. La carpeta se borra siempre. EL juez de
   ComoLoEscribeElIde y de LoQueNoCargaElIde. }
 function JuezDelIde(const APath, ATexto, AEnc: string; const AComponente: string = '';
-  const ASoltado: string = ''): TRespuestaRender;
+  const ASoltado: string = ''; const AUnidad: string = ''): TRespuestaRender;
 var
   Pet: TPeticionRender;
   Dir, Cand: string;
@@ -1928,6 +1937,11 @@ begin
       // escritor de verdad (PatchSaveText) si escribia (revisor propio de la
       // 1.18.1); lo NUEVO lo sigue negando ese escritor
       EscribeTexto(Cand, ATexto, ltTemporal, EncKindOf(AEnc), False);
+      // la unidad como quedara (un insert anade su campo y su uses): el ayudante la
+      // lee con su detector, asi que va en UTF-8 con BOM, quepa lo que quepa
+      if AUnidad <> '' then
+        EscribeTexto(TPath.Combine(Dir, TPath.GetFileName(UnidadDeDesigner(APath))), AUnidad, ltTemporal,
+          EncKindOf('utf8-bom'), False);
     except
       on E: Exception do
       begin
@@ -1941,7 +1955,19 @@ begin
     Pet.Escribe := True;
     Pet.Componente := AComponente; // con el, tambien su orden (ORDER=)
     Pet.Soltado := ASoltado;
+    if AUnidad <> '' then
+      Pet.UnidadPropuesta := TPath.Combine(Dir, TPath.GetFileName(UnidadDeDesigner(APath)));
     Result := CorreRender(Pet);
+    // lo que leyo de esa unidad fue la propuesta, no el disco: no cuenta como lectura
+    // (CambioEnLoLeido compararia su huella con la unidad de verdad y negaria DSGN-144)
+    if AUnidad <> '' then
+    begin
+      var Reales: TArray<TLeidoPorElJuez> := [];
+      for var L in Result.Leidos do
+        if not SameFileName(L.Ruta, UnidadDeDesigner(APath)) then
+          Reales := Reales + [L];
+      Result.Leidos := Reales;
+    end;
   finally
     try
       BorraArbol(Dir); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
@@ -1953,14 +1979,15 @@ end;
 
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
   out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
-  out AError: string; out AParada: TIgnorada; const ASoltado: string): string;
+  out AError: string; out AParada: TIgnorada; const ASoltado: string;
+  const AUnidad: string): string;
 begin
   AEscrito := '';
   ASustituidas := [];
   AAvisos := [];
   ASinLeer := [];
   ALeidos := [];
-  var R := JuezDelIde(APath, ATexto, AEnc, '', ASoltado);
+  var R := JuezDelIde(APath, ATexto, AEnc, '', ASoltado, AUnidad);
   AError := R.Error;
   AParada := R.Parada;
   Result := R.Fallo;

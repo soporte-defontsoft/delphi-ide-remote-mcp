@@ -67,6 +67,26 @@ the MCP `initialize` response (`serverInfo.version`).
   answer gives its own causes (`LSP-052`): the shared note asked for a position inside an
   identifier, the opposite of what it needs. The TCP probe of `delphi_paserver` says the host
   passed because `RemoteHosts` allows it.
+- **`delphi_designer layout` of a VCL form lists an inline frame and what is inside it.**
+  With the renderer (`boxesFrom: renderer`) the boxes were the text's list with the real
+  rectangles put in, and the text of a form never lists what a frame holds: a form made of
+  frames answered `boxes: []` and `clean: true`. Found by the directed test of this version
+  on the 13.2 machine. Now what the renderer measures and the text does not list is added,
+  with the line of its block (0 inside a frame); it is listed, not judged, and
+  `howMeasured` says so.
+- **`delphi_designer insert` of a frame of the project no longer says the renderer could not
+  load it.** The IDE's writer was asked with the form proposed but the unit as it is on
+  disk, whose `uses` does not name the frame's unit yet - and since this version a lone
+  copy the `uses` does not name is not taken (`RENDER-025`): every frame went in as the
+  last child with `DSGN-145` and a `DSGN-140` that blamed a missing package or folder.
+  Found by the directed test of this version. The judge now sees the unit as the insert
+  will leave it, and what it reads of that proposal does not count as a reading of the
+  disk.
+- **`DSGN-115` says why a literal under Windows or Program Files is refused.** It said "a
+  path outside the allowed read locations" of a folder the session could read: since this
+  version the renderer's container reads those folders on its own, so such a literal is
+  refused by its text, exists or not, and the message now says so, and where to keep the
+  files (the form's folder or below it).
 - **The renderer's packages box is moved into place with the retries a file write has, and
   `DSGN-177` names the step of the box that failed.** The server fills the box beside its
   final name and renames the folder into place; a reader of an instant holding any of the

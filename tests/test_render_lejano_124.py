@@ -211,6 +211,10 @@ try:
     pas = open(os.path.join(APP, 'forms', 'UOtra.pas'), encoding='ascii').read()
     check('I1 V77 insert de un frame del proyecto: inline con el nombre del IDE, su campo y su unidad en el uses',
           'inline Frame11: TFrame1' in dfm and 'Frame11: TFrame1;' in pas and 'UFr' in pas.split('type')[0], (r[:500], dfm))
+    # el juez del orden ve la unidad como queda (su uses nombra UFr) y carga el frame: sin la nota de
+    # "ultimo sin juez" (dirigido de Hermes de la 1.24, punto 2: DSGN-145 con DSGN-140 en cada frame)
+    check('I1b ...y el juez del orden cargo el frame: sin DSGN-145',
+          not mc.es(r, 'SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT') and not mc.es(r, 'SR_DESIGNER_ORDEN_SIN_CLASE_FMT'), r[:700])
     r = srv.call('delphi_designer', {'command': 'preview', 'path': UN_FORM, 'component': 'Frame11.LabelF', 'out': os.path.join(JAIL, 'i.png')}, t=240)
     check('I2 ...y carga: su LabelF tiene sitio, nada sustituido', len(J(r).get('componentRect', '').split(',')) == 4 and not J(r).get('substituted'), r[:500])
     antes = open(UN_FORM, 'rb').read()

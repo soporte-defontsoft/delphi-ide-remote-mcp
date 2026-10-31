@@ -437,6 +437,23 @@ check('R10 AlignWithMargins desplaza el rectangulo (boxes exactos)',
       bx['PanelTop']['x'] == 3 and bx['PanelTop']['y'] == 3 and bx['PanelTop']['w'] == 394
       and bx['PanelClient']['y'] == 56 and bx['PanelClient']['h'] == 244, o)
 
+# V24b (dirigido de Hermes de la 1.24, punto 4): un frame inline y lo que lleva dentro no estan en
+# el texto del form; con el renderizador entran en boxes (medido a pelo: BOX=Marco1 y
+# BOX=Marco1.EdMarco salian del ayudante y el servidor los tiraba), listados y sin juzgar
+os.makedirs(os.path.join(BASE, 'marco'))
+open(os.path.join(BASE, 'marco', 'UMarco.pas'), 'w', encoding='utf-8', newline='').write(
+    "unit UMarco;\n\ninterface\n\nuses\n  System.Classes, Vcl.Forms, Vcl.StdCtrls, Vcl.Controls;\n\ntype\n  TFrameUMarco = class(TFrame)\n    EdMarco: TEdit;\n  end;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n")
+open(os.path.join(BASE, 'marco', 'UMarco.dfm'), 'w', encoding='utf-8', newline='').write(
+    "object FrameUMarco: TFrameUMarco\n  Left = 0\n  Top = 0\n  Width = 320\n  Height = 240\n  TabOrder = 0\n  object EdMarco: TEdit\n    Left = 10\n    Top = 10\n    Width = 121\n    Height = 23\n    TabOrder = 0\n    Text = 'EdMarco'\n  end\nend\n")
+open(os.path.join(BASE, 'marco', 'UConMarco.pas'), 'w', encoding='utf-8', newline='').write(
+    "unit UConMarco;\n\ninterface\n\nuses\n  System.Classes, Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, UMarco;\n\ntype\n  TFConMarco = class(TForm)\n    Marco1: TFrameUMarco;\n    B: TButton;\n  end;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n")
+o = layout('marco\\UConMarco', "object FConMarco: TFConMarco\n  ClientWidth = 400\n  ClientHeight = 300\n  object B: TButton\n    Left = 8\n    Top = 260\n    Width = 75\n    Height = 25\n    TabOrder = 0\n  end\n  inline Marco1: TFrameUMarco\n    Left = 24\n    Top = 30\n    TabOrder = 1\n  end\nend\n")
+bx = {b['name']: b for b in o.get('boxes', [])}
+check('V24b con el renderizador, un frame inline y lo de dentro salen en boxes (el texto no los lista), con su padre y su linea',
+      o.get('boxesFrom') == 'renderer' and bx.get('Marco1', {}).get('x') == 24 and bx.get('Marco1', {}).get('h') == 240
+      and bx.get('Marco1.EdMarco', {}).get('parent') == 'Marco1' and bx.get('Marco1.EdMarco', {}).get('x') == 34
+      and bx.get('Marco1.EdMarco', {}).get('line') == 0 and bx.get('B', {}).get('align') == 'alNone', o)
+
 srv.mata()
 mc.borra(BASE)  # con el servidor va su caja de paquetes: cien megas (V65 de la 1.24)
 mc.fin('layout battery')

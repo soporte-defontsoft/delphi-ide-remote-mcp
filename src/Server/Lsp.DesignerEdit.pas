@@ -1218,7 +1218,7 @@ function AbreFormParaJuzgar(const APath: string; ANecesitaPas, ANecesitaTabla: B
 function CambioDesdeQueSeJuzgo(const F: TFormEnEdicion; const AAntes, AAntesPas: TArray<Byte>): string; forward;
 function DondeLoDejaElIde(var F: TFormEnEdicion; const ALineas: TArray<string>;
   const ANomObj, ANomPadre: string; var AIni: Integer; ALargo: Integer; ASinTabOrder: Boolean;
-  out ANota: string; out ATabOrder: Integer): TArray<string>; forward;
+  out ANota: string; out ATabOrder: Integer; const AUnidad: string = ''): TArray<string>; forward;
 // la mezcla con lo que guarda el escritor del IDE (1.22.1) la usa
 function Resangra(const S: string; ADelta: Integer): string; forward;
 
@@ -2282,8 +2282,11 @@ begin
     for var P in Props do
       if SameText(P.Trim, 'TabOrder') then
         TabDelAgente := True;
+    // ...y con la unidad como quedara: un frame del proyecto solo se toma si el uses
+    // lo nombra, y en un insert lo nombra la propuesta, no el disco (dirigido de
+    // Hermes de la 1.24, punto 2: DSGN-145 en cada frame)
     DfmLineas := DondeLoDejaElIde(F, DfmLineas, Nombre, NombrePadre, Ini, Largo, ConTab and not TabDelAgente,
-      NotaOrden, TabDelIde);
+      NotaOrden, TabDelIde, PasNuevo);
     FinBloque := Ini + Largo - 1;
     if ConTab and not TabDelAgente and (TabDelIde >= 0) then
       PonSuTabOrder(F, DfmLineas, Nombre, TabDelIde);
@@ -3540,7 +3543,8 @@ end;
   componente donde lo dejaria el IDE, o el ultimo si no se sabe. ASoltado: el
   que se acaba de soltar, que el juez deja como el disenador (V72). }
 function JuezDelOrden(var F: TFormEnEdicion; const ATexto, ANomObj, ANomPadre: string;
-  out ANuestro, ASuyo: TArray<string>; out AEscrito: string; const ASoltado: string = ''): string;
+  out ANuestro, ASuyo: TArray<string>; out AEscrito: string; const ASoltado: string = '';
+  const AUnidad: string = ''): string;
 var
   Escrito, ErrorAyudante: string;
   Sustituidas, Avisos, SinLeer, Faltan: TArray<string>;
@@ -3553,7 +3557,7 @@ begin
   ASuyo := [];
   AEscrito := '';
   Result := ComoLoEscribeElIde(F.Dfm, ATexto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer,
-    Leidos, ErrorAyudante, Parada, ASoltado);
+    Leidos, ErrorAyudante, Parada, ASoltado, AUnidad);
   // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
   F.LeidoPorElJuez := F.LeidoPorElJuez + Leidos;
   if Result <> '' then
@@ -3608,7 +3612,7 @@ end;
   guardar (3.11, el juez para dos llamadores mas). }
 function DondeLoDejaElIde(var F: TFormEnEdicion; const ALineas: TArray<string>;
   const ANomObj, ANomPadre: string; var AIni: Integer; ALargo: Integer; ASinTabOrder: Boolean;
-  out ANota: string; out ATabOrder: Integer): TArray<string>;
+  out ANota: string; out ATabOrder: Integer; const AUnidad: string): TArray<string>;
 var
   Nuestro, Suyo: TArray<string>;
   Doc: TStyleDoc;
@@ -3627,7 +3631,7 @@ begin
   // ...y como el que se acaba de soltar: sin su linea, FMX no lo mete en el
   // tabulador de su padre al leerlo y su escritor no le daba ninguno (V72)
   var Motivo := JuezDelOrden(F, Texto, ANomObj, ANomPadre, Nuestro, Suyo, Escrito,
-    (if ASinTabOrder then ANomObj else ''));
+    (if ASinTabOrder then ANomObj else ''), AUnidad);
   if Motivo <> '' then
   begin
     ANota := MsgFmt(SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT, [ANomObj, ANomPadre, Motivo.Trim]);
