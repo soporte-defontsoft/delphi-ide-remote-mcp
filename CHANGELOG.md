@@ -67,6 +67,17 @@ the MCP `initialize` response (`serverInfo.version`).
   answer gives its own causes (`LSP-052`): the shared note asked for a position inside an
   identifier, the opposite of what it needs. The TCP probe of `delphi_paserver` says the host
   passed because `RemoteHosts` allows it.
+- **The renderer's packages box is moved into place with the retries a file write has, and
+  `DSGN-177` names the step of the box that failed.** The server fills the box beside its
+  final name and renames the folder into place; a reader of an instant holding any of the
+  hundred copies it has just made (a scanner opens files as they are born) makes that rename
+  fail with access denied - measured: a folder with a file open inside is refused even when
+  the reader shares reading, writing and deletion - and the first preview of that server
+  answered `DSGN-177` with a bare `System Error. Code: 5`. Seen once in the suite, with the
+  IDE starting on the same machine; the log of that run was not kept, so the step is not
+  known. The rename now retries for half a second as `AtomicWrite` does (one helper for both),
+  and the refusal says which step of the box failed: its folder, the containers' access, the
+  copies, the COM classes or the move.
 - **The form renderer now always runs inside its own container, and its answer no
   longer says whether a file exists.** `delphi_designer` preview, lint and the check
   of what the IDE would save run the design code of the installed packages. That code

@@ -58,6 +58,22 @@ type
     [Test] procedure UnaCerradaEnUnaRaizNoSeReclama;
   end;
 
+  // RenombraConReintentos (Lsp.Guard): un lector de un instante sobre un fichero
+  // de DENTRO hace rebotar el renombre de la carpeta con 5 y el helper insiste
+  // medio segundo (el mutante sin bucle contesta al instante); otro codigo (183,
+  // el destino existe) sale a la primera. Sin seguridad: vale en cualquier pasada
+  [TestFixture]
+  TRenombraConReintentosTests = class
+  private
+    FBase: string;
+    function Carpeta(const ANombre: string): string;
+  public
+    [Setup] procedure Prepara;
+    [TearDown] procedure Limpia;
+    [Test] procedure UnFicheroAbiertoDentroRebotaConCincoYSeReintenta;
+    [Test] procedure UnDestinoQueExisteNoSeReintenta;
+  end;
+
 implementation
 
 uses
@@ -366,9 +382,81 @@ begin
   // que aqui no se juzga; el reclamo positivo lo mide, a pelo, TReclamoDeDaclTests.
 end;
 
+{ TRenombraConReintentosTests }
+
+function TRenombraConReintentosTests.Carpeta(const ANombre: string): string;
+begin
+  Result := TPath.Combine(FBase, ANombre);
+end;
+
+procedure TRenombraConReintentosTests.Prepara;
+begin
+  FBase := ServerTempDir('renombra-' + FragmentoUnico);
+  ForceDirectories(FBase);
+end;
+
+procedure TRenombraConReintentosTests.Limpia;
+begin
+  for var D in TArray<string>.Create(Carpeta('nueva'), Carpeta('caja')) do
+    if DirectoryExists(D) then
+    begin
+      if FileExists(TPath.Combine(D, 'a.bpl')) then
+        TFile.Delete(TPath.Combine(D, 'a.bpl'));
+      RemoveDir(D);
+    end;
+  RemoveDir(FBase);
+end;
+
+procedure TRenombraConReintentosTests.UnFicheroAbiertoDentroRebotaConCincoYSeReintenta;
+var
+  Dentro: string;
+  Codigo: Cardinal;
+  H: THandle;
+  T0: UInt64;
+begin
+  ForceDirectories(Carpeta('nueva'));
+  Dentro := TPath.Combine(Carpeta('nueva'), 'a.bpl');
+  TFile.WriteAllBytes(Dentro, TBytes.Create(1, 2, 3));
+  // el lector de un instante: abierto compartiendo TODO, y aun asi la carpeta
+  // no se renombra (medido el 31-oct-2026 con MoveFileW a pelo)
+  H := CreateFile(PChar(Dentro), GENERIC_READ,
+    FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil, OPEN_EXISTING, 0, 0);
+  Assert.IsTrue(H <> INVALID_HANDLE_VALUE, 'se abre el fichero de dentro: ' + SysErrorMessage(GetLastError));
+  try
+    T0 := GetTickCount64;
+    Assert.IsFalse(RenombraConReintentos(Carpeta('nueva'), Carpeta('caja'), 0, Codigo),
+      'con un fichero abierto dentro no se renombra');
+    Assert.AreEqual(Integer(ERROR_ACCESS_DENIED), Integer(Codigo), 'y Windows dice 5');
+    // insistio: cuatro esperas de 100 ms entre los cinco intentos
+    Assert.IsTrue(GetTickCount64 - T0 >= 350, 'reintento medio segundo: ' + UIntToStr(GetTickCount64 - T0) + ' ms');
+    Assert.IsTrue(DirectoryExists(Carpeta('nueva')) and not DirectoryExists(Carpeta('caja')), 'nada se movio');
+  finally
+    CloseHandle(H);
+  end;
+  // suelto, a la primera
+  Assert.IsTrue(RenombraConReintentos(Carpeta('nueva'), Carpeta('caja'), 0, Codigo),
+    'suelto renombra: ' + SysErrorMessage(Codigo));
+  Assert.IsTrue(DirectoryExists(Carpeta('caja')) and not DirectoryExists(Carpeta('nueva')), 'la carpeta esta en su sitio');
+end;
+
+procedure TRenombraConReintentosTests.UnDestinoQueExisteNoSeReintenta;
+var
+  Codigo: Cardinal;
+  T0: UInt64;
+begin
+  ForceDirectories(Carpeta('nueva'));
+  ForceDirectories(Carpeta('caja'));
+  T0 := GetTickCount64;
+  Assert.IsFalse(RenombraConReintentos(Carpeta('nueva'), Carpeta('caja'), 0, Codigo),
+    'un destino que existe no se renombra');
+  Assert.AreEqual(Integer(ERROR_ALREADY_EXISTS), Integer(Codigo), 'y Windows dice 183');
+  Assert.IsTrue(GetTickCount64 - T0 < 100, 'sin reintentos: ' + UIntToStr(GetTickCount64 - T0) + ' ms');
+end;
+
 initialization
 
 TDUnitX.RegisterTestFixture(TReclamoDeDaclTests);
 TDUnitX.RegisterTestFixture(TReclamoFueraDeLaCasaTests);
+TDUnitX.RegisterTestFixture(TRenombraConReintentosTests);
 
 end.

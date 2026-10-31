@@ -1138,7 +1138,9 @@ REGLAS = [
       # el atomico, el de productos, la copia diaria y la sellada de la papelera
       ('Lsp.Patch.pas', 'EscribeBytes'), ('Lsp.Patch.pas', 'CopiaAntesDePisar'),
       ('Lsp.Patch.pas', 'AtomicWrite'),
-      ('Lsp.Patch.pas', 'SustituyePorRenombre'), ('Lsp.Patch.pas', 'Coloca'),
+      # el renombre que insiste ante un lector de un instante (antes en linea en
+      # SustituyePorRenombre; la caja de paquetes del render lo llama tambien)
+      ('Lsp.Guard.pas', 'RenombraConReintentos'), ('Lsp.Patch.pas', 'Coloca'),
       # la fecha de creacion de lo que el escritor ACABA de sustituir
       ('Lsp.Patch.pas', 'PonFechaDeCreacion'),
       # la reserva del nombre de un informe, tras la puerta sobre su carpeta con el

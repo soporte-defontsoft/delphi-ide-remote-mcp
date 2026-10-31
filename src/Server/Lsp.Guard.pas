@@ -168,6 +168,20 @@ function ExisteYSeLee(const ARuta: string; ACarpeta: Boolean = False): Boolean;
   y el SYS-027 de un comodin no decia cual estaba cogido (25-oct-2026). }
 function MotivoDeRenombre(const APath: string; ACodigo: Cardinal): string;
 
+{ MoveFileEx que aguanta a un lector de un instante (el preview de un changeset,
+  una busqueda, el antivirus): un fichero -o uno DENTRO de una carpeta- que otro
+  tiene abierto hace rebotar el renombre con 5, 32 o 33, y unos instantes
+  despues pasa. Medido el 31-oct-2026: una carpeta con un fichero abierto dentro
+  da 5 aunque el otro comparta lectura, escritura y borrado; un destino que ya
+  existe da 183, y ese no se reintenta. True si renombro; si no, ACodigo trae el
+  de Windows del ultimo intento. Era el bucle de SustituyePorRenombre (cuatro
+  EDIT-106 de la tercera ronda, todos del propio servidor: reintentar
+  funcionaba); la caja de paquetes del render, que renombra una carpeta recien
+  llena de copias, es el segundo sitio (test_http_auth 2ab, una vez, con el IDE
+  arrancando). }
+function RenombraConReintentos(const AOrigen, ADestino: string; AFlags: Cardinal;
+  out ACodigo: Cardinal): Boolean;
+
 { La pregunta de la puerta de leer sobre los OTROS nombres de un fichero (un
   enlace duro: GUARD-041/042), para quien lee sus BYTES por su cuenta - las
   copias de la papelera, la de un move, la de una carpeta -. ReadPathDenied
@@ -5366,6 +5380,24 @@ begin
   if Result = '' then
     Result := MsgFmt(SR_EDIT_RENAME_ATOMICO_FALLIDO_FMT,
       [TPath.GetFileName(APath), ACodigo, SysErrorMessage(ACodigo).Trim]);
+end;
+
+function RenombraConReintentos(const AOrigen, ADestino: string; AFlags: Cardinal;
+  out ACodigo: Cardinal): Boolean;
+begin
+  Result := False;
+  ACodigo := 0;
+  for var Intento := 1 to 5 do
+  begin
+    Result := MoveFileEx(PChar(AOrigen), PChar(ADestino), AFlags);
+    if Result then
+      Exit;
+    ACodigo := GetLastError;
+    if (ACodigo <> ERROR_ACCESS_DENIED) and (ACodigo <> ERROR_SHARING_VIOLATION) and
+       (ACodigo <> ERROR_LOCK_VIOLATION) then
+      Exit;
+    Sleep(100);
+  end;
 end;
 
 function MotivoToolOculta(const AToolName: string): TMotivoOculta;

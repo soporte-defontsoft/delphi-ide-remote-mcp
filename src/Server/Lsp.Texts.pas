@@ -5669,6 +5669,15 @@ const
     '[DSGN-177 INTERNAL] The form renderer runs only inside its container, ' +
     'and the container could not be prepared: %s. Nothing was drawn.';
 
+  // el paso de la caja de paquetes que fallo, dentro de DSGN-177: un "System
+  // Error. Code: 5" no decia cual de los cinco (31-oct-2026, una vez)
+  SF_RENDER_CAJA_PASO_FMT = 'the packages box could not be made (%s): %s';
+  SF_RENDER_CAJA_CARPETA = 'its folder';
+  SF_RENDER_CAJA_ACE = 'the read access of the containers';
+  SF_RENDER_CAJA_COPIA = 'copying the packages';
+  SF_RENDER_CAJA_CLASES = 'declaring its COM classes';
+  SF_RENDER_CAJA_RENOMBRE = 'moving it into place';
+
   SR_DESIGNER_VALOR_CON_COMILLAS_FMT =
     '[DSGN-065 INVALID_PARAM] "%s" carries a double quote or a control ' +
     'character, which cannot travel to the renderer as one value. Nothing ' +

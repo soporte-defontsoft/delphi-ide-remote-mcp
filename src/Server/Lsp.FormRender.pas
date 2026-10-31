@@ -1347,6 +1347,7 @@ function CajaDePaquetes(const AInfo: TRadStudioInfo; out ACaja, APath: string;
 var
   Fuentes: TDictionary<string, string>;
   Vistas, Ayudantes, PathDelServidor, Claves: TArray<string>;
+  Paso: string; // el paso de la caja en curso: cual fallo (DSGN-177)
 
   // los ficheros de ACarpeta con esa mascara. Por EntradasDeCarpeta y no por
   // WalkFiles: esto es trabajo del servidor con la instalacion, no lo que nombra
@@ -1407,6 +1408,7 @@ begin
   Result := '';
   ACaja := '';
   APath := '';
+  Paso := '';
   APaquetes := PaquetesDelIde(AInfo);
   Vistas := [];
   Ayudantes := [];
@@ -1454,14 +1456,23 @@ begin
           // entera o ninguna: se llena al lado y entra de un renombre
           var Nueva := ACaja + '.' + FragmentoUnico;
           try
+            Paso := SF_RENDER_CAJA_CARPETA;
             CrearCarpeta(Nueva);
+            Paso := SF_RENDER_CAJA_ACE;
             var Err := PreparaCarpetaParaLosContenedores(Nueva);
             if Err <> 0 then
               RaiseLastOSError(Err);
+            Paso := SF_RENDER_CAJA_COPIA;
             CopiaLoQueFalta(Nueva);
+            Paso := SF_RENDER_CAJA_CLASES;
             DaSusClasesAlContenedor(Nueva, SuPath(Nueva), Ayudantes);
-            if not MoveFile(PChar(Nueva), PChar(ACaja)) then
-              RaiseLastOSError;
+            // una carpeta recien llena de copias que un lector de un instante (el
+            // escaner, que las abre al nacer) tiene abierta no se deja renombrar
+            // (5, medido el 31-oct-2026): se insiste como el escritor atomico
+            Paso := SF_RENDER_CAJA_RENOMBRE;
+            var Codigo: Cardinal;
+            if not RenombraConReintentos(Nueva, ACaja, 0, Codigo) then
+              RaiseLastOSError(Codigo);
           except
             try
               BorraArbol(Nueva);
@@ -1470,6 +1481,7 @@ begin
             end;
             raise;
           end;
+          Paso := '';
           // las generaciones viejas, las que ningun ayudante usa: borrar una en uso
           // la dejaba a medias, y si volvia ese conjunto se usaba con agujeros
           for var D in EntradasDeCarpeta(ServerTempDir) do
@@ -1498,7 +1510,11 @@ begin
       APath := SuPath(ACaja);
     except
       on E: Exception do
-        Result := MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [SinNuestraCasa(E.Message)]);
+        if Paso <> '' then
+          Result := MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT,
+            [MsgFmt(SF_RENDER_CAJA_PASO_FMT, [Paso, SinNuestraCasa(E.Message)])])
+        else
+          Result := MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [SinNuestraCasa(E.Message)]);
     end;
   finally
     Fuentes.Free;

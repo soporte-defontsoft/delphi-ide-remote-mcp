@@ -1767,24 +1767,13 @@ begin
   var TeniaFecha := GetFileAttributesEx(PChar(APath), GetFileExInfoStandard, @Antes);
   // Un lector de un instante (el preview de un changeset, una busqueda, el
   // antivirus) tiene el fichero abierto sin compartir el borrado y el rename
-  // rebota: se reintenta unos instantes antes de decir que algo lo tiene
+  // rebota: RenombraConReintentos (Lsp.Guard; tambien el de la caja de paquetes
+  // del render) insiste unos instantes antes de decir que algo lo tiene
   // (verificacion de la tercera ronda: cuatro EDIT-106 con varias sesiones,
-  // todos del propio servidor; reintentar funcionaba)
-  var Renombrado := False;
-  var Codigo: DWORD := 0;
-  for var Intento := 1 to 5 do
-  begin
-    Renombrado := MoveFileEx(PChar(ATmp), PChar(Destino), MOVEFILE_REPLACE_EXISTING);
-    if Renombrado then
-      Break;
-    // el codigo de Windows ANTES de borrar el temporal (despues salia 0)
-    Codigo := GetLastError;
-    if (Codigo <> ERROR_ACCESS_DENIED) and (Codigo <> ERROR_SHARING_VIOLATION) and
-       (Codigo <> ERROR_LOCK_VIOLATION) then
-      Break;
-    Sleep(100);
-  end;
-  if not Renombrado then
+  // todos del propio servidor; reintentar funcionaba). El codigo de Windows,
+  // ANTES de borrar el temporal (despues salia 0)
+  var Codigo: Cardinal := 0;
+  if not RenombraConReintentos(ATmp, Destino, MOVEFILE_REPLACE_EXISTING, Codigo) then
   begin
     // un temporal que no se deja borrar no cambia la causa que se dice
     try
