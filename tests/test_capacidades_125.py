@@ -20,6 +20,7 @@ con la renombrada DESPUES (medido con dcc: gana la ultima del uses, y las de imp
 del interface. Ni un metodo, ni una rutina solo de implementation, ni una declaracion local, ni un nombre calificado.
 V224 (visto en vivo al probar V132b): de una llamada a una rutina con la cabecera en VARIAS lineas, el motor contesta una
 linea interior de la cabecera, que no la nombra: definition apuntaba ahi, references la rechazaba y rename se bloqueaba.
+V190b: delphi_definition dice que hay en el destino (name y text), sin otra llamada a delphi_read.
 
 Usage:  python tests/test_capacidades_125.py [path-to-DelphiLspMcp.exe]
 """
@@ -452,6 +453,26 @@ try:
     j = mc.como_json(call('delphi_rename_symbol', {'path': UDEF, 'line': i, 'character': c, 'newname': 'MetNuevo', 'mode': 'apply'}, t=240))
     b = mc.como_json(call('delphi_build', {'project': os.path.join(LM, 'Lm.dproj'), 'platform': 'Win64', 'config': 'Debug'}, t=180))
     check('V224 ...y aplicado compila', b.get('success') is True, str(b)[:500])
+
+    # V190b - lo que hay en el destino de delphi_definition
+    j = definicion(UUSA, 'Corta(1)', 'Corta')
+    check('V190b definition: name y text del destino', j.get('name') == 'Corta' and j.get('text') == 'procedure Corta(A: Integer);', j)
+    j = definicion(UUSA, 'UDef.Larga', 'Larga')
+    check('V190b ...en una cabecera de varias lineas, su primera', j.get('name') == 'Larga' and j.get('text') == 'procedure Larga(A: Integer;', j)
+    with open(UDEF, encoding='utf-8-sig', newline='') as f:
+        d_ = f.read()
+    with open(UDEF, 'w', newline='') as f:
+        f.write(d_.replace('type\r\n', "const\r\n  RUTA_C = 'D:\\x\\y.txt';\r\n\r\ntype\r\n", 1))
+    with open(UUSA, encoding='utf-8-sig', newline='') as f:
+        d_ = f.read()
+    with open(UUSA, 'w', newline='') as f:
+        f.write(d_.replace('  Corta(1);', '  Corta(Length(RUTA_C));', 1))
+    i, c = donde(UUSA, 'Length(RUTA_C)', 'RUTA_C')
+    j = mc.como_json(call('delphi_definition', {'path': UUSA, 'line': i, 'character': c}, t=120))
+    check('V190b text es el fuente tal cual: una ruta dentro no se enmascara', "RUTA_C = 'D:\\x\\y.txt'" in (j.get('text') or ''), j)
+    i, c = donde(UUSA, 'TK.Create', 'Create')
+    j = mc.como_json(call('delphi_definition', {'path': UUSA, 'line': i, 'character': c}, t=120))
+    check('V190b en la biblioteca, tambien (lo que el motor puede ensenar)', 'Create' in (j.get('text') or '') and j.get('name') == 'Create', str(j)[:300])
 finally:
     srv.mata()
 

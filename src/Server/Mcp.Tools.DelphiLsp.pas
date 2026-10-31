@@ -486,9 +486,9 @@ const
   // signature, las etiquetas de completion, el markdown de hover): van tal
   // cual (Lsp.Mascara.EnmascaraJsonSalvo), y una constante con una ruta salia
   // con la letra virtual; uri, path y lo demas, enmascarados
-  CONTENIDO_DEL_MOTOR: array [0 .. 8] of string = ('label', 'detail',
+  CONTENIDO_DEL_MOTOR: array [0 .. 9] of string = ('label', 'detail',
     'documentation', 'value', 'insertText', 'filterText', 'sortText', 'newText',
-    'name');
+    'name', 'text');
   // ...y los de symbols: la declaracion leida del fuente, sus etiquetas del
   // resumen y los uses del digest
   CONTENIDO_DE_SYMBOLS: array [0 .. 5] of string = ('decl', 'name', 'detail',
@@ -1359,6 +1359,35 @@ begin
   FDescription := SD_LSP_DEFINITION;
 end;
 
+{ Lo que hay en el destino, para no gastar otra llamada: el nombre y la linea tal
+  cual, con la puerta de leer y los lugares del motor. Se llama con la ubicacion
+  ya juzgada (LSP-038). Lo que no se deja leer se queda sin ellos: la posicion
+  sigue siendo la respuesta (V190b de la 1.25). }
+procedure ConLoQueHayEnElDestino(AResp: TJSONObject);
+begin
+  try
+    var V := AResp.GetValue('result');
+    if (V is TJSONArray) and (TJSONArray(V).Count > 0) then
+      V := TJSONArray(V).Items[0];
+    var Loc: TLoc;
+    if not (V is TJSONObject) or not ParseLoc(V, Loc) then
+      Exit;
+    var Lineas := SplitToLines(LeeTexto(TLspClient.UriToPath(Loc.Uri), LUGARES_DEL_MOTOR));
+    if (Loc.Line < 0) or (Loc.Line >= Length(Lineas)) then
+      Exit;
+    var Linea := Lineas[Loc.Line].TrimRight([#13, #10]);
+    var Rango := TJSONObject(V).GetValue('range');
+    var Ident := '';
+    if Rango <> nil then
+      Ident := IdentifierAt(Linea, Rango.GetValue<Integer>('start.character', 0));
+    if Ident <> '' then
+      TJSONObject(V).AddPair('name', Ident);
+    TJSONObject(V).AddPair('text', Linea);
+  except
+    // la posicion sigue siendo la respuesta
+  end;
+end;
+
 function TDelphiDefinitionTool.ExecuteWithParams(const Params: TDelphiDefinitionParams): string;
 var
   Client: TLspClient;
@@ -1453,6 +1482,7 @@ begin
         Resp.Free;
         Exit;
       end;
+      ConLoQueHayEnElDestino(Resp);
       Exit(RenderResult(Resp, MsgText(SN_DEF_DECL_FALLBACK) + NoSettingsNote(Settings)));
     end;
   end
@@ -1485,6 +1515,7 @@ begin
   // el nombre (como declaration): con 0, un hover o un rename alli caian en
   // "procedure" (Opus en Hermes, 1.22.1)
   ColumnaEnElNombre(Resp);
+  ConLoQueHayEnElDestino(Resp);
   Result := RenderResult(Resp, NoSettingsNote(Settings));
 end;
 

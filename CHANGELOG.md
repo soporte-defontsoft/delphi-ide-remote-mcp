@@ -57,6 +57,8 @@ the MCP `initialize` response (`serverInfo.version`).
   symbol, and it compiles (measured with dcc: the last of the uses wins, those of `implementation`
   count after those of `interface`). A method, a routine only in `implementation`, a local
   declaration or a qualified call do not count.
+- **`delphi_definition` says what is at the destination**: `name` and `text`, the line as written,
+  so finding out what it found no longer takes a `delphi_read`.
 
 ### Fixed
 
