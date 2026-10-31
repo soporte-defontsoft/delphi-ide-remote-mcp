@@ -461,19 +461,13 @@ begin
 end;
 
 { Si ABase + '.' + AResto (una vista de la unidad ABase) es un fichero de SU
-  carpeta y con ESE nombre, como lo resuelve Windows (GetFullPathName, por
-  ExpandFileName): ni un separador - '\' o '/' -, ni '..', ni lo que Windows
-  recorta. El juez es Windows: ExtractFileName(AResto) = AResto, el de V165,
-  no veia '/' (solo corta por '\' y ':'), y '*./../../x.fmx' nombraba un .fmx
-  de fuera de la jaula (V165b de la 1.23.1, medido). }
+  carpeta y con ESE nombre. El juez es Windows: ExtractFileName(AResto) = AResto,
+  el de V165, no veia '/' (solo corta por '\' y ':'), y '*./../../x.fmx' nombraba
+  un .fmx de fuera de la jaula (V165b de la 1.23.1, medido). }
 function VistaEnSuCarpeta(const ABase, AResto: string): Boolean;
-var
-  Compuesta, Full: string;
 begin
-  Compuesta := ABase + '.' + AResto;
-  Full := ExpandFileName(Compuesta);
-  Result := SameFileName(ExtractFilePath(Full), ExtractFilePath(ExpandFileName(ABase))) and
-    (ExtractFileName(Full) = ExtractFileName(Compuesta));
+  Result := EsNombreSueltoEn(ExtractFilePath(ExpandFileName(ABase)),
+    ExtractFileName(ABase) + '.' + AResto);
 end;
 
 function VistasDeUnidad(const AUnidad, ATexto: string): TArray<string>;

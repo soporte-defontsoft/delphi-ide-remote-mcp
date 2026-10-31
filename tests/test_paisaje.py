@@ -400,6 +400,15 @@ REGLAS = [
     ('el numero de un nombre mDNS de adb leido a mano', r"Pos\(\s*'\)\.'",
      [('Lsp.Settings.pas', 'DispositivoSinNumeroMdns')],
      'DispositivoSinNumeroMdns (Lsp.Settings): lo leen BadDeviceName y AdbTargetAllowed'),
+    # tres decisiones de jaula sobre el mismo texto, cada una con su lector hasta la 1.24: la raiz
+    # mas honda (V174), el juez de un nombre suelto (V178) y una unidad virtual bajo su letra (V171)
+    ('la raiz mas honda escrita a mano', r'RutaDentroDe\([^;]*Length\(', [],
+     'RaizMasHonda (Lsp.Rutas): la jaula, el confinamiento y RaizQueContiene, cada uno con su forma'),
+    ('un nombre suelto juzgado a mano', r'(?:GetFileName|ExtractFileName)\(\s*(\w+)\s*\)\s*<>\s*\1\b', [],
+     'EsNombreSueltoEn (Lsp.Pascal): el juez es Windows, y una vista de unidad y una captura lo preguntan'),
+    ('una unidad virtual bajo su letra compuesta a mano', r"Copy\(\s*\w+,\s*(?:5|Pos\(':',\s*\w+\)),\s*MaxInt\)",
+     [('Lsp.Mascara.pas', 'RutaBajoSuLetra')],
+     'RutaBajoSuLetra (Lsp.Mascara): la inversa del enmascarado'),
     # el esquema de una direccion de git: git no tiene una orden que diga como la lee sin
     # conectarse, asi que es gramatica nuestra, UNA y calcada de la suya (url.c is_urlschemechar;
     # el '://' en cualquier sitio, como el strstr de connect.c). La leian dos lectores, uno que
@@ -1720,6 +1729,9 @@ PLANTADO = {
     'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
     'la clave del IDE en el registro': "  if Reg.OpenKeyReadOnly('SOFTWARE\\Embarcadero\\BDS\\' + Ver) then",
     'el numero de un nombre mDNS de adb leido a mano': "  C := Pos(').', Nombre);",
+    'la raiz mas honda escrita a mano': "  if RutaDentroDe(R, Full) and (Length(R) > Length(Mejor)) then",
+    'un nombre suelto juzgado a mano': "  if TPath.GetFileName(Nombre) <> Nombre then",
+    'una unidad virtual bajo su letra compuesta a mano': "  R := Letra + Copy(V, Pos(':', V), MaxInt);",
     'el esquema de una direccion de git leido a mano': "  if Pos('://', Url) > 0 then",
     'la rama absoluta de una entrada de sitio': "  Full := TPath.GetFullPath(RaizSiUnidad(V));",
     'el significado de old/new': "  A.HasNew := (ANew <> '') or A.HasOld;",

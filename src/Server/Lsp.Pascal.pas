@@ -251,6 +251,12 @@ function ClaveDeIdentificador(const S: string): string;
 // A-Z (GESTORIA con su I acentuada no era gestoria). Medido el 28-oct-2026
 // con LCMapStringEx (V108 de la 1.23.1).
 function SinMayusculas(const S: string): string;
+// ANombre es un fichero de ACarpeta (ruta completa) con ESE nombre, y nada mas,
+// como lo resuelve Windows (GetFullPathName, por ExpandFileName): ni separador,
+// ni unidad, ni stream, ni '..', ni lo que Windows recorta. EL juez de "es un
+// nombre suelto": eran dos, y uno por el texto (V178). Aqui y no en Lsp.Rutas
+// porque el ayudante de render lo usa, sin arrastrar los mensajes.
+function EsNombreSueltoEn(const ACarpeta, ANombre: string): Boolean;
 // La distancia de edicion (Levenshtein) entre dos textos, tal cual: quien la
 // quiera sin mayusculas los pliega antes. Vivia dentro de delphi_help (el
 // nombre de una tool casi bien escrito); delphi_designer set es su segundo
@@ -386,6 +392,16 @@ function SinMayusculas(const S: string): string;
 begin
   // LCMapString con LOCALE_INVARIANT y sin casing de ningun idioma
   Result := S.ToLowerInvariant;
+end;
+
+function EsNombreSueltoEn(const ACarpeta, ANombre: string): Boolean;
+var
+  Carpeta, Full: string;
+begin
+  Carpeta := IncludeTrailingPathDelimiter(ACarpeta);
+  Full := ExpandFileName(Carpeta + ANombre);
+  Result := (ANombre <> '') and SameFileName(ExtractFilePath(Full), Carpeta) and
+    (ExtractFileName(Full) = ANombre);
 end;
 
 function EditDistance(const A, B: string): Integer;

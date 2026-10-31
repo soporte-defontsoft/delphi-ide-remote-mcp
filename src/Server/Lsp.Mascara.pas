@@ -107,6 +107,11 @@ function ExpandDriveValue(const AValue: string): string;
   unit: refuse it by name, never let it near GetFullPath. }
 function VirtualUnitLetter(const AValue: string): Char;
 
+{ Un valor con la forma de una unidad virtual bajo su letra: 'srvd:\x' -> 'D:\x',
+  se sirva o no ('' si no tiene esa forma). LA inversa del enmascarado: la
+  expansion de ida y la pista de la unidad equivocada (V171). }
+function RutaBajoSuLetra(const AValue: string): string;
+
 { True si AValue EMPIEZA con la forma de una unidad virtual ('srvd:', o el
   centinela 'srv0:'), sea lo que sea lo que venga detras. La unica prueba de
   esa forma: VirtualUnitLetter la usa (y exige ademas la barra o el final) y
@@ -296,6 +301,13 @@ begin
       Result := UpCase(AValue[4]);
 end;
 
+function RutaBajoSuLetra(const AValue: string): string;
+begin
+  Result := '';
+  if VirtualUnitLetter(AValue) <> #0 then
+    Result := VirtualUnitLetter(AValue) + Copy(AValue, 5, MaxInt);
+end;
+
 { 'srvd:\x' / 'srvd:/x' / bare 'srvd:' -> 'D:\x' ... Whole-value prefix match
   only; anything else comes back untouched (real paths keep working).
   Only a SERVED letter expands. Mapping an unserved 'srvz:' to the real 'Z:\'
@@ -311,7 +323,7 @@ begin
   Result := AValue;
   Letter := VirtualUnitLetter(AValue);
   if (Letter <> #0) and (Pos(Letter, ServedDriveLetters) > 0) then
-    Exit(Letter + Copy(AValue, 5, MaxInt));
+    Exit(RutaBajoSuLetra(AValue));
   // el HOST de un UNC sale enmascarado como srvhost (MaskDriveText) y nadie
   // lo leia de vuelta: el agente no podia repetir lo que el servidor le
   // ensenaba (GUARD-002). Vuelve solo si el operador declaro UN unico host

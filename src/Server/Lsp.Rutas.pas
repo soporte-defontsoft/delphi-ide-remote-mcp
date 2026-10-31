@@ -79,6 +79,16 @@ function EnLugar(const APath, ALugar: string;
   Solo yerran hacia "fuera" / "distintas": niegan de mas, nunca de menos. }
 function RutaDentroDe(const AContenedor, ARuta: string): Boolean;
 function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
+type
+  TFormaDeRaiz = reference to function(const ARaiz: string): string;
+{ LA raiz MAS HONDA de ARaices que contiene ARuta, en la forma AForma con la
+  que se compara; '' si ninguna. La mas larga y no la primera que casa: con
+  raices anidadas el confinamiento dependia del ORDEN en que se declararon (V167
+  de la 1.23.1). Si llega ARutaComoLlega, una raiz tambien la contiene por el
+  texto con que se declaro: la pertenencia a la jaula va por las dos formas. Una
+  decision de jaula tiene UN lector: estaba escrita a mano en tres sitios (V174). }
+function RaizMasHonda(const ARaices: TArray<string>; const ARuta: string;
+  const AForma: TFormaDeRaiz; const ARutaComoLlega: string = ''): string;
 { Lo que sigue a AContenedor en ARuta, sin la barra de delante ('' si ARuta
   es el propio AContenedor): True si ARuta es AContenedor o esta dentro, por
   EL juez (RutaDentroDe) y cortando el MISMO texto que juzgo. Las dos llegan
@@ -577,6 +587,19 @@ begin
   // prefijo de "casa2\".
   Result := (Length(R) >= Length(C)) and
     (AnsiCompareFileName(Copy(R, 1, Length(C)), C) = 0);
+end;
+
+function RaizMasHonda(const ARaices: TArray<string>; const ARuta: string;
+  const AForma: TFormaDeRaiz; const ARutaComoLlega: string): string;
+begin
+  Result := '';
+  for var R in ARaices do
+  begin
+    var Forma := AForma(R);
+    if (RutaDentroDe(Forma, ARuta) or RutaDentroDe(R, ARutaComoLlega)) and
+       (Length(Forma) > Length(Result)) then
+      Result := Forma;
+  end;
 end;
 
 function TrozoBajo(const AContenedor, ARuta: string; out ATrozo: string): Boolean;

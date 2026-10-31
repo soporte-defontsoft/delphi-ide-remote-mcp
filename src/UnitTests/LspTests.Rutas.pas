@@ -247,6 +247,16 @@ type
     [Test] procedure ElComodinSoloEnElNombre;
   end;
 
+  // tres decisiones de jaula con UN lector (V174, V178, V171)
+  [TestFixture]
+  TLectoresDeJaulaTests = class
+  public
+    [Test] procedure LaRaizMasHondaNoDependeDelOrden;
+    [Test] procedure LaRaizMasHondaPorLasDosFormas;
+    [Test] procedure UnNombreSueltoLoJuzgaWindows;
+    [Test] procedure UnaUnidadVirtualBajoSuLetra;
+  end;
+
 implementation
 
 uses
@@ -260,6 +270,7 @@ uses
   Lsp.Codificacion,   // ekUtf8Bom
   Lsp.Discovery,      // la instalacion del IDE
   Lsp.Rutas,          // EsRutaAbsoluta, RutaDesde
+  Lsp.Pascal,         // EsNombreSueltoEn
   Lsp.ProjectUnits,   // ProyectoListaUnidad (V204)
   LspTests.FormRender, // CreaUnion
   Lsp.Mascara,
@@ -1496,7 +1507,60 @@ begin
     Assert.IsFalse(Lsp.Reparse.EsEnlace(Alias), Alias);
 end;
 
+function SinTocarLaRaiz(const ARaiz: string): string;
+begin
+  Result := ARaiz;
+end;
+
+procedure TLectoresDeJaulaTests.LaRaizMasHondaNoDependeDelOrden;
+const
+  ARRIBA = 'C:\Nadie\W\';
+  HONDA = 'C:\Nadie\W\agentes\';
+  RUTA = 'C:\Nadie\W\agentes\uno\a.pas';
+begin
+  Assert.AreEqual(HONDA, RaizMasHonda([ARRIBA, HONDA], RUTA, SinTocarLaRaiz));
+  Assert.AreEqual(HONDA, RaizMasHonda([HONDA, ARRIBA], RUTA, SinTocarLaRaiz));
+  Assert.AreEqual(ARRIBA, RaizMasHonda([HONDA, ARRIBA], 'C:\Nadie\W\b.pas', SinTocarLaRaiz));
+  Assert.AreEqual('', RaizMasHonda([HONDA, ARRIBA], 'C:\Nadie\Wotra\b.pas', SinTocarLaRaiz));
+end;
+
+procedure TLectoresDeJaulaTests.LaRaizMasHondaPorLasDosFormas;
+var
+  Larga: TFormaDeRaiz;
+begin
+  Larga :=
+    function(const ARaiz: string): string
+    begin
+      Result := StringReplace(ARaiz, 'CORTA~1', 'Larguisima', []);
+    end;
+  // en su forma, o por el texto con que se declaro; devuelve la forma
+  Assert.AreEqual('C:\Larguisima\', RaizMasHonda(['C:\CORTA~1\'], 'C:\Larguisima\a', Larga));
+  Assert.AreEqual('C:\Larguisima\', RaizMasHonda(['C:\CORTA~1\'], 'C:\Otra\a', Larga, 'C:\CORTA~1\a'));
+  Assert.AreEqual('', RaizMasHonda(['C:\CORTA~1\'], 'C:\Otra\a', Larga));
+end;
+
+procedure TLectoresDeJaulaTests.UnNombreSueltoLoJuzgaWindows;
+const
+  CASA = 'C:\Nadie\Casa';
+begin
+  Assert.IsTrue(EsNombreSueltoEn(CASA, 'a.png'));
+  Assert.IsTrue(EsNombreSueltoEn(CASA + '\', 'a b.png'));
+  for var Malo in TArray<string>.Create('', '..\a.png', 'x\a.png', 'x/a.png', '../a.png',
+    'a.png:s', 'C:\a.png', 'C:a.png', '\a.png', 'a.png.', 'a.png ', '.') do
+    Assert.IsFalse(EsNombreSueltoEn(CASA, Malo), Malo);
+end;
+
+procedure TLectoresDeJaulaTests.UnaUnidadVirtualBajoSuLetra;
+begin
+  Assert.AreEqual('D:\x', RutaBajoSuLetra('srvd:\x'));
+  Assert.AreEqual('Z:/x', RutaBajoSuLetra('srvz:/x'));
+  Assert.AreEqual('D:', RutaBajoSuLetra('srvd:'));
+  Assert.AreEqual('', RutaBajoSuLetra('srvd:x'));
+  Assert.AreEqual('', RutaBajoSuLetra('D:\x'));
+end;
+
 initialization
+  TDUnitX.RegisterTestFixture(TLectoresDeJaulaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TIncludeDelProyectoTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);

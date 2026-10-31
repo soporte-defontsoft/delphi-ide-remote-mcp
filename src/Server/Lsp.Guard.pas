@@ -2575,8 +2575,7 @@ begin
   // ...y si solo se equivoco de unidad, la misma ruta bajo una que esta sesion
   // lee y existe: LA casa de READ-011 (V92), con la letra que nombro y su
   // cola; la unidad que no se sirve no se toca nunca (V140 de la 1.23.1)
-  var Letra := VirtualUnitLetter(APath);
-  var Otra := MismaRutaEnOtraUnidad(Letra + Copy(APath, Pos(':', APath), MaxInt), False);
+  var Otra := MismaRutaEnOtraUnidad(RutaBajoSuLetra(APath), False);
   if Otra <> '' then
     Result := Result + ' ' + MsgFmt(SN_READ_OTRA_UNIDAD_FMT, [Otra]);
 end;
@@ -3339,8 +3338,7 @@ begin
   Nombre := ANombre;
   // un NOMBRE y nada mas: ni carpeta, ni unidad, ni stream; y el de una captura
   try
-    if (Nombre = '') or (Nombre.IndexOfAny(['\', '/', ':']) >= 0) or
-       (TPath.GetFileName(Nombre) <> Nombre) or
+    if not EsNombreSueltoEn(CasaDeCapturas, Nombre) or
        not SameText(TPath.GetExtension(Nombre), CAPTURE_EXT) then
       Exit(MsgText(SR_FILES_CAPTURA_NOMBRE));
   except
@@ -4808,16 +4806,12 @@ begin
   if (Real = '') or EsPrefijoDeDispositivo(Real) then
     Exit;
   Real := FormaLarga(Real);
-  // la raiz real MAS ESPECIFICA (la mas larga) que la contiene, no la PRIMERA
-  // que casa: con raices anidadas el confinamiento dependia del ORDEN de las
-  // raices (V167 de la 1.23.1, como RaizQueContiene y como PathDenied)
-  var Mejor := '';
-  for var R in ARoots do
-  begin
-    var RaizReal := FormaLarga(RealDeLugar(R));
-    if RutaDentroDe(RaizReal, Real) and (Length(RaizReal) > Length(Mejor)) then
-      Mejor := RaizReal;
-  end;
+  // la raiz real mas honda que la contiene, comparada por su ruta real
+  var Mejor := RaizMasHonda(ARoots, Real,
+    function(const ARaiz: string): string
+    begin
+      Result := FormaLarga(RealDeLugar(ARaiz));
+    end);
   if Mejor <> '' then
     Result := AgentConfineDenied(SinBarraFinal(Real), Mejor);
 end;
@@ -5097,7 +5091,7 @@ end;
 function PathDenied(const APath: string; APermiteGit: Boolean): string;
 var
   Roots: TArray<string>;
-  Full, R: string;
+  Full: string;
 begin
   // PRIMERO la jaula; solo delphi_git recibe el permiso de metadatos.
   Result := JaulaDenegada(APath, APermiteGit);
@@ -5124,20 +5118,9 @@ begin
   if Ref <> '' then
     Exit(MsgFmt(SR_REFERENCE_ROOT_FMT, [APath, Ref]));
   var FullLargo := FormaLarga(Full);
-  // La raiz MAS ESPECIFICA que lo contiene (la mas larga), no la PRIMERA que
-  // casa: con raices anidadas (D:\W y D:\W\agents) el tramo del agente, y con
-  // el el confinamiento, dependia del ORDEN en que se declararon las raices
-  // (V167 de la 1.23.1). Como RaizQueContiene, EL namer de "que raiz contiene
-  // esto". La pertenencia a la jaula, por las dos formas, como antes.
-  var MejorRaiz := '';
-  for R in Roots do
-    if RutaDentroDe(R, Full) or
-       RutaDentroDe(FormaLarga(R), FullLargo) then
-    begin
-      var RaizLarga := FormaLarga(R);
-      if Length(RaizLarga) > Length(MejorRaiz) then
-        MejorRaiz := RaizLarga;
-    end;
+  // La raiz mas honda que lo contiene: de ella se cuenta el tramo del agente. La
+  // pertenencia a la jaula, por las dos formas.
+  var MejorRaiz := RaizMasHonda(Roots, FullLargo, FormaLarga, Full);
   if MejorRaiz <> '' then
   begin
     // Dentro de la jaula, pero quiza en una carpeta declarada de SOLO

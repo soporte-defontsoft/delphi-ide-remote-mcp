@@ -933,12 +933,7 @@ begin
   except
     Exit;
   end;
-  for var R in WorkspaceRoots do
-  begin
-    var Larga := FormaLarga(R);
-    if RutaDentroDe(Larga, Full) and (Length(Larga) > Length(Result) + 1) then
-      Result := SinBarraFinal(Larga);
-  end;
+  Result := SinBarraFinal(RaizMasHonda(WorkspaceRoots, Full, FormaLarga));
 end;
 
 initialization
