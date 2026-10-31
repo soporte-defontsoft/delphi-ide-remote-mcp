@@ -573,6 +573,52 @@ begin
   end;
 end;
 
+{ La cabecera de la rutina AIdent si la linea ALinea cae DENTRO de sus parentesis:
+  su linea, y en ACol donde empieza el nombre; -1 si no. De una llamada a una
+  rutina con la cabecera en varias lineas, el motor contesta una linea interior
+  (medido el 31-oct-2026: la de A en 'procedure Larga(X: Integer;' + 'A: Integer);',
+  columna 2; en este repo y en test_capacidades_125), que no la nombra (V224 de la 1.25). }
+function CabeceraQueContiene(const AUri: string; ALinea: Integer; const AIdent: string;
+  out ACol: Integer): Integer;
+const
+  TOPE_DE_CABECERA = 60; // las lineas que se miran hacia arriba
+var
+  Vista: TStringList;
+begin
+  Result := -1;
+  ACol := 0;
+  Vista := TStringList.Create;
+  try
+    try
+      Vista.Text := CodigoPascal(TLspClient.LoadSourceText(TLspClient.UriToPath(AUri)));
+    except
+      Exit;
+    end;
+    if (ALinea < 1) or (ALinea >= Vista.Count) then
+      Exit;
+    var Abiertos := 0;
+    var K := ALinea - 1;
+    while (K >= 0) and (K >= ALinea - TOPE_DE_CABECERA) do
+    begin
+      var L := Vista[K];
+      Abiertos := Abiertos + L.CountChar('(') - L.CountChar(')');
+      if ColumnaDelNombreDeRutina(L) >= 0 then
+      begin
+        var M := TRegEx.Match(L, PatronIdentEntero(AIdent), [roIgnoreCase]);
+        if M.Success and (Abiertos > 0) then
+        begin
+          ACol := M.Index - 1;
+          Result := K;
+        end;
+        Exit; // la primera cabecera hacia arriba: la suya, u otra y no cae en ella
+      end;
+      Dec(K);
+    end;
+  finally
+    Vista.Free;
+  end;
+end;
+
 { La DECLARACION de un campo en el arbol de documentSymbol del motor
   (ASimbolos, su result): un nodo de kind Field cuyo rango empieza en
   (ALinea, ACol), a cualquier profundidad (V181 de la 1.23.1). }
@@ -608,11 +654,25 @@ var
   Vista: TStringList;
   Cabecera, Campo: Boolean;
 
-  function Posicion(ACaracter: Integer): TJSONObject;
+  { La respuesta del motor, con otro sitio }
+  function Respuesta(const AUriDe: string; ALineaDe, ACaracter: Integer): TJSONObject;
+
+    function Posicion(ACol: Integer): TJSONObject;
+    begin
+      Result := TJSONObject.Create;
+      Result.AddPair('line', TJSONNumber.Create(ALineaDe));
+      Result.AddPair('character', TJSONNumber.Create(ACol));
+    end;
+
   begin
     Result := TJSONObject.Create;
-    Result.AddPair('line', TJSONNumber.Create(ALine));
-    Result.AddPair('character', TJSONNumber.Create(ACaracter));
+    var Lugar := TJSONObject.Create;
+    Result.AddPair('result', Lugar);
+    Lugar.AddPair('uri', AUriDe);
+    var Rango := TJSONObject.Create;
+    Lugar.AddPair('range', Rango);
+    Rango.AddPair('start', Posicion(ACaracter));
+    Rango.AddPair('end', Posicion(ACaracter + Length(Ident)));
   end;
 
   { Detras del nombre que empieza en ACol, ':' (no ':=') o ',': la forma de
@@ -657,6 +717,19 @@ begin
   Ident := IdentifierAt(Texto, ACharacter, Col);
   if Ident = '' then
     Exit;
+  // una linea de dentro de una cabecera en varias lineas: la cabecera (V224)
+  if DefinitionLocation(AResp, Uri, Linea) and MotorPuedeEnsenar(TLspClient.UriToPath(Uri)) and
+     not LineaNombra(Uri, Linea, Ident) then
+  begin
+    var ColDeCabecera: Integer;
+    var DeCabecera := CabeceraQueContiene(Uri, Linea, Ident, ColDeCabecera);
+    if DeCabecera >= 0 then
+    begin
+      Result := Respuesta(Uri, DeCabecera, ColDeCabecera);
+      AResp.Free;
+      Exit;
+    end;
+  end;
   ColRutina := ColumnaDelNombreDeRutina(Texto);
   Cabecera := (ColRutina >= 0) and (ACharacter >= ColRutina) and (ACharacter < ColRutina + Length(Ident));
   Campo := not Cabecera and (AClient <> nil) and SigueUnTipo(Texto) and
@@ -709,14 +782,7 @@ begin
   end
   else
     Exit;
-  Result := TJSONObject.Create;
-  var Lugar := TJSONObject.Create;
-  Result.AddPair('result', Lugar);
-  Lugar.AddPair('uri', TLspClient.PathToUri(TPath.GetFullPath(APath)));
-  var Rango := TJSONObject.Create;
-  Lugar.AddPair('range', Rango);
-  Rango.AddPair('start', Posicion(Col));
-  Rango.AddPair('end', Posicion(Col + Length(Ident)));
+  Result := Respuesta(TLspClient.PathToUri(TPath.GetFullPath(APath)), ALine, Col);
   AResp.Free;
 end;
 

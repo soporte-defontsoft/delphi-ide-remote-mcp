@@ -18,6 +18,8 @@ cuenta.
 V132b: delphi_rename_symbol niega si una unidad que no escribe cambiaria de destino en silencio: la que usa las dos,
 con la renombrada DESPUES (medido con dcc: gana la ultima del uses, y las de implementation van despues), una global
 del interface. Ni un metodo, ni una rutina solo de implementation, ni una declaracion local, ni un nombre calificado.
+V224 (visto en vivo al probar V132b): de una llamada a una rutina con la cabecera en VARIAS lineas, el motor contesta una
+linea interior de la cabecera, que no la nombra: definition apuntaba ahi, references la rechazaba y rename se bloqueaba.
 
 Usage:  python tests/test_capacidades_125.py [path-to-DelphiLspMcp.exe]
 """
@@ -388,6 +390,68 @@ try:
     j = renombra('MarcarNuevo', modo='apply')
     b = mc.como_json(call('delphi_build', {'project': os.path.join(RN, 'Rn.dproj'), 'platform': 'Win64', 'config': 'Debug'}, t=180))
     check('V132b ...y lo que queda compila (el juez de que no era colision)', b.get('success') is True, str(b)[:500])
+
+    # V224 - las cabeceras en varias lineas
+    LM = os.path.join(RAIZ, 'lm')
+    call('delphi_create', {'kind': 'project-console', 'name': 'Lm', 'dir': LM})
+
+
+    def fuente(nombre, texto):
+        with open(os.path.join(LM, nombre), 'w', newline='') as f:
+            f.write(texto.replace('\n', '\r\n'))
+
+
+    fuente('UDef.pas', 'unit UDef;\n\ninterface\n\nprocedure Larga(A: Integer;\n  B: Integer;\n  C: Integer);\n\nprocedure Corta(A: Integer);\n\n'
+           'type\n  TK = class\n    procedure Met(A: Integer;\n      B: Integer);\n  end;\n\nimplementation\n\n'
+           'procedure Larga(A: Integer;\n  B: Integer;\n  C: Integer);\nbegin\nend;\n\nprocedure Corta(A: Integer);\nbegin\nend;\n\n'
+           'procedure TK.Met(A: Integer;\n  B: Integer);\nbegin\nend;\n\nend.\n')
+    fuente('UOtra.pas', 'unit UOtra;\n\ninterface\n\nprocedure Larga(A: Integer;\n  B: Integer);\n\nimplementation\n\nprocedure Larga(A: Integer;\n  B: Integer);\nbegin\nend;\n\nend.\n')
+    fuente('UUsa.pas', 'unit UUsa;\n\ninterface\n\nprocedure Pide;\n\nimplementation\n\nuses\n  UDef, UOtra;\n\nprocedure Pide;\nvar\n  K: TK;\nbegin\n'
+           '  UDef.Larga(1, 2, 3);\n  Corta(1);\n  K := TK.Create;\n  K.Met(1, 2);\n  UOtra.Larga(1, 2);\nend;\n\nend.\n')
+    LDPR = os.path.join(LM, 'Lm.dpr')
+    with open(LDPR, encoding='utf-8-sig', newline='') as f:
+        d_ = f.read()
+    with open(LDPR, 'w', encoding='utf-8', newline='') as f:
+        f.write(d_.replace('uses\r\n', "uses\r\n  UDef in 'UDef.pas', UOtra in 'UOtra.pas', UUsa in 'UUsa.pas',\r\n", 1))
+    UDEF, UUSA = os.path.join(LM, 'UDef.pas'), os.path.join(LM, 'UUsa.pas')
+
+
+    def donde(ruta, trozo, nombre):
+        ls = open(ruta, newline='').read().split('\r\n')
+        i = next(k for k, l in enumerate(ls) if trozo in l)
+        return i, ls[i].index(nombre) + 1
+
+
+    def definicion(ruta, trozo, nombre):
+        i, c = donde(ruta, trozo, nombre)
+        return mc.como_json(call('delphi_definition', {'path': UUSA if ruta == UUSA else ruta, 'line': i, 'character': c}, t=120))
+
+
+    lineas_def = open(UDEF, newline='').read().split('\r\n')
+    impl_larga = next(k for k, l in enumerate(lineas_def) if l.startswith('procedure Larga') and k > 10)
+    impl_met = next(k for k, l in enumerate(lineas_def) if l.startswith('procedure TK.Met'))
+    j = definicion(UUSA, 'UDef.Larga', 'Larga')
+    check('V224 definition de una llamada: la cabecera, no una linea de dentro', j.get('line0') == impl_larga and j.get('character0') == 10, j)
+    j = definicion(UUSA, 'K.Met', 'Met')
+    check('V224 ...tambien de un metodo', j.get('line0') == impl_met and j.get('character0') == 13, j)
+    j = definicion(UUSA, 'Corta(1)', 'Corta')
+    check('V224 control: una cabecera de una linea, igual que siempre', 'Corta' in lineas_def[j.get('line0', 0)], j)
+    i, c = donde(UDEF, 'procedure Larga', 'Larga')
+    j = mc.como_json(call('delphi_references', {'path': UDEF, 'line': i, 'character': c}, t=240))
+    textos = json.dumps(j.get('confirmed', ''))
+    check('V224 references confirma la llamada, y no la de otra unidad',
+          'UDef.Larga' in textos and 'UOtra.Larga' not in textos and j.get('rejectedCount', 1) >= 1, str(j)[:500])
+    i, c = donde(UUSA, 'UDef.Larga', 'Larga')
+    j = mc.como_json(call('delphi_rename_symbol', {'path': UUSA, 'line': i, 'character': c, 'newname': 'LargaNueva'}, t=240))
+    rej = json.dumps(j.get('lookalikes', ''))
+    check('V224 rename desde la llamada: la de la otra unidad es homonima, la propia no',
+          'UDef.Larga' not in rej and 'UOtra.Larga' in rej and j.get('occurrences') == 3, str(j)[:600])
+    i, c = donde(UDEF, 'procedure TK.Met', 'Met')
+    j = mc.como_json(call('delphi_rename_symbol', {'path': UDEF, 'line': i, 'character': c, 'newname': 'MetNuevo'}, t=240))
+    check('V224 rename de un metodo con la cabecera en dos lineas: aplicable', j.get('applicable') is True, str(j)[:600])
+    j = mc.como_json(call('delphi_rename_symbol', {'path': UDEF, 'line': i, 'character': c, 'newname': 'MetNuevo', 'mode': 'apply'}, t=240))
+    b = mc.como_json(call('delphi_build', {'project': os.path.join(LM, 'Lm.dproj'), 'platform': 'Win64', 'config': 'Debug'}, t=180))
+    check('V224 ...y aplicado compila', b.get('success') is True, str(b)[:500])
 finally:
     srv.mata()
 

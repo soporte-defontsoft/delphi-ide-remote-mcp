@@ -68,6 +68,10 @@ the MCP `initialize` response (`serverInfo.version`).
   a gesture on a live target waited behind a dead one; and each attempt left a folder in the
   server's temporary area. `status` still answers `reachable: false` with the reason; a gesture
   now says `FETCH-004` instead of `RUN-010`, with what `paclient` said.
+- **A routine whose header spans several lines is found again.** For a call to it the engine
+  answers a line inside the header, which does not name the routine: `delphi_definition` pointed
+  there, `delphi_references` took the call for a homonym and `delphi_rename_symbol` was blocked
+  (`RENAME-017`). Now the answer is the header itself.
 
 ## [1.24.0] - 2026-10-31
 
