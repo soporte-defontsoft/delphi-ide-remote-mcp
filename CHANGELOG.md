@@ -46,6 +46,11 @@ the MCP `initialize` response (`serverInfo.version`).
 - **`delphi_build` lists the compiler's hints in `hints`**, read by the same reader as `warnings`:
   they only came inside `outputTail`. Nothing in `quiet`, no key when there are none, no repeat
   in the tail, and at most 50 with `hintsTotal` saying how many there were.
+- **`delphi_diagnostics` gives warnings and hints of a unit below its project's folder.** The
+  engine only gave its errors, and `LSP-046` said so; measured, what decides it is the folder of
+  the project named in its settings, and that file does not have to exist. Such a unit is linted
+  with its own settings, per folder, and nothing is written in the workspace. Each folder costs
+  an engine, inside `MaxEngines`. `LSP-046` is gone.
 
 ### Fixed
 

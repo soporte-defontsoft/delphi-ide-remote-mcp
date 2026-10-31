@@ -112,7 +112,7 @@ uses
   Lsp.BuildRunner,
   Lsp.Listas,     // AgrupaPorFichero: los usos por carpeta y fichero
   Lsp.Guard,      // ReadPathDenied: la guarda antes que nada (ruta vacia)
-  Lsp.ConfigFabricator, // NotaDeRecorte, NotaDeDebajoDelProyecto, ProyectoDeLosAjustes
+  Lsp.ConfigFabricator, // NotaDeRecorte, ProyectoDeLosAjustes
   Lsp.Pascal,           // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Mascara;
 
@@ -206,10 +206,8 @@ begin
       if Proyecto <> '' then
         Return.AddPair('project', Proyecto);
       // unos ajustes recortados lo dicen (LSP-037): por eso hay units que el
-      // motor no encuentra aqui y que delphi_build si compila; y una unidad
-      // DEBAJO de la carpeta del proyecto, que se queda sin warnings ni hints
-      // (LSP-046): ahi un 0 no dice nada
-      var Nota := NotaDeRecorte(Settings) + NotaDeDebajoDelProyecto(Settings, Params.Path);
+      // motor no encuentra aqui y que delphi_build si compila
+      var Nota := NotaDeRecorte(Settings);
       if Nota <> '' then
         Return.AddPair('note', Nota.Trim);
       // (sin ajustes de proyecto ya no se llega aqui: LintFile lo dice antes,

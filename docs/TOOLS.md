@@ -132,7 +132,7 @@ Find references to the identifier at a 0-based line:character position. Hybrid m
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight, the official DelphiLSP linter), WITHOUT building. Real compiler codes (E2003, W1000, H2164...) with the exact 0-based range and the 1-based line delphi_read shows. Severity is the LSP scale: 1=error, 2=warning, 3=information, 4=hint; the "hints" counter groups 3 and 4. Lints the CURRENT on-disk content with the settings of its project, which the answer names in "project". For a unit BELOW its folder the engine gives errors only (LSP-046); delphi_build gives the rest. A big unit can take over a minute the first time: the answer then says the lint is in progress - call again (it is not restarted while the file is unchanged).
+Compiler-grade errors/warnings/hints for one Delphi source file (Error Insight, the official DelphiLSP linter), WITHOUT building. Real compiler codes (E2003, W1000, H2164...) with the exact 0-based range and the 1-based line delphi_read shows. Severity is the LSP scale: 1=error, 2=warning, 3=information, 4=hint; the "hints" counter groups 3 and 4. Lints the CURRENT on-disk content with the settings of its project, which the answer names in "project". A big unit can take over a minute the first time: the answer then says the lint is in progress - call again (it is not restarted while the file is unchanged).
 
 *Access: read-only OK.*
 

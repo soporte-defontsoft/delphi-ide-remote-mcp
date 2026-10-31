@@ -1339,6 +1339,14 @@ const
   Prefix: array [Boolean] of string = ('agent|', 'linter|');
 begin
   ASettingsUsed := ResolveSettings(AFullPath, ARootDir);
+  // el lint de una unidad de DEBAJO de la carpeta del proyecto, por sus ajustes
+  // y su motor: con los del proyecto solo publica los errores (V61 de la 1.25)
+  if ALinter and (ASettingsUsed <> '') then
+  begin
+    var Debajo := CarpetaDebajoDelProyecto(ASettingsUsed, AFullPath);
+    if Debajo <> '' then
+      ASettingsUsed := FabricateSettings(FindDproj(AFullPath), DiscoverRadStudio, Debajo);
+  end;
   // La VERSION entra en la clave: cada RAD Studio necesita SU DelphiLSP.
   // Hoy hay una por servidor, pero la clave no tiene que saberlo.
   var Ver := DiscoverRadStudio.Version;

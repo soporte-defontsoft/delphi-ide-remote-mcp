@@ -122,9 +122,7 @@ it. With no name, each request of that protocol is a stranger to the one before.
   (`Unit.TFixture`), a test by its full name (`Unit.TFixture.Method`) - and
   no wildcards; one that ran nothing says so (`filterNote`).
 - `delphi_diagnostics` is the quick check and `delphi_build` the real one.
-  The answer names the project it linted with (`project`); of a unit in a
-  folder BELOW that project's folder the engine gives the errors only,
-  never warnings or hints (`LSP-046` says so) - the build gives them.
+  The answer names the project it linted with (`project`).
 - It needs `AllowTests=1` declared in YOUR workspace on the server. Without
   it `discover` works and `run` says so - that is a switch, not a bug.
 - The test runs in a Windows container on a COPY of its output folder: it

@@ -79,9 +79,11 @@ function ProyectoDeLosAjustes(const ASettingsFile: string): string;
 { The settings file for ADprojPath, made again from the .dproj, the IDE's
   library and the jail every time it is asked, and written to the cache only
   when its bytes change: the path stays, its disk stamp moves. Returns the
-  cached .delphilsp.json path. Raises if the .dproj cannot be mined. }
+  cached .delphilsp.json path. Raises if the .dproj cannot be mined.
+  ACarpetaDeLint, los del motor de lint de una unidad de DEBAJO de la carpeta del
+  proyecto (CarpetaDebajoDelProyecto): otro fichero, y otro motor, por carpeta. }
 function FabricateSettings(const ADprojPath: string;
-  const AInfo: TRadStudioInfo): string;
+  const AInfo: TRadStudioInfo; const ACarpetaDeLint: string = ''): string;
 
 { Si el motor puede ENSENAR lo que dice de APath: es de lo que esta sesion
   puede leer (la jaula), de los lugares del IDE o de su zona de biblioteca,
@@ -104,12 +106,13 @@ function UnitsDeFueraDelProyecto(const ADprojPath: string): TArray<string>;
 { La nota de unos ajustes del motor recortados (LSP-037), leida del NOMBRE
   que les pone FabricateSettings (su inversa); '' si no se recorto nada. }
 function NotaDeRecorte(const ASettingsFile: string): string;
-{ La nota de AFile si cuelga por DEBAJO de la carpeta del proyecto de
-  ASettingsFile (LSP-046): de esa unidad el motor publica los errores y nunca
-  los warnings ni los hints (medido el 15-oct-2026 con el motor solo; en la
-  carpeta del proyecto y en una hermana publica todo). '' en otro caso, y
-  nunca lanza: es una nota, no puede costar la respuesta. }
-function NotaDeDebajoDelProyecto(const ASettingsFile, AFile: string): string;
+{ La carpeta de AFile si cuelga por DEBAJO de la del proyecto de ASettingsFile:
+  de esa unidad el motor publica los errores y nunca los warnings ni los hints
+  (medido el 15-oct-2026 con el motor solo; en la carpeta del proyecto y en una
+  hermana publica todo), y lo que lo decide es que la carpeta del "project" de
+  sus ajustes sea la suya: FabricateSettings con ACarpetaDeLint (V61 de la 1.25).
+  '' en otro caso, y nunca lanza. }
+function CarpetaDebajoDelProyecto(const ASettingsFile, AFile: string): string;
 { Las carpetas de una lista de search path (a;b;c) como las ve el motor: los
   macros expandidos con AVars (la tabla del IDE, IdeMacroVars, con Platform y
   Config) ANTES de partir - uno que expande a una lista son varias carpetas -,
@@ -203,6 +206,10 @@ const
   RECORTE_PATRON = '-r(\d+)x[0-9A-F]{8}-g\d+\.delphilsp\.json$';
   // ...y la generacion, al final: su lector (PurgaGeneracionesViejas)
   GENERACION_PATRON = '-g(\d+)\.delphilsp\.json$';
+  // los ajustes de lint de una unidad de debajo: el proyecto que nombran (no
+  // existe ni se crea) y el campo con el de verdad, que es el que se ensena
+  PROYECTO_DE_LINT = '__delphi-lint.dpr';
+  CAMPO_PROYECTO_REAL = 'mcpRealProject';
 
 { La plataforma que se le da al motor: la SELECCIONADA si es de Windows; si
   no, Win32 (Code Insight itself is a Windows front-end, y las tools del
@@ -303,7 +310,7 @@ begin
     Result := MsgFmt(SN_LSP_RECORTE_FMT, [StrToIntDef(M.Groups[1].Value, 0)]);
 end;
 
-function NotaDeDebajoDelProyecto(const ASettingsFile, AFile: string): string;
+function CarpetaDebajoDelProyecto(const ASettingsFile, AFile: string): string;
 begin
   Result := '';
   try
@@ -316,7 +323,7 @@ begin
     var DeProyecto := TPath.GetDirectoryName(Proyecto);
     var DeUnidad := TPath.GetDirectoryName(TPath.GetFullPath(AFile));
     if DentroDeSiMismo(DeProyecto, DeUnidad) and not DentroDeSiMismo(DeUnidad, DeProyecto) then
-      Result := MsgText(SN_LSP_DEBAJO_DEL_PROYECTO);
+      Result := DeUnidad;
   except
     Result := '';
   end;
@@ -395,6 +402,21 @@ end;
 
 function ProyectoDeLosAjustes(const ASettingsFile: string): string;
 begin
+  // los de una unidad de debajo nombran un proyecto que no existe: el de
+  // verdad va aparte, en su campo (FabricateSettings con ACarpetaDeLint)
+  try
+    var Root := ObjetoJson(LeeTexto(ASettingsFile, [ltJaula, ltCasa]));
+    if Root <> nil then
+    try
+      if (Root.GetValue('settings') is TJSONObject) and
+         (TJSONObject(Root.GetValue('settings')).GetValue(CAMPO_PROYECTO_REAL) <> nil) then
+        Exit(TJSONObject(Root.GetValue('settings')).GetValue(CAMPO_PROYECTO_REAL).Value);
+    finally
+      Root.Free;
+    end;
+  except
+    // sigue por el de los ajustes: esto es una nota de la respuesta
+  end;
   Result := ProjectOfSettings(ASettingsFile);
   if (Result <> '') and FileExists(DprojDe(Result)) then
     Result := DprojDe(Result);
@@ -450,7 +472,7 @@ begin
 end;
 
 function FabricateSettings(const ADprojPath: string;
-  const AInfo: TRadStudioInfo): string;
+  const AInfo: TRadStudioInfo; const ACarpetaDeLint: string): string;
 var
   Xml, DprojDir, MainSource, DprPath, Plat, Cfg, Suffix, DllName, Lib: string;
   Defines, Namespaces, Recorte, Marco, Prefijo, Contenido: string;
@@ -496,8 +518,13 @@ begin
   SalidaDelMotor := ServerCacheDir(SALIDA_DEL_MOTOR_SUB);
   Prefijo := Format('%s-%x-', [TPath.GetFileNameWithoutExtension(ADprojPath),
     THashFNV1a32.GetHashValue(ClaveDeRuta(TPath.GetFullPath(ADprojPath)))]);
-  CacheFile := TPath.Combine(CacheDir, Prefijo + Format('%s%s-g%d.delphilsp.json',
-    [AInfo.Version.Replace('.', '_'), Recorte, FABRICATOR_GEN]));
+  // la marca de unos ajustes de lint, delante del recorte y de la generacion,
+  // que se leen del final; con el mismo prefijo, los purga lo mismo
+  var DeLint := '';
+  if ACarpetaDeLint <> '' then
+    DeLint := Format('-d%.8x', [THashFNV1a32.GetHashValue(ClaveDeRuta(ACarpetaDeLint))]);
+  CacheFile := TPath.Combine(CacheDir, Prefijo + Format('%s%s%s-g%d.delphilsp.json',
+    [AInfo.Version.Replace('.', '_'), DeLint, Recorte, FABRICATOR_GEN]));
 
   Values := AllTagValues(Xml, 'MainSource');
   if Length(Values) > 0 then
@@ -519,6 +546,33 @@ begin
   // que esta donde el .dproj. V160c de la 1.23.1, medido.
   if (DprPath = '') or (LugarDeLecturaDenegado(DprPath, [ltJaula]) <> '') then
     DprPath := DprDe(ADprojPath);
+
+  // De una unidad de DEBAJO, el motor solo publica warnings y hints si la
+  // carpeta del "project" es la suya, y el fichero no tiene que existir: medido
+  // con el motor a pelo el 31-oct-2026, con un nombre que no hay en esa carpeta
+  // publica H2077 y con el .dpr real no; una paja en otra carpeta del mismo
+  // disco tampoco valia. Nada se escribe en el workspace. Sin el .dpr real, lo
+  // que el compilador encuentra por el va al search path: la carpeta del
+  // proyecto y las de sus units (in '...'), si el motor las puede ensenar.
+  var DelLint: TArray<string> := nil;
+  if ACarpetaDeLint <> '' then
+  begin
+    if MotorPuedeEnsenar(DprojDir) then
+      DelLint := [DprojDir];
+    try
+      for var U in ProjectUnits(DprPath, False) do
+      try
+        var Ruta := RutaDeInclude(DprPath, U.Include);
+        if (Ruta <> '') and MotorPuedeEnsenar(Ruta) and not RutaEnLista(ExtractFileDir(Ruta), DelLint) then
+          DelLint := DelLint + [ExtractFileDir(Ruta)];
+      except
+        // una entrada que no se deja juzgar no entra (UnitsDeFueraDelProyecto)
+      end;
+    except
+      // un .dpr que no se deja leer ahora: el lint va sin sus carpetas
+    end;
+    DprPath := TPath.Combine(ACarpetaDeLint, PROYECTO_DE_LINT);
+  end;
 
   // EL sufijo de su compilador, el que HAY en su bin (TRadStudioInfo). Antes
   // se componia del numero BDS, de dos formas en dos sitios, y solo acertaba
@@ -544,14 +598,14 @@ begin
   if EsVerdadDeMsbuild(EffectiveProperty(Xml, 'DCC_DebugDCUs', Plat, Cfg)) then // como msbuild (A33)
     Depuracion := IdePlatformLibraryPaths(AInfo, Plat, 'Debug DCU Path', Cfg);
   UnitPaths := nil;
-  for P in Depuracion + ProjDentro + [Lib] + IdePaths do
+  for P in Depuracion + ProjDentro + DelLint + [Lib] + IdePaths do
     if not RutaEnLista(P, UnitPaths) then
       UnitPaths := UnitPaths + [P];
   // las de fuente: las del proyecto que se pueden leer y las del IDE, sin
   // repetir (el orden de siempre: primero el proyecto); las del proyecto que
   // no, fuera
   Fuentes := nil;
-  for P in ProjDentro + IdePaths do
+  for P in ProjDentro + DelLint + IdePaths do
     if not RutaEnLista(P, Fuentes) then
       Fuentes := Fuentes + [P];
 
@@ -626,6 +680,8 @@ begin
     Settings := TJSONObject.Create;
     Root.AddPair('settings', Settings);
     Settings.AddPair('project', TLspClient.PathToUri(DprPath));
+    if ACarpetaDeLint <> '' then
+      Settings.AddPair(CAMPO_PROYECTO_REAL, ADprojPath);
     Settings.AddPair('dllname', DllName);
     Settings.AddPair('dccOptions', Opts);
     Settings.AddPair('projectFiles', TJSONArray.Create);

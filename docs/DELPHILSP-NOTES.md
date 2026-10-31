@@ -166,10 +166,15 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
   `Domain\Models\` under the folder of the project's `.dpr`, listed in the project or not, the
   linter publishes the errors (`E2010`) and never the warnings or hints dcc gives for the same
   text (`W1036`, `H2077`); in the project's folder (listed or not) and in a sibling folder
-  (`..\Shared`) it publishes everything. Nothing on our side changed it: `projectFiles` in the
-  IDE's own `{name, file}` shape, the folder in `-U`, the `.dpr` opened first, an absolute `in`
-  path, the uri with backslashes or a lowercase drive. `delphi_diagnostics` says so (`LSP-046`)
-  and names the project it linted with; `delphi_build` is the full check.
+  (`..\Shared`) it publishes everything. None of these changed it: `projectFiles` in the IDE's
+  own `{name, file}` shape, the folder in `-U`, the `.dpr` opened first, an absolute `in` path,
+  the uri with backslashes or a lowercase drive. What decides it (measured 2026-10-31, engine
+  alone): the folder of `settings.project`, and that file does not have to exist. Named in the
+  unit's own folder, a project that is not there makes it publish `H2077`; a real straw `.dpr`
+  in an unrelated folder of the same disk does not. So the lint of such a unit gets its own
+  settings and engine, per folder: `project` names a file that is never created, and the project
+  folder and those of the `.dpr`'s units go to the search path, since the real `.dpr` no longer
+  finds them. Nothing is written in the workspace, and `project` in the answer is the real one.
 
 ## Complete capability inventory (measured on 37.0, 2026-08)
 
