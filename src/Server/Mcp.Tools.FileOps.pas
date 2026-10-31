@@ -1080,7 +1080,12 @@ begin
     // un FICHERO que va a una ruta con separador final: esa ruta nombra una
     // CARPETA, y dest es el NUEVO nombre (GUARD-025; octava revision)
     if TFile.Exists(Params.Path) and (CarpetaEnVezDeFichero(Params.Dest) <> '') then
+    begin
+      if TDirectory.Exists(Params.Dest) then
+        Exit(MsgFmt(SR_MOVE_DEST_ES_CARPETA_FMT, [Params.Dest,
+          TPath.Combine(Params.Dest, TPath.GetFileName(Params.Path))]));
       Exit(CarpetaEnVezDeFichero(Params.Dest));
+    end;
     Pasos := [Paso(Params.Path, Params.Dest)];
   end;
   // Cada paso por SU puerta. Un move renombra en su unidad, fichero o carpeta

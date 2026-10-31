@@ -59,6 +59,9 @@ type
     Convierte: string;
     // --unreadableclasses: la pregunta al hacer la caja de paquetes; nada mas en la orden
     ClasesSinLeer: Boolean;
+    // forms del proyecto, de otra carpeta, de las clases que el ayudante dijo que le
+    // faltaban (ancestros y frames, V120b de la 1.24). Lo pone CorreRender
+    Lejanos: TArray<string>;
   end;
 
   { Una propiedad que el lector se salto (IGNORED=, el OnError de TReader que
@@ -1034,6 +1037,12 @@ begin
         if Result <> '' then
           Exit;
       end;
+    for var Lejano in APeticion.Lejanos do
+    begin
+      Result := CompruebaForm(Lejano);
+      if Result <> '' then
+        Exit;
+    end;
     for var Estado in APeticion.Estados do
     begin
       var P := Pos('=', Estado);
@@ -1402,7 +1411,8 @@ var
 
   procedure Copia(const AOrigen, ADestino: string);
   begin
-    if EsEnlace(AOrigen) or not TFile.Exists(AOrigen) then
+    // un lejano no pisa a un hermano del mismo nombre: la propuesta si, abajo
+    if EsEnlace(AOrigen) or not TFile.Exists(AOrigen) or TFile.Exists(ADestino) then
       Exit;
     try
       var Bytes := LeeBytes(AOrigen, LUGARES_DEL_MOTOR);
@@ -1430,6 +1440,11 @@ begin
     CopiaAlLado(UnidadDeDesigner(F));
   end;
   CopiaAlLado(UnidadDeDesigner(TPath.Combine(Hermanos, TPath.GetFileName(APeticion.Path))));
+  for var L in APeticion.Lejanos do
+  begin
+    CopiaAlLado(L);
+    CopiaAlLado(UnidadDeDesigner(L));
+  end;
   Result := TPath.Combine(AEtapa, TPath.GetFileName(APeticion.Path));
   // el pedido, por su lugar: una propuesta de la casa o un form ya juzgado
   EscribeBytes(Result, LeeBytes(APeticion.Path, LUGARES_DEL_MOTOR + [ltTemporal]), ltTemporal);
@@ -1497,6 +1512,13 @@ begin
       Origen := TPath.GetDirectoryName(APeticion.Path);
       if APeticion.Carpeta <> '' then
         Origen := APeticion.Carpeta;
+      // un lejano vuelve a su carpeta, no a la del form: CambioEnLoLeido lo relee
+      for var L in APeticion.Lejanos do
+      begin
+        ASalida := StringReplace(ASalida, TPath.Combine(Etapa, TPath.GetFileName(L)), L, [rfReplaceAll, rfIgnoreCase]);
+        var Unidad := UnidadDeDesigner(L);
+        ASalida := StringReplace(ASalida, TPath.Combine(Etapa, TPath.GetFileName(Unidad)), Unidad, [rfReplaceAll, rfIgnoreCase]);
+      end;
       ASalida := StringReplace(ASalida, Etapa, Origen, [rfReplaceAll, rfIgnoreCase]);
       // un paquete o un componente que nombre su ruta: su nombre lleva la huella,
       // ningun texto de un form la trae
@@ -1518,11 +1540,39 @@ begin
   end;
 end;
 
+{ Los forms del proyecto de APeticion, fuera de la carpeta que el ayudante ve, cuya
+  raiz es de una de AClases (lo que dijo que le faltaba: un ancestro o un frame).
+  El proyecto, el .dpr o .dpk que lista la unidad del form (ProjectsUsingUnit),
+  porque ahi dcc encuentra esas unidades; a cuales llega lo dice FormsDeLasClases.
+  Nunca lanza: sin proyecto, el form sigue a medias y lo dice. }
+function FormsLejanos(const APeticion: TPeticionRender; const AClases: TArray<string>): TArray<string>;
+begin
+  Result := [];
+  if Length(AClases) = 0 then
+    Exit;
+  try
+    var Form := APeticion.Path;
+    if APeticion.Carpeta <> '' then
+      Form := TPath.Combine(APeticion.Carpeta, TPath.GetFileName(APeticion.Path));
+    var Carpeta := TPath.GetDirectoryName(Form);
+    for var P in ProjectsUsingUnit(UnidadDeDesigner(Form)) do
+      for var F in FormsDeLasClases(P, AClases, ExtractFileExt(Form)) do
+        if not SameFileName(TPath.GetDirectoryName(F.Designer), Carpeta) and not RutaEnLista(F.Designer, Result) then
+          Result := Result + [F.Designer];
+  except
+    // lo que no se lee no se trae
+  end;
+end;
+
 function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
+const
+  // el form, su ancestro, el de este y un frame suyo: cada vuelta es un ayudante entero
+  VUELTAS_POR_LO_LEJANO = 3;
 var
   Exe, Nombre, Salida, Fallo: string;
   Codigo: Cardinal;
   Reloj: TStopwatch;
+  Pet: TPeticionRender;
 
   // el fallo del ayudante con su por que: no dibujo el form o, con --convert,
   // no lo convirtio (V71: ahi el form es una copia nuestra, y se nombra el
@@ -1544,13 +1594,27 @@ begin
     Exit;
   end;
   Reloj := TStopwatch.StartNew;
-  Fallo := CorreEnSuContenedor(APeticion, Exe, Salida, Codigo);
-  if Fallo <> '' then
+  Pet := APeticion;
+  for var Vuelta := 0 to VUELTAS_POR_LO_LEJANO do
   begin
-    Result.Fallo := Fallo;
-    Exit;
+    Fallo := CorreEnSuContenedor(Pet, Exe, Salida, Codigo);
+    if Fallo <> '' then
+    begin
+      Result.Fallo := Fallo;
+      Exit;
+    end;
+    Result := LeeRespuestaDeRender(Salida);
+    // lo que le falto y el proyecto tiene en otra carpeta: otra vuelta con ello
+    if (Vuelta = VUELTAS_POR_LO_LEJANO) or (APeticion.Convierte <> '') then
+      Break;
+    var Nuevos: TArray<string> := [];
+    for var F in FormsLejanos(APeticion, Result.SinLeer + Result.Sustituidas) do
+      if not RutaEnLista(F, Pet.Lejanos) then
+        Nuevos := Nuevos + [F];
+    if Length(Nuevos) = 0 then
+      Break;
+    Pet.Lejanos := Pet.Lejanos + Nuevos;
   end;
-  Result := LeeRespuestaDeRender(Salida);
   Result.Codigo := Codigo;
   Result.MsTotal := Reloj.ElapsedMilliseconds;
   if (Codigo = FR_RC_OK) and (Result.Error = '') and

@@ -158,6 +158,22 @@ procedure AddUnitsView(const ADproj: string; AReturn: TJSONObject);
   nivel (SitiosDeProyectos). Lo pregunta RegistroDelIde (el <DCCReference> de
   un designer); hasta V19 tambien delete y move, para re-apuntarlos. }
 function ProjectsUsingUnit(const APasPath: string): TArray<string>;
+
+type
+  TFormDelProyecto = record
+    Clase, Designer, Unidad: string; // su clase raiz, su .dfm o .fmx, y su unidad como la lista el proyecto
+  end;
+
+{ Los forms y frames que AProyecto (.dpr, .dpk) lista con raiz de una de AClases,
+  con la extension AExt y que la sesion puede leer. De cada entrada se mira su
+  comentario de form, T + nombre como la llama el IDE, y solo si casa se abre el
+  form y manda su raiz: quien pregunta por una clase de un paquete que no esta no
+  lee el proyecto entero. Lo que falte o no se lea no sale. Puede lanzar, como
+  ProjectUnits, si el proyecto no se deja leer. Lo piden el render (un ancestro o
+  un frame de otra carpeta), insert (un frame) y delphi_create (un ancestro). }
+function FormsDeLasClases(const AProyecto: string; const AClases: TArray<string>;
+  const AExt: string): TArray<TFormDelProyecto>;
+
 { True si el .dpr o el .dpk de AProyecto (un .dproj se mira por su fuente
   principal) nombra APasPath por su RUTA (in '...'): la unidad es de ese
   proyecto. EL juez de ProjectsUsingUnit y el de que proyecto sirve a una
@@ -3461,6 +3477,36 @@ begin
       if EsFuentePrincipal(F) then
         if ProyectoListaUnidad(F, APasPath) then // the .dpr decides; no .dproj read
           Result := Result + [F];
+  end;
+end;
+
+function FormsDeLasClases(const AProyecto: string; const AClases: TArray<string>;
+  const AExt: string): TArray<TFormDelProyecto>;
+begin
+  Result := [];
+  for var U in ProjectUnits(AProyecto, False) do
+  begin
+    if (U.FormName = '') or not MatchText('T' + U.FormName, AClases) then
+      Continue;
+    var Ruta := ChangeFileExt(RutaDesde(TPath.GetDirectoryName(AProyecto), U.Include), AExt);
+    if not TFile.Exists(Ruta) or EsEnlace(Ruta) or (ReadPathDenied(Ruta) <> '') then
+      Continue;
+    var Texto, Enc: string;
+    if TextoDeDesigner(Ruta, Texto, Enc) <> '' then
+      Continue;
+    for var L in LineasDeForm(SplitToLines(Texto)) do
+      if L.Clase = clfObjeto then
+      begin
+        if MatchText(L.ClaseObj, AClases) then
+        begin
+          var F: TFormDelProyecto;
+          F.Clase := L.ClaseObj;
+          F.Designer := Ruta;
+          F.Unidad := U.UnitName;
+          Result := Result + [F];
+        end;
+        Break;
+      end;
   end;
 end;
 

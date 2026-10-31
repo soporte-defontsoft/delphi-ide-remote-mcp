@@ -1325,8 +1325,8 @@ const
     'does not empty files, just as it does not rewrite them whole. To ' +
     'REPLACE what is in it, leave at least one line out of the range - the ' +
     'last one (in a form, the root''s closing end) - and give in new what ' +
-    'goes before it; or anchor that last line and give it back in new with ' +
-    'what follows. To remove the file, delphi_delete sends it to the trash ' +
+    'goes before it; or anchor that last line alone and give in new the new ' +
+    'text followed by that same line. To remove the file, delphi_delete sends it to the trash ' +
     'and it can be recovered.';
 
   SR_RANGE_WITH_BLOCK =
@@ -1889,8 +1889,8 @@ const
     'work, ask for it with delphi_report.';
 
   SR_VAULT_PROMPT_NO_EXISTE_FMT =
-    '[VAULT-041 NOT_FOUND] Prompt "%s" does not exist (prompts/list ' +
-    'names the ones there are).';
+    '[VAULT-041 NOT_FOUND] Prompt "%s" does not exist. Prompts come from the ' +
+    'knowledge vault of your workspace; prompts/list names the ones there are.';
 
   // No echo of the offending path on purpose: the outbound filter rewrites
   // server drive letters, so echoing "C:/Windows/win.ini" came back as
@@ -4257,6 +4257,13 @@ const
     'style - %s - so neither the app nor the .bin.style would carry it. ' +
     'Nothing written. What a class publishes, and the values a property ' +
     'takes: delphi_designer command=prop classname=<class> framework=fmx.';
+  { Solo una pista: quien juzga el valor es el lector de FMX (V179 de la 1.24) }
+  SN_STYLES_COLOR_SIN_X =
+    ' [STYLE-063] A color goes as x and its AARRGGBB digits, as xFFF6ECDB.';
+  { El lint no miro ningun form: lookupsUsed 0 no dice que esten bien (V157) }
+  SN_STYLES_SIN_FORMS =
+    '[STYLE-064] No .fmx or .pas under projectDir: this lint judged no form, and ' +
+    'lookupsUsed 0 says nothing of the project. project= takes its .dproj or folder.';
   SN_STYLES_FMX_IGNORA_FMT =
     '[STYLE-051] FMX ignores %d thing(s) of these text styles when it loads ' +
     'them ("ignored"): a property the class does not publish, a value it ' +
@@ -6491,6 +6498,11 @@ const
     'matches its class (check-binding: every event points to a declared, ' +
     'published method).';
 
+  SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT =
+    '[DSGN-178] Not judged: its %d StyleLookup value(s). They come from a StyleBook ' +
+    'this lint does not read - one of its own kept in binary, another form''s, its ' +
+    'ancestor''s or, in a frame, the one of the form that hosts it.';
+
   SN_DESIGNER_LINT_BAD_FMT =
     '[DSGN-038] %d designer warnings in %s (unpublished ' +
     'property or nonexistent enum value, a value the IDE''s own form reader ' +
@@ -7239,6 +7251,14 @@ const
     '[CREATE-037] "%s" is also %s through %s: code that writes "uses %s" ' +
     'meaning the library''s unit gets this one instead. Code that names it ' +
     'in full (%s), as the IDE writes it, is not affected.';
+  { El ancestro de un form o frame que se crea (V76 de la 1.24) }
+  SR_CREATE_ANCESTRO_NO_ESTA_FMT =
+    '[CREATE-038 NOT_FOUND] %s is not the class of a form or frame that %s lists, ' +
+    'with its file where it says and readable. Nothing created. delphi_config view ' +
+    'section=units lists them.';
+  SR_CREATE_ANCESTRO_OTRA_RAIZ_FMT =
+    '[CREATE-039 INVALID_PARAM] %s cannot be the ancestor of a kind=%s: a form inherits ' +
+    'from a form and a frame from a frame. Nothing created.';
   SF_CREATE_AMBITOS_DEL_PROYECTO_FMT = 'the unit scope names of %s';
   SF_CREATE_AMBITOS_DE_UN_VCL_NUEVO = 'the unit scope names of a VCL project the IDE creates';
 
@@ -8253,8 +8273,8 @@ const
   SD_COMPONENTS =
     'What this server''s RAD Studio has INSTALLED to program with: the ' +
     'component/design packages REGISTERED in the IDE (Known Packages, its ' +
-    'palette), whatever the channel (GetIt, vendor installer, manual) - ' +
-    'description and .bpl, disabled ones marked. With filter, also the ' +
+    'palette) - description and .bpl, disabled ones marked; their classes: ' +
+    'delphi_designer info. With filter, also the ' +
     'matching folders of the per-platform Library Search Paths, where a ' +
     'library with no package (units only) lives. No install command: ' +
     'report a missing library with delphi_report. The base RTL is always ' +
@@ -10773,6 +10793,9 @@ const
     'Forms/frames/data modules optional: instance name without the T ' +
     '(default: Form+unit, Frame+unit, DM+unit)';
 
+  SP_CREATE_ANCESTOR =
+    'Forms/frames: the class of a form or frame of this project to inherit from';
+
   SP_CREATE_CONTENT =
     'kind=unit optional: the FULL source, written as it comes (CRLF) and ' +
     'registered in the same call - no empty skeleton first. Its `unit X;` ' +
@@ -11214,13 +11237,11 @@ const
     'List EVERY RAD Studio installation on this machine: version, root ' +
     'directory, whether it ships DelphiLSP.exe and rsvars.bat (msbuild), ' +
     'and the name, personality, edition and build each one states about ' +
-    'itself ("RAD Studio 13", "Delphi 13", "Enterprise", ' +
-    '"37.0.59082.6021"), plus installedUpdate (its installer''s label). ' +
+    'itself, plus installedUpdate (its installer''s label). ' +
     'activeForLsp is the one THIS server uses, pinned by [Server] ' +
     'DelphiVersion (requested; written at the first start); ' +
-    'requestedUpdate, the declared [Server] DelphiUpdate. A server whose ' +
-    'pinned version is not installed does not start. Read-only, no ' +
-    'parameters.';
+    'requestedUpdate, [Server] DelphiUpdate if declared. A server whose ' +
+    'pinned version is not installed does not start. Read-only.';
 
   SD_WS_PROJECTS =
     'Locate Delphi projects (.dproj/.groupproj) under a directory - or ' +
@@ -11474,8 +11495,7 @@ const
     'console), transport, pid, uptime, the open sessions, the machine it ' +
     'runs on ("host", also in serverInfo) and the Windows account it runs ' +
     'as - the way to check a deployment without looking ' +
-    'at the machine from outside. %s Call this FIRST. Read-only, no ' +
-    'parameters.';
+    'at the machine from outside. %s Call this FIRST. Read-only.';
 
   SF_WS_JAIL_CERRADA_FMT =
     'closed (%s): every path is refused (GUARD-030)';
@@ -11497,7 +11517,7 @@ const
 
   // Textos que estaban en linea en Lsp.Patch.pas (el resto, 27-sep-2026)
   SF_EDIT_METRICAS_FMT =
-    'bytes=%d breaks=%d CRLF=%d loneLF=%d accents=%d corruption=%d';
+    'bytes=%d breaks=%d CRLF=%d loneLF=%d accents=%d corruption(U+FFFD)=%d';
   // los contadores cuando no hay nada que mirar (Lsp.Patch.Auditoria): sin
   // U+FFFD, sin CR suelto y un solo tipo de salto; los acentos se quedan,
   // dicen si la codificacion importa (revisor de tokens, 4-oct-2026)
@@ -12382,7 +12402,12 @@ const
     ese nombre, y el agente esperaba una carpeta (V139 de la 1.23.1) }
   SN_MOVE_DESTINO_SIN_EXTENSION_FMT =
     '[MOVE-025] dest is the final path, so the file is now %0:s, with no ' +
-    'extension. If you meant a folder, dest=%1:s.';
+    'extension. If you meant a folder, dest=%1:s (parent folders are created).';
+  { %0:s: el destino, una carpeta; %1:s: la ruta final que quiza se queria. Salia
+    LSP-016, el de leer, que manda a delphi_list (V221 de la 1.24) }
+  SR_MOVE_DEST_ES_CARPETA_FMT =
+    '[MOVE-026 INVALID_PARAM] %0:s is a folder, and for a file dest is its final ' +
+    'path. To put the file in that folder: dest=%1:s.';
 
   // MOVE-015, MOVE-016 y MOVE-018 (la cabecera "unit X;" reescrita, o no) se
   // retiraron en la 1.23 (V19): un move o una copia no reescriben el fichero

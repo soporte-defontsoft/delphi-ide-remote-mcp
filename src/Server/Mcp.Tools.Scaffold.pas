@@ -20,6 +20,7 @@ type
     FName: string;
     FProject: string;
     FFormName: string;
+    FAncestor: string;
     FContent: string;
   public
     [SchemaDescription(SP_CREATE_KIND)]
@@ -37,6 +38,8 @@ type
     property Project: string read FProject write FProject;
     [SchemaDescription(SP_CREATE_FORMNAME)]
     property FormName: string read FFormName write FFormName;
+    [SchemaDescription(SP_CREATE_ANCESTOR)]
+    property Ancestor: string read FAncestor write FAncestor;
     [SchemaDescription(SP_CREATE_CONTENT)]
     [Contenido]
     property Content: string read FContent write FContent;
@@ -91,8 +94,8 @@ const
   KINDS: array [0 .. 23] of string = (
     'project-console', 'dir', 'project-vcl', 'dir', 'project-fmx', 'dir',
     'project-package', 'dir', 'project-test', 'dir',
-    'form-vcl', 'project formname dir', 'form-fmx', 'project formname dir',
-    'frame-vcl', 'project formname dir', 'frame-fmx', 'project formname dir',
+    'form-vcl', 'project formname dir ancestor', 'form-fmx', 'project formname dir ancestor',
+    'frame-vcl', 'project formname dir ancestor', 'frame-fmx', 'project formname dir ancestor',
     'datamodule', 'project formname dir',
     'unit', 'project content dir',
     'include', 'project content dir');
@@ -107,7 +110,8 @@ begin
   // no una tabla que lo daba por bueno (octava revision)
   Sobra := ParametroQueNoVa(K, KINDS,
     ['dir', Params.Dir, '', 'project', Params.Project, '',
-     'formname', Params.FormName, '', 'content', Params.Content, ''], Suyos, VaCon);
+     'formname', Params.FormName, '', 'content', Params.Content, '',
+     'ancestor', Params.Ancestor, ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_CREATE_NO_VA_CON_KIND_FMT, [Sobra, Params.Kind.Trim,
       Params.Kind.Trim, 'name ' + Suyos]) + VaCon);
@@ -115,10 +119,10 @@ begin
     Result := CreateDelphiProject(Params.Dir, Params.Name, K.Substring(8))
   else if K.StartsWith('form-') then
     Result := CreateDelphiForm(Params.Project, Params.Name, Params.FormName,
-      K.Substring(5), Params.Dir)
+      K.Substring(5), Params.Dir, Params.Ancestor)
   else if K.StartsWith('frame-') or (K = 'datamodule') then
     Result := CreateDelphiForm(Params.Project, Params.Name, Params.FormName, K,
-      Params.Dir)
+      Params.Dir, Params.Ancestor)
   else if K = 'unit' then
     Result := CreateDelphiUnit(Params.Project, Params.Name, Params.Content,
       Params.Dir)

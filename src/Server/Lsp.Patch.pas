@@ -861,6 +861,9 @@ type
     // los colores de menos de 8 cifras, por el escritor del IDE: una nota
     // (DSGN-176), solo con ALector (V154 de la 1.23.1)
     Colores: TArray<string>;
+    // los StyleLookup que no se juzgan: toman sus estilos de un StyleBook que no
+    // se lee, o son de un frame (LookupsDeDesigner). Solo con ALector (V156 de la 1.24)
+    LookupsSinJuzgar: Integer;
   end;
 
 { El lint del form ADfm con el TEXTO ATexto (lo que dice o dira el disco, en
@@ -5960,7 +5963,13 @@ begin
   // ...y sus colores de menos de 8 cifras: los juzga el escritor del IDE, un
   // proceso aparte, asi que solo con el lector, fuera de los cerrojos (V154)
   if ALector and EsDesignerFmx(ADfm) then
+  begin
     Result.Colores := NotaDeColoresSinAlfa(ADfm, ATexto, AEnc, AAntes);
+    var ConStyleBook: Boolean;
+    var Usados := LookupsDeDesigner(ADfm, Lineas, ConStyleBook);
+    if ConStyleBook then
+      Result.LookupsSinJuzgar := Length(Usados);
+  end;
   // ...y EL parser del IDE con los bytes del disco (8.10 de la 1.18.0): un //
   // en un .fmx daba CLEAN y solo el IDE lo rechazaba al cargarlo
   if AJuzga then

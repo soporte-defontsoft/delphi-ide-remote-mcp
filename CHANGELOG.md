@@ -8,8 +8,38 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- **`delphi_create` makes inherited forms and frames.** `ancestor` takes the class of a
+  form or frame of the project: the new form says `inherited`, its class descends from
+  that one and its `uses` gets that unit. An ancestor the project does not list answers
+  `CREATE-038`, and a frame as the ancestor of a form or the reverse, `CREATE-039`.
+- **`delphi_designer insert` takes a frame of the project.** It was refused because the
+  class table only knows the library (`DSGN-015`), and by hand it took three more calls.
+  Now it writes the `inline` block as the IDE does, with its field and its unit in the
+  `uses`.
+
+### Changed
+
+- **A form whose ancestor or frame lives in another folder of the project is drawn and
+  judged whole.** It came out partial (`RENDER-010`), the frame substituted, and the
+  order judge refused it (`DSGN-143`). When the renderer says a class is missing and the
+  project that lists the form's unit has it, the server brings that form along, judged
+  like a sibling, literals included. With no project listing the unit, the form stays
+  partial and says so. Each folder crossed costs one more run of the renderer.
+
 ### Fixed
 
+- **Several answers said what they did not mean.** `delphi_move` of a file to a folder
+  that exists answered `LSP-016`, which sends you to `delphi_list`; now `MOVE-026` gives
+  the final path to use. `MOVE-025` says parent folders are created, and `EDIT-019` says
+  plainly what to give back. `delphi_designer lint` of a frame or a form with a StyleBook
+  it cannot read now says its `StyleLookup` values were not judged (`DSGN-178`), and
+  `delphi_styles lint` that it looked at no form (`STYLE-064`), where `lookupsUsed: 0` read
+  as good news. `delphi_styles set` of a color without its `x` names the format (`STYLE-063`),
+  `VAULT-041` says prompts come from the workspace's vault, `delphi_installs` says
+  `requestedUpdate` appears only if declared, and the long audit line names what
+  `corruption` counts.
 - **The form renderer now always runs inside its own container, and its answer no
   longer says whether a file exists.** `delphi_designer` preview, lint and the check
   of what the IDE would save run the design code of the installed packages. That code

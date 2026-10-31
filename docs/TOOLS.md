@@ -239,7 +239,7 @@ Locate Delphi projects (.dproj/.groupproj) under a directory - or under the work
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-List EVERY RAD Studio installation on this machine: version, root directory, whether it ships DelphiLSP.exe and rsvars.bat (msbuild), and the name, personality, edition and build each one states about itself ("RAD Studio 13", "Delphi 13", "Enterprise", "37.0.59082.6021"), plus installedUpdate (its installer's label). activeForLsp is the one THIS server uses, pinned by [Server] DelphiVersion (requested; written at the first start); requestedUpdate, the declared [Server] DelphiUpdate. A server whose pinned version is not installed does not start. Read-only, no parameters.
+List EVERY RAD Studio installation on this machine: version, root directory, whether it ships DelphiLSP.exe and rsvars.bat (msbuild), and the name, personality, edition and build each one states about itself, plus installedUpdate (its installer's label). activeForLsp is the one THIS server uses, pinned by [Server] DelphiVersion (requested; written at the first start); requestedUpdate, [Server] DelphiUpdate if declared. A server whose pinned version is not installed does not start. Read-only.
 
 *Access: read-only OK.*
 
@@ -250,7 +250,7 @@ No parameters.
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), the [Workspace.\<name>] section of the server this token is scoped to ("workspace"), and the active RAD Studio by version AND by name (activeDelphiName / Personality / Edition / Build, read from the installation - use them when you look anything up for this Delphi), plus delphiUpdate if declared. It also says WHO is answering ("server"): version, how this process was started (tray / service / console), transport, pid, uptime, the open sessions, the machine it runs on ("host", also in serverInfo) and the Windows account it runs as - the way to check a deployment without looking at the machine from outside. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only, no parameters.
+The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), the [Workspace.\<name>] section of the server this token is scoped to ("workspace"), and the active RAD Studio by version AND by name (activeDelphiName / Personality / Edition / Build, read from the installation - use them when you look anything up for this Delphi), plus delphiUpdate if declared. It also says WHO is answering ("server"): version, how this process was started (tray / service / console), transport, pid, uptime, the open sessions, the machine it runs on ("host", also in serverInfo) and the Windows account it runs as - the way to check a deployment without looking at the machine from outside. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only.
 
 *Access: read-only OK.*
 
@@ -355,6 +355,7 @@ Create a NEW Delphi project - console/VCL/FMX (.dpr + buildable .dproj + main fo
 | `name` | string | **yes** | Projects: project name. Forms, frames, data modules and units: unit name (e.g. UCustomers) |
 | `project` | string | optional | Everything but projects: the ABSOLUTE path of the .dpr, .dpk or .dproj that registers the new unit (uses of a program, contains of a package). kind=unit may go without it, with an ABSOLUTE dir (standalone, listed by no project yet). kind=include: optional, and dir is then relative to it. |
 | `formname` | string | optional | Forms/frames/data modules optional: instance name without the T (default: Form+unit, Frame+unit, DM+unit) |
+| `ancestor` | string | optional | Forms/frames: the class of a form or frame of this project to inherit from |
 | `content` | string | optional | kind=unit optional: the FULL source, written as it comes (CRLF) and registered in the same call - no empty skeleton first. Its `unit X;` must match "name" and it must end in `end.`. Without it, a standard empty skeleton. kind=include: REQUIRED, the text of the .inc. |
 <!-- /contract -->
 
@@ -666,7 +667,7 @@ The target needs a graphical session open - a headless box has nothing to show -
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-What this server's RAD Studio has INSTALLED to program with: the component/design packages REGISTERED in the IDE (Known Packages, its palette), whatever the channel (GetIt, vendor installer, manual) - description and .bpl, disabled ones marked. With filter, also the matching folders of the per-platform Library Search Paths, where a library with no package (units only) lives. No install command: report a missing library with delphi_report. The base RTL is always there and not listed.
+What this server's RAD Studio has INSTALLED to program with: the component/design packages REGISTERED in the IDE (Known Packages, its palette) - description and .bpl, disabled ones marked; their classes: delphi_designer info. With filter, also the matching folders of the per-platform Library Search Paths, where a library with no package (units only) lives. No install command: report a missing library with delphi_report. The base RTL is always there and not listed.
 
 *Access: read-only OK.*
 

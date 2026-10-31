@@ -1184,6 +1184,9 @@ begin
       Result := Result + MsgFmt(SN_DESIGNER_LINT_SIN_LECTOR_FMT, [L.SinJuez, L.SinLector]);
     end;
   end;
+  // lo que dice CLEAN no habla de ellos, y un agente lo leia como "lookups bien" (V156)
+  if L.LookupsSinJuzgar > 0 then
+    Result := Result + #13#10 + MsgFmt(SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT, [L.LookupsSinJuzgar]);
 end;
 
 { TDelphiDesignerTool }

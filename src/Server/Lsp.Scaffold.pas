@@ -14,9 +14,10 @@ function CreateDelphiProject(const ADir, AName, AKind: string): string;
 { AKind: console | vcl | fmx | package (a runtime package: .dpk + .dproj,
   requires rtl, no contains yet - the first kind=unit opens it) | test (un
   runner DUnitX de consola + su primer fixture, lo que delphi_test corre). }
-{ AKind: vcl | fmx (forms) | frame-vcl | frame-fmx | datamodule. }
+{ AKind: vcl | fmx (forms) | frame-vcl | frame-fmx | datamodule. AAncestro: la clase
+  de un form o frame del proyecto del que hereda (no en un data module; V76 de la 1.24). }
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
-  const ASubDir: string = ''): string;
+  const ASubDir: string = ''; const AAncestro: string = ''): string;
 { A plain unit (interface/implementation skeleton) registered in the project. }
 function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string;
   const ASubDir: string = ''): string;
@@ -967,11 +968,31 @@ begin
   Result := WriteTargetDenied(ADir); // jaula + carpetas muertas, UNA puerta
 end;
 
+{ Un heredado, sobre el esqueleto de su marco: su clase hereda del ancestro y su uses
+  lleva la unidad de este, donde la lista el proyecto; su form, lo que el IDE escribe
+  en uno nuevo: inherited, y en una form su Caption. }
+function PasHeredado(const APas, AFormName: string; const AAncestro: TFormDelProyecto): string;
+begin
+  var Cabeza := 'T' + AFormName + ' = class(';
+  var Ini := APas.IndexOf(Cabeza) + Length(Cabeza);
+  Result := APas.Substring(0, Ini) + AAncestro.Clase + APas.Substring(APas.IndexOf(')', Ini));
+  Result := StringReplace(Result, ';' + CRLF + CRLF + 'type', ', ' + AAncestro.Unidad + ';' + CRLF + CRLF + 'type', []);
+end;
+
+function FormHeredado(const AFormName: string; AEsFrame: Boolean): string;
+begin
+  Result := ComponeLineaDeObjeto('inherited', AFormName, 'T' + AFormName) + CRLF;
+  if not AEsFrame then
+    Result := Result + string.Join(CRLF, LineasDePropiedad('  ', 'Caption', TrozosDeLiteral(AFormName))) + CRLF;
+  Result := Result + 'end' + CRLF;
+end;
+
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
-  const ASubDir: string): string;
+  const ASubDir, AAncestro: string): string;
 var
   Kind, Dir, FormName, PasPath, DesignerExt, Have, Want, FrameworkNote: string;
   Fmx: Boolean;
+  Ancestro: TFormDelProyecto;
 begin
   Kind := SinMayusculas(AKind.Trim);
   if (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'frame-vcl') and
@@ -1050,6 +1071,18 @@ begin
   if TFile.Exists(TPath.Combine(Dir, AUnitName + DesignerExt)) then
     Exit(MsgFmt(SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT,
       [TPath.Combine(Dir, AUnitName + DesignerExt)]));
+  // el ancestro: del proyecto, por su raiz, y del tipo que se crea
+  var Heredado := AAncestro.Trim <> '';
+  if Heredado then
+  begin
+    var Candidatos := FormsDeLasClases(DprDe(ADprPath), [AAncestro.Trim], DesignerExt);
+    if Length(Candidatos) = 0 then
+      Exit(MsgFmt(SR_CREATE_ANCESTRO_NO_ESTA_FMT, [AAncestro.Trim, TPath.GetFileName(ADprPath)]));
+    Ancestro := Candidatos[0];
+    var Raiz := RaizDeDesigner(Ancestro.Designer);
+    if (Raiz <> rdDesconocida) and ((Raiz = rdFrame) <> Kind.StartsWith('frame')) then
+      Exit(MsgFmt(SR_CREATE_ANCESTRO_OTRA_RAIZ_FMT, [Ancestro.Clase, AKind]));
+  end;
 
   // TODO O NADA (quinta revision): si el registro no se puede (o lanza: un
   // .dproj que otro proceso tiene abierto), el par creado se quita. Quedaba
@@ -1063,25 +1096,57 @@ begin
   try
   if Kind = 'vcl' then
   begin
-    WriteNewFile(PasPath, VclFormPas(AUnitName, FormName));
-    WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), VclFormDfm(FormName));
+    if Heredado then
+    begin
+      WriteNewFile(PasPath, PasHeredado(VclFormPas(AUnitName, FormName), FormName, Ancestro));
+      WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), FormHeredado(FormName, False));
+    end
+    else
+    begin
+      WriteNewFile(PasPath, VclFormPas(AUnitName, FormName));
+      WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), VclFormDfm(FormName));
+    end;
   end
   else if Kind = 'fmx' then
   begin
     DesignerExt := '.fmx';
-    WriteNewFile(PasPath, FmxFormPas(AUnitName, FormName));
-    WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FmxFormFmx(FormName));
+    if Heredado then
+    begin
+      WriteNewFile(PasPath, PasHeredado(FmxFormPas(AUnitName, FormName), FormName, Ancestro));
+      WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FormHeredado(FormName, False));
+    end
+    else
+    begin
+      WriteNewFile(PasPath, FmxFormPas(AUnitName, FormName));
+      WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FmxFormFmx(FormName));
+    end;
   end
   else if Kind = 'frame-vcl' then
   begin
-    WriteNewFile(PasPath, VclFramePas(AUnitName, FormName));
-    WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), VclFrameDfm(FormName));
+    if Heredado then
+    begin
+      WriteNewFile(PasPath, PasHeredado(VclFramePas(AUnitName, FormName), FormName, Ancestro));
+      WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), FormHeredado(FormName, True));
+    end
+    else
+    begin
+      WriteNewFile(PasPath, VclFramePas(AUnitName, FormName));
+      WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), VclFrameDfm(FormName));
+    end;
   end
   else if Kind = 'frame-fmx' then
   begin
     DesignerExt := '.fmx';
-    WriteNewFile(PasPath, FmxFramePas(AUnitName, FormName));
-    WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FmxFrameFmx(FormName));
+    if Heredado then
+    begin
+      WriteNewFile(PasPath, PasHeredado(FmxFramePas(AUnitName, FormName), FormName, Ancestro));
+      WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FormHeredado(FormName, True));
+    end
+    else
+    begin
+      WriteNewFile(PasPath, FmxFramePas(AUnitName, FormName));
+      WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FmxFrameFmx(FormName));
+    end;
   end
   else
   begin

@@ -2085,6 +2085,24 @@ end;
 
 { ---- insert ---- }
 
+{ El frame de clase AClase que lista el proyecto del form F, otro que el propio: el
+  .dpr que lista su unidad dice cual, y su raiz, por su cadena, que es un frame. }
+function FrameDelProyecto(const F: TFormEnEdicion; const AClase: string; out AFrame: TFormDelProyecto): Boolean;
+begin
+  Result := False;
+  try
+    for var P in ProjectsUsingUnit(F.Pas) do
+      for var C in FormsDeLasClases(P, [AClase], ExtractFileExt(F.Dfm)) do
+        if not SameFileName(C.Designer, F.Dfm) and (RaizDeDesigner(C.Designer) = rdFrame) then
+        begin
+          AFrame := C;
+          Exit(True);
+        end;
+  except
+    // un proyecto que no se deja leer: como si no estuviera
+  end;
+end;
+
 function InsertaComponente(const APath, AClase, AComponente, AParent: string;
   const AProps: string): string;
 var
@@ -2116,11 +2134,15 @@ begin
   if Result <> '' then
     Exit;
   try
-    // la clase: de la tabla del Delphi activo, y un control
-    if not F.Tabla.ClaseDeNombre(AClase.Trim, ClsId) then
+    // la clase: de la tabla del Delphi activo, y un control; o un frame de SU proyecto,
+    // que la tabla no tiene, con lo que publica un TFrame (V77 de la 1.24)
+    var Frame: TFormDelProyecto;
+    var EsFrame := not F.Tabla.ClaseDeNombre(AClase.Trim, ClsId) and
+      FrameDelProyecto(F, AClase.Trim, Frame) and F.Tabla.ClaseDeNombre(IfThen(F.EsFmx, ID_FMX_FRAME, ID_VCL_FRAME), ClsId);
+    if not EsFrame and not F.Tabla.ClaseDeNombre(AClase.Trim, ClsId) then
       Exit(ClaseQueNoEsta(F.Tabla, AClase.Trim, F.Marco) +
         MsgFmt(SF_DESIGNER_INSERT_SIN_TABLA_FMT, [MsgText(SF_DESIGNER_A_MANO)]));
-    Clase := F.Tabla.Classes[ClsId];
+    Clase := (if EsFrame then Frame.Clase else F.Tabla.Classes[ClsId]);
     if not F.Tabla.Desciende(ClsId, IfThen(F.EsFmx, ID_FMX_CONTROL, ID_VCL_CONTROL)) then
       Exit(MsgFmt(SR_DESIGNER_INSERT_NO_VISUAL_FMT, [Clase, IfThen(F.EsFmx, ID_FMX_CONTROL, ID_VCL_CONTROL),
         MsgText(SF_DESIGNER_A_MANO)]));
@@ -2167,7 +2189,9 @@ begin
       // no las arrastra, como al soltarlo en el IDE: sin FMX.Grid.Style un
       // TStringGrid compila y FMX pinta su aviso en su lugar (V69)
       var Unidades: TArray<string> := [];
-      if EsIdDeTipo(ClsId) then
+      if EsFrame then
+        Unidades := [Frame.Unidad]
+      else if EsIdDeTipo(ClsId) then
         Unidades := [UnidadDeIdDeTipo(F.Tabla.IdEscrito[ClsId])] + F.Tabla.UnidadesDePresentacion(ClsId);
       var Pedidas: TArray<string> := [];
       // "ya esta" por EL juez de dcc, con los ambitos de SU proyecto (V79): el
@@ -2197,7 +2221,7 @@ begin
     Ind := SangriaDeNivel(Padre.Depth + 1);
     // cada linea por sus compositores (Lsp.DesignerBin): la de objeto, la de
     // una propiedad, el literal, el flotante
-    Bloque := [Ind + ComponeLineaDeObjeto('object', Nombre, Clase)];
+    Bloque := [Ind + ComponeLineaDeObjeto((if EsFrame then 'inline' else 'object'), Nombre, Clase)];
     if F.EsFmx then
       Bloque := Bloque + LineasDePropiedad(Ind + '  ', 'Position.X', [FlotanteFmx(INSERT_X)]) +
         LineasDePropiedad(Ind + '  ', 'Position.Y', [FlotanteFmx(INSERT_Y)])
