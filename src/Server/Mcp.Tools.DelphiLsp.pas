@@ -508,8 +508,9 @@ begin
 end;
 
 { Extracts "result" from a full JSON-RPC response and renders it, adding a
-  filesystem path next to any "uri" for agent convenience. Frees AResp. }
-function RenderResult(AResp: TJSONObject; const ANote: string): string;
+  filesystem path next to any "uri" for agent convenience. Frees AResp. Un null
+  contesta ANulo si llega: una tool con sus propias causas lo dice ella. }
+function RenderResult(AResp: TJSONObject; const ANote: string; const ANulo: string = ''): string;
 var
   V: TJSONValue;
   Err: TJSONValue;
@@ -520,7 +521,7 @@ begin
       Exit(ErrorDelMotor(Err, ANote));
     V := AResp.GetValue('result');
     if (V = nil) or (V is TJSONNull) then
-      Exit(MsgText(SN_LSP_NULL_NOTE) + ANote);
+      Exit(if ANulo <> '' then ANulo else MsgText(SN_LSP_NULL_NOTE) + ANote);
     DecorateLocations(V);
     Result := EnmascaraJsonSalvo(V.ToJSON, CONTENIDO_DEL_MOTOR, ANote);
   finally
@@ -1519,8 +1520,10 @@ begin
   Resp := Client.SignatureHelp(TLspClient.PathToUri(Params.Path), Params.Line, Params.Character);
   V := Resp.GetValue('result');
   if (V = nil) or (V is TJSONNull) then
-    Result := RenderResult(Resp, NoSettingsNote(Settings) +
-      MsgText(SN_LSP_HINT_INSIDE_CALL))
+    // sus propias causas: la 1 de LSP-029, "dentro de un identificador", es lo contrario de
+    // lo que aqui hace falta (Hermes, V190); si el motor fallo, la nota con su pista
+    Result := RenderResult(Resp, NoSettingsNote(Settings) + MsgText(SN_LSP_HINT_INSIDE_CALL),
+      MsgText(SN_LSP_NULL_SIGNATURE_NOTE) + NoSettingsNote(Settings))
   else
     Result := RenderResult(Resp, NoSettingsNote(Settings));
 end;

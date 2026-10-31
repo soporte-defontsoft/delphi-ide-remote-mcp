@@ -299,6 +299,7 @@ lst.close()
 try:
     d = json.loads(out)
     check('probe TCP puerto abierto: tcpReachable=true', d.get('tcpReachable') is True, out[:250])
+    check('V186 la sonda dice que paso porque RemoteHosts deja ese host', 'RemoteHosts' in d.get('note', ''), out[:400])
 except Exception:
     check('probe TCP abierto: parsea', False, out[:300])
 

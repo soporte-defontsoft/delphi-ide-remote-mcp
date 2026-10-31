@@ -2561,6 +2561,20 @@ begin
     Result := MsgFmt(SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT, [AAtLine, ListaDeLineas(AHits)]);
 end;
 
+{ Una linea en un informe: ANumero|texto, cortada si es larga, y diciendolo (V189:
+  se cortaba a 90 en silencio y parecia la linea entera). }
+function EcoDeLinea(ANumero: Integer; const ALinea: string): string;
+const
+  TOPE_DEL_ECO = 90;
+var
+  Texto: string;
+begin
+  Texto := ALinea.Trim;
+  if Length(Texto) > TOPE_DEL_ECO then
+    Texto := PrincipioDeTexto(Texto, TOPE_DEL_ECO) + '...';
+  Result := CitaDeLinea(ANumero, Texto);
+end;
+
 function LineaEnBlancoDenegada(const ALines: TArray<string>;
   AReales, AAtLine: Integer; const AFichero: string): string;
 begin
@@ -2570,7 +2584,7 @@ begin
   // la misma pregunta que despues elige la linea: la de la regla del motor
   if not LineaEsLaDelAncla(ALines[AAtLine - 1], '') then
     Exit(MsgFmt(SR_EDIT_LINEA_NO_EN_BLANCO_FMT, [AAtLine, AFichero,
-      CitaDeLinea(AAtLine, Copy(ALines[AAtLine - 1].Trim, 1, 90))]));
+      EcoDeLinea(AAtLine, ALines[AAtLine - 1])]));
 end;
 
 function DecodeSourceBytes(const B: TArray<Byte>; AEsDesigner: Boolean): string;
@@ -4372,7 +4386,7 @@ begin
             Dec(Reales);
           if Cambio < Reales then
           begin
-            Eco := CitaDeLinea(Cambio + 1, Copy(DespuesL[Cambio].Trim, 1, 90));
+            Eco := EcoDeLinea(Cambio + 1, DespuesL[Cambio]);
             // en un form, en que objeto cayo: un bloque repetido puede caer en otro (V148)
             if EsRutaDeDesigner(APath) then
             begin

@@ -58,7 +58,11 @@ the MCP `initialize` response (`serverInfo.version`).
   `VAULT-041` says prompts come from the workspace's vault, `delphi_installs` says
   `requestedUpdate` appears only if declared, and the long audit line names what
   `corruption` counts. In `edits` on a form, each entry's report names the object it landed
-  in: a repeated block could land in another component with only a line number to tell.
+  in: a repeated block could land in another component with only a line number to tell. The
+  same report now says when it cut a long line (`...`). `delphi_signature` with nothing to
+  answer gives its own causes (`LSP-052`): the shared note asked for a position inside an
+  identifier, the opposite of what it needs. The TCP probe of `delphi_paserver` says the host
+  passed because `RemoteHosts` allows it.
 - **The form renderer now always runs inside its own container, and its answer no
   longer says whether a file exists.** `delphi_designer` preview, lint and the check
   of what the IDE would save run the design code of the installed packages. That code

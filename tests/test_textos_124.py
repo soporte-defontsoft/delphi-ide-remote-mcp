@@ -12,6 +12,8 @@ llamada medida de Hermes: la herramienta hizo lo correcto y la respuesta no lo d
      ahora lo dice; un form corriente, no
   T5 V158 MOVE-025 dice que crea las carpetas padre
   T6 V148 edits en un form: el informe de cada entrada dice en que objeto cayo
+  T7 V189 edits sobre una linea larga: el eco la corta y lo dice (...); una corta, entera
+  T8 V190 delphi_signature null: sus causas, no "dentro de un identificador" de LSP-029
 
 Uso:  python tests/test_textos_124.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -52,6 +54,19 @@ try:
           os.path.exists(F) and not os.listdir(CARPETA), r[:300])
     r = srv.call('delphi_move', {'path': F, 'dest': os.path.join(CARPETA, 'a.txt')})
     check('T1b ...y la ruta que propone es la que vale', not mc.rechazado(r) and os.path.exists(os.path.join(CARPETA, 'a.txt')), r[:300])
+
+    # ---- T7
+    LARGA = 'const X = ' + "'" + 'z' * 120 + "'" + ';'
+    P7 = escribe('eco\\U7.pas', 'unit U7;\ninterface\n// una\n// dos\nimplementation\nend.\n')
+    r = srv.call('delphi_edit', {'path': P7, 'edits': [{'old': '// una', 'new': LARGA}, {'old': '// dos', 'new': '// corta'}]})
+    check('T7 V189 el eco de una linea larga dice que la corta, y una corta sale entera',
+          not mc.rechazado(r) and 'z' * 60 + '...' in r and '|// corta' in r and 'z' * 120 not in r, r[:500])
+
+    # ---- T8
+    P8 = escribe('firma\\U8.pas', 'unit U8;\ninterface\nimplementation\nend.\n')
+    r = srv.call('delphi_signature', {'path': P8, 'line': 0, 'character': 0}, 240)
+    check('T8 V190 signature null: sus causas, sin el "dentro de un identificador" de LSP-029',
+          mc.abre(r, 'SN_LSP_NULL_SIGNATURE_NOTE') and 'INSIDE an identifier' not in r and 'delphi_hover' in r, r[:400])
 
     # ---- T5
     G = escribe('mover\\b.txt', 'hola\n')

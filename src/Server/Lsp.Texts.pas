@@ -2547,7 +2547,8 @@ const
     '[PAS-027] TCP route open: this server reaches that host:port. This ' +
     'only proves the route - the full PAServer handshake with ' +
     'credentials is test-connection with a profile (add-profile ' +
-    'first).';
+    'first). It ran because the workspace''s RemoteHosts allows this host: ' +
+    'localhost has no exception.';
 
   SN_PASERVER_TCP_FAIL =
     '[PAS-028] No TCP route from this server to that host:port. Check, ' +
@@ -9387,6 +9388,14 @@ const
   SN_LSP_HINT_SIN_PROYECTO =
     ' [LSP-036] [hint: the engine failed on this file OUTSIDE a project; ' +
     'next to its .dproj it usually answers]';
+
+  SN_LSP_NULL_SIGNATURE_NOTE =
+    '[LSP-052] null - the engine has no signature there. It is not an error: the ' +
+    'position must be INSIDE the parentheses of a call, right after ( or , - on the ' +
+    'name of the routine there is none, and delphi_hover gives its declaration. ' +
+    'Lines are 0-BASED here and 1-based in delphi_read, so line N of a read is N-1 ' +
+    'here. If the position is right, the file may have no project configuration ' +
+    '(the warning next to this says so, if it appears).';
 
   SN_LSP_HINT_INSIDE_CALL =
     ' [LSP-023] [hint: the position must be INSIDE the call parentheses, ' +
