@@ -566,7 +566,7 @@ end;
 // el dueno de un trabajo: su perfil y la ruta larga de su proyecto
 function DuenoDeTrabajo(const AProfile, ADprojPath: string): string;
 begin
-  Result := LowerCase(AProfile.Trim) + #9 + LowerCase(FormaLarga(ADprojPath));
+  Result := LowerCase(AProfile.Trim) + #9 + ClaveDeRuta(FormaLarga(ADprojPath));
 end;
 
 procedure ApuntaTrabajo(const AJobId, AProfile, ADprojPath: string);

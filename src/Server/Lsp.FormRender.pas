@@ -256,6 +256,11 @@ function EsEjecutable(const ABytes: TArray<Byte>): Boolean;
   Known Packages: $(BDSBIN)\x.bpl o una ruta) con sus macros resueltas; una sin
   valor se queda, y el paquete sale como que falta: vacia daria \Bpl\x.bpl, la
   raiz de la unidad actual. }
+{ La carpeta del form que pidio el agente y ese form. Con Carpeta, lo que se le
+  da a leer al ayudante (Path) es la propuesta del juez, escrita en otro sitio:
+  lo escribian a mano seis sitios (P14 del revisor). }
+function CarpetaDelFormDeVerdad(const APeticion: TPeticionRender): string;
+function FormDeVerdad(const APeticion: TPeticionRender): string;
 function RutaDePaqueteDelIde(const AValor, ARaiz, AComun: string): string;
 
 type
@@ -1076,9 +1081,7 @@ begin
   // llamada, y de ahi nombra lo que quiera subiendo con ..\. Sus hermanos, los
   // de la carpeta del form de verdad: se le copian (CopiaLoQueLee). Una base que
   // no mira es un relativo que pasa la puerta (revisor 3 de la noche, A-1)
-  Hermanos := TPath.GetDirectoryName(APeticion.Path);
-  if APeticion.Carpeta <> '' then
-    Hermanos := APeticion.Carpeta;
+  Hermanos := CarpetaDelFormDeVerdad(APeticion);
   Bases := [AEtapa];
   try
     // lo que se le da a leer al ayudante, TAMBIEN la propuesta del juez
@@ -1091,9 +1094,7 @@ begin
     // (con Carpeta, el form de verdad no es un hermano: el ayudante lee su
     // propuesta, que ya se miro arriba; mirarlo otra vez dependia de que no
     // lo borrasen mientras - medido con O20)
-    var ElDeVerdad := '';
-    if APeticion.Carpeta <> '' then
-      ElDeVerdad := TPath.Combine(APeticion.Carpeta, TPath.GetFileName(APeticion.Path));
+    var ElDeVerdad := FormDeVerdad(APeticion);
     for var Hermano in WalkFiles(Hermanos, ['*' + ExtractFileExt(APeticion.Path)], False, False) do
       if not EsEnlace(Hermano) and not SameFileName(Hermano, APeticion.Path) and
          not SameFileName(Hermano, ElDeVerdad) then
@@ -1125,6 +1126,18 @@ begin
   except
     Result := MsgText(SR_DESIGNER_LITERAL_NO_VERIFICABLE);
   end;
+end;
+
+function CarpetaDelFormDeVerdad(const APeticion: TPeticionRender): string;
+begin
+  Result := APeticion.Carpeta;
+  if Result = '' then
+    Result := TPath.GetDirectoryName(APeticion.Path);
+end;
+
+function FormDeVerdad(const APeticion: TPeticionRender): string;
+begin
+  Result := TPath.Combine(CarpetaDelFormDeVerdad(APeticion), TPath.GetFileName(APeticion.Path));
 end;
 
 function RutaDePaqueteDelIde(const AValor, ARaiz, AComun: string): string;
@@ -1559,9 +1572,7 @@ var
   end;
 
 begin
-  Hermanos := TPath.GetDirectoryName(APeticion.Path);
-  if APeticion.Carpeta <> '' then
-    Hermanos := APeticion.Carpeta;
+  Hermanos := CarpetaDelFormDeVerdad(APeticion);
   for var R in AJunto do
     Copia(TPath.Combine(Hermanos, R), TPath.Combine(AEtapa, R));
   for var F in WalkFiles(Hermanos, ['*' + ExtractFileExt(APeticion.Path)], False, False) do
@@ -1644,9 +1655,7 @@ begin
         Exit;
       ASalida := RunCapturedEnContenedor(Orden, Etapa, AC, PlazoDeRender(APeticion), ACodigo, AVencido,
         phConsola, EntornoSinConfiguracion(['PATH=' + PathHijo]));
-      Origen := TPath.GetDirectoryName(APeticion.Path);
-      if APeticion.Carpeta <> '' then
-        Origen := APeticion.Carpeta;
+      Origen := CarpetaDelFormDeVerdad(APeticion);
       // un lejano vuelve a su carpeta, no a la del form: CambioEnLoLeido lo relee
       for var L in APeticion.Lejanos do
       begin
@@ -1691,9 +1700,7 @@ begin
   if Length(AClases) = 0 then
     Exit;
   try
-    var Form := APeticion.Path;
-    if APeticion.Carpeta <> '' then
-      Form := TPath.Combine(APeticion.Carpeta, TPath.GetFileName(APeticion.Path));
+    var Form := FormDeVerdad(APeticion);
     var Carpeta := TPath.GetDirectoryName(Form);
     for var P in ProjectsUsingUnit(UnidadDeDesigner(Form)) do
       for var F in FormsDeLasClases(P, AClases, ExtractFileExt(Form)) do
@@ -1813,9 +1820,7 @@ begin
       end;
       // el form de verdad: el del juez es una propuesta escrita en otra
       // carpeta, y su .pas (lo que publica el usuario) esta en Carpeta
-      var Form := APeticion.Path;
-      if APeticion.Carpeta <> '' then
-        Form := TPath.Combine(APeticion.Carpeta, TPath.GetFileName(APeticion.Path));
+      var Form := FormDeVerdad(APeticion);
       // (lo de la raiz que el lector no ve no va en la lista; el error que lo
       // paro, si)
       var NoVista: string;

@@ -32,6 +32,8 @@ uses
 const
 {$I NodeKey.inc}
 {$I NodeProtocolo.inc}
+  // donde deja el nodo su captura, junto a el: la que el servidor se trae
+  NOMBRE_DE_LA_CAPTURA = 'captura.png';
 
 { Los argumentos van DESPLAZADOS uno: el primero es la clave que prueba que
   llama el servidor MCP, y las ordenes empiezan detras. Todo el reparto de
@@ -114,7 +116,7 @@ begin
     no lo es, como CP1252: en ANSI un titulo con acento salia bien solo por
     ese respaldo. En UTF-8, como el nodo Linux, no depende de adivinar. }
   SetTextCodePage(Output, CP_UTF8);
-  Ruta := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'captura.png');
+  Ruta := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), NOMBRE_DE_LA_CAPTURA);
   Escritorio := TEscritorioWin.Create;
   try
     Writeln(MsgText(SN_NODE_CONTROL_ESCRITORIO_WINDOWS));
@@ -243,7 +245,7 @@ begin
     carpeta (dentro del area de PAServer, de donde el servidor puede
     traersela) y borra la original: ni ensucia las carpetas del usuario ni
     deja copias sueltas. }
-  Result := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), 'captura.png');
+  Result := TPath.Combine(TPath.GetDirectoryName(ParamStr(0)), NOMBRE_DE_LA_CAPTURA);
   try
     TFile.Copy(AOrigen, Result, True);
     TFile.Delete(AOrigen);

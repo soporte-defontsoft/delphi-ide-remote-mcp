@@ -1515,7 +1515,7 @@ begin
       Result := Result + Copy(S, Q + Salta, P - Q - Salta); // literal
     P := P + Length(Cierre);
   end;
-  Result := Result.Replace(#13#10, #10).Replace(#13, #10);
+  Result := ConSalto(Result, #10);
 end;
 
 function AtributosDeTramo(const AXml: string; const ATramo: TTramoXml): TArray<TAtributoXml>;
@@ -1526,8 +1526,7 @@ end;
 
 function ValorDeAtributo(const AXml: string; const AAtributo: TAtributoXml): string;
 begin
-  Result := XmlUnescape(Copy(AXml, AAtributo.Ini, AAtributo.Fin - AAtributo.Ini)
-    .Replace(#13#10, #10).Replace(#13, #10));
+  Result := XmlUnescape(ConSalto(Copy(AXml, AAtributo.Ini, AAtributo.Fin - AAtributo.Ini), #10));
 end;
 
 function AllTagValues(const AXml, ATag: string): TArray<string>;

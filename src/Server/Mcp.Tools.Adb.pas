@@ -294,6 +294,26 @@ begin
   end;
 end;
 
+{ El paquete que pide el agente, ELEGIDO entre los que lista el dispositivo
+  (PaqueteInstalado): '' y su negativa si no se pudo preguntar o no esta. }
+function PaqueteDelDispositivo(const AAdb, ADevArg, AApp: string; out ANegativa: string): string;
+var
+  Salida: string;
+  Codigo: Cardinal;
+begin
+  Result := '';
+  ANegativa := '';
+  Salida := RunAdb(AAdb, ADevArg + 'shell pm list packages', 30000, Codigo);
+  if Codigo <> 0 then
+  begin
+    ANegativa := ResultadoAdb(Salida, Codigo);
+    Exit;
+  end;
+  Result := PaqueteInstalado(Salida, AApp);
+  if Result = '' then
+    ANegativa := MsgFmt(SR_ADB_APP_NO_INSTALADA_FMT, [AApp]);
+end;
+
 function TDelphiAdbTool.ExecuteWithParams(const Params: TDelphiAdbParams): string;
 var
   Cmd, Adb, Args, Output, L, Denied, DevArg: string;
@@ -514,12 +534,9 @@ begin
     // Y el paquete, ELEGIDO entre los instalados (PaqueteInstalado): a am
     // start va el nombre que da el dispositivo, nunca lo tecleado (V8 de la
     // 1.23; era deuda declarada en el CLAUDE.md del repo)
-    Output := RunAdb(Adb, DevArg + 'shell pm list packages', 30000, ExitCode);
-    if ExitCode <> 0 then
-      Exit(ResultadoAdb(Output, ExitCode));
-    var App := PaqueteInstalado(Output, Params.App.Trim);
+    var App := PaqueteDelDispositivo(Adb, DevArg, Params.App.Trim, Result);
     if App = '' then
-      Exit(MsgFmt(SR_ADB_APP_NO_INSTALADA_FMT, [Params.App.Trim]));
+      Exit;
     Output := RunAdb(Adb, DevArg + 'shell am start -n ' + App + '/' + ACTIVIDAD_FMX, 30000, ExitCode);
     // am start sale con 0 aunque no arranque (la actividad no existe: no es
     // una app Delphi FMX): lo dicen sus palabras (NoLoHizoConCero, V63)
@@ -535,12 +552,9 @@ begin
     // solo lo que run puede arrancar: la actividad de una app FMX, la que dice el
     // dispositivo. Nada de los Ajustes ni de lo que el usuario tenga abierto. El
     // nombre, el que da el, como en run
-    Output := RunAdb(Adb, DevArg + 'shell pm list packages', 30000, ExitCode);
-    if ExitCode <> 0 then
-      Exit(ResultadoAdb(Output, ExitCode));
-    var App := PaqueteInstalado(Output, Params.App.Trim);
+    var App := PaqueteDelDispositivo(Adb, DevArg, Params.App.Trim, Result);
     if App = '' then
-      Exit(MsgFmt(SR_ADB_APP_NO_INSTALADA_FMT, [Params.App.Trim]));
+      Exit;
     Output := RunAdb(Adb, DevArg + 'shell cmd package resolve-activity --brief -c android.intent.category.LAUNCHER ' + App,
       30000, ExitCode);
     if ExitCode <> 0 then

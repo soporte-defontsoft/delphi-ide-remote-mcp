@@ -1184,7 +1184,7 @@ const
   (lo preguntan la puerta de antes y el que lo coloca). }
 function BinDeEstilo(const ADir, AFuente: string): string;
 begin
-  Result := TPath.Combine(ADir, TPath.GetFileNameWithoutExtension(AFuente) + '.bin.style');
+  Result := TPath.Combine(ADir, TPath.GetFileNameWithoutExtension(AFuente) + COLA_DE_ESTILO_BINARIO);
 end;
 
 { El derivado que un proceso dejo en ALocal (nuestra temporal), en ADestino
@@ -1405,7 +1405,7 @@ begin
       // error del conversor ensenaba la casa por dentro (revisor del 2s); lo
       // que diga de el, con el nombre del destino
       Inc(N);
-      Hecho := TPath.Combine(Tmp, IntToStr(N) + '.bin.style');
+      Hecho := TPath.Combine(Tmp, IntToStr(N) + COLA_DE_ESTILO_BINARIO);
       Out := CorreStyleConvert(Exe, 'tobin ' + ComillasSinEscape(F) + ' ' + ComillasSinEscape(Hecho), Dir, 120000, Code);
       Out := Out.Replace(Hecho, Bin, [rfReplaceAll, rfIgnoreCase]);
       if Code = 0 then

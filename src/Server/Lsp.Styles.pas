@@ -225,6 +225,11 @@ type
 function ValidStyleValue(const AValue: string): Boolean;
 
 { True for the binary forms (FMX_STYLE signature or the $FF wrapper). }
+const
+  { La cola del binario de un .style de texto: <nombre>.bin.style. La escriben
+    el convertidor y BinDeEstilo, y la lee quien lista los de texto. }
+  COLA_DE_ESTILO_BINARIO = '.bin.style';
+
 function IsBinaryStyle(const APath: string): Boolean;
 
 { The text .style files of a folder (binary ones and *.bin.style excluded). }
@@ -1136,7 +1141,7 @@ begin
   try
     if TDirectory.Exists(ADir) then
       for F in TDirectory.GetFiles(ADir, '*.style') do
-        if not SinMayusculas(F).EndsWith('.bin.style') and not IsBinaryStyle(F) then
+        if not SinMayusculas(F).EndsWith(COLA_DE_ESTILO_BINARIO) and not IsBinaryStyle(F) then
           L.Add(F);
     L.Sort;
     Result := L.ToArray;

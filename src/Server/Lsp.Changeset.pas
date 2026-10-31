@@ -245,7 +245,7 @@ end;
   parametros, ClaveDeParam, y test_paisaje la vigila). }
 function ClaveDeLineaEscrita(const APath: string; ALinea: Integer): string;
 begin
-  Result := IntToStr(ALinea) + '@' + LowerCase(APath);
+  Result := IntToStr(ALinea) + '@' + ClaveDeRuta(APath);
 end;
 
 function ResuelveAncla(const AText, ALine: string; AAtLine: Integer;
