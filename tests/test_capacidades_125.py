@@ -21,6 +21,8 @@ del interface. Ni un metodo, ni una rutina solo de implementation, ni una declar
 V224 (visto en vivo al probar V132b): de una llamada a una rutina con la cabecera en VARIAS lineas, el motor contesta una
 linea interior de la cabecera, que no la nombra: definition apuntaba ahi, references la rechazaba y rename se bloqueaba.
 V190b: delphi_definition dice que hay en el destino (name y text), sin otra llamada a delphi_read.
+V40: una local de nombre comun se puede renombrar: su alcance es su rutina (cada I de otra rutina la bloqueaba como
+homonimo, y el tope de candidatos se gastaba en todo el proyecto).
 
 Usage:  python tests/test_capacidades_125.py [path-to-DelphiLspMcp.exe]
 """
@@ -473,6 +475,56 @@ try:
     i, c = donde(UUSA, 'TK.Create', 'Create')
     j = mc.como_json(call('delphi_definition', {'path': UUSA, 'line': i, 'character': c}, t=120))
     check('V190b en la biblioteca, tambien (lo que el motor puede ensenar)', 'Create' in (j.get('text') or '') and j.get('name') == 'Create', str(j)[:300])
+
+    # V40 - una local de nombre comun
+    LC = os.path.join(RAIZ, 'lc')
+    call('delphi_create', {'kind': 'project-console', 'name': 'Lc', 'dir': LC})
+    with open(os.path.join(LC, 'UOtro.pas'), 'w', newline='') as f:
+        f.write('unit UOtro;\r\n\r\ninterface\r\n\r\nprocedure Fuera;\r\n\r\nimplementation\r\n\r\nprocedure Fuera;\r\nvar\r\n  I: Integer;\r\nbegin\r\n  I := 1;\r\n'
+                + '  I := I + 1;\r\n' * 450 + 'end;\r\n\r\nend.\r\n')
+    ULOC = os.path.join(LC, 'ULoc.pas')
+    TEXTO_LOC = ('unit ULoc;\r\n\r\ninterface\r\n\r\nprocedure Uno;\r\nprocedure Dos(I: Integer);\r\n\r\nimplementation\r\n\r\nvar\r\n  Otro: Integer;\r\n\r\n'
+                 'procedure Uno;\r\nvar\r\n  I, J: Integer;\r\n\r\n  procedure Dentro;\r\n  begin\r\n    I := 2; // I\r\n  end;\r\n\r\nbegin\r\n  I := 1;\r\n  J := I;\r\n  Dentro;\r\nend;\r\n\r\n'
+                 'procedure Dos(I: Integer);\r\nvar\r\n  J: Integer;\r\nbegin\r\n  J := I;\r\n  Otro := J;\r\nend;\r\n\r\nprocedure Tres;\r\nvar\r\n  I: Integer;\r\nbegin\r\n  I := 1;\r\n  Otro := I;\r\nend;\r\n\r\nend.\r\n')
+    with open(ULOC, 'w', newline='') as f:
+        f.write(TEXTO_LOC)
+    with open(os.path.join(LC, 'Lc.dpr'), encoding='utf-8-sig', newline='') as f:
+        d_ = f.read()
+    with open(os.path.join(LC, 'Lc.dpr'), 'w', encoding='utf-8', newline='') as f:
+        f.write(d_.replace('uses\r\n', "uses\r\n  UOtro in 'UOtro.pas', ULoc in 'ULoc.pas',\r\n", 1))
+
+
+    def renombra_local(trozo, nombre, nuevo, modo='preview'):
+        i, c = donde_en(ULOC, trozo, nombre)
+        return mc.como_json(call('delphi_rename_symbol', {'path': ULOC, 'line': i, 'character': c, 'newname': nuevo, 'mode': modo}, t=240))
+
+
+    def donde_en(ruta, trozo, nombre):
+        # en el primer caracter: con un nombre de una letra, uno mas cae fuera de el
+        ls = open(ruta, newline='').read().split('\r\n')
+        i = next(k for k, l in enumerate(ls) if trozo in l)
+        return i, ls[i].index(trozo) + trozo.index(nombre)
+
+
+    j = renombra_local('I, J: Integer', 'I', 'Cuenta')
+    check('V40 una local: aplicable, solo en su rutina, con las de la anidada (su declaracion y tres usos)', j.get('applicable') is True and j.get('occurrences') == 4 and j.get('filesTouched') == 1, str(j)[:700])
+    check('V40 ...y dice su alcance, sin homonimos de otras rutinas ni de otras unidades', j.get('localTo', {}).get('routine') == 'Uno' and 'lookalikes' not in j and j.get('filesScanned') == 1, str(j)[:500])
+    j = renombra_local('I, J: Integer', 'I', 'Otro')
+    check('V40 un nombre libre en su rutina pero usado fuera: aplicable', j.get('applicable') is True, str(j)[:500])
+    j = renombra_local('I, J: Integer', 'I', 'J')
+    check('V40 un nombre que ya esta en su rutina: choca', j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_COLLISION_FMT') for b in j.get('blockers', [])), str(j)[:500])
+    # desde un USO en el cuerpo: en la cabecera el motor no resuelve un parametro (LSP-003)
+    ls_ = open(ULOC, newline='').read().split('\r\n')
+    i = next(k for k, l in enumerate(ls_) if l == '  J := I;' and k > next(n for n, x in enumerate(ls_) if x.startswith('procedure Dos') and n > 10))
+    t = call('delphi_references', {'path': ULOC, 'line': i, 'character': ls_[i].index('I')}, t=240)
+    check('V40 un parametro no es una local: su cabecera vive en dos sitios', mc.como_json(t).get('identifier') == 'I' and 'localTo' not in t, t[:500])
+    j = renombra_local('I, J: Integer', 'I', 'Cuenta', 'apply')
+    with open(ULOC, newline='') as f:
+        final = f.read()
+    check('V40 apply: la de Uno y la anidada; Dos y Tres como estaban', 'Cuenta, J: Integer' in final and 'Cuenta := 2; // I' in final and 'Cuenta := 1;' in final and
+          'J := Cuenta;' in final and 'procedure Dos(I: Integer);' in final and final.count('  I: Integer;') == 1 and 'Otro := I;' in final, final[:700])
+    b = mc.como_json(call('delphi_build', {'project': os.path.join(LC, 'Lc.dproj'), 'platform': 'Win64', 'config': 'Debug'}, t=180))
+    check('V40 ...y compila', b.get('success') is True, str(b)[:500])
 finally:
     srv.mata()
 

@@ -973,6 +973,13 @@ begin
       end;
     end;
   TargetPath := TLspClient.UriToPath(TargetUri);
+  // la rutina de una LOCAL: su alcance entero, y ni otro fichero ni otra rutina
+  // pueden nombrarla. Sin esto, cada I del proyecto era un candidato: gastaba el
+  // tope, y los de otras rutinas bloqueaban su rename como homonimos (V40 de la
+  // 1.25). Los candidatos de dentro los sigue juzgando el motor
+  var LocalDe := '';
+  var LocalIni := -1;
+  var LocalFin := -1;
   if TFile.Exists(TargetPath) then
   begin
     var TwinLines := TStringList.Create;
@@ -994,6 +1001,22 @@ begin
       var ClaseDecl := ClaseDeMetodo(TwinLines, TwinU, TargetLine, Ident);
       if ClaseDecl <> nil then
         ClaseObjetivoLinea := ClaseDecl.Linea;
+      // dentro de una rutina y fuera de los parentesis de su cabecera: un
+      // parametro de un metodo o de una global vive tambien en su declaracion
+      for var C in TwinU.Cuerpos do
+        if (TargetLine > C.Linea) and (TargetLine <= C.LineaFin) and (TargetLine < TwinLines.Count) then
+        begin
+          var Abiertos := 0;
+          for var K := C.Linea to TargetLine - 1 do
+            Abiertos := Abiertos + TwinLines[K].CountChar('(') - TwinLines[K].CountChar(')');
+          if Abiertos <= 0 then
+          begin
+            LocalDe := C.Nombre;
+            LocalIni := C.Linea;
+            LocalFin := C.LineaFin;
+          end;
+          Break;
+        end;
       if (TargetLine >= 0) and (TargetLine < TwinLines.Count) then
       begin
         // Same 1-based-Pos-as-character convention the candidate loop uses
@@ -1129,6 +1152,12 @@ begin
     finally
       Dirs.Free;
     end;
+    if LocalIni >= 0 then
+    begin
+      AllFiles.Clear;
+      AllFiles.Add(TargetPath);
+      ScopeDirs := [TPath.GetDirectoryName(TargetPath)];
+    end;
     Scanned := AllFiles.Count;
 
     for F in AllFiles do
@@ -1158,6 +1187,8 @@ begin
         VistaLines.Text := Vista;
         for I := 0 to Lines.Count - 1 do
         begin
+          if (LocalIni >= 0) and ((I < LocalIni) or (I > LocalFin)) then
+            Continue;
           LineText := Lines[I];
           VistaLine := VistaLines[I];
           ScanCol := 1;
@@ -1433,6 +1464,11 @@ begin
         Result.AddPair('unreadableNote', MsgFmt(SN_REFS_ILEGIBLES_FMT, [Length(Distintos)]));
       end;
       Result.AddPair('candidates', TJSONNumber.Create(Candidates.Count));
+      if LocalIni >= 0 then
+        Result.AddPair('localTo', TJSONObject.Create
+          .AddPair('routine', LocalDe)
+          .AddPair('fromLine', TJSONNumber.Create(LocalIni + 1))
+          .AddPair('toLine', TJSONNumber.Create(LocalFin + 1)));
       // WHERE we looked. "filesScanned: 4" says how many, never which, and a
       // caller cannot tell a complete answer from one that stopped at the
       // project's own folder (field round 11).

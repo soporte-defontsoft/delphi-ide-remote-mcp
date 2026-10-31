@@ -78,6 +78,8 @@ var
   Touched: TList<string>;
   Item, Chg: TJSONObject;
   DesignerHits, StringHits: Integer;
+  EsLocal: Boolean;
+  LocalIni, LocalFin: Integer;
 begin
   Result := TJSONObject.Create;
   try
@@ -112,9 +114,20 @@ begin
 
     // 2. the references engine does the semantic work
     StringHits := 0;
+    EsLocal := False;
+    LocalIni := 0;
+    LocalFin := 0;
     Refs := FindDelphiReferences(AFilePath, ALine, ACharacter);
     try
       Ident := Refs.GetValue('identifier').Value;
+      // una local: su rutina es todo su alcance (V40 de la 1.25)
+      if Refs.GetValue('localTo') is TJSONObject then
+      begin
+        EsLocal := True;
+        LocalIni := Refs.GetValue('localTo').GetValue<Integer>('fromLine') - 1;
+        LocalFin := Refs.GetValue('localTo').GetValue<Integer>('toLine') - 1;
+        Result.AddPair('localTo', TJSONObject(Refs.GetValue('localTo').Clone));
+      end;
       Result.AddPair('symbol', Ident);
       Result.AddPair('newName', ANewName);
       if MismoIdentificador(Ident, ANewName) then
@@ -332,7 +345,10 @@ begin
     // (Lsp.References.UsosEnDisenadores), el mismo con que references los
     // lista; aqui se cuentan por fichero y bloquean
     var DsgIlegibles: TArray<string>;
-    var EnForms := UsosEnDisenadores(AFilePath, Ident, Touched.ToArray, DsgIlegibles);
+    // (un form enlaza por nombre lo de la clase, nunca una local)
+    var EnForms: TArray<TCandidate> := nil;
+    if not EsLocal then
+      EnForms := UsosEnDisenadores(AFilePath, Ident, Touched.ToArray, DsgIlegibles);
     DesignerHits := Length(EnForms);
     I := 0;
     while I < Length(EnForms) do
@@ -370,7 +386,16 @@ begin
     for P in Touched do
     begin
       Text := PatchLoadText(P, EncName);
-      Inc(N, TRegEx.Matches(CodigoPascal(Text), '(?i)' + PatronIdentEntero(ANewName)).Count);
+      if EsLocal then
+      begin
+        // lo que importa es su rutina: en otra, ese nombre es de otra local
+        Lines := SplitToLines(CodigoPascal(Text));
+        for I := LocalIni to LocalFin do
+          if I <= High(Lines) then
+            Inc(N, TRegEx.Matches(Lines[I], '(?i)' + PatronIdentEntero(ANewName)).Count);
+      end
+      else
+        Inc(N, TRegEx.Matches(CodigoPascal(Text), '(?i)' + PatronIdentEntero(ANewName)).Count);
     end;
     if N > 0 then
       Blockers.Add(MsgFmt(SR_RENAME_COLLISION_FMT, [ANewName, N]));
@@ -378,7 +403,7 @@ begin
     // 5. ...y una unidad que NO escribe: si usa las dos y la renombrada va
     // detras, sus llamadas cambian de destino y compila igual (V132b de la 1.25;
     // medido con dcc: gana la ultima del uses)
-    if (PathDenied(DefPath) = '') and not MismoIdentificador(Ident, ANewName) then
+    if not EsLocal and (PathDenied(DefPath) = '') and not MismoIdentificador(Ident, ANewName) then
     begin
       var Carpetas: TArray<string> := nil;
       if Result.GetValue('scope') is TJSONArray then

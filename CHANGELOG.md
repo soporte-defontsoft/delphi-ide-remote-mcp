@@ -59,6 +59,10 @@ the MCP `initialize` response (`serverInfo.version`).
   declaration or a qualified call do not count.
 - **`delphi_definition` says what is at the destination**: `name` and `text`, the line as written,
   so finding out what it found no longer takes a `delphi_read`.
+- **A local with a common name can be renamed.** `delphi_references` and `delphi_rename_symbol`
+  look for a local in its routine only, and say so (`localTo`): every `I` of the project used up the
+  candidates, and those of other routines blocked the rename as homonyms. The candidates inside are
+  still judged by the engine; a parameter is not a local, its header lives in two places.
 
 ### Fixed
 
