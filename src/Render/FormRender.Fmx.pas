@@ -201,7 +201,12 @@ begin
   end;
   if not RecursoDePlataforma(GPeticion.Estilo, Bpl, Recurso) then
     raise ERender.Create(MsgFmt(SR_RENDER_ESTILO_DESCONOCIDO_FMT, [GPeticion.Estilo, NombresDePlataforma]));
-  Bpl := RaizDelIde(GPeticion.Bds) + 'bin\' + Bpl;
+  // la copia de la caja, junto al ayudante: con el IDE fuera de lo que el contenedor
+  // lee, en su sitio no se abre
+  if TFile.Exists(ExtractFilePath(ParamStr(0)) + Bpl) then
+    Bpl := ExtractFilePath(ParamStr(0)) + Bpl
+  else
+    Bpl := RaizDelIde(GPeticion.Bds) + 'bin\' + Bpl;
   // el BPL se abre como DATOS: nada suyo se ejecuta
   Modulo := LoadLibraryEx(PChar(Bpl), 0, LOAD_LIBRARY_AS_DATAFILE);
   if Modulo = 0 then
@@ -310,28 +315,45 @@ end;
 
 { Donde queda cada control del form ya pintado, en coordenadas del form: lo que
   resuelve FMX, que un texto no dice (V74 de la 1.24). Lo que no se guarda es de la
-  presentacion de un control, no del form. }
+  presentacion de un control, no del form, pero se baja por ello: un TTabItem, un
+  TScrollBox o un TExpander guardan a sus hijos en un contenido que no se guarda.
+  De esos hijos se dice tambien ese contenido, su contenedor de verdad: el padre con
+  nombre puede ser otra cosa, como la pestana de un TTabItem. }
 procedure RespondeCajas(AForm: TForm; ARaiz: TComponent; ACargador: TCargador);
 
-  procedure De(APadre: TFmxObject);
+  procedure De(APadre: TFmxObject; const ARutaPadre: string; AContenido: TControl);
   begin
     for var I := 0 to APadre.ChildrenCount - 1 do
-      if (APadre.Children[I] is TControl) and APadre.Children[I].Stored then
+    begin
+      var Hijo := APadre.Children[I];
+      if (Hijo is TControl) and Hijo.Stored then
       begin
-        var C := TControl(APadre.Children[I]);
+        var C := TControl(Hijo);
         var RF := C.AbsoluteRect;
         var Ruta := RutaDeComponente(ARaiz, C);
         if Ruta <> '' then
-          RespondeCaja(Ruta, ACargador.ClaseEscrita(C, ARaiz),
-            (if (APadre = AForm) or (APadre = ARaiz) then '' else RutaDeComponente(ARaiz, TComponent(APadre))),
-            Round(RF.Left), Round(RF.Top), Round(RF.Width), Round(RF.Height), C.Visible);
-        De(C);
-      end;
+        begin
+          var Dentro := '';
+          if AContenido <> nil then
+            Dentro := Format('%d,%d,%d,%d', [Round(AContenido.AbsoluteRect.Left), Round(AContenido.AbsoluteRect.Top),
+              Round(AContenido.AbsoluteRect.Width), Round(AContenido.AbsoluteRect.Height)]);
+          RespondeCaja(Ruta, ACargador.ClaseEscrita(C, ARaiz), ARutaPadre,
+            Round(RF.Left), Round(RF.Top), Round(RF.Width), Round(RF.Height), C.Visible, Dentro);
+          De(C, Ruta, nil);
+        end
+        else
+          De(C, ARutaPadre, AContenido);
+      end
+      else if Hijo is TControl then
+        De(Hijo, ARutaPadre, TControl(Hijo))
+      else
+        De(Hijo, ARutaPadre, AContenido);
+    end;
   end;
 
 begin
   if ARaiz is TFmxObject then
-    De(TFmxObject(ARaiz));
+    De(TFmxObject(ARaiz), '', nil);
 end;
 
 { Crea la form de diseno y lee el fichero (form o frame) en ella }

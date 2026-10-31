@@ -583,6 +583,8 @@ noal = Server()
 out = noal.call('delphi_adb', {"command": "run", "app": "com.embarcadero.X"})
 check('sin lista: comando con device implicito RECHAZADO (fail closed)',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_DEVICE') and 'AdbAllowedDevices' in out, out[:250])
+out = noal.call('delphi_adb', {"command": "stopp"})
+check('un comando que no existe: la negativa lista stop (ADB-001)', mc.es(out, 'SR_ADB_CMD') and '| stop |' in out, out[:300])
 out = noal.call('delphi_adb', {"command": "stop", "app": "com.embarcadero.X"})
 check('sin lista: stop con device implicito, igual (V64)',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_DEVICE'), out[:250])

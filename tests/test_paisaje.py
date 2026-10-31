@@ -288,7 +288,9 @@ REGLAS = [
      r'\b(?:ExtractFileDir|ExtractFilePath|TPath\.GetDirectoryName)\s*\(\s*ParamStr\s*\(\s*0\s*\)',
      [('Lsp.Casa.pas', 'ServerDir'),
       # otro programa: la carpeta del NODO, no la del servidor
-      ('McpDesktopNode.dpr', '*')],
+      ('McpDesktopNode.dpr', '*'),
+      # otro programa: el ayudante mira a su lado, en la caja de paquetes
+      ('FormRender.Fmx.pas', 'AplicaEstilo')],
      'ServerDir: la casa tiene UN compositor (2.7 de la 1.18.0: LugaresProtegidos la escribia a mano)'),
     ('la carpeta de los informes o del correo sin el workspace', r'\bCarpetaDe(?:Informes|Mensajes)\b',
      [('Lsp.Casa.pas', '*')],
@@ -404,7 +406,7 @@ REGLAS = [
     # el CRT (git, adb, msbuild), ComillasSinEscape para lo que lee la RTL de Delphi y para el
     # programa (V115). Y las operaciones de paclient, cada una con su compositor (V222)
     ('una linea de orden con comillas a mano',
-     r"(?:RunCaptured\w*|RunDetached|RunAdb|CorreStyleConvert)\(.*'[^',]*\"[^',]*'\s*\+",
+     r"(?:RunCaptured\w*|RunDetached|RunAdb|CorreStyleConvert)\(.*'[^']*\"|:=\s*'-s\s+\"",
      # el -fo"r.res" de brcc32: una constante, la que siempre se le dio
      [('Mcp.Tools.Styles.pas', 'CompilaRcEnContenedor')],
      'Lsp.ProcessLaunch: EnComillas (CRT) y ComillasSinEscape (RTL de Delphi, y el programa)'),
@@ -1742,7 +1744,7 @@ PLANTADO = {
     'la propiedad que elige las partes de un componente': "  if P.EndsWith('ClassName', True) then",
     'la clave del IDE en el registro': "  if Reg.OpenKeyReadOnly('SOFTWARE\\Embarcadero\\BDS\\' + Ver) then",
     'el numero de un nombre mDNS de adb leido a mano': "  C := Pos(').', Nombre);",
-    'una linea de orden con comillas a mano': "  S := RunCaptured('\"' + Exe + '\" x', 1000, C);",
+    'una linea de orden con comillas a mano': "  S := RunCaptured(Format('\"%s\" x', [Exe]), 1000, C);",
     'una operacion de paclient compuesta a mano': "  Ops := '--put=' + A;",
     'la raiz mas honda escrita a mano': "  if RutaDentroDe(R, Full) and (Length(R) > Length(Mejor)) then",
     'un nombre suelto juzgado a mano': "  if TPath.GetFileName(Nombre) <> Nombre then",

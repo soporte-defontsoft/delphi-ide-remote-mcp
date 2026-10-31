@@ -23,8 +23,9 @@ the MCP `initialize` response (`serverInfo.version`).
   app. It force-stops what `run` can start, a Delphi FMX app, by the activity the device
   says it launches; any other package is refused (`ADB-033`) and left running.
 - **`delphi_designer layout` measures FMX forms.** It refused them (`DSGN-027`). Now the
-  renderer lays the form out and says where each control ends up: `boxes`, what has a zero
-  side and what sticks out of its parent. What overlaps is listed and does not take `clean`
+  renderer lays the form out and says where each control ends up, those inside a `TTabControl`,
+  a `TVertScrollBox` or a `TExpander` too: `boxes`, what has a zero side and what sticks out of
+  where it lives. What overlaps is listed and does not take `clean`
   away, because in FMX one control over another is how a form is composed. Without the
   renderer it still refuses, never `clean: true`.
 
@@ -32,14 +33,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - **`delphi_designer layout` of a VCL form gives the real rectangles.** `boxes` come from
   what the VCL resolved (`boxesFrom: renderer`), so a page of a `TPageControl` leaves out the
-  tab band; without the renderer they come from the text, as before (`boxesFrom: text`). What
-  it reports as a problem is still judged from the text. It now takes what a `preview` takes.
+  tab band; without the renderer, or if it takes over 30 s, they come from the text and
+  `boxesNote` says why (`boxesFrom: text`). What it reports as a problem is still judged from
+  the text. It now takes what a `preview` takes.
 - **A form whose ancestor or frame lives in another folder of the project is drawn and
   judged whole.** It came out partial (`RENDER-010`), the frame substituted, and the
   order judge refused it (`DSGN-143`). When the renderer says a class is missing and the
   project that lists the form's unit has it, the server brings that form along, judged
   like a sibling, literals included. With no project listing the unit, the form stays
-  partial and says so. Each folder crossed costs one more run of the renderer.
+  partial and says so; if what it brings makes the renderer fail, the partial form is the
+  answer and `DSGN-181` names it. A lone copy beside the form that its `uses` does not name
+  is not taken for the original. Each folder crossed costs one more run of the renderer.
 
 ### Fixed
 

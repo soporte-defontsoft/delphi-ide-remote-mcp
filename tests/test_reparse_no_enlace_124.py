@@ -5,7 +5,7 @@ un proyecto en un Documentos de OneDrive era todo enlaces (no se listaba, no se
 recorria, no se purgaba). Aqui no hay OneDrive; el mismo caso, sin escribir nada,
 son los alias de WindowsApps (etiqueta 8000001B, atributo 00000420):
 
-  R1 control: la maquina tiene un alias y es un punto de reparse sin el bit de enlace
+  (la etiqueta sin el bit de enlace la mide LspTests.Rutas; sin alias, no hay caso)
   R2 delphi_list lo enumera (ROJO en la 1.23.1: se saltaba como enlace)
   R3 una union de verdad sigue sin recorrerse: lo que hay detras no se lista
 
@@ -45,7 +45,6 @@ UNION = mc.junction(os.path.join(JAIL, 'union'), FUERA)
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL + ';' + ALIAS}), nombre='reparse-no-enlace', t=120)
 try:
-    check('R1 control: la maquina tiene un alias y es un punto de reparse', es_reparse(alias[0]), alias[0])
     r = srv.call('delphi_list', {'root': ALIAS, 'pattern': '*.exe'})
     try:
         nombres = [f['name'] for d in json.loads(r).get('folders', []) for f in d.get('files', [])]

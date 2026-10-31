@@ -186,7 +186,9 @@ handshake.
   or nothing, and a refusal says exactly what to do instead - including how
   to add by hand what insert cannot place (a non-visual component such as
   a TTimer: its block, its published field, its unit in the uses, then
-  `check-binding`).
+  `check-binding`). A frame of the project goes by `insert` too, by its class;
+  a new form or frame that inherits from one of the project is `delphi_create`
+  with `ancestor`.
 - After a form edit made with `delphi_edit`, run `delphi_designer lint
   path=<form>`: a property the class does not publish, or a value its type
   does not take, will not stream, and nobody tells you at build time.
@@ -442,10 +444,12 @@ profile=`, and `delphi_desktop profile=` deploys the node on its first gesture.
 
 Flow: `discover` (mDNS) -> `connect address=ip:port` -> `devices` ->
 `delphi_build target=Deploy` -> `install` -> `run` -> `logcat` ->
-`screenshot` -> `tap`/`key`.
+`screenshot` -> `tap`/`key` -> `stop` (force-stops what `run` starts: a hung
+app does not close with `key=back`).
 
 - Devices are allowlisted PER WORKSPACE (`AdbAllowedDevices`; absent =
-  none): always name your `device=` explicitly.
+  none): always name your `device=` explicitly, as `devices` lists it, a
+  name like `adb-X (2)._adb-tls-connect._tcp` included.
 - `logcat`: default 300 lines, inline answers carry the newest 400, at most
   64K characters.
   For the full dump pass `out=srvd:\...\dump.txt`, then read it in

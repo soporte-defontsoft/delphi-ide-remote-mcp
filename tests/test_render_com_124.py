@@ -5,21 +5,22 @@ COM de 32 bits hay 4 cuya clave InprocServer32 un contenedor no lee, las de ADO
 acceso denegado: TADOQuery no se creaba, salia en IGNORED= y el juez del orden no
 juzgaba ese form (DSGN-143). Su biblioteca si se lee, asi que la caja de paquetes
 le da esas clases en el manifiesto de su copia del ayudante. Que clases, lo dice el
-contenedor; este juego solo vale aqui mientras Windows las deje asi, y C0 lo mira.
+contenedor; si Windows dejara de esconderlas, C1-C3 seguirian verdes sin el arreglo, y
+C5 caeria: la copia ya no necesitaria manifiesto.
 
-  C0    la premisa, medida: el ayudante en su contenedor ve esas clases sin leer
   C1-C2 VCL: un form con ADO carga entero y el juez lo reordena
   C3    FMX: lo mismo al cargar
   C4    el ayudante original no se toca: el manifiesto es de la copia de la caja
+  C5    ...y la copia de la caja lo lleva
 
 ROJO contra un build sin el arreglo: C1, C2 y C3.
 
 Uso:  python tests/test_render_com_124.py [ruta-a-DelphiLspMcp.exe]
 """
 import ctypes
+import glob
 import json
 import os
-import subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -103,6 +104,9 @@ finally:
 
 check('C4 los ayudantes de la instalacion no llevan manifiesto: se lo pone la caja a su copia',
       not any(tiene_manifiesto(a) for a in AYUDANTES), AYUDANTES)
+COPIAS = glob.glob(os.path.join(os.path.dirname(EXE), mc.TEMPORALES, 'render-paquetes-*', 'DelphiFormRender*.exe'))
+check('C5 las copias de la caja llevan el manifiesto con esas clases',
+      len(COPIAS) == 2 and all(tiene_manifiesto(c) for c in COPIAS), COPIAS)
 
 mc.borra(BASE)
 mc.fin('un form con ADO carga y se juzga en el contenedor (V65)')

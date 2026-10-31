@@ -691,7 +691,8 @@ end;
   spills is reached by scrolling, not clipped. }
 function IsScrollBox(const ACls: string): Boolean;
 begin
-  Result := MatchText(ACls, ['TScrollBox', 'TFramedScrollBox']);
+  Result := MatchText(ACls, ['TScrollBox', 'TFramedScrollBox', 'TVertScrollBox', 'THorzScrollBox',
+    'TFramedVertScrollBox', 'TPresentedScrollBox']);
 end;
 
 { Grid containers place each child in a CELL by its ControlCollection, so every
@@ -719,12 +720,17 @@ begin
   Result := MatchText(ACls, ['TPageControl', 'TTabControl', 'TPageScroller']);
 end;
 
+const
+  LAYOUT_PLAZO_MS = 30000; // un form del NAS, 13 s (medido el 31-oct-2026)
+
 { Lo que dice el renderizador de donde queda cada control de APath: el juez de un
-  layout (V74 y V24 de la 1.24). Fallo en R.Fallo, por ejemplo sin renderizador. }
-function CajasDelRender(const APath: string): TRespuestaRender;
+  layout (V74 y V24 de la 1.24). Fallo en R.Fallo, por ejemplo sin renderizador.
+  APlazoMs, si hay otra respuesta que dar sin el. }
+function CajasDelRender(const APath: string; APlazoMs: Integer = 0): TRespuestaRender;
 begin
   var Pet := PeticionDeRender(APath, '');
   Pet.Cajas := True;
+  Pet.PlazoMs := APlazoMs;
   Result := CorreRender(Pet);
 end;
 
@@ -810,10 +816,15 @@ begin
             Continue;
           if (C.W = 0) or (C.H = 0) then
             Zero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [C.Ruta, C.Clase, Linea, IntToStr(C.W), IntToStr(C.H)]));
-          if not IsScrollBox(Padre.Clase) and ((C.X < Padre.X) or (C.Y < Padre.Y) or
-             (C.X + C.W > Padre.X + Padre.W) or (C.Y + C.H > Padre.Y + Padre.H)) then
+          // donde esta de verdad: el padre con nombre de un hijo de un TTabItem es su pestana
+          var DX := (if C.EnContenido then C.CX else Padre.X);
+          var DY := (if C.EnContenido then C.CY else Padre.Y);
+          var DW := (if C.EnContenido then C.CW else Padre.W);
+          var DH := (if C.EnContenido then C.CH else Padre.H);
+          if not IsScrollBox(Padre.Clase) and ((C.X < DX) or (C.Y < DY) or
+             (C.X + C.W > DX + DW) or (C.Y + C.H > DY + DH)) then
             Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [C.Ruta, C.Clase, Linea, C.X, C.Y, C.X + C.W, C.Y + C.H,
-              Padre.Ruta, Padre.W, Padre.H]));
+              Padre.Ruta, DW, DH]));
           if IsPageContainer(Padre.Clase) or IsAutoLayout(Padre.Clase) or IsGridPanel(Padre.Clase) then
             Continue;
           for var J := I + 1 to High(R.Cajas) do
@@ -1209,7 +1220,9 @@ begin
 
       // donde quedan de verdad, si el renderizador contesta: lo resuelto del texto es
       // aproximado (V24 de la 1.24)
-      var Medido := CajasDelRender(APath);
+      // con un plazo propio: aqui hay respuesta sin el, y un paquete que cuelga no
+      // puede costar lo que un preview
+      var Medido := CajasDelRender(APath, LAYOUT_PLAZO_MS);
       if Medido.Fallo = '' then
       begin
         for var B := 0 to Boxes.Count - 1 do
@@ -1230,7 +1243,10 @@ begin
         Ret.AddPair('boxesFrom', 'renderer');
       end
       else
+      begin
         Ret.AddPair('boxesFrom', 'text');
+        Ret.AddPair('boxesNote', MsgFmt(SN_DESIGNER_LAYOUT_DEL_TEXTO_FMT, [Medido.Fallo]));
+      end;
 
       // clean = sin problemas de layout; ok es "la llamada fue bien" (novena)
       Ret.AddPair('clean', TJSONBool.Create((Zero.Count = 0) and (Outside.Count = 0)

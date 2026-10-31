@@ -382,6 +382,31 @@ check('V74 un .fmx se mide con lo que resuelve FMX: Align Top y Client donde que
 check('V74b lo que se sale y lo de lado cero, dichos; clean false; un solape solo no lo quitaria',
       'Fuera' in json.dumps(j.get('outsideParent')) and 'Nulo' in json.dumps(j.get('zeroSize')) and j.get('clean') is False, r[:700])
 
+# lo que guardan en un contenido que no se guarda: un TTabControl, un TVertScrollBox, un TExpander
+os.makedirs(os.path.join(BASE, 'dentro'))
+def edit_fmx(nombre, x, y, w):
+    return ("      object %s: TEdit\n        TabOrder = 0\n        Position.X = %d.000000000000000000\n        Position.Y = %d.000000000000000000\n"
+            "        Size.Width = %d.000000000000000000\n        Size.Height = 22.000000000000000000\n        Size.PlatformDefault = False\n      end\n" % (nombre, x, y, w))
+p_dentro = os.path.join(BASE, 'dentro', 'D.fmx')
+open(p_dentro, 'w', newline='').write(
+    'object F: TF\n  ClientHeight = 480\n  ClientWidth = 640\n'
+    '  object Tab: TTabControl\n    Position.X = 10.000000000000000000\n    Position.Y = 10.000000000000000000\n'
+    '    Size.Width = 300.000000000000000000\n    Size.Height = 200.000000000000000000\n    Size.PlatformDefault = False\n    TabIndex = 0\n    TabOrder = 0\n'
+    "    object Item1: TTabItem\n      Text = 'A'\n" + edit_fmx('ECero', 5, 5, 0) + edit_fmx('EBien', 5, 40, 100) + edit_fmx('EFuera', 500, 40, 100) + '    end\n'
+    "    object Item2: TTabItem\n      Text = 'B'\n" + edit_fmx('EOtra', 5, 5, 100) + '    end\n  end\n'
+    '  object Scroll: TVertScrollBox\n    Position.X = 10.000000000000000000\n    Position.Y = 230.000000000000000000\n'
+    '    Size.Width = 200.000000000000000000\n    Size.Height = 100.000000000000000000\n    Size.PlatformDefault = False\n    TabOrder = 1\n'
+    + edit_fmx('ELejos', 5, 500, 100) + '  end\nend\n')
+r = call({'command': 'layout', 'path': p_dentro})
+j = json.loads(r) if r.startswith('{') else {}
+bx = {b['name']: b for b in j.get('boxes', [])}
+check('V74c FMX baja a lo que guardan un TTabControl y un TVertScrollBox: sus hijos salen, con su padre con nombre',
+      bx.get('ECero', {}).get('parent') == 'Item1' and bx.get('EOtra', {}).get('parent') == 'Item2' and bx.get('ELejos', {}).get('parent') == 'Scroll', r[:900])
+check('V74d lo de lado cero y lo que se sale de su pagina, dichos, con la pagina y no con la pestana; clean false',
+      'ECero' in json.dumps(j.get('zeroSize')) and 'EFuera' in json.dumps(j.get('outsideParent')) and j.get('clean') is False, r[:900])
+check('V74e lo que cabe en su pagina y lo que se alcanza con el scroll no se dicen',
+      not any(n in json.dumps(j.get('outsideParent')) for n in ('EBien', 'EOtra', 'ELejos')), r[:900])
+
 # (en su carpeta: el renderizador juzga los hermanos del form, y aqui los hay truncados a proposito)
 os.makedirs(os.path.join(BASE, 'paginas'))
 o = layout('paginas\\Paginas', "object FPag: TFPag\n  ClientWidth = 400\n  ClientHeight = 300\n  object PageControl1: TPageControl\n    Align = alClient\n    Width = 400\n    Height = 300\n    object TabSheet1: TTabSheet\n      Caption = 'A'\n      object B: TButton\n        Left = 8\n        Top = 8\n        Width = 75\n        Height = 25\n        TabOrder = 0\n      end\n    end\n  end\nend\n")

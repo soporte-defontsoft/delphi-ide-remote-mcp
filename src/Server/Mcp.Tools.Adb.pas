@@ -279,6 +279,21 @@ begin
     Result := Parecidos[0];
 end;
 
+{ Si el dispositivo lanza AApp por la actividad de una app FMX, en la salida de
+  resolve-activity --brief: su ultima linea es paquete/clase, y la clase va en forma
+  corta (.FMXNativeActivity) si empieza por el paquete (medido en una tablet con
+  com.embarcadero.firemonkey). }
+function LanzaLaActividadFmx(const ASalida, AApp: string): Boolean;
+begin
+  Result := False;
+  for var L in LineasDelTexto(ASalida) do
+  begin
+    var Trozos := L.Trim.Split(['/']);
+    if (Length(Trozos) = 2) and (Trozos[0] = AApp) then
+      Exit((Trozos[1] = ACTIVIDAD_FMX) or (AApp + Trozos[1] = ACTIVIDAD_FMX));
+  end;
+end;
+
 function TDelphiAdbTool.ExecuteWithParams(const Params: TDelphiAdbParams): string;
 var
   Cmd, Adb, Args, Output, L, Denied, DevArg: string;
@@ -536,7 +551,7 @@ begin
       30000, ExitCode);
     if ExitCode <> 0 then
       Exit(ResultadoAdb(Output, ExitCode));
-    if not Output.Contains(App + '/' + ACTIVIDAD_FMX) then
+    if not LanzaLaActividadFmx(Output, App) then
       Exit(MsgFmt(SR_ADB_STOP_NO_ES_FMX_FMT, [App]));
     Output := RunAdb(Adb, DevArg + 'shell am force-stop ' + App, 30000, ExitCode);
     if ExitCode = 0 then

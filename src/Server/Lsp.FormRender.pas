@@ -61,6 +61,9 @@ type
     ClasesSinLeer: Boolean;
     // --boxes: sin png, donde queda cada control (BOX=). Lo pone delphi_designer layout
     Cajas: Boolean;
+    // cuanto puede tardar cada ayudante, si no es RENDER_TIEMPO_MS: quien tiene otra
+    // respuesta que dar no espera lo que espera un preview
+    PlazoMs: Integer;
     // forms del proyecto, de otra carpeta, de las clases que el ayudante dijo que le
     // faltaban (ancestros y frames, V120b de la 1.24). Lo pone CorreRender
     Lejanos: TArray<string>;
@@ -99,6 +102,9 @@ type
     Ruta, Clase, Padre: string; // Padre: su ruta, '' si es la raiz
     X, Y, W, H: Integer;
     Visible: Boolean;
+    // donde esta de verdad, si no es su padre: el contenido de un TTabItem o un TScrollBox
+    EnContenido: Boolean;
+    CX, CY, CW, CH: Integer;
   end;
 
   TRespuestaRender = record
@@ -238,6 +244,9 @@ function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
   COPIADOS a la carpeta de esta llamada, lo que dice se traduce de vuelta a las
   rutas de verdad, y sin contenedor no se dibuja (DSGN-177). }
 function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
+{ Si esos bytes son un programa o una biblioteca, por su cabecera y no por su nombre:
+  de eso no se copia nada al lado del ayudante. }
+function EsEjecutable(const ABytes: TArray<Byte>): Boolean;
 
 { La ruta de un paquete de la lista del IDE (AValor, el nombre del valor en
   Known Packages: $(BDSBIN)\x.bpl o una ruta) con sus macros resueltas; una sin
@@ -636,9 +645,9 @@ begin
       Result.ClasesSinLeer := Result.ClasesSinLeer + [V]
     else if Es(FR_BOX) then
     begin
-      // <ruta>|<clase>|<padre>|<x>,<y>,<ancho>,<alto>|<visible>: un nombre no lleva '|'
+      // <ruta>|<clase>|<padre>|<x>,<y>,<ancho>,<alto>|<visible>|<contenido>: un nombre no lleva '|'
       Trozos := V.Split(['|']);
-      if Length(Trozos) = 5 then
+      if Length(Trozos) = 6 then
       begin
         var Medidas := Trozos[3].Split([',']);
         if Length(Medidas) = 4 then
@@ -652,6 +661,15 @@ begin
           Caja.W := StrToIntDef(Medidas[2], 0);
           Caja.H := StrToIntDef(Medidas[3], 0);
           Caja.Visible := Trozos[4] = '1';
+          var Contenido := Trozos[5].Split([',']);
+          Caja.EnContenido := Length(Contenido) = 4;
+          if Caja.EnContenido then
+          begin
+            Caja.CX := StrToIntDef(Contenido[0], 0);
+            Caja.CY := StrToIntDef(Contenido[1], 0);
+            Caja.CW := StrToIntDef(Contenido[2], 0);
+            Caja.CH := StrToIntDef(Contenido[3], 0);
+          end;
           Result.Cajas := Result.Cajas + [Caja];
         end;
       end;
@@ -926,6 +944,11 @@ end;
   y la sesion puede leer (un .avi de un TAnimate), relativo a ella y con su tope,
   para copiarselo: alli donde esta ya no lo alcanza. Solo se pregunta si existe
   por lo que la puerta deja leer, asi que no dice nada de fuera. }
+function EsEjecutable(const ABytes: TArray<Byte>): Boolean;
+begin
+  Result := (Length(ABytes) >= 2) and (ABytes[0] = Ord('M')) and (ABytes[1] = Ord('Z'));
+end;
+
 function LiteralesDeRenderDenegados(const APeticion: TPeticionRender; const AEtapa: string;
   out AJunto: TArray<string>): string;
 const
@@ -977,7 +1000,9 @@ var
     begin
       var Tam: Int64;
       var Fecha: TDateTime;
-      if HuellaDeFichero(Ruta, Tam, Fecha) and (BytesJunto + Tam <= TOPE_JUNTO_BYTES) then
+      // un programa no es lo que un form lee: el ayudante no carga nada que no sea del IDE
+      if not RutaEnLista(Trozo, AJunto) and HuellaDeFichero(Ruta, Tam, Fecha) and
+         (BytesJunto + Tam <= TOPE_JUNTO_BYTES) and not EsEjecutable(LeeBytes(Ruta, LUGARES_DEL_MOTOR)) then
       begin
         Inc(BytesJunto, Tam);
         AJunto := AJunto + [Trozo];
@@ -1284,6 +1309,30 @@ const
 
 var
   GCajaDePaquetes: TObject;
+  GUsosDeCaja: TDictionary<string, Integer>; // los ayudantes que usan cada generacion, bajo ese cerrojo
+
+{ El ayudante que usaba ACaja ya acabo. }
+procedure SueltaCaja(const ACaja: string);
+begin
+  System.TMonitor.Enter(GCajaDePaquetes);
+  try
+    var Usos: Integer;
+    if GUsosDeCaja.TryGetValue(ClaveDeRuta(ACaja), Usos) then
+      if Usos > 1 then
+        GUsosDeCaja[ClaveDeRuta(ACaja)] := Usos - 1
+      else
+        GUsosDeCaja.Remove(ClaveDeRuta(ACaja));
+  finally
+    System.TMonitor.Exit(GCajaDePaquetes);
+  end;
+end;
+
+function PlazoDeRender(const APeticion: TPeticionRender): Integer;
+begin
+  Result := APeticion.PlazoMs;
+  if Result <= 0 then
+    Result := RENDER_TIEMPO_MS;
+end;
 
 { LA CAJA DE PAQUETES: los .bpl y .dll que un contenedor no leeria donde estan
   (la carpeta publica del IDE, las de terceros; las del sistema si las lee: es
@@ -1297,7 +1346,7 @@ function CajaDePaquetes(const AInfo: TRadStudioInfo; out ACaja, APath: string;
   out APaquetes: TArray<string>): string;
 var
   Fuentes: TDictionary<string, string>;
-  Vistas, Ayudantes, PathDelServidor: TArray<string>;
+  Vistas, Ayudantes, PathDelServidor, Claves: TArray<string>;
 
   // los ficheros de ACarpeta con esa mascara. Por EntradasDeCarpeta y no por
   // WalkFiles: esto es trabajo del servidor con la instalacion, no lo que nombra
@@ -1328,6 +1377,20 @@ var
     Vistas := Vistas + [ACarpeta];
     Mira(ACarpeta, '*.bpl');
     Mira(ACarpeta, '*.dll');
+  end;
+
+  // el que no se pueda copiar sale como cualquier paquete que falta, y se vuelve a
+  // intentar en la llamada siguiente: no es de esta generacion dejarlo fuera
+  procedure CopiaLoQueFalta(const ACarpeta: string);
+  begin
+    for var K in Claves do
+      if not TFile.Exists(TPath.Combine(ACarpeta, TPath.GetFileName(Fuentes[K]))) then
+        try
+          TFile.Copy(Fuentes[K], TPath.Combine(ACarpeta, TPath.GetFileName(Fuentes[K])));
+        except
+          on E: Exception do
+            TLogger.Warning(MsgFmt(SL_RENDER_PAQUETE_SIN_COPIAR_FMT, [Fuentes[K], E.Message]));
+        end;
   end;
 
   // lo que un contenedor con el ayudante en ACarpeta encuentra por el PATH: esa
@@ -1372,7 +1435,7 @@ begin
         if not LoLeeElContenedor(D) and (Length(Lista(D, '*.bpl')) > 0) then
           MiraCarpeta(D);
       // la generacion: nombre, tamano y fecha de lo que lleva
-      var Claves := Fuentes.Keys.ToArray;
+      Claves := Fuentes.Keys.ToArray;
       TArray.Sort<string>(Claves);
       var Sello := '';
       for var K in Claves do
@@ -1390,29 +1453,40 @@ begin
         begin
           // entera o ninguna: se llena al lado y entra de un renombre
           var Nueva := ACaja + '.' + FragmentoUnico;
-          CrearCarpeta(Nueva);
-          var Err := PreparaCarpetaParaLosContenedores(Nueva);
-          if Err <> 0 then
-            RaiseLastOSError(Err);
-          for var K in Claves do
+          try
+            CrearCarpeta(Nueva);
+            var Err := PreparaCarpetaParaLosContenedores(Nueva);
+            if Err <> 0 then
+              RaiseLastOSError(Err);
+            CopiaLoQueFalta(Nueva);
+            DaSusClasesAlContenedor(Nueva, SuPath(Nueva), Ayudantes);
+            if not MoveFile(PChar(Nueva), PChar(ACaja)) then
+              RaiseLastOSError;
+          except
             try
-              TFile.Copy(Fuentes[K], TPath.Combine(Nueva, TPath.GetFileName(Fuentes[K])));
+              BorraArbol(Nueva);
             except
-              // el que no se pueda copiar sale como cualquier paquete que falta
-              on E: Exception do
-                TLogger.Warning(MsgFmt(SL_RENDER_PAQUETE_SIN_COPIAR_FMT, [Fuentes[K], E.Message]));
+              // la purga del arranque se la lleva
             end;
-          DaSusClasesAlContenedor(Nueva, SuPath(Nueva), Ayudantes);
-          if not MoveFile(PChar(Nueva), PChar(ACaja)) then
-            RaiseLastOSError;
-          // las generaciones viejas: una en uso se queda para la proxima
+            raise;
+          end;
+          // las generaciones viejas, las que ningun ayudante usa: borrar una en uso
+          // la dejaba a medias, y si volvia ese conjunto se usaba con agujeros
           for var D in EntradasDeCarpeta(ServerTempDir) do
-            if TPath.GetFileName(D).StartsWith(PREFIJO_CAJA_DE_PAQUETES) and not SameFileName(D, ACaja) then
+            if TPath.GetFileName(D).StartsWith(PREFIJO_CAJA_DE_PAQUETES) and not SameFileName(D, ACaja) and
+               not GUsosDeCaja.ContainsKey(ClaveDeRuta(D)) then
               try
                 BorraArbol(D); // sin cruzar enlaces: ver Lsp.Guard
               except
               end;
-        end;
+        end
+        else
+          // lo que no se pudo copiar otra vez, o lo que se llevo una purga a medias
+          CopiaLoQueFalta(ACaja);
+        var Usos: Integer;
+        if not GUsosDeCaja.TryGetValue(ClaveDeRuta(ACaja), Usos) then
+          Usos := 0;
+        GUsosDeCaja.AddOrSetValue(ClaveDeRuta(ACaja), Usos + 1);
       finally
         System.TMonitor.Exit(GCajaDePaquetes);
       end;
@@ -1491,17 +1565,18 @@ end;
   nuestra casa ni CambioEnLoLeido relee una copia. '' o el fallo; lo demas lo
   juzga quien llama. }
 function CorreEnSuContenedor(const APeticion: TPeticionRender; const AExe: string;
-  out ASalida: string; out ACodigo: Cardinal): string;
+  out ASalida: string; out ACodigo: Cardinal; out AVencido: Boolean): string;
 var
   AC: TContenedor;
   Etapa, Caja, PathHijo, Orden, Origen: string;
   Paquetes, Junto: TArray<string>;
   Err: DWORD;
-  Vencido: Boolean;
 begin
   Result := '';
   ASalida := '';
   ACodigo := 0;
+  AVencido := False;
+  Caja := '';
   Err := CreaContenedor(AC);
   if Err <> 0 then
     Exit(MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
@@ -1542,7 +1617,7 @@ begin
       Result := ComponeOrdenDeRender(TPath.Combine(Caja, TPath.GetFileName(AExe)), Pet, Orden);
       if Result <> '' then
         Exit;
-      ASalida := RunCapturedEnContenedor(Orden, Etapa, AC, RENDER_TIEMPO_MS, ACodigo, Vencido,
+      ASalida := RunCapturedEnContenedor(Orden, Etapa, AC, PlazoDeRender(APeticion), ACodigo, AVencido,
         phConsola, EntornoSinConfiguracion(['PATH=' + PathHijo]));
       Origen := TPath.GetDirectoryName(APeticion.Path);
       if APeticion.Carpeta <> '' then
@@ -1561,10 +1636,15 @@ begin
       if (APeticion.Salida <> '') and TFile.Exists(Pet.Salida) then
         ColocaProducto(Pet.Salida, APeticion.Salida, ltTemporal);
     except
+      // sin Job no corre: fail-closed, y no es cosa de delphi_test
+      on E: ETestNoConfinado do
+        Result := MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [SinNuestraCasa(E.Message)]);
       on E: Exception do
         Result := MsgFmt(SR_DESIGNER_RENDER_NO_ARRANCA_FMT, [TPath.GetFileName(AExe), SinNuestraCasa(E.Message)]);
     end;
   finally
+    if Caja <> '' then
+      SueltaCaja(Caja);
     BorraContenedor(AC);
     try
       ReclamaArbol(Etapa); // una carpeta que dejo cerrada el codigo de un paquete
@@ -1608,6 +1688,14 @@ var
   Codigo: Cardinal;
   Reloj: TStopwatch;
   Pet: TPeticionRender;
+  Vencido: Boolean;
+
+  function Salio(const AR: TRespuestaRender): Boolean;
+  begin
+    Result := (Codigo = FR_RC_OK) and (AR.Error = '') and not AR.NoCarga and
+      (if APeticion.Escribe then Length(AR.Escrito) > 0
+       else APeticion.Cajas or TFile.Exists(APeticion.Salida));
+  end;
 
   // el fallo del ayudante con su por que: no dibujo el form o, con --convert,
   // no lo convirtio (V71: ahi el form es una copia nuestra, y se nombra el
@@ -1615,7 +1703,7 @@ var
   function FalloDelAyudante(const APorQue: string): string;
   begin
     if APeticion.Convierte <> '' then
-      Result := MsgEnvuelve(SR_DSGN_CONVERSOR_FALLO_FMT, APorQue, [Nombre, APorQue])
+      Result := MsgEnvuelve(SR_DSGN_CONVERSOR_FALLO_FMT, SinNuestraCasa(APorQue), [Nombre, SinNuestraCasa(APorQue)])
     else
       Result := MsgEnvuelve(SR_DESIGNER_RENDER_FALLO_FMT, APorQue, [TPath.GetFileName(APeticion.Path), APorQue]);
   end;
@@ -1625,22 +1713,44 @@ begin
   Exe := FormRenderExe(APeticion.Framework, Nombre);
   if Exe = '' then
   begin
-    Result.Fallo := MsgFmt(SR_DESIGNER_SIN_RENDER_FMT, [Nombre, ServerDir('')]);
+    Result.Fallo := MsgFmt(SR_DESIGNER_SIN_RENDER_FMT, [Nombre]);
     Exit;
   end;
   Reloj := TStopwatch.StartNew;
   Pet := APeticion;
+  var Buena := Default(TRespuestaRender);
+  var HayBuena := False;
+  var CodigoBueno: Cardinal := 0;
+  var LoTraido: TArray<string> := [];
   for var Vuelta := 0 to VUELTAS_POR_LO_LEJANO do
   begin
-    Fallo := CorreEnSuContenedor(Pet, Exe, Salida, Codigo);
+    Fallo := CorreEnSuContenedor(Pet, Exe, Salida, Codigo, Vencido);
     if Fallo <> '' then
     begin
       Result.Fallo := Fallo;
       Exit;
     end;
     Result := LeeRespuestaDeRender(Salida);
-    // lo que le falto y el proyecto tiene en otra carpeta: otra vuelta con ello
-    if (Vuelta = VUELTAS_POR_LO_LEJANO) or (APeticion.Convierte <> '') then
+    // lo que se trajo hizo fallar al ayudante: el form a medias que ya salio es mejor
+    // respuesta que un fallo, y dice que no entro
+    if HayBuena and not Salio(Result) then
+    begin
+      Result := Buena;
+      Codigo := CodigoBueno;
+      Vencido := False;
+      Result.Avisos := Result.Avisos + [MsgFmt(SN_DESIGNER_LEJANO_NO_ENTRO_FMT, [string.Join(', ', LoTraido)])];
+      Break;
+    end;
+    if Salio(Result) then
+    begin
+      Buena := Result;
+      HayBuena := True;
+      CodigoBueno := Codigo;
+    end;
+    // lo que le falto y el proyecto tiene en otra carpeta: otra vuelta con ello, si
+    // queda tiempo: el plazo es de la llamada y no de cada vuelta
+    if (Vuelta = VUELTAS_POR_LO_LEJANO) or (APeticion.Convierte <> '') or
+       (Reloj.ElapsedMilliseconds >= PlazoDeRender(APeticion)) then
       Break;
     var Nuevos: TArray<string> := [];
     for var F in FormsLejanos(APeticion, Result.SinLeer + Result.Sustituidas) do
@@ -1649,6 +1759,9 @@ begin
     if Length(Nuevos) = 0 then
       Break;
     Pet.Lejanos := Pet.Lejanos + Nuevos;
+    LoTraido := [];
+    for var F in Nuevos do
+      LoTraido := LoTraido + [TPath.GetFileName(F)];
   end;
   Result.Codigo := Codigo;
   Result.MsTotal := Reloj.ElapsedMilliseconds;
@@ -1656,6 +1769,7 @@ begin
      (if APeticion.Escribe then Length(Result.Escrito) > 0
       else APeticion.Cajas or TFile.Exists(APeticion.Salida)) then
     Exit;
+  // (no por Salio: un NOTLOADED con codigo bueno y sin imagen sale por su rama)
   // el LECTOR no cargo el form (NOTLOADED=): es el fichero, y se dice con lo
   // que dijo y su linea. Salia como DSGN-061 INTERNAL, y con un valor que el
   // Ignore se saltaba, solo "Stream read error" (DSGN-061 de la 1.20, Hermes)
@@ -1692,11 +1806,11 @@ begin
   else if (Codigo = STATUS_DLL_NOT_FOUND_) or (Codigo = STATUS_ENTRYPOINT_NOT_FOUND_) or
     (Codigo = STATUS_INVALID_IMAGE_FORMAT_) then
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_SIN_BPL_FMT, [Nombre, APeticion.Bds, Codigo])
-  else if (Result.MsTotal >= RENDER_TIEMPO_MS) and (APeticion.Convierte <> '') then
+  else if Vencido and (APeticion.Convierte <> '') then
     // el conversor no carga el form: "algo del form espera" no es su causa (V102)
-    Result.Fallo := FalloDelAyudante(MsgFmt(SF_DSGN_CONVERSOR_TIEMPO_FMT, [RENDER_TIEMPO_MS div 1000]))
-  else if Result.MsTotal >= RENDER_TIEMPO_MS then
-    Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_TIEMPO_FMT, [Nombre, RENDER_TIEMPO_MS div 1000])
+    Result.Fallo := FalloDelAyudante(MsgFmt(SF_DSGN_CONVERSOR_TIEMPO_FMT, [PlazoDeRender(APeticion) div 1000]))
+  else if Vencido then
+    Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_TIEMPO_FMT, [Nombre, PlazoDeRender(APeticion) div 1000])
   else
     Result.Fallo := FalloDelAyudante(MsgFmt(SF_DESIGNER_RENDER_SIN_RESPUESTA_FMT,
       [Codigo, PrincipioDeTexto(Salida.Trim, 300)]));
@@ -1981,8 +2095,10 @@ end;
 
 initialization
   GCajaDePaquetes := TObject.Create;
+  GUsosDeCaja := TDictionary<string, Integer>.Create;
 
 finalization
+  GUsosDeCaja.Free;
   GCajaDePaquetes.Free;
 
 end.

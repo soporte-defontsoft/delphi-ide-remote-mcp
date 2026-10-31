@@ -53,6 +53,8 @@ type
     procedure RutaDeComponenteConLaRaizDelante;
     [Test]
     procedure LaCabezaYSusPartesTienenUnLector;
+    [Test]
+    procedure UnProgramaSeReconocePorSuCabecera;
   end;
 
 { Una UNION de carpeta (punto de montaje) AUnion -> ADestino, para las pruebas
@@ -751,6 +753,14 @@ begin
   Assert.AreEqual('el texto', R.Parada.Texto);
   R := LeeRespuestaDeRender(FR_IGNORED + 'mensaje sin partes'#13#10);
   Assert.AreEqual('mensaje sin partes', R.Ignoradas[0].Texto, 'IGNORED=, igual');
+end;
+
+procedure TFormRenderTests.UnProgramaSeReconocePorSuCabecera;
+begin
+  Assert.IsTrue(EsEjecutable(TEncoding.ASCII.GetBytes('MZ'#144#0)));
+  Assert.IsFalse(EsEjecutable(TEncoding.ASCII.GetBytes('RIFF....AVI ')));
+  Assert.IsFalse(EsEjecutable(TEncoding.ASCII.GetBytes('M')));
+  Assert.IsFalse(EsEjecutable(nil));
 end;
 
 initialization

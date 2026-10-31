@@ -45,8 +45,9 @@
                                  // nombre del metodo de un evento (no hay codigo) o una referencia a un
                                  // componente que no resolvio en el form (la de otro modulo). El escritor no
                                  // lo escribe, y el servidor conserva esa linea (1.22.1)
-  FR_BOX = 'BOX=';               // BOX=<ruta>|<clase>|<ruta del padre>|<x>,<y>,<ancho>,<alto>|<visible 0|1> (repetible;
-                                 // --boxes): cada control, donde queda de verdad, en coordenadas del form (V74, V24)
+  FR_BOX = 'BOX=';               // BOX=<ruta>|<clase>|<ruta del padre>|<x>,<y>,<ancho>,<alto>|<visible 0|1>|<contenido> (repetible;
+                                 // --boxes): cada control, donde queda de verdad, en coordenadas del form (V74, V24);
+                                 // <contenido>, x,y,ancho,alto de donde esta si no es su padre (un TTabItem), o vacio
   FR_UNREADABLE_CLASS = 'UNREADABLECLASS='; // UNREADABLECLASS=<clsid> (repetible; --unreadableclasses): una clase
                                  // COM cuya clave InprocServer32 no se deja leer desde el contenedor
   FR_MS = 'MS=';                 // MS=<carga>,<pintado> en milisegundos

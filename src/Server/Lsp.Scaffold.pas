@@ -1080,7 +1080,7 @@ begin
       Exit(MsgFmt(SR_CREATE_ANCESTRO_NO_ESTA_FMT, [AAncestro.Trim, TPath.GetFileName(ADprPath)]));
     Ancestro := Candidatos[0];
     var Raiz := RaizDeDesigner(Ancestro.Designer);
-    if (Raiz <> rdDesconocida) and ((Raiz = rdFrame) <> Kind.StartsWith('frame')) then
+    if (Raiz <> rdDesconocida) and ((Raiz = rdModulo) or ((Raiz = rdFrame) <> Kind.StartsWith('frame'))) then
       Exit(MsgFmt(SR_CREATE_ANCESTRO_OTRA_RAIZ_FMT, [Ancestro.Clase, AKind]));
   end;
 

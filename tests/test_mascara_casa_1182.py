@@ -68,8 +68,8 @@ try:
     check('C1 delphi_workspace: server.exe es <server>\\DelphiLspMcp.exe, sin la carpeta del servidor en ninguna forma',
           exe == '<server>\\DelphiLspMcp.exe' and not nombra(r, SRV), (exe, nombra(r, SRV)))
     r = srv.call('delphi_designer', {'command': 'preview', 'path': FORM})
-    check('C2 DSGN-060 (sin los renderizadores) dice <server>, no la carpeta del servidor',
-          mc.es(r, 'SR_DESIGNER_SIN_RENDER_FMT') and '<server>' in r and not nombra(r, SRV),
+    check('C2 DSGN-060 (sin los renderizadores): sin la carpeta del servidor, ni enmascarada',
+          mc.es(r, 'SR_DESIGNER_SIN_RENDER_FMT') and '<server>' not in r and not nombra(r, SRV),
           (r[:300], nombra(r, SRV)))
     r = srv.call('delphi_read', {'path': CITA})
     check('C3 el contenido no se enmascara: la ruta real del servidor citada en un fichero sale tal cual',

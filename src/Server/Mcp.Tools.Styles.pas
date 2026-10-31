@@ -806,7 +806,9 @@ begin
       Defaults.AddOrSetValue(D, '');
     Standard := 0;
     Used := 0;
-    var Mirados := 0;
+    var FmxMirados := 0;
+    var PasMirados := 0;
+    var Negados := 0;
     if TDirectory.Exists(ProjDir) then
       // por EL recorredor, como el de los .rc de abajo: no baja por un enlace
       // a lo que no se puede leer y una carpeta ilegible no corta el paseo (la
@@ -820,8 +822,14 @@ begin
         if not (F.EndsWith('.fmx', True) or F.EndsWith('.pas', True)) then
           Continue;
         if ReadPathDenied(F) <> '' then
+        begin
+          Inc(Negados);
           Continue;
-        Inc(Mirados);
+        end;
+        if F.EndsWith('.fmx', True) then
+          Inc(FmxMirados)
+        else
+          Inc(PasMirados);
         // El lector de la CASA, con el encoding REAL. Leia como UTF-8
         // estricto "porque los lookups son ASCII" - pero el FICHERO no lo es:
         // un solo .pas en CP1252 con un acento tumbaba el lint entero con
@@ -1090,8 +1098,8 @@ begin
     Ret.AddPair('styleNames', TJSONNumber.Create(Names.Count));
     Ret.AddPair('lookupsUsed', TJSONNumber.Create(Used));
     Ret.AddPair('lookupsStandard', TJSONNumber.Create(Standard));
-    if Mirados = 0 then
-      Ret.AddPair('noFormsNote', MsgText(SN_STYLES_SIN_FORMS));
+    if (FmxMirados = 0) and (Used = 0) then
+      Ret.AddPair('noFormsNote', MsgFmt(SN_STYLES_SIN_FORMS_FMT, [FmxMirados, PasMirados, Negados]));
     Ret.AddPair('duplicatedStyleNames', Dups);
     Ret.AddPair('lookupsWithoutStyle', Missing);
     Ret.AddPair('tokensMissing', Tokens);

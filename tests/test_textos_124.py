@@ -81,7 +81,10 @@ try:
     r = srv.call('delphi_styles', {'command': 'lint', 'path': os.path.dirname(PLANO), 'project': os.path.join(JAIL, 'vacio')}, t=120)
     j = J(r)
     check('T2 V157 un project sin forms: lookupsUsed 0 y lo dice (STYLE-064)',
-          j.get('lookupsUsed') == 0 and mc.es(j.get('noFormsNote', ''), 'SN_STYLES_SIN_FORMS'), r[:500])
+          j.get('lookupsUsed') == 0 and mc.es(j.get('noFormsNote', ''), 'SN_STYLES_SIN_FORMS_FMT'), r[:500])
+    escribe('solopas\\U.pas', 'unit U;\ninterface\nimplementation\nend.\n')
+    r = srv.call('delphi_styles', {'command': 'lint', 'path': os.path.dirname(PLANO), 'project': os.path.join(JAIL, 'solopas')}, t=120)
+    check('T2c un .pas sin ningun .fmx: tampoco miro un form, y lo dice', mc.es(J(r).get('noFormsNote', ''), 'SN_STYLES_SIN_FORMS_FMT'), r[:500])
     escribe('confrm\\U.fmx', "object Form1: TForm1\n  Left = 0\n  Top = 0\n  ClientHeight = 100\n  ClientWidth = 100\nend\n")
     r = srv.call('delphi_styles', {'command': 'lint', 'path': os.path.dirname(PLANO), 'project': os.path.join(JAIL, 'confrm')}, t=120)
     check('T2b con un form mirado no sale', bool(J(r)) and 'noFormsNote' not in J(r), r[:500])
@@ -101,10 +104,11 @@ try:
           mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT') and '1 StyleLookup' in r, r[:600])
     escribe('fo\\UFo.pas', 'unit UFo;\n\ninterface\n\nuses\n  System.Classes, FMX.Forms, FMX.Controls, FMX.StdCtrls, FMX.Types;\n\ntype\n'
             '  TForm2 = class(TForm)\n    Button1: TButton;\n  end;\n\nimplementation\n\n{$R *.fmx}\n\nend.\n')
+    # con un StyleLookup: el T4b sin el pasaba igual sin la condicion del StyleBook
     FORM = escribe('fo\\UFo.fmx', "object Form2: TForm2\n  Left = 0\n  Top = 0\n  ClientHeight = 100\n  ClientWidth = 100\n"
-                   "  object Button1: TButton\n    TabOrder = 0\n    Text = 'B'\n  end\nend\n")
+                   "  object Button1: TButton\n    StyleLookup = 'cardstyle'\n    TabOrder = 0\n    Text = 'B'\n  end\nend\n")
     r = srv.call('delphi_designer', {'command': 'lint', 'path': FORM}, t=240)
-    check('T4b un form sin StyleLookup: nada', not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT'), r[:400])
+    check('T4b un form corriente con StyleLookup y sin StyleBook: se juzga, no sale DSGN-178', not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT'), r[:400])
 
     # ---- T6: edits con occurrence en un form: en que objeto cayo
     DOS = escribe('dos\\UDos.dfm', "object FormDos: TFormDos\n  Left = 0\n  Top = 0\n  Caption = 'D'\n  ClientHeight = 200\n  ClientWidth = 300\n"

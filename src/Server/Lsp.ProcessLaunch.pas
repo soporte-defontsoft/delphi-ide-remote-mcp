@@ -43,9 +43,10 @@ function EnComillas(const AValor: string): string;
 { UN argumento para quien NO lee la barra como escape: el programa en la linea
   de CreateProcess y lo que lee la RTL de Delphi - paclient y nuestros ayudantes
   -. Medido en su fuente (System.GetParamStr): una comilla abre y cierra y nada
-  mas, asi que EnComillas, que dobla la barra final, ahi cambiaria el valor. Una
-  comilla dentro no cabe: quien llama ya la nego. Un compositor por analizador:
-  estaban a mano por las unidades (V115). }
+  mas, asi que EnComillas, que dobla la barra final, ahi cambiaria el valor. Y un
+  /p: de msbuild, que parte por ',' y ';' lo que va sin comillas y EnComillas no se
+  las pone. Una comilla dentro no cabe: quien llama ya la nego. Un compositor por
+  analizador: estaban a mano por las unidades (V115). }
 function ComillasSinEscape(const AValor: string): string;
 
 { La ruta completa de APrograma, con su extension ('msbuild.exe'), en las

@@ -78,6 +78,11 @@ try:
     r = crea(kind='form-vcl', name='UNada', project=DPROJ, ancestor='TFrame1')
     check('H6 un frame de ancestro de una form: CREATE-039, nada creado',
           mc.abre(r, 'SR_CREATE_ANCESTRO_OTRA_RAIZ_FMT') and not os.path.exists(os.path.join(DIR, 'UNada.pas')), r[:300])
+    r = crea(kind='datamodule', name='UDatos', project=DPROJ, formname='Datos1', dir='datos')
+    check('fixture: un data module', not mc.rechazado(r), r[:200])
+    r = crea(kind='form-vcl', name='UNada', project=DPROJ, ancestor='TDatos1')
+    check('H6b un data module de ancestro de una form: CREATE-039 (su form llevaria un Caption que no publica), nada creado',
+          mc.abre(r, 'SR_CREATE_ANCESTRO_OTRA_RAIZ_FMT') and not os.path.exists(os.path.join(DIR, 'UNada.pas')), r[:300])
     r = crea(kind='unit', name='UNada', project=DPROJ, ancestor='TFormBase')
     check('H7 ancestor con kind=unit: se dice, no se ignora', mc.abre(r, 'SR_CREATE_NO_VA_CON_KIND_FMT') and 'ancestor' in r, r[:300])
 

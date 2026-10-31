@@ -2957,7 +2957,7 @@ const
 
   SR_ADB_CMD =
     '[ADB-001 INVALID_PARAM] Command must be discover | devices | ' +
-    'connect | disconnect | install | run | logcat | screenshot | tap | ' +
+    'connect | disconnect | install | run | stop | logcat | screenshot | tap | ' +
     'key';
 
   { El "out" de TODA la familia de capturas (delphi_desktop, delphi_adb_linux,
@@ -3143,8 +3143,8 @@ const
 
   SR_ADB_TARGET_FMT =
     '[ADB-018 INVALID_PARAM] "%s" is not valid as a device address or serial. ' +
-    'Use letters, digits, ".", ":", "_" and "-" (like the ones ' +
-    'command=devices lists).';
+    'Use letters, digits, ".", ":", "_" and "-", and as a device the name exactly as ' +
+    'command=devices lists it, the " (2)" adb may number it with included.';
 
   SN_ADB_DEVICES =
     '[ADB-019] These devices hang off the SERVER machine. Attach one ' +
@@ -4270,9 +4270,9 @@ const
   SN_STYLES_COLOR_SIN_X =
     ' [STYLE-063] A color goes as x and its AARRGGBB digits, as xFFF6ECDB.';
   { El lint no miro ningun form: lookupsUsed 0 no dice que esten bien (V157) }
-  SN_STYLES_SIN_FORMS =
-    '[STYLE-064] No .fmx or .pas under projectDir: this lint judged no form, and ' +
-    'lookupsUsed 0 says nothing of the project. project= takes its .dproj or folder.';
+  SN_STYLES_SIN_FORMS_FMT =
+    '[STYLE-064] No .fmx read under projectDir (%d .fmx and %d .pas read, %d refused by ' +
+    'the jail): lookupsUsed 0 says nothing of the forms. project= takes its .dproj or folder.';
   SN_STYLES_FMX_IGNORA_FMT =
     '[STYLE-051] FMX ignores %d thing(s) of these text styles when it loads ' +
     'them ("ignored"): a property the class does not publish, a value it ' +
@@ -5514,8 +5514,8 @@ const
 
   { delphi_designer command=preview: el renderizador (Lsp.FormRender) }
   SR_DESIGNER_SIN_RENDER_FMT =
-    '[DSGN-060 INTERNAL] The form renderer %s is not next to the server ' +
-    '(%s). It ships in the release zip beside DelphiLspMcp.exe; the ' +
+    '[DSGN-060 INTERNAL] The form renderer %s is not next to the server. ' +
+    'It ships in the release zip beside DelphiLspMcp.exe; the ' +
     'operator copies it there. tree, get, lint and layout read a text form ' +
     'without it (a binary one, it converts as the IDE does).';
 
@@ -6953,6 +6953,13 @@ const
     'judged. "overlapping" does not take clean away: in FMX one control over another ' +
     'is how a form is composed, so read it as a list to check against preview.';
 
+  SN_DESIGNER_LEJANO_NO_ENTRO_FMT =
+    '[DSGN-181] Drawn without %s, from another folder of the project: with it the ' +
+    'renderer failed. Preview that file on its own to see why.';
+
+  SN_DESIGNER_LAYOUT_DEL_TEXTO_FMT =
+    '[DSGN-182] These boxes are worked out from the text, not measured: %s';
+
   SN_DESIGNER_LAYOUT_A_MEDIAS_FMT =
     '[DSGN-180] Measured without %s: the renderer could not load them, so what they ' +
     'would hold or move is not here.';
@@ -7270,9 +7277,9 @@ const
     'in full (%s), as the IDE writes it, is not affected.';
   { El ancestro de un form o frame que se crea (V76 de la 1.24) }
   SR_CREATE_ANCESTRO_NO_ESTA_FMT =
-    '[CREATE-038 NOT_FOUND] %s is not the class of a form or frame that %s lists, ' +
-    'with its file where it says and readable. Nothing created. delphi_config view ' +
-    'section=units lists them.';
+    '[CREATE-038 NOT_FOUND] %s is not the class of a form or frame that %s lists as ' +
+    'the IDE does (its {Form1} comment, the class named T + that), with its file where ' +
+    'it says and readable. Nothing created. delphi_config view section=units lists them.';
   SR_CREATE_ANCESTRO_OTRA_RAIZ_FMT =
     '[CREATE-039 INVALID_PARAM] %s cannot be the ancestor of a kind=%s: a form inherits ' +
     'from a form and a frame from a frame. Nothing created.';

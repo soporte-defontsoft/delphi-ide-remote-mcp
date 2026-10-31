@@ -78,6 +78,7 @@ type
     FCarpeta: string;
     FDesconocida: string;
     FFramePendiente: string;      // el fichero del frame inline que toca crear
+    FLeyendo: string;             // el fichero que se esta leyendo, el que nombra las clases
     FClaseFrame: string;          // y la clase con la que lo escribe el fichero
     FPorClase: TDictionary<string, TArray<string>>; // clase raiz -> sus ficheros, en la carpeta
     FNoCargan: TStringList;       // los de la carpeta que el lector del IDE no toma por texto (A28 de la 1.23)
@@ -218,7 +219,8 @@ function ListaClasesSinLeer: Integer;
   lo de dentro de un control, que el form no escribe. }
 function RutaDeComponente(ARaiz, AComp: TComponent): string;
 { EL escritor de BOX=, el que lee Lsp.FormRender.LeeRespuestaDeRender }
-procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean);
+procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean;
+  const AContenido: string = '');
 { Lo que el cargador dice de lo leido, igual en los dos renderizadores:
   SUBSTITUTED=, IGNORED=, WARNING=, PARTIAL= y READ= }
 procedure RespondeLoLeido(ACargador: TCargador);
@@ -564,9 +566,10 @@ begin
   end;
 end;
 
-procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean);
+procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean;
+  const AContenido: string);
 begin
-  Responde(FR_BOX, Format('%s|%s|%s|%d,%d,%d,%d|%d', [ARuta, AClase, APadre, AX, AY, AAncho, AAlto, Ord(AVisible)]));
+  Responde(FR_BOX, Format('%s|%s|%s|%d,%d,%d,%d|%d|%s', [ARuta, AClase, APadre, AX, AY, AAncho, AAlto, Ord(AVisible), AContenido]));
 end;
 
 function ListaClasesSinLeer: Integer;
@@ -1556,21 +1559,24 @@ begin
   if not FPorClase.TryGetValue(ClaveDeIdentificador(AClase), Candidatos) then
     Exit('');
   Result := Candidatos[0];
-  if Length(Candidatos) = 1 then
-    Exit;
-  // varios con esa raiz, la copia que deja el Explorador ("UBase - copia.dfm",
-  // con la misma clase): el primero listado era la copia y se dibujaba ella (V120
-  // de la 1.24, medido: el exe enlaza UBase). Lo dice el uses del que la nombra,
-  // por el NOMBRE del fichero: la copia sigue diciendo "unit UBase;" y dcc la
-  // busca por el suyo. Sin .pas, o sin nombrarla, no decide y se avisa
+  // la copia que deja el Explorador ("UBase - copia.dfm", con la misma clase) no es
+  // la que enlaza el exe (V120 de la 1.24, medido). Lo dice el uses del que la nombra,
+  // por el NOMBRE del fichero: la copia sigue diciendo "unit UBase;" y dcc la busca por
+  // el suyo. Sin .pas no decide. Y una sola que el uses no nombra tampoco es: lo que
+  // el proyecto enlaza esta en otra carpeta, y el servidor lo trae
   Pas := UnidadDeDesigner(AQuienLaNombra);
   if TFile.Exists(Pas) and not EsEnlace(Pas) then
   begin
-    var Usadas := UnidadesEnUses(TextoDeUnidadAnotada(Pas, FLeidos));
+    var Usadas := UnidadesEnUses(TextoDeUnidadAnotada(Pas, FLeidos)) +
+      [ClaveDeIdentificador(TPath.GetFileNameWithoutExtension(Pas))];
     for var F in Candidatos do
       if IndexStr(ClaveDeIdentificador(TPath.GetFileNameWithoutExtension(F)), Usadas) >= 0 then
         Exit(F);
-  end;
+    if Length(Candidatos) = 1 then
+      Exit('');
+  end
+  else if Length(Candidatos) = 1 then
+    Exit;
   var Nombres: TArray<string> := nil;
   for var F in Candidatos do
     Nombres := Nombres + [ExtractFileName(F)];
@@ -1585,7 +1591,7 @@ begin
   if ComponentClass <> nil then
     Exit;
   // un frame inline (o una form metida en otra): su fichero esta en la carpeta
-  FFramePendiente := FicheroDeClase(ExtractFilePath(GPeticion.Path), ClassName, GPeticion.Path);
+  FFramePendiente := FicheroDeClase(ExtractFilePath(GPeticion.Path), ClassName, FLeyendo);
   if FFramePendiente <> '' then
   begin
     FClaseFrame := ClassName;
@@ -1981,8 +1987,17 @@ begin
       Cadena.Insert(0, Fichero);
       Cab := Cabecera(Fichero);
     end;
-    for var F in Cadena do
-      LeeUno(F, AInstancia);
+    // quien nombra una clase es el fichero que se esta leyendo, no el form pedido
+    var Antes := FLeyendo;
+    try
+      for var F in Cadena do
+      begin
+        FLeyendo := F;
+        LeeUno(F, AInstancia);
+      end;
+    finally
+      FLeyendo := Antes;
+    end;
   finally
     Cadena.Free;
   end;

@@ -13,7 +13,10 @@ servidor le lleva ese form, juzgado como un hermano.
      no encontraria lo leido y se negaria (CambioEnLoLeido)
   L7 sin proyecto que lo liste, sigue a medias y lo dice
   L8 con otro proyecto al lado, solo manda el que lista la unidad: su copia de otro no se trae
-  L9 un ancestro fuera de lo que la sesion lee no entra
+  L9 un ancestro fuera de lo que la sesion lee no entra, y no sale nada suyo
+  L10 una copia sola junto al form, con el original en otra carpeta: se dibuja el original
+  L11 el frame que nombra el ancestro lo decide el uses del ancestro, no el del form pedido
+  L12 lo que se trae hace fallar al ayudante: el form a medias que ya salio, y lo dice (DSGN-181)
 
 ROJO contra un build sin el arreglo: L1, L2, L3 y L4.
 
@@ -75,6 +78,40 @@ escribe(APP, 'base\\UMalo.pas', unidad('UMalo', 'TFormMalo', 'TForm', USOS))
 escribe(APP, 'base\\UMalo.dfm', "object FormMalo: TFormMalo\n  Left = 0\n  Top = 0\n  Caption = '%s'\n  ClientHeight = 200\n  ClientWidth = 400\nend\n" % SIS)
 escribe(APP, 'forms\\UHijaMala.pas', unidad('UHijaMala', 'TFormHijaMala', 'TFormMalo', USOS + ', UMalo'))
 HIJAMALA = escribe(APP, 'forms\\UHijaMala.dfm', "inherited FormHijaMala: TFormHijaMala\n  Caption = 'HM'\nend\n")
+
+# ---- L10: en forms\ una copia de lo de base\, que se queda sola
+COPIA = os.path.join(JAIL, 'copia')
+escribe(COPIA, 'App2.dpr', dpr('App2', ["UHijaC in 'forms\\UHijaC.pas' {FormHijaC}", "UBaseC in 'base\\UBaseC.pas' {FormBaseC}"]))
+escribe(COPIA, 'base\\UBaseC.pas', unidad('UBaseC', 'TFormBaseC', 'TForm', USOS, '    ButtonBase: TButton;\n'))
+escribe(COPIA, 'base\\UBaseC.dfm', "object FormBaseC: TFormBaseC\n  Left = 0\n  Top = 0\n  Caption = 'B'\n  ClientHeight = 200\n  ClientWidth = 400\n"
+        + BOTON % ('ButtonBase', 111, 'Original', 0) + 'end\n')
+escribe(COPIA, 'forms\\UBaseC - copia.pas', unidad('UBaseC', 'TFormBaseC', 'TForm', USOS, '    ButtonBase: TButton;\n'))
+escribe(COPIA, 'forms\\UBaseC - copia.dfm', "object FormBaseC: TFormBaseC\n  Left = 0\n  Top = 0\n  Caption = 'C'\n  ClientHeight = 200\n  ClientWidth = 400\n"
+        + BOTON % ('ButtonBase', 222, 'Copia', 0) + 'end\n')
+escribe(COPIA, 'forms\\UHijaC.pas', unidad('UHijaC', 'TFormHijaC', 'TFormBaseC', USOS + ', UBaseC'))
+HIJAC = escribe(COPIA, 'forms\\UHijaC.dfm', "inherited FormHijaC: TFormHijaC\n  Caption = 'HC'\nend\n")
+
+# ---- L11: el frame lo nombra el ancestro; en la carpeta, el suyo y una copia
+CADENA = os.path.join(JAIL, 'cadena')
+MARCO = "object %s: TMarcoN\n  Left = 0\n  Top = 0\n  Width = 200\n  Height = 60\n  object LabelF: TLabel\n    Left = %d\n    Top = 8\n    Width = 50\n    Height = 15\n    Caption = 'M'\n  end\nend\n"
+escribe(CADENA, 'UMarcoN.pas', unidad('UMarcoN', 'TMarcoN', 'TFrame', USOS, '    LabelF: TLabel;\n'))
+escribe(CADENA, 'UMarcoN.dfm', MARCO % ('MarcoN', 33))
+escribe(CADENA, 'UMarcoN - copia.pas', unidad('UMarcoN', 'TMarcoN', 'TFrame', USOS, '    LabelF: TLabel;\n'))
+escribe(CADENA, 'UMarcoN - copia.dfm', MARCO % ('MarcoN', 44))
+escribe(CADENA, 'UBaseN.pas', unidad('UBaseN', 'TFormBaseN', 'TForm', USOS + ', UMarcoN', '    MarcoN1: TMarcoN;\n'))
+escribe(CADENA, 'UBaseN.dfm', "object FormBaseN: TFormBaseN\n  Left = 0\n  Top = 0\n  Caption = 'B'\n  ClientHeight = 200\n  ClientWidth = 400\n"
+        "  inline MarcoN1: TMarcoN\n    Left = 0\n    Top = 0\n    TabOrder = 0\n  end\nend\n")
+escribe(CADENA, 'UHijaN.pas', unidad('UHijaN', 'TFormHijaN', 'TFormBaseN', USOS + ', UBaseN'))
+HIJAN = escribe(CADENA, 'UHijaN.dfm', "inherited FormHijaN: TFormHijaN\n  Caption = 'HN'\nend\n")
+
+# ---- L12: el form dibuja a medias y el frame lejano, que se contiene a si mismo, tumba al ayudante
+ROTO = os.path.join(JAIL, 'roto')
+escribe(ROTO, 'Ro.dpr', dpr('Ro', ["UHijaR in 'forms\\UHijaR.pas' {FormHijaR}", "UMalF in 'frames\\UMalF.pas' {MalF: TFrame}"]))
+escribe(ROTO, 'frames\\UMalF.pas', unidad('UMalF', 'TMalF', 'TFrame', USOS))
+escribe(ROTO, 'frames\\UMalF.dfm', "object MalF: TMalF\n  Left = 0\n  Top = 0\n  Width = 200\n  Height = 60\n  inline Yo: TMalF\n    Left = 0\n    Top = 0\n    TabOrder = 0\n  end\nend\n")
+escribe(ROTO, 'forms\\UHijaR.pas', unidad('UHijaR', 'TFormHijaR', 'TForm', USOS + ', UMalF', '    MalF1: TMalF;\n'))
+HIJAR = escribe(ROTO, 'forms\\UHijaR.dfm', "object FormHijaR: TFormHijaR\n  Left = 0\n  Top = 0\n  Caption = 'R'\n  ClientHeight = 200\n  ClientWidth = 400\n"
+                "  inline MalF1: TMalF\n    Left = 0\n    Top = 0\n    TabOrder = 0\n  end\nend\n")
 
 # ---- sin proyecto
 SOLA = os.path.join(JAIL, 'sola')
@@ -150,7 +187,17 @@ try:
 
     r = preview(HIJAF, 'f.png')
     check('L9 un ancestro fuera de lo que la sesion lee no entra: a medias (RENDER-010), sin nombrar su boton',
-          mc.es(r, SIN_ANCESTRO) and J(r).get('components') == 0, r[:500])
+          mc.es(r, SIN_ANCESTRO) and J(r).get('components') == 0 and 'ButtonBase' not in r, r[:500])
+
+    r = srv.call('delphi_designer', {'command': 'preview', 'path': HIJAC, 'component': 'ButtonBase', 'out': os.path.join(JAIL, 'c.png')}, t=240)
+    check('L10 una copia sola en la carpeta y el original en otra: se dibuja el original',
+          J(r).get('componentRect', '').split(',')[:1] == ['111'], r[:600])
+    r = srv.call('delphi_designer', {'command': 'preview', 'path': HIJAN, 'component': 'MarcoN1.LabelF', 'out': os.path.join(JAIL, 'n.png')}, t=240)
+    check('L11 el frame del ancestro lo decide el uses del ancestro: el suyo, sin avisar de la copia',
+          J(r).get('componentRect', '').split(',')[:1] == ['33'] and not mc.es(r, 'SN_RENDER_CLASE_EN_VARIOS_FMT'), r[:700])
+    r = preview(HIJAR, 'r.png')
+    check('L12 lo que se trae hace fallar al ayudante: a medias como salio, y lo dice (DSGN-181)',
+          not mc.fallo(r) and mc.es(r, 'SN_DESIGNER_LEJANO_NO_ENTRO_FMT') and 'UMalF.dfm' in r, r[:700])
 
     # ---- V77: insert de un frame del proyecto
     UN_FORM = os.path.join(APP, 'forms', 'UOtra.dfm')
