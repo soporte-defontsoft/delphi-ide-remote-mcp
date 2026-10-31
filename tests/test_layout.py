@@ -365,10 +365,29 @@ o = layout('Trunc', DFMS['Trunc'])
 check('Bug4 un .dfm truncado se avisa', 'truncatedNote' in o, o)
 
 p_fmx = os.path.join(BASE, 'F.fmx')
-open(p_fmx, 'w', newline='').write('object F: TF\n  object R: TRectangle\n  end\nend\n')
+open(p_fmx, 'w', newline='').write(
+    'object F: TF\n  ClientHeight = 200\n  ClientWidth = 300\n'
+    '  object Barra: TLayout\n    Align = Top\n    Size.Height = 40.000000000000000000\n    Size.PlatformDefault = False\n  end\n'
+    '  object Cuerpo: TRectangle\n    Align = Client\n    Size.PlatformDefault = False\n  end\n'
+    '  object Fuera: TRectangle\n    Position.X = 250.000000000000000000\n    Position.Y = 150.000000000000000000\n'
+    '    Size.Width = 100.000000000000000000\n    Size.Height = 100.000000000000000000\n    Size.PlatformDefault = False\n  end\n'
+    '  object Nulo: TRectangle\n    Position.X = 10.000000000000000000\n    Position.Y = 10.000000000000000000\n'
+    '    Size.Width = 0.000000000000000000\n    Size.Height = 50.000000000000000000\n    Size.PlatformDefault = False\n  end\nend\n')
 r = call({'command': 'layout', 'path': p_fmx})
-check('FP7 un .fmx se rechaza (no se contesta ok en falso)',
-      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_LAYOUT_FMX'), r[:120])
+j = json.loads(r) if r.startswith('{') else {}
+bx = {b['name']: b for b in j.get('boxes', [])}
+check('V74 un .fmx se mide con lo que resuelve FMX: Align Top y Client donde quedan',
+      bx.get('Barra', {}).get('h') == 40 and bx.get('Barra', {}).get('w') == 300 and
+      bx.get('Cuerpo', {}).get('y') == 40 and bx.get('Cuerpo', {}).get('h') == 160, r[:700])
+check('V74b lo que se sale y lo de lado cero, dichos; clean false; un solape solo no lo quitaria',
+      'Fuera' in json.dumps(j.get('outsideParent')) and 'Nulo' in json.dumps(j.get('zeroSize')) and j.get('clean') is False, r[:700])
+
+# (en su carpeta: el renderizador juzga los hermanos del form, y aqui los hay truncados a proposito)
+os.makedirs(os.path.join(BASE, 'paginas'))
+o = layout('paginas\\Paginas', "object FPag: TFPag\n  ClientWidth = 400\n  ClientHeight = 300\n  object PageControl1: TPageControl\n    Align = alClient\n    Width = 400\n    Height = 300\n    object TabSheet1: TTabSheet\n      Caption = 'A'\n      object B: TButton\n        Left = 8\n        Top = 8\n        Width = 75\n        Height = 25\n        TabOrder = 0\n      end\n    end\n  end\nend\n")
+bx = {b['name']: b for b in o.get('boxes', [])}
+check('V24 con el renderizador, la caja de una pagina es la de verdad: sin la banda de pestanas',
+      o.get('boxesFrom') == 'renderer' and 0 < bx['TabSheet1']['h'] < 300 and bx['TabSheet1']['y'] > 0, o)
 
 o = layout('OldForm', DFMS['OldForm'])
 check('FN3 un form sin ClientWidth se estima y lo declara',

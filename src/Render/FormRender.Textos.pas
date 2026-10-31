@@ -161,7 +161,7 @@ const
     '[--component Name] [--dropped Name] ' +
     '[--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout ms] | ' +
     '%s --path <dfm|fmx> --convert text|binary --out <file> [--timeout ms] | ' +
-    '%s --unreadableclasses';
+    '%s --unreadableclasses | %s --path <dfm|fmx> --boxes [--packages ...] [--bds] [--bdsroot] [--knownfile] [--timeout ms]';
 
 function MsgText(const AMsg: string): string;
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;

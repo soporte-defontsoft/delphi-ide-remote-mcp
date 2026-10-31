@@ -388,6 +388,33 @@ begin
         end;
 end;
 
+{ Donde queda cada control del form ya mostrado, en coordenadas del cliente de la form:
+  lo que resuelve la VCL, no lo que dice el texto (V24 de la 1.24). }
+procedure RespondeCajas(AForm: TForm; ARaiz: TComponent; ACargador: TCargador);
+
+  procedure De(APadre: TWinControl);
+  begin
+    for var I := 0 to APadre.ControlCount - 1 do
+    begin
+      var C := APadre.Controls[I];
+      var P := C.BoundsRect.TopLeft;
+      if APadre <> AForm then
+        P := APadre.ClientToParent(P, AForm);
+      var Ruta := RutaDeComponente(ARaiz, C);
+      if Ruta <> '' then
+        RespondeCaja(Ruta, ACargador.ClaseEscrita(C, ARaiz),
+          (if (APadre = AForm) or (APadre = ARaiz) then '' else RutaDeComponente(ARaiz, APadre)),
+          P.X, P.Y, C.Width, C.Height, C.Visible);
+      if C is TWinControl then
+        De(TWinControl(C));
+    end;
+  end;
+
+begin
+  if ARaiz is TWinControl then
+    De(TWinControl(ARaiz));
+end;
+
 procedure GuardaPng(ABmp: TBitmap; const APng: string);
 var
   Png: TPngImage;
@@ -561,7 +588,10 @@ begin
           Responde(FR_RECT, Format('%s=%d,%d,%d,%d', [GPeticion.Componente, R.Left, R.Top, R.Width, R.Height]))
         else
           Aviso(MsgFmt(SN_RENDER_SIN_COMPONENTE_FMT, [GPeticion.Componente, Raiz.Name]));
-      GuardaPng(Bmp, GPeticion.Salida);
+      if GPeticion.Cajas then
+        RespondeCajas(F, Raiz, Cargador)
+      else
+        GuardaPng(Bmp, GPeticion.Salida);
       MsPintado := Reloj.ElapsedMilliseconds;
       Responde(FR_FIDELITY, Usado);
       Responde(FR_SIZE, Format('%dx%d', [Bmp.Width, Bmp.Height]));

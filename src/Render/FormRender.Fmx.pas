@@ -308,6 +308,32 @@ begin
         end;
 end;
 
+{ Donde queda cada control del form ya pintado, en coordenadas del form: lo que
+  resuelve FMX, que un texto no dice (V74 de la 1.24). Lo que no se guarda es de la
+  presentacion de un control, no del form. }
+procedure RespondeCajas(AForm: TForm; ARaiz: TComponent; ACargador: TCargador);
+
+  procedure De(APadre: TFmxObject);
+  begin
+    for var I := 0 to APadre.ChildrenCount - 1 do
+      if (APadre.Children[I] is TControl) and APadre.Children[I].Stored then
+      begin
+        var C := TControl(APadre.Children[I]);
+        var RF := C.AbsoluteRect;
+        var Ruta := RutaDeComponente(ARaiz, C);
+        if Ruta <> '' then
+          RespondeCaja(Ruta, ACargador.ClaseEscrita(C, ARaiz),
+            (if (APadre = AForm) or (APadre = ARaiz) then '' else RutaDeComponente(ARaiz, TComponent(APadre))),
+            Round(RF.Left), Round(RF.Top), Round(RF.Width), Round(RF.Height), C.Visible);
+        De(C);
+      end;
+  end;
+
+begin
+  if ARaiz is TFmxObject then
+    De(TFmxObject(ARaiz));
+end;
+
 { Crea la form de diseno y lee el fichero (form o frame) en ella }
 function CreaYLee(ACargador: TCargador; out ARaiz: TComponent): TForm;
 var
@@ -476,7 +502,10 @@ begin
           Responde(FR_RECT, Format('%s=%d,%d,%d,%d', [GPeticion.Componente, R.Left, R.Top, R.Width, R.Height]))
         else
           Aviso(MsgFmt(SN_RENDER_SIN_COMPONENTE_FMT, [GPeticion.Componente, Raiz.Name]));
-      Bmp.SaveToFile(GPeticion.Salida);
+      if GPeticion.Cajas then
+        RespondeCajas(F, Raiz, Cargador)
+      else
+        Bmp.SaveToFile(GPeticion.Salida);
       MsPintado := Reloj.ElapsedMilliseconds;
       Responde(FR_FIDELITY, 'canvas (' + Bmp.Canvas.ClassName + ')');
       Responde(FR_SIZE, Format('%dx%d', [Bmp.Width, Bmp.Height]));

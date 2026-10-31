@@ -40,11 +40,11 @@ try:
     fmx = modulo('UDatosFmx', 'DatosFmx', True)
     vcl = modulo('UDatosVcl', 'DatosVcl', False)
     r = srv.call('delphi_designer', {'command': 'layout', 'path': fmx}, t=120)
-    check('V1 layout de un .dfm de FMX (CLASSGROUP de FMX): "layout no mide FMX", no una medida de la VCL',
-          mc.es(r, 'SR_DESIGNER_LAYOUT_FMX'), r[:300])
+    check('V1 layout de un .dfm de FMX (CLASSGROUP de FMX): lo que dice FMX, no una medida de la VCL; sin renderizador, DSGN-027',
+          mc.es(r, 'SR_DESIGNER_LAYOUT_FMX_FMT'), r[:300])
     r = srv.call('delphi_designer', {'command': 'layout', 'path': vcl}, t=120)
     check('V2 (guarda) el mismo modulo sin CLASSGROUP es de la VCL: layout lo mide',
-          not mc.es(r, 'SR_DESIGNER_LAYOUT_FMX') and not mc.es(r, 'SR_DESIGNER_NOT_FORM'), r[:300])
+          not mc.es(r, 'SR_DESIGNER_LAYOUT_FMX_FMT') and not mc.es(r, 'SR_DESIGNER_NOT_FORM'), r[:300])
 finally:
     srv.cierra()
 

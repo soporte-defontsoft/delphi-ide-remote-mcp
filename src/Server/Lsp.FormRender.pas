@@ -59,6 +59,8 @@ type
     Convierte: string;
     // --unreadableclasses: la pregunta al hacer la caja de paquetes; nada mas en la orden
     ClasesSinLeer: Boolean;
+    // --boxes: sin png, donde queda cada control (BOX=). Lo pone delphi_designer layout
+    Cajas: Boolean;
     // forms del proyecto, de otra carpeta, de las clases que el ayudante dijo que le
     // faltaban (ancestros y frames, V120b de la 1.24). Lo pone CorreRender
     Lejanos: TArray<string>;
@@ -90,6 +92,13 @@ type
     que uso (B5 rev6 de la 1.18.2). }
   TLeidoPorElJuez = record
     Huella, Ruta: string;
+  end;
+
+  { Un control donde queda de verdad (BOX=), en coordenadas del form }
+  TCajaDeRender = record
+    Ruta, Clase, Padre: string; // Padre: su ruta, '' si es la raiz
+    X, Y, W, H: Integer;
+    Visible: Boolean;
   end;
 
   TRespuestaRender = record
@@ -128,6 +137,7 @@ type
     NoAplicados: TArray<string>;
     SinLeer: TArray<string>;   // PARTIAL=: sin que ancestro (o fichero) se leyo el form
     ClasesSinLeer: TArray<string>; // UNREADABLECLASS=: las clases COM que su contenedor no busca
+    Cajas: TArray<TCajaDeRender>;  // BOX=
     Leidos: TArray<TLeidoPorElJuez>; // READ=: lo que leyo para cargarlo, con su huella
   end;
 
@@ -448,6 +458,8 @@ begin
   // el juez no pinta: sin --out (3.11)
   else if APeticion.Escribe then
     AOrden := AOrden + ' --writeback on'
+  else if APeticion.Cajas then
+    AOrden := AOrden + ' --boxes --nonvisual off'
   else
     AOrden := AOrden + Arg('--out', APeticion.Salida) +
       ' --nonvisual ' + (if APeticion.NoVisuales then 'on' else 'off');
@@ -621,6 +633,28 @@ begin
       Result.Escrito := Result.Escrito + [V]
     else if Es(FR_UNREADABLE_CLASS) then
       Result.ClasesSinLeer := Result.ClasesSinLeer + [V]
+    else if Es(FR_BOX) then
+    begin
+      // <ruta>|<clase>|<padre>|<x>,<y>,<ancho>,<alto>|<visible>: un nombre no lleva '|'
+      Trozos := V.Split(['|']);
+      if Length(Trozos) = 5 then
+      begin
+        var Medidas := Trozos[3].Split([',']);
+        if Length(Medidas) = 4 then
+        begin
+          var Caja: TCajaDeRender;
+          Caja.Ruta := Trozos[0];
+          Caja.Clase := Trozos[1];
+          Caja.Padre := Trozos[2];
+          Caja.X := StrToIntDef(Medidas[0], 0);
+          Caja.Y := StrToIntDef(Medidas[1], 0);
+          Caja.W := StrToIntDef(Medidas[2], 0);
+          Caja.H := StrToIntDef(Medidas[3], 0);
+          Caja.Visible := Trozos[4] = '1';
+          Result.Cajas := Result.Cajas + [Caja];
+        end;
+      end;
+    end
     else if Es(FR_ORDER) then
     begin
       // <Nombre>=<prop>,<prop>,...: el nombre no lleva '='
@@ -1618,7 +1652,8 @@ begin
   Result.Codigo := Codigo;
   Result.MsTotal := Reloj.ElapsedMilliseconds;
   if (Codigo = FR_RC_OK) and (Result.Error = '') and
-     (if APeticion.Escribe then Length(Result.Escrito) > 0 else TFile.Exists(APeticion.Salida)) then
+     (if APeticion.Escribe then Length(Result.Escrito) > 0
+      else APeticion.Cajas or TFile.Exists(APeticion.Salida)) then
     Exit;
   // el LECTOR no cargo el form (NOTLOADED=): es el fichero, y se dice con lo
   // que dijo y su linea. Salia como DSGN-061 INTERNAL, y con un valor que el

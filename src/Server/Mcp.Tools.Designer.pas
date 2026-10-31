@@ -719,6 +719,128 @@ begin
   Result := MatchText(ACls, ['TPageControl', 'TTabControl', 'TPageScroller']);
 end;
 
+{ Lo que dice el renderizador de donde queda cada control de APath: el juez de un
+  layout (V74 y V24 de la 1.24). Fallo en R.Fallo, por ejemplo sin renderizador. }
+function CajasDelRender(const APath: string): TRespuestaRender;
+begin
+  var Pet := PeticionDeRender(APath, '');
+  Pet.Cajas := True;
+  Result := CorreRender(Pet);
+end;
+
+{ La linea del objeto ANombre en el form, 0 si es de dentro de un frame o no esta }
+function LineaDeObjeto(AObj: TStyleObj; const ANombre: string): Integer;
+begin
+  if SameText(AObj.ObjName, ANombre) then
+    Exit(AObj.StartLine);
+  Result := 0;
+  for var I := 0 to AObj.Children.Count - 1 do
+  begin
+    Result := LineaDeObjeto(AObj.Children[I], ANombre);
+    if Result > 0 then
+      Exit;
+  end;
+end;
+
+{ layout de un form FMX: lo que FMX resuelve, medido; no hay un modelo que imitar
+  (Size, Position, Align, Margins, Padding, los estilos). Un control oculto no se
+  juzga. Lo que se solapa se dice, y no quita clean: en FMX un control sobre otro es
+  como se compone un form, con un TRectangle de fondo y un TText encima. Sin
+  renderizador se dice, nunca clean:true (DSGN-027). }
+function LayoutFmx(const APath: string): string;
+var
+  Doc: TStyleDoc;
+begin
+  Doc := nil;
+  Result := LoadDoc(APath, Doc);
+  if Result <> '' then
+    Exit;
+  try
+    if Doc.Root = nil then
+      Exit(MsgText(SR_DESIGNER_BINDING_NO_ROOT));
+    var R := CajasDelRender(APath);
+    if R.Fallo <> '' then
+      Exit(MsgFmt(SR_DESIGNER_LAYOUT_FMX_FMT, [R.Fallo]));
+    var Ret := TJSONObject.Create;
+    try
+      Ret.AddPair('form', Doc.Root.ObjName);
+      Ret.AddPair('class', Doc.Root.ClassName_);
+      Ret.AddPair('clientWidth', TJSONNumber.Create(R.Ancho));
+      Ret.AddPair('clientHeight', TJSONNumber.Create(R.Alto));
+      var Zero := TJSONArray.Create;
+      Ret.AddPair('zeroSize', Zero);
+      var Outside := TJSONArray.Create;
+      Ret.AddPair('outsideParent', Outside);
+      var Overlap := TJSONArray.Create;
+      Ret.AddPair('overlapping', Overlap);
+      var Boxes := TJSONArray.Create;
+      Ret.AddPair('boxes', Boxes);
+      // el padre de una caja, para su rectangulo y su nombre: la raiz, el form
+      var Padres := TDictionary<string, TCajaDeRender>.Create;
+      try
+        for var C in R.Cajas do
+          Padres.AddOrSetValue(ClaveDeIdentificador(C.Ruta), C);
+        for var I := 0 to High(R.Cajas) do
+        begin
+          var C := R.Cajas[I];
+          var Linea := LineaDeObjeto(Doc.Root, C.Ruta);
+          var Padre: TCajaDeRender;
+          if Padres.ContainsKey(ClaveDeIdentificador(C.Padre)) then
+            Padre := Padres[ClaveDeIdentificador(C.Padre)]
+          else
+          begin
+            Padre := Default(TCajaDeRender);
+            Padre.Ruta := Doc.Root.ObjName;
+            Padre.W := R.Ancho;
+            Padre.H := R.Alto;
+            Padre.Visible := True;
+          end;
+          var Bx := TJSONObject.Create;
+          Bx.AddPair('name', C.Ruta);
+          Bx.AddPair('class', C.Clase);
+          Bx.AddPair('parent', Padre.Ruta);
+          Bx.AddPair('x', TJSONNumber.Create(C.X));
+          Bx.AddPair('y', TJSONNumber.Create(C.Y));
+          Bx.AddPair('w', TJSONNumber.Create(C.W));
+          Bx.AddPair('h', TJSONNumber.Create(C.H));
+          Bx.AddPair('visible', TJSONBool.Create(C.Visible));
+          Bx.AddPair('line', TJSONNumber.Create(Linea));
+          Boxes.AddElement(Bx);
+          if not C.Visible or not Padre.Visible then
+            Continue;
+          if (C.W = 0) or (C.H = 0) then
+            Zero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [C.Ruta, C.Clase, Linea, IntToStr(C.W), IntToStr(C.H)]));
+          if not IsScrollBox(Padre.Clase) and ((C.X < Padre.X) or (C.Y < Padre.Y) or
+             (C.X + C.W > Padre.X + Padre.W) or (C.Y + C.H > Padre.Y + Padre.H)) then
+            Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [C.Ruta, C.Clase, Linea, C.X, C.Y, C.X + C.W, C.Y + C.H,
+              Padre.Ruta, Padre.W, Padre.H]));
+          if IsPageContainer(Padre.Clase) or IsAutoLayout(Padre.Clase) or IsGridPanel(Padre.Clase) then
+            Continue;
+          for var J := I + 1 to High(R.Cajas) do
+          begin
+            var O := R.Cajas[J];
+            if O.Visible and SameText(O.Padre, C.Padre) and (C.W > 0) and (C.H > 0) and (O.W > 0) and (O.H > 0) and
+               (C.X < O.X + O.W) and (O.X < C.X + C.W) and (C.Y < O.Y + O.H) and (O.Y < C.Y + C.H) then
+              Overlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT, [C.Ruta, Linea, O.Ruta, LineaDeObjeto(Doc.Root, O.Ruta), Padre.Ruta,
+                Max(C.X, O.X), Max(C.Y, O.Y), Min(C.X + C.W, O.X + O.W), Min(C.Y + C.H, O.Y + O.H)]));
+          end;
+        end;
+      finally
+        Padres.Free;
+      end;
+      if Length(R.Sustituidas) + Length(R.SinLeer) > 0 then
+        Ret.AddPair('partialNote', MsgFmt(SN_DESIGNER_LAYOUT_A_MEDIAS_FMT, [string.Join(', ', R.Sustituidas + R.SinLeer)]));
+      Ret.AddPair('clean', TJSONBool.Create((Zero.Count = 0) and (Outside.Count = 0)));
+      Ret.AddPair('howMeasured', MsgText(SN_DESIGNER_LAYOUT_FMX_HOW));
+      Result := Ret.ToJSON;
+    finally
+      Ret.Free;
+    end;
+  finally
+    Doc.Free;
+  end;
+end;
+
 { WHERE things actually end up, which is the one thing an agent building a form
   cannot see. It has the numbers - it wrote them - but not the arithmetic that
   turns Left/Top/Width/Height plus Align into a screen, and a form that binds
@@ -743,8 +865,9 @@ end;
   Approximate, and it says how: a container's client area is its Width/Height
   (bevels and borders shave a few pixels), a form given only Width/Height (no
   ClientWidth) has its window frame estimated at 96 dpi, and Anchors - which
-  govern RESIZE - are not what this measures. VCL only; .fmx geometry (Size.Width,
-  Position.Y) is a different model and is refused rather than answered wrongly. }
+  govern RESIZE - are not what this measures. Lo que se juzga sale de este texto; las
+  cajas, si hay renderizador, de lo que resuelve la VCL (V24 de la 1.24: la banda de
+  pestanas de un TPageControl no la descontaba). FMX, LayoutFmx. }
 function LayoutOf(const APath: string): string;
 type
   TBox = record
@@ -1027,7 +1150,7 @@ begin
   if not EsDesignerVcl(APath) then
   begin
     if EsDesignerFmx(APath) then
-      Exit(MsgText(SR_DESIGNER_LAYOUT_FMX));
+      Exit(LayoutFmx(APath));
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   end;
   Result := LoadDoc(APath, Doc);
@@ -1083,6 +1206,31 @@ begin
         NoRoom.Add(MsgFmt(SF_DSGN_NO_DICE_CUANTO_MIDE_FMT, [Doc.Root.ObjName, RootW, RootH]))
       else
         Walk(Doc.Root, RootW, RootH, 0, 0, Doc.Root.ObjName, not Estimated, False);
+
+      // donde quedan de verdad, si el renderizador contesta: lo resuelto del texto es
+      // aproximado (V24 de la 1.24)
+      var Medido := CajasDelRender(APath);
+      if Medido.Fallo = '' then
+      begin
+        for var B := 0 to Boxes.Count - 1 do
+          for var C in Medido.Cajas do
+            if SameText(C.Ruta, (Boxes.Items[B] as TJSONObject).GetValue<string>('name')) then
+            begin
+              var Bx := Boxes.Items[B] as TJSONObject;
+              Bx.RemovePair('x').Free;
+              Bx.RemovePair('y').Free;
+              Bx.RemovePair('w').Free;
+              Bx.RemovePair('h').Free;
+              Bx.AddPair('x', TJSONNumber.Create(C.X));
+              Bx.AddPair('y', TJSONNumber.Create(C.Y));
+              Bx.AddPair('w', TJSONNumber.Create(C.W));
+              Bx.AddPair('h', TJSONNumber.Create(C.H));
+              Break;
+            end;
+        Ret.AddPair('boxesFrom', 'renderer');
+      end
+      else
+        Ret.AddPair('boxesFrom', 'text');
 
       // clean = sin problemas de layout; ok es "la llamada fue bien" (novena)
       Ret.AddPair('clean', TJSONBool.Create((Zero.Count = 0) and (Outside.Count = 0)

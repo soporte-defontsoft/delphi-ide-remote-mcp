@@ -55,6 +55,8 @@ type
     // --unreadableclasses: la pregunta del servidor al hacer la caja de paquetes:
     // que clases COM no se dejan buscar desde este contenedor (ListaClasesSinLeer)
     ClasesSinLeer: Boolean;
+    // --boxes: donde queda cada control (BOX=), sin png: lo pide delphi_designer layout
+    Cajas: Boolean;
   end;
 
   { El lector comun de un .dfm/.fmx, texto o binario, sobre una instancia ya
@@ -211,6 +213,12 @@ function ConvierteComoElIde: Integer;
   se lea (medido el 30-oct-2026: 4 de 5181 clases de 32 bits, las de ADO de
   msado15.dll). Sin form, sin paquetes y sin ventanas. }
 function ListaClasesSinLeer: Integer;
+{ La ruta de AComp como lee la RTL una referencia, desde ARaiz (Marco1.LblAviso, uno
+  de dentro de un frame inline; la inversa de ComponenteDeRuta). '' si no tiene nombre:
+  lo de dentro de un control, que el form no escribe. }
+function RutaDeComponente(ARaiz, AComp: TComponent): string;
+{ EL escritor de BOX=, el que lee Lsp.FormRender.LeeRespuestaDeRender }
+procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean);
 { Lo que el cargador dice de lo leido, igual en los dos renderizadores:
   SUBSTITUTED=, IGNORED=, WARNING=, PARTIAL= y READ= }
 procedure RespondeLoLeido(ACargador: TCargador);
@@ -448,9 +456,9 @@ end;
 
 function TextoDeUso(const AExe: string): string;
 begin
-  // cuatro formas de uso, cada una con el nombre del programa: con uno solo
+  // cinco formas de uso, cada una con el nombre del programa: con uno solo
   // salia "%s --path ..." y el "(No argument for format)" de MsgFmt
-  Result := MsgFmt(SF_RENDER_USO_FMT, [AExe, AExe, AExe, AExe]);
+  Result := MsgFmt(SF_RENDER_USO_FMT, [AExe, AExe, AExe, AExe, AExe]);
 end;
 
 function ParseaArgumentos(out AUso: string): string;
@@ -515,6 +523,7 @@ begin
       else if P = '--dropped' then GPeticion.Soltado := Valor
       else if P = '--convert' then GPeticion.Convierte := Entre(Valor, ['text', 'binary'])
       else if P = '--unreadableclasses' then GPeticion.ClasesSinLeer := True
+      else if P = '--boxes' then GPeticion.Cajas := True
       else if P = '--timeout' then GPeticion.TiempoMs := StrToInt(Valor)
       else if P = '--verbose' then GPeticion.Verbose := True
       else
@@ -526,7 +535,7 @@ begin
     if GPeticion.Path = '' then
       raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, ['--path']));
     // el juez no pinta: sin png
-    if (GPeticion.Salida = '') and not GPeticion.Escribe then
+    if (GPeticion.Salida = '') and not GPeticion.Escribe and not GPeticion.Cajas then
       raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, ['--out']));
     if not TFile.Exists(GPeticion.Path) then
       raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [GPeticion.Path]));
@@ -542,6 +551,22 @@ begin
     on E: Exception do
       Result := E.Message;
   end;
+end;
+
+function RutaDeComponente(ARaiz, AComp: TComponent): string;
+begin
+  Result := AComp.Name;
+  var O := AComp.Owner;
+  while (Result <> '') and (O <> nil) and (O <> ARaiz) and (O.Name <> '') do
+  begin
+    Result := O.Name + '.' + Result;
+    O := O.Owner;
+  end;
+end;
+
+procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean);
+begin
+  Responde(FR_BOX, Format('%s|%s|%s|%d,%d,%d,%d|%d', [ARuta, AClase, APadre, AX, AY, AAncho, AAlto, Ord(AVisible)]));
 end;
 
 function ListaClasesSinLeer: Integer;

@@ -5336,7 +5336,7 @@ const
     'not published, published fields with no component, duplicate names, an ' +
     'FMX control whose styled presentation unit the .pas does not use - ' +
     'all of which COMPILE and then fail when the form is created) | ' +
-    'layout (WHERE things end up on a VCL .dfm: resolves Align and returns ' +
+    'layout (WHERE things end up on a form: resolves Align and returns ' +
     'every control''s rectangle plus those of size zero, outside their ' +
     'container, overlapping or clipped by the bands around them - a form ' +
     'can bind perfectly and still be unusable) | to-text (a BINARY .dfm, ' +
@@ -6892,7 +6892,8 @@ const
     'TScrollBox may have larger content on purpose. In "boxes" you get ' +
     'the resolved rectangle of each control in form coordinates: that is ' +
     'where each thing ends up, so you can place the next one without ' +
-    'seeing the screen. It is approximate: I take a container''s usable ' +
+    'seeing the screen: with boxesFrom=renderer, as the VCL really placed it. What ' +
+    'I judge comes from the text and is approximate: I take a container''s usable ' +
     'area as its Width/Height, and Anchors (which govern RESIZING) is ' +
     'not what I measure.';
 
@@ -6932,13 +6933,20 @@ const
     'the dot + 1; on the name, the LSP returns the whole global scope. ' +
     'These are the members of the type.';
 
-  SR_DESIGNER_LAYOUT_FMX =
-    '[DSGN-027 DENIED] command=layout is only for a VCL form (.dfm). An FMX ' +
-    'form - a .fmx, or a .dfm whose unit carries the FMX CLASSGROUP, as a ' +
-    'data module of an FMX project does - lays out with another model ' +
-    '(Size.Width, Position.X, a different Align) that this server does not ' +
-    'resolve yet; answering clean:true on it would be a lie. For FMX use ' +
-    'tree/get/lint for now.';
+  SR_DESIGNER_LAYOUT_FMX_FMT =
+    '[DSGN-027 DENIED] layout of an FMX form - a .fmx, or a .dfm whose unit carries ' +
+    'the FMX CLASSGROUP - asks the form renderer where each control ends up, and it ' +
+    'could not say: %s';
+
+  SN_DESIGNER_LAYOUT_FMX_HOW =
+    '[DSGN-179] How I measure it: FMX laid the form out and the renderer said where ' +
+    'each control ended up, in form coordinates ("boxes"). A hidden control is not ' +
+    'judged. "overlapping" does not take clean away: in FMX one control over another ' +
+    'is how a form is composed, so read it as a list to check against preview.';
+
+  SN_DESIGNER_LAYOUT_A_MEDIAS_FMT =
+    '[DSGN-180] Measured without %s: the renderer could not load them, so what they ' +
+    'would hold or move is not here.';
 
   SN_DESIGNER_LAYOUT_TRUNC =
     '[DSGN-040] NOTE: the .dfm looks TRUNCATED (there are more open ' +

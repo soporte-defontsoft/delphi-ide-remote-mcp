@@ -19,8 +19,18 @@ the MCP `initialize` response (`serverInfo.version`).
   Now it writes the `inline` block as the IDE does, with its field and its unit in the
   `uses`.
 
+- **`delphi_designer layout` measures FMX forms.** It refused them (`DSGN-027`). Now the
+  renderer lays the form out and says where each control ends up: `boxes`, what has a zero
+  side and what sticks out of its parent. What overlaps is listed and does not take `clean`
+  away, because in FMX one control over another is how a form is composed. Without the
+  renderer it still refuses, never `clean: true`.
+
 ### Changed
 
+- **`delphi_designer layout` of a VCL form gives the real rectangles.** `boxes` come from
+  what the VCL resolved (`boxesFrom: renderer`), so a page of a `TPageControl` leaves out the
+  tab band; without the renderer they come from the text, as before (`boxesFrom: text`). What
+  it reports as a problem is still judged from the text. It now takes what a `preview` takes.
 - **A form whose ancestor or frame lives in another folder of the project is drawn and
   judged whole.** It came out partial (`RENDER-010`), the frame substituted, and the
   order judge refused it (`DSGN-143`). When the renderer says a class is missing and the

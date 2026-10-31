@@ -102,6 +102,7 @@ DelphiFormRenderFmx --path <fmx> --out <png> [--state ...]* [--component Name]
                     [--style <file.style>|none|windows|win7|win8|win10|win11|mobile|android|ios|ios-dark|osx|linux|gnome]
                     [--nonvisual on|off] [--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout] [--verbose]
 DelphiFormRender*   --unreadableclasses
+DelphiFormRender*   --path <form> --boxes [--packages ...] [--bds] [--bdsroot] [--knownfile] [--timeout]
 ```
 
 - `--state`: a view state applied through RTTI after the form is built and
