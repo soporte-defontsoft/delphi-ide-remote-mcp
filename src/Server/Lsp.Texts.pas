@@ -410,17 +410,25 @@ const
 
   { Calentamiento del motor: definition vacia con hover lleno (medido por
     Hermes, 2026-09-22). Es "todavia no", asi que va como error: (corrige y
-    repite) y no como RECHAZADO (cambia de rumbo). }
+    repite) y no como RECHAZADO (cambia de rumbo). Y la otra causa, la que no
+    se calienta nunca: un metodo cuyo cuerpo es solo ";" no lo indexa el motor
+    como definicion (medido el 31-oct-2026 en 13.1 y 13.2; el completo de
+    Hermes de la 1.24 repitio dos minutos). No hay juez que las separe: se
+    dicen las dos. }
   SR_LSP_WARMING =
     '[LSP-025 DENIED] The engine recognizes the symbol at that ' +
     'position (hover answers) but has not indexed its definition yet: it ' +
     'is warming up that unit. Repeat the same call in a few seconds; the ' +
-    'position is correct and there is nothing to change.';
+    'position is correct and there is nothing to change. If it stays so, ' +
+    'the engine has no definition for it: a method whose body is only ";" ' +
+    '(an empty statement) is never indexed - give it a statement.';
   SR_REFS_WARMING_FMT =
     '[LSP-002 DENIED] The engine recognizes "%s" (hover answers) ' +
     'but does not have its definition indexed yet: it is warming up that ' +
     'unit. Repeat the same call in a few seconds, with the same ' +
-    'arguments.';
+    'arguments. If it stays so, the engine has no definition for it: a ' +
+    'method whose body is only ";" (an empty statement) is never indexed - ' +
+    'give it a statement.';
   { Medido por Hermes (2026-09-22): con definition vacia, declaration directa
     en un punto de llamada devuelve el metodo ENVOLVENTE, y la tool lo daba
     por bueno sin decirlo. }

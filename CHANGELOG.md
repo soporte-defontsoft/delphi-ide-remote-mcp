@@ -82,6 +82,12 @@ the MCP `initialize` response (`serverInfo.version`).
   Found by the directed test of this version. The judge now sees the unit as the insert
   will leave it, and what it reads of that proposal does not count as a reading of the
   disk.
+- **`LSP-002` and `LSP-025` name the case that never warms up.** They said the engine was
+  warming up the unit and to repeat in a few seconds; a method whose body is only `;` is
+  one DelphiLSP never indexes as a definition (measured on 13.1 and 13.2: hover answers,
+  definition does not, and the same call failed for two minutes in the complete review of
+  this version), and a rename from its declaration lists its header as unverified
+  (`RENAME-018`) for the same reason. The messages now say so and what to do.
 - **`DSGN-115` says why a literal under Windows or Program Files is refused.** It said "a
   path outside the allowed read locations" of a folder the session could read: since this
   version the renderer's container reads those folders on its own, so such a literal is
