@@ -1416,7 +1416,7 @@ REGLAS = [
      r"\.Substring\(\s*0\s*,\s*(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*\)",
      [('Lsp.DesignerMetaGen.pas', 'HuellaDeCarpetas'),      # un hash en hexadecimal
       ('Lsp.RemoteRun.pas', 'EnsureNodeCurrent'),           # el SHA-256 en hexadecimal de un nombre
-      ('Lsp.Identidad.pas', 'SanitizeAgent'),               # el nombre ya saneado a ASCII
+      ('Lsp.Casa.pas', 'NombreDeAgente'),                   # un nombre que se sanea a ASCII
       ('Lsp.LogSink.pas', 'ClaveDeBloque')],                # un sello de fecha
      'PrincipioDeTexto (Lsp.Listas), el gemelo de FinalDeTexto: el corte que no parte un par sustituto'),
     # una LINEA de elemento -la sangria, el elemento, el salto- fuera de su compositor (V97 de la

@@ -68,9 +68,12 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - `delphi_edit` `adduses` and `removeuses` read their list like `add-requires` does: `;`, `,` or a blank separates names. `"A B"` was refused as one invalid unit name.
 - The account warning of `delphi_workspace` asks the process token whether the server runs as LocalSystem (SID `S-1-5-18`), so it no longer depends on the name of the account or on `USERPROFILE`.
+- An agent's mailbox and report folder are its name in lower case, so `a--b` and `a-b`, two agents for the trash, no longer read and delete each other's mail.
 - Rules that were written in several places now live in one: the text a new file is born with, the empty unit skeleton, the IDE's `bin` folder, where a sysroot keeps its `libc.so.6` and whether it mixes two distros, which `delphi_adb` commands need a named device, how a disabled IDE package is matched, what msbuild sees of the server's environment, and the lines the form renderers write to the server. No result changes.
 
 ### Fixed
+
+- `delphi_changeset` refuses `delete` and `move` of a link when staging (CHSET-036): undoing a batch that failed turned a link into a plain file with its target's content, while the answer said every file was back byte for byte. `delphi_delete` and `delphi_move` handle the link itself.
 
 - **`delphi_desktop` against a PAServer that does not answer costs one wait, and only that
   profile's.** `paclient` gives up by itself (21 s against an address that does not answer,

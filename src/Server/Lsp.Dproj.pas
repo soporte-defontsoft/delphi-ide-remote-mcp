@@ -1065,8 +1065,10 @@ function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): strin
   de la posicion y quien la lleve la deja escrita, no verificable. Tampoco
   $(Platform)/$(Config), que elige quien compila, ni $(MSBuildProjectFile) /
   $(MSBuildProjectFullPath), que salen del path real del .dproj donde hacen falta
-  (Lsp.BuildRunner): aqui no se compone ningun nombre de fichero. }
+  (MacrosDelFicheroDelProyecto): aqui no se compone ningun nombre de fichero. }
 function MacrosReservadasDeMsbuild(const ACarpetaProyecto, ANombreProyecto, ACarpetaDelFichero: string): TArray<string>;
+{ Las dos reservadas que son el path real del propio .dproj (V160e). }
+function MacrosDelFicheroDelProyecto(const ADprojPath: string): TArray<string>;
 { EL expansor de los macros de un valor de SALIDA del .dproj: $(Platform) y
   $(Config), que elige quien compila, mas las reservadas por EL lector
   (MacrosReservadasDeMsbuild). $(ProjectDir) ya no (V118: no reservada, no
@@ -3541,6 +3543,12 @@ begin
       IncludeTrailingPathDelimiter(ACarpetaDelFichero)];
 end;
 
+function MacrosDelFicheroDelProyecto(const ADprojPath: string): TArray<string>;
+begin
+  Result := ['MSBuildProjectFile=' + TPath.GetFileName(ADprojPath),
+    'MSBuildProjectFullPath=' + TPath.GetFullPath(ADprojPath)];
+end;
+
 { La ruta de un <Import> con sus macros expandidas por EL lector
   (MacrosReservadasDeMsbuild) y resuelta como la lee msbuild (EL resolutor,
   que corre en ACarpetaDelBuild: un "\x" o un "X:y" se leen desde ella aunque
@@ -3628,8 +3636,10 @@ var
     begin
       if IsStockImport(LowerCase(V.Trim)) then
         Continue;
+      // sin preguntarle antes al disco (V160): lo que no se puede leer lo dice
+      // la puerta de arriba, y una ruta de fuera de las raices ni se toca
       Resolved := ResolveImportPath(V.Trim, AFile, CarpetaDelBuild, NombreRaiz);
-      if (Resolved <> '') and TFile.Exists(Resolved) then
+      if Resolved <> '' then
         Lee(Resolved, ADepth + 1);
     end;
   end;

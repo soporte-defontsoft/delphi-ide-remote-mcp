@@ -86,7 +86,8 @@ uses
   Lsp.Rutas,
   Lsp.ProjectUnits,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
-  Lsp.ShaCache;
+  Lsp.ShaCache,
+  Lsp.NetDrives;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
@@ -827,8 +828,12 @@ begin
               Exit(MsgFmt(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
           end;
         opDelete:
-          if not WillExist(C, Op.Path) then
-            Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+          begin
+            if EsEnlace(SinBarraFinal(Op.Path)) then
+              Exit(MsgFmt(SR_CHANGESET_ES_UN_ENLACE_FMT, [Op.Path]));
+            if not WillExist(C, Op.Path) then
+              Exit(MsgFmt(SR_CHANGESET_VIRT_MISSING_FMT, [Op.Path]));
+          end;
         opDeleteLine:
           begin
             // a BLANK line has no usable anchor, so atline decides; old is
@@ -845,6 +850,8 @@ begin
           end;
         opMove:
           begin
+            if EsEnlace(SinBarraFinal(Op.Path)) then
+              Exit(MsgFmt(SR_CHANGESET_ES_UN_ENLACE_FMT, [Op.Path]));
             if ADest.Trim = '' then
               Exit(MsgText(SR_CHANGESET_NEED_DEST));
             Denied := WriteTargetDenied(ADest);

@@ -12,13 +12,20 @@ Esta bateria VIGILA que siga cerrado (su mutante: que WriteTargetDenied dejara
 de resolver el enlace). Borrar un enlace COMO enlace es del operador
 (delphi_delete); por el changeset, un enlace que sale se niega.
 
+V201 de la 1.25, MEDIDO: un enlace que NO sale se borraba, y si el lote fallaba
+despues el deshacer lo devolvia como FICHERO con el contenido de su destino,
+diciendo ROLLBACK COMPLETE byte for byte: la foto guarda bytes. Delete y move de
+un enlace se niegan al apilar (CHSET-036), tambien el colgante.
+
 Necesita modo desarrollador (crear un symlink de fichero); si no, NOTA.
 
   A1 (A18-M1) changeset delete de un symlink a FUERA: el STAGE lo niega (GUARD-001,
      SR_JAIL_LINK_FMT) y el contenido de fuera NO entra en la papelera   [vigila lo cerrado]
   A2 (guarda) changeset delete de un .txt NORMAL: se compromete
-  A3 (guarda) changeset delete de un symlink a un .txt de DENTRO: se compromete y
-     su DESTINO (dentro-real.txt) sigue (borrar el enlace no toca su objetivo)
+  A3 (V201) changeset delete de un symlink a un .txt de DENTRO: CHSET-036, y el enlace
+     y su DESTINO siguen
+  A4 (V201) move del mismo enlace y delete de uno colgante: CHSET-036
+  A5 (guarda) delphi_delete, que SI lo borra como enlace, no toca su destino
 
 Uso:  python tests/test_changeset_enlace_1230.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -88,10 +95,21 @@ try:
         linkdentro = os.path.join(JAIL, 'enlace-dentro.txt')
         os.symlink(dentro, linkdentro)
         st, cm = borra_cs(linkdentro)
-        # borrar el ENLACE no toca su destino: dentro-real.txt sigue (revisor A18-M1)
-        check('A3 (guarda) delete de un symlink a DENTRO: se compromete y su DESTINO (dentro-real.txt) sigue',
-              mc.es(cm, 'SN_CHANGESET_COMMITTED_FMT') and not os.path.lexists(linkdentro)
-              and os.path.exists(dentro), cm[:300])
+        check('A3 (V201) delete de un symlink a DENTRO: CHSET-036, y siguen el enlace y su destino',
+              mc.abre(st, 'SR_CHANGESET_ES_UN_ENLACE_FMT') and os.path.islink(linkdentro)
+              and os.path.exists(dentro), st[:300])
+        i = mc.id_changeset(cs(command='begin'))
+        mv = cs(command='stage', id=i, kind='move', path=linkdentro, dest=os.path.join(JAIL, 'movido.txt'))
+        colgante = os.path.join(JAIL, 'colgante.txt')
+        os.symlink(os.path.join(JAIL, 'no-esta.txt'), colgante)
+        co = cs(command='stage', id=i, kind='delete', path=colgante)
+        cs(command='rollback', id=i)
+        check('A4 (V201) move de un symlink y delete de uno colgante: CHSET-036',
+              mc.abre(mv, 'SR_CHANGESET_ES_UN_ENLACE_FMT') and mc.abre(co, 'SR_CHANGESET_ES_UN_ENLACE_FMT'),
+              (mv[:200], co[:200]))
+        r = s.call('delphi_delete', {'path': linkdentro}, t=60)
+        check('A5 (guarda) delphi_delete lo borra como enlace y su destino sigue',
+              not os.path.lexists(linkdentro) and os.path.exists(dentro), r[:300])
 finally:
     s.cierra()
 mc.borra(BASE)

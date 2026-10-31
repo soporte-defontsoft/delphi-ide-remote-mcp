@@ -94,23 +94,6 @@ var
   GCaducadas: TStringList;    // las ultimas que caducaron: su motivo no se pierde al purgarlas
 threadvar
   TCurrentAgent: string; // WHO is calling on THIS thread (the HTTP request)
-{ A name safe to use as a folder tag: letters, digits, dash, underscore, dot.
-  Anything else collapses to '-', so a declared name can never traverse. }
-function SanitizeAgent(const AName: string): string;
-var
-  C: Char;
-begin
-  Result := '';
-  for C in AName.Trim do
-    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
-      Result := Result + C
-    else
-      Result := Result + '-';
-  Result := Result.Trim(['-', '.']);
-  if Length(Result) > 40 then
-    Result := Copy(Result, 1, 40);
-end;
-
 const
   MINUTOS_POR_DIA = 1440;
   // la identidad de una sesion HTTP sin nombre: el prefijo y FragmentoUnico
@@ -178,7 +161,7 @@ begin
   Id := ASessionId.Trim;
   if Id = '' then
     Exit;
-  Clean := SanitizeAgent(AName);
+  Clean := NombreDeAgente(AName);
   GIdentLock.Enter;
   try
     I := IndiceDeSesion(Id);
@@ -305,14 +288,14 @@ end;
 
 procedure SetThreadIdentityByRequest(const AName: string);
 begin
-  TCurrentAgent := SanitizeAgent(AName);
+  TCurrentAgent := NombreDeAgente(AName);
   if TCurrentAgent = '' then
     TCurrentAgent := IdentidadPropia;
 end;
 
 procedure SetThreadIdentity(const AName: string);
 begin
-  TCurrentAgent := SanitizeAgent(AName);
+  TCurrentAgent := NombreDeAgente(AName);
 end;
 
 procedure ClearThreadIdentity;

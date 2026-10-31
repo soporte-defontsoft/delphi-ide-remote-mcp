@@ -186,9 +186,13 @@ function EsCarpetaDescarga(const ANombre: string): Boolean;
   cifras ASCII, el resto se junta en un guion, 40 como mucho, minusculas.
   Nada del valor crudo llega al sistema de ficheros. Uno solo: estaba
   copiado identico en Mcp.Tools.Messages y Mcp.Tools.Report (25-sep-2026). }
-function Slug(const S: string; const AConservar: string = ''): string;
-{ La carpeta de un agente: Slug, sin juntar lo que su nombre separa (SanitizeAgent
-  admite '.' y '_'): con Slug a secas, a.b, a_b y a-b compartian buzon. }
+function Slug(const S: string): string;
+{ EL nombre de un agente, el que lo identifica y marca lo suyo: letras, cifras
+  ASCII, '_', '-' y '.'; lo demas, un guion; 40 como mucho. Nunca recorre. Y su
+  carpeta, ese mismo en minusculas: eran dos nombradores (V116), y dos agentes
+  distintos para la papelera (a.b y a-b; a--b y a-b) leian y BORRABAN el correo
+  del otro. }
+function NombreDeAgente(const AName: string): string;
 function SlugDeAgente(const S: string): string;
 
 { El nombre de la carpeta de copias ('__delphi-patch'), para quien tenga que
@@ -422,12 +426,24 @@ begin
     FRAGMENTO_UNICO_PATRON + '$', [roIgnoreCase]);
 end;
 
-function SlugDeAgente(const S: string): string;
+function NombreDeAgente(const AName: string): string;
 begin
-  Result := Slug(S, '._');
+  Result := '';
+  for var C in Copy(AName.Trim, 1, 40) do
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.']) then
+      Result := Result + C
+    else
+      Result := Result + '-';
+  // (un '.' de los extremos tampoco: Windows lo recorta, y '..' no es un nombre)
+  Result := Result.Trim(['-', '.']);
 end;
 
-function Slug(const S: string; const AConservar: string): string;
+function SlugDeAgente(const S: string): string;
+begin
+  Result := SinMayusculas(NombreDeAgente(S));
+end;
+
+function Slug(const S: string): string;
 var
   C, Prev: Char;
 begin
@@ -435,7 +451,7 @@ begin
   Prev := '-';
   for C in S do
   begin
-    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) or (Pos(C, AConservar) > 0) then
+    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
     begin
       Result := Result + C;
       Prev := C;

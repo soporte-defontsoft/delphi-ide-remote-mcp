@@ -7406,6 +7406,14 @@ const
     'it, reorder the operations: they are applied in the order you stack ' +
     'them.';
 
+  { (V201 de la 1.25) la foto de un lote guarda bytes: un enlace deshecho volvia
+    como un fichero con el contenido de su destino, diciendo "byte for byte" }
+  SR_CHANGESET_ES_UN_ENLACE_FMT =
+    '[CHSET-036 DENIED] %s is a link. A changeset undoes its work from the ' +
+    'bytes of each file, which cannot put a link back: delete or move it ' +
+    'with delphi_delete or delphi_move, which handle the link itself and ' +
+    'leave its target alone.';
+
   SR_CHANGESET_VIRT_EXISTS_FMT =
     '[CHSET-002 DENIED] %s already exists (create never overwrites). If ' +
     'what you want is to redo it entirely, first stack kind=delete of ' +

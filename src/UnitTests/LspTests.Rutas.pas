@@ -1618,6 +1618,8 @@ begin
   Assert.AreEqual('hermes-30', SlugDeAgente('Hermes 30'), 'un nombre sin punto ni guion bajo, en la carpeta de siempre');
   Assert.AreEqual('', SlugDeAgente('..'));
   Assert.AreEqual('x', SlugDeAgente('..\x..'));
+  Assert.AreEqual('a--b', SlugDeAgente('a--b'), 'dos agentes distintos para la papelera, dos buzones (V116)');
+  Assert.AreEqual(SinMayusculas(NombreDeAgente('Hermes 30.x')), SlugDeAgente('Hermes 30.x'), 'el nombre es uno (V116)');
   Assert.AreEqual('a-b', Slug('a.b'), 'el titulo de un informe sigue igual');
 end;
 

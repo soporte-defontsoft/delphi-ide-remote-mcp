@@ -1975,6 +1975,17 @@ var
     end;
   end;
 
+  // 'Nombre=Valor', a la tabla: el reparto estaba escrito tres veces (V160e)
+  procedure PonEnLaTabla(const APares: TArray<string>);
+  begin
+    for var Par in APares do
+    begin
+      var P := Pos('=', Par);
+      if P > 1 then
+        Vars.Values[Copy(Par, 1, P - 1)] := Copy(Par, P + 1, MaxInt);
+    end;
+  end;
+
 begin
   Result := '';
   Xmls := ProjectXmlChain(ADprojPath, Ficheros);
@@ -1986,28 +1997,16 @@ begin
   try
     IdeMacroVars(AInfo, Vars);
     // rsvars.bat manda sobre la tabla: es el entorno que recibe msbuild
-    for var V in VariablesDeRsVars(AInfo) do
-    begin
-      var I := Pos('=', V);
-      if I > 1 then
-        Vars.Values[Copy(V, 1, I - 1)] := Copy(V, I + 1, MaxInt);
-    end;
+    PonEnLaTabla(VariablesDeRsVars(AInfo));
     Vars.Values['Platform'] := APlat;
     Vars.Values['Config'] := ACfg;
     // las reservadas de msbuild sobre este proyecto, por EL lector: UNA casa
     // (V118) para ResolveImportPath, ExpandOutputMacros y esta tabla. La carpeta
     // del fichero es la del proyecto para sembrar; $(MSBuildThisFileDirectory)
     // se reajusta por documento mas abajo (cada valor se juzga en SU fichero).
-    for var Macro in MacrosReservadasDeMsbuild(Dir, Base, Dir) do
-    begin
-      var P := Pos('=', Macro);
-      if P > 1 then
-        Vars.Values[Copy(Macro, 1, P - 1)] := Copy(Macro, P + 1, MaxInt);
-    end;
-    // y las que son el path del propio .dproj (constantes en la cadena): de su
-    // path real, sin componer ningun nombre (DprojDe es EL compositor de .dproj)
-    Vars.Values['MSBuildProjectFile'] := TPath.GetFileName(ADprojPath);
-    Vars.Values['MSBuildProjectFullPath'] := TPath.GetFullPath(ADprojPath);
+    PonEnLaTabla(MacrosReservadasDeMsbuild(Dir, Base, Dir));
+    // y las que son el path del propio .dproj (constantes en la cadena)
+    PonEnLaTabla(MacrosDelFicheroDelProyecto(ADprojPath));
     // $(ProjectDir) NO va en la tabla: NO es una propiedad reservada -
     // CodeGear.Delphi.Targets la DEFINE (vacia en el cuerpo del .dproj, la
     // carpeta del proyecto tras ese Import) y el proyecto puede redefinirla. En
@@ -2042,12 +2041,7 @@ begin
       // no al proyecto (V118, caso D: un DCC_UnitSearchPath con ..\..\ en un
       // .targets importado de otra carpeta leia fuera de la jaula). UNA sola
       // casa calcula el valor -el lector-, aqui con el fichero del documento.
-      for var Macro in MacrosReservadasDeMsbuild(Dir, Base, ExtractFileDir(Ficheros[I])) do
-      begin
-        var P := Pos('=', Macro);
-        if P > 1 then
-          Vars.Values[Copy(Macro, 1, P - 1)] := Copy(Macro, P + 1, MaxInt);
-      end;
+      PonEnLaTabla(MacrosReservadasDeMsbuild(Dir, Base, ExtractFileDir(Ficheros[I])));
       var DeOtros: TArray<string> := [];
       for var J := 0 to High(Xmls) do
         if J <> I then

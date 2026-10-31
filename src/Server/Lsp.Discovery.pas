@@ -1541,6 +1541,8 @@ begin
     ADest.Values['BDS'] := PrefijoSinBarra(AInfo.RootDir);
   if ADest.Values['BDSLIB'] = '' then
     ADest.Values['BDSLIB'] := PrefijoSinBarra(AInfo.RootDir) + '\lib';
+  if ADest.Values['BDSBIN'] = '' then
+    ADest.Values['BDSBIN'] := BinDelIde(AInfo.RootDir); // la de Known Packages (P4)
   UserDocs := BdsUserDir(AInfo);
   if (UserDocs <> '') and (ADest.Values['BDSUSERDIR'] = '') then
     ADest.Values['BDSUSERDIR'] := UserDocs;
