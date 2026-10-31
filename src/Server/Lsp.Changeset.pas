@@ -869,7 +869,7 @@ begin
       end;
       C.Ops.Add(Op);
       Exit(MsgFmt(SN_CHANGESET_STAGED_FMT,
-        [KindName(Op.Kind), Op.Path, C.Ops.Count]));
+        [KindName(Op.Kind), Op.Path, C.Ops.Count]) + MsgText(SF_CHANGESET_TRAS_STAGED));
     end;
 
     // Taking one operation back out. Without this, a single mistyped anchor

@@ -11,6 +11,8 @@ V45: delphi_git por campos: format name-only, log grep, add/commit/fetch action,
 commit que un remoto ya tiene se niega.
 V46: los nombres que un agente manda a delphi_build (friccion de Hermes del 22-oct): configuration y command, por la
 tabla de alias de siempre, sin coste en el contrato.
+V41: delphi_changeset stage con ops: varias operaciones en una llamada, todas o ninguna, y cada una por la misma
+puerta que una suelta (una ruta de dentro de ops no tiene otra).
 
 Usage:  python tests/test_capacidades_125.py [path-to-DelphiLspMcp.exe]
 """
@@ -215,6 +217,73 @@ try:
     check('V46 el alias con otro valor que el real: la negativa de siempre', mc.es(t, 'SR_ARG_ALIAS_OTRO_VALOR_FMT'), t[:300])
     d = json.loads(call('delphi_list', {'path': RAIZ, 'pattern': 'UNo.pas'}))
     check('V46 control: path ya valia en delphi_list', d.get('total', 0) >= 1 or d.get('folders'), d)
+
+    # V41 - delphi_changeset stage con ops
+    CS = os.path.join(RAIZ, 'cs')
+    os.makedirs(CS)
+    A, B, M1, M2, N = [os.path.join(CS, x) for x in ('a.txt', 'b.txt', 'm1.txt', 'm2.txt', 'n.txt')]
+    for ruta in (A, B, M1):
+        with open(ruta, 'w', newline='') as f:
+            f.write('uno\r\ndos\r\n')
+
+
+    def cs(comando, **kw):
+        return call('delphi_changeset', dict({'command': comando}, **kw))
+
+
+    def nuevo():
+        return mc.id_changeset(cs('begin'))
+
+
+    ID = nuevo()
+    t = cs('stage', id=ID, ops=[{'kind': 'edit', 'path': A, 'old': 'uno', 'new': 'UNO'},
+                                {'kind': 'edit', 'path': mc.virtual(B), 'old': 'dos', 'new': 'DOS'},
+                                {'kind': 'create', 'path': N, 'content': 'nuevo'},
+                                {'kind': 'move', 'path': M1, 'dest': M2}])
+    check('V41 ops: las cuatro apiladas, y dice cada una', t.count('CHSET-021') == 4 and mc.es(t, 'SN_CHANGESET_STAGED_FMT') and not mc.fallo(t), t[:400])
+    check('V41 ops: lo que vale para todas, una vez', t.count('MANDATORY') == 1, t[:600])
+    p = cs('preview', id=ID)
+    check('V41 ops: el preview las ve, con la unidad virtual ya traducida', not mc.fallo(p), p[:400])
+    t = cs('commit', id=ID)
+    with open(A, 'rb') as f:
+        de_a = f.read()
+    with open(B, 'rb') as f:
+        de_b = f.read()
+    check('V41 ops: el commit las aplica todas, en su orden',
+          de_a == b'UNO\r\ndos\r\n' and de_b == b'uno\r\nDOS\r\n' and os.path.exists(N) and os.path.exists(M2) and not os.path.exists(M1), (t[:300], de_a, de_b))
+
+    # todas o ninguna, y cada una por la puerta de una suelta
+    FUERA = os.path.join(BASE, 'fuera-de-la-raiz.txt')
+    ID = nuevo()
+    t = cs('stage', id=ID, ops=[{'kind': 'edit', 'path': A, 'old': 'dos', 'new': 'X'}, {'kind': 'create', 'path': FUERA, 'content': 'x'}])
+    check('V41 una ruta fuera de la jaula dentro de ops: su negativa, la de siempre', mc.es(t, 'SR_CHANGESET_OP_NEGADA_FMT') and 'GUARD-' in t, t[:300])
+    p = cs('preview', id=ID)
+    check('V41 ...y la que iba delante no se queda apilada', 'a.txt' not in p, p[:300])
+    cs('commit', id=ID)
+    with open(A, 'rb') as f:
+        check('V41 ...ni el fichero cambia, ni fuera hay nada', f.read() == de_a and not os.path.exists(FUERA), FUERA)
+    t = cs('stage', id=ID, ops=[{'kind': 'edit', 'path': '\\\\192.0.2.1\\s\\x.pas', 'old': 'a', 'new': 'b'}])
+    check('V41 un UNC ajeno dentro de ops: negado por texto, como uno suelto', mc.es(t, 'SR_CHANGESET_OP_NEGADA_FMT') and 'GUARD-' in t, t[:300])
+    t = cs('stage', id=ID, ops=[{'kind': 'edit', 'path': A, 'old': 'dos', 'new': 'X', 'noexiste': 1}])
+    check('V41 un campo que no existe dentro de una op: SYS-015', mc.es(t, 'SR_CHANGESET_OP_NEGADA_FMT') and mc.es(t, 'SR_SYS_UNKNOWN_PARAM_FMT'), t[:300])
+    t = cs('stage', id=ID, ops=[{'kind': 'delete', 'path': A, 'old': 'dos'}])
+    check('V41 lo que no es de su kind, como en una suelta', mc.es(t, 'SR_CHANGESET_NO_ES_DE_KIND_FMT'), t[:300])
+    for malo in ({'command': 'commit'}, {'id': 'otro'}, {'ops': []}):
+        t = cs('stage', id=ID, ops=[dict({'kind': 'edit', 'path': A}, **malo)])
+        check('V41 una op no lleva %s' % list(malo)[0], mc.es(t, 'SR_CHANGESET_OP_CAMPO_FMT'), t[:300])
+    for malo in ([], ['texto'], [{'kind': 'delete', 'path': A}] * 51):
+        t = cs('stage', id=ID, ops=malo)
+        check('V41 ops de %d: su negativa' % len(malo), mc.es(t, 'SR_CHANGESET_OPS_LISTA_FMT') or (malo == ['texto'] and mc.es(t, 'SR_CHANGESET_OP_NEGADA_FMT')), t[:300])
+    t = cs('stage', id=ID, kind='edit', ops=[{'kind': 'delete', 'path': A}])
+    check('V41 ops con kind: no se mezclan', mc.es(t, 'SR_CHANGESET_NO_VA_CON_COMANDO_FMT'), t[:300])
+    t = cs('preview', id=ID, ops=[{'kind': 'delete', 'path': A}])
+    check('V41 ops solo va con stage', mc.es(t, 'SR_CHANGESET_NO_VA_CON_COMANDO_FMT'), t[:300])
+    cs('rollback', id=ID)
+    # una sola sigue valiendo
+    ID = nuevo()
+    t = cs('stage', id=ID, kind='edit', path=A, old='dos', new='DOS')
+    check('V41 control: stage suelto sigue igual', not mc.fallo(t) and mc.es(t, 'SN_CHANGESET_STAGED_FMT'), t[:300])
+    cs('rollback', id=ID)
 finally:
     srv.mata()
 

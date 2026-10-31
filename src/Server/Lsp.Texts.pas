@@ -8130,7 +8130,7 @@ const
   SD_CHANGESET =
     'MULTI-FILE TRANSACTIONS: when one change touches several files, the ' +
     'whole batch lands or none of it. Flow: begin (gives an id) -> stage ' +
-    'one operation per call (kind=edit|create|delete|move; nothing touches ' +
+    'the operations (kind=edit|create|delete|move; nothing touches ' +
     'disk yet) -> preview (resolves every edit anchor, rehearses each edit ' +
     'and create with the engine - encoding, read-only attribute, binary ' +
     'content, the write gate - and fingerprints every file the batch ' +
@@ -8148,10 +8148,14 @@ const
     'would break the project; for one file, delphi_edit is simpler.';
 
   SP_CHANGESET_COMMAND =
-    'begin (new changeset -> id) | stage (add ONE operation) | unstage ' +
+    'begin (new changeset -> id) | stage (add ONE operation, or several by ops) | unstage ' +
     '(take operation "n" back out; n=0 = the last one) | preview (resolve ' +
     'anchors, rehearse, fingerprint; required before commit) | commit (all ' +
     'or nothing) | rollback (discard) | status (the open ones)';
+
+  SP_CHANGESET_OPS =
+    'stage: several operations in ONE call, instead of kind and its fields: a list of ' +
+    '{kind, path, ...}; all are staged or none.';
 
   SP_CHANGESET_N =
     'unstage: number of the operation to remove, the one preview shows ' +
@@ -8273,11 +8277,14 @@ const
 
   SN_CHANGESET_BEGUN_FMT =
     '[CHSET-020] CHANGESET %s opened. stage adds operations (one per ' +
-    'call), preview resolves them, commit applies all or nothing.';
+    'call, or several by ops), preview resolves them, commit applies all or nothing.';
 
   SN_CHANGESET_STAGED_FMT =
-    '[CHSET-021] STAGED %s of %s (operation %d of the changeset). ' +
-    'Nothing touched yet. command=preview is MANDATORY before the ' +
+    '[CHSET-021] STAGED %s of %s (operation %d of the changeset).';
+
+  { ...lo que vale para todas: stage con ops lo dice una vez, al final }
+  SF_CHANGESET_TRAS_STAGED =
+    ' Nothing touched yet. command=preview is MANDATORY before the ' +
     'commit, and it has to come AFTER the last operation you stage: if ' +
     'you stage anything else after the preview, preview again. If you ' +
     'get one wrong, command=unstage n=<number> removes it without ' +
@@ -8314,6 +8321,18 @@ const
 
   { ...y un parametro que no es del COMANDO: commit / preview con kind,
     path, old o n se ignoraban (octava revision). }
+  { stage con ops: lo que no es una lista, y una op que trae lo de la llamada }
+  SR_CHANGESET_OPS_LISTA_FMT =
+    '[CHSET-033 INVALID_PARAM] ops is a list of 1 to %d operations. Nothing ' +
+    'was staged.';
+
+  SR_CHANGESET_OP_CAMPO_FMT =
+    '[CHSET-034 INVALID_PARAM] Operation %d of ops carries "%s": that goes ' +
+    'with the call, not with an operation. Nothing was staged.';
+
+  SR_CHANGESET_OP_NEGADA_FMT =
+    '[CHSET-035 DENIED] Operation %d of %d was refused, so none was staged: %s';
+
   SR_CHANGESET_NO_VA_CON_COMANDO_FMT =
     '[CHSET-031 INVALID_PARAM] "%s" does not go with command=%s (it would ' +
     'be ignored). Nothing was done: %s takes %s.';

@@ -40,6 +40,9 @@ the MCP `initialize` response (`serverInfo.version`).
   plain git: it took the current branch too).
 - **`delphi_build` takes `configuration` and `command` as other names of `config` and `target`**,
   what agents send without looking; each one cost a call.
+- **`delphi_changeset stage` takes several operations in one call.** `ops` is a list of the
+  fields one `stage` takes; all are staged or none, and each goes through the same checks as one
+  sent alone. A batch of N files costs four calls instead of N+3.
 
 ### Fixed
 

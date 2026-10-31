@@ -25,6 +25,7 @@ type
     FContent: string;
     FAtLine: Integer;
     FFragment: string;
+    FOps: string;
     FN: Integer;
   public
     [SchemaDescription(SP_CHANGESET_COMMAND)]
@@ -53,11 +54,17 @@ type
     [SchemaDescription(SP_PATCH_FRAGMENT)]
     [Contenido]
     property Fragment: string read FFragment write FFragment;
+    [SchemaDescription(SP_CHANGESET_OPS)]
+    [JsonComoTexto]
+    [Contenido]
+    property Ops: string read FOps write FOps;
     [SchemaDescription(SP_CHANGESET_N)]
     property N: Integer read FN write FN;
   end;
 
   TDelphiChangesetTool = class(TMCPToolBase<TDelphiChangesetParams>)
+  private
+    function ApilaVarias(const AId, AOps: string): string;
   protected
     function ExecuteWithParams(const Params: TDelphiChangesetParams): string; override;
   public
@@ -68,7 +75,9 @@ implementation
 
 uses
   System.StrUtils,
+  System.JSON,
   MCPServer.Registration,
+  MCPServer.Serializer,
   Lsp.Guard,
   Lsp.Mascara, // MaskDriveText: la ruta delante de cada aviso, como el commit
   Lsp.Patch,   // AvisosDelLector: el lector del IDE, fuera del cerrojo
@@ -83,26 +92,108 @@ begin
   FDescription := SD_CHANGESET;
 end;
 
+{ stage con "ops": varias operaciones en una llamada, todas o ninguna. Cada una
+  entra por LA MISMA puerta que una suelta (ToolCallDenied: unidades virtuales,
+  UNC, nombre largo, el suelo de la jaula) y por el mismo Execute (sus campos, lo
+  que no va con su kind): una ruta de dentro de ops no tiene otra puerta, que
+  seria un segundo lector de lo mismo. Si una se niega, las ya apiladas se
+  retiran, y el agente corrige y manda la lista entera otra vez. }
+function TDelphiChangesetTool.ApilaVarias(const AId, AOps: string): string;
+const
+  TOPE_OPS = 50;
+
+  function Uno(const AElemento: TJSONValue; ANumero, ATotal: Integer; out ALinea: string): string;
+  begin
+    Result := '';
+    if not (AElemento is TJSONObject) then
+      Exit(MsgFmt(SR_CHANGESET_OP_NEGADA_FMT, [ANumero, ATotal, MsgFmt(SR_CHANGESET_OPS_LISTA_FMT, [TOPE_OPS])]));
+    var Args := AElemento.Clone as TJSONObject;
+    try
+      for var P in Args do
+        if MatchStr(TMCPSerializer.NormalizeKey(P.JsonString.Value), ['command', 'id', 'ops']) then
+          Exit(MsgFmt(SR_CHANGESET_OP_CAMPO_FMT, [ANumero, P.JsonString.Value]));
+      Args.AddPair('command', 'stage');
+      Args.AddPair('id', AId);
+      var Negada := ToolCallDenied('delphi_changeset', Args);
+      if Negada <> '' then
+        Exit(MsgFmt(SR_CHANGESET_OP_NEGADA_FMT, [ANumero, ATotal, MaskDriveText('', Negada)]));
+      try
+        ALinea := Execute(Args).AsString;
+      except
+        on E: Exception do
+          Exit(MsgFmt(SR_CHANGESET_OP_NEGADA_FMT, [ANumero, ATotal, E.Message]));
+      end;
+      if not HasMsg(ALinea, SN_CHANGESET_STAGED_FMT) then
+        Exit(MsgFmt(SR_CHANGESET_OP_NEGADA_FMT, [ANumero, ATotal, ALinea]));
+    finally
+      Args.Free;
+    end;
+  end;
+
+var
+  Valor: TJSONValue;
+  Linea, Negativa: string;
+begin
+  Result := '';
+  Valor := TJSONObject.ParseJSONValue(AOps);
+  try
+    if not (Valor is TJSONArray) or (TJSONArray(Valor).Count = 0) or
+       (TJSONArray(Valor).Count > TOPE_OPS) then
+      Exit(MsgFmt(SR_CHANGESET_OPS_LISTA_FMT, [TOPE_OPS]));
+    var Lista := TJSONArray(Valor);
+    for var I := 0 to Lista.Count - 1 do
+    begin
+      Negativa := Uno(Lista.Items[I], I + 1, Lista.Count, Linea);
+      if Negativa <> '' then
+      begin
+        for var K := 1 to I do
+        begin
+          var Retira := TJSONObject.Create;
+          try
+            Retira.AddPair('command', 'unstage');
+            Retira.AddPair('id', AId);
+            Execute(Retira);
+          finally
+            Retira.Free;
+          end;
+        end;
+        Exit(Negativa);
+      end;
+      // lo que vale para todas, una vez: con 50 eran 18 KB de lo mismo (medido en vivo)
+      Result := Result + IfThen(Result <> '', #10) + Linea.Replace(MsgText(SF_CHANGESET_TRAS_STAGED), '');
+    end;
+    Result := Result + MsgText(SF_CHANGESET_TRAS_STAGED);
+  finally
+    Valor.Free;
+  end;
+end;
+
 function TDelphiChangesetTool.ExecuteWithParams(const Params: TDelphiChangesetParams): string;
 begin
   // lo que no va con el COMANDO se dice (Lsp.Guard.ParametroQueNoVa): commit
   // o preview con kind / path / old / n se ignoraban (octava revision). Lo
   // de cada kind lo mira stage (CHSET-030)
   var Suyos, VaCon: string;
-  var Sobra := ParametroQueNoVa(SinMayusculas(Params.Command.Trim), [
+  var Modo := SinMayusculas(Params.Command.Trim);
+  if (Modo = 'stage') and (Params.Ops.Trim <> '') then
+    Modo := 'stage ops';
+  var Sobra := ParametroQueNoVa(Modo, [
       'begin', '',
       'status', '', // status lista TODOS: su tabla decia id y SP_CHANGESET_ID no (novena)
       'stage', 'id kind path dest old new content atline fragment',
+      'stage ops', 'id ops',
       'unstage', 'id n', 'undo', 'id n',
       'preview', 'id', 'commit', 'id', 'rollback', 'id'],
     ['id', Params.Id, '', 'kind', Params.Kind, '', 'path', Params.Path, '',
      'dest', Params.Dest, '', 'old', Params.Old, '', 'new', Params.New, '',
      'content', Params.Content, '', 'fragment', Params.Fragment, '',
+     'ops', Params.Ops, '',
      'atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
      'n', IfThen(Params.N <> 0, IntToStr(Params.N)), ''], Suyos, VaCon);
   if Sobra <> '' then
-    Exit(MsgFmt(SR_CHANGESET_NO_VA_CON_COMANDO_FMT, [Sobra, SinMayusculas(Params.Command.Trim),
-      SinMayusculas(Params.Command.Trim), ONinguno(Suyos)]) + VaCon);
+    Exit(MsgFmt(SR_CHANGESET_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, ONinguno(Suyos)]) + VaCon);
+  if Modo = 'stage ops' then
+    Exit(ApilaVarias(Params.Id, Params.Ops));
   var Forms: TArray<TFormEscrito>;
   Result := ChangesetExecuteYForms(Params.Command, Params.Id, SinMayusculas(Params.Kind.Trim),
     Params.Path, Params.Dest, Params.Old, Params.New, Params.Content,
