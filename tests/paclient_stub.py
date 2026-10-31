@@ -110,14 +110,29 @@ def ejecutar(lanzador):
         time.sleep(0.2)
 
 
-# Un PAServer que no contesta, como lo cuenta paclient de verdad (medido el
-# 2026-09-28 contra tres destinos apagados): la bateria lo pide con este
-# fichero en la scratch.
-if os.path.exists(os.path.join(SCRATCH, '_sin_paserver')):
+def sin_conexion():
     print('Platform Assistant Client  Version 37.1.10.6')
     print('Connecting to 192.0.2.1 on port 64211... ')
     print("Error: E0003 Connection to '192.0.2.1' on port 64211 failed")
     sys.exit(1)
+
+
+# Un PAServer que no contesta, como lo cuenta paclient de verdad (medido el
+# 2026-09-28 contra tres destinos apagados): la bateria lo pide con este
+# fichero en la scratch.
+if os.path.exists(os.path.join(SCRATCH, '_sin_paserver')):
+    sin_conexion()
+# El mismo, para UN perfil y tardando lo que diga el fichero: paclient tarda en
+# rendirse (21 s contra una IP que no contesta, medido el 31-oct-2026)
+_caido = os.path.join(SCRATCH, '_caido_' + sys.argv[-1])
+if os.path.exists(_caido):
+    time.sleep(float(open(_caido).read() or 0))
+    sin_conexion()
+# Un destino que recibe ficheros pero donde nada arranca: lo que se mide es lo
+# que se sube, sin correr el nodo en esta maquina
+if os.path.exists(os.path.join(SCRATCH, '_sin_trabajos')) and any(
+        a.startswith('--put=') and '.job' in a for a in sys.argv[1:]):
+    sin_conexion()
 
 for arg in sys.argv[1:]:
     if arg.startswith('--put='):

@@ -32,6 +32,17 @@ the MCP `initialize` response (`serverInfo.version`).
   hit. `exclude` takes masks like `pattern`, judged the same way, and `excluded` counts what
   it left out.
 
+### Fixed
+
+- **`delphi_desktop` against a PAServer that does not answer costs one wait, and only that
+  profile's.** `paclient` gives up by itself (21 s against an address that does not answer,
+  and its `--timeout` does not shorten that), so no `timeoutms` was added: what went away is
+  ours. The first gesture on a profile tried to upload the node after being told there was no
+  connection, paying the wait twice; while it waited it held a lock shared by every profile, so
+  a gesture on a live target waited behind a dead one; and each attempt left a folder in the
+  server's temporary area. `status` still answers `reachable: false` with the reason; a gesture
+  now says `FETCH-004` instead of `RUN-010`, with what `paclient` said.
+
 ## [1.24.0] - 2026-10-31
 
 A minor version around the form designer, and the renderer inside its own

@@ -4,10 +4,13 @@
 V39: delphi_docs search pagina como las demas listas.
 V44: delphi_search con contexto alrededor de cada acierto y con ficheros que se dejan fuera, por el
 mismo juez de mascaras que el paseo.
+V42: delphi_desktop con el PAServer caido, sin parametro nuevo: paclient se rinde solo y --timeout no lo acorta
+(medido: 21 s contra una IP que no contesta, con y sin el), asi que lo que sobraba era lo nuestro: subir el nodo
+despues de saber que no hay conexion, y retener a los demas perfiles mientras tanto. Contra paclient_stub, sin red.
 
 Usage:  python tests/test_capacidades_125.py [path-to-DelphiLspMcp.exe]
 """
-import json, os
+import glob, json, os, shutil, threading, time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -77,6 +80,93 @@ try:
     check('V44 todo fuera: no dice que la mascara no casa', d.get('excluded') == 3 and 'maskNote' not in d, d)
 finally:
     srv.mata()
+
+# V42 - delphi_desktop con el PAServer caido
+HERE = os.path.dirname(os.path.abspath(__file__))
+SRV = os.path.join(BASE, 'srv')
+EXE2 = mc.copia_exe(SRV)
+shutil.copytree(os.path.join(os.path.dirname(HERE), 'node'), os.path.join(SRV, 'node'))
+SCRATCH = os.path.join(BASE, 'scratch')
+os.makedirs(SCRATCH)
+STUB = os.path.join(BASE, 'paclient.cmd')
+with open(STUB, 'w') as f:
+    f.write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
+LOG = os.path.join(BASE, 'paclient.log')
+for perfil in ('caido', 'otro', 'vivo'):
+    ad, host = mc.appdata_perfil(BASE, perfil, '127.0.0.1')
+TOKEN = 'capacidades-125'
+with open(os.path.join(SRV, 'settings.ini'), 'w') as f:
+    f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\nAllowRemoteRun=1\nRemoteRunProjects=all\nRemoteHosts=%s\n' % (TOKEN, RAIZ, host))
+PORT = mc.puerto_libre()
+proc = mc.lanza_http(EXE2, PORT, mc.entorno({
+    'DELPHI_MCP_ROOTS': RAIZ, 'DELPHI_MCP_BIND_IP': '127.0.0.1', 'APPDATA': ad, 'DELPHI_MCP_PACLIENT': STUB,
+    'MCP_STUB_SCRATCH': SCRATCH, 'MCP_STUB_LOG': LOG}))
+
+
+def cliente(nombre):
+    c = mc.Http(PORT, TOKEN, t=120)
+    c.session(nombre)
+    return c
+
+
+def status(c, perfil):
+    return c.call('delphi_desktop', {'command': 'status', 'profile': perfil}, 120)
+
+
+def caido(perfil, segundos):
+    with open(os.path.join(SCRATCH, '_caido_' + perfil), 'w') as f:
+        f.write(str(segundos))
+
+
+def peticiones(perfil):
+    with open(LOG, encoding='utf-8') as f:
+        return [x for x in f.read().splitlines() if x.endswith(' ' + perfil)]
+
+
+try:
+    uno, dos = cliente('v42-uno'), cliente('v42-dos')
+    caido('caido', 0)
+    r = status(uno, 'caido')
+    j = mc.como_json(r)
+    check('V42 status con el PAServer caido: reachable=false con el motivo, sin error',
+          j.get('reachable') is False and 'E0003' in (j.get('hint') or '') and 'error' not in j, r[:300])
+    pet = peticiones('caido')
+    check('V42 sin conexion no se intenta subir el nodo: UNA espera de paclient, no dos',
+          len(pet) == 1 and pet[0].startswith('--get='), pet)
+    check('V42 la carpeta de esa comprobacion no se queda en la casa',
+          not glob.glob(os.path.join(SRV, mc.TEMPORALES, 'remoterun', 'ver-*')),
+          glob.glob(os.path.join(SRV, mc.TEMPORALES, 'remoterun', '*')))
+    r = uno.call('delphi_desktop', {'command': 'tap', 'profile': 'caido', 'x': '1', 'y': '1'}, 120)
+    check('V42 un gesto contra ese destino: su negativa, con lo que dijo paclient', mc.es(r, 'SR_FETCHTARGET_FAIL_FMT') and 'E0003' in r, r[:300])
+
+    # un perfil caido no retiene a otro
+    caido('caido', 6)
+    caido('otro', 0)
+    fuera = []
+    hilo = threading.Thread(target=lambda: fuera.append(status(uno, 'caido')))
+    hilo.start()
+    time.sleep(1.5)
+    t0 = time.time()
+    r = status(dos, 'otro')
+    tardo = time.time() - t0
+    sigue = hilo.is_alive()
+    hilo.join()
+    check('V42 un perfil caido no retiene a otro: contesta mientras el primero sigue esperando a paclient',
+          sigue and tardo < 3 and mc.como_json(r).get('reachable') is False, (sigue, tardo, r[:200]))
+
+    # el control: un sello que no esta NO es falta de conexion, y el nodo se sube
+    with open(os.path.join(SCRATCH, '_sin_trabajos'), 'w') as f:
+        f.write('x')
+    status(uno, 'vivo')
+    pet = peticiones('vivo')
+    subidas = [x for x in pet if x.startswith('--put=') and 'McpDesktopNode' in x and '.job' not in x]
+    check('V42 control: sin sello y con conexion, el nodo y su sello se suben', len(subidas) >= 2 and pet[0].startswith('--get='), pet)
+    antes = len([x for x in peticiones('vivo') if x.startswith('--get=') and 'node.ver' in x])
+    status(uno, 'vivo')
+    check('V42 control: la comprobacion del nodo sigue siendo una por perfil y proceso',
+          len([x for x in peticiones('vivo') if x.startswith('--get=') and 'node.ver' in x]) == antes == 1, peticiones('vivo'))
+finally:
+    proc.kill()
 
 mc.borra(BASE)
 mc.fin('capacidades 1.25 battery')

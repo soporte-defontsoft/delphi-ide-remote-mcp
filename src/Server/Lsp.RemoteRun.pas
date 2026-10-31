@@ -1008,16 +1008,51 @@ begin
 end;
 
 
-{ El trabajo; EnsureNodeCurrent lo envuelve en el cerrojo del nodo. }
-function EnsureNodeCurrentNucleo(const AProfile: string;
-  out AAccion: string): string;
+{ paclient no llego al PAServer: lo dice el, con esta frase (medido contra
+  destinos apagados y contra una IP que no contesta). Su codigo de salida no lo
+  distingue: un fichero que no esta tambien puede dar distinto de 0. Un paclient
+  en otro idioma no casa, y entonces solo se espera lo de antes. }
+function PaclientSinConexion(const ASalida: string): Boolean;
+begin
+  Result := TRegEx.IsMatch(ASalida, 'Connection to ''[^'']*'' on port \d+ failed', [roIgnoreCase]);
+end;
+
+function NodoYaComprobado(const AProfile: string): Boolean;
+begin
+  GNodoLock.Enter;
+  try
+    Result := GNodoAlDia.IndexOf(SinMayusculas(AProfile.Trim)) >= 0;
+  finally
+    GNodoLock.Leave;
+  end;
+end;
+
+procedure ApuntaNodoComprobado(const AProfile: string);
+begin
+  GNodoLock.Enter;
+  try
+    if GNodoAlDia.IndexOf(SinMayusculas(AProfile.Trim)) < 0 then
+      GNodoAlDia.Add(SinMayusculas(AProfile.Trim));
+  finally
+    GNodoLock.Leave;
+  end;
+end;
+
+{ Comprobar el sello y desplegar son UN gesto: separados, dos llamadas
+  simultaneas veian las dos "falta el nodo" y subian el binario a la vez sobre
+  el mismo fichero del target (analisis 2026-09-20). Lo que lo hace un gesto es
+  el cerrojo de la maquina que ya tiene quien llama (delphi_desktop,
+  CerrojoDePerfil). GNodoLock guarda solo la lista: envolvia todo esto, y un
+  destino caido retenia a los demas perfiles lo que tardase paclient en rendirse
+  (10,9 s con 6 s por llamada, V42 de la 1.25). }
+function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
 var
   Bin, LocalSha, RemotoSha, Pc, Output, VerLocal, VerFile, TmpDir: string;
   Rc: Integer;
 begin
   Result := '';
   AAccion := '';
-  if GNodoAlDia.IndexOf(SinMayusculas(AProfile.Trim)) >= 0 then
+  if NodoYaComprobado(AProfile) then
     Exit;
   { Al target va el binario de SU sistema: el ELF a un Linux y el .exe a un
     Windows con PAServer. El nombre en el destino es el mismo para los dos
@@ -1038,52 +1073,46 @@ begin
   TmpDir := TPath.Combine(ServerTempDir(REMOTERUN_SUB), 'ver-' +
     FragmentoUnico);
   CrearCarpeta(TmpDir);
-  // el sello del target: ausente = nodo de antes de los sellos (o ninguno)
-  RemotoSha := '';
-  if FetchFromTarget(AProfile, NODE_PROJECT, NODE_SELLO, TmpDir, VerFile) = '' then
   try
-    RemotoSha := LeeTexto(VerFile, [ltTemporal]).Trim;
-    BorraFichero(VerFile, ltTemporal);
-  except
+    // el sello del target: ausente = nodo de antes de los sellos (o ninguno)
     RemotoSha := '';
-  end;
-  if not SameText(RemotoSha, LocalSha) then
-  begin
-    // flag 1 = runnable: PAServer deja el fichero ejecutable en su carpeta
-    Rc := Paclient(Pc, PaclientPut(Bin, NODE_PROJECT, 1, NODE_PROJECT), AProfile, Output);
-    if Rc <> 0 then
-      Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
-    VerLocal := TPath.Combine(TmpDir, 'node-' + LocalSha.Substring(0, 12) + '.ver');
-    EscribeTexto(VerLocal, LocalSha, ltTemporal, ekUtf8);
-    Rc := Paclient(Pc, PaclientPut(VerLocal, NODE_PROJECT, 0, NODE_SELLO), AProfile, Output);
-    BorraFichero(VerLocal, ltTemporal);
-    if Rc <> 0 then
-      Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
-    if RemotoSha = '' then
-      AAccion := 'deployed'
-    else
-      AAccion := 'updated';
-  end;
-  if GNodoAlDia.IndexOf(SinMayusculas(AProfile.Trim)) < 0 then
-    GNodoAlDia.Add(SinMayusculas(AProfile.Trim));
-  try
-    BorraArbol(TmpDir); // la carpeta de ESTA comprobacion, sin cruzar enlaces
-  except
-    // dejar un temporal huerfano nunca es motivo para fallar un despliegue
-  end;
-end;
-
-function EnsureNodeCurrent(const AProfile: string; out AAccion: string): string;
-begin
-  // Comprobar el sello y desplegar son UN gesto: separados, dos llamadas
-  // simultaneas veian las dos "falta el nodo" y subian el binario a la vez
-  // sobre el mismo fichero del target (analisis 2026-09-20). Pasa una vez por
-  // perfil y proceso, asi que un cerrojo unico no le cuesta nada a nadie.
-  GNodoLock.Enter;
-  try
-    Result := EnsureNodeCurrentNucleo(AProfile, AAccion);
+    var Sello := FetchFromTarget(AProfile, NODE_PROJECT, NODE_SELLO, TmpDir, VerFile);
+    if Sello = '' then
+    try
+      RemotoSha := LeeTexto(VerFile, [ltTemporal]).Trim;
+      BorraFichero(VerFile, ltTemporal);
+    except
+      RemotoSha := '';
+    end
+    else if PaclientSinConexion(Sello) then
+      // sin conexion no hay nada que subir: la subida se rendiria igual, y era
+      // pagar dos veces lo que tarda paclient (21 s cada una, medido; su
+      // --timeout no lo acorta)
+      Exit(Sello);
+    if not SameText(RemotoSha, LocalSha) then
+    begin
+      // flag 1 = runnable: PAServer deja el fichero ejecutable en su carpeta
+      Rc := Paclient(Pc, PaclientPut(Bin, NODE_PROJECT, 1, NODE_PROJECT), AProfile, Output);
+      if Rc <> 0 then
+        Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
+      VerLocal := TPath.Combine(TmpDir, 'node-' + LocalSha.Substring(0, 12) + '.ver');
+      EscribeTexto(VerLocal, LocalSha, ltTemporal, ekUtf8);
+      Rc := Paclient(Pc, PaclientPut(VerLocal, NODE_PROJECT, 0, NODE_SELLO), AProfile, Output);
+      BorraFichero(VerLocal, ltTemporal);
+      if Rc <> 0 then
+        Exit(MsgFmt(SR_REMOTERUN_PUT_FMT, [Rc, Output.Trim]));
+      if RemotoSha = '' then
+        AAccion := 'deployed'
+      else
+        AAccion := 'updated';
+    end;
+    ApuntaNodoComprobado(AProfile);
   finally
-    GNodoLock.Leave;
+    try
+      BorraArbol(TmpDir); // la carpeta de ESTA comprobacion, sin cruzar enlaces
+    except
+      // dejar un temporal huerfano nunca es motivo para fallar un despliegue
+    end;
   end;
 end;
 

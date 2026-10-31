@@ -1382,7 +1382,7 @@ REGLAS = [
      r"\bCopy\(\s*[\w.]+\s*,\s*1\s*,\s*(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*\)|"
      r"\.Substring\(\s*0\s*,\s*(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*\)",
      [('Lsp.DesignerMetaGen.pas', 'HuellaDeCarpetas'),      # un hash en hexadecimal
-      ('Lsp.RemoteRun.pas', 'EnsureNodeCurrentNucleo'),     # el SHA-256 en hexadecimal de un nombre
+      ('Lsp.RemoteRun.pas', 'EnsureNodeCurrent'),           # el SHA-256 en hexadecimal de un nombre
       ('Lsp.Identidad.pas', 'SanitizeAgent'),               # el nombre ya saneado a ASCII
       ('Lsp.LogSink.pas', 'ClaveDeBloque')],                # un sello de fecha
      'PrincipioDeTexto (Lsp.Listas), el gemelo de FinalDeTexto: el corte que no parte un par sustituto'),

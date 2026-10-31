@@ -450,7 +450,7 @@ begin
       // RUN-010, ya pasadas las puertas de permisos) es SU respuesta y no una
       // negativa, como en su gemela test-connection (test completo de Opus de
       // la 1.22.0: DENIED). Lo demas (un permiso que falta) sigue negado
-      if (Cmd = 'status') and EsMsg(Result, SR_REMOTERUN_PUT_FMT) then
+      if (Cmd = 'status') and (EsMsg(Result, SR_REMOTERUN_PUT_FMT) or EsMsg(Result, SR_FETCHTARGET_FAIL_FMT)) then
       begin
         Return := TJSONObject.Create;
         try
