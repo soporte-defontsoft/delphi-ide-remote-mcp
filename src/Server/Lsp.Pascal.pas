@@ -271,6 +271,9 @@ function ElMasParecido(const A: string; const ACandidatos: array of string;
 // CRLF, LF o un CR suelto, como en el troceador (Lsp.Patch.SplitToLines).
 // Estaba a mano en LlavesAnidadas; el analizador de impacto de
 // delphi_designer (los usos de un componente en su unidad) es el segundo
+{ Si el caracter K de ATexto acaba una linea: LF, o un CR que no va delante de un
+  LF. La condicion estaba dos veces (P19 del revisor). }
+function EsFinDeLinea(const ATexto: string; K: Integer): Boolean;
 function LineaDePosicion(const ATexto: string; APos: Integer): Integer;
 
 { LA cabecera de un fuente (unit, program, library o package), leida en
@@ -793,11 +796,16 @@ begin
       Inc(Result);
 end;
 
+function EsFinDeLinea(const ATexto: string; K: Integer): Boolean;
+begin
+  Result := (ATexto[K] = #10) or ((ATexto[K] = #13) and ((K = Length(ATexto)) or (ATexto[K + 1] <> #10)));
+end;
+
 function LineaDePosicion(const ATexto: string; APos: Integer): Integer;
 begin
   Result := 1;
   for var K := 1 to Min(APos, Length(ATexto) + 1) - 1 do
-    if (ATexto[K] = #10) or ((ATexto[K] = #13) and ((K = Length(ATexto)) or (ATexto[K + 1] <> #10))) then
+    if EsFinDeLinea(ATexto, K) then
       Inc(Result);
 end;
 

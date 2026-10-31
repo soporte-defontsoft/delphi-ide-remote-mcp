@@ -343,6 +343,9 @@ procedure AplicaEstado(ACargador: TCargador; ARoot: TComponent; const AEspec: st
 function IconoPngDeClase(const AClase: string; out APng: TBytes): Boolean;
 
 { Left/Top de un no visual, como los guarda el dfm (DesignInfo) }
+const
+  LADO_DE_NO_VISUAL = 28; // el icono de un no visual, en los dos renderizadores (P17)
+
 function PosicionDeNoVisual(AComp: TComponent): TPoint;
 
 { Los no visuales de ARaiz como los ensena el designer: componentes suyos

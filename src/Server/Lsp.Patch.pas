@@ -365,6 +365,10 @@ function ComoEnDisco(const APath: string): string;
   de texto o binario. EL predicado: estaba escrito a mano con su lista en
   nueve sitios (4.1 de la 1.18.0, al pasarselo al detector). }
 function EsRutaDeDesigner(const APath: string): Boolean;
+{ La entrada a un form: la puerta (la de leer o, con AEscribir, la de escribir),
+  que exista y que sea un designer. '' si pasa, o la negativa de la primera que
+  no. La escribian cuatro sitios, en el mismo orden (P15 del revisor). }
+function EntradaDeFormDenegada(const APath: string; AEscribir: Boolean): string;
 { Si APath es un estilo de FMX por su extension (.style), de texto o
   binario: el de texto lo lee el parser de los forms (TParser). EL
   predicado: estaba comparado a mano en Lsp.TextEdit y Mcp.Tools.Styles, y
@@ -1953,6 +1957,20 @@ begin
     Result := Result + [ChangeFileExt(AUnidad, E)];
   if Assigned(GTextoDeUnidad) then
     Result := Result + VistasDeUnidad(AUnidad, GTextoDeUnidad(IfThen(ATextoDe <> '', ATextoDe, AUnidad)));
+end;
+
+function EntradaDeFormDenegada(const APath: string; AEscribir: Boolean): string;
+begin
+  if AEscribir then
+    Result := WriteTargetDenied(APath)
+  else
+    Result := ReadPathDenied(APath);
+  if Result <> '' then
+    Exit;
+  if not TFile.Exists(APath) then
+    Exit(NoEsFichero(APath, MsgFmt(SR_NO_EXISTE_FMT, [APath])));
+  if not EsRutaDeDesigner(APath) then
+    Result := MsgText(SR_DESIGNER_NOT_FORM);
 end;
 
 function EsRutaDeDesigner(const APath: string): Boolean;

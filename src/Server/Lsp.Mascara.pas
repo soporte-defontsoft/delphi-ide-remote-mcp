@@ -200,10 +200,9 @@ var
 
   procedure AddDriveOf(const APath: string);
   begin
-    if (Length(APath) >= 2) and (APath[2] = ':') and
-       CharInSet(APath[1], ['A'..'Z', 'a'..'z']) and
-       (Pos(UpCase(APath[1]), Letras) = 0) then
-      Letras := Letras + UpCase(APath[1]);
+    var L := LetraDeRuta(APath);
+    if (L <> #0) and (Pos(UpCase(L), Letras) = 0) then
+      Letras := Letras + UpCase(L);
   end;
 
 var

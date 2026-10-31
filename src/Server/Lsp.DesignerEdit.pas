@@ -488,7 +488,7 @@ begin
   P1 := Length(ATexto) + 1;
   L := 0;
   for K := 1 to Length(ATexto) do
-    if (ATexto[K] = #10) or ((ATexto[K] = #13) and ((K = Length(ATexto)) or (ATexto[K + 1] <> #10))) then
+    if EsFinDeLinea(ATexto, K) then
     begin
       if L = AFin then
       begin
@@ -1044,13 +1044,9 @@ function AbreFormNucleo(const APath: string; ANecesitaPas, ANecesitaTabla: Boole
 var
   Unidad: TUnidadPas;
 begin
-  Result := WriteTargetDenied(APath);
+  Result := EntradaDeFormDenegada(APath, True);
   if Result <> '' then
     Exit;
-  if not TFile.Exists(APath) then
-    Exit(NoEsFichero(APath, MsgFmt(SR_NO_EXISTE_FMT, [APath])));
-  if not EsRutaDeDesigner(APath) then
-    Exit(MsgText(SR_DESIGNER_NOT_FORM));
   F.Dfm := APath;
   F.DfmNombre := TPath.GetFileName(APath);
   F.EsFmx := EsDesignerFmx(APath);

@@ -226,7 +226,7 @@ end;
 { Los no visuales como los ensena el designer: icono en su Left/Top y el nombre debajo }
 function DibujaNoVisuales(ARaiz: TComponent; ABmp: TBitmap): Integer;
 const
-  LADO = 28;
+  LADO = LADO_DE_NO_VISUAL;
 var
   Png: TBytes;
   Icono: TBitmap;
@@ -308,7 +308,7 @@ begin
         if N = C then
         begin
           P := PosicionDeNoVisual(C);
-          R := Rect(P.X, P.Y, P.X + 28, P.Y + 28 + 14);
+          R := Rect(P.X, P.Y, P.X + LADO_DE_NO_VISUAL, P.Y + LADO_DE_NO_VISUAL + 14);
           Exit(True);
         end;
 end;

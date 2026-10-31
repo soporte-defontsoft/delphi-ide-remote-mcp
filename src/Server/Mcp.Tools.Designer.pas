@@ -454,13 +454,9 @@ end;
 
 function LoadDoc(const APath: string; out ADoc: TStyleDoc): string;
 begin
-  Result := ReadPathDenied(APath); // looking at a form is reading
+  Result := EntradaDeFormDenegada(APath, False); // looking at a form is reading
   if Result <> '' then
     Exit;
-  if not TFile.Exists(APath) then
-    Exit(NoEsFichero(APath, MsgFmt(SR_NO_EXISTE_FMT, [APath])));
-  if not EsRutaDeDesigner(APath) then
-    Exit(MsgText(SR_DESIGNER_NOT_FORM));
   // Un binario se lee al vuelo (TStyleDoc lo convierte); solo uno danado
   // sigue siendo un rechazo, con el motivo de la RTL. Y uno que el parser del
   // IDE no lee por lineas como este lector, tampoco: tree, get y layout
@@ -1292,13 +1288,9 @@ var
   Denied, EncName, Text: string;
   Warns: TArray<string>;
 begin
-  Denied := ReadPathDenied(APath);
+  Denied := EntradaDeFormDenegada(APath, False);
   if Denied <> '' then
     Exit(Denied);
-  if not TFile.Exists(APath) then
-    Exit(NoEsFichero(APath, MsgFmt(SR_NO_EXISTE_FMT, [APath])));
-  if not EsRutaDeDesigner(APath) then
-    Exit(MsgText(SR_DESIGNER_NOT_FORM));
   // Un .dfm binario se lee al vuelo (Lsp.DesignerBin); uno danado se rechaza.
   // (por EL lector de designers, Lsp.Patch.TextoDeDesigner)
   var Motivo := TextoDeDesigner(APath, Text, EncName);
@@ -1402,14 +1394,10 @@ var
   Forma: TDesignerShape;
   K: TEncKind;
 begin
-  Result := WriteTargetDenied(APath);
+  Result := EntradaDeFormDenegada(APath, True);
   if Result <> '' then
     Exit;
   Ruta := TPath.GetFullPath(APath);
-  if not TFile.Exists(Ruta) then
-    Exit(NoEsFichero(Ruta, MsgFmt(SR_NO_EXISTE_FMT, [Ruta])));
-  if not EsRutaDeDesigner(Ruta) then
-    Exit(MsgText(SR_DESIGNER_NOT_FORM));
   B := TFile.ReadAllBytes(Ruta);
   Forma := DesignerShapeOf(B);
   // un form de TEXTO en UTF-16 o UTF-32, que el IDE no carga (A28 de la 1.23)

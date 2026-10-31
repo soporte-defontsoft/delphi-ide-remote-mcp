@@ -297,7 +297,7 @@ end;
   Left/Top que guarda el dfm y el nombre debajo. Cuenta los dibujados. }
 function DibujaNoVisuales(ARaiz: TComponent; ABmp: TBitmap): Integer;
 const
-  LADO = 28;
+  LADO = LADO_DE_NO_VISUAL;
 var
   Png: TBytes;
   Imagen: TPngImage;
@@ -383,7 +383,7 @@ begin
         if N = C then
         begin
           P := PosicionDeNoVisual(C);
-          R := Rect(P.X, P.Y, P.X + 28, P.Y + 28 + 12);
+          R := Rect(P.X, P.Y, P.X + LADO_DE_NO_VISUAL, P.Y + LADO_DE_NO_VISUAL + 12);
           Exit(True);
         end;
 end;
