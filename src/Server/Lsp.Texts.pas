@@ -11569,6 +11569,9 @@ const
   SF_EDIT_LINEA_QUITADA_FMT =
     '(line %d removed)';
 
+  SF_EDIT_EN_OBJETO_FMT =
+    '  (in %s)';
+
   SF_EDIT_OK_BLOQUE_LINEAS_FMT =
     '  %d OK (block of %d lines)';
 

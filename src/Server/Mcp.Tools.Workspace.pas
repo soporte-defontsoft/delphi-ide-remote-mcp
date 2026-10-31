@@ -1842,7 +1842,7 @@ begin
     end;
     if Params.Sha256.Trim <> '' then
     begin
-      Sha := CachedFileSha256(FullPath);
+      Sha := FileSha256(FullPath); // lo recien escrito, sin la cache (V129)
       Return.AddPair('sha256', Sha);
       Return.AddPair('verified', TJSONBool.Create(
         SameText(Sha, Params.Sha256.Trim)));

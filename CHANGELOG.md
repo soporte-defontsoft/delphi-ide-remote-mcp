@@ -53,7 +53,8 @@ the MCP `initialize` response (`serverInfo.version`).
   as good news. `delphi_styles set` of a color without its `x` names the format (`STYLE-063`),
   `VAULT-041` says prompts come from the workspace's vault, `delphi_installs` says
   `requestedUpdate` appears only if declared, and the long audit line names what
-  `corruption` counts.
+  `corruption` counts. In `edits` on a form, each entry's report names the object it landed
+  in: a repeated block could land in another component with only a line number to tell.
 - **The form renderer now always runs inside its own container, and its answer no
   longer says whether a file exists.** `delphi_designer` preview, lint and the check
   of what the IDE would save run the design code of the installed packages. That code

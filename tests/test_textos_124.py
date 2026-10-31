@@ -11,6 +11,7 @@ llamada medida de Hermes: la herramienta hizo lo correcto y la respuesta no lo d
   T4 V156 delphi_designer lint de un frame con StyleLookup: CLEAN no habla de ellos, y
      ahora lo dice; un form corriente, no
   T5 V158 MOVE-025 dice que crea las carpetas padre
+  T6 V148 edits en un form: el informe de cada entrada dice en que objeto cayo
 
 Uso:  python tests/test_textos_124.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -89,6 +90,13 @@ try:
                    "  object Button1: TButton\n    TabOrder = 0\n    Text = 'B'\n  end\nend\n")
     r = srv.call('delphi_designer', {'command': 'lint', 'path': FORM}, t=240)
     check('T4b un form sin StyleLookup: nada', not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT'), r[:400])
+
+    # ---- T6: edits con occurrence en un form: en que objeto cayo
+    DOS = escribe('dos\\UDos.dfm', "object FormDos: TFormDos\n  Left = 0\n  Top = 0\n  Caption = 'D'\n  ClientHeight = 200\n  ClientWidth = 300\n"
+                  "  object Button1: TButton\n    Left = 8\n    Top = 8\n    Width = 75\n    Height = 25\n    TabOrder = 0\n  end\n"
+                  "  object Button2: TButton\n    Left = 8\n    Top = 40\n    Width = 75\n    Height = 25\n    TabOrder = 1\n  end\nend\n")
+    r = srv.call('delphi_edit', {'path': DOS, 'edits': [{'old': 'Width = 75', 'new': 'Width = 90', 'occurrence': 2}]}, t=120)
+    check('T6 V148 el informe de una entrada dice en que objeto cayo', '(in Button2)' in r, r[:500])
 finally:
     srv.cierra()
 

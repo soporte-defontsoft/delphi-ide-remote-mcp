@@ -4371,7 +4371,16 @@ begin
           if (Reales > 0) and (DespuesL[Reales - 1] = '') then
             Dec(Reales);
           if Cambio < Reales then
-            Eco := CitaDeLinea(Cambio + 1, Copy(DespuesL[Cambio].Trim, 1, 90))
+          begin
+            Eco := CitaDeLinea(Cambio + 1, Copy(DespuesL[Cambio].Trim, 1, 90));
+            // en un form, en que objeto cayo: un bloque repetido puede caer en otro (V148)
+            if EsRutaDeDesigner(APath) then
+            begin
+              var Objeto := ObjetoDeLinea(DespuesL, Cambio);
+              if Objeto <> '' then
+                Eco := Eco + MsgFmt(SF_EDIT_EN_OBJETO_FMT, [Objeto]);
+            end;
+          end
           else if Delta < 0 then
             Eco := MsgFmt(SF_EDIT_LINEA_QUITADA_FMT, [Cambio + 1]);
         except

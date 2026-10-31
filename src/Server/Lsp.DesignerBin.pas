@@ -162,6 +162,11 @@ type
   end;
 
 function LineasDeForm(const ALineas: TArray<string>): TArray<TLineaForm>;
+(* El objeto en cuyo bloque esta la linea AIndice (0-based) de un form: su nombre,
+  '' fuera de todos. La de su 'object' y la de su 'end' son suyas. V148 de la 1.24:
+  edits con occurrence cayo en otro componente con las mismas medidas y el informe
+  solo daba la linea. *)
+function ObjetoDeLinea(const ALineas: TArray<string>; AIndice: Integer): string;
 // una linea 'Prop = valor' (Prop con puntos; AValor sin espacios alrededor)
 function LineaDePropiedad(const ALinea: string; out AProp, AValor: string): Boolean;
 (* El valor entero de la propiedad de la linea AIni (clfPropiedad): el de su
@@ -1668,6 +1673,26 @@ begin
     Lineas.Free;
   end;
   Result := MsgFmt(SR_DSGN_NO_PUDE_CONVERTIR_BINARIO_FMT, [Clase, Mensaje]);
+end;
+
+function ObjetoDeLinea(const ALineas: TArray<string>; AIndice: Integer): string;
+begin
+  Result := '';
+  var Abiertos: TArray<string> := [];
+  var Form := LineasDeForm(ALineas);
+  for var I := 0 to High(Form) do
+  begin
+    if I > AIndice then
+      Exit;
+    if Form[I].Clase = clfObjeto then
+      Abiertos := Abiertos + [Form[I].Nombre];
+    if Length(Abiertos) > 0 then
+      Result := Abiertos[High(Abiertos)]
+    else
+      Result := '';
+    if (Form[I].Clase = clfFin) and (Length(Abiertos) > 0) then
+      SetLength(Abiertos, Length(Abiertos) - 1);
+  end;
 end;
 
 initialization

@@ -77,7 +77,8 @@ implementation
 
 {$IFDEF MSWINDOWS}
 uses
-  Winapi.Windows;
+  Winapi.Windows,
+  MCPServer.Serializer;
 {$ENDIF}
 
 // [local change] See the interface comment. String-scan on purpose (no regex
@@ -94,7 +95,7 @@ function ClaveSecreta(const AKey: string): Boolean;
 var
   K, N: string;
 begin
-  N := LowerCase(AKey).Replace('_', '', [rfReplaceAll]);
+  N := TMCPSerializer.NormalizeKey(AKey);
   for K in SECRET_KEYS do
     if N = K then
       Exit(True);

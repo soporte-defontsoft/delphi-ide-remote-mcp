@@ -14,6 +14,9 @@ unit Lsp.ShaCache;
 interface
 
 function CachedFileSha256(const APath: string): string;
+{ Sin la cache: para verificar lo recien escrito, que el sello (la hora) puede no
+  distinguir de lo anterior (V129 de la 1.24). }
+function FileSha256(const APath: string): string;
 function Sha256DeBytes(const ABytes: TArray<Byte>): string;
 
 { The disk fingerprint of a file - last write time and size - in ONE call
@@ -121,6 +124,11 @@ begin
   Result := H.HashAsString;
 end;
 
+function FileSha256(const APath: string): string;
+begin
+  Result := THashSHA2.GetHashStringFromFile(TPath.GetFullPath(APath), THashSHA2.TSHA2Version.SHA256);
+end;
+
 function CachedFileSha256(const APath: string): string;
 var
   Full, Key, Stamp: string;
@@ -143,7 +151,7 @@ begin
       GLock.Leave;
     end;
   end;
-  Result := THashSHA2.GetHashStringFromFile(Full, THashSHA2.TSHA2Version.SHA256);
+  Result := FileSha256(Full);
   if HasStamp(Stamp) then
   begin
     GLock.Enter;
