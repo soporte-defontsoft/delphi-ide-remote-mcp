@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-10-30 (current release v1.23.1; 42 tools).
+Status page as of 2026-11-01 (current release v1.25.0; 42 tools).
 
 ## Delivered
 
@@ -16,7 +16,7 @@ Status page as of 2026-10-30 (current release v1.23.1; 42 tools).
 - Native run-job launcher (`node/McpRunJob`), no shell; the on-target runner was removed in 0.98 (1.0.16)
 - Vault, messages, reports
 - Auth model: workspace-or-nothing (0.91) and nothing-global (0.98)
-- Jail floor at the gate (1.0.14); `__delphi-temp` inside the jail (1.0.12)
+- Jail floor at the gate (1.0.14); `__delphi-temp` inside the jail (1.0.12; superseded in 1.18.2: what the server does for itself lives in its own house, never in a root)
 - `DelphiVersion` per workspace and the named Delphi (1.0.17) - superseded: one server, one Delphi, `[Server] DelphiVersion` (written by the server at its first start)
 - `rename_symbol mode=apply` (1.0.17)
 - HTTP session TTL (1.0.17)
@@ -60,6 +60,10 @@ Status page as of 2026-10-30 (current release v1.23.1; 42 tools).
 
 - The patch of 1.23: the holes a review of the whole source found in the published 1.23.0 closed (a build running code left in the project's folder; a project name or a hand-written `.deployproj` sending a file of the server's folder to a target; the instructions every client receives, the vault through a link and another agent's trash; a workspace with a repeated key staying open) (1.23.1)
 
+- The form designer, and the renderer in its own container: `delphi_create` making inherited forms and frames, `insert` taking a frame of the project, `layout` measuring FMX forms and giving a VCL form the rectangles the VCL resolved; the form renderer always inside an AppContainer with no capabilities and no network, a form whose ancestor or frame lives in another folder drawn whole, a package disabled in the IDE no longer loaded; `delphi_adb stop` (1.24.0)
+
+- The MCP revision 2026-07-28 next to the sessions, and what agents kept asking for: `delphi_search` with `context` and `exclude`, six more `delphi_git` operations, several operations in one `delphi_changeset stage`, the compiler's `hints` in a build, warnings and hints of a unit below its project's folder, the rename of a local and `RENAME-023`; `delphi_desktop` a permission of its own, per host; what a build and a test say read from their judges (MSBuild's classification, DUnitX's summary) instead of the console text; form renderers that state their protocol (1.25.0)
+
 ## Next
 
 Stabilizing what is there, not adding to it:
@@ -74,7 +78,6 @@ Stabilizing what is there, not adding to it:
 
 - KDE and other non-GNOME Linux desktops on the desktop node
 - The two-Delphi-versions case, measured on a machine that has them
-- Completion prefix filter
 - Progress and cancellation for long builds; `POST /files` upload
 - LSIF as a references backend (measured feasible, see [DELPHILSP-NOTES.md](DELPHILSP-NOTES.md))
 

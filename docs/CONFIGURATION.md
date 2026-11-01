@@ -322,7 +322,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`,
   `LibraryZone`,
   `AgentConfinement`, `SharedFolders`, `ReadOnlyPaths`, `ReadOnlyRoots`, `Profile` — and the reach lists `GitRemotes`,
-  `RemoteHosts`, `RemoteRunProjects`. Nothing is inherited from anywhere: an absent switch
+  `RemoteHosts`, `RemoteRunProjects`, `DesktopAllowedHosts`, `DesktopViewHosts`. Nothing is inherited from anywhere: an absent switch
   is off, an absent list is empty — one workspace can be a CI space that executes and dials
   its build machine while every other space stays compile-only and offline.
 - **Network shares are opt-in.** A share becomes part of the Delphi environment only when the
@@ -433,7 +433,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   nothing, and the startup log names it as a retired key.)
 - **AllowRemoteRun**: lets `delphi_paserver remote-run` execute, on a PAServer target, the
   binary *that project deployed there* — never anything else on that machine: the server
-  derives the remote path itself and its launch script verifies the file's signature
+  derives the remote path itself and its launcher verifies the file's signature
   (ELF/Mach-O/PE), so only a native binary ever runs. The one execution path of the product (running on
   the target is not running here). It takes TWO declarations: this switch and
   `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98). Its
@@ -468,7 +468,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   close a port-scanning primitive. In any of the four lists - `RemoteHosts`, `GitRemotes`,
   `RemoteRunProjects` and `AdbAllowedDevices` - an entry `*` (or `all`, or `0.0.0.0`) declares
   "anything" on purpose. Where each workspace may talk to is its own declaration, like
-  everything else. A list of NAMES (`GitRemotes`, `RemoteHosts`, `AdbAllowedDevices`,
+  everything else. A list of NAMES (`GitRemotes`, `RemoteHosts`, `DesktopAllowedHosts`, `DesktopViewHosts`, `AdbAllowedDevices`,
   `SharedFolders`, `[Tools] Only`) takes `;` or `,` between its entries; a list of PATHS
   (`Roots`, `ReadOnlyPaths`, `ReadOnlyRoots`, `RemoteRunProjects`) only `;`, since a path may
   hold a comma. Blanks and quotes around an entry are ignored in both.

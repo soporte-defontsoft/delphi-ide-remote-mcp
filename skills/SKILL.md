@@ -44,6 +44,8 @@ it. With no name, each request of that protocol is a stranger to the one before.
 
 - `delphi_read` pages at 400 lines per call - read in RANGES.
 - `delphi_search` / `delphi_list` to locate; never read whole trees.
+  `delphi_search context=3` brings the lines around each hit in the same
+  answer, so a hit does not need a read of its own.
 - A `READ-007`, `READ-008` or `READ-009` note on a read (bytes that do not
   fit the file's encoding; a UTF-8 source - or a text form - without a BOM,
   which the compiler and the IDE read as ANSI: the note shows both readings)
@@ -156,7 +158,12 @@ it. With no name, each request of that protocol is a stranger to the one before.
   writes it through the changeset engine (all files or none, a backup of
   each) and answers with the commit. Then `delphi_build`. If false, the
   blockers say exactly why - fix them or leave the name alone; apply
-  writes nothing in that case.
+  writes nothing in that case. One of them is `RENAME-023`: a unit the
+  rename does not write would silently call your new name instead of what
+  it calls today (`retargeted` names it), and that compiles.
+- A local is looked for in its routine only, and the answer says so
+  (`localTo`), so a common name like `I` can be renamed. A parameter is not
+  a local: its header lives in two places.
 
 ## Forms (.dfm/.fmx)
 
@@ -191,6 +198,9 @@ it. With no name, each request of that protocol is a stranger to the one before.
 - After a form edit made with `delphi_edit`, run `delphi_designer lint
   path=<form>`: a property the class does not publish, or a value its type
   does not take, will not stream, and nobody tells you at build time.
+  `lint`, `set` and an edit also say when a string value names a path
+  `preview` refuses (`DSGN-183`, a note): the form stays valid, but neither
+  it nor the other forms of its folder preview until that value changes.
 - SEE the form instead of imagining it: `delphi_designer command=preview
   path=<form>` returns a PNG of what the IDE designer shows. The loop is
   insert/set -> `lint` -> `preview` -> fix. To place something, measure on
@@ -342,7 +352,8 @@ in frame. Do the gesture you came for and nothing else.
   `add-unit` / `remove-unit`, or `fix-references` for a whole project.
   `view` lists the project's `units`.
 - `delphi_build` runs MSBuild. The result declares the real `output`
-  path - trust it, do not guess. `target=Deploy` on Android builds the
+  path - trust it, do not guess - and `errors`, `warnings` and `hints` as
+  MSBuild classifies them. `target=Deploy` on Android builds the
   full `.apk`, or the `.aab` for a store build of Android64
   (`BT_BuildType=AppStore`; `BUILD-064`: it does not install on a device). The
   server generates the deployment manifest if missing.
@@ -521,9 +532,9 @@ in with `delphi_move copy=true`; a repository with its git, when its git is insi
 You always work inside ONE workspace: what its declaration grants is ALL
 there is (an absent switch is off, an absent list is empty - hosts,
 projects, devices, vault). A refusal naming `RemoteHosts`,
-`RemoteRunProjects` or `AdbAllowedDevices` is your workspace's declared
+`RemoteRunProjects`, `DesktopAllowedHosts` or `AdbAllowedDevices` is your workspace's declared
 reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.24.0 -->
+<!-- contract reviewed: v1.25.0 -->

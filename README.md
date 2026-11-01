@@ -1,6 +1,6 @@
 # Delphi IDE Remote MCP Server
 
-[![Latest release](https://img.shields.io/badge/download-v1.24.0-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
+[![Latest release](https://img.shields.io/badge/download-v1.25.0-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ![Delphi IDE Remote MCP — RAD Studio as a remote backend for AI programming agents: any MCP client on one side, Windows/Linux/Android test targets on the other, one workspace-jailed server in the middle](docs/media/hero.webp)
@@ -13,7 +13,7 @@ The Windows machine holds RAD Studio and the projects. You work from wherever yo
 
 It is not a language-server bridge. Semantic understanding is one capability of many, and it is the one that is genuinely hard, so it runs on Embarcadero's official `DelphiLSP.exe` — the same engine behind Code Insight in the RAD Studio IDE. But the language server backs **8 of the 42 tools**; the other 34 are the working day: the safe editing engine, MSBuild, git, the file tools, the project scaffolder, the deploy chain (PAServer, adb), the RAD Studio help, the knowledge vault. See [What each tool actually runs on](#what-each-tool-actually-runs-on) for the exact split.
 
-Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well.
+Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well. It speaks MCP 2026-07-28, which has no handshake and no sessions, next to the sessions of the earlier revisions, on the same endpoint.
 
 > **Status: latest 1.24.0 (published today, validated by its batteries and, before the release, through Hermes on a second machine by Qwen3.8 Flash Next - a full test of every tool, directed tests of what changed and three rounds over what those found); stable 1.22.1.** Covered by 352 end-to-end batteries — 8,104 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
@@ -25,7 +25,7 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 
 **The showpiece: your app on a real Linux desktop, seen and driven from the agent.** Deploy to a GNOME machine through PAServer, launch it with `remote-run` (the program is not killed when the call returns — a window is meant to stay up), and then `delphi_desktop` brings the **whole desktop back as a PNG**, presses the exact pixel you measured, types into your app, walks its windows. Beyond PAServer itself there are no prerequisites and nothing to install by hand on the target: it executes what this server sends, and the tiny helper node — **shipped inside this release** — deploys and updates itself on first use. It is the same eyes-and-hands idea `delphi_adb` gives you on Android — pointed at a Linux desktop. Today it speaks GNOME (Zorin and Fedora, measured live). And the node itself is the proof of the whole premise: **it was developed entirely through this server** — an AI agent on the other end of the MCP wrote it, compiled it, deployed it and debugged it against the live targets, without ever sitting at the Windows machine. This repo dogfoods its own tools.
 
-**And the same eyes and hands on a Windows desktop - including the server's own.** Since 1.0.16 there is ONE desktop tool, `delphi_desktop`, and the machine is a parameter: the PAServer profile. Point it at a Linux, at a Windows with PAServer, or at this very server when a PAServer runs in its user session (`windows-local`, 127.0.0.1): same node, same gestures, same permissions (`AllowRemoteRun`, `RemoteHosts`, `RemoteRunProjects`). Every remote execution - Linux or Windows - goes through ONE mechanism: a job file (the binary, the output file, then one argument per line) and a native launcher (`node\McpRunJob`, `node\McpRunJob.exe`) that PAServer starts; there is no shell in the path, so an agent's arguments reach the program as argv, untouched. The old name, `delphi_adb_linux`, no longer exists.
+**And the same eyes and hands on a Windows desktop - including the server's own.** Since 1.0.16 there is ONE desktop tool, `delphi_desktop`, and the machine is a parameter: the PAServer profile. Point it at a Linux, at a Windows with PAServer, or at this very server when a PAServer runs in its user session (`windows-local`, 127.0.0.1): same node, same gestures, same permissions (`AllowRemoteRun`, `RemoteHosts` and, per host, `DesktopAllowedHosts` to see and act or `DesktopViewHosts` only to see). Every remote execution - Linux or Windows - goes through ONE mechanism: a job file (the binary, the output file, then one argument per line) and a native launcher (`node\McpRunJob`, `node\McpRunJob.exe`) that PAServer starts; there is no shell in the path, so an agent's arguments reach the program as argv, untouched. The old name, `delphi_adb_linux`, no longer exists.
 
 ## Use cases
 
@@ -165,7 +165,7 @@ nor `check-binding` checks that a component's class matches its field's type, th
 signature fits the event, or that `Action = X` points at something real.
 
 **"MSBuild output will flood the context."** `delphi_build` never returns raw log. It returns one
-already-extracted line per problem in `errors[]` and `warnings[]` — file, line, code and message,
+already-extracted line per problem in `errors[]`, `warnings[]` and `hints[]`, as MSBuild classifies them — file, line, code and message,
 though **not** a separate column field — plus an `outputTail` capped at ~25 lines and `firstError`,
 because one `E2009` can spawn seven `E2250` that look like unrelated failures, and an agent that
 chases the last error chases noise. `errors[]` itself is **not** capped: a build with forty errors
@@ -237,7 +237,7 @@ switch and its own allowlist; it will not arrive by accident.
 | [`delphi_build`](docs/TOOLS.md#delphi_build) | Real MSBuild with structured errors and the artifact it produced; it builds what the IDE would build, and `target=Deploy` ships to a PAServer target or assembles the Android `.apk` (`.aab` for a store build) |
 | [`delphi_fetch`](docs/TOOLS.md#delphi_fetch) | Download files from the server: a `download` link (HTTP GET, same Bearer, SHA-256 header) for any size, base64 chunks for clients without a shell |
 | [`delphi_upload`](docs/TOOLS.md#delphi_upload) | The mirror of fetch: send files TO the server in chunks, SHA-256 verified |
-| [`delphi_search`](docs/TOOLS.md#delphi_search) | Recursive search, literal or a regular expression, each file decoded with its real encoding; hits grouped by folder and file |
+| [`delphi_search`](docs/TOOLS.md#delphi_search) | Recursive search, literal or a regular expression, each file decoded with its real encoding; hits grouped by folder and file, with the lines around each one on request (`context`) and masks to leave files out (`exclude`) |
 | [`delphi_list`](docs/TOOLS.md#delphi_list) | Recursive file listing, or the subfolders explorer-style; IDE artifacts filtered and counted, paged |
 | [`delphi_projects`](docs/TOOLS.md#delphi_projects) | Locate projects (.dproj/.groupproj) by name under a root or under the workspace roots, paged |
 | [`delphi_installs`](docs/TOOLS.md#delphi_installs) | Every RAD Studio installation on the machine, and which one this server works with |
@@ -279,7 +279,8 @@ desktops are not supported yet), and it needs nothing installed there.
 **What a desktop profile gives.** `delphi_desktop` drives the target's desktop as the user PAServer
 runs as: everything a person sitting at that keyboard can do, opening a terminal and typing in it
 included. That is by design - a filter on what gets typed into which window would be a guess, not a
-guarantee. Give an agent a desktop profile the way you would give it a seat at that machine.
+guarantee. Give an agent a desktop profile the way you would give it a seat at that machine. It is a
+permission of its own, per host: `DesktopAllowedHosts` sees and acts, `DesktopViewHosts` only sees.
 
 ## One repo, one project group, seven projects
 

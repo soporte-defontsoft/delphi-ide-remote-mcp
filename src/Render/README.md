@@ -150,6 +150,10 @@ DelphiFormRender*   --path <form> --boxes [--packages ...] [--bds] [--bdsroot] [
 ## Output (stdout, `KEY=value` lines; the keys live in `FormRenderProtocolo.inc`)
 
 ```
+PROTOCOL=<n>                  always first: the version of this protocol
+                              (FR_PROTOCOLO_VERSION). A renderer that states
+                              another one, or none, is a stale one: the server
+                              answers DSGN-184 and reads nothing else of it
 DPI=96                        the process is DPI-unaware: 1 pixel = 1 dfm unit
 SESSION=<n>                   0 = a service
 STYLE=<what was applied>

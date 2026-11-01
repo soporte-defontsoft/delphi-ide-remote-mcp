@@ -1043,7 +1043,7 @@ Your MAILBOX: messages the operator leaves for you (the way back of delphi_repor
 | `agent` | string | optional | Your agent id - the same value you give delphi_report as "agent" (e.g. dsh, hermes). Omitted: the id your client declared at the handshake |
 <!-- /contract -->
 
-Operator side: drop a `.md` in `messages\<agent>\` next to the server exe (`scripts\Enviar-Mensaje.ps1 -Agente dsh -Titulo ... -Texto ...`). The agent gets it once and reading DELETES it: nothing is kept aside and nothing is purged later. There is no box "for everyone": a notice for all is dropped once per agent. An agent with no id has no mailbox.
+Operator side: drop a `.md` in `messages\<workspace>\<agent>\` next to the server exe, the agent's name in lower case (`scripts\Enviar-Mensaje.ps1 -Workspace Workspace.claude -Agente dsh -Titulo ... -Texto ...`). The agent gets it once and reading DELETES it: nothing is kept aside and nothing is purged later. There is no box "for everyone": a notice for all is dropped once per agent. An agent with no id has no mailbox.
 
 ## Knowledge vault (optional — only for workspaces that declare `VaultPath=`)
 

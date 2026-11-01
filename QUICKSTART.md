@@ -47,7 +47,7 @@ Roots=D:\Projects
   that writes in its sandbox and reads your projects. Its sibling
   `ReadOnlyPaths=` is another thing: folders INSIDE the roots that are read and
   never written (a `vendor\`); it opens nothing outside them.
-- Everything else is **off until you turn it on** (tests, remote execution,
+- Everything else is **off until you turn it on** (tests, remote execution, a target's desktop,
   build scripts, git remotes...). The example file documents every key, one
   by one, when you want them.
 - Which RAD Studio? At its first start the server takes the newest and writes
