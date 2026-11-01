@@ -497,6 +497,9 @@ var
 
 begin
   Result := '';
+  // antes que nada que pueda fallar: un argumento que este ayudante no conoce
+  // tambien es otra version
+  Responde(FR_PROTOCOL, IntToStr(FR_PROTOCOLO_VERSION));
   AUso := TextoDeUso(ExtractFileName(ParamStr(0)));
   GPeticion := Default(TPeticion);
   GPeticion.Bds := '37.0';

@@ -25,7 +25,7 @@ La config local/worktree de Git y los hosts de todos sus remotos son listas blan
 
 Uso:  python tests/test_paisaje.py
 """
-import os, re, glob
+import hashlib, os, re, glob
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -2514,4 +2514,33 @@ check('los eventos del build: UN /p: desde EventosDeBuild, ninguno a mano, y Glo
       'EventosDeBuild' in SUMA.group(0), (eventos_compuestos(BR), re.findall(A_MANO, BR)))
 check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
       re.search(A_MANO, BR + "\n  EventArg := ' /p:PreBuildEvent=';") is not None)
+
+# El protocolo de los renderizadores lleva numero (V25): lo que escriben (las claves de
+# FormRenderProtocolo.inc) y lo que entienden (los argumentos de ParseaArgumentos). Si cambia uno sin
+# subirlo, un ayudante viejo y un servidor nuevo se creen iguales. Cambia: sube FR_PROTOCOLO_VERSION y
+# pon aqui el numero y la firma que dice el fallo
+FIRMA_DEL_PROTOCOLO = (1, '0274b6c545fd9874')
+
+
+def firma_del_protocolo(inc, comun):
+    claves = sorted(x for x in re.findall(r"^\s*(FR_\w+ = (?:'[^']*'|\d+));", inc, re.M)
+                    if not x.startswith('FR_PROTOCOLO_VERSION'))
+    argumentos = sorted(set(re.findall(r"P = '(--\w+)'", comun)))
+    return hashlib.sha256('\n'.join(claves + argumentos).encode()).hexdigest()[:16]
+
+
+with open(os.path.join(SRC, 'Render', 'FormRenderProtocolo.inc'), encoding='utf-8-sig') as _f:
+    INC_PROTO = _f.read()
+with open(os.path.join(SRC, 'Render', 'FormRender.Comun.pas'), encoding='utf-8-sig') as _f:
+    COMUN_PROTO = _f.read()
+_v = re.search(r'FR_PROTOCOLO_VERSION = (\d+);', INC_PROTO)
+_ahora = (int(_v.group(1)) if _v else None, firma_del_protocolo(INC_PROTO, COMUN_PROTO))
+check('el protocolo de los renderizadores: cambio de claves o argumentos, cambio de numero (V25)',
+      _ahora == FIRMA_DEL_PROTOCOLO, 'esta %s, anotado %s' % (_ahora, FIRMA_DEL_PROTOCOLO))
+check('mutante del protocolo: una clave nueva cambia la firma',
+      firma_del_protocolo(INC_PROTO + "\n  FR_NUEVA = 'NUEVA=';", COMUN_PROTO) != _ahora[1])
+check('mutante del protocolo: un argumento nuevo cambia la firma',
+      firma_del_protocolo(INC_PROTO, COMUN_PROTO + "\n  if P = '--nuevo' then") != _ahora[1])
+check('mutante del protocolo: el numero solo no cambia la firma',
+      firma_del_protocolo(INC_PROTO.replace('FR_PROTOCOLO_VERSION = 1', 'FR_PROTOCOLO_VERSION = 2'), COMUN_PROTO) == _ahora[1])
 mc.fin('paisaje battery')

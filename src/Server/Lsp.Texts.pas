@@ -5621,6 +5621,14 @@ const
     'live in that RAD Studio''s bin folder, which has to be on the PATH of ' +
     'the account the server runs as.';
 
+  { %0:s: el ayudante; %1:s: el protocolo que dijo, o SF_NINGUNO; %2:d: el del
+    servidor (FR_PROTOCOLO_VERSION). Los dos salen del mismo build: lo que fuera
+    que contestase uno de otra version se leeria mal y sin ruido (V25) }
+  SR_DESIGNER_RENDER_OTRA_VERSION_FMT =
+    '[DSGN-184 INTERNAL] %0:s speaks protocol %1:s and this server speaks %2:d: ' +
+    'they come from different versions, so nothing it answered was used. Whoever ' +
+    'runs this server has to install every file of ONE version.';
+
   // tambien lo de Windows y Program Files, que el agente puede leer y el contenedor
   // del renderizador lee solo: por su texto, exista o no (V65 de la 1.24; el dirigido
   // de Hermes leyo "outside the allowed read locations" de una carpeta legible)

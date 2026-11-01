@@ -81,6 +81,7 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_build` takes `errors`, `warnings` and `hints` from MSBuild's own classification, in log files of the server. They were found by searching its console text: with `verbosity=normal`, a warning whose text said `: error` came back in `errors` next to `success: true`, and with `verbose` a folder named `My error Example` sent there every line that named it, and each warning came back twice.
 - `delphi_designer set`, `delphi_edit` and `lint` say when a string value names a path that `preview` refuses (DSGN-183): `set` wrote it, `lint` answered CLEAN, and only `preview` refused the form, and any other form of its folder, afterwards (DSGN-115). The form stays valid and the value is written: it is a note, by the same judge as `preview`. After an edit it names only what that edit brought.
 - `delphi_test` reads the last DUnitX summary in the output. A test that printed `Tests Failed : 7` turned a green suite red, and one that printed `Tests Failed : 0` hid the count of a red one.
+- A form renderer from another version says so (DSGN-184) instead of being misread. The renderers now state their protocol first thing and the server compares it: with a stale renderer, `preview` blamed a design package (DSGN-061), and what it skipped could turn into "not confirmed" with no notice.
 
 - **`delphi_desktop` against a PAServer that does not answer costs one wait, and only that
   profile's.** `paclient` gives up by itself (21 s against an address that does not answer,

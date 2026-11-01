@@ -114,6 +114,7 @@ type
   TRespuestaRender = record
     Fallo: string;             // '' = hay imagen; si no, el mensaje para el agente
     Error: string;             // ERROR= del ayudante, tal cual
+    Protocolo: string;         // PROTOCOL= del ayudante, tal cual; '' si no lo dijo
     // NOTLOADED=: lo que fallo fue el LECTOR mientras cargaba el form - el
     // fichero, no el ayudante (DSGN-061 de la 1.20)
     NoCarga: Boolean;
@@ -571,7 +572,9 @@ begin
     L := Linea;
     if (L = '') or L.StartsWith('#') then
       Continue;
-    if Es(FR_CAPTURE) then
+    if Es(FR_PROTOCOL) then
+      Result.Protocolo := V
+    else if Es(FR_CAPTURE) then
       Result.Captura := V
     else if Es(FR_SIZE) then
     begin
@@ -1845,6 +1848,19 @@ begin
       Exit;
     end;
     Result := LeeRespuestaDeRender(Salida);
+    // un ayudante de otra version: lo que diga se leeria mal y sin ruido, y salia
+    // como un paquete que fallo (DSGN-061). Uno que murio sin decir nada o con un
+    // codigo que no es de los suyos no es eso, y sigue por su rama
+    if (Result.Protocolo <> IntToStr(FR_PROTOCOLO_VERSION)) and (Salida.Trim <> '') and
+       (Codigo <= FR_RC_TIMEOUT) then
+    begin
+      var Dijo := Result.Protocolo;
+      if Dijo = '' then
+        Dijo := MsgText(SF_NINGUNO);
+      Result := Default(TRespuestaRender);
+      Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_OTRA_VERSION_FMT, [Nombre, Dijo, FR_PROTOCOLO_VERSION]);
+      Exit;
+    end;
     // lo que se trajo hizo fallar al ayudante: el form a medias que ya salio es mejor
     // respuesta que un fallo, y dice que no entro
     if HayBuena and not Salio(Result) then

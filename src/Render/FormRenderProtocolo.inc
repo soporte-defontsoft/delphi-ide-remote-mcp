@@ -4,6 +4,10 @@
   seccion const, como NodeProtocolo.inc. Una linea por clave, 'CLAVE=valor';
   las repetibles (IGNORED, WARNING) salen tantas veces como haga falta; el
   resto una vez. Lo que empieza por '#' es traza (--verbose) y no se lee. }
+  FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
+                                 // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
+  // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
+  FR_PROTOCOLO_VERSION = 1;
   FR_CAPTURE = 'CAPTURE=';       // CAPTURE=<ruta del png> (la misma clave que el nodo de escritorio)
   FR_SIZE = 'SIZE=';             // SIZE=<ancho>x<alto> del png
   FR_DPI = 'DPI=';               // DPI=96: el proceso no es consciente del DPI, un pixel = una unidad del dfm
