@@ -181,6 +181,7 @@ type
   TFormEnEdicion = record
     Dfm, Pas, DfmNombre, PasNombre, Marco: string;
     JuzgandoDesde: UInt64; // AbreFormParaJuzgar: desde cuando se juzga esta edicion (JuezQueTardo)
+    FrameCiclico: string;  // JuezDelOrden: lo que dijo el lector si el form propuesto cierra un ciclo de frames
     EsFmx, HayPas: Boolean;
     Doc: TStyleDoc;
     PasTexto, PasEnc: string;
@@ -2135,6 +2136,9 @@ begin
   if Result <> '' then
     Exit;
   try
+    // un frame en si mismo no llega al juez: FrameDelProyecto busca otro que el propio
+    if SameText(AClase.Trim, ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_)) and (RaizDeDesigner(F.Dfm) = rdFrame) then
+      Exit(MsgFmt(SR_DESIGNER_INSERT_FRAME_CICLICO_FMT, [AClase.Trim, MsgFmt(SF_DESIGNER_ES_ESTE_FRAME_FMT, [AClase.Trim])]));
     // la clase: de la tabla del Delphi activo, y un control; o un frame de SU proyecto,
     // que la tabla no tiene, con lo que publica un TFrame (V77 de la 1.24)
     var Frame: TFormDelProyecto;
@@ -2289,6 +2293,9 @@ begin
     DfmLineas := DondeLoDejaElIde(F, DfmLineas, Nombre, NombrePadre, Ini, Largo, ConTab and not TabDelAgente,
       NotaOrden, TabDelIde, PasNuevo);
     FinBloque := Ini + Largo - 1;
+    // solo un frame cierra un ciclo: un control en un form que ya lo tenia no es culpable
+    if EsFrame and (F.FrameCiclico <> '') then
+      Exit(MsgFmt(SR_DESIGNER_INSERT_FRAME_CICLICO_FMT, [Clase, F.FrameCiclico]));
     // el segundo juez, abajo, puede tardar otro tanto: si ya no se va a escribir, ahora
     Result := JuezQueTardo(F);
     if Result <> '' then
@@ -3563,6 +3570,8 @@ begin
   AEscrito := '';
   Result := ComoLoEscribeElIde(F.Dfm, ATexto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer,
     Leidos, ErrorAyudante, Parada, ASoltado, AUnidad);
+  if EsFrameCiclico(Parada) then
+    F.FrameCiclico := Parada.Texto;
   // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
   F.LeidoPorElJuez := F.LeidoPorElJuez + Leidos;
   if Result <> '' then

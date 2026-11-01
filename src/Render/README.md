@@ -249,6 +249,11 @@ signatures, up to about 10 s each, and the helper's budget counts that wait (mea
 packages, 1.6 s for the same bytes afterwards, and again 92 s with 16 bytes appended to
 each). It is checked once per signature update, so repeating the call gets through.
 
+A frame that contains itself, directly or through others, gets `RENDER-026` with the
+chain of files, and the rest of the form is drawn without it: the reader takes the
+refusal as one more thing it could not load. So the answer is `ignored` with exit code 0,
+and `lint` and a form edit ask this same reader about any form holding an inline frame.
+
 ## Tests, in three layers
 
 - **`tests/test_designer_preview.py`** (every `run_all`): `preview` through the

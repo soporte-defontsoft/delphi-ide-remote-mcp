@@ -6488,6 +6488,16 @@ const
   { La primera vez tras instalar, actualizar o tocar las rutas del IDE la
     tabla se genera del fuente (segundos); quien llama espera un rato y, si
     no ha acabado, se le dice que vuelva. }
+  { Un insert que dejaria un frame dentro de si mismo, directo o por otro: la lectura
+    no acabaria nunca. %s la clase, %s el porque (el del lector, o que es la del frame).
+    DSGN-015 decia "no esta en la tabla" con la receta a mano, que llevaba a escribir
+    el ciclo, y por otro frame se escribia (dirigido de Luna y Qwen, 1-nov-2026). }
+  SR_DESIGNER_INSERT_FRAME_CICLICO_FMT =
+    '[DSGN-186 DENIED] Inserting %s here would make a frame contain itself, so ' +
+    'nothing was written: it could never finish loading. %s';
+  SF_DESIGNER_ES_ESTE_FRAME_FMT =
+    '%s is the class of this frame.';
+
   { Un juez que tarda mas de lo que espera un cliente: escribir despues es una
     edicion que el cliente da por perdida y repite (medido el 1-nov-2026 en la VM:
     FileListBox1 tras rendirse el cliente, y el reintento, FileListBox2). }

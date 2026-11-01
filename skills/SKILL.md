@@ -192,7 +192,8 @@ it. With no name, each request of that protocol is a stranger to the one before.
   or nothing, and a refusal says exactly what to do instead - including how
   to add by hand what insert cannot place (a non-visual component such as
   a TTimer: its block, its published field, its unit in the uses, then
-  `check-binding`). A frame of the project goes by `insert` too, by its class;
+  `check-binding`). A frame of the project goes by `insert` too, by its class
+  (one that would end up containing itself is refused, `DSGN-186`);
   a new form or frame that inherits from one of the project is `delphi_create`
   with `ancestor`.
 - After a form edit made with `delphi_edit`, run `delphi_designer lint
@@ -201,6 +202,10 @@ it. With no name, each request of that protocol is a stranger to the one before.
   `lint`, `set` and an edit also say when a string value names a path
   `preview` refuses (`DSGN-183`, a note): the form stays valid, but neither
   it nor the other forms of its folder preview until that value changes.
+- `RENDER-007` (a render that passed its time) or `DSGN-185` (an edit judged
+  too slowly, nothing written): repeat the same call. An antivirus checking
+  packages it has not seen takes that long once. Only if it happens every
+  time is it the form: something in it waits when it loads.
 - SEE the form instead of imagining it: `delphi_designer command=preview
   path=<form>` returns a PNG of what the IDE designer shows. The loop is
   insert/set -> `lint` -> `preview` -> fix. To place something, measure on
@@ -537,4 +542,4 @@ reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (declared with no roots): the operator's side, not yours.
 
-<!-- contract reviewed: v1.25.0 -->
+<!-- contract reviewed: v1.25.1 -->

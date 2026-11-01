@@ -24,6 +24,7 @@ type
   { Un rechazo nuestro (estado, estilo, argumentos): su mensaje ya lleva la
     etiqueta del catalogo y sale tal cual en ERROR=, sin la clase delante }
   ERender = class(Exception);
+  EFrameCiclico = class(ERender);
 
   TPeticion = record
     Path: string;        // --path <dfm|fmx>
@@ -1660,7 +1661,7 @@ begin
       var Cadena := ExtractFileName(GPeticion.Path);
       for var EnCurso in FFramesEnCurso do
         Cadena := Cadena + ' > ' + ExtractFileName(EnCurso);
-      raise ERender.Create(MsgFmt(SR_RENDER_FRAME_CICLICO_FMT, [FClaseFrame, Cadena + ' > ' + ExtractFileName(Fichero)]));
+      raise EFrameCiclico.Create(MsgFmt(SR_RENDER_FRAME_CICLICO_FMT, [FClaseFrame, Cadena + ' > ' + ExtractFileName(Fichero)]));
     end;
     Component := ClaseFrame.Create(Reader.Owner);
     FEscritas.AddOrSetValue(Component, FClaseFrame);
@@ -1729,7 +1730,9 @@ begin
   // (ReadComponent.Recover) y en los fixups (revisor de la 1.20.2)
   Origen := FR_ORIGEN_LECTOR;
   var E := ExceptObject;
-  if (E <> nil) and not ((E is EFilerError) or (E is EParserError)) then
+  if E is EFrameCiclico then
+    Origen := FR_ORIGEN_FRAME_CICLICO
+  else if (E <> nil) and not ((E is EFilerError) or (E is EParserError)) then
     Origen := E.ClassName;
   FIgnoradas.Add(Origen + FR_PARTES_SEP + Message);
   Handled := True;

@@ -7,7 +7,7 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 1;
+  FR_PROTOCOLO_VERSION = 2;
   FR_CAPTURE = 'CAPTURE=';       // CAPTURE=<ruta del png> (la misma clave que el nodo de escritorio)
   FR_SIZE = 'SIZE=';             // SIZE=<ancho>x<alto> del png
   FR_DPI = 'DPI=';               // DPI=96: el proceso no es consciente del DPI, un pixel = una unidad del dfm
@@ -23,6 +23,7 @@
                                  // crearlo o nombrarlo (IBX sin gds32.dll, un AV de un bpl: no es del fichero, que se
                                  // sepa; corpus 18-oct-2026). La de un SETTER llega envuelta en EReadError: del lector
   FR_ORIGEN_LECTOR = 'reader';   // el <de quien> de un IGNORED= del propio lector
+  FR_ORIGEN_FRAME_CICLICO = 'framecycle'; // ...y el de un frame que se contiene a si mismo: es del fichero (RENDER-026)
   FR_NONVISUAL = 'NONVISUAL=';   // NONVISUAL=<n> iconos de no visuales dibujados (solo con --nonvisual on)
   FR_NONVISUALS = 'NONVISUALS='; // NONVISUALS=<Nombre:Clase,...> los no visuales de la raiz, se dibujen o no: el
                                  // agente necesita saber que existen aunque no los vea (David, 7-oct-2026)

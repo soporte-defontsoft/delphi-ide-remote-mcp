@@ -764,7 +764,12 @@ what the IDE's `convert.exe` writes.
 its unit together, all or nothing; any other `set` writes the form only
 (`Lsp.DesignerEdit`). What `insert` cannot place - a non-visual component, a
 class or a parent the tables do not have, a unit missing from a `uses` split in
-`{$IFDEF}` branches - is written by hand, and its refusal says how. A name, given by `insert component=` or by
+`{$IFDEF}` branches - is written by hand, and its refusal says how. An edit whose
+judging took 50 s or more writes nothing (`DSGN-185`, 1.25.1): the client may have
+given up, and a late write would land twice when it repeats the call. Repeating it
+is safe. A frame that would end up containing itself, directly or through another
+frame, is refused with nothing written (`DSGN-186`, 1.25.1), since it could never
+finish loading. A name, given by `insert component=` or by
 `set prop=Name`, is judged by one rule: an identifier, not a reserved word, taken
 by nothing in the form or its class (`DSGN-095`/`096`); without one, insert takes the IDE's
 first free `Button1`, `Button2`... The Caption/Text follows the name when the

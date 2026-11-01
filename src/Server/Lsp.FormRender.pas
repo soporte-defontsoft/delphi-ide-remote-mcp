@@ -223,6 +223,10 @@ function LoQueNoCargo(const R: TRespuestaRender; ADoc: TStyleDoc; const AForm: s
   aviso: lo mide V3 de test_lint_vistas_1202. }
 function DelCodigoDeUnComponente(const AI: TIgnorada): Boolean;
 
+{ Lo que se salto es un frame que se contiene a si mismo (RENDER-026): del fichero,
+  no del codigo de un componente. }
+function EsFrameCiclico(const AI: TIgnorada): Boolean;
+
 { El componente de AI elige sus PARTES por una clase que esta instalacion no
   tiene: una propiedad suya '...ClassName' con un nombre de clase que la tabla
   del marco no conoce (ItemAppearanceClassName = 'TMultiDetailItemAppearance',
@@ -759,9 +763,14 @@ begin
     PropiedadDelUsuarioLlamada(APublicadas, AI.Propiedad, ASuya);
 end;
 
+function EsFrameCiclico(const AI: TIgnorada): Boolean;
+begin
+  Result := AI.Origen = FR_ORIGEN_FRAME_CICLICO;
+end;
+
 function DelCodigoDeUnComponente(const AI: TIgnorada): Boolean;
 begin
-  Result := AI.Origen <> '';
+  Result := (AI.Origen <> '') and not EsFrameCiclico(AI);
 end;
 
 function TextoDeIgnorada(const AI: TIgnorada): string;
@@ -2090,6 +2099,11 @@ begin
   var R := JuezDelIde(APath, ATexto, AEnc, '', ASoltado, AUnidad);
   AError := R.Error;
   AParada := R.Parada;
+  // un ciclo de frames no para al lector, que lo salta, y el form propuesto no se
+  // cargaria nunca en el IDE: quien juzga una edicion lo tiene que ver
+  for var I in R.Ignoradas do
+    if EsFrameCiclico(I) then
+      AParada := I;
   Result := R.Fallo;
   if Result <> '' then
     Exit;

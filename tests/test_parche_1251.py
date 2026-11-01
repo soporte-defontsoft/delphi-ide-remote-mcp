@@ -12,13 +12,23 @@ r"""Lo que fallaba en la 1.25.0 publicada, medido el 1-nov-2026 antes de planear
      la cadena.
   C2 lint de ese frame: decia CLEAN de un form que no se carga.
   C3 control: un frame inline dos veces en un form, sin ciclo, se dibuja.
+  C4 preview y lint no culpan del ciclo al codigo de un componente (Luna y Qwen, dirigido).
+  I1 insert de un frame en si mismo: DSGN-186, no "no esta en la tabla" con la receta a mano,
+     que llevaba a escribir el ciclo.
+  I2 insert que cierra un ciclo por otro frame (UUno ya tiene a UDos, UDos en UUno): lo
+     escribia con ok:true y la unidad de los dos con el uses circular. Ahora DSGN-186
+     y nada escrito.
+  I3 control: el primer insert de esos, sin ciclo, se escribe.
+  I4 un control en un form que YA tiene el ciclo se inserta: el no lo cierra (mi primer
+     arreglo le contestaba DSGN-186, cazado en vivo).
+  I5 el ciclo se puede quitar a mano con delphi_edit, y lint queda limpio.
   O1 VCL: el frame insertado con tres controles recibe TabOrder 3 (recibia 0,
      repetido), y el boton siguiente el 4.
   O2 control: un boton insertado sigue recibiendo el ultimo.
   E1 delphi_delete del propio enlace en un __delphi-temp: FILE-053 ya no manda
      solo a borrar el fichero real, que es lo vivo; nada se borra.
 
-Rojo contra la 1.25.0: T1, C1, C2, O1, E1.
+Rojo contra la 1.25.0: T1, C1, C2, O1, E1. Rojo sin este ultimo arreglo: C4, I1, I2.
 
 Uso:  python tests/test_parche_1251.py [exe]
 """
@@ -119,6 +129,47 @@ escribe(DOS, "object Dos: TDos\n  Left = 0\n  Top = 0\n  Caption = 'Dos'\n  Clie
              '  inline H2: THoja\n    Left = 50\n    Top = 0\n    TabOrder = 1\n  end\nend\n')
 r = d(command='preview', path=DOS, maxwidth=100)
 check('C3 control: el mismo frame dos veces, sin ciclo, se dibuja', 'screenshotBytes' in r and not mc.es(r, 'SR_RENDER_FRAME_CICLICO_FMT'), r[:220])
+
+r = d(command='preview', path=AUTO, maxwidth=100)
+r2 = d(command='lint', path=AUTO)
+check('C4 preview y lint no culpan del ciclo al codigo de un componente',
+      mc.es(r, 'SR_RENDER_FRAME_CICLICO_FMT') and mc.es(r2, 'SR_RENDER_FRAME_CICLICO_FMT') and
+      not mc.es(r, 'SN_DESIGNER_PREVIEW_IGNORADAS_NO_CONFIRMADAS_FMT') and 'the code of a' not in r2,
+      (r[:300], r2[:300]))
+
+# ---- I: insert no cierra un ciclo
+F6 = carpeta('insert_ciclo')
+s.call('delphi_create', {'kind': 'project-vcl', 'dir': F6, 'name': 'Cic'})
+DPROJ6 = os.path.join(F6, 'Cic.dproj')
+s.call('delphi_create', {'kind': 'frame-vcl', 'name': 'UUno', 'project': DPROJ6})
+s.call('delphi_create', {'kind': 'frame-vcl', 'name': 'UDos', 'project': DPROJ6})
+UNO, DOS = os.path.join(F6, 'UUno.dfm'), os.path.join(F6, 'UDos.dfm')
+
+
+def bytes_de(*rutas):
+    return [open(p, 'rb').read() for p in rutas]
+
+
+antes = bytes_de(UNO, os.path.join(F6, 'UUno.pas'))
+r = d(command='insert', path=UNO, classname='TFrameUUno')
+check('I1 un frame en si mismo: DSGN-186, sin la receta a mano, y nada escrito',
+      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_INSERT_FRAME_CICLICO_FMT') and not mc.es(r, 'SR_DESIGNER_CLASS_FMT') and
+      bytes_de(UNO, os.path.join(F6, 'UUno.pas')) == antes, r[:300])
+r = d(command='insert', path=UNO, classname='TFrameUDos')
+check('I3 control: UDos en UUno, sin ciclo, se escribe', 'FrameUDos1' in open(UNO, encoding='utf-8', errors='replace').read() and not mc.rechazado(r), r[:220])
+antes = bytes_de(DOS, os.path.join(F6, 'UDos.pas'))
+r = d(command='insert', path=DOS, classname='TFrameUUno')
+check('I2 UUno en UDos cerraria el ciclo: DSGN-186 con la cadena y nada escrito',
+      mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_INSERT_FRAME_CICLICO_FMT') and 'UDos.dfm > UUno.dfm > UDos.dfm' in r and
+      bytes_de(DOS, os.path.join(F6, 'UDos.pas')) == antes, r[:420])
+
+r = d(command='insert', path=AUTO, classname='TButton')
+check('I4 un control en un form que ya tiene el ciclo se inserta, sin DSGN-186',
+      not mc.es(r, 'SR_DESIGNER_INSERT_FRAME_CICLICO_FMT') and not mc.rechazado(r) and 'Button1' in open(AUTO, encoding='utf-8', errors='replace').read(), r[:300])
+r = s.call('delphi_edit', {'path': AUTO, 'old': '  inline Dentro: TAuto\r\n    Left = 0\r\n    Top = 0\r\n  end', 'new': ''})
+r2 = d(command='lint', path=AUTO)
+check('I5 el ciclo se quita con delphi_edit y lint ya no lo ve',
+      not mc.rechazado(r) and 'inline Dentro' not in open(AUTO, encoding='utf-8', errors='replace').read() and not mc.es(r2, 'SR_RENDER_FRAME_CICLICO_FMT'), (r[:220], r2[:220]))
 
 # ---- E: el propio enlace dentro de un __delphi-temp
 F5 = carpeta('enlace')
