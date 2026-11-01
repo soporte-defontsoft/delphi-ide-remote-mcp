@@ -50,18 +50,9 @@ open(DFM, 'wb').write(
 
 k32 = ctypes.WinDLL('kernel32', use_last_error=True)
 u32 = ctypes.WinDLL('user32', use_last_error=True)
-TH32CS_SNAPPROCESS = 0x2
 
 
-class PE32(ctypes.Structure):
-    _fields_ = [('dwSize', w.DWORD), ('cntUsage', w.DWORD), ('th32ProcessID', w.DWORD),
-                ('th32DefaultHeapID', ctypes.c_size_t), ('th32ModuleID', w.DWORD), ('cntThreads', w.DWORD),
-                ('th32ParentProcessID', w.DWORD), ('pcPriClassBase', ctypes.c_long), ('dwFlags', w.DWORD),
-                ('szExeFile', ctypes.c_wchar * 260)]
 
-
-k32.CreateToolhelp32Snapshot.restype = w.HANDLE
-k32.Process32FirstW.argtypes = k32.Process32NextW.argtypes = [w.HANDLE, ctypes.POINTER(PE32)]
 k32.OpenProcess.restype = w.HANDLE
 k32.OpenProcess.argtypes = [w.DWORD, w.BOOL, w.DWORD]
 k32.TerminateProcess.argtypes = [w.HANDLE, w.UINT]
@@ -69,19 +60,7 @@ k32.WaitForSingleObject.argtypes = [w.HANDLE, w.DWORD]
 k32.CloseHandle.argtypes = [w.HANDLE]
 
 
-def renderizador_hijo_de(pid_padre, nombre='delphiformrendervcl.exe'):
-    """el pid del renderizador que lanzo ese servidor (0 si aun no hay)"""
-    snap = k32.CreateToolhelp32Snapshot(TH32CS_SNAPPROCESS, 0)
-    pe = PE32()
-    pe.dwSize = ctypes.sizeof(PE32)
-    hallado = 0
-    ok = k32.Process32FirstW(snap, ctypes.byref(pe))
-    while ok and not hallado:
-        if pe.th32ParentProcessID == pid_padre and pe.szExeFile.lower() == nombre:
-            hallado = pe.th32ProcessID
-        ok = k32.Process32NextW(snap, ctypes.byref(pe))
-    k32.CloseHandle(snap)
-    return hallado
+renderizador_hijo_de = mc.renderizador_hijo_de
 
 
 def atomos_de(pid, tid):

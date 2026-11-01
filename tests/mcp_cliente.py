@@ -553,6 +553,48 @@ def suspende(pid):
     return rc == 0
 
 
+def reanuda(pid):
+    """La inversa de suspende."""
+    import ctypes
+    k32 = ctypes.windll.kernel32
+    k32.OpenProcess.restype = ctypes.c_void_p
+    h = k32.OpenProcess(0x0800, False, pid)              # PROCESS_SUSPEND_RESUME
+    if not h:
+        return False
+    rc = ctypes.windll.ntdll.NtResumeProcess(ctypes.c_void_p(h))
+    k32.CloseHandle(ctypes.c_void_p(h))
+    return rc == 0
+
+
+def renderizador_hijo_de(pid_padre, nombre='delphiformrendervcl.exe'):
+    """El pid del renderizador que lanzo ESE servidor (0 si aun no hay). Sin
+    powershell: un renderizador vive un segundo. Estaba en test_hijo_sin_finalizar_1212."""
+    import ctypes
+    from ctypes import wintypes as w
+
+    class PE32(ctypes.Structure):
+        _fields_ = [('dwSize', w.DWORD), ('cntUsage', w.DWORD), ('th32ProcessID', w.DWORD),
+                    ('th32DefaultHeapID', ctypes.c_size_t), ('th32ModuleID', w.DWORD), ('cntThreads', w.DWORD),
+                    ('th32ParentProcessID', w.DWORD), ('pcPriClassBase', ctypes.c_long), ('dwFlags', w.DWORD),
+                    ('szExeFile', ctypes.c_wchar * 260)]
+
+    k32 = ctypes.WinDLL('kernel32', use_last_error=True)
+    k32.CreateToolhelp32Snapshot.restype = w.HANDLE
+    k32.Process32FirstW.argtypes = k32.Process32NextW.argtypes = [w.HANDLE, ctypes.POINTER(PE32)]
+    k32.CloseHandle.argtypes = [w.HANDLE]
+    snap = k32.CreateToolhelp32Snapshot(0x2, 0)                  # TH32CS_SNAPPROCESS
+    pe = PE32()
+    pe.dwSize = ctypes.sizeof(PE32)
+    hallado = 0
+    ok = k32.Process32FirstW(snap, ctypes.byref(pe))
+    while ok and not hallado:
+        if pe.th32ParentProcessID == pid_padre and pe.szExeFile.lower() == nombre:
+            hallado = pe.th32ProcessID
+        ok = k32.Process32NextW(snap, ctypes.byref(pe))
+    k32.CloseHandle(snap)
+    return hallado
+
+
 def es_esta_maquina(host):
     """El "host" que dice un servidor lanzado AQUI es el nombre de esta
     maquina (el NetBIOS, el de %COMPUTERNAME%, que es el que da

@@ -5978,6 +5978,18 @@ begin
   end;
 end;
 
+{ Si el form lleva un frame inline: esa carga no la juzga ninguna tabla (un frame que
+  se contiene a si mismo daba CLEAN de un form que no se carga; 1-nov-2026) }
+function LlevaFrameInline(const ALineas: TArray<string>): Boolean;
+var
+  Clave, Nombre, Clase: string;
+begin
+  for var L in ALineas do
+    if LineaDeObjeto(L.Trim, Clave, Nombre, Clase) and SameText(Clave, 'inline') then
+      Exit(True);
+  Result := False;
+end;
+
 function LosJuecesDeUnForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
   AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string): TLintDeForm;
 var
@@ -6029,7 +6041,7 @@ begin
   // FontColor = -65536 en un TEdit FMX pasaba delphi_edit sin aviso y el lint
   // con CLEAN de un form que no abria. Solo si la tabla no encontro nada: con
   // un aviso suyo el form ya no carga, y el lector no diria mas
-  if ALector and (Result.SinJuez > 0) and (Result.Parser = '') and
+  if ALector and ((Result.SinJuez > 0) or LlevaFrameInline(Lineas)) and (Result.Parser = '') and
      (Length(Result.Propiedades) = 0) and (Result.Falta.Razon = '') then
     Result.Lector := LoQueNoCargaElIde(ADfm, ATexto, AEnc, Result.SinLector);
 end;

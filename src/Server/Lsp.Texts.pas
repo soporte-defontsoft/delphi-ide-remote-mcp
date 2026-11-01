@@ -6488,6 +6488,17 @@ const
   { La primera vez tras instalar, actualizar o tocar las rutas del IDE la
     tabla se genera del fuente (segundos); quien llama espera un rato y, si
     no ha acabado, se le dice que vuelva. }
+  { Un juez que tarda mas de lo que espera un cliente: escribir despues es una
+    edicion que el cliente da por perdida y repite (medido el 1-nov-2026 en la VM:
+    FileListBox1 tras rendirse el cliente, y el reintento, FileListBox2). }
+  SR_DESIGNER_JUEZ_TARDO_FMT =
+    '[DSGN-185 DENIED] Judging this edit of %s took %d s, longer than a client ' +
+    'may wait for an answer, so nothing was written: an edit that lands after ' +
+    'the client gave up gets repeated, and lands twice. Repeat the same call: ' +
+    'what is slow the first time is ready now. If it is slow every time, ' +
+    'something in the form waits when it loads (a connection with nothing to ' +
+    'open, usually): change that with delphi_edit.';
+
   SR_DESIGNER_GENERANDOSE_FMT =
     '[DSGN-051 DENIED] The designer table of %s is still being generated ' +
     'from its source (the first use after an install, an update or a change ' +
@@ -7695,8 +7706,10 @@ const
     '[FILE-053 DENIED] %s is named inside a server temporary (__delphi-temp), ' +
     'but its real path is a LIVE file or folder a link points to, outside any ' +
     'temporary. Deleting it as a temporary would wipe it for good, with no ' +
-    'recoverable copy. Delete the real file by its own path instead - that one ' +
-    'goes to the recoverable trash.';
+    'recoverable copy, so nothing was deleted. If what you want gone is that ' +
+    'live file, delete it by its own path: that goes to the recoverable trash. ' +
+    'If it is the link, it is the operator''s: no tool of this server plants or ' +
+    'removes one here.';
 
   SN_FILE_PURGED_FMT =
     '[FILE-014] PURGED %s. There is no way back from this: it was a copy ' +

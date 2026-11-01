@@ -712,9 +712,10 @@ procedure TRenderDUMMYTests.Vcl_inline_ciclico;
 var
   R: TRespuesta;
 begin
+  // el lector se salta el frame y sigue: el resto se dibuja y RENDER-026 lo dice
   R := RenderDUMMY('DUMMY-inline.dfm');
-  Assert.AreEqual<Cardinal>(FR_RC_TIMEOUT, R.Rc, string.Join(' | ', R.Lineas));
-  Assert.IsTrue(R.Valor(FR_ERROR).Contains('RENDER-007'));
+  Assert.AreEqual<Cardinal>(FR_RC_OK, R.Rc, string.Join(' | ', R.Lineas));
+  Assert.IsTrue(R.Valor(FR_IGNORED).Contains('RENDER-026'), string.Join(' | ', R.Lineas));
 end;
 
 procedure TRenderDUMMYTests.Fmx_inline_ciclico;
@@ -722,8 +723,8 @@ var
   R: TRespuesta;
 begin
   R := RenderDUMMY('DUMMY-inline.fmx');
-  Assert.AreEqual<Cardinal>(FR_RC_TIMEOUT, R.Rc, string.Join(' | ', R.Lineas));
-  Assert.IsTrue(R.Valor(FR_ERROR).Contains('RENDER-007'));
+  Assert.AreEqual<Cardinal>(FR_RC_OK, R.Rc, string.Join(' | ', R.Lineas));
+  Assert.IsTrue(R.Valor(FR_IGNORED).Contains('RENDER-026'), string.Join(' | ', R.Lineas));
 end;
 
 procedure TRenderDUMMYTests.Vcl_archivo_avi;

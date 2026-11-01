@@ -124,6 +124,12 @@ const
     'form runs at design time (a connection set to Connected or a dataset ' +
     'to Active, usually): the IDE would show that dialog when opening it.';
 
+  // Un frame inline que acaba conteniendose a si mismo: la lectura no acaba
+  // nunca y el renderizador caia con $C0000005 a los 3,3 s (medido el 1-nov-2026)
+  SR_RENDER_FRAME_CICLICO_FMT =
+    '[RENDER-026 DENIED] The frame %s contains itself (%s): it could never ' +
+    'finish loading. Take that inline out of the form.';
+
   // Lo que dice STYLE= del StyleBook de la form, y la coletilla de un style=
   // de la peticion: lo que lleva la form ES lo que vera la app. Decia "(1
   // items)" de un StyleBook con un item vacio, y nada con style=: Hermes tomo

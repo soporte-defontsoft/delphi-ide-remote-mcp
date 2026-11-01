@@ -160,7 +160,8 @@ uses
   Lsp.ProjectUnits,    // UsesConUnidades: el uses de la unidad
   Lsp.TodoONada,       // FicherosTodoONada
   Lsp.FormRender,      // ComoLoEscribeElIde: el juez del orden entre hermanos (3.11)
-  Lsp.Args;
+  Lsp.Args,
+  Winapi.Windows;
 
 const
   // (las identidades de la tabla, ID_VCL_CONTROL y las demas: Lsp.DesignerMeta)
@@ -169,6 +170,8 @@ const
   INSERT_Y = 10;
   MAX_USOS = 30;
   MAX_NOMBRES = 40;
+  // hay clientes MCP que se rinden al minuto (el mismo de ESPERA_TABLA_MS)
+  PLAZO_DEL_JUICIO_MS = 50000;
   // (que valor toma cada tipo lo dice la tabla, leido del fuente: la base
   // de un tipo 'o' y las constantes de un entero, BaseQueNoCasa; aqui habia
   // tres listas de nombres de tipos a mano, que dejaban pasar un TColor
@@ -177,6 +180,7 @@ const
 type
   TFormEnEdicion = record
     Dfm, Pas, DfmNombre, PasNombre, Marco: string;
+    JuzgandoDesde: UInt64; // AbreFormParaJuzgar: desde cuando se juzga esta edicion (JuezQueTardo)
     EsFmx, HayPas: Boolean;
     Doc: TStyleDoc;
     PasTexto, PasEnc: string;
@@ -1211,6 +1215,7 @@ function ConBloqueMovido(const ALineas, ABloque: TArray<string>; AIni, ALargo: I
 // deja el IDE un bloque nuevo entre sus hermanos (3.11: insert y set parent=)
 function AbreFormParaJuzgar(const APath: string; ANecesitaPas, ANecesitaTabla: Boolean;
   out F: TFormEnEdicion; out AAntes, AAntesPas: TArray<Byte>): string; forward;
+function JuezQueTardo(const F: TFormEnEdicion): string; forward;
 function CambioDesdeQueSeJuzgo(const F: TFormEnEdicion; const AAntes, AAntesPas: TArray<Byte>): string; forward;
 function DondeLoDejaElIde(var F: TFormEnEdicion; const ALineas: TArray<string>;
   const ANomObj, ANomPadre: string; var AIni: Integer; ALargo: Integer; ASinTabOrder: Boolean;
@@ -2284,6 +2289,10 @@ begin
     DfmLineas := DondeLoDejaElIde(F, DfmLineas, Nombre, NombrePadre, Ini, Largo, ConTab and not TabDelAgente,
       NotaOrden, TabDelIde, PasNuevo);
     FinBloque := Ini + Largo - 1;
+    // el segundo juez, abajo, puede tardar otro tanto: si ya no se va a escribir, ahora
+    Result := JuezQueTardo(F);
+    if Result <> '' then
+      Exit;
     if ConTab and not TabDelAgente and (TabDelIde >= 0) then
       PonSuTabOrder(F, DfmLineas, Nombre, TabDelIde);
     // sus propiedades como las guarda el escritor del IDE (1.22.1: el tamano
@@ -3703,7 +3712,10 @@ end;
   set before=/after=/index=; insert y set parent= preguntan ahora al juez. }
 function AbreFormParaJuzgar(const APath: string; ANecesitaPas, ANecesitaTabla: Boolean;
   out F: TFormEnEdicion; out AAntes, AAntesPas: TArray<Byte>): string;
+var
+  Desde: UInt64;
 begin
+  Desde := GetTickCount64;
   F := Default(TFormEnEdicion);
   AAntes := nil;
   AAntesPas := nil;
@@ -3744,6 +3756,7 @@ begin
   finally
     LeaveFileEdit;
   end;
+  F.JuzgandoDesde := Desde;
   if (Result = '') and ANecesitaTabla then
   try
     Result := PonTabla(F);
@@ -3755,6 +3768,22 @@ begin
     FreeAndNil(F.Doc); // nil si AbreForm fallo; abierto si los bytes no eran los leidos
 end;
 
+{ '' si esta edicion lleva juzgandose menos de lo que espera un cliente; si no,
+  DSGN-185 y no se escribe. El cliente se rinde al minuto y el servidor no se
+  entera: la escritura llegaba despues, y el reintento la duplicaba. Lo que tarda la
+  primera vez (las tablas, la caja de paquetes) ya esta listo al repetir. }
+function JuezQueTardo(const F: TFormEnEdicion): string;
+var
+  Ms: UInt64;
+begin
+  Result := '';
+  if F.JuzgandoDesde = 0 then
+    Exit;
+  Ms := GetTickCount64 - F.JuzgandoDesde;
+  if Ms >= PLAZO_DEL_JUICIO_MS then
+    Result := MsgFmt(SR_DESIGNER_JUEZ_TARDO_FMT, [F.DfmNombre, Ms div 1000]);
+end;
+
 { CON el cerrojo, justo antes de escribir: '' si el form -y la unidad, si se
   leyo, y lo que leyo el juez para cargarlo (READ=)- son los bytes que se
   juzgaron (AbreFormParaJuzgar, LeidoPorElJuez); si no, DSGN-144
@@ -3762,6 +3791,9 @@ end;
   se juzgaba: revisor 6 del 3.11, B2). }
 function CambioDesdeQueSeJuzgo(const F: TFormEnEdicion; const AAntes, AAntesPas: TArray<Byte>): string;
 begin
+  Result := JuezQueTardo(F);
+  if Result <> '' then
+    Exit;
   Result := MsgFmt(SR_DESIGNER_ORDEN_CAMBIO_FMT, [F.DfmNombre]);
   try
     if not BytesIguales(AAntes, LeeBytes(F.Dfm, [ltJaula])) then

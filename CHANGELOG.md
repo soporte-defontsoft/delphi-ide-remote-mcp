@@ -8,6 +8,13 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- `delphi_designer` no longer writes an edit after a client may have given up. When judging an `insert`, `set` or a rename took 50 s or more, the client had usually stopped waiting (many give up at a minute) while the server went on and wrote: the agent repeated the call and the control landed twice. Now nothing is written and the answer says so (`DSGN-185`); repeating it works, since what was slow the first time is ready.
+- A frame that contains itself, directly or through others, is told apart (`RENDER-026`, with the chain), and the rest of the form is drawn without it. The renderer fell with an access violation after about 3 s, `preview` blamed a design package (`DSGN-061`) and `lint` answered CLEAN. `lint`, and a form edit, now ask the IDE's form reader about every form that holds an inline frame, which no table can judge.
+- `delphi_designer insert` gives a VCL frame the next `TabOrder`, as the designer does when dropping it: with three controls it took 0, the one of another control.
+- `FILE-053` no longer sends you to delete the live file when what you named is the link itself: it says the link is the operator's, and that nothing was deleted.
+
 ## [1.25.0] - 2026-11-01
 
 A minor version around the protocol, and around what agents kept tripping on.

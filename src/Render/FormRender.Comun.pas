@@ -78,6 +78,7 @@ type
     FCarpeta: string;
     FDesconocida: string;
     FFramePendiente: string;      // el fichero del frame inline que toca crear
+    FFramesEnCurso: TStringList;  // los ficheros de los frames que se estan leyendo, del de fuera al de dentro
     FLeyendo: string;             // el fichero que se esta leyendo, el que nombra las clases
     FClaseFrame: string;          // y la clase con la que lo escribe el fichero
     FPorClase: TDictionary<string, TArray<string>>; // clase raiz -> sus ficheros, en la carpeta
@@ -1528,6 +1529,7 @@ begin
   FNoAplicados.Duplicates := dupIgnore;
   FPorClase := TDictionary<string, TArray<string>>.Create;
   FNoCargan := TStringList.Create;
+  FFramesEnCurso := TStringList.Create;
   FEscritas := TDictionary<TComponent, string>.Create;
 end;
 
@@ -1535,6 +1537,7 @@ destructor TCargador.Destroy;
 begin
   FEscritas.Free;
   FNoCargan.Free;
+  FFramesEnCurso.Free;
   FPorClase.Free;
   FNoAplicados.Free;
   FLeidos.Free;
@@ -1651,6 +1654,14 @@ begin
   begin
     Fichero := FFramePendiente;
     FFramePendiente := '';
+    // el que ya se esta leyendo, o el form pedido: la lectura no acabaria nunca
+    if SameFileName(Fichero, GPeticion.Path) or (FFramesEnCurso.IndexOf(Fichero) >= 0) then
+    begin
+      var Cadena := ExtractFileName(GPeticion.Path);
+      for var EnCurso in FFramesEnCurso do
+        Cadena := Cadena + ' > ' + ExtractFileName(EnCurso);
+      raise ERender.Create(MsgFmt(SR_RENDER_FRAME_CICLICO_FMT, [FClaseFrame, Cadena + ' > ' + ExtractFileName(Fichero)]));
+    end;
     Component := ClaseFrame.Create(Reader.Owner);
     FEscritas.AddOrSetValue(Component, FClaseFrame);
     PonEnDiseno(Component);
@@ -1659,7 +1670,12 @@ begin
     // tiene que buscar los hijos EN el frame (FLookupRoot): solo lo hace si el
     // componente lleva csInline, y cuando lo crea OnCreateComponent el lector
     // no se lo pone (System.Classes 11869-11873: solo en su propio camino).
-    Lee(Fichero, Component);
+    FFramesEnCurso.Add(Fichero);
+    try
+      Lee(Fichero, Component);
+    finally
+      FFramesEnCurso.Delete(FFramesEnCurso.Count - 1);
+    end;
     TComponentCrack(Component).SetInline(True);
     Exit;
   end;
