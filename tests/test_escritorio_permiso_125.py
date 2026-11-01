@@ -103,12 +103,15 @@ finally:
 P = os.path.join(RAIZ, 'Nodo.dproj')
 with open(P, 'w', encoding='utf-8') as f:
     f.write('<Project/>')
-s = servidor({'DELPHI_MCP_REMOTE_RUN_PROJECTS': P, 'DELPHI_MCP_DESKTOP_HOSTS': HOSTS['actua']})
+s = servidor({'DELPHI_MCP_REMOTE_RUN_PROJECTS': P, 'DELPHI_MCP_DESKTOP_HOSTS': HOSTS['actua'], 'DELPHI_MCP_DESKTOP_VIEW_HOSTS': HOSTS['mira']})
 try:
     t = pide(s, 'status', 'nada', proyecto=P)
     check('project= en un host sin permiso: se niega', mc.es(t, NIEGA), t[:300])
     t = pide(s, 'status', 'actua', proyecto=P)
     check('project= en un host con permiso: pasa la puerta', not mc.es(t, NIEGA), t[:300])
+    # ...y project= ejecuta ese proyecto en el destino: no es mirar, aunque el comando sea status
+    t = pide(s, 'status', 'mira', proyecto=P)
+    check('project= en un host de ninguna lista de actuar: se niega', mc.es(t, NIEGA) and 'act on' in t, t[:300])
     # remote-run es otra pregunta: el proyecto, no el escritorio
     t = s.call('delphi_paserver', {'command': 'remote-run', 'profile': 'nada', 'project': P}, 120)
     check('remote-run no pide el permiso del escritorio', not mc.es(t, NIEGA), t[:300])

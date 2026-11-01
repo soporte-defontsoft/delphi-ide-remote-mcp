@@ -91,13 +91,36 @@ try:
     j = compila(P, 'quiet')
     check('F2613 en errors[] y en missingUnits', j.get('success') is False and any('F2613' in e for e in j.get('errors') or []) and any(m.get('unit') == 'UnidadQueNoExiste' for m in j.get('missingUnits') or []), str(j)[:500])
 
+    # el codigo de un fallo es el del compilador: el nombre de la carpeta no reintenta el build
+    P = consola('PBloq', 'F2039Demo', cuerpo='  NoExiste := 1;\r\n')
+    j = compila(P, 'normal')
+    check('un E2003 en una carpeta F2039Demo: sin reintentos ni nota de binario abierto',
+          j.get('success') is False and 'lockedRetries' not in j and 'lockedOutputNote' not in j, str(j)[:400])
+
     # lo que no es ASCII, tal cual lo dijo dcc
     P = consola('PAcc', 'Acc', "{$MESSAGE WARN 'año y acción'}\r\n")
     j = compila(P, 'normal')
     check('un aviso con acentos llega con sus acentos', any('año y acción' in w for w in j.get('warnings') or []), str(j)[:400])
 
-    # DUnitX: su resumen es el ultimo, no el primero que escriba un test
+    # DUnitX: su resumen es el ultimo, no el primero que escriba un test. Y no cierra la salida:
+    # detras van sus bloques, con el Message de cada test (DUnitX.Loggers.Console)
     REC = "var\r\n  DUnitX: record Foo: Integer end;\r\n"
+
+
+    def salida(nombre, lineas, codigo):
+        cuerpo = "  DUnitX.Foo := 1;\r\n" + ''.join("  Writeln('%s');\r\n" % x for x in lineas) + "  System.ExitCode := %d;\r\n" % codigo
+        return mc.como_json(call('delphi_test', {'project': consola(nombre, nombre, REC, cuerpo)}, t=240)) or {}
+
+
+    RESUMEN = ['Tests Found   : 5', 'Tests Ignored : 0', 'Tests Passed  : %d', 'Tests Leaked  : 0', 'Tests Failed  : %d', 'Tests Errored : 0']
+    j = salida('MsgRojo', [x % {2: 4, 4: 1}[i] if '%' in x else x for i, x in enumerate(RESUMEN)] +
+               ['', 'Failing Tests', '', '  T.UnTest', '  Message: Expected Tests Failed : 0', ''], 0)
+    check('DUnitX: el Message de un test rojo no es la cuenta, y una suite roja no sale verde',
+          j.get('result') == 'fail' and j.get('failed') == 1 and j.get('passed') == 4, str(j)[:400])
+    check('...y el fallo sale en failures, con su mensaje', any('T.UnTest' in x and 'Expected' in x for x in j.get('failures') or []), str(j)[:400])
+    j = salida('RuidoBloque', ['Failing Tests', 'esto lo escribio un test'] + [x % {2: 5, 4: 0}[i] if '%' in x else x for i, x in enumerate(RESUMEN)], 0)
+    check('DUnitX: un test que escribe "Failing Tests" antes del resumen no llena failures',
+          j.get('result') == 'pass' and j.get('failures') == [], str(j)[:400])
 
 
     def suite(nombre, ruido, fallos, salida):

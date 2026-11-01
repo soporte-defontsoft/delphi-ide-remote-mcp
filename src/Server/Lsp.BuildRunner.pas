@@ -2239,14 +2239,29 @@ begin
   end;
 end;
 
-{ Para msbuild, un hint de dcc es un aviso ("Hint warning H2077:"): lo distingue
-  su codigo, el primero de la linea. Antes de el solo va el fichero, y un nombre
-  de fichero no lleva dos puntos; por el codigo, porque un dcc traducido no dice
-  "Hint". }
+{ El codigo de dcc de una linea de msbuild (F2039, W1054, H2077), o '': el primero
+  de la linea. Antes de el solo va el fichero, y un nombre de fichero no lleva dos
+  puntos: una carpeta F2039Demo no es un F2039. Por el codigo, porque un dcc
+  traducido no dice "Hint" ni "Could not". }
+function CodigoDelCompilador(const ALinea: string): string;
+begin
+  var M := TRegEx.Match(ALinea, '\b([EFHW]\d+):');
+  Result := (if M.Success then M.Groups[1].Value else '');
+end;
+
+{ Para msbuild, un hint de dcc es un aviso ("Hint warning H2077:") }
 function EsHintDelCompilador(const ALinea: string): Boolean;
 begin
-  var M := TRegEx.Match(ALinea, '\b([HW])\d+:');
-  Result := M.Success and (M.Groups[1].Value = 'H');
+  Result := CodigoDelCompilador(ALinea).StartsWith('H');
+end;
+
+{ Si dcc dijo ACodigo en ese fichero de /flp }
+function LogDiceCodigo(const ARuta, ACodigo: string): Boolean;
+begin
+  Result := False;
+  for var L in LineasDelLogDeMsBuild(ARuta) do
+    if SameText(CodigoDelCompilador(L), ACodigo) then
+      Exit(True);
 end;
 
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
@@ -2662,13 +2677,12 @@ begin
   // Vacio = normal, que es como se comportaba antes de tener el parametro:
   // los otros motores que llaman aqui no cambian de comportamiento.
   var Verb := '/v:minimal /nologo';
-  // Un PAQUETE en quiet pide minimal: el W1033 ("unit de otro paquete
-  // compilada dentro de este") es un warning, y en quiet msbuild no lo
-  // imprime - el paquete salia en verde con la VCL entera dentro y el agente
-  // no veia nada (medido 2026-09-23: 25 W1033, BPL de 4,6 MB en vez de 13 KB).
-  // La respuesta sigue sin warnings[] en quiet; los W1033 van aparte.
+  // Un PAQUETE con un W1033 ("unit de otro paquete compilada dentro de este") se
+  // dice tambien en quiet, aparte de warnings[]: salia en verde con la VCL entera
+  // dentro (medido 2026-09-23: 25 W1033, BPL de 4,6 MB en vez de 13 KB). Lo lee el
+  // log de avisos, que no depende de esto
   EsPaquete := SameText(ReadDproj(TPath.GetFullPath(ADprojPath)).AppType, 'Package');
-  if SameText(AVerbosity, 'quiet') and not EsPaquete then
+  if SameText(AVerbosity, 'quiet') then
     Verb := '/v:quiet /clp:ErrorsOnly;Summary;NoItemAndPropertyList /nologo'
   else if SameText(AVerbosity, 'verbose') then
     Verb := '/v:detailed';
@@ -2721,7 +2735,7 @@ begin
   // machacar a msbuild ni quedarse esperando para siempre. Medido 2026-09-20:
   // con esperas fijas de 1,5 s un programa de 8 s agotaba los reintentos.
   var EsperaBloqueo := 1000;
-  while (ExitCode <> 0) and (ReintentosBloqueo < 4) and Output.Contains('F2039') do
+  while (ExitCode <> 0) and (ReintentosBloqueo < 4) and LogDiceCodigo(LogDeErrores, 'F2039') do
   begin
     Inc(ReintentosBloqueo);
     Sleep(EsperaBloqueo);
@@ -2732,9 +2746,10 @@ begin
   // completa en el SDK (ver CompletaEnlacesDev) y el build se repite UNA vez.
   // Medido 2026-09-21: una app FMX real dejo de enlazar en zorin18 y fedora44 por
   // un libz.so que ninguno de los dos traia; con la copia enlaza en ambos.
-  if (ExitCode <> 0) and (SdkUsado <> '') and Output.Contains('cannot find -l') then
+  var ErroresDelLog := string.Join(#10, LineasDelLogDeMsBuild(LogDeErrores));
+  if (ExitCode <> 0) and (SdkUsado <> '') and ErroresDelLog.Contains('cannot find -l') then
   begin
-    EnlacesDev := CompletaEnlacesDev(Info.Version, SdkUsado, Output, EnlacesNota);
+    EnlacesDev := CompletaEnlacesDev(Info.Version, SdkUsado, ErroresDelLog, EnlacesNota);
     if EnlacesDev > 0 then
       Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode, EntornoMsBuild);
   end;
@@ -2761,7 +2776,9 @@ begin
     Errors.Add(Line);
     YaDicho.Add(Line);
   end;
-  for Line in LineasDelLogDeMsBuild(LogDeAvisos) do
+  var AvisosDelLog := LineasDelLogDeMsBuild(LogDeAvisos);
+  var BloqueoDelLog := LogDiceCodigo(LogDeErrores, 'F2039');
+  for Line in AvisosDelLog do
   begin
     YaDicho.Add(Line);
     // los hints con su tope y su cuenta, y fuera de la cola aunque no quepan: son
@@ -2911,7 +2928,7 @@ begin
         // Fable sobre la 1.22.2, B3)
         DeBpl.Sorted := True; DeBpl.Duplicates := dupIgnore;
         // por el CODIGO y el primer '...' (un dcc traducido no dice "implicitly imported")
-        for var MI in TRegEx.Matches(Output, 'W1033:?[^'']*''([^'']+)''', [roIgnoreCase]) do
+        for var MI in TRegEx.Matches(string.Join(#10, AvisosDelLog), 'W1033:?[^'']*''([^'']+)''', [roIgnoreCase]) do
         begin
           Implicitas.Add(MI.Groups[1].Value);
           var Pk := PaqueteDeUnit(Info.RootDir, MI.Groups[1].Value);
@@ -2992,7 +3009,7 @@ begin
     // write is OPEN - the previous run still alive, the IDE holding it, a
     // debugger attached. It reads like a compiler error and it is not, so it
     // gets the one sentence that turns it into an action.
-    if (ExitCode <> 0) and Output.Contains('F2039') then
+    if (ExitCode <> 0) and BloqueoDelLog then
     begin
       Result.AddPair('lockedOutputNote', MsgText(SN_BUILD_LOCKED_OUTPUT));
     end;

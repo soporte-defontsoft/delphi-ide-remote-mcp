@@ -100,7 +100,7 @@ def _linea_de(p, n):
 # motor, text la linea TAL CUAL (el ancla); ni anchor, ni character, ni line1
 check('changes: line y line0, character0 y text = la linea de disco tal cual; sin anchor/character/line1',
       bool(_chg) and all(c.get('line0') == c.get('line', 0) - 1
-                         and ('character0' in c or c.get('kind') == 'definition')
+                         and 'character0' in c
                          and c.get('text') == _linea_de(c['path'], c['line'])
                          and not {'anchor', 'character', 'line1'} & set(c) for c in _chg)
       and _def.get('line0') == _def.get('line', 0) - 1 and 'line1' not in _def,

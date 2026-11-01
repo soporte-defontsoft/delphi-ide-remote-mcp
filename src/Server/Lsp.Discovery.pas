@@ -1438,31 +1438,32 @@ begin
     ONinguno(string.Join(', ', Sirven))]);
 end;
 
-function ProfileHostDenied(const AProfName: string): string;
-var
-  Info: TRadStudioInfo;
-  Host, Motivo: string;
+{ El host del perfil pedido, para una puerta: '' y AHost, o la negativa. Falla
+  cerrado: sin Delphi, no existe, no se lee o sin host }
+function HostDelPerfilPedido(const AProfName: string; out AHost: string): string;
 begin
-  Info := DiscoverRadStudio;
+  var Info := DiscoverRadStudio;
   if not Info.Found then
     Exit(MsgText(SR_PROFILE_NO_DELPHI));
-  Host := HostDePerfil(Info.Version, AProfName, Motivo);
-  if Motivo <> '' then
-    Exit(Motivo); // falla cerrado: no existe / no se lee / sin host
-  Result := ProbeHostDenied(Host);
+  AHost := HostDePerfil(Info.Version, AProfName, Result);
+end;
+
+function ProfileHostDenied(const AProfName: string): string;
+var
+  Host: string;
+begin
+  Result := HostDelPerfilPedido(AProfName, Host);
+  if Result = '' then
+    Result := ProbeHostDenied(Host);
 end;
 
 function ProfileDesktopDenied(const AProfName: string; AActua: Boolean): string;
 var
-  Info: TRadStudioInfo;
-  Host, Motivo: string;
+  Host: string;
 begin
-  Info := DiscoverRadStudio;
-  if not Info.Found then
-    Exit(MsgText(SR_PROFILE_NO_DELPHI));
-  Host := HostDePerfil(Info.Version, AProfName, Motivo);
-  if Motivo <> '' then
-    Exit(Motivo);
+  Result := HostDelPerfilPedido(AProfName, Host);
+  if Result <> '' then
+    Exit;
   if DesktopHostAllowed(Host, AActua) then
     Exit('');
   Result := MsgFmt(SR_DESKTOP_HOST_DENIED_FMT,

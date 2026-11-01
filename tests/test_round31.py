@@ -265,6 +265,8 @@ try:
     check('R1g ...y el rename no renombra el de Baz: aplicable, y sus cambios son los tres de Bar',
           rn.get('applicable') is True and sorted(c.get('line0') for c in mc.aciertos(rn, 'changes')) == sorted([_ayudas[0]] + _llam),
           json.dumps(rn)[:400])
+    check('R1g ...y cada fila de changes, la de la definicion tambien, trae su character0',
+          all('character0' in c for c in mc.aciertos(rn, 'changes')), json.dumps(rn)[:600])
     _ovl = [i for i, x in enumerate(_her) if 'function Interna2(' in x]
     _call2 = [i for i, x in enumerate(_her) if 'Writeln(Interna2(1))' in x]
     ovl = mc.como_json(call('delphi_references', {

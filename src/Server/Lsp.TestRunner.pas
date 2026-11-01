@@ -196,15 +196,59 @@ begin
   end;
 end;
 
-{ La cuenta de un rotulo del resumen de DUnitX: la ULTIMA de la salida, porque
-  el resumen la cierra y antes un test puede haber escrito lo mismo (medido el
-  1-nov-2026: un "Tests Failed : 7" de un test daba rojo a una suite verde). -1
-  si no esta. }
-function CuentaDelResumen(const AOutput, ARotulo: string): Integer;
+type
+  { El resumen de DUnitX: sus cuentas (-1 las que no dijo) y la linea en que acaba }
+  TResumenDUnitX = record
+    Found, Passed, Failed, Errored, Fin: Integer;
+  end;
+
+{ El ULTIMO bloque de lineas seguidas "Tests <rotulo> : <n>" (DUnitX.ResStrs),
+  cada una entera. Antes del resumen un test puede haber escrito lo mismo (un
+  "Tests Failed : 7" daba rojo a una suite verde), y detras van los bloques con el
+  Message de cada test, que no llena una linea (DUnitX.Loggers.Console): el ultimo
+  "Tests Failed" de la salida era el de un mensaje "Expected Tests Failed : 0", y
+  una suite roja salia verde (revisor del paisaje de la 1.25). }
+function ResumenDeDUnitX(const ALineas: TArray<string>): TResumenDUnitX;
+const
+  CUENTA = '(?i)^\s*Tests?\s+(Found|Passed|Failed|Errored|[a-z]+(?:\s+[a-z]+)*)\s*:\s*(\d+)\s*$';
+var
+  Ini, K: Integer;
 begin
-  Result := -1;
-  for var M in TRegEx.Matches(AOutput, '(?i)Tests?\s+' + ARotulo + '\s*:\s*(\d+)') do
-    Result := StrToIntDef(M.Groups[1].Value, -1);
+  Result.Found := -1;
+  Result.Passed := -1;
+  Result.Failed := -1;
+  Result.Errored := -1;
+  Result.Fin := -1;
+  K := High(ALineas);
+  while (K >= 0) and (Result.Fin < 0) do
+  begin
+    if not TRegEx.IsMatch(ALineas[K], CUENTA) then
+    begin
+      Dec(K);
+      Continue;
+    end;
+    Ini := K;
+    while (Ini > 0) and TRegEx.IsMatch(ALineas[Ini - 1], CUENTA) do
+      Dec(Ini);
+    for var I := Ini to K do
+    begin
+      var M := TRegEx.Match(ALineas[I], CUENTA);
+      var N := StrToIntDef(M.Groups[2].Value, -1);
+      if SameText(M.Groups[1].Value, 'Found') then
+        Result.Found := N
+      else if SameText(M.Groups[1].Value, 'Passed') then
+        Result.Passed := N
+      else if SameText(M.Groups[1].Value, 'Failed') then
+        Result.Failed := N
+      else if SameText(M.Groups[1].Value, 'Errored') then
+        Result.Errored := N;
+    end;
+    // un "Tests with Warnings : 3" suelto no es el resumen: sigue subiendo
+    if (Result.Found >= 0) or (Result.Passed >= 0) or (Result.Failed >= 0) then
+      Result.Fin := K
+    else
+      K := Ini - 1;
+  end;
 end;
 
 { DUnitX prints, among other things:
@@ -232,29 +276,34 @@ begin
   Near := TStringList.Create;
   if AKind = tkDUnitX then
   begin
-    Found := CuentaDelResumen(AOutput, 'Found');
-    Passed := CuentaDelResumen(AOutput, 'Passed');
-    Failed := CuentaDelResumen(AOutput, 'Failed');
-    HasNumbers := (Found >= 0) or (Passed >= 0) or (Failed >= 0);
+    var Lineas := LineasDelTexto(AOutput);
+    var Resumen := ResumenDeDUnitX(Lineas);
+    Found := Resumen.Found;
+    Passed := Resumen.Passed;
+    Failed := Resumen.Failed;
+    HasNumbers := Resumen.Fin >= 0;
     // Un test que LANZA es un error, no un fallo, y DUnitX lo cuenta aparte:
     // sin leerlo, una suite con un test que lanzaba salia 'pass' por las
     // cuentas (Failed: 0), con el ejecutable acabando en 1 (medido el
     // 2-oct-2026 en la mutacion de la 1.10.0: 'pass 16/17' sin fallos)
-    var Lanzados := CuentaDelResumen(AOutput, 'Errored');
-    if Lanzados > 0 then
-      Errored := Lanzados;
+    if Resumen.Errored > 0 then
+      Errored := Resumen.Errored;
     // Los bloques "Failing Tests" y "Tests With Errors" del logger de consola
     // de DUnitX (DUnitX.ResStrs): el nombre del test en una linea y su
     // "Message:" en la siguiente. Sin leerlo, failures venia VACIO con
     // failed=1 (medido el 2026-09-22, el dia que DUnitX se instalo en esta
     // maquina). Aqui ponia "Errored Tests", que DUnitX no escribe: los que
     // lanzaban no salian nunca. "Tests With Memory Leak" cierra, no es fallo.
+    // Solo detras del resumen, donde los escribe: uno que escribiese "Failing
+    // Tests" antes llenaba failures de una suite verde.
     var Rojos := TStringList.Create;
     try
       var EnFallos := False;
-      for L in LineasDelTexto(AOutput) do
+      for var I := Resumen.Fin + 1 to High(Lineas) do
       begin
-        var T := L.Trim;
+        if Resumen.Fin < 0 then
+          Break;
+        var T := Lineas[I].Trim;
         if not EnFallos then
         begin
           EnFallos := TRegEx.IsMatch(T, '(?i)^(Failing\s+Tests|Tests\s+With\s+Errors)\s*$');

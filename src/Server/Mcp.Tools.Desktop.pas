@@ -381,15 +381,16 @@ begin
     delphi_paserver (EjecucionRemotaDenegada): AllowRemoteRun, perfil, host del
     perfil y el proyecto del agente, si lo hay, en RemoteRunProjects. Y lo que
     es solo de esta tool, ver o actuar en ESE escritorio, por el host del perfil
-    (ProfileDesktopDenied, V90): screenshot y status miran, lo demas actua. Va
-    AQUI, tras validar los argumentos propios y ANTES de leer el perfil, marcar o
-    escribir. }
+    (ProfileDesktopDenied, V90): screenshot y status miran, lo demas actua, y
+    project= ejecuta ese proyecto en el destino, asi que tampoco es mirar (la misma
+    cuenta que la tabla de accesos de Lsp.Guard). Va AQUI, tras validar los argumentos
+    propios y ANTES de leer el perfil, marcar o escribir. }
   Proj := DprojDe(Params.Project.Trim);
   Result := EjecucionRemotaDenegada(Params.Profile.Trim, Proj,
     MsgText(SR_ADBLINUX_NEEDPROFILE));
   if Result <> '' then
     Exit;
-  Result := ProfileDesktopDenied(Params.Profile.Trim, not MatchStr(Cmd, ['screenshot', 'status']));
+  Result := ProfileDesktopDenied(Params.Profile.Trim, (Proj <> '') or not MatchStr(Cmd, ['screenshot', 'status']));
   if Result <> '' then
     Exit;
   { El destino dice que nodo y que teclas espera: lo lee el .profile, nunca el
