@@ -10847,7 +10847,7 @@ const
     'nothing is restored from a temp, so a delete there is for good (the ' +
     'temp folder itself is refused). Jailed to the workspace roots, refused ' +
     'in read-only mode; a folder that is or holds a workspace root, a ' +
-    'reference project or a read-only folder is refused (it would go ' +
+    'reference project (ReadOnlyRoots) or a read-only folder is refused (it would go ' +
     'along). Nothing else is touched: a project that lists what you deleted ' +
     'still lists it, and the answer names each file that points at it ' +
     '(FILE-046) and a unit whose form stays behind, or the reverse ' +

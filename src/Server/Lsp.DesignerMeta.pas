@@ -1436,8 +1436,12 @@ begin
   if AHoja.Kind <> 'o' then
     Exit;
   K := ClaveDeIdentificador(AHoja.TypeId);
-  if not (M.Bases.TryGetValue(K, Base) and (Base = 'integer') and M.Constantes.TryGetValue(K, Lista)) then
+  if not (M.Bases.TryGetValue(K, Base) and (Base = 'integer')) then
     Exit;
+  // sin constantes que el lector de forms entienda: el numero, y se dice. prop
+  // callaba de TModalResult, y el agente probaba mrOk para enterarse (Hermes, 1.25)
+  if not M.Constantes.TryGetValue(K, Lista) then
+    Exit(MsgText(SF_DESIGNER_TOMA_ENTERO));
   if Lista = '*' then
     Exit(MsgText(SF_DESIGNER_TOMA_CONSTANTE));
   Show := M.ConstantesShow[K];

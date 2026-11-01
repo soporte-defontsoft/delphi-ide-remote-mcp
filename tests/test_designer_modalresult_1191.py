@@ -48,6 +48,10 @@ try:
     s.call('delphi_create', {'kind': 'project-vcl', 'name': 'Modal', 'dir': JAIL})
     DFM = os.path.join(JAIL, 'UMain.dfm')
     d(command='insert', path=DFM, classname='TButton', component='BtnOk')
+    p = mc.como_json(d(command='prop', classname='TButton', prop='ModalResult')) or {}
+    check('M0 prop ModalResult dice que toma un numero, sin tener que probar', 'whole number' in (p.get('takes') or ''), str(p)[:300])
+    p = mc.como_json(d(command='prop', classname='TButton', prop='Cursor')) or {}
+    check('M0 control: Cursor sigue dando sus constantes', 'crDefault' in (p.get('takes') or ''), str(p)[:300])
     antes = mc.lee(DFM)
     r = d(command='set', path=DFM, component='BtnOk', prop='ModalResult', value='mrOK')
     check('M1 set ModalResult=mrOK: negado como entero (DSGN-093) y nada escrito',

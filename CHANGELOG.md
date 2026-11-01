@@ -83,6 +83,8 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_designer set`, `delphi_edit` and `lint` say when a string value names a path that `preview` refuses (DSGN-183): `set` wrote it, `lint` answered CLEAN, and only `preview` refused the form, and any other form of its folder, afterwards (DSGN-115). The form stays valid and the value is written: it is a note, by the same judge as `preview`. After an edit it names only what that edit brought.
 - `delphi_test` reads the last DUnitX summary in the output. A test that printed `Tests Failed : 7` turned a green suite red, and one that printed `Tests Failed : 0` hid the count of a red one.
 - A form renderer from another version says so (DSGN-184) instead of being misread. The renderers now state their protocol first thing and the server compares it: with a stale renderer, `preview` blamed a design package (DSGN-061), and what it skipped could turn into "not confirmed" with no notice.
+- `delphi_designer prop` says that an integer property with no named constants the form reader understands takes a whole number. On `ModalResult` it said nothing, and the way to find out was to try `mrOk`, which is refused.
+- The description of `delphi_delete` says what a reference project is (`ReadOnlyRoots`): an agent read it as any project with its repository, tried a delete expecting the refusal, and it went to the trash, as a folder of your roots does.
 
 - **`delphi_desktop` against a PAServer that does not answer costs one wait, and only that
   profile's.** `paclient` gives up by itself (21 s against an address that does not answer,
