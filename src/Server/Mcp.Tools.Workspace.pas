@@ -558,14 +558,12 @@ begin
                 end;
                 Entry := TJSONObject.Create;
                 Hits.Add(Entry);
-                Entry.AddPair('line', TJSONNumber.Create(I + 1));
                 // The LSP tools want a 0-based line:character, and the hit
                 // used to arrive Trim'ed - so the column could not be derived
                 // and every navigation cost an extra delphi_read just to
                 // count spaces (field 2026-08-25). Now the line travels
                 // VERBATIM and the position of the match comes with it.
-                Entry.AddPair('line0', TJSONNumber.Create(I));
-                Entry.AddPair('character0', TJSONNumber.Create(P - 1));
+                PonPosicion(Entry, I, P - 1);
                 Entry.AddPair('text', LineText);
                 if Contexto > 0 then
                 begin

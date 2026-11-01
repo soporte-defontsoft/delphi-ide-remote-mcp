@@ -201,7 +201,8 @@ uses
   Lsp.ConfigFabricator, // MotorPuedeEnsenar: EL juez de "fuera" de lo que dice el motor
   Lsp.Settings,
   Lsp.Rutas,            // EsRutaAbsoluta: LA regla de ruta completa
-  Lsp.Herencia;         // LA cadena de ancestros por el motor (TCadenaPorElMotor)
+  Lsp.Herencia,         // LA cadena de ancestros por el motor (TCadenaPorElMotor)
+  Lsp.Listas;
 
 function IdentifierAt(const ALineText: string; ACol: Integer; out AInicio: Integer): string;
 var
@@ -829,9 +830,7 @@ var
     // delphi_read, line0 y character0 las 0-based que toman las tools del
     // motor. references era la unica hermana con line 0-based y line1 al
     // lado (1.15.0: las dos convenciones en tools que se encadenan).
-    Result.AddPair('line', TJSONNumber.Create(C.Line + 1));
-    Result.AddPair('line0', TJSONNumber.Create(C.Line));
-    Result.AddPair('character0', TJSONNumber.Create(C.Col));
+    PonPosicion(Result, C.Line, C.Col);
     // La linea TAL CUAL, sangria incluida: es el ancla que pide delphi_edit
     // (recortada no lo era: cinco llamadas releyendo el fichero, 2026-08-25).
     // Iba dos veces, recortada en text y entera en anchor; como en
@@ -1385,11 +1384,9 @@ begin
       Entry := TJSONObject.Create;
       Result.AddPair('definition', Entry);
       Entry.AddPair('path', TLspClient.UriToPath(TargetUri));
-      Entry.AddPair('line', TJSONNumber.Create(TargetLine + 1));
-      Entry.AddPair('line0', TJSONNumber.Create(TargetLine));
       // como cada hit (CandidateJson): SP_LSP_CHARACTER manda usar el
       // character0 de un hit, y la definicion no lo traia (V210)
-      Entry.AddPair('character0', TJSONNumber.Create(TargetCol));
+      PonPosicion(Entry, TargetLine, TargetCol);
       Result.AddPair('confirmed', Confirmed);
       Result.AddPair('unverified', Unverified);
       // Menciones: el nombre esta escrito ahi, pero en prosa. No son
@@ -1632,9 +1629,7 @@ var
     var Uso := TJSONObject.Create;
     Salida.AddElement(Uso);
     Uso.AddPair('path', AFile);
-    Uso.AddPair('line', TJSONNumber.Create(ALine + 1));
-    Uso.AddPair('line0', TJSONNumber.Create(ALine));
-    Uso.AddPair('character0', TJSONNumber.Create(ACol));
+    PonPosicion(Uso, ALine, ACol);
     Uso.AddPair('text', ALinea);
     if Destino <> '' then
       Uso.AddPair('resolvedTo', Destino);

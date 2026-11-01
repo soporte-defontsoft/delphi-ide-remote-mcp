@@ -395,7 +395,8 @@ uses
   Lsp.NetDrives,    // PrefijoSinBarra y ConBarrasDeWindows: la forma de una ruta del IDE
   Lsp.Listas,
   System.StrUtils,
-  Lsp.ProcessLaunch;
+  Lsp.ProcessLaunch,
+  Lsp.Pascal;
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
@@ -1065,19 +1066,15 @@ begin
     if Length(Marcados) = 0 then
       Exit; // lo normal, y corre en cada edicion de un form: lo de antes ni se lee
     // los que ya estaban no los trae la edicion
-    var Estaban := TDictionary<string, Boolean>.Create;
-    try
-      for var L in LiteralesDeLineas(AAntes) do
-        Estaban.AddOrSetValue(L.Prop + #0 + L.Texto, True);
-      for var L in Marcados do
-        if not Estaban.ContainsKey(L.Prop + #0 + L.Texto) then
-          Result := Result + [MsgFmt(SF_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT, [L.Prop, L.Linea])];
-    finally
-      Estaban.Free;
-    end;
+    for var L in TLoQueTraeLaEdicion.Filtra<TLiteralDeForm>(Marcados, LiteralesDeLineas(AAntes),
+      function(AL: TLiteralDeForm): string
+      begin
+        Result := AL.Prop + #0 + AL.Texto;
+      end) do
+      Result := Result + [MsgFmt(SF_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT, [L.Prop, L.Linea])];
     if Length(Result) > 0 then
       Result := [MsgFmt(SN_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT, [ExtractFileName(ADesigner), Length(Result),
-        IfThen(Length(AAntes) > 0, MsgText(SF_DESIGNER_LOOKUPS_DE_LA_EDICION), '')])] + Result;
+        SufijoDeLaEdicion(Length(AAntes) > 0)])] + Result;
   except
     Result := []; // sin poder juzgarlo no se dice nada: preview sigue siendo el juez
   end;
@@ -2127,14 +2124,11 @@ begin
       if (Length(Candidatos) > 0) and (AAntes <> '') then
       begin
         DocAntes := TStyleDoc.DeTexto(AAntes);
-        var Estaban: TArray<string> := [];
-        for var C in CandidatosSinAlfa(DocAntes) do
-          Estaban := Estaban + [C.Componente + #0 + C.Prop + #0 + C.Valor];
-        var Nuevos: TArray<TColorSinAlfa> := [];
-        for var C in Candidatos do
-          if IndexText(C.Componente + #0 + C.Prop + #0 + C.Valor, Estaban) < 0 then
-            Nuevos := Nuevos + [C];
-        Candidatos := Nuevos;
+        Candidatos := TLoQueTraeLaEdicion.Filtra<TColorSinAlfa>(Candidatos, CandidatosSinAlfa(DocAntes),
+          function(AC: TColorSinAlfa): string
+          begin
+            Result := SinMayusculas(AC.Componente + #0 + AC.Prop + #0 + AC.Valor);
+          end);
       end;
       if Length(Candidatos) = 0 then
         Exit(True);
@@ -2166,7 +2160,7 @@ begin
   if not ColoresSinAlfaDeForm(APath, ATexto, AEnc, AAntes, Colores) or (Length(Colores) = 0) then
     Exit;
   Result := [MsgFmt(SN_DESIGNER_COLORES_SIN_ALFA_FMT, [ExtractFileName(APath), Length(Colores),
-    IfThen(AAntes <> '', MsgText(SF_DESIGNER_LOOKUPS_DE_LA_EDICION), '')])];
+    SufijoDeLaEdicion(AAntes <> '')])];
   for var C in Colores do
     Result := Result + [MsgFmt(SF_DESIGNER_COLOR_SIN_ALFA_FMT, [C.Componente, C.Prop, C.Valor, C.Linea,
       IfThen(C.ComoLoCarga <> '', C.ComoLoCarga, MsgText(SF_COLOR_NO_GUARDADO))])];

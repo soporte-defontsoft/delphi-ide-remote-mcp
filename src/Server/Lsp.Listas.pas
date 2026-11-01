@@ -110,6 +110,12 @@ procedure AgrupaPorFichero(AObj: TJSONObject; const ACampo: string);
   entrada no trae 'path', el campo se deja como esta: nada se pierde. }
 procedure AgrupaPorCarpeta(AObj: TJSONObject; const ACampo: string);
 
+{ EL formato de una posicion en una respuesta: line, la 1-based de delphi_read;
+  line0 y character0, las 0-based que toman las tools del motor, para encadenar
+  sin hacer cuentas. ACol < 0: sin character0. A mano en once sitios, y a uno se
+  le olvido la columna (V210 de la 1.23 y el rename de la 1.25). }
+procedure PonPosicion(AObj: TJSONObject; ALine0: Integer; ACol: Integer = -1);
+
 { La pagina que pide quien llama: un offset negativo es 0, un maximo que no
   es positivo es APorDefecto y uno mayor que ATope es ATope. }
 function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
@@ -182,6 +188,15 @@ uses
   Lsp.Rutas;
 
 { TPagina }
+
+procedure PonPosicion(AObj: TJSONObject; ALine0, ACol: Integer);
+begin
+  // sin posicion (-1, un simbolo sin rango), -1 en las dos
+  AObj.AddPair('line', TJSONNumber.Create(if ALine0 >= 0 then ALine0 + 1 else ALine0));
+  AObj.AddPair('line0', TJSONNumber.Create(ALine0));
+  if ACol >= 0 then
+    AObj.AddPair('character0', TJSONNumber.Create(ACol));
+end;
 
 function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
 begin

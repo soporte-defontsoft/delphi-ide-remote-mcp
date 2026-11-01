@@ -2719,17 +2719,15 @@ begin
   // sin name ni message; worktree y stash solo action=list). Se anunciaban
   // branch/tag como lecturas y la puerta los negaba con args (r11b H1, r11c
   // H3); branch solo lista desde la 1.19.0
-  AnadeAcceso('delphi_git', atMixta, ['status', 'diff', 'log', 'show', 'ls-remote', 'branch'], 'command',
-    ['tag', 'without name or message (then it lists)',
-     'worktree', 'with action=list',
-     'stash', 'with action=list',
-     'config', 'without message (then it reads the value)']);
+  AnadeAcceso('delphi_git', atMixta, ConsultasDeGit, 'command',
+    ['tag', MsgText(SF_ACCESO_GIT_TAG),
+     'worktree', MsgText(SF_ACCESO_GIT_ACTION_LIST),
+     'stash', MsgText(SF_ACCESO_GIT_ACTION_LIST),
+     'config', MsgText(SF_ACCESO_GIT_CONFIG)]);
   // lecturas para la puerta, con un EFECTO fuera del workspace: el hint MCP
   // "no modifica su entorno" es falso y se dice (r11e H6)
-  AnadeAcceso('delphi_report', atLectura, [], 'command', nil,
-    'writes a report file on the server for the operator');
-  AnadeAcceso('delphi_messages', atLectura, [], 'command', nil,
-    'command=read consumes (deletes) the message it delivers');
+  AnadeAcceso('delphi_report', atLectura, [], 'command', nil, MsgText(SF_ACCESO_REPORT_EFECTO));
+  AnadeAcceso('delphi_messages', atLectura, [], 'command', nil, MsgText(SF_ACCESO_MESSAGES_EFECTO));
   // preview lee; apply escribe por el motor de changesets (lo negaba el
   // escritor al llegar a escribir; ahora la puerta, a la entrada, como a todas)
   AnadeAcceso('delphi_rename_symbol', atMixta, ['preview'], 'mode');

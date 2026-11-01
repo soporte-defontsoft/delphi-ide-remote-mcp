@@ -462,14 +462,10 @@ begin
         // motor y las de ficheros contaban con nombres distintos, 1.15.0)
         if L <> nil then
         begin
-          Obj.AddPair('line', TJSONNumber.Create(L.GetValue<Integer> + 1));
           // ...y las 0-based que toman las tools del motor, con el nombre de
           // los aciertos de search/references: se encadena sin hacer cuentas
           // (revisor de contrato de la 1.15.0)
-          Obj.AddPair('line0', TJSONNumber.Create(L.GetValue<Integer>));
-          var C := Start.GetValue('character');
-          if C <> nil then
-            Obj.AddPair('character0', TJSONNumber.Create(C.GetValue<Integer>));
+          PonPosicion(Obj, L.GetValue<Integer>, Start.GetValue<Integer>('character', -1));
         end;
       end;
     end;
@@ -913,8 +909,7 @@ begin
       SecObj := TJSONObject.Create;
       Sections.AddElement(SecObj);
       SecObj.AddPair('section', N.GetValue<string>('name', '?'));
-      SecObj.AddPair('line', TJSONNumber.Create(SymLine1(N)));
-      SecObj.AddPair('line0', TJSONNumber.Create(SymLine(N)));
+      PonPosicion(SecObj, SymLine(N));
       Syms := TJSONArray.Create;
       SecObj.AddPair('symbols', Syms);
       if SymChildren(N) <> nil then
@@ -980,8 +975,7 @@ var
             D := Nm;
           H.AddPair('decl', D);
           H.AddPair('kind', SymKindName(N));
-          H.AddPair('line', TJSONNumber.Create(SymLine1(N)));
-          H.AddPair('line0', TJSONNumber.Create(SymLine(N)));
+          PonPosicion(H, SymLine(N));
           if APath <> '' then
             H.AddPair('in', APath);
           if (Ch <> nil) and (Ch.Count > 0) then
@@ -1184,8 +1178,7 @@ begin
         Obj.AddPair('decl', WholeStatement(J));
         if Dueno <> nil then
           Obj.AddPair('of', Dueno.NombreCompleto);
-        Obj.AddPair('line', TJSONNumber.Create(I + 1));
-        Obj.AddPair('line0', TJSONNumber.Create(I));
+        PonPosicion(Obj, I);
       end
       else
         J := I;

@@ -70,7 +70,7 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_edit` `adduses` and `removeuses` read their list like `add-requires` does: `;`, `,` or a blank separates names. `"A B"` was refused as one invalid unit name.
 - The account warning of `delphi_workspace` asks the process token whether the server runs as LocalSystem (SID `S-1-5-18`), so it no longer depends on the name of the account or on `USERPROFILE`.
 - An agent's mailbox and report folder are its name in lower case, so `a--b` and `a-b`, two agents for the trash, no longer read and delete each other's mail.
-- Rules that were written in several places now live in one: the text a new file is born with, the empty unit skeleton, the IDE's `bin` folder, where a sysroot keeps its `libc.so.6` and whether it mixes two distros, which `delphi_adb` commands need a named device, how a disabled IDE package is matched, what msbuild sees of the server's environment, and the lines the form renderers write to the server. No result changes.
+- Rules that were written in several places now live in one: the text a new file is born with, the empty unit skeleton, the IDE's `bin` folder, where a sysroot keeps its `libc.so.6` and whether it mixes two distros, which `delphi_adb` commands need a named device, how a disabled IDE package is matched, what msbuild sees of the server's environment, the lines the form renderers write to the server, how an answer writes a position, what a note leaves out after an edit, and which `delphi_git` commands only consult. No result changes.
 - The standard unit aliases the engine gets come from the installation's `CodeGear.Common.Targets`, where they were a copy of that list. Answers of several lines use one line break, LF: some used CRLF.
 
 ### Fixed

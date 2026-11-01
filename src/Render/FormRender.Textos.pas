@@ -148,6 +148,9 @@ const
   SF_RENDER_SIN_ESTILO_VCL =
     'none (as the VCL designer)';
 
+  SF_RENDER_ESTILO_DE_PLATAFORMA_FMT =
+    'designer platform style %s (%s of %s)';
+
   SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT =
     '%s - for this image only: the form itself carries %s';
 

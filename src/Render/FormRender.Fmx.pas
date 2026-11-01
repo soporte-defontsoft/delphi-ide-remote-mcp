@@ -219,7 +219,7 @@ begin
   finally
     Res.Free;
   end;
-  Result := MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, [Format('designer platform style %s (%s of %s)',
+  Result := MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, [MsgFmt(SF_RENDER_ESTILO_DE_PLATAFORMA_FMT,
     [LowerCase(GPeticion.Estilo), Recurso, ExtractFileName(Bpl)]), Lleva]);
 end;
 

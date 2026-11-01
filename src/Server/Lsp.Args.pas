@@ -32,6 +32,9 @@ function NombreDeMensajeGit: string;
   y un proyecto de REFERENCIA (ReadOnlyRoots) pueden ejecutar. UNA lista:
   la consulta ToolCallDenied y la consulta la propia tool. Por los campos
   de la llamada (1.19.0): la accion de stash y worktree, el nombre de tag. }
+{ Los comandos de delphi_git que solo consultan, sea cual sea su llamada: los que
+  anuncia tools/list y los que deja pasar GitCommandIsQuery. Eran dos listas }
+function ConsultasDeGit: TArray<string>;
 function GitCommandIsQuery(const ACmd, AAccion, ANombre, AMessage: string): Boolean;
 
 { '' when AText carries none of the shell metacharacters that would break a
@@ -341,10 +344,15 @@ begin
       Exit(MsgFmt(SR_SHELL_META_FMT, [B]));
 end;
 
-function GitCommandIsQuery(const ACmd, AAccion, ANombre, AMessage: string): Boolean;
+function ConsultasDeGit: TArray<string>;
 begin
   // branch solo lista desde la 1.19.0 (crear es switch create=true)
-  Result := MatchText(Trim(ACmd), ['status', 'diff', 'log', 'show', 'ls-remote', 'branch']) or
+  Result := ['status', 'diff', 'log', 'show', 'ls-remote', 'branch'];
+end;
+
+function GitCommandIsQuery(const ACmd, AAccion, ANombre, AMessage: string): Boolean;
+begin
+  Result := MatchText(Trim(ACmd), ConsultasDeGit) or
     // tag sin nombre lista los que hay
     (SameText(Trim(ACmd), 'tag') and (Trim(ANombre) = '') and (Trim(AMessage) = '')) or
     // worktree list solo ENSENA las copias de trabajo (1.4.0)

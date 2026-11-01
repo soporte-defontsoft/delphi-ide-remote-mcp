@@ -1103,6 +1103,18 @@ begin
       Result := Result + [E];
 end;
 
+function SinBlancosAlFinalDeLinea(const ATexto: string): string;
+begin
+  Result := TRegEx.Replace(ATexto, '[ \t]+(\r?\n)', '$1');
+end;
+
+{ La sangria de la primera entrada de una clausula; dos blancos si no tiene }
+function SangriaDeClausula(const AClausula: string): string;
+begin
+  var M := TRegEx.Match(AClausula, '\n([ \t]+)\S');
+  Result := (if M.Success then M.Groups[1].Value else '  ');
+end;
+
 // APalabra: otra clausula que la de la unidad, del programa o del paquete -
 // 'requires', la de un paquete: la leia una regex sobre el codigo con las
 // directivas en blanco, y add-requires la reescribia sin ellas (18-oct-2026)
@@ -1573,18 +1585,14 @@ begin
   // sin coma colgando al final, sin blancos al final de linea, sin lineas
   // que se quedaron vacias
   Nuevo := TRegEx.Replace(Nuevo, '[\s,]+$', '');
-  Nuevo := TRegEx.Replace(Nuevo, '[ \t]+(\r?\n)', '$1');
+  Nuevo := SinBlancosAlFinalDeLinea(Nuevo);
   repeat
     Antes := Nuevo;
     Nuevo := TRegEx.Replace(Nuevo, '\r?\n[ \t]*(?=\r?\n)', '');
   until Nuevo = Antes;
   // las nuevas, detras de la ultima
   NL := SaltoDominante(Dpr);
-  M := TRegEx.Match(Cuerpo, '\n([ \t]+)\S');
-  if M.Success then
-    Indent := M.Groups[1].Value
-  else
-    Indent := '  ';
+  Indent := SangriaDeClausula(Cuerpo);
   Ancho := 80;
   for var L in SplitToLines(Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1)) do
     if Length(L) > Ancho then
@@ -1726,11 +1734,7 @@ begin
   // the indent of the first entry line of the existing clause
   Clause := Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1);
   ClasesClausula := ClasesPascal(Clause);
-  M := TRegEx.Match(Clause, '\n([ \t]+)\S');
-  if M.Success then
-    Indent := M.Groups[1].Value
-  else
-    Indent := '  ';
+  Indent := SangriaDeClausula(Clause);
   SetLength(Parts, Length(AEntries));
   Mapa := EntradaNuevaDe(U.Entries, AEntries);
   // un // que va detras de la coma es de la entrada de ANTES (esta en su
@@ -1861,7 +1865,7 @@ begin
     Parts[I] := Indent + E;
   end;
   Body := IfThen(U.Keyword <> '', U.Keyword, 'uses') + NL + string.Join(NL, Parts);
-  Body := TRegEx.Replace(Body, '[ \t]+(\r?\n)', '$1'); // no trailing blanks
+  Body := SinBlancosAlFinalDeLinea(Body);
   // EL escritor pregunta si lo que deja sigue siendo una lista en cada rama de
   // sus condicionales (ListaEnCadaRama), y solo si la que habia lo era: una
   // coma fuera de su condicional no compila con unos simbolos (revisor de

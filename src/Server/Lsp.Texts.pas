@@ -2176,6 +2176,14 @@ const
     '[Workspace.<name>] RemoteRunProjects of the server''s settings.ini, or ' +
     'all for every project. Nothing was deployed or run.';
 
+  { Lo que tools/list dice de quien lee y quien escribe: cuando un comando de git
+    es de lectura, y lo que dos lecturas dejan fuera del workspace }
+  SF_ACCESO_GIT_TAG = 'without name or message (then it lists)';
+  SF_ACCESO_GIT_ACTION_LIST = 'with action=list';
+  SF_ACCESO_GIT_CONFIG = 'without message (then it reads the value)';
+  SF_ACCESO_REPORT_EFECTO = 'writes a report file on the server for the operator';
+  SF_ACCESO_MESSAGES_EFECTO = 'command=read consumes (deletes) the message it delivers';
+
   { %0:s: SF_DESKTOP_VER o SF_DESKTOP_ACTUAR; %1:s: el host del perfil. Era una
     entrada por NOMBRE (McpDesktopNode) en una lista de rutas de proyectos: un
     permiso disfrazado de proyecto (V90, David: "depende que desktop") }

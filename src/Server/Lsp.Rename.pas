@@ -63,7 +63,8 @@ uses
   Lsp.Texts,
   Lsp.Pascal,
   Lsp.Rutas, // ClaveDeRuta: la clave de una ruta
-  Lsp.Json;
+  Lsp.Json,
+  Lsp.Listas;
 
 function RenamePreview(const AFilePath: string; ALine, ACharacter: Integer;
   const ANewName: string; ATodas: Boolean): TJSONObject;
@@ -225,11 +226,8 @@ begin
             Chg := TJSONObject.Create;
             Changes.AddElement(Chg);
             Chg.AddPair('path', DefPath);
-            Chg.AddPair('line', TJSONNumber.Create(DefLine + 1));
-            Chg.AddPair('line0', TJSONNumber.Create(DefLine));
             // como cada aparicion de arriba, y como la definicion de references (V210)
-            if DefObj.GetValue('character0') <> nil then
-              Chg.AddPair('character0', DefObj.GetValue('character0').Clone as TJSONValue);
+            PonPosicion(Chg, DefLine, DefObj.GetValue<Integer>('character0', -1));
             // the line as it IS - the anchor, as for every occurrence: without
             // it, one last trip to delphi_read for no reason (field round 11)
             Chg.AddPair('text', Lines[DefLine].TrimRight([#13, #10]));

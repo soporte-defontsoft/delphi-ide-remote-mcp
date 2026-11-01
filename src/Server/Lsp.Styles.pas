@@ -346,6 +346,18 @@ type
     Linea: Integer;
   end;
 
+  { De lo que dice una nota tras una edicion, solo lo que ella trae: lo que ya
+    estaba en AAntes no se repite. Por su clave, que elige quien llama (si las
+    mayusculas cuentan o no). Tres notas lo hacian cada una a su manera: los
+    StyleLookup, los colores sin alfa y los literales que preview niega. }
+  TLoQueTraeLaEdicion = class
+  public
+    class function Filtra<T>(const ALista, AAntes: TArray<T>; const AClave: TFunc<T, string>): TArray<T>;
+  end;
+
+{ Lo que la cabecera de esas notas anade tras una edicion, '' en el lint }
+function SufijoDeLaEdicion(AHayAntes: Boolean): string;
+
 { EL lector de los StyleLookup de un form FMX (sus lineas): los que llevan
   valor (vacio es el estilo de su clase, sin buscar ninguno por nombre).
   AStyleBookQueNoSeLee: el form puede tomar sus estilos de un StyleBook que
@@ -1515,7 +1527,7 @@ end;
 function NotaDeLookupsSinEstilo(const ADesigner: string; const ALineas, AAntes: TArray<string>): TArray<string>;
 var
   Lookups: TArray<TLookupDeForm>;
-  Defecto, Estaban: TArray<string>;
+  Defecto: TArray<string>;
   ConStyleBook: Boolean;
 begin
   Result := [];
@@ -1526,16 +1538,36 @@ begin
   if Length(Defecto) = 0 then
     Exit; // sin el juez no se dice nada
   // los que ya estaban (el componente y su lookup) no los trae la edicion
-  Estaban := [];
-  for var L in LookupsDeForm(AAntes, ConStyleBook) do
-    Estaban := Estaban + [L.Componente + #0 + ClaveDeEstilo(L.Lookup)];
-  for var L in Lookups do
-    if (IndexStr(ClaveDeEstilo(L.Lookup), Defecto) < 0) and
-       (IndexStr(L.Componente + #0 + ClaveDeEstilo(L.Lookup), Estaban) < 0) then
+  for var L in TLoQueTraeLaEdicion.Filtra<TLookupDeForm>(Lookups, LookupsDeForm(AAntes, ConStyleBook),
+    function(AL: TLookupDeForm): string
+    begin
+      Result := AL.Componente + #0 + ClaveDeEstilo(AL.Lookup);
+    end) do
+    if IndexStr(ClaveDeEstilo(L.Lookup), Defecto) < 0 then
       Result := Result + [MsgFmt(SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [L.Componente, L.Lookup, L.Linea])];
   if Length(Result) > 0 then
     Result := [MsgFmt(SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT, [ExtractFileName(ADesigner), Length(Result),
-      IfThen(Length(AAntes) > 0, MsgText(SF_DESIGNER_LOOKUPS_DE_LA_EDICION), '')])] + Result;
+      SufijoDeLaEdicion(Length(AAntes) > 0)])] + Result;
+end;
+
+class function TLoQueTraeLaEdicion.Filtra<T>(const ALista, AAntes: TArray<T>; const AClave: TFunc<T, string>): TArray<T>;
+begin
+  Result := [];
+  var Estaban := TDictionary<string, Boolean>.Create;
+  try
+    for var X in AAntes do
+      Estaban.AddOrSetValue(AClave(X), True);
+    for var X in ALista do
+      if not Estaban.ContainsKey(AClave(X)) then
+        Result := Result + [X];
+  finally
+    Estaban.Free;
+  end;
+end;
+
+function SufijoDeLaEdicion(AHayAntes: Boolean): string;
+begin
+  Result := (if AHayAntes then MsgText(SF_DESIGNER_LOOKUPS_DE_LA_EDICION) else '');
 end;
 
 const
