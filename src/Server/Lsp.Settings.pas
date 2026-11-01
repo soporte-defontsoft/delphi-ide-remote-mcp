@@ -331,6 +331,11 @@ function VaultModoEscritura: Boolean;
 function SitiosQueNoSeTocan: TArray<string>;
 function AdbTargetAllowed(const ATarget: string): Boolean;
 function DispositivoSinNumeroMdns(const ATarget: string): string;
+{ Si esta sesion puede VER (AActua=False: screenshot, status) o ACTUAR en el
+  escritorio de la maquina AHost: DesktopAllowedHosts ve y actua, DesktopViewHosts
+  solo ve; ausentes = ninguno, y hacen falta ademas de RemoteHosts, que dice a
+  donde llega un perfil y no que se puede hacer alli (V90 de la 1.25). }
+function DesktopHostAllowed(const AHost: string; AActua: Boolean): Boolean;
 
 { Las raices de ESCRITURA de todos los workspaces declarados, en el orden
   del settings.ini, y las del modo local de lanzamiento: lo que entra en la
@@ -406,6 +411,8 @@ type
     VaultPath: string;                // vault de conocimiento de ESTE workspace
     OvVaultReadOnly: Integer;         // tri-estado: ausente = solo lectura
     AdbDevices: TArray<string>;       // dispositivos delphi_adb; ausente = ninguno
+    DesktopHosts: TArray<string>;     // hosts donde delphi_desktop ve y actua; ausente = ninguno
+    DesktopViewHosts: TArray<string>; // hosts donde solo ve; ausente = ninguno
   end;
 
 var
@@ -459,6 +466,8 @@ var
   GWorkspaces: TArray<TWorkspaceDef>; // [Workspace.*]: token -> its own jail
   GWorkspaceNotes: TArray<string>;    // startup findings about that config
   GAdbDevices: TArray<string>;      // DELPHI_MCP_ADB_DEVICES (lanzamiento local)
+  GDesktopHosts: TArray<string>;    // DELPHI_MCP_DESKTOP_HOSTS (lanzamiento local)
+  GDesktopViewHosts: TArray<string>; // DELPHI_MCP_DESKTOP_VIEW_HOSTS (lanzamiento local)
   GVaultPath: string = '';          // DELPHI_MCP_VAULT_PATH (lanzamiento local)
 
 threadvar
@@ -1273,6 +1282,8 @@ begin
   if GSecLoaded then
     Exit;
   GAdbDevices := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'), True);
+  GDesktopHosts := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_DESKTOP_HOSTS'), True);
+  GDesktopViewHosts := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_DESKTOP_VIEW_HOSTS'), True);
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
   // los si/no por SU gramatica (EnvSiNo): el defecto y el lado que cierra
@@ -1457,6 +1468,8 @@ begin
             end;
             W.OvVaultReadOnly := ReadTriState(Ini, S, 'VaultReadOnly', 1);
             W.AdbDevices := EntradasDeLista(Ini.ReadString(S, 'AdbAllowedDevices', ''), True);
+            W.DesktopHosts := EntradasDeLista(Ini.ReadString(S, 'DesktopAllowedHosts', ''), True);
+            W.DesktopViewHosts := EntradasDeLista(Ini.ReadString(S, 'DesktopViewHosts', ''), True);
             W.OvSharedSet := Ini.ValueExists(S, 'SharedFolders');
             if W.OvSharedSet then
               W.OvSharedFolders := EntradasDeLista(LowerCase(Ini.ReadString(S, 'SharedFolders', '')), True);
@@ -2045,6 +2058,24 @@ begin
     Host := Copy(ATarget, 1, P - 1);
   Result := NombreEnLaLista(ATarget, Lista) or NombreEnLaLista(Host, Lista) or
     NombreEnLaLista(DispositivoSinNumeroMdns(ATarget), Lista);
+end;
+
+function DesktopHostAllowed(const AHost: string; AActua: Boolean): Boolean;
+var
+  Actua, Ve: TArray<string>;
+begin
+  LoadSecurity;
+  if HasActiveWS then
+  begin
+    Actua := ActiveWS.DesktopHosts;
+    Ve := ActiveWS.DesktopViewHosts;
+  end
+  else
+  begin
+    Actua := GDesktopHosts;
+    Ve := GDesktopViewHosts;
+  end;
+  Result := NombreEnLaLista(AHost.Trim, Actua) or (not AActua and NombreEnLaLista(AHost.Trim, Ve));
 end;
 
 function EsComodinDeLista(const AEntrada: string): Boolean;

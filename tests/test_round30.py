@@ -46,6 +46,7 @@ env['DELPHI_MCP_ROOTS'] = DIR
 # v0.98: delphi_adb_linux pasa por los MISMOS interruptores que remote-run
 env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'
 env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'all'
+env['DELPHI_MCP_DESKTOP_HOSTS'] = '*'
 # perfil FALSO 'x' (Linux64) en un APPDATA de prueba: la puerta ProfileHostDenido
 # falla cerrado desde 1.15.1 (antes 'x' inexistente pasaba). Las validaciones de
 # argumentos (tap/type sin datos) ya se comprueban ANTES de la puerta; 'key' y la

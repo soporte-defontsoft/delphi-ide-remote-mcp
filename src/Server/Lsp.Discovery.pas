@@ -254,6 +254,12 @@ function PerfilQueNoSirve(const AVersion, AProfile, APlatform: string): string;
   delphi_paserver, remote-run y el deploy de delphi_build. }
 function ProfileHostDenied(const AProfName: string): string;
 
+{ '' si esta sesion puede ver (AActua=False) o actuar en el escritorio de la
+  maquina del perfil AProfName: DesktopHostAllowed (Lsp.Settings) con el host
+  leido del perfil. Falla CERRADO, como ProfileHostDenied. La llama delphi_desktop
+  (V90 de la 1.25). }
+function ProfileDesktopDenied(const AProfName: string; AActua: Boolean): string;
+
 { Where THIS installation keeps the platform sysroots - the folder the IDE
   calls $(BDSPLATFORMSDKSDIR), with one <name>.sdk subfolder per SDK.
 
@@ -1444,6 +1450,23 @@ begin
   if Motivo <> '' then
     Exit(Motivo); // falla cerrado: no existe / no se lee / sin host
   Result := ProbeHostDenied(Host);
+end;
+
+function ProfileDesktopDenied(const AProfName: string; AActua: Boolean): string;
+var
+  Info: TRadStudioInfo;
+  Host, Motivo: string;
+begin
+  Info := DiscoverRadStudio;
+  if not Info.Found then
+    Exit(MsgText(SR_PROFILE_NO_DELPHI));
+  Host := HostDePerfil(Info.Version, AProfName, Motivo);
+  if Motivo <> '' then
+    Exit(Motivo);
+  if DesktopHostAllowed(Host, AActua) then
+    Exit('');
+  Result := MsgFmt(SR_DESKTOP_HOST_DENIED_FMT,
+    [IfThen(AActua, MsgText(SF_DESKTOP_ACTUAR), MsgText(SF_DESKTOP_VER)), Host.Trim]);
 end;
 
 function SysrootsRegistrados(const AVersion: string): TArray<string>;

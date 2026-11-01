@@ -119,7 +119,8 @@
     "workspaceJail": "[Workspace.<name>] Roots / DELPHI_MCP_ROOTS",
     "credentials": "Token (read-write) / ReadOnlyToken, per workspace; no token, no access",
     "execution": "AllowTests / AllowBuildScripts / AllowRemoteRun (all off by default; nothing else runs on the server)",
-    "remoteRunScope": "RemoteRunProjects (empty = nothing; all/* = every project of the jail; McpDesktopNode = delphi_desktop may see and type on a target's desktop)",
+    "remoteRunScope": "RemoteRunProjects (empty = nothing; all/* = every project of the jail)",
+    "desktopScope": "DesktopAllowedHosts sees and acts, DesktopViewHosts only sees, by the profile's host (empty = no desktop; */all = any host)",
     "libraryZone": "LibraryZone=1 opens the read zone; absent = off"
   }
 }

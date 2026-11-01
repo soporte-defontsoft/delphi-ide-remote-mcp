@@ -293,10 +293,10 @@ elsewhere. `key` takes an evdev code on Linux and a key NAME on Windows
 it goes down. `type` on Linux uses the desktop's own keymap, accents
 included; the text is typed, never run.
 
-It runs under the SAME workspace switches as remote-run (`AllowRemoteRun`,
-`McpDesktopNode` or `all` in `RemoteRunProjects`, the profile's host in
-`RemoteHosts`; the server's own desktop is the profile whose host is
-127.0.0.1). The target needs a graphical session open for the user PAServer
+It needs `AllowRemoteRun` and the profile's host in `RemoteHosts`, as remote-run,
+and that host in `DesktopAllowedHosts` (`DesktopViewHosts` only lets you
+`screenshot` and `status`); the server's own desktop is the profile whose host
+is 127.0.0.1. The target needs a graphical session open for the user PAServer
 runs as: on Linux PAServer may run as a service (the server completes
 DISPLAY from the session); on Windows PAServer must run INSIDE the user's
 session - a service lives in session 0, which has no desktop - and the

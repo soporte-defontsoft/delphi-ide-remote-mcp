@@ -544,7 +544,7 @@ for perfil in ('caido', 'otro', 'vivo'):
     ad, host = mc.appdata_perfil(BASE, perfil, '127.0.0.1')
 TOKEN = 'capacidades-125'
 with open(os.path.join(SRV, 'settings.ini'), 'w') as f:
-    f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\nAllowRemoteRun=1\nRemoteRunProjects=all\nRemoteHosts=%s\n' % (TOKEN, RAIZ, host))
+    f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\nAllowRemoteRun=1\nRemoteRunProjects=all\nRemoteHosts=%s\nDesktopAllowedHosts=%s\n' % (TOKEN, RAIZ, host, host))
 PORT = mc.puerto_libre()
 proc = mc.lanza_http(EXE2, PORT, mc.entorno({
     'DELPHI_MCP_ROOTS': RAIZ, 'DELPHI_MCP_BIND_IP': '127.0.0.1', 'APPDATA': ad, 'DELPHI_MCP_PACLIENT': STUB,

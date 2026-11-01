@@ -55,7 +55,7 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 # el nodo viaja con el servidor (Lsp.RemoteRun: ServerDir('node'))
 shutil.copytree(os.path.join(REPO, 'node'), os.path.join(BASE, 'srv', 'node'))
 COMUN = {'DELPHI_MCP_REMOTE_HOSTS': HOST, 'DELPHI_MCP_ALLOW_REMOTE_RUN': '1',
-         'DELPHI_MCP_REMOTE_RUN_PROJECTS': 'all'}
+         'DELPHI_MCP_REMOTE_RUN_PROJECTS': 'all', 'DELPHI_MCP_DESKTOP_HOSTS': '*'}
 
 
 def entorno(extra):

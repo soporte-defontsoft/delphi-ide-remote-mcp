@@ -185,9 +185,9 @@ try:
     # Y el otro lado, que es la mitad que se olvida: cerrar la puerta no sirve
     # de nada si se cierra tambien para quien SI puede pasar. Con un perfil
     # ficticio la llamada pasa la ruta y muere en la SIGUIENTE puerta, la de
-    # ejecucion remota (EjecucionRemotaDenegada: el nodo de escritorio no esta
-    # en RemoteRunProjects, con su negativa propia RUN-020 desde la 1.13.0,
-    # que dice que es el permiso de ver y teclear en ese escritorio): eso es
+    # ejecucion remota y la del escritorio (ProfileDesktopDenied: el host no esta
+    # en DesktopAllowedHosts, con su negativa propia RUN-020 desde la 1.13.0,
+    # que dice que es el permiso de ver y actuar en ese escritorio): eso es
     # lo que se mide, y no "cualquier negativa
     # que no sea la de la jaula". (Hasta 1.0.15 aqui capturaba de verdad con
     # el nodo local; ahora la captura real necesita un PAServer y se mide en
@@ -195,9 +195,8 @@ try:
     f = call('delphi_desktop', {'command': 'screenshot', 'profile': 'x',
                                 'out': DIR_DENTRO})
     check('W4 un "out" DENTRO de la jaula no muere por la ruta',
-          not rechazada_por_jaula(f) and mc.es(f, 'SR_REMOTERUN_NODO_DENIED_FMT')
-          and 'RemoteRunProjects' in f
-          and 'McpDesktopNode' in f, f[:280])
+          not rechazada_por_jaula(f) and mc.es(f, 'SR_DESKTOP_HOST_DENIED_FMT')
+          and 'DesktopAllowedHosts' in f, f[:280])
     # (W4c, "y fuera sigue vacio", no podia ponerse rojo: con un perfil
     # ficticio nada captura; revisor de baterias, 18-oct-2026)
     print('NOTA: W4b, W4c, W5e y W5f (captura real por perfil, y que no escriba '

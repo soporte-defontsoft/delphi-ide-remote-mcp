@@ -77,6 +77,7 @@ env['MCP_STUB_RUNJOB_EXE'] = RUNJOB_EXE   # el gemelo Win64 del lanzador que cor
 env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'   # v0.48.1: remote execution is opt-in
 # v0.98: lista vacia = NADA (fail closed); desde la 1.22.2 la entrada es la RUTA del .dproj (un nombre no autoriza)
 env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = DPROJ
+env['DELPHI_MCP_DESKTOP_HOSTS'] = '*'
 # APPDATA de prueba con el perfil FALSO (mc.appdata_perfil, un solo sitio): los
 # hijos (el stub de paclient, msbuild) lo heredan; la puerta ProfileHostDenido
 # (fail-closed desde 1.15.1) encuentra 'perfil' con host 127.0.0.1, y ese host

@@ -1042,11 +1042,6 @@ procedure CrearCarpeta(const ADir: string);
   cualquier proyecto de ese nombre, y un homonimo de otra carpeta desplegaba
   encima del permitido (Fable, revision de la 1.22.2). }
 function RemoteRunProjectDenied(const APath: string): string;
-{ La lista del workspace activo concede el nodo de escritorio del propio
-  servidor: ANodo, por su NOMBRE (Lsp.RemoteRun.NODE_PROJECT), o el comodin.
-  El nodo va por nombre porque es nuestro, no un proyecto del agente, y por
-  eso es otra pregunta: un McpDesktopNode.dproj del agente no pasa por aqui. }
-function RemoteRunNodeAllowed(const ANodo: string): Boolean;
 
 { THE single entry gate, consulted by the tools dispatcher before ANY tool
   executes. '' = allowed; otherwise the rejection message returned to the
@@ -1425,16 +1420,6 @@ begin
       Exit(MsgFmt(SR_REMOTERUN_ENTRADA_A_SECAS_FMT, [E.Trim, Full]));
   Result := MsgFmt(SR_REMOTERUN_PROJECT_DENIED_FMT,
     [Name, string.Join(', ', Lista)]);
-end;
-
-function RemoteRunNodeAllowed(const ANodo: string): Boolean;
-var
-  E: string;
-begin
-  for E in RemoteProjectsNow do
-    if EsComodinDeLista(E) or SameFileName(E.Trim, ANodo) then
-      Exit(True);
-  Result := False;
 end;
 
 function InVault(const APath: string): Boolean;

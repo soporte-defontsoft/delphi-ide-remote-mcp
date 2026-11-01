@@ -66,6 +66,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- **`delphi_desktop` has its own permission, per host: this needs a line in your `settings.ini`.** `DesktopAllowedHosts` sees and acts on the desktops of those hosts, `DesktopViewHosts` only sees them (`screenshot`, `status`), and `RemoteHosts` is still needed too. `McpDesktopNode` or `all` in `RemoteRunProjects` no longer grant it, and a workspace that relied on them gets `RUN-020`, which says what to write. That entry was a permission disguised as a project in a list of project paths, and it could not tell one target from another, or looking from typing.
 - `delphi_edit` `adduses` and `removeuses` read their list like `add-requires` does: `;`, `,` or a blank separates names. `"A B"` was refused as one invalid unit name.
 - The account warning of `delphi_workspace` asks the process token whether the server runs as LocalSystem (SID `S-1-5-18`), so it no longer depends on the name of the account or on `USERPROFILE`.
 - An agent's mailbox and report folder are its name in lower case, so `a--b` and `a-b`, two agents for the trash, no longer read and delete each other's mail.

@@ -95,9 +95,11 @@ type
   lanzarlo, pararlo, leer lo que dejo o hacer un gesto en su escritorio:
   AllowRemoteRun, un perfil (ASinPerfil si falta) cuyo host permite el
   workspace, y el proyecto en RemoteRunProjects - un .dproj NUESTRO,
-  dentro de la jaula y existente, o con AProj vacio el nodo de escritorio
-  empaquetado. La usan delphi_paserver (remote-run, kill, output) y
-  delphi_desktop; hasta el 26-sep cada una llevaba su copia, y la de
+  dentro de la jaula y existente. AProj vacio es el nodo de escritorio
+  empaquetado, que solo pide delphi_desktop: su permiso es el del host
+  (ProfileDesktopDenied, que esa tool pregunta detras; un trabajo no llega aqui
+  sin proyecto, TrabajoDenegado). La usan delphi_paserver (remote-run, kill,
+  output) y delphi_desktop; hasta el 26-sep cada una llevaba su copia, y la de
   desktop no miraba si el .dproj existia. }
 function EjecucionRemotaDenegada(const AProf, AProj, ASinPerfil: string): string;
 
@@ -1155,16 +1157,9 @@ begin
   Result := ProfileHostDenied(AProf);
   if Result <> '' then
     Exit;
-  // El nodo es NUESTRO (binario fijo, con su SHA): lo que el operador
-  // concede al ponerlo en la lista es VER y TECLEAR en ese escritorio, y la
-  // negativa lo dice asi. Salia el RUN-007 de un proyecto, que no explicaba
-  // que el nodo es un permiso aparte (Hermes, 4-oct-2026)
+  // El nodo es NUESTRO (binario fijo, con su SHA): no es un proyecto de la lista
   if AProj = '' then
-  begin
-    if not RemoteRunNodeAllowed(NODE_PROJECT) then
-      Exit(MsgFmt(SR_REMOTERUN_NODO_DENIED_FMT, [NODE_PROJECT]));
-    Exit('');
-  end;
+    Exit;
   // the project must be one this server may touch, and must exist
   Result := PathDenied(AProj);
   if Result <> '' then

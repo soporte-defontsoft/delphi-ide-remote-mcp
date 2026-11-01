@@ -443,8 +443,11 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   could deploy over the allowed one. `delphi_build target=Deploy` through a profile asks
   the same list.
   `delphi_desktop` runs the server's own desktop node on the target, and seeing and
-  typing on a desktop is a permission of its own: `McpDesktopNode` (or `all`) in
-  `RemoteRunProjects` (`RUN-020` when it is missing). Looking leaves traces of the server on
+  acting on a desktop is a permission of its own, by the host of the profile:
+  `DesktopAllowedHosts` sees and acts (`tap`, `type`, `key`, `overview`), `DesktopViewHosts`
+  only sees (`screenshot`, `status`), and `RemoteHosts` is still needed too (`RUN-020` when
+  it is missing). Empty, no desktop; `*` is any host. `McpDesktopNode` or `all` in
+  `RemoteRunProjects` no longer grant it. Looking leaves traces of the server on
   the target: it deploys or updates the node there, uploads and deletes a job file and its
   launcher, and the node writes the capture it hands back.
 - **Reach lists (per workspace)**: `GitRemotes` limits which hosts git may reach - the URL

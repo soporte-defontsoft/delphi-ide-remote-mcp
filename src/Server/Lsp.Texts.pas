@@ -2176,12 +2176,18 @@ const
     '[Workspace.<name>] RemoteRunProjects of the server''s settings.ini, or ' +
     'all for every project. Nothing was deployed or run.';
 
-  SR_REMOTERUN_NODO_DENIED_FMT =
-    '[RUN-020 DENIED] delphi_desktop works through this server''s own ' +
-    'desktop node (%s), and seeing and typing on a target''s desktop is a ' +
-    'permission of its own: the operator grants it by adding %0:s (or all) ' +
-    'to [Workspace.<name>] RemoteRunProjects in the server''s settings.ini. ' +
-    'No tool changes that list - ask the operator.';
+  { %0:s: SF_DESKTOP_VER o SF_DESKTOP_ACTUAR; %1:s: el host del perfil. Era una
+    entrada por NOMBRE (McpDesktopNode) en una lista de rutas de proyectos: un
+    permiso disfrazado de proyecto (V90, David: "depende que desktop") }
+  SR_DESKTOP_HOST_DENIED_FMT =
+    '[RUN-020 DENIED] This workspace may not %0:s the desktop of %1:s: that is a ' +
+    'permission of its own, per host. The operator grants it in ' +
+    '[Workspace.<name>] of the server''s settings.ini: DesktopAllowedHosts=<host> ' +
+    'to see and act, DesktopViewHosts=<host> only to see (screenshot, status). ' +
+    'McpDesktopNode in RemoteRunProjects no longer grants it. No tool changes ' +
+    'those lists - ask the operator.';
+  SF_DESKTOP_VER = 'see';
+  SF_DESKTOP_ACTUAR = 'act on';
 
   SR_PASERVER_RUN_DISABLED =
     '[PAS-003 DENIED] Remote execution is OFF on this server. The ' +
@@ -2598,9 +2604,9 @@ const
     'or a Windows service (session 0) has nothing to show (command=status ' +
     'says what to ask the operator for). It is a ' +
     'permission of its own: ' +
-    'AllowRemoteRun=1, the profile''s host in RemoteHosts and ' +
-    'McpDesktopNode (or all) in RemoteRunProjects - only the operator sets ' +
-    'them, and a refusal names the missing one.';
+    'AllowRemoteRun=1, the profile''s host in RemoteHosts and in ' +
+    'DesktopAllowedHosts (DesktopViewHosts: only screenshot and status) - only ' +
+    'the operator sets them, and a refusal names the missing one.';
   SP_ADBLINUX_COMMAND =
     'screenshot (default: the whole desktop as a PNG) | tap (press at x,y ' +
     'measured on that screenshot) | type (write "text"; with x,y it ' +

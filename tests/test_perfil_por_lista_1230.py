@@ -48,7 +48,7 @@ with open(STUB, 'w') as _f:
 
 srv = mc.Stdio(EXE, mc.entorno({
     'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': AD, 'DELPHI_MCP_REMOTE_HOSTS': HOST,
-    'DELPHI_MCP_ALLOW_REMOTE_RUN': '1', 'DELPHI_MCP_REMOTE_RUN_PROJECTS': 'all',
+    'DELPHI_MCP_ALLOW_REMOTE_RUN': '1', 'DELPHI_MCP_REMOTE_RUN_PROJECTS': 'all', 'DELPHI_MCP_DESKTOP_HOSTS': '*',
     'DELPHI_MCP_PACLIENT': STUB, 'MCP_STUB_SCRATCH': os.path.join(BASE, 'destino'), 'MCP_STUB_LOG': LOG}),
     nombre='perfil_por_lista_1230', t=300)
 try:
