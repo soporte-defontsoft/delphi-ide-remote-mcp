@@ -1712,7 +1712,7 @@ begin
   if L.Falta.Razon <> '' then
     Result := Result + [MsgFmt(SN_DESIGNER_LINT_SIN_TABLA_FMT, [L.Falta.Razon])];
   // un StyleLookup que ningun estilo que el form ve define (V75 de la 1.23.1)
-  Result := Result + L.Lookups;
+  Result := Result + L.Lookups + L.Literales;
 end;
 
 // el form y su unidad, todo o nada

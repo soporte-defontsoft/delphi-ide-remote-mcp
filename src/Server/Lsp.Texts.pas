@@ -6845,6 +6845,20 @@ const
   SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT = '  %0:s: StyleLookup = ''%1:s'' (line %2:d)';
 
   { %0:s: el fichero; %1:d: cuantos; %2:s: '' en el lint, o
+    SF_DESIGNER_LOOKUPS_DE_LA_EDICION tras una edicion. Un valor que es una ruta
+    que el renderizador no lee: set y delphi_edit lo escribian, el lint decia CLEAN
+    y solo preview lo negaba (DSGN-115), a esta form y a las de su carpeta. El form
+    es valido y compila: una nota, no una negativa. El valor no se ensena }
+  SN_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT =
+    '[DSGN-183] %0:s: %1:d string value(s) that name a path the renderer may not ' +
+    'read: outside your read locations, or under Windows or Program Files. The form ' +
+    'is valid and compiles, but delphi_designer preview refuses it while they are ' +
+    'there (DSGN-115), and any other form of this folder too. Files a form needs to ' +
+    'be drawn go in its folder or below it%2:s:';
+  { %0:s: la propiedad; %1:d: su linea (una linea de la nota DSGN-183) }
+  SF_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT = '  %0:s (line %1:d)';
+
+  { %0:s: el fichero; %1:d: cuantos; %2:s: '' en el lint, o
     SF_DESIGNER_LOOKUPS_DE_LA_EDICION tras una edicion (solo los que ella
     trae). Un color de menos de 8 cifras en un .fmx: delphi_edit lo escribia y
     el lint decia CLEAN (V154 de la 1.23.1, medido); como lo carga, el

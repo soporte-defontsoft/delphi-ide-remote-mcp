@@ -873,6 +873,8 @@ type
     // los colores de menos de 8 cifras, por el escritor del IDE: una nota
     // (DSGN-176), solo con ALector (V154 de la 1.23.1)
     Colores: TArray<string>;
+    // los literales que preview negaria: una nota (DSGN-183); el form es valido
+    Literales: TArray<string>;
     // los StyleLookup que no se juzgan: toman sus estilos de un StyleBook que no
     // se lee, o son de un frame (LookupsDeDesigner). Solo con ALector (V156 de la 1.24)
     LookupsSinJuzgar: Integer;
@@ -935,9 +937,8 @@ function AvisosDelLector(const APath: string; const AAntes: string = ''): TArray
 { ARespuesta (la de una escritura de APath) con AvisosDelLector detras, si
   APath es un form y no fue un fallo. AAntes, el de TextoAntesDeEditar. }
 function ConAvisosDelLector(const ARespuesta, APath: string; const AAntes: string = ''): string;
-{ Lo que dice el disco de APath ANTES de una edicion, si es un form FMX (el
-  de un color sin alfa: AvisosDelLector solo dice lo que la edicion trae);
-  '' si no lo es o no se lee. Nunca lanza. }
+{ Lo que dice el disco de APath ANTES de una edicion, si es un form (las notas
+  dicen solo lo que la edicion trae); '' si no lo es o no se lee. Nunca lanza. }
 function TextoAntesDeEditar(const APath: string): string;
 { Una edicion SUELTA cuyo ancla trae VARIAS lineas es un BLOQUE: la tanda de
   UNA entrada, la que el propio EDIT-001 mandaba escribir. Hermes tropezo con
@@ -6006,6 +6007,9 @@ begin
   // CLEAN); tras una edicion, los que ella trae (V143)
   if EsDesignerFmx(ADfm) then
     Result.Lookups := NotaDeLookupsSinEstilo(ADfm, Lineas, LineasDelTexto(AAntes));
+  // ...y lo que preview negaria luego: EL juez de preview (DSGN-115); tras una
+  // edicion, lo que ella trae. Por el texto: nada que pida salir del cerrojo
+  Result.Literales := NotaDeLiteralesQuePreviewNiega(ADfm, Lineas, LineasDelTexto(AAntes));
   // ...y sus colores de menos de 8 cifras: los juzga el escritor del IDE, un
   // proceso aparte, asi que solo con el lector, fuera de los cerrojos (V154)
   if ALector and EsDesignerFmx(ADfm) then
@@ -6087,8 +6091,7 @@ var
 begin
   Result := '';
   try
-    if not EsRutaDeDesigner(APath) or not EsDesignerFmx(APath) or
-       (TextoDeDesigner(TPath.GetFullPath(APath), Result, Enc) <> '') then
+    if not EsRutaDeDesigner(APath) or (TextoDeDesigner(TPath.GetFullPath(APath), Result, Enc) <> '') then
       Result := '';
   except
     Result := ''; // sin el de antes se juzgan todos
@@ -6145,7 +6148,7 @@ begin
   // fichero que acaba de escribirse
   var NotaEnc := NotaDeCodificacionDeForm(APath);
   if (L.Parser = '') and (Length(Raw) = 0) and (Length(Bind) = 0) and (Length(Notas) = 0) and
-     (Length(L.Lookups) = 0) and (Falta.Razon = '') and (NotaEnc = '') then
+     (Length(L.Lookups) = 0) and (Length(L.Literales) = 0) and (Falta.Razon = '') and (NotaEnc = '') then
     Exit;
   Res := TStringList.Create;
   try
@@ -6198,6 +6201,7 @@ begin
       Res.AddStrings(Bind);
     end;
     Res.AddStrings(L.Lookups);
+    Res.AddStrings(L.Literales);
     if NotaEnc <> '' then
       Res.Add(NotaEnc);
     Result := Res.ToStringArray;

@@ -336,6 +336,13 @@ function CambioEnLoLeido(const ALeidos: TArray<TLeidoPorElJuez>): string;
   lineas y no se sabe. Nunca lanza. }
 function LoQueNoCargaElIde(const APath, ATexto, AEnc: string; out ANoPregunto: string): TArray<string>;
 
+{ La nota DSGN-183 de un form: los literales de ALineas que preview negaria,
+  por EL juez de preview y desde la carpeta del form, sin ensenar su valor, o
+  []. AAntes: las lineas de antes de una edicion ([] en el lint o en un form
+  nuevo): solo los que ella trae. Lo piden el lint y el juicio de lo escrito: el
+  form es valido, y sin esto solo se sabia al pedir la imagen. Nunca lanza. }
+function NotaDeLiteralesQuePreviewNiega(const ADesigner: string; const ALineas, AAntes: TArray<string>): TArray<string>;
+
 { LO COMUN de una peticion de render para el form APath (ya por la puerta de
   lectura): el framework (AFramework, o el del fichero si va vacio), la ruta,
   el Delphi del servidor y form o frame por EL lector de clases si su .pas se
@@ -959,6 +966,120 @@ begin
   Result := (Length(ABytes) >= 2) and (ABytes[0] = Ord('M')) and (ABytes[1] = Ord('Z'));
 end;
 
+{ EL juez de un literal: lo que el ayudante no llegaria a leer, interpretado
+  desde ABases. Por su texto antes de alargarlo o preguntar si existe. }
+function LiteralQueElContenedorNiega(const ABases: TArray<string>; const AValor: string): Boolean;
+var
+  Ruta: string;
+begin
+  if RutaSinTocarElDisco(AValor) then
+    Exit(True);
+  Result := False;
+  if AValor = '' then
+    Exit;
+  for var Base in ABases do
+  begin
+    // como lo lee el ayudante, cuya carpeta actual es AEtapa (EL resolutor).
+    // "X:y" de OTRA unidad, por la carpeta de esa unidad que el ayudante
+    // hereda del servidor con su entorno: la de este proceso
+    Ruta := RutaDesde(Base, AValor);
+    if Ruta = '' then
+    try
+      Ruta := TPath.GetFullPath(AValor);
+    except
+      Continue; // una cadena que no es ruta no nombra un fichero
+    end;
+    // lo normal, un texto: se queda en esa carpeta y no nombra el sistema.
+    // Por su texto y antes de tocar el disco: un form trae miles, y por cada uno
+    // de los hermanos en el NAS tardaba 80 s en lugar de 15 (medido)
+    var Trozo: string;
+    if not TrozoBajo(Base, Ruta, Trozo) and LoLeeElContenedor(Ruta) and (ReadPathDenied(Ruta) <> '') then
+      Exit(True);
+  end;
+end;
+
+type
+  TLiteralDeForm = record
+    Prop, Texto: string;
+    Linea: Integer;
+  end;
+
+{ Los literales de cadena de las lineas de un form: el valor de una propiedad y
+  cada elemento de una lista de cadenas. Por las lineas de LineasDeForm, las del
+  parser del IDE. }
+function LiteralesDeLineas(const ALineas: TArray<string>): TArray<TLiteralDeForm>;
+var
+  Form: TArray<TLineaForm>;
+  Lista: TList<TLiteralDeForm>;
+  Texto: string;
+
+  procedure Pon(const AProp: string; ALinea: Integer);
+  var
+    L: TLiteralDeForm;
+  begin
+    L.Prop := AProp;
+    L.Texto := Texto;
+    L.Linea := ALinea + 1;
+    Lista.Add(L);
+  end;
+
+begin
+  Form := LineasDeForm(ALineas);
+  Lista := TList<TLiteralDeForm>.Create;
+  try
+    for var I := 0 to High(ALineas) do
+      if Form[I].Clase = clfPropiedad then
+      begin
+        var Valor := ValorEnteroDe(ALineas, Form, I);
+        if LeeLiteralDeForm(Valor, Texto) then
+          Pon(Form[I].Prop, I)
+        else if Valor = '(' then
+          // Strings de una lista: sus elementos por SU lector (Lsp.DesignerBin)
+          // y cada uno por el mismo lector de literales. A mano se saltaba el
+          // ultimo, el del ')' que el IDE escribe detras (V109 de la 1.23.1)
+          for var Elem in ElementosDeLista(ALineas, I, Form[I].Fin) do
+            if LeeLiteralDeForm(Elem, Texto) then
+              Pon(Form[I].Prop, I);
+      end;
+    Result := Lista.ToArray;
+  finally
+    Lista.Free;
+  end;
+end;
+
+function NotaDeLiteralesQuePreviewNiega(const ADesigner: string; const ALineas, AAntes: TArray<string>): TArray<string>;
+var
+  Bases: TArray<string>;
+  Marcados: TArray<TLiteralDeForm>;
+begin
+  Result := [];
+  try
+    Bases := [TPath.GetDirectoryName(ADesigner)];
+    Marcados := [];
+    for var L in LiteralesDeLineas(ALineas) do
+      if LiteralQueElContenedorNiega(Bases, L.Texto) then
+        Marcados := Marcados + [L];
+    if Length(Marcados) = 0 then
+      Exit; // lo normal, y corre en cada edicion de un form: lo de antes ni se lee
+    // los que ya estaban no los trae la edicion
+    var Estaban := TDictionary<string, Boolean>.Create;
+    try
+      for var L in LiteralesDeLineas(AAntes) do
+        Estaban.AddOrSetValue(L.Prop + #0 + L.Texto, True);
+      for var L in Marcados do
+        if not Estaban.ContainsKey(L.Prop + #0 + L.Texto) then
+          Result := Result + [MsgFmt(SF_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT, [L.Prop, L.Linea])];
+    finally
+      Estaban.Free;
+    end;
+    if Length(Result) > 0 then
+      Result := [MsgFmt(SN_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT, [ExtractFileName(ADesigner), Length(Result),
+        IfThen(Length(AAntes) > 0, MsgText(SF_DESIGNER_LOOKUPS_DE_LA_EDICION), '')])] + Result;
+  except
+    Result := []; // sin poder juzgarlo no se dice nada: preview sigue siendo el juez
+  end;
+end;
+
 function LiteralesDeRenderDenegados(const APeticion: TPeticionRender; const AEtapa: string;
   out AJunto: TArray<string>): string;
 const
@@ -968,7 +1089,6 @@ var
   Hermanos: string;
   BytesLeidos, BytesJunto: Int64;
   Doc: TStyleDoc;
-  Form: TArray<TLineaForm>;
   Texto, Valor, Prop: string;
 
   function Comprueba(const AProp, AValor: string): string;
@@ -976,30 +1096,10 @@ var
     Ruta: string;
   begin
     Result := '';
-    // El valor se juzga por su texto ANTES de alargarlo o preguntar si existe.
-    if RutaSinTocarElDisco(AValor) then
+    if LiteralQueElContenedorNiega(Bases, AValor) then
       Exit(MsgFmt(SR_DESIGNER_LITERAL_FUERA_FMT, [AProp]));
     if AValor = '' then
       Exit;
-    for var Base in Bases do
-    begin
-      // como lo lee el ayudante, cuya carpeta actual es AEtapa (EL resolutor).
-      // "X:y" de OTRA unidad, por la carpeta de esa unidad que el ayudante
-      // hereda del servidor con su entorno: la de este proceso
-      Ruta := RutaDesde(Base, AValor);
-      if Ruta = '' then
-      try
-        Ruta := TPath.GetFullPath(AValor);
-      except
-        Continue; // una cadena que no es ruta no nombra un fichero
-      end;
-      // lo normal, un texto: se queda en esa carpeta y no nombra el sistema.
-      // Por su texto y antes de tocar el disco: un form trae miles, y por cada uno
-      // de los hermanos en el NAS tardaba 80 s en lugar de 15 (medido)
-      var Trozo: string;
-      if not TrozoBajo(Base, Ruta, Trozo) and LoLeeElContenedor(Ruta) and (ReadPathDenied(Ruta) <> '') then
-        Exit(MsgFmt(SR_DESIGNER_LITERAL_FUERA_FMT, [AProp]));
-    end;
     // ...y solo uno con forma de fichero, con su extension, se busca al lado del form
     if ExtractFileExt(AValor).Length < 2 then // (TPath.GetExtension lanza con un | o un <)
       Exit;
@@ -1043,30 +1143,12 @@ var
       Result := FormaDistintaDeLineas(Doc.Lines, TPath.GetFileName(ARuta));
       if Result <> '' then
         Exit;
-      Form := LineasDeForm(Doc.Lines);
-      for var I := 0 to High(Doc.Lines) do
-        if Form[I].Clase = clfPropiedad then
-        begin
-          Prop := Form[I].Prop;
-          Valor := ValorEnteroDe(Doc.Lines, Form, I);
-          if LeeLiteralDeForm(Valor, Texto) then
-          begin
-            Result := Comprueba(Prop, Texto);
-            if Result <> '' then
-              Exit;
-          end
-          else if Valor = '(' then
-            // Strings de una lista: sus elementos por SU lector (Lsp.DesignerBin)
-            // y cada uno por el mismo lector de literales. A mano se saltaba el
-            // ultimo, el del ')' que el IDE escribe detras (V109 de la 1.23.1)
-            for var Elem in ElementosDeLista(Doc.Lines, I, Form[I].Fin) do
-              if LeeLiteralDeForm(Elem, Texto) then
-              begin
-                Result := Comprueba(Prop, Texto);
-                if Result <> '' then
-                  Exit;
-              end;
-        end;
+      for var L in LiteralesDeLineas(Doc.Lines) do
+      begin
+        Result := Comprueba(L.Prop, L.Texto);
+        if Result <> '' then
+          Exit;
+      end;
     finally
       Doc.Free;
     end;

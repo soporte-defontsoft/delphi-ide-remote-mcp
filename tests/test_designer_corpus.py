@@ -148,7 +148,8 @@ check('corpus: ningun renderizador robo el foco', vigilante.foco == 0, vigilante
 for dst, r in zip(copiados, respuestas):
     rel = os.path.relpath(dst, FORMS)
     if not any(mc.abre(r, c) for c in ('SN_DESIGNER_LINT_OK_FMT', 'SN_DESIGNER_LINT_BAD_FMT',
-                                        'SN_DESIGNER_LINT_NOTAS_FMT', 'SN_DESIGNER_LINT_SIN_LECTOR_FMT')):
+                                        'SN_DESIGNER_LINT_NOTAS_FMT', 'SN_DESIGNER_LINT_SIN_LECTOR_FMT',
+                                        'SN_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT')):
         sin_lint.append('%s: %s' % (rel, r[:100]))
     if mc.es(r, 'SN_DESIGNER_LINT_SIN_LECTOR_FMT'):
         if mc.es(r, 'SR_DESIGNER_SIN_RENDER_FMT'):
