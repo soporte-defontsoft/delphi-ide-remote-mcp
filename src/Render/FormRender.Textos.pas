@@ -33,9 +33,11 @@ const
     'Component.Property=Value.';
 
   SR_RENDER_TIEMPO_FMT =
-    '[RENDER-007 DENIED] The render did not finish in %d ms (something in ' +
-    'the form waits, or a package hangs while loading): the renderer ends ' +
-    'itself.';
+    '[RENDER-007 DENIED] The render did not finish in %d ms: the renderer ends ' +
+    'itself. Repeat the same call: an antivirus checking design packages it ' +
+    'has not seen yet takes that long once, and what it checked stays ' +
+    'checked. If it happens every time, something in the form waits, or a ' +
+    'package hangs while loading.';
 
   SR_RENDER_SIN_IDE_FMT =
     '[RENDER-008 NOT_FOUND] Nobody said where RAD Studio %s is (--bdsroot): ' +

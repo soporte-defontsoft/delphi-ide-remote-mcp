@@ -242,7 +242,12 @@ as the IDE runs them when it opens a form - in the container, which is what boun
 them. A component that waits - a design-time connection with nothing to open, a
 package that hangs while loading - ends at the helper's budget with `RENDER-007`
 (measured 2026-10-14 with a `TFDConnection` set to `Connected = True` and no
-database to open: 60 s, nothing written, no process left).
+database to open: 60 s, nothing written, no process left). A first load can end there
+too: Microsoft Defender checks each design package it has not seen under its current
+signatures, up to about 10 s each, and the helper's budget counts that wait (measured
+2026-11-01, its own performance report, `TrustCheck`: 86 to 110 s with 41 third-party
+packages, 1.6 s for the same bytes afterwards, and again 92 s with 16 bytes appended to
+each). It is checked once per signature update, so repeating the call gets through.
 
 ## Tests, in three layers
 

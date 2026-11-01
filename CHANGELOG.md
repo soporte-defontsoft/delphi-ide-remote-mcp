@@ -14,6 +14,7 @@ the MCP `initialize` response (`serverInfo.version`).
 - A frame that contains itself, directly or through others, is told apart (`RENDER-026`, with the chain), and the rest of the form is drawn without it. The renderer fell with an access violation after about 3 s, `preview` blamed a design package (`DSGN-061`) and `lint` answered CLEAN. `lint`, and a form edit, now ask the IDE's form reader about every form that holds an inline frame, which no table can judge.
 - `delphi_designer insert` gives a VCL frame the next `TabOrder`, as the designer does when dropping it: with three controls it took 0, the one of another control.
 - `FILE-053` no longer sends you to delete the live file when what you named is the link itself: it says the link is the operator's, and that nothing was deleted.
+- `RENDER-007` says what to do, and names the cause it left out. Microsoft Defender checks each design package it has not seen under its current signatures, up to about 10 s each: on a 4-core VM with 41 third-party packages the first load after a signature update took 86 to 110 s and passed the renderer's 60 s, with nothing wrong in the form or its packages. The answer blamed them. Now it says to repeat the call, since what was checked stays checked.
 
 ## [1.25.0] - 2026-11-01
 
