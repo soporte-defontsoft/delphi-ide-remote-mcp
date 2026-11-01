@@ -78,6 +78,8 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_test` with `nobuild` runs the binary of the configuration it was asked for. With a literal output folder per configuration, the newest binary won: Release ran the Debug binary and reported its results as Release's. The `output` of `delphi_build` reads the same output folder, the one of that build.
 - `delphi_edit` `insert=rutina-global` in a `.dpr` whose `uses` is split in `{$IFDEF}` branches places the routine after the whole clause. It landed inside the first branch, so with the other branch active the routine did not exist.
 - An Android project with no version keys gets the `minSdkVersion` and `targetSdkVersion` of the installed IDE, read from its Android package (36 on 37.0), where the server wrote a fixed 35.
+- `delphi_build` takes `errors`, `warnings` and `hints` from MSBuild's own classification, in log files of the server. They were found by searching its console text: with `verbosity=normal`, a warning whose text said `: error` came back in `errors` next to `success: true`, and with `verbose` a folder named `My error Example` sent there every line that named it. Each warning also came back once instead of twice in `verbose`.
+- `delphi_test` reads the last DUnitX summary in the output. A test that printed `Tests Failed : 7` turned a green suite red, and one that printed `Tests Failed : 0` hid the count of a red one.
 
 - **`delphi_desktop` against a PAServer that does not answer costs one wait, and only that
   profile's.** `paclient` gives up by itself (21 s against an address that does not answer,

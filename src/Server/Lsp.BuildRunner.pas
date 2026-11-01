@@ -2213,11 +2213,48 @@ begin
     (PCardinal(@B[4])^ = Cardinal(Length(B)));
 end;
 
+{ msbuild cierra cada aviso y cada error con " [<ruta del .dproj>]": la MISMA
+  ruta en cada linea, cerca del 40% de un aviso (medido el 6-oct-2026 compilando
+  este repo). Fuera, antes de ensenarla: errors[], warnings[] y la cola salen
+  sin ella. }
+function SinRutaDelProyecto(const ALinea: string): string;
+begin
+  Result := TRegEx.Replace(ALinea,
+    '\s\[[^\[\]]+\.(?:dproj|groupproj)\]\s*$', '', [roIgnoreCase]);
+end;
+
+{ Lo que msbuild dejo en uno de sus ficheros de /flp. Sin fichero o sin poder
+  leerlo, nada: lo que dijera sigue en la cola, y un log no tumba la respuesta
+  del build. }
+function LineasDelLogDeMsBuild(const ARuta: string): TArray<string>;
+begin
+  Result := [];
+  try
+    if TFile.Exists(ARuta) then
+      for var L in LineasDelTexto(LeeTexto(ARuta, [ltTemporal])) do
+        if L.Trim <> '' then
+          Result := Result + [SinRutaDelProyecto(L).Trim];
+  except
+    Result := [];
+  end;
+end;
+
+{ Para msbuild, un hint de dcc es un aviso ("Hint warning H2077:"): lo distingue
+  su codigo, el primero de la linea. Antes de el solo va el fichero, y un nombre
+  de fichero no lleva dos puntos; por el codigo, porque un dcc traducido no dice
+  "Hint". }
+function EsHintDelCompilador(const ALinea: string): Boolean;
+begin
+  var M := TRegEx.Match(ALinea, '\b([HW])\d+:');
+  Result := M.Success and (M.Groups[1].Value = 'H');
+end;
+
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile, ADeviceId: string; ATimeoutMs: Integer;
   const ASdk, AVerbosity: string): TJSONObject;
 const
   TOPE_HINTS = 50; // cuantos van en hints[]; hintsTotal dice los demas
+  BUILD_LOGS_SUB = 'build-logs';
 var
   Info: TRadStudioInfo;
   Output, Line, Plat, Cfg, Target: string;
@@ -2484,6 +2521,10 @@ begin
   var EnlacesNota := '';      // lo hecho, y lo que no se pudo
   var ResVersion := '';       // el .res de version (ResDeVersion)...
   var ResVacioAntes := False; // ...y si ya estaba sin recursos
+  // donde deja msbuild lo que clasifica, abajo
+  var LogsDelBuild := NuevaCarpetaDescarga(ServerTempDir(BUILD_LOGS_SUB));
+  var LogDeErrores := TPath.Combine(LogsDelBuild, 'errors.log');
+  var LogDeAvisos := TPath.Combine(LogsDelBuild, 'warnings.log');
   var QueueSW := TStopwatch.StartNew;
   GBuildLock.Enter;
   var QueuedMs := QueueSW.ElapsedMilliseconds;
@@ -2631,6 +2672,14 @@ begin
     Verb := '/v:quiet /clp:ErrorsOnly;Summary;NoItemAndPropertyList /nologo'
   else if SameText(AVerbosity, 'verbose') then
     Verb := '/v:detailed';
+  // Que es error y que es aviso lo dice msbuild, en un fichero para cada cosa y
+  // con cualquier verbosidad. Se buscaba en su consola por subcadenas: un aviso
+  // que decia ": error" o una carpeta "Mi error Ejemplo" iban a errors[] con
+  // success=true (V13, medido el 1-nov-2026). En la casa del servidor: es trabajo
+  // nuestro, no algo que nombre el agente
+  CrearCarpeta(LogsDelBuild);
+  var LogsArg := ' ' + EnComillas('/flp1:errorsonly;encoding=UTF-8;logfile=' + LogDeErrores) +
+    ' ' + EnComillas('/flp2:warningsonly;encoding=UTF-8;logfile=' + LogDeAvisos);
   // Propiedades globales de msbuild ganan a las del .dproj: vaciar los
   // eventos aqui es no ejecutarlos, sin tocar el proyecto.
   var EventArg := '';
@@ -2643,9 +2692,9 @@ begin
   // msbuild.exe por su ruta y sin shell (2an, arriba): un metacaracter en un
   // valor es solo un caracter, y los jueces de cada valor siguen como segunda
   // barrera (David, 11-oct)
-  var Orden := Format('%s %s /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s%s %s',
+  var Orden := Format('%s %s /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s%s %s%s',
     [EnComillas(MsBuildExe), EnComillas(TPath.GetFullPath(ADprojPath)), TargetsMsBuild, Cfg,
-     Plat, SdkArg, ProfileArg, DeviceArg, EventArg, SalidaArg, Verb]);
+     Plat, SdkArg, ProfileArg, DeviceArg, EventArg, SalidaArg, Verb, LogsArg]);
   // la carpeta del proyecto como cwd: sin ella, msbuild hereda la del proceso
   // (el servicio: la casa del servidor) y lo que una tarea escribe RELATIVO -el
   // .vrc/.res de la info de version- cae FUERA de la jaula (2ak de la 1.18.2,
@@ -2705,37 +2754,32 @@ begin
   YaDicho.Sorted := True;
   YaDicho.Duplicates := dupIgnore;
   Lines := LineasDelTexto(Output);
-  // msbuild cierra cada aviso y cada error con " [<ruta del .dproj>]": la
-  // MISMA ruta en cada linea, cerca del 40% de un aviso (medido el
-  // 6-oct-2026 compilando este repo). Fuera aqui, una vez, antes de
-  // clasificar: errors[], warnings[] y la cola salen sin ella.
   for var K := 0 to High(Lines) do
-    Lines[K] := TRegEx.Replace(Lines[K],
-      '\s\[[^\[\]]+\.(?:dproj|groupproj)\]\s*$', '', [roIgnoreCase]);
-  for Line in Lines do
+    Lines[K] := SinRutaDelProyecto(Lines[K]);
+  for Line in LineasDelLogDeMsBuild(LogDeErrores) do
   begin
-    if Line.Contains(': error ') or Line.Contains(' error E') or
-       Line.Contains(' error MSB') or Line.Contains('fatal error') or
-       Line.Contains(': fatal ') then
-  begin
-    Errors.Add(Line.Trim);
-    YaDicho.Add(Line.Trim);
-  end
-  else if Line.Contains(': warning ') or Line.Contains(' warning W') then
-  begin
-    Warnings.Add(Line.Trim);
-    YaDicho.Add(Line.Trim);
-  end
-  // los hints, por este mismo lector: dcc escribe "Hint warning H2077". Con su
-  // tope y su cuenta, y fuera de la cola aunque no quepan: son lo que mas se
-  // repite de un build y los paga el contexto del agente (David, 15-oct-2026)
-  else if Line.Contains(' warning H') or Line.Contains(': hint ') then
-  begin
-    Inc(HintsTotal);
-    if Hints.Count < TOPE_HINTS then
-      Hints.Add(Line.Trim);
-    YaDicho.Add(Line.Trim);
+    Errors.Add(Line);
+    YaDicho.Add(Line);
   end;
+  for Line in LineasDelLogDeMsBuild(LogDeAvisos) do
+  begin
+    YaDicho.Add(Line);
+    // los hints con su tope y su cuenta, y fuera de la cola aunque no quepan: son
+    // lo que mas se repite de un build y los paga el contexto del agente (David,
+    // 15-oct-2026)
+    if EsHintDelCompilador(Line) then
+    begin
+      Inc(HintsTotal);
+      if Hints.Count < TOPE_HINTS then
+        Hints.Add(Line);
+    end
+    else
+      Warnings.Add(Line);
+  end;
+  try
+    BorraArbol(LogsDelBuild);
+  except
+    // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
   end;
 
   // La linea del linker de Linux trae unos 2 KB de rutas -L en CADA build.

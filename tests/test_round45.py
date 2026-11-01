@@ -193,6 +193,9 @@ EXCLUIDOS = {
     ('delphi_edit', 'adduses'): 'NOMBRES de unidad (System.SysUtils;UCustomer), no rutas: su descripcion '
         'dice que en un .dpr van "no path" (11.6 de la 1.18.0, 3822d39); lo prueba test_delphi_patch',
     ('delphi_search', 'pattern'): 'mascara de fichero, no una ruta',
+    ('delphi_search', 'exclude'): 'mascara de fichero, no una ruta (V44)',
+    ('delphi_changeset', 'ops'): 'lista de operaciones: cada una vuelve a entrar por ToolCallDenied con su path y su dest '
+        '(V41); lo prueba test_capacidades_125',
     ('delphi_list', 'pattern'): 'mascara de fichero, no una ruta',
     ('delphi_config', 'output'): 'nombre relativo de carpeta de salida; vetado aparte',
     ('delphi_config', 'path'): 'search path: puede apuntar a la zona de biblioteca, que es legitima',

@@ -196,6 +196,17 @@ begin
   end;
 end;
 
+{ La cuenta de un rotulo del resumen de DUnitX: la ULTIMA de la salida, porque
+  el resumen la cierra y antes un test puede haber escrito lo mismo (medido el
+  1-nov-2026: un "Tests Failed : 7" de un test daba rojo a una suite verde). -1
+  si no esta. }
+function CuentaDelResumen(const AOutput, ARotulo: string): Integer;
+begin
+  Result := -1;
+  for var M in TRegEx.Matches(AOutput, '(?i)Tests?\s+' + ARotulo + '\s*:\s*(\d+)') do
+    Result := StrToIntDef(M.Groups[1].Value, -1);
+end;
+
 { DUnitX prints, among other things:
     Tests Found   : 12
     Tests Passed  : 11
@@ -208,7 +219,6 @@ end;
 procedure ParseOutcome(const AOutput: string; AKind: TTestKind;
   AExitCode: Integer; ARet: TJSONObject);
 var
-  M: TMatch;
   Fails: TJSONArray;
   L: string;
   Found, Passed, Failed, Errored: Integer;
@@ -222,19 +232,17 @@ begin
   Near := TStringList.Create;
   if AKind = tkDUnitX then
   begin
-    M := TRegEx.Match(AOutput, '(?i)Tests?\s+Found\s*:\s*(\d+)');
-    if M.Success then begin Found := StrToIntDef(M.Groups[1].Value, -1); HasNumbers := True; end;
-    M := TRegEx.Match(AOutput, '(?i)Tests?\s+Passed\s*:\s*(\d+)');
-    if M.Success then begin Passed := StrToIntDef(M.Groups[1].Value, -1); HasNumbers := True; end;
-    M := TRegEx.Match(AOutput, '(?i)Tests?\s+Failed\s*:\s*(\d+)');
-    if M.Success then begin Failed := StrToIntDef(M.Groups[1].Value, -1); HasNumbers := True; end;
+    Found := CuentaDelResumen(AOutput, 'Found');
+    Passed := CuentaDelResumen(AOutput, 'Passed');
+    Failed := CuentaDelResumen(AOutput, 'Failed');
+    HasNumbers := (Found >= 0) or (Passed >= 0) or (Failed >= 0);
     // Un test que LANZA es un error, no un fallo, y DUnitX lo cuenta aparte:
     // sin leerlo, una suite con un test que lanzaba salia 'pass' por las
     // cuentas (Failed: 0), con el ejecutable acabando en 1 (medido el
     // 2-oct-2026 en la mutacion de la 1.10.0: 'pass 16/17' sin fallos)
-    M := TRegEx.Match(AOutput, '(?i)Tests?\s+Errored\s*:\s*(\d+)');
-    if M.Success then
-      Errored := StrToIntDef(M.Groups[1].Value, 0);
+    var Lanzados := CuentaDelResumen(AOutput, 'Errored');
+    if Lanzados > 0 then
+      Errored := Lanzados;
     // Los bloques "Failing Tests" y "Tests With Errors" del logger de consola
     // de DUnitX (DUnitX.ResStrs): el nombre del test en una linea y su
     // "Message:" en la siguiente. Sin leerlo, failures venia VACIO con

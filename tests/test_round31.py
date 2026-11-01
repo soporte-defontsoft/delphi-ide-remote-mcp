@@ -253,16 +253,18 @@ try:
         'path': UHER, 'line': _ayudas[0], 'character': _her[_ayudas[0]].index('Ayuda') + 1}))
     conf = lineas(her, 'confirmed', 'UHermanas.pas')
     rej = lineas(her, 'rejected', 'UHermanas.pas')
-    check('R1f references desde el Ayuda anidado de Bar: el y sus dos llamadas; el Ayuda de Baz, homonimo '
-          '(se confirmaba, via la rutina de fuera)',
-          conf == sorted([_ayudas[0]] + _llam) and rej == [_ayudas[1]]
+    # Desde V40 (1.25) una anidada se busca solo en su rutina: el Ayuda de Baz ya no es ni
+    # candidato, y lo que se vigila es que no se confirme (se confirmaba, via la rutina de fuera)
+    check('R1f references desde el Ayuda anidado de Bar: el y sus dos llamadas, solo en su rutina; el Ayuda de Baz, no',
+          conf == sorted([_ayudas[0]] + _llam) and _ayudas[1] not in conf + rej
+          and (her.get('localTo') or {}).get('routine') == 'TFoo.Bar'
           and not any(c.get('via') for c in mc.aciertos(her, 'confirmed')),
-          'confirmed=%s rejected=%s esperadas=%s/%s' % (conf, rej, sorted([_ayudas[0]] + _llam), [_ayudas[1]]))
+          'confirmed=%s rejected=%s esperadas=%s' % (conf, rej, sorted([_ayudas[0]] + _llam)))
     rn = mc.como_json(call('delphi_rename_symbol', {
         'path': UHER, 'line': _ayudas[0], 'character': _her[_ayudas[0]].index('Ayuda') + 1, 'newname': 'AyudaX'}))
-    check('R1g ...y el rename no renombra el de Baz: no aplicable, con el de Baz entre los parecidos',
-          rn.get('applicable') is False and _ayudas[1] not in [c.get('line0') for c in mc.aciertos(rn, 'changes')]
-          and _ayudas[1] in [c.get('line0') for c in mc.aciertos(rn, 'lookalikes')], json.dumps(rn)[:400])
+    check('R1g ...y el rename no renombra el de Baz: aplicable, y sus cambios son los tres de Bar',
+          rn.get('applicable') is True and sorted(c.get('line0') for c in mc.aciertos(rn, 'changes')) == sorted([_ayudas[0]] + _llam),
+          json.dumps(rn)[:400])
     _ovl = [i for i, x in enumerate(_her) if 'function Interna2(' in x]
     _call2 = [i for i, x in enumerate(_her) if 'Writeln(Interna2(1))' in x]
     ovl = mc.como_json(call('delphi_references', {
@@ -296,11 +298,11 @@ try:
         'path': UUNA, 'line': _qs[0], 'character': _una[_qs[0]].index('Q'), 'newname': 'QQ'}))
     _hija = [i for i, x in enumerate(_una) if x in ('    procedure Q;', 'procedure TQHija.Q;', '  H.Q;')]
     check('R1l una anidada de UNA letra: references da ella y su llamada; la Q hermana y el metodo Q de la '
-          'hija, homonimos (ningun "via override"); y rename no las renombra (no aplicable)',
+          'hija, no (ningun "via override"); y rename solo cambia esas dos',
           lineas(una, 'confirmed', 'UUnaLetra.pas') == sorted([_qs[0]] + _llq) and len(_hija) == 3
-          and set([_qs[1]] + _hija) <= set(lineas(una, 'rejected', 'UUnaLetra.pas'))
+          and not set([_qs[1]] + _hija) & set(lineas(una, 'confirmed', 'UUnaLetra.pas'))
           and not any(c.get('via') for c in mc.aciertos(una, 'confirmed'))
-          and rn.get('applicable') is False and _qs[1] not in [c.get('line0') for c in mc.aciertos(rn, 'changes')],
+          and rn.get('applicable') is True and sorted(c.get('line0') for c in mc.aciertos(rn, 'changes')) == sorted([_qs[0]] + _llq),
           'confirmed=%s rejected=%s rename=%s' % (lineas(una, 'confirmed', 'UUnaLetra.pas'),
                                                   lineas(una, 'rejected', 'UUnaLetra.pas'), json.dumps(rn)[:200]))
     _gen = open(UGEN).read().split('\n')
