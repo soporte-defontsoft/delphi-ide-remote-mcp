@@ -8,7 +8,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
-## [1.25.1] - 2026-11-01
+## [1.25.1] - 2026-11-02
 
 A patch for what measuring everything left pending after 1.25.0 found, and for what two
 agents found testing that. The form designer no longer writes an edit after a client gave
