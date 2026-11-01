@@ -65,6 +65,7 @@ type
     FWaitingSince: UInt64; // when that wait began, or the engine's last sign of life since
     FSeenCpuMs, FSeenIoOps: UInt64; // the process's counters at the last look
     FWaiters: Integer;     // calls waiting for a notification right now (under FLock)
+    FEscribiendo: Integer; // los que han pasado la puerta de Send y aun no han salido (bajo FLock)
     // los caracteres de disparo de completion que anuncia el motor (Initialize)
     FTriggersDeCompletion: TArray<string>;
     // las LINEAS del texto que tiene el motor de cada documento que se le
@@ -82,6 +83,7 @@ type
     function DoWaitForNotification(const AMethod: string; ATimeoutMs: Integer;
       const AUriFilter: string): TJSONObject;
     procedure SayHowItEnded(AAsked, AAnswered: Boolean);
+    procedure EsperaALosQueEscriben;
     procedure GuardaLineas(const AUri, AText: string);
     { Las lineas que tiene el motor de AUri: las que se le mandaron o, si no
       lo tiene abierto, las del disco por EL lector (el motor lo lee y lo
@@ -476,6 +478,7 @@ begin
   // First the word, then the process: stopping it takes seconds, and nobody
   // has to wait for that to know.
   Retire;
+  EsperaALosQueEscriben;
   // Then the engine is ASKED to shut down - the protocol's request - and
   // only after that is its input closed. Closed with a question IN FLIGHT
   // (how the server usually stops one: under another agent's request) it
@@ -505,6 +508,32 @@ begin
     // write lock, or is inside the write: the transport, which has just
     // found that writer inside, keeps what it stands on (CloseHandles)
   SayHowItEnded(Asked, Answered);
+end;
+
+{ Lo ultimo que el motor recibe tiene que ser `shutdown`. Un hilo que ya paso la
+  puerta de Send cuando llego Retire escribia DETRAS: el motor le contesta -32600,
+  contesta a todo, y al cerrarle la entrada muere con $C0000005 (medido 1-nov-2026:
+  1 de 40 vueltas de PararUnMotorOcupadoNoLoTumba; con el hueco ensanchado, 2 de
+  25 y las dos con un definition escrito tras el shutdown). Con plazo: el que
+  sigue dentro tras SHUTDOWN_WAIT_MS es un motor que no lee, y a ese lo suelta
+  acabar el proceso. }
+procedure TLspClient.EsperaALosQueEscriben;
+var
+  T0: UInt64;
+  Quedan: Integer;
+begin
+  T0 := GetTickCount64;
+  repeat
+    FLock.Enter;
+    try
+      Quedan := FEscribiendo;
+    finally
+      FLock.Leave;
+    end;
+    if (Quedan = 0) or (GetTickCount64 - T0 >= SHUTDOWN_WAIT_MS) then
+      Exit;
+    Sleep(5);
+  until False;
 end;
 
 { How the engine ended goes to the server's log, once per engine, from the
@@ -621,21 +650,38 @@ end;
   engine was being stopped came out as the transport's own error. }
 procedure TLspClient.Send(const AJson: string);
 begin
-  if FStopped then
-    raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
-  // a write is something in flight: an engine that stopped reading keeps it
-  // inside the transport for as long as the pipe is full (see Hung)
-  BeginWait;
+  // mirar y contarse, bajo el mismo cerrojo que Retire: el que pasa de aqui lo
+  // espera StopEngine antes de pedir `shutdown` (EsperaALosQueEscriben)
+  FLock.Enter;
   try
+    if FStopped then
+      raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
+    Inc(FEscribiendo);
+  finally
+    FLock.Leave;
+  end;
+  try
+    // a write is something in flight: an engine that stopped reading keeps it
+    // inside the transport for as long as the pipe is full (see Hung)
+    BeginWait;
     try
-      FTransport.SendJson(AJson);
-    except
-      if FStopped then
-        raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
-      raise;
+      try
+        FTransport.SendJson(AJson);
+      except
+        if FStopped then
+          raise ELspClient.Create(MsgText(SR_LSP_ENGINE_STOPPED));
+        raise;
+      end;
+    finally
+      EndWait;
     end;
   finally
-    EndWait;
+    FLock.Enter;
+    try
+      Dec(FEscribiendo);
+    finally
+      FLock.Leave;
+    end;
   end;
 end;
 

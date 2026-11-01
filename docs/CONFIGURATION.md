@@ -198,7 +198,7 @@ section is completely inert.
    per workspace token. (A locally launched process may declare a private
    jail with `DELPHI_MCP_ROOTS` and the other `DELPHI_MCP_*` variables —
    the harness/dev launch mode; they never touch a named workspace.)
-3. **Capabilities** — what each workspace may *do* beyond compiling (run,
+3. **Capabilities** — what each workspace may *do* beyond compiling (run on a target, see its desktop,
    test, remote-run, build scripts, reach git hosts or PAServer machines).
    All off until that workspace declares them.
 4. **Surface** — what `tools/list` *advertises* (`[Tools]` profiles). Helps
@@ -293,7 +293,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   not even announce it the tools that only write, and `delphi_help` tells it so).
   Tokenless HTTP is **always 401** — the anonymous mode is gone in v0.98. A secret that appears in two sections (or a `Token=` equal to its `ReadOnlyToken=`), a key repeated inside a section, or a section written twice is a copy-paste the ini parser would swallow silently, so the server **closes the workspaces involved** (fail closed) and says which in the startup log. A token of a closed workspace - closed by that, by a protection that does not load or by roots that do not parse - is answered **403** `SYS-034` naming the workspace, not the 401 of a token that does not exist: the token is right, and the startup log says what to fix.
   The whole classification is enforced at a **single gate** in front of every
-  `tools/call` — including the git argument filter, so no option can turn a "read" command
+  `tools/call` — including the table of git's query commands, so no field can turn a "read" command
   into a write. **With NO workspace token configured at all, the server binds to
   `127.0.0.1` only** — an unconfigured server is never silently open to the network.
 - **BREAKING — migrating from ≤ v0.97**: the `[Security]` section is GONE and completely

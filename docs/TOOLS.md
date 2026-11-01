@@ -10,7 +10,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Required column**: every schema carries its real `required` list (the same one `delphi_help command=tool` returns); the table below says the same — the rest are optional and have sensible defaults, as their descriptions note.
 
 
-> **Parameter aliases.** Some spellings are accepted as aliases and mapped to the declared name when it is absent: `vault_search query|filter` → `pattern`, `delphi_list filter|mask` → `pattern`, `delphi_components pattern|query` → `filter`, `delphi_read startline|endline` → `fromline|toline`, `delphi_search text` → `query`. The declared name always wins.
+> **Parameter aliases.** Some spellings are accepted as aliases and mapped to the declared name when it is absent: `vault_search query|filter` → `pattern`, `delphi_list filter|mask` → `pattern`, `delphi_components pattern|query` → `filter`, `delphi_read startline|endline` → `fromline|toline`, `delphi_search text` → `query`, `delphi_build configuration|command` → `config|target`. The declared name always wins.
 
 ## Index
 
@@ -441,7 +441,7 @@ When a Linux link fails with `cannot find -lX`, the usual cause is not the proje
 
 Everything above reaches an MSBuild command line, so it is validated at the
 gate: `platform` must be one Delphi knows, `target` is one of the four,
-`config` admits no character a shell would interpret, `profile` follows the
+`config` has to be one the project declares, `profile` follows the
 PAServer profile-name rule and `deviceid` the adb device rule. A rejected
 value names what is valid instead.
 
@@ -957,7 +957,7 @@ Concrete sequences that string the tools together. Paths shown as `srvd:\...` ar
 Use `delphi_textedit` (same anchor/encoding/backup discipline) for `.md .html .js .css .py .ini ...`. `delphi_edit` refuses them on purpose.
 
 ### Scaffold a new project or form
-`delphi_create {kind:"project-vcl"|"project-fmx"|"project-console"|"project-package"|"project-test", dir, name}`, or `{kind:"form-vcl"|"form-fmx"|"frame-vcl"|"frame-fmx"|"datamodule"|"unit", project, name}` (registered in the `.dpr` and the `.dproj` on creation), or `{kind:"include", name, content}` (a `.inc` for `{$I}`, never registered). An existing `.pas` joins with `delphi_config {project, command:"add-unit", path}`; `remove-unit` takes it out and keeps the file. `delphi_delete`/`delphi_move` on a unit keep the projects that list it consistent (designer pair included).
+`delphi_create {kind:"project-vcl"|"project-fmx"|"project-console"|"project-package"|"project-test", dir, name}`, or `{kind:"form-vcl"|"form-fmx"|"frame-vcl"|"frame-fmx"|"datamodule"|"unit", project, name}` (registered in the `.dpr` and the `.dproj` on creation), or `{kind:"include", name, content}` (a `.inc` for `{$I}`, never registered). An existing `.pas` joins with `delphi_config {project, command:"add-unit", path}`; `remove-unit` takes it out and keeps the file. `delphi_delete`/`delphi_move` on a unit take what you name (`Form1.*` takes it with its form) and rewrite no project: the answer names what still points at it, and `add-unit`, `remove-unit` or `fix-references` re-point it.
 
 ### Build and get the binary onto your machine
 1. `delphi_build {project, platform:"Win64", config:"Debug", target:"Build"}` — structured errors/warnings.

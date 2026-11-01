@@ -89,6 +89,11 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
   answers in 60 ms on a busy 60-unit project (0 ms idle) and the process then ends clean when its
   input is closed - 0 crashes of 48. It does NOT end on the `exit` notification (10 s watched):
   close its input. The linter answers `shutdown` at once and ends clean either way.
+  A request written AFTER `shutdown` undoes that (measured 2026-11-01): the engine answers it
+  `-32600`, answers everything, and still dies with `0xC0000005` when its input is closed. Two
+  threads asking without pause and a stop under them: 1 run of 40 (five stops each), and with
+  the gap between "is it stopped?" and the write widened, 2 of 25, both with a `definition`
+  after the `shutdown` in the trace. So `shutdown` has to be the last thing it receives.
   An engine nobody has asked anything yet ends clean when its input is closed: 0 of 8 with
   `initialize` still in flight, 0 of 8 just initialized, 0 of 8 with its settings just sent;
   and `shutdown` sent while `initialize` is in flight is answered in 20 ms.

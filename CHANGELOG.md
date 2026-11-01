@@ -105,6 +105,7 @@ tests of what changed).
 - `delphi_designer prop` says that an integer property with no named constants the form reader understands takes a whole number. On `ModalResult` it said nothing, and the way to find out was to try `mrOk`, which is refused.
 - The description of `delphi_delete` says what a reference project is (`ReadOnlyRoots`): an agent read it as any project with its repository, tried a delete expecting the refusal, and it went to the trash, as a folder of your roots does.
 - `scripts\Enviar-Mensaje.ps1` leaves the message where the server reads it, in the workspace's folder (`-Workspace`), and refuses a folder that does not exist. Since each workspace got its own mailbox (1.18.0) it wrote to a folder nobody read, and `docs/TOOLS.md` said the same.
+- An engine stopped under another agent's request ends clean: `shutdown` is now the last thing it receives. A request that had already passed the check of "is it stopped?" could be written after it, and then the engine, having answered everything, died with `0xC0000005` when its input was closed. Nobody lost an answer, but the log said so and the suite went red about one run in forty.
 - **`delphi_desktop` against a PAServer that does not answer costs one wait, and only that
   profile's.** `paclient` gives up by itself (21 s against an address that does not answer,
   and its `--timeout` does not shorten that), so no `timeoutms` was added: what went away is
