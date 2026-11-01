@@ -8,6 +8,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.25.1] - 2026-11-01
+
+A patch for what measuring everything left pending after 1.25.0 found, and for what two
+agents found testing that. The form designer no longer writes an edit after a client gave
+up on it, which could land a control twice, and `insert` no longer closes a cycle of frames.
+A frame that contains itself is told apart instead of bringing the renderer down, and
+`RENDER-007` says to repeat the call: measured with Microsoft Defender's own report, the
+first load of design packages after a signature update can pass the renderer's 60 s. Nothing
+in a contract changes. Validated before the release through Hermes on a second machine by
+Qwen3.8 Flash Next and GPT-5.6 Luna (directed tests of what changed).
+
 ### Fixed
 
 - `delphi_designer` no longer writes an edit after a client may have given up. When judging an `insert`, `set` or a rename took 50 s or more, the client had usually stopped waiting (many give up at a minute) while the server went on and wrote: the agent repeated the call and the control landed twice. Now nothing is written and the answer says so (`DSGN-185`); repeating it works, since what was slow the first time is ready.
