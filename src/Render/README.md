@@ -270,9 +270,11 @@ and `lint` and a form edit ask this same reader about any form holding an inline
   watchdog's exit code 3 (`--timeout 1`), the usage exit code 2 and
   `--fidelity print` forced in a session with a desktop. It cannot run in
   `delphi_test`'s container (no windows can be created there), so it runs
-  from the user's session: build it with `delphi_build` and start
-  `Pruebas\Win64\Debug\RenderTests.exe`. **Run it after touching a renderer
-  and before every release.** Its hand-made guinea pigs live in `Pruebas/`
+  from the user's session: build it with `delphi_build` and run
+  `python tests/rendertests_manual.py [passes]`, which runs it without and
+  with the guinea pigs of `DUMMY` and keeps the output of a red pass in
+  `release-out`. **Run it after touching a renderer and before every
+  release.** Its hand-made guinea pigs live in `Pruebas/`
   and must always pass; a second fixture with real-world forms (third-party
   packages, real styles) is registered only when `RENDER_COBAYAS`, or the
   first line of `render_cobayas.txt` next to the runner, names their folder

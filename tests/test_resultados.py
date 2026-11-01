@@ -1297,24 +1297,30 @@ try:
     # plantar, y 400 ficheros tardan 0,26 s solos y 0,38 con las baterias en
     # paralelo recien arrancado el PC, asi que un rojo de carga costaba un
     # run_all. Ahora se planta para dentro de medio segundo y la llamada
-    # espera a que se abra: el guardian mide lo mismo con margen.
+    # espera a que se abra: el guardian mide lo mismo con margen. Plantar tambien
+    # puede pasarse de ese margen (2-nov-2026, dentro de un run_all: 3,93 s antes
+    # de que la llamada empezara, sin que el servidor hubiera hecho nada): eso no
+    # ejercita nada ni acusa a nadie, asi que se planta otra vez con mas margen.
     D95 = os.path.join(JAIL, 'e95b')
     os.makedirs(D95)
     F95 = os.path.join(D95, 'dos95.txt')
     open(F95, 'w').write('v0\n')
     PAP = mc._papelera()
-    ahora = datetime.datetime.now()
-    CAJ95 = os.path.join(D95, PAP['BACKUP_SUB'], mc.dia_de_papelera(ahora.timetuple()), PAP['CAJON_BORRADOS'])
-    os.makedirs(CAJ95)
-    ABRE95 = 0.5  # segundos: la ventana se abre aqui, despues de plantar
-    inicio95 = ahora + datetime.timedelta(seconds=ABRE95)
-    for ms in range(0, 400):
-        sello = (inicio95 + datetime.timedelta(milliseconds=ms)).strftime('%H%M%S%f')[:9]
-        open(os.path.join(CAJ95, 'dos95.txt-' + sello), 'w').write('plantado\n')
-    espera95 = (inicio95 - datetime.datetime.now()).total_seconds()
-    if espera95 > 0:
-        time.sleep(espera95 + 0.01)  # nunca un milisegundo antes de abrirse
-    plantado_en = (datetime.datetime.now() - inicio95).total_seconds() # tras abrirse la ventana
+    for ABRE95 in (0.5, 4, 16):  # segundos: la ventana se abre aqui, despues de plantar
+        ahora = datetime.datetime.now()
+        CAJ95 = os.path.join(D95, PAP['BACKUP_SUB'], mc.dia_de_papelera(ahora.timetuple()), PAP['CAJON_BORRADOS'])
+        os.makedirs(CAJ95, exist_ok=True)
+        inicio95 = ahora + datetime.timedelta(seconds=ABRE95)
+        for ms in range(0, 400):
+            sello = (inicio95 + datetime.timedelta(milliseconds=ms)).strftime('%H%M%S%f')[:9]
+            open(os.path.join(CAJ95, 'dos95.txt-' + sello), 'w').write('plantado\n')
+        espera95 = (inicio95 - datetime.datetime.now()).total_seconds()
+        if espera95 > 0:
+            time.sleep(espera95 + 0.01)  # nunca un milisegundo antes de abrirse
+        plantado_en = (datetime.datetime.now() - inicio95).total_seconds() # tras abrirse la ventana
+        if plantado_en < 0.35:
+            break
+        print('NOTA: E95b: plantar tardo mas que los %s s de margen (%.2f s tarde): otra vez' % (ABRE95, plantado_en))
     res, sc, t = llama('delphi_delete', {'path': F95})
     buenas = [c for c in mc.copias(D95, 'dos95.txt', 'CAJON_BORRADOS') if open(c).read() == 'v0\n']
     # la llamada EMPEZO dentro de la ventana y su copia se sello al final de

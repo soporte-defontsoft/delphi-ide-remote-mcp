@@ -141,6 +141,15 @@ def foto_procesos():
     return ' '.join(p.stdout.split()) if p.returncode == 0 else 'powershell rc=%d' % p.returncode
 
 
+def finales_de_motor():
+    """Lo que el servidor dijo de como acabo cada motor que no acabo limpio."""
+    try:
+        with open(os.path.join(SRVDIR, 'logs', 'actual.log'), encoding='utf-8', errors='replace') as f:
+            return [l.strip()[-160:] for l in f if 'lsp: ENGINE' in l]
+    except OSError as e:
+        return 'sin log: %s' % e
+
+
 def choca(v):
     # SOLO el choque al fabricar la configuracion, o una peticion que no
     # vuelve: la negativa prevista de un motor frio (LSP-025, "warming up,
@@ -508,7 +517,12 @@ def p8(uno, colgados):
               'ronda pudo parar un motor sin nada en vuelo' % paradas)
     check('P8 un motor parado bajo las peticiones en vuelo de otros agentes sale LIMPIO (codigo 0): ni una '
           'violacion de acceso (0xc0000005) ni matado por no irse (1)',
-          codigos != [] and all(c == 0 for c in codigos), [hex(c) for c in codigos])
+          codigos != [] and all(c == 0 for c in codigos),
+          # el rojo se lleva lo que hace falta para medirlo (2-nov-2026: 0x1 en un
+          # run_all y limpio suelto, sin nada con que saber por que): si el motor
+          # habia contestado a shutdown, y lo que habia vivo. Lo del log, DELANTE:
+          # run_all recorta la linea
+          '%s | %s | al empezar P8: %s' % (finales_de_motor(), [hex(c) for c in codigos], foto))
 
 
 def p9(uno, colgados):
