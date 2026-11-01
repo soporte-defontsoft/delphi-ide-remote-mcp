@@ -3955,7 +3955,7 @@ begin
     var Escrito: string;
     Result := JuezDelOrden(F, Texto, NomObj, NomPadre, Nuestro, Suyo, Escrito);
     if Result <> '' then
-      Exit;
+      Exit(Result + MsgText(SF_DESIGNER_ORDEN_NADA_ESCRITO));
     if not MismaPosicion(NomObj, NomRef, Original, Nuestro, Suyo) then
       Exit(MsgFmt(SR_DESIGNER_ORDEN_EL_IDE_FMT, [NomObj, Donde, NomPadre, string.Join(', ', Suyo)]));
     // el bloque del heredado que se puso para juzgar no se escribe: el IDE no

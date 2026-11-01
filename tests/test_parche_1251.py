@@ -22,6 +22,8 @@ r"""Lo que fallaba en la 1.25.0 publicada, medido el 1-nov-2026 antes de planear
   I4 un control en un form que YA tiene el ciclo se inserta: el no lo cierra (mi primer
      arreglo le contestaba DSGN-186, cazado en vivo).
   I5 el ciclo se puede quitar a mano con delphi_edit, y lint queda limpio.
+  N1 insert que escribe sin poder preguntar el orden: su DSGN-145 decia "Nothing was written"
+     de lo que acababa de escribir (Qwen). N2 set index= en ese caso si niega, y lo dice.
   O1 VCL: el frame insertado con tres controles recibe TabOrder 3 (recibia 0,
      repetido), y el boton siguiente el 4.
   O2 control: un boton insertado sigue recibiendo el ultimo.
@@ -166,6 +168,10 @@ check('I2 UUno en UDos cerraria el ciclo: DSGN-186 con la cadena y nada escrito'
 r = d(command='insert', path=AUTO, classname='TButton')
 check('I4 un control en un form que ya tiene el ciclo se inserta, sin DSGN-186',
       not mc.es(r, 'SR_DESIGNER_INSERT_FRAME_CICLICO_FMT') and not mc.rechazado(r) and 'Button1' in open(AUTO, encoding='utf-8', errors='replace').read(), r[:300])
+check('N1 ese insert escribe, y su nota no dice que no escribio', 'Nothing was written' not in r, r[:900])
+antes = open(AUTO, 'rb').read()
+r = d(command='set', path=AUTO, component='Button1', index=1)
+check('N2 set index= sin poder preguntar el orden niega y lo dice', mc.rechazado(r) and 'Nothing was written' in r and open(AUTO, 'rb').read() == antes, r[:400])
 r = s.call('delphi_edit', {'path': AUTO, 'old': '  inline Dentro: TAuto\r\n    Left = 0\r\n    Top = 0\r\n  end', 'new': ''})
 r2 = d(command='lint', path=AUTO)
 check('I5 el ciclo se quita con delphi_edit y lint ya no lo ve',

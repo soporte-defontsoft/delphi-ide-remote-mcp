@@ -12358,16 +12358,19 @@ const
     '[DSGN-140 INVALID_PARAM] %s cannot be ordered there: the renderer could ' +
     'not load the class %s (of %s) - no installed package registers it, or ' +
     'it is a frame whose .dfm is not in the form''s folder -, so where the IDE ' +
-    'would write it cannot be asked. Nothing was written. To place it anyway, ' +
-    'move its block with delphi_edit: the file order is the order, and the ' +
-    'IDE may keep it or change it when it saves the form.';
+    'would write it cannot be asked.';
   SR_DESIGNER_ORDEN_INCOMPLETO_FMT =
     '[DSGN-143 INVALID_PARAM] %s cannot be ordered there: the renderer loaded ' +
     'the form without %s (what it said: %s) - an ancestor it did not find ' +
     'next to the form, or a component its loader skipped -, so the IDE''s ' +
-    'writer cannot say where it would put it. Nothing was written. To place ' +
-    'it anyway, move its block with delphi_edit: the file order is the ' +
-    'order, and the IDE may keep it or change it when it saves the form.';
+    'writer cannot say where it would put it.';
+  // ...lo que anade quien de verdad niega por eso (set before=/after=/index=): insert y
+  // set parent= escriben igual, y DSGN-145 decia "Nothing was written" de lo que acababa
+  // de escribir (dirigido de Qwen de la 1.25.1)
+  SF_DESIGNER_ORDEN_NADA_ESCRITO =
+    ' Nothing was written. To place it anyway, move its block with delphi_edit: ' +
+    'the file order is the order, and the IDE may keep it or change it when it ' +
+    'saves the form.';
   SR_DESIGNER_ORDEN_CAMBIO_FMT =
     '[DSGN-144 INVALID_PARAM] %s changed while the IDE''s writer was being ' +
     'asked: nothing was written. Repeat the call.';
