@@ -16,7 +16,9 @@ servidor le lleva ese form, juzgado como un hermano.
   L9 un ancestro fuera de lo que la sesion lee no entra, y no sale nada suyo
   L10 una copia sola junto al form, con el original en otra carpeta: se dibuja el original
   L11 el frame que nombra el ancestro lo decide el uses del ancestro, no el del form pedido
-  L12 lo que se trae hace fallar al ayudante: el form a medias que ya salio, y lo dice (DSGN-181)
+  L12 un frame lejano que se contiene a si mismo ya no tumba al ayudante (1.25.1): RENDER-026 y el resto dibujado
+  L13 lo que se trae hace fallar al ayudante: el form a medias que ya salio, y lo dice (DSGN-181). De
+      andamio, la segunda vuelta del ayudante suspendida hasta su plazo: el ciclo de L12 ya no la tumba
 
 ROJO contra un build sin el arreglo: L1, L2, L3 y L4.
 
@@ -24,6 +26,8 @@ Uso:  python tests/test_render_lejano_124.py [ruta-a-DelphiLspMcp.exe]
 """
 import json
 import os
+import threading
+import time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -113,6 +117,15 @@ escribe(ROTO, 'forms\\UHijaR.pas', unidad('UHijaR', 'TFormHijaR', 'TForm', USOS 
 HIJAR = escribe(ROTO, 'forms\\UHijaR.dfm', "object FormHijaR: TFormHijaR\n  Left = 0\n  Top = 0\n  Caption = 'R'\n  ClientHeight = 200\n  ClientWidth = 400\n"
                 "  inline MalF1: TMalF\n    Left = 0\n    Top = 0\n    TabOrder = 0\n  end\nend\n")
 
+# ---- L13: el mismo reparto con un frame sano, y la segunda vuelta del ayudante que no acaba
+SUSP = os.path.join(JAIL, 'susp')
+escribe(SUSP, 'Su.dpr', dpr('Su', ["UHijaS in 'forms\\UHijaS.pas' {FormHijaS}", "UBienF in 'frames\\UBienF.pas' {BienF: TFrame}"]))
+escribe(SUSP, 'frames\\UBienF.pas', unidad('UBienF', 'TBienF', 'TFrame', USOS))
+escribe(SUSP, 'frames\\UBienF.dfm', "object BienF: TBienF\n  Left = 0\n  Top = 0\n  Width = 200\n  Height = 60\nend\n")
+escribe(SUSP, 'forms\\UHijaS.pas', unidad('UHijaS', 'TFormHijaS', 'TForm', USOS + ', UBienF', '    BienF1: TBienF;\n'))
+HIJA_SUSP = escribe(SUSP, 'forms\\UHijaS.dfm', "object FormHijaS: TFormHijaS\n  Left = 0\n  Top = 0\n  Caption = 'S'\n  ClientHeight = 200\n  ClientWidth = 400\n"
+                "  inline BienF1: TBienF\n    Left = 0\n    Top = 0\n    TabOrder = 0\n  end\nend\n")
+
 # ---- sin proyecto
 SOLA = os.path.join(JAIL, 'sola')
 escribe(SOLA, 'base\\UBaseS.pas', unidad('UBaseS', 'TFormBaseS', 'TForm', USOS, '    ButtonBase: TButton;\n'))
@@ -196,8 +209,29 @@ try:
     check('L11 el frame del ancestro lo decide el uses del ancestro: el suyo, sin avisar de la copia',
           J(r).get('componentRect', '').split(',')[:1] == ['33'] and not mc.es(r, 'SN_RENDER_CLASE_EN_VARIOS_FMT'), r[:700])
     r = preview(HIJAR, 'r.png')
-    check('L12 lo que se trae hace fallar al ayudante: a medias como salio, y lo dice (DSGN-181)',
-          not mc.fallo(r) and mc.es(r, 'SN_DESIGNER_LEJANO_NO_ENTRO_FMT') and 'UMalF.dfm' in r, r[:700])
+    check('L12 un frame lejano que se contiene a si mismo: RENDER-026 con su cadena, y el resto dibujado',
+          not mc.fallo(r) and mc.es(r, 'SR_RENDER_FRAME_CICLICO_FMT') and 'UMalF.dfm' in r, r[:700])
+
+    def suspende_la_segunda_vuelta(salida):
+        primera = 0
+        fin = time.time() + 30
+        while time.time() < fin:
+            p = mc.renderizador_hijo_de(srv.p.pid)
+            if p and not primera:
+                primera = p
+            elif p and p != primera:
+                salida.append(mc.suspende(p))
+                return
+            time.sleep(0.002)
+
+    suspendida = []
+    hilo = threading.Thread(target=suspende_la_segunda_vuelta, args=(suspendida,))
+    hilo.start()
+    r = preview(HIJA_SUSP, 'susp.png')
+    hilo.join()
+    check('L13 lo que se trae hace fallar al ayudante: a medias como salio, y lo dice (DSGN-181)',
+          bool(suspendida) and suspendida[0] and not mc.fallo(r) and mc.es(r, 'SN_DESIGNER_LEJANO_NO_ENTRO_FMT') and 'UBienF.dfm' in r,
+          (suspendida, r[:700]))
 
     # ---- V77: insert de un frame del proyecto
     UN_FORM = os.path.join(APP, 'forms', 'UOtra.dfm')
@@ -222,7 +256,7 @@ try:
     check('I3 una clase del proyecto que no es un frame no entra (DSGN-015), nada escrito',
           mc.abre(r, 'SR_DESIGNER_CLASS_FMT') and open(UN_FORM, 'rb').read() == antes, r[:300])
     r = srv.call('delphi_designer', {'command': 'insert', 'path': os.path.join(APP, 'frames', 'UFr.dfm'), 'classname': 'TFrame1'}, t=240)
-    check('I4 un frame no se mete en si mismo', mc.abre(r, 'SR_DESIGNER_CLASS_FMT'), r[:300])
+    check('I4 un frame no se mete en si mismo', mc.abre(r, 'SR_DESIGNER_INSERT_FRAME_CICLICO_FMT'), r[:300])
 finally:
     srv.cierra()
 
