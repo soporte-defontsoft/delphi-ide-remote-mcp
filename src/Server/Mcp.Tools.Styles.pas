@@ -1279,15 +1279,11 @@ var
   Err, Code: Cardinal;
   TimedOut: Boolean;
 begin
-  Err := CreaContenedor(AC);
+  Etapa := CarpetaUnica(ServerTempDir, 'styles-rc-');
+  Err := AbreEtapa(Etapa, False, AC);
   if Err <> 0 then
     Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, [IntToHex(Err, 8), SysErrorMessage(Err)]));
-  Etapa := CarpetaUnica(ServerTempDir, 'styles-rc-');
   try
-    CrearCarpeta(Etapa);
-    Err := PreparaCarpetaDelContenedor(AC, Etapa);
-    if Err <> 0 then
-      Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, [IntToHex(Err, 8), SysErrorMessage(Err)]));
     // la carpeta de estilos entera en la etapa, SIN seguir enlaces (uno de
     // dentro no saca nada de fuera) y sin el .res viejo: las referencias
     // relativas del .rc resuelven aqui; lo de fuera, el contenedor no lo ve
@@ -1349,11 +1345,7 @@ begin
         Result := E.Message;
     end;
   finally
-    BorraContenedor(AC);
-    try
-      BorraArbol(Etapa); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
-    except
-    end;
+    CierraEtapa(AC, Etapa); // SIEMPRE, sin cruzar enlaces
   end;
 end;
 

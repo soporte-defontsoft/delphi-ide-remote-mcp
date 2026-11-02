@@ -561,24 +561,16 @@ begin
   ATimedOut := False;
   AFicheros := nil;
   ARecortado := False;
-  Err := CreaContenedor(AC);
+  Etapa := CarpetaUnica(ServerTempDir, 'test-');
+  Err := AbreEtapa(Etapa, False, AC);
   if Err <> 0 then
   begin
     ARet.AddPair('error', MsgFmt(SR_TEST_CONTENEDOR_FMT,
       [IntToHex(Err, 8), SysErrorMessage(Err)]));
     Exit;
   end;
-  Etapa := CarpetaUnica(ServerTempDir, 'test-');
   Antes := nil;
   try
-    CrearCarpeta(Etapa);
-    Err := PreparaCarpetaDelContenedor(AC, Etapa);
-    if Err <> 0 then
-    begin
-      ARet.AddPair('error', MsgFmt(SR_TEST_CONTENEDOR_FMT,
-        [IntToHex(Err, 8), SysErrorMessage(Err)]));
-      Exit;
-    end;
     Copiado := 0;
     try
       CopiaArbol(TPath.GetDirectoryName(AExe), Etapa, False, NoSeguidos, True,
@@ -644,19 +636,15 @@ begin
     Result := True;
   finally
     Antes.Free;
-    BorraContenedor(AC);
-    try
-      ReclamaArbol(Etapa); // V9: recupera una carpeta nacida cerrada que dejo el test antes de borrar
-      BorraArbol(Etapa);
-    except
-      // una copia huerfana se va con la temporal en el proximo arranque, y
-      // queda apuntada, como el contenedor que Windows no borra
-      on E: Exception do
-        try
-          TLogger.Warning(MsgFmt(SL_TEST_COPIA_NO_BORRADA_FMT, [Etapa, E.Message]));
-        except
-        end;
-    end;
+    // V9: la etapa, recuperada (una carpeta nacida cerrada que dejo el test) y
+    // borrada; una copia huerfana se va con la temporal en el proximo arranque, y
+    // queda apuntada, como el contenedor que Windows no borra
+    var Queda := CierraEtapa(AC, Etapa);
+    if Queda <> '' then
+      try
+        TLogger.Warning(MsgFmt(SL_TEST_COPIA_NO_BORRADA_FMT, [Etapa, Queda]));
+      except
+      end;
   end;
 end;
 

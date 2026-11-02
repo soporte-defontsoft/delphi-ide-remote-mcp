@@ -68,6 +68,22 @@ function PreparaCarpetaDelContenedor(const AC: TContenedor;
   permiso a propagar por cientos de ficheros en cada ejecucion. 0 o el error. }
 function PreparaCarpetaParaLosContenedores(const ADir: string): DWORD;
 
+{ La etapa de UNA ejecucion en un contenedor: el contenedor sin capacidades -con
+  ventanas si AConVentanas- y su carpeta AEtapa, creada vacia y SUYA
+  (PreparaCarpetaDelContenedor). 0 o el error de Windows, y entonces no queda
+  nada, ni contenedor ni carpeta; si crear la carpeta lanza, tampoco. La abrian a
+  mano los cuatro que corren algo en un contenedor (el renderizador, el conversor
+  de estilos, brcc32 y delphi_test: C13 del revisor del paisaje del cierre de la
+  1.26). }
+function AbreEtapa(const AEtapa: string; AConVentanas: Boolean; out AC: TContenedor): DWORD;
+
+{ ...y su final, el UNICO: el contenedor fuera y la carpeta recuperada
+  (ReclamaArbol: una que dejo cerrada lo que corrio dentro, el codigo de un
+  paquete o de un test) y borrada sin cruzar enlaces. Con lo que AbreEtapa no
+  llego a hacer, nada. Nunca lanza: '' o por que la carpeta se quedo, que se lleva
+  la purga del arranque. El conversor y brcc32 no la recuperaban. }
+function CierraEtapa(var AC: TContenedor; const AEtapa: string): string;
+
 { CreateProcess DENTRO del contenedor, heredando handles (la tuberia de la
   salida) como el de siempre, y con el entorno SIN la configuracion del
   servidor (DELPHI_MCP_*: raices, tokens, interruptores): el test no ve con
@@ -141,7 +157,8 @@ uses
   MCPServer.Logger,
   Lsp.Texts,
   Lsp.ProcessLaunch,
-  Lsp.Casa; // ServerDir y ClaveDeCarpeta: la marca de esta casa
+  Lsp.Casa, // ServerDir y ClaveDeCarpeta: la marca de esta casa
+  Lsp.Guard;
 
 const
   PREFIJO_DE_CONFIGURACION = 'DELPHI_MCP_';
@@ -432,6 +449,38 @@ begin
   Result := PonDescriptor(ADir,
     'D:P(A;OICI;FA;;;SY)(A;OICI;FA;;;BA)(A;OICI;FA;;;' + Yo + ')' +
     '(A;OICI;0x1200a9;;;AC)', DACL_SECURITY_INFORMATION);
+end;
+
+function AbreEtapa(const AEtapa: string; AConVentanas: Boolean; out AC: TContenedor): DWORD;
+begin
+  Result := CreaContenedor(AC);
+  if Result <> 0 then
+    Exit;
+  AC.ConVentanas := AConVentanas;
+  try
+    CrearCarpeta(AEtapa);
+    Result := PreparaCarpetaDelContenedor(AC, AEtapa);
+  except
+    CierraEtapa(AC, AEtapa);
+    raise;
+  end;
+  if Result <> 0 then
+    CierraEtapa(AC, AEtapa);
+end;
+
+function CierraEtapa(var AC: TContenedor; const AEtapa: string): string;
+begin
+  Result := '';
+  BorraContenedor(AC);
+  if AEtapa = '' then
+    Exit;
+  try
+    ReclamaArbol(AEtapa);
+    BorraArbol(AEtapa); // sin cruzar enlaces: ver Lsp.Guard
+  except
+    on E: Exception do
+      Result := E.Message;
+  end;
 end;
 
 

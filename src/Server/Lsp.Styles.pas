@@ -1210,17 +1210,12 @@ begin
   ACodigo := SC_NO_CORRIO;
   if StyleConverterExe = '' then
     Exit(MsgText(SR_STYLES_NO_CONVERTER));
-  Err := CreaContenedor(AC);
-  if Err <> 0 then
-    Exit(MsgFmt(SR_STYLES_CONVERSOR_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
-  AC.ConVentanas := True; // FMX: ver arriba
   Result := '';
   Caja := '';
   Etapa := NuevaCarpetaDescarga(ServerTempDir(ESTILOS_CHECK_SUB));
   try
     try
-      CrearCarpeta(Etapa);
-      Err := PreparaCarpetaDelContenedor(AC, Etapa);
+      Err := AbreEtapa(Etapa, True, AC); // con ventanas: FMX, ver arriba
       if Err <> 0 then
         Exit(MsgFmt(SR_STYLES_CONVERSOR_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
       Result := CajaDeLosAyudantes(Caja, PathHijo);
@@ -1246,8 +1241,7 @@ begin
           Dijo := Linea.Substring(Length(SC_PROTOCOL)).Trim
         else
           Resto := Resto + [Linea];
-      if (Dijo <> IntToStr(SC_PROTOCOLO_VERSION)) and (Result.Trim <> '') and not Vencido and
-         (ACodigo <= SC_RC_USO) then
+      if DijoOtraVersion(Dijo, SC_PROTOCOLO_VERSION, Result, ACodigo, SC_RC_USO, Vencido) then
       begin
         if Dijo = '' then
           Dijo := MsgText(SF_NINGUNO);
@@ -1275,12 +1269,7 @@ begin
         [AOrden, UIntToStr(ACodigo), PrincipioDeTexto(Result.Trim, 400)]));
     if Caja <> '' then
       SueltaCaja(Caja);
-    BorraContenedor(AC);
-    try
-      BorraArbol(Etapa); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
-    except
-      // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
-    end;
+    CierraEtapa(AC, Etapa); // SIEMPRE; limpiar no tumba la respuesta
   end;
 end;
 

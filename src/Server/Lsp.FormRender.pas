@@ -303,6 +303,15 @@ function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
   con SueltaCaja cuando su ayudante acaba: una caja en uso no se purga. }
 function CajaDeLosAyudantes(out ACaja, APath: string): string;
 procedure SueltaCaja(const ACaja: string);
+{ Si un ayudante dijo OTRA version de su protocolo que AVersion (ADijo, lo de su
+  PROTOCOL=; '' si no lo dijo) en una salida con algo, sin que el servidor lo
+  parara por el plazo y con un codigo de los suyos (hasta AUltimoCodigo): lo que
+  diga se leeria mal y sin ruido. Uno que murio sin decir nada, al que paro el
+  servidor o con un codigo que no es suyo no es eso, y sigue por su rama. LA
+  puerta de version de los ayudantes: el renderizador y el conversor de estilos
+  la escribian cada uno (C13 del revisor del paisaje del cierre de la 1.26). }
+function DijoOtraVersion(const ADijo: string; AVersion: Integer; const ASalida: string;
+  ACodigo, AUltimoCodigo: Cardinal; AVencido: Boolean): Boolean;
 { Un mensaje sin la casa del servidor por dentro (su temporal): lo que dice un
   ayudante o una excepcion de su lanzamiento puede nombrarla }
 function SinNuestraCasa(const AMensaje: string): string;
@@ -526,6 +535,13 @@ end;
 function VigiaDelAyudante(APlazoMs: Integer): Integer;
 begin
   Result := Max(APlazoMs - MARGEN_DEL_VIGIA_MS, APlazoMs div 2);
+end;
+
+function DijoOtraVersion(const ADijo: string; AVersion: Integer; const ASalida: string;
+  ACodigo, AUltimoCodigo: Cardinal; AVencido: Boolean): Boolean;
+begin
+  Result := (ADijo <> IntToStr(AVersion)) and (ASalida.Trim <> '') and not AVencido and
+    (ACodigo <= AUltimoCodigo);
 end;
 
 { Un valor que viaja como UN argumento entre comillas: lo que recibe el ParamStr
@@ -1866,15 +1882,11 @@ begin
   ACodigo := 0;
   AVencido := False;
   Caja := '';
-  Err := CreaContenedor(AC);
-  if Err <> 0 then
-    Exit(MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
-  AC.ConVentanas := True;
   Etapa := NuevaCarpetaDescarga(ServerTempDir(CAPTURE_SUB_DESIGNER));
   try
     try
-      CrearCarpeta(Etapa);
-      Err := PreparaCarpetaDelContenedor(AC, Etapa);
+      // con ventanas: el ayudante las crea aunque no se vean
+      Err := AbreEtapa(Etapa, True, AC);
       if Err <> 0 then
         Exit(MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
       // el conversor (V71) no carga el form: ningun literal suyo se resuelve, y
@@ -1932,13 +1944,9 @@ begin
   finally
     if Caja <> '' then
       SueltaCaja(Caja);
-    BorraContenedor(AC);
-    try
-      ReclamaArbol(Etapa); // una carpeta que dejo cerrada el codigo de un paquete
-      BorraArbol(Etapa);   // sin cruzar enlaces: ver Lsp.Guard
-    except
-      // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
-    end;
+    // la etapa, recuperada (una carpeta que dejo cerrada el codigo de un paquete) y
+    // borrada; limpiar no tumba la respuesta: la purga del arranque se la lleva
+    CierraEtapa(AC, Etapa);
   end;
 end;
 
@@ -2023,8 +2031,7 @@ begin
     // un ayudante de otra version: lo que diga se leeria mal y sin ruido, y salia
     // como un paquete que fallo (DSGN-061). Uno que murio sin decir nada o con un
     // codigo que no es de los suyos no es eso, y sigue por su rama
-    if (Result.Protocolo <> IntToStr(FR_PROTOCOLO_VERSION)) and (Salida.Trim <> '') and
-       (Codigo <= FR_RC_TIMEOUT) then
+    if DijoOtraVersion(Result.Protocolo, FR_PROTOCOLO_VERSION, Salida, Codigo, FR_RC_TIMEOUT, Vencido) then
     begin
       var Dijo := Result.Protocolo;
       if Dijo = '' then
