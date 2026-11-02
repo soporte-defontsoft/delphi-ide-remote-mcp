@@ -190,7 +190,7 @@ begin
   begin
     Result := TStringList.Create;
     try
-      Result.Text := CodigoPascal(TLspClient.LoadSourceText(APath));
+      Result.Text := TLspClient.LoadSourceCode(APath);
     except
       FIlegibles := FIlegibles + [APath];
     end;

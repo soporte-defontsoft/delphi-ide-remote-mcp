@@ -387,6 +387,11 @@ REGLAS = [
     # sin casa (forma 17 de la 1.26)
     ('las palabras del protocolo del nodo a mano', r"'(?:(?:ventanas|escribe|texto|tecla|altab)'|win:)", [],
      'NodeProtocolo.inc (src\\DesktopNode): NODO_ORDEN_* y JOB_ENV_WIN, la orden y la sesion por su nombre'),
+    # la vista de CODIGO de un fuente que ve el motor, compuesta a mano: la leian asi la herencia y tres sitios de
+    # references (forma 24 de la 1.26). Quien necesita ademas el texto entero lo lee y lo pasa por CodigoPascal
+    ('la vista de codigo de un fuente del motor a mano', r'\bCodigoPascal\(\s*(?:TLspClient\.)?LoadSourceText\(',
+     [('Lsp.Client.pas', 'TLspClient.LoadSourceCode')],
+     'TLspClient.LoadSourceCode (Lsp.Client, forma 24 de la 1.26): el fuente por la puerta del motor, sin comentarios'),
     # los nombres de gobierno del vault a mano: estaban en cuatro sitios y la puerta de escritura conocia
     # tres - VAULT-INSTRUCTIONS.md, las instrucciones de TODOS los clientes, lo creaba un agente (V191)
     ('un fichero de gobierno del vault nombrado a mano',
@@ -1880,6 +1885,7 @@ PLANTADO = {
     'el trozo unico de la casa fuera de su nombrador': "  Tmp := ServerTempDir('sdk-' + FragmentoUnico);",
     'el agente de la llamada comparado a mano': "  if (Owner <> '') and not SameText(Owner, Me) then",
     'las palabras del protocolo del nodo a mano': "    Args := Args + ['tecla'] + Mods + [Code];",
+    'la vista de codigo de un fuente del motor a mano': "      Vista.Text := CodigoPascal(TLspClient.LoadSourceText(APath));",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",

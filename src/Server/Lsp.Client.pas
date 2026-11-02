@@ -249,6 +249,11 @@ type
       ahi lanza la negativa. Quien recorre carpetas pregunta ADEMAS la de la
       jaula por cada fichero: lo de detras de una union no es suyo. }
     class function LoadSourceText(const AFilePath: string): string;
+    { ...y su vista de CODIGO (Lsp.Pascal.CodigoPascal: cadenas, comentarios y
+      directivas en blanco, el largo y los saltos intactos), la de quien busca
+      estructura en lo que el motor ve. La componian a mano la herencia y tres
+      sitios de references (forma 24 de la 1.26). }
+    class function LoadSourceCode(const AFilePath: string): string;
     { LA columna del motor y su inversa. DelphiLSP cuenta la columna de una
       linea en BYTES UTF-8 del texto que tiene de ella, a la ida y a la vuelta
       (medido el 22-oct-2026 con el motor solo: una enye +1, un euro +2 y un
@@ -1240,6 +1245,11 @@ begin
   // BOM los conoce Lsp.Patch.DetectEnc y aqui no se decide nada (tampoco
   // que un form de texto sin BOM es ANSI: se le dice que es un form).
   Result := DecodeSourceBytes(Bytes, EsRutaDeDesigner(AFilePath));
+end;
+
+class function TLspClient.LoadSourceCode(const AFilePath: string): string;
+begin
+  Result := CodigoPascal(LoadSourceText(AFilePath));
 end;
 
 class function TLspClient.ColumnaAlMotor(const ALinea: string; ACol: Integer): Integer;

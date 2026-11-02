@@ -560,7 +560,7 @@ begin
   Vista := TStringList.Create;
   try
     try
-      Vista.Text := CodigoPascal(TLspClient.LoadSourceText(TLspClient.UriToPath(AUri)));
+      Vista.Text := TLspClient.LoadSourceCode(TLspClient.UriToPath(AUri));
     except
       Exit;
     end;
@@ -588,7 +588,7 @@ begin
   Vista := TStringList.Create;
   try
     try
-      Vista.Text := CodigoPascal(TLspClient.LoadSourceText(TLspClient.UriToPath(AUri)));
+      Vista.Text := TLspClient.LoadSourceCode(TLspClient.UriToPath(AUri));
     except
       Exit;
     end;
@@ -739,7 +739,7 @@ begin
   Vista := TStringList.Create;
   try
     try
-      Vista.Text := CodigoPascal(TLspClient.LoadSourceText(APath));
+      Vista.Text := TLspClient.LoadSourceCode(APath);
     except
       Exit;
     end;
