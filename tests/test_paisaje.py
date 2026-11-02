@@ -347,7 +347,9 @@ REGLAS = [
      'EsOrdenDeRed (Lsp.Args, forma 2 de la 1.26)'),
     # la clausula uses NUEVA compuesta a mano ('uses', salto, dos espacios, entradas): la escribian los dos llamadores
     # de EstrenaClausula, que la inserta (forma 3 de la 1.26). Las plantillas de Lsp.Scaffold son esqueletos enteros
-    ('una clausula uses nueva compuesta a mano', r"'uses'\s*\+\s*\w+\s*\+\s*'  '",
+    # ...y su forma en linea (' uses A, B;' pegada a la palabra de una unit de una linea), que se quedo a mano al
+    # lado de su llamada y la regex no veia: blancos dentro del literal (C3 del revisor del cierre de la 1.26)
+    ('una clausula uses nueva compuesta a mano', r"'uses'\s*\+\s*\w+\s*\+\s*'  '|'\s+uses\s+'\s*\+",
      [('Lsp.ProjectUnits.pas', 'EstrenaClausula')],
      'EstrenaClausula (Lsp.ProjectUnits): el escritor de una clausula uses nueva y su forma, la del IDE'),
     ('una extension juzgada con el locale',

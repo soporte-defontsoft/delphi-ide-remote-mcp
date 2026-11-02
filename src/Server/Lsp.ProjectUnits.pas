@@ -2106,12 +2106,21 @@ end;
   mismos bytes que antes. Sin salto en APos, dos delante, como antes. EL
   escritor de una clausula nueva de un .pas y de un .dpr (eran dos), y su
   forma, la del IDE ('uses', salto, dos espacios, las entradas): la componian
-  a mano sus dos llamadores (forma 3 de la 1.26). }
-procedure EstrenaClausula(var AText: string; APos: Integer; const AEntradas: string);
+  a mano sus dos llamadores (forma 3 de la 1.26). AEnLinea: la de una unit de
+  UNA linea ('unit X; interface implementation end.'), pegada a la palabra en
+  APos y en su misma linea, que se quedo a mano junto a su llamada (C3 del
+  cierre de la 1.26). }
+procedure EstrenaClausula(var AText: string; APos: Integer; const AEntradas: string;
+  AEnLinea: Boolean = False);
 var
   Fin: Integer;
   NL, Cuerpo: string;
 begin
+  if AEnLinea then
+  begin
+    AText := Copy(AText, 1, APos - 1) + ' uses ' + AEntradas + ';' + Copy(AText, APos, MaxInt);
+    Exit;
+  end;
   NL := SaltoDominante(AText);
   Cuerpo := 'uses' + NL + '  ' + AEntradas + ';';
   Fin := APos;
@@ -3057,8 +3066,7 @@ begin
     // encuentra desde el 18-oct-2026): ahi va pegada a la palabra; debajo
     // caia detras del end. final
     if Trim(Copy(Blank, PosSec, FinLinea - PosSec)) <> '' then
-      AText := Copy(AText, 1, PosSec - 1) + ' uses ' + string.Join(', ', AFaltan) + ';' +
-        Copy(AText, PosSec, MaxInt)
+      EstrenaClausula(AText, PosSec, string.Join(', ', AFaltan), True)
     else
       EstrenaClausula(AText, FinLinea, string.Join(', ', AFaltan));
   end;
