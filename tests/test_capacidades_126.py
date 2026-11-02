@@ -406,6 +406,97 @@ fuera = mc.como_json(r).get('outsideParent') or []
 check('RG insert FMX de un TEdit que se sale del form (380 + 100 > 400): outsideParent lo dice, y es el suyo',
       len(fuera) == 1 and fuera[0].startswith('Edit1'), r[:500])
 
+# RF dos capturas de adb a la vez del mismo dispositivo: cada una con SU fichero alli (era uno fijo,
+# /sdcard/delphi_mcp_screen.png, sin cerrojo: una se llevaba la de la otra y la otra no encontraba la suya). Con un
+# adb de mentira, sin dispositivo: el "dispositivo" es una carpeta junto a el, y cada screencap deja un PNG con una
+# huella suya detras y espera, para que las dos se crucen
+RF = os.path.join(JAIL, 'rf')
+os.makedirs(RF)
+ADB = de_mentira('AdbFalso',
+                 "  var Dev := TPath.Combine(ExtractFilePath(ParamStr(0)), 'Dev');\n"
+                 "  ForceDirectories(Dev);\n"
+                 "  var A: TArray<string> := [];\n"
+                 "  for var I := 1 to ParamCount do\n"
+                 "    A := A + [ParamStr(I)];\n"
+                 "  if (Length(A) >= 2) and (A[0] = '-s') then\n"
+                 "    A := Copy(A, 2, MaxInt);\n"
+                 "  if (Length(A) >= 4) and (A[0] = 'shell') and (A[1] = 'screencap') then\n"
+                 "  begin\n"
+                 "    TFile.WriteAllBytes(TPath.Combine(Dev, TPath.GetFileName(A[3])),\n"
+                 "      TFile.ReadAllBytes(TPath.Combine(ExtractFilePath(ParamStr(0)), 'base.png')) +\n"
+                 "      TEncoding.ASCII.GetBytes(TGUID.NewGuid.ToString));\n"
+                 "    Sleep(3000);\n"
+                 "  end\n"
+                 "  else if (Length(A) >= 3) and (A[0] = 'pull') then\n"
+                 "  begin\n"
+                 "    if not TFile.Exists(TPath.Combine(Dev, TPath.GetFileName(A[1]))) then\n"
+                 "    begin\n"
+                 "      Writeln('adb: error: remote object ''' + A[1] + ''' does not exist');\n"
+                 "      Halt(1);\n"
+                 "    end;\n"
+                 "    TFile.Copy(TPath.Combine(Dev, TPath.GetFileName(A[1])), A[2], True);\n"
+                 "    Writeln(A[1] + ': 1 file pulled');\n"
+                 "  end\n"
+                 "  else if (Length(A) >= 3) and (A[0] = 'shell') and (A[1] = 'rm') then\n"
+                 "  begin\n"
+                 "    if TFile.Exists(TPath.Combine(Dev, TPath.GetFileName(A[2]))) then\n"
+                 "      TFile.Delete(TPath.Combine(Dev, TPath.GetFileName(A[2])));\n"
+                 "  end\n"
+                 "  else if (Length(A) >= 3) and (A[0] = 'shell') and (A[1] = 'wm') and (A[2] = 'size') then\n"
+                 "    Writeln('Physical size: 1x1')\n"
+                 "  else if (Length(A) >= 3) and (A[0] = 'shell') and (A[1] = 'wm') then\n"
+                 "    Writeln('Physical density: 160');\n")
+import struct, zlib
+
+
+def trozo(tipo, datos):
+    return struct.pack('>I', len(datos)) + tipo + datos + struct.pack('>I', zlib.crc32(tipo + datos) & 0xffffffff)
+
+
+with open(os.path.join(os.path.dirname(ADB), 'base.png'), 'wb') as f:
+    f.write(b'\x89PNG\r\n\x1a\n' + trozo(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0)) +
+            trozo(b'IDAT', zlib.compress(b'\x00\xff\x00\x00')) + trozo(b'IEND', b''))
+# un APPDATA de prueba cuyo SDK de Android dice que su adb es el de mentira (FindAdb lee SDKAdbPath de los .sdk)
+APPD_RF, _ = mc.appdata_perfil(os.path.join(BASE, 'rf-ad'), 'mcp-e2e-rf', '127.0.0.1')
+CON_ADB = 0
+for raiz, _, ficheros in os.walk(APPD_RF):
+    for f in ficheros:
+        if f.lower().endswith('.sdk'):
+            p = os.path.join(raiz, f)
+            t = open(p, encoding='utf-8-sig').read()
+            if '<SDKAdbPath>' in t:
+                CON_ADB += 1
+                open(p, 'w', encoding='utf-8').write(
+                    re.sub(r'<SDKAdbPath>[^<]*</SDKAdbPath>', lambda m: '<SDKAdbPath>%s</SDKAdbPath>' % ADB, t))
+if CON_ADB == 0:
+    for v in os.listdir(os.path.join(APPD_RF, 'Embarcadero', 'BDS')):
+        open(os.path.join(APPD_RF, 'Embarcadero', 'BDS', v, 'AdbFalso.sdk'), 'w', encoding='utf-8').write(
+            '<Project><PropertyGroup><SDKAdbPath>%s</SDKAdbPath></PropertyGroup></Project>\n' % ADB)
+
+
+def captura(nombre, res):
+    otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': APPD_RF, 'DELPHI_MCP_ADB_DEVICES': 'FALSO1'}),
+                    nombre='126-' + nombre, t=120)
+    try:
+        res[nombre] = otro.call('delphi_adb', {'command': 'screenshot', 'device': 'FALSO1',
+                                               'out': os.path.join(RF, nombre + '.png')}, t=90)
+    finally:
+        otro.cierra()
+
+
+res = {}
+hilos = [threading.Thread(target=captura, args=(n, res)) for n in ('a', 'b')]
+for h in hilos:
+    h.start()
+    time.sleep(0.5)
+for h in hilos:
+    h.join(200)
+pa, pb = (open(os.path.join(RF, n + '.png'), 'rb').read() if os.path.exists(os.path.join(RF, n + '.png')) else b''
+          for n in ('a', 'b'))
+check('RF dos capturas a la vez del mismo dispositivo: las dos salen, y cada una es la suya',
+      pa and pb and pa != pb and not mc.fallo(res.get('a', '')) and not mc.fallo(res.get('b', '')),
+      (len(pa), len(pb), pa == pb, res.get('a', '')[:300], res.get('b', '')[:300]))
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')

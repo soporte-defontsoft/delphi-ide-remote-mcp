@@ -577,7 +577,13 @@ begin
     // dispositivo, no de una segunda constante. Se resuelve ANTES de tocar
     // el dispositivo: un argumento malo de quien llama se contesta sin
     // preguntarle a nadie.
-    const DevPng = '/sdcard/delphi_mcp_screen.png';
+    // en el dispositivo, un fichero de ESTA captura: el nombre unico de la casa
+    // (SelloUnico, abajo). Era uno fijo y sin cerrojo: dos capturas a la vez se
+    // llevaban la de la otra, o no encontraban la suya (revisor del paisaje de
+    // la 1.26, F, medido con un adb de mentira)
+    const DevDir = '/sdcard/';
+    const DevExt = '.png'; // lo que escribe screencap -p
+    var DevPng: string;
     var Destino, Propia: string;
     var EnLaCasa: Boolean;
     // por stdio, inline=false sin out= no tendria por donde salir: se niega
@@ -586,7 +592,7 @@ begin
     if Denied <> '' then
       Exit(Denied);
     Denied := CaptureTarget(Params.Out, CAPTURE_SUB_ANDROID, 'android',
-      TPath.GetExtension(DevPng), Propia, EnLaCasa);
+      DevExt, Propia, EnLaCasa);
     if Denied <> '' then
       Exit(Denied);
     // se baja SIEMPRE a un temporal nuestro y sin cerrojo (el pull tarda
@@ -597,11 +603,12 @@ begin
     if not EnLaCasa then // un out=: lo dice EL que lo decide (CaptureTarget)
     begin
       Denied := CaptureTarget('', CAPTURE_SUB_ANDROID, 'android',
-        TPath.GetExtension(DevPng), Destino);
+        DevExt, Destino);
       if Denied <> '' then
         Exit(Denied);
     end;
     CrearCarpeta(TPath.GetDirectoryName(Destino));
+    DevPng := DevDir + TPath.GetFileName(Destino);
     Output := RunAdb(Adb, DevArg + 'shell screencap -p ' + DevPng, 30000,
       ExitCode);
     if (ExitCode <> 0) or DeviceGone(Output) then
