@@ -484,7 +484,9 @@ uses
   Lsp.ProjectUnits, // RaizDeDesigner: EL lector de la raiz de un designer
   Lsp.ProcessLaunch,
   Lsp.Sandbox,      // el contenedor del conversor de estilos
-  Lsp.FormRender;   // CajaDeLosAyudantes: la caja desde la que corre
+  Lsp.FormRender,   // CajaDeLosAyudantes: la caja desde la que corre
+  MCPServer.Logger,
+  Lsp.Listas;
 
 { TStyleObj }
 
@@ -1178,10 +1180,12 @@ const
   CONVERSOR_TIEMPO_MS = 60000;
 
 { LA llamada al conversor de estilos (DelphiStyleConvert): dentro de un
-  contenedor sin capacidades, como el renderizador pero sin ventanas (corre con
-  COM en MTA: con STA, que crea una ventana oculta, el contenedor le niega COM y
-  FMX no lee los PNG de un estilo; medido el 2-nov-2026), desde la caja de los
-  ayudantes (Lsp.FormRender), en una etapa de ESTA llamada en la casa del
+  contenedor sin capacidades, con ventanas como el renderizador (sin ellas el
+  contenedor le niega COM, que en STA crea una ventana oculta, FMX no lee los PNG
+  de un estilo -WIC- y en la sesion 0 del servicio reventaba al salir a veces,
+  runtime error 216 con su OK ya dicho: medido el 2-nov-2026, 2 de 5 sin ellas y
+  0 de 15 con ellas), desde la caja de los ayudantes (Lsp.FormRender), en una
+  etapa de ESTA llamada en la casa del
   servidor. Corria fuera, sobre el fichero del agente y en su carpeta (forma 6
   del revisor del paisaje de la 1.26). AEntrada escribe lo que lee en la ruta que
   recibe, en su etapa, por SU escritor (EscribeBytes, EscribeTexto; nil: nada);
@@ -1205,6 +1209,7 @@ begin
   Err := CreaContenedor(AC);
   if Err <> 0 then
     Exit(MsgFmt(SR_STYLES_CONVERSOR_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
+  AC.ConVentanas := True; // FMX: ver arriba
   Result := '';
   Caja := '';
   Etapa := NuevaCarpetaDescarga(ServerTempDir(ESTILOS_CHECK_SUB));
@@ -1259,6 +1264,11 @@ begin
       end;
     end;
   finally
+    // lo que no contesto, con su por que, al log: la respuesta solo dice "no se pudo
+    // preguntar" (STYLE-060), y un estilo que FMX no carga (SC_RC_ERROR) no es de aqui
+    if (ACodigo <> SC_RC_OK) and (ACodigo <> SC_RC_ERROR) then
+      TLogger.Warning(MsgFmt(SL_STYLES_CONVERSOR_SIN_RESPUESTA_FMT,
+        [AOrden, UIntToStr(ACodigo), PrincipioDeTexto(Result.Trim, 400)]));
     if Caja <> '' then
       SueltaCaja(Caja);
     BorraContenedor(AC);

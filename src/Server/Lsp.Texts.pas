@@ -4170,6 +4170,10 @@ const
     '[STYLE-065 INTERNAL] The style converter runs only inside its Windows ' +
     'container, and the container could not be prepared: %s. Nothing was ' +
     'converted or checked. It is a problem of this server: tell the operator.';
+  { al log: una orden del conversor que no contesto (STYLE-060 y los "no se sabe"
+    de lint no dicen por que); %0:s la orden, %1:s su codigo, %2:s lo que dijo }
+  SL_STYLES_CONVERSOR_SIN_RESPUESTA_FMT =
+    'The style converter did not answer "%0:s" (code %1:s): %2:s';
   { %0:s el protocolo que dijo el conversor, %1:d el del servidor }
   SR_STYLES_CONVERSOR_OTRA_VERSION_FMT =
     '[STYLE-066 INTERNAL] DelphiStyleConvert.exe speaks protocol %0:s and this ' +

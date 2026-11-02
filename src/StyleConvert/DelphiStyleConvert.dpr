@@ -22,7 +22,6 @@ uses
   System.SysUtils,
   System.Classes,
   Winapi.Windows,
-  Winapi.ActiveX, // CoInitializeEx: COM en MTA (ver el principio del programa)
   FMX.Types,
   FMX.Styles,
   FMX.Consts, // SCannotLoadStyleFromFile: la negativa de TStyleStreaming.LoadFromFile
@@ -170,10 +169,6 @@ end;
 var
   Cmd: string;
 begin
-  // COM en MTA: en el contenedor sin ventanas en el que lo corre el servidor, STA (que
-  // crea una ventana oculta) da E_ACCESSDENIED, y sin COM FMX no lee los PNG de un
-  // estilo (WIC; medido el 2-nov-2026). Fuera, si FMX ya lo abrio en STA, no cambia nada
-  CoInitializeEx(nil, COINIT_MULTITHREADED);
   Writeln(SC_PROTOCOL + IntToStr(SC_PROTOCOLO_VERSION));
   try
     Cmd := LowerCase(ParamStr(1));
