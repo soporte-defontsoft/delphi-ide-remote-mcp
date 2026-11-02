@@ -288,6 +288,10 @@ const
   SR_SEARCH_REGEX_INVALID_FMT =
     '[SEARCH-004 INVALID_PARAM] The query is not a valid regular expression: ' +
     '%s. Nothing was searched.';
+  // ...y su %s: lo que dijo PCRE del patron y donde (Lsp.Regex; estaba en linea,
+  // revisor del paisaje de la 1.26)
+  SF_REGEX_ERROR_EN_FMT =
+    '%s (at %d)';
 
   SR_SEARCH_REGEX_CARA_FMT =
     '[SEARCH-005 INVALID_PARAM] The regular expression gave up on line %d of ' +
@@ -8350,11 +8354,10 @@ const
     'commit. Cause: %s -- The changeset stays closed; fix it and build ' +
     'another one.';
 
-  SR_CHANGESET_PROJECT_FILE_FMT =
-    '[CHSET-018 DENIED] %s is a project file and the IDE maintains it; ' +
-    'the commit would have refused it anyway, and it would have thrown ' +
-    'away your whole batch. To touch the project use delphi_config ' +
-    '(add-unit, remove-unit, add-platform, add-searchpath, set-output).';
+  // CHSET-018 (un fichero de proyecto en un changeset) se retiro en la 1.26: era
+  // la regla de EDIT-128, con su mismo juez (EsRutaDeProyecto), otro codigo y
+  // otra lista de lo que hace delphi_config, que se habia quedado corta (revisor
+  // del paisaje de la 1.26)
 
   // CHSET-033 (un fichero de Delphi no se movia ni se borraba por changeset:
   // delphi_move y delphi_delete lo hacian entero; B de la 1.19.2) se retiro en
@@ -8738,7 +8741,7 @@ const
     'is only for Delphi files; for non-Delphi text (.md .py .html .js ' +
     '.ini ...) use delphi_textedit.';
 
-  { Un proyecto del IDE, el MISMO texto en delphi_edit y en delphi_textedit:
+  { Un proyecto del IDE, el MISMO texto en delphi_edit, delphi_textedit y delphi_changeset:
     se mandaban el uno al otro (EDIT-032 a textedit, TEXT-001 al IDE /
     delphi_create) y ninguno a delphi_config, que es quien lo edita (Hermes,
     dirigido de la 1.20.1). %s = el fichero. }
@@ -8746,7 +8749,7 @@ const
     '[EDIT-128 INVALID_PARAM] %s is a project file: delphi_config edits it ' +
     '(platforms, search paths, output, version, SDK, profile, units, ' +
     'deploy files, the projects of a group) and delphi_create writes a new ' +
-    'one; neither delphi_edit nor delphi_textedit writes it.';
+    'one; delphi_edit, delphi_textedit and delphi_changeset do not write it.';
 
   SR_EDIT_CREATEUNIT_SOLO_CREA_UNITS =
     '[EDIT-034 INVALID_PARAM] createunit only creates units (.pas).';
@@ -10487,8 +10490,8 @@ const
     'defaultConfig and defaultPlatform (what delphi_build builds without ' +
     'config= / platform=) and every ' +
     'platform - enabled or not, possible for THIS project, needing a ' +
-    'PAServer profile. add-platform / remove-platform: a curated edit of ' +
-    '<Platforms> only. ' +
+    'PAServer profile. add-platform / remove-platform: enable or disable a ' +
+    'platform in the .dproj (a curated edit of <Platforms> only). ' +
     'set-version: the project VERSION everywhere it must agree. ' +
     'set-active: what it builds by default, as Activate in the IDE''s Project ' +
     'Manager. ' +
@@ -11360,8 +11363,7 @@ const
     'carried it, with nothing on disk.';
 
   SP_WS_DIR =
-    'Directory to package (e.g. the build output Win64\Debug). ' +
-    'Recursive; *.dcu, dcu\ and the IDE''s __history/__recovery excluded';
+    'Directory to package (e.g. the build output Win64\Debug)';
 
   SP_WS_OUTFILE =
     'Optional zip path, ending in .zip (default: sibling of dir, named ' +
@@ -11446,7 +11448,8 @@ const
 
   SD_WS_PACKAGE =
     'Zip a build-output directory ON the server into a single deploy ' +
-    'artifact (recursive; *.dcu and the IDE''s __history excluded), ready to ' +
+    'artifact (recursive; *.dcu, dcu\, the IDE''s __history/__recovery and the ' +
+    'trash are left out), ready to ' +
     'download with ONE delphi_fetch. The standard way to bring a GUI app ' +
     'to the client machine: delphi_build -> delphi_package -> ' +
     'delphi_fetch.';

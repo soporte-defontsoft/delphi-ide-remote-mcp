@@ -160,7 +160,16 @@ is ahead on the other three.
 
 The checker, measured again, failed twice: a boolean the model sent as
 `"True"`, and two calls in one answer, whose arguments were joined into
-something that is not JSON. Both texts fail the same two tasks every time:
+something that is not JSON. Both texts failed the same two tasks every time:
 to set Linux64's SDK the model calls `add-platform` with `sdk`, and to ship
-a `.so` it looks first with `view`. That is a friction of `delphi_config`'s
-text, not of the trim, and it is measured apart.
+a `.so` it looks first with `view`.
+
+Measured apart, both were the checker again, and one hid a loss. The `.so`
+task did not say where the file was, so looking first was sensible: with its
+path, 4 of 5 ship it at once. And `add-platform` with `sdk` leaves the SDK set
+even on a platform already enabled (measured: `CFG-076` and then `CFG-010`),
+so it does the job; with a checker that takes it, the trim had dropped that
+task from 3 of 5 to 2 of 18. What it had dropped was "enable or disable a
+platform in the .dproj" from `add-platform`: with that phrase back, 9 of 18,
+and the other ten tasks of `delphi_config` stay where they were (28 and 29 of
+33).

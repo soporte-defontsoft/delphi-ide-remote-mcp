@@ -32,8 +32,11 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Changed
 
+- `delphi_config`'s description says again that `add-platform` enables a platform in the `.dproj`. The second pass had dropped it, and with Qwen3.8 Flash Next the task "build Linux64 with the SDK zorin18" fell from 3 of 5 to 2 of 18; with it back, 9 of 18 (`docs/TOOL-DESCRIPTIONS.md`).
+- `delphi_package` lists what it leaves out in one place, all of it: `*.dcu`, `dcu\`, the IDE's `__history` and `__recovery`, and the trash. The description and its `dir` gave two different, shorter lists.
+- A project file staged in `delphi_changeset` is refused with `EDIT-128`, the message of `delphi_edit` and `delphi_textedit` for the same rule; `CHSET-018` said it with another code and a shorter list of what `delphi_config` does.
 - Internal, nothing in a contract: one reader of a list of folders (`CarpetasDeUnaLista`), of the account's name, by Windows and no longer by the environment for a deploy's note (`NombreDeEstaCuenta`), of the X authorization on Linux (`XauthorityMasReciente`), and one start, one report of what was read and one writer of a measure for the two form renderers.
-- Seven tool descriptions are shorter, 891 characters in all (`delphi_config`, `delphi_changeset`, `delphi_move`, `delphi_test`, `delphi_build`, and the `new` of `delphi_edit`, `delphi_textedit` and `delphi_changeset`): no rule, limit or default went, and with Qwen3.8 Flash Next no measured task was lost (`docs/TOOL-DESCRIPTIONS.md`, the second pass).
+- Seven tool descriptions are shorter, 891 characters in all (`delphi_config`, `delphi_changeset`, `delphi_move`, `delphi_test`, `delphi_build`, and the `new` of `delphi_edit`, `delphi_textedit` and `delphi_changeset`): no rule, limit or default went, and the one task Qwen3.8 Flash Next lost came back with the phrase of `add-platform` above (`docs/TOOL-DESCRIPTIONS.md`, the second pass).
 
 ## [1.25.1] - 2026-11-02
 

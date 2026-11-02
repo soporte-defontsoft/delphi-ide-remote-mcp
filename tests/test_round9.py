@@ -198,7 +198,7 @@ r = A.call('delphi_changeset', {'command': 'stage', 'id': CID2, 'kind': 'edit',
                                 'path': os.path.join(BASE, 'Proy', 'Proy.dproj'),
                                 'old': '<Platform>Win32</Platform>', 'new': 'x'})
 check('M3 un .dproj se rechaza EN EL STAGE, no en el commit',
-      mc.rechazado(r) and mc.es(r, 'SR_CHANGESET_PROJECT_FILE_FMT') and 'delphi_config' in r, r[:250])
+      mc.rechazado(r) and mc.es(r, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT') and 'delphi_config' in r, r[:250])
 A.call('delphi_changeset', {'command': 'rollback', 'id': CID2})
 r = A.call('delphi_create', {'kind': 'project-package', 'name': 'Pk', 'dir': os.path.join(BASE, 'Pk')})
 assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r

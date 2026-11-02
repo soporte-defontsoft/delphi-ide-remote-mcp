@@ -61,7 +61,8 @@ type
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  Lsp.Texts; // SF_REGEX_ERROR_EN_FMT: el texto, en el catalogo
 
 function GrupoDe(const AMatch: TMatch; AIndice: Integer): string;
 begin
@@ -98,7 +99,7 @@ begin
     @Err, @ErrOfs, nil);
 {$ENDIF}
   if FPatron = nil then
-    AError := Format('%s (at %d)', [string(AnsiString(Err)), ErrOfs]);
+    AError := MsgFmt(SF_REGEX_ERROR_EN_FMT, [string(AnsiString(Err)), ErrOfs]);
   { PCRE recursa en la pila de C, y sin tope propio su limite de recursion es
     el de pasos (diez millones): mucho antes desborda la pila del hilo.
     Medido el 6-oct-2026: (?:a|b)*c sobre una linea de 2.000 caracteres daba
