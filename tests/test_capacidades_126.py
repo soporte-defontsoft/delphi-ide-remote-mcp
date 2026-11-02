@@ -497,6 +497,18 @@ check('RF dos capturas a la vez del mismo dispositivo: las dos salen, y cada una
       pa and pb and pa != pb and not mc.fallo(res.get('a', '')) and not mc.fallo(res.get('b', '')),
       (len(pa), len(pb), pa == pb, res.get('a', '')[:300], res.get('b', '')[:300]))
 
+# RA un search path con prefijo de dispositivo que no es una unidad ni un UNC (\\?\GLOBALROOT\Device\...): la puerta
+# del build le quitaba el prefijo y juzgaba lo que quedaba, una ruta RELATIVA que caia dentro del proyecto, mientras
+# dcc abre el dispositivo. Un volumen que no existe: nada se lee aunque pasara
+PRA = os.path.join(JAIL, 'ra')
+s.call('delphi_create', {'kind': 'project-console', 'dir': PRA, 'name': 'Ra'})
+t = s.call('delphi_config', {'command': 'set-property', 'project': os.path.join(PRA, 'Ra.dproj'),
+                             'name': 'DCC_UnitSearchPath', 'value': r'\\?\GLOBALROOT\Device\HarddiskVolume999\nada'})
+check('RA fixture: el search path se escribe (lo juzga el build)', not mc.fallo(t), t[:300])
+r = s.call('delphi_build', {'project': os.path.join(PRA, 'Ra.dproj'), 'platform': 'Win64', 'config': 'Debug'}, t=300)
+check('RA el build niega un search path de dispositivo que no es una unidad ni un UNC (BUILD-050), como fuera de '
+      'toda raiz', mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT'), r[:400])
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')

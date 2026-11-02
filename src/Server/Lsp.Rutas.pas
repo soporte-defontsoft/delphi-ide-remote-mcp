@@ -193,7 +193,9 @@ function EsPrefijoDeDispositivo(const APath: string): Boolean;
 { ...y la ruta sin el: \\?\C:\x -> C:\x, \\?\UNC\host\x -> \\host\x (lo que
   devuelve GetFinalPathNameByHandle, y lo que un .dproj puede traer en un
   search path: dcc abre una carpeta por ese prefijo, medido el 21-oct-2026, y
-  la puerta del build lo juzga sin el). Sin prefijo, tal cual. }
+  la puerta del build lo juzga sin el). Sin prefijo, tal cual; y uno que no
+  lleva detras una unidad ni un UNC (\\?\GLOBALROOT\..., un volumen por su
+  GUID), con el: no hay ruta que juzgar, y queda fuera de toda raiz. }
 function SinPrefijoDeDispositivo(const APath: string): string;
 { ...y la inversa, el prefijo PUESTO: APath -> \\?\APath, el formato de ruta
   extendida (para una ruta larga, o para marcar un destino de dispositivo fuera
@@ -789,11 +791,16 @@ begin
   if not EsPrefijoDeDispositivo(Result) then
     Exit;
   Result := ConBarrasDeWindows(Result.Trim);
-  // \\?\UNC\host\x es \\host\x; lo demas, la ruta tras las cuatro del prefijo
+  // \\?\UNC\host\x es \\host\x, y \\?\C:\x es C:\x. Lo demas (\\?\GLOBALROOT\Device\...,
+  // un volumen por su GUID, \\.\PhysicalDrive0) no tiene ruta con letra ni de red: se
+  // queda con su prefijo, fuera de toda raiz, como lo deja DestinoDeEnlace. Sin el
+  // quedaba una ruta RELATIVA, que la puerta del build juzgaba dentro del proyecto
+  // mientras dcc abria el dispositivo (revisor del paisaje de la 1.26, A; medido)
   if StartsText('\\?\UNC\', Result) or StartsText('\\.\UNC\', Result) or StartsText('\??\UNC\', Result) then
-    Result := '\\' + Result.Substring(8)
-  else
-    Result := Result.Substring(4);
+    Exit('\\' + Result.Substring(8));
+  var Resto := Result.Substring(4);
+  if (Length(Resto) >= 2) and CharInSet(Resto[1], ['A' .. 'Z', 'a' .. 'z']) and (Resto[2] = ':') then
+    Result := Resto;
 end;
 
 function ConPrefijoDeDispositivo(const APath: string): string;
