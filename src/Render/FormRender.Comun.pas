@@ -63,6 +63,13 @@ type
     Cajas: Boolean;
   end;
 
+  { Donde esta escrito un componente: el fichero que lo nombro y la raiz en la que
+    se leia ese fichero (la del form, o la de un frame en linea) }
+  TEscritoEn = record
+    Fichero: string;
+    Raiz: TComponent;
+  end;
+
   { El lector comun de un .dfm/.fmx, texto o binario, sobre una instancia ya
     creada en modo diseno. Clases que no existen -> sustituto del framework
     con el nombre de la clase; eventos ignorados; errores del lector apuntados
@@ -90,11 +97,19 @@ type
     // lo creado con OTRA clase que la escrita (un sustituto, un frame inline):
     // la escrita, la que el agente conoce (ClaseEscrita)
     FEscritas: TDictionary<TComponent, string>;
+    // donde esta escrito cada componente que nombro el lector (OnSetName): lo pide
+    // layout para su linea (Hermes, dirigido de la 1.26: line=0 sin fichero)
+    FEscritoEn: TDictionary<TComponent, TEscritoEn>;
+    FRaizLeyendo: TComponent;     // la instancia en la que se lee FLeyendo
+    // el fichero donde nacio la excepcion que aun no se ha dicho: la de un frame
+    // llega al OnError del lector de fuera con FLeyendo ya devuelto al de fuera
+    FFalloEn: string;
     procedure FindComponentClass(Reader: TReader; const ClassName: string; var ComponentClass: TComponentClass);
     procedure CreateComponent(Reader: TReader; ComponentClass: TComponentClass; var Component: TComponent);
     procedure FindMethod(Reader: TReader; const MethodName: string; var Address: Pointer; var Error: Boolean);
     procedure FindComponentInstance(Reader: TReader; const Name: string; var Instance: Pointer);
     procedure ReaderError(Reader: TReader; const Message: string; var Handled: Boolean);
+    procedure SetName(Reader: TReader; Component: TComponent; var Name: string);
     procedure AncestorNotFound(Reader: TReader; const ComponentName: string;
       ComponentClass: TPersistentClass; var Component: TComponent);
     procedure IndexaCarpeta(const ACarpeta: string);
@@ -132,6 +147,11 @@ type
       cargado). El escritor no las escribe, y no es porque el IDE no las
       guarde: el servidor las conserva (1.22.1) }
     property NoAplicados: TStringList read FNoAplicados;
+    { El fichero en el que esta escrito AComp ('' si no se sabe) y su ruta en el
+      (ARuta: desde la raiz de ese fichero) }
+    function EscritoEn(AComp: TComponent; out ARuta: string): string;
+    { El fichero en el que paro el lector, si paro sin decirlo ('' si no): NOTLOADED= }
+    property ParoEn: string read FFalloEn;
     property Eventos: Integer read FEventos;
     { La clase de AObj como la escribe el fichero, la que el agente conoce:
       la de la cabecera para la raiz ARaiz (que se crea como una form o un
@@ -230,7 +250,7 @@ function ListaClasesSinLeer: Integer;
 function RutaDeComponente(ARaiz, AComp: TComponent): string;
 { EL escritor de BOX=, el que lee Lsp.FormRender.LeeRespuestaDeRender }
 procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean;
-  const AContenido: string = '');
+  const AContenido, AFichero, AEnFichero: string);
 { Los escritores de ROOT=, PACKAGES=, RECT=, SIZE= y MS=, los que lee
   Lsp.FormRender.LeeRespuestaDeRender: cada renderizador los escribia a mano, y
   si uno deriva el lector deja los campos vacios sin decir nada (P7 del revisor). }
@@ -470,13 +490,14 @@ begin
     FR_PARTES_SEP + AMensaje;
 end;
 
-{ EL escritor de un valor <cabeza>|<mensaje en partes> (IGNORED=, NOTLOADED=):
-  la cabeza (de quien, o la clase de la excepcion) y el mensaje en sus partes.
+{ EL escritor de un valor <cabeza>|<fichero>|<mensaje en partes> (IGNORED=, NOTLOADED=):
+  la cabeza (de quien, o la clase de la excepcion), el fichero que se leia (el de un
+  frame o un ancestro, si fue ahi; '' si no hay fichero) y el mensaje en sus partes.
   Su lector es DeCabezaYPartes (Lsp.FormRender). V106 de la 1.23.1: se
   componia a mano en tres sitios. }
-function EnCabezaYPartes(const ACabeza, AMensaje: string): string;
+function EnCabezaYPartes(const ACabeza, AFichero, AMensaje: string): string;
 begin
-  Result := ACabeza + FR_PARTES_SEP + LecturaEnPartes(AMensaje);
+  Result := ACabeza + FR_PARTES_SEP + AFichero + FR_PARTES_SEP + LecturaEnPartes(AMensaje);
 end;
 
 procedure Traza(const S: string);
@@ -605,9 +626,10 @@ begin
 end;
 
 procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean;
-  const AContenido: string);
+  const AContenido, AFichero, AEnFichero: string);
 begin
-  Responde(FR_BOX, Format('%s|%s|%s|%s|%d|%s', [ARuta, AClase, APadre, MedidasEnTexto(AX, AY, AAncho, AAlto), Ord(AVisible), AContenido]));
+  Responde(FR_BOX, Format('%s|%s|%s|%s|%d|%s|%s|%s', [ARuta, AClase, APadre, MedidasEnTexto(AX, AY, AAncho, AAlto),
+    Ord(AVisible), AContenido, AFichero, AEnFichero]));
 end;
 
 procedure RespondeRaiz(const ANombre, AClase: string; AEsFrame: Boolean);
@@ -1629,10 +1651,12 @@ begin
   FNoCargan := TStringList.Create;
   FFramesEnCurso := TStringList.Create;
   FEscritas := TDictionary<TComponent, string>.Create;
+  FEscritoEn := TDictionary<TComponent, TEscritoEn>.Create;
 end;
 
 destructor TCargador.Destroy;
 begin
+  FEscritoEn.Free;
   FEscritas.Free;
   FNoCargan.Free;
   FFramesEnCurso.Free;
@@ -1838,8 +1862,33 @@ begin
     Origen := FR_ORIGEN_FRAME_CICLICO
   else if (E <> nil) and not ((E is EFilerError) or (E is EParserError)) then
     Origen := E.ClassName;
-  FIgnoradas.Add(Origen + FR_PARTES_SEP + Message);
+  // el fichero que se leia: el de un frame si la excepcion salio de su lectura
+  // (su Lee ya devolvio FLeyendo al de fuera), y si no, el que se lee
+  var Fichero := (if FFalloEn <> '' then FFalloEn else FLeyendo);
+  FFalloEn := '';
+  FIgnoradas.Add(Origen + FR_PARTES_SEP + Fichero + FR_PARTES_SEP + Message);
   Handled := True;
+end;
+
+procedure TCargador.SetName(Reader: TReader; Component: TComponent; var Name: string);
+var
+  E: TEscritoEn;
+begin
+  // el nombre no se toca: se apunta donde esta escrito
+  E.Fichero := FLeyendo;
+  E.Raiz := FRaizLeyendo;
+  FEscritoEn.AddOrSetValue(Component, E);
+end;
+
+function TCargador.EscritoEn(AComp: TComponent; out ARuta: string): string;
+var
+  E: TEscritoEn;
+begin
+  ARuta := '';
+  if not FEscritoEn.TryGetValue(AComp, E) then
+    Exit('');
+  Result := E.Fichero;
+  ARuta := RutaDeComponente(E.Raiz, AComp);
 end;
 
 procedure TCargador.AncestorNotFound(Reader: TReader; const ComponentName: string;
@@ -1876,6 +1925,7 @@ begin
       Reader.OnFindMethod := FindMethod;
       Reader.OnFindComponentInstance := FindComponentInstance;
       Reader.OnError := ReaderError;
+      Reader.OnSetName := SetName;
       Reader.OnAncestorNotFound := AncestorNotFound;
       Reader.ReadRootComponent(AInstancia);
     finally
@@ -1891,11 +1941,12 @@ procedure RespondeLoLeido(ACargador: TCargador);
 begin
   if ACargador.Sustituidas.Count > 0 then
     Responde(FR_SUBSTITUTED, string.Join(',', ACargador.Sustituidas.ToStringArray));
-  // <de quien>|<mensaje en partes>: ReaderError guarda 'origen|mensaje'
+  // <de quien>|<fichero>|<mensaje en partes>: ReaderError guarda 'origen|fichero|mensaje',
+  // y ni el origen ni una ruta llevan el separador
   for var S in ACargador.Ignoradas do
   begin
-    var P := Pos(FR_PARTES_SEP, S);
-    Responde(FR_IGNORED, EnCabezaYPartes(Copy(S, 1, P - 1), Copy(S, P + 1, MaxInt)));
+    var Partes := S.Split([FR_PARTES_SEP], 3);
+    Responde(FR_IGNORED, EnCabezaYPartes(Partes[0], Partes[1], Partes[2]));
   end;
   for var S in ACargador.Avisos do
     Aviso(S);
@@ -1912,7 +1963,8 @@ begin
   if not AYaLeido and (ACargador <> nil) then
     RespondeLoLeido(ACargador);
   if ACargando and ((E is EFilerError) or (E is EParserError)) then
-    Responde(FR_NOT_LOADED, EnCabezaYPartes(E.ClassName, E.Message));
+    Responde(FR_NOT_LOADED, EnCabezaYPartes(E.ClassName, (if ACargador <> nil then ACargador.ParoEn else ''),
+      E.Message));
   if E is ERender then
     Responde(FR_ERROR, E.Message) // ya lleva su etiqueta
   else
@@ -2056,7 +2108,7 @@ begin
           // el conversor solo lee esos bytes: lo que lanza es del contenido,
           // y la linea la dice el formato de ESTE proceso (su idioma)
           Responde(FR_LINE, IntToStr(LineaDeErrorDelParser(E.Message)));
-          Responde(FR_NOT_LOADED, EnCabezaYPartes(E.ClassName, E.Message));
+          Responde(FR_NOT_LOADED, EnCabezaYPartes(E.ClassName, '', E.Message)); // bytes, sin fichero
           Responde(FR_ERROR, E.ClassName + ': ' + E.Message);
           Exit(FR_RC_ERROR);
         end;
@@ -2151,14 +2203,24 @@ begin
     end;
     // quien nombra una clase es el fichero que se esta leyendo, no el form pedido
     var Antes := FLeyendo;
+    var RaizAntes := FRaizLeyendo;
     try
-      for var F in Cadena do
-      begin
-        FLeyendo := F;
-        LeeUno(F, AInstancia);
+      try
+        for var F in Cadena do
+        begin
+          FLeyendo := F;
+          FRaizLeyendo := AInstancia;
+          LeeUno(F, AInstancia);
+        end;
+      except
+        // el fichero donde nacio: el de mas dentro, el primero que lo apunta
+        if FFalloEn = '' then
+          FFalloEn := FLeyendo;
+        raise;
       end;
     finally
       FLeyendo := Antes;
+      FRaizLeyendo := RaizAntes;
     end;
   finally
     Cadena.Free;

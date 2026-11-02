@@ -337,8 +337,11 @@ procedure RespondeCajas(AForm: TForm; ARaiz: TComponent; ACargador: TCargador);
           if AContenido <> nil then
             Dentro := MedidasEnTexto(Round(AContenido.AbsoluteRect.Left), Round(AContenido.AbsoluteRect.Top),
               Round(AContenido.AbsoluteRect.Width), Round(AContenido.AbsoluteRect.Height));
+          // y donde esta escrito: el de dentro de un frame, en el fichero del frame
+          var EnFichero: string;
+          var Fichero := ACargador.EscritoEn(C, EnFichero);
           RespondeCaja(Ruta, ACargador.ClaseEscrita(C, ARaiz), ARutaPadre,
-            Round(RF.Left), Round(RF.Top), Round(RF.Width), Round(RF.Height), C.Visible, Dentro);
+            Round(RF.Left), Round(RF.Top), Round(RF.Width), Round(RF.Height), C.Visible, Dentro, Fichero, EnFichero);
           De(C, Ruta, nil);
         end
         else

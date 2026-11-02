@@ -449,10 +449,13 @@ open(os.path.join(BASE, 'marco', 'UConMarco.pas'), 'w', encoding='utf-8', newlin
     "unit UConMarco;\n\ninterface\n\nuses\n  System.Classes, Vcl.Forms, Vcl.StdCtrls, Vcl.Controls, UMarco;\n\ntype\n  TFConMarco = class(TForm)\n    Marco1: TFrameUMarco;\n    B: TButton;\n  end;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n")
 o = layout('marco\\UConMarco', "object FConMarco: TFConMarco\n  ClientWidth = 400\n  ClientHeight = 300\n  object B: TButton\n    Left = 8\n    Top = 260\n    Width = 75\n    Height = 25\n    TabOrder = 0\n  end\n  inline Marco1: TFrameUMarco\n    Left = 24\n    Top = 30\n    TabOrder = 1\n  end\nend\n")
 bx = {b['name']: b for b in o.get('boxes', [])}
+# (y lo de dentro, con la linea de su fichero, el del frame, y ese fichero: salia line=0 sin decir donde;
+# Hermes, dirigido de la 1.26)
 check('V24b con el renderizador, un frame inline y lo de dentro salen en boxes (el texto no los lista), con su padre y su linea',
       o.get('boxesFrom') == 'renderer' and bx.get('Marco1', {}).get('x') == 24 and bx.get('Marco1', {}).get('h') == 240
       and bx.get('Marco1.EdMarco', {}).get('parent') == 'Marco1' and bx.get('Marco1.EdMarco', {}).get('x') == 34
-      and bx.get('Marco1.EdMarco', {}).get('line') == 0 and bx.get('B', {}).get('align') == 'alNone', o)
+      and bx.get('Marco1.EdMarco', {}).get('line') == 7 and (bx.get('Marco1.EdMarco', {}).get('file') or '').endswith('UMarco.dfm')
+      and 'file' not in bx.get('Marco1', {'file': 1}) and bx.get('B', {}).get('align') == 'alNone', o)
 
 srv.mata()
 mc.borra(BASE)  # con el servidor va su caja de paquetes: cien megas (V65 de la 1.24)

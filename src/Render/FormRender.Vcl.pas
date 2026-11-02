@@ -402,9 +402,14 @@ procedure RespondeCajas(AForm: TForm; ARaiz: TComponent; ACargador: TCargador);
         P := APadre.ClientToParent(P, AForm);
       var Ruta := RutaDeComponente(ARaiz, C);
       if Ruta <> '' then
+      begin
+        // y donde esta escrito: el de dentro de un frame, en el fichero del frame
+        var EnFichero: string;
+        var Fichero := ACargador.EscritoEn(C, EnFichero);
         RespondeCaja(Ruta, ACargador.ClaseEscrita(C, ARaiz),
           (if (APadre = AForm) or (APadre = ARaiz) then '' else RutaDeComponente(ARaiz, APadre)),
-          P.X, P.Y, C.Width, C.Height, C.Visible);
+          P.X, P.Y, C.Width, C.Height, C.Visible, '', Fichero, EnFichero);
+      end;
       if C is TWinControl then
         De(TWinControl(C));
     end;

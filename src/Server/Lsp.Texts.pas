@@ -5571,17 +5571,16 @@ const
     'reader said:%s'#10'Fix that line (delphi_designer set, or delphi_edit) ' +
     'and preview again.';
   { preview con propiedades que el lector se salto (el Ignore del IDE): que
-    guie al modelo, no solo que lo cuente (David, 7-oct-2026). Una sin linea
-    no esta escrita en este fichero: la de un frame en linea o un ancestro
-    (Hermes, dirigido de la 1.26: la nota prometia una linea que no traia) }
+    guie al modelo, no solo que lo cuente (David, 7-oct-2026). La escrita en un
+    frame en linea o un ancestro lleva su fichero (Hermes, dirigido de la 1.26:
+    la nota prometia una linea que no traia) }
   SN_DESIGNER_PREVIEW_IGNORADAS =
     '[DSGN-114] These properties were skipped as the IDE''s Ignore would, and ' +
     'the rest was drawn. The form will fail to open until they are fixed (the ' +
     'program cannot create it, and the IDE asks to ignore each one): set them ' +
-    'with delphi_designer set, or remove them - line says where each one is in ' +
-    'this file. One without line is not written in this file: it comes from one ' +
-    'this form loads (an inline frame''s, an ancestor''s) - fix it there; a ' +
-    'preview of that file gives its line.';
+    'with delphi_designer set, or remove them - line says where each one is; ' +
+    'file, when it is written in a file this form loads (an inline frame''s, ' +
+    'an ancestor''s), says which: fix it there.';
   { ...salvo si el form se leyo SIN un ancestro (PARTIAL=): lo saltado puede
     ser solo lo que ese ancestro aporta, no un defecto del form (una vista FMX
     sin su maestro salia en blanco y "no abrira"; 18-oct-2026). %s: lo que falto }
@@ -7001,7 +7000,8 @@ const
     'where each thing ends up, so you can place the next one without ' +
     'seeing the screen: with boxesFrom=renderer, as the VCL really placed it, and ' +
     'with what the text does not list - an inline frame and what is inside it -, ' +
-    'listed and not judged. What ' +
+    'listed and not judged. A box''s line is where its object is written; with ' +
+    'file, in that file (an inline frame''s or an ancestor''s), not in this form. What ' +
     'I judge comes from the text and is approximate: I take a container''s usable ' +
     'area as its Width/Height, and Anchors (which govern RESIZING) is ' +
     'not what I measure.';
@@ -7051,7 +7051,9 @@ const
     '[DSGN-179] How I measure it: FMX laid the form out and the renderer said where ' +
     'each control ended up, in form coordinates ("boxes"). A hidden control is not ' +
     'judged. "overlapping" does not take clean away: in FMX one control over another ' +
-    'is how a form is composed, so read it as a list to check against preview.';
+    'is how a form is composed, so read it as a list to check against preview. A ' +
+    'box''s line is where its object is written; with file, in that file (an inline ' +
+    'frame''s or an ancestor''s), not in this form.';
 
   SN_DESIGNER_LEJANO_NO_ENTRO_FMT =
     '[DSGN-181] Drawn without %s, from another folder of the project: with it the ' +
@@ -10473,7 +10475,7 @@ const
   SD_CFG_CONFIG =
     'See and manage a project''s build configurations and target PLATFORMS. ' +
     'view (read-only): the framework (VCL is Windows-only; FMX and console ' +
-    'cross platforms), the configurations, the ' +
+    'cross platforms), the configurations, the version, the ' +
     'defaultConfig and defaultPlatform (what delphi_build builds without ' +
     'config= / platform=) and every ' +
     'platform - enabled or not, possible for THIS project, needing a ' +
@@ -12670,6 +12672,13 @@ const
   // ancestro, de un frame, o sin componente: "Stream read error")
   SF_DSGN_LECTOR_SIN_LINEA_FMT =
     '  %s';
+  // ...y lo que dijo de OTRO fichero que leia para cargar el form (un frame en
+  // linea, un ancestro: Hermes, dirigido de la 1.26): ese fichero, su linea, el
+  // texto de esa linea y lo que dijo; o, sin linea, el fichero y lo que dijo
+  SF_DSGN_LINEA_AVISO_EN_FMT =
+    '  %s line %d: %s  ->  %s';
+  SF_DSGN_LECTOR_EN_FICHERO_FMT =
+    '  %s: %s';
   // el motivo de DSGN-154 cuando el lector leyo el form SIN un ancestro
   // (PARTIAL=): sin el, cada 'inherited' dice "Ancestor for X not found", que
   // es de nuestra lectura y no del form (una vista FMX sin su maestro, medido

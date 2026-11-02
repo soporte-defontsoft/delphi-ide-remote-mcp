@@ -82,8 +82,8 @@ nota = mc.como_json(r).get('ignoredNote') or ''
 check('H1 un frame que se contiene a si mismo no lleva la nota DSGN-114, que promete una linea que no trae',
       not mc.es(nota, 'SN_DESIGNER_PREVIEW_IGNORADAS'), nota[:300])
 
-# H2 una propiedad mala en el fichero de un frame en linea: el lector la salta leyendo el form, sin linea en el
-# form (no esta en el), y la nota dice que hacer con una sin linea; el preview del frame si la da
+# H2 una propiedad mala en el fichero de un frame en linea: el lector la salta leyendo el form; la entrada dice el
+# fichero del frame y su linea alli (el ayudante dice que fichero leia: protocolo 4), y lint lo mismo
 H2 = os.path.join(JAIL, 'marcov')
 os.makedirs(H2)
 USOS_VCL = 'Vcl.Forms, Vcl.Controls, Vcl.StdCtrls'
@@ -97,20 +97,45 @@ escribe(os.path.join(H2, 'UFV.pas'), 'unit UFV;\n\ninterface\n\nuses\n  %s, UMar
         '    MarcoV1: TMarcoV;\n  end;\n\nvar\n  FormV: TFormV;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n' % USOS_VCL)
 escribe(os.path.join(H2, 'UFV.dfm'), "object FormV: TFormV\n  Left = 0\n  Top = 0\n  Caption = 'V'\n  ClientHeight = 200\n"
         "  ClientWidth = 300\n  inline MarcoV1: TMarcoV\n    Left = 10\n    Top = 10\n    TabOrder = 0\n  end\nend\n")
+LINEA_NOEXISTE = MARCO_V.split('\n').index('    NoExiste = 1') + 1
 r = s.call('delphi_designer', {'command': 'preview', 'path': os.path.join(H2, 'UFV.dfm'), 'maxwidth': 100}, t=400)
 j = mc.como_json(r)
 mala = [x for x in (j.get('ignored') or []) if x.get('property') == 'NoExiste']
-nota = j.get('ignoredNote') or ''
-TEXTO_114 = mc.catalogo()['SN_DESIGNER_PREVIEW_IGNORADAS']
-check('H2 la propiedad mala del frame sale sin linea en el preview del form, y la nota dice que hacer con una '
-      'sin linea (no solo "line says where each one is")',
-      len(mala) == 1 and 'line' not in mala[0] and mc.es(nota, 'SN_DESIGNER_PREVIEW_IGNORADAS')
-      and 'without line' in TEXTO_114 and nota.startswith(TEXTO_114.split(' - ')[0]) and 'without line' in nota,
-      (mala, nota[:400]))
+check('H2 la propiedad mala del frame, en el preview del form: su fichero (el del frame) y su linea alli (%d)'
+      % LINEA_NOEXISTE,
+      len(mala) == 1 and (mala[0].get('file') or '').endswith('UMarcoV.dfm') and mala[0].get('line') == LINEA_NOEXISTE
+      and mc.es(j.get('ignoredNote') or '', 'SN_DESIGNER_PREVIEW_IGNORADAS'), (mala, r[:400]))
 r = s.call('delphi_designer', {'command': 'preview', 'path': os.path.join(H2, 'UMarcoV.dfm'), 'maxwidth': 100}, t=400)
 mala = [x for x in (mc.como_json(r).get('ignored') or []) if x.get('property') == 'NoExiste']
-check('H2 ...y el preview del frame, al que manda la nota, la da con su linea',
-      len(mala) == 1 and mala[0].get('line') == MARCO_V.split('\n').index('    NoExiste = 1') + 1, (mala, r[:300]))
+check('H2 ...y en el preview del propio frame, su linea sin fichero (es el suyo)',
+      len(mala) == 1 and mala[0].get('line') == LINEA_NOEXISTE and 'file' not in mala[0], (mala, r[:300]))
+r = s.call('delphi_designer', {'command': 'lint', 'path': os.path.join(H2, 'UFV.dfm')}, t=400)
+check('H2 lint del form: lo que salto el lector, en el fichero del frame y su linea',
+      'UMarcoV.dfm line %d:' % LINEA_NOEXISTE in r, r[:600])
+
+# H4 layout: un control de dentro de un frame en linea que el form no sobrescribe esta escrito en el fichero del
+# frame: su caja dice ese fichero y su linea alli (salia line=0 y nada mas; Hermes, dirigido de la 1.26)
+r = s.call('delphi_designer', {'command': 'layout', 'path': os.path.join(H2, 'UFV.dfm')}, t=400)
+cajas = {b.get('name'): b for b in (mc.como_json(r).get('boxes') or [])}
+b = cajas.get('MarcoV1.Edit1') or {}
+check('H4 layout VCL: MarcoV1.Edit1 en UMarcoV.dfm, linea %d; el frame en el form, sin fichero'
+      % (MARCO_V.split('\n').index('  object Edit1: TEdit') + 1),
+      (b.get('file') or '').endswith('UMarcoV.dfm') and b.get('line') == MARCO_V.split('\n').index('  object Edit1: TEdit') + 1
+      and 'file' not in (cajas.get('MarcoV1') or {'file': 1}), (b, r[:400]))
+
+# H5 un frame que no se puede leer (una cadena sin cerrar): lo que dice el preview del form nombra el fichero del frame
+H5 = os.path.join(JAIL, 'roto')
+os.makedirs(H5)
+escribe(os.path.join(H5, 'UMarcoR.pas'), 'unit UMarcoR;\n\ninterface\n\nuses\n  %s;\n\ntype\n  TMarcoR = class(TFrame)\n'
+        '    Edit1: TEdit;\n  end;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n' % USOS_VCL)
+escribe(os.path.join(H5, 'UMarcoR.dfm'), "object MarcoR: TMarcoR\n  Left = 0\n  Top = 0\n  Width = 200\n  Height = 60\n"
+        "  TabOrder = 0\n  object Edit1: TEdit\n    Left = 8\n    Top = 8\n    Text = 'sin cerrar\n  end\nend\n")
+escribe(os.path.join(H5, 'UFR.pas'), 'unit UFR;\n\ninterface\n\nuses\n  %s, UMarcoR;\n\ntype\n  TFormR = class(TForm)\n'
+        '    MarcoR1: TMarcoR;\n  end;\n\nvar\n  FormR: TFormR;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n' % USOS_VCL)
+escribe(os.path.join(H5, 'UFR.dfm'), "object FormR: TFormR\n  Left = 0\n  Top = 0\n  Caption = 'R'\n  ClientHeight = 200\n"
+        "  ClientWidth = 300\n  inline MarcoR1: TMarcoR\n    Left = 10\n    Top = 10\n    TabOrder = 0\n  end\nend\n")
+r = s.call('delphi_designer', {'command': 'preview', 'path': os.path.join(H5, 'UFR.dfm'), 'maxwidth': 100}, t=400)
+check('H5 un frame que no se lee: el preview del form nombra el fichero del frame', 'UMarcoR.dfm' in r, r[:600])
 
 # ---- F: la fase de los paquetes
 F1 = os.path.join(JAIL, 'fases')
@@ -241,6 +266,17 @@ cajas = {b.get('name'): b.get('line') for b in (mc.como_json(r).get('boxes') or 
 check('P3 layout FMX: el Edit1 del form en SU linea (%d), no en la del inherited del frame (%d); el del frame, en la suya'
       % (LINEA_DEL_FORM, LINEA_DEL_MARCO),
       cajas.get('Edit1') == LINEA_DEL_FORM and cajas.get('MarcoF1.Edit1') == LINEA_DEL_MARCO, (cajas, r[:300]))
+# H4 ...y en FMX, lo que vio Hermes: el Edit1 del frame que el form no sobrescribe, en el fichero del frame
+escribe(os.path.join(M, 'UF3.pas'), 'unit UF3;\n\ninterface\n\nuses\n  %s, UMarcoF;\n\ntype\n  TFormG = class(TForm)\n'
+        '    MarcoF1: TMarcoF;\n  end;\n\nvar\n  FormG: TFormG;\n\nimplementation\n\n{$R *.fmx}\n\nend.\n' % USOS_FMX)
+escribe(os.path.join(M, 'UF3.fmx'), "object FormG: TFormG\n  Left = 0\n  Top = 0\n  Caption = 'G'\n  ClientHeight = 300\n"
+        "  ClientWidth = 400\n  FormFactor.Width = 320\n  FormFactor.Height = 480\n  FormFactor.Devices = [Desktop]\n"
+        "  DesignerMasterStyle = 0\n  inline MarcoF1: TMarcoF\n    Size.Width = 200.000000000000000000\n"
+        "    Size.Height = 60.000000000000000000\n    Size.PlatformDefault = False\n  end\nend\n")
+r = s.call('delphi_designer', {'command': 'layout', 'path': os.path.join(M, 'UF3.fmx')}, t=240)
+b = {x.get('name'): x for x in (mc.como_json(r).get('boxes') or [])}.get('MarcoF1.Edit1') or {}
+check('H4 layout FMX: MarcoF1.Edit1, que el form no sobrescribe, en UMarcoF.fmx linea 5 (salia line=0)',
+      (b.get('file') or '').endswith('UMarcoF.fmx') and b.get('line') == 5, (b, r[:400]))
 
 # P4 un set que el juez no pudo preguntar porque el ayudante se paro por tiempo (RENDER-027) no se niega como
 # si el valor rompiera el form (DSGN-158): se escribe y readerNote lo dice. El de mentira se para con la
@@ -320,6 +356,23 @@ check('P7 fixture: el proyecto se queda sin DCC_DcuOutput', not mc.fallo(t), t[:
 j = mc.como_json(s.call('delphi_build', {'project': os.path.join(P7, 'Coma.dproj'), 'platform': 'Win64', 'config': 'Debug'}, t=300)) or {}
 check('P7 un proyecto en una carpeta con coma, con la carpeta de .dcu suplida por el build, compila',
       j.get('success') is True and 'outputSupplied' in j, str(j)[:500])
+
+# ---- H: lo que encontro Hermes en el dirigido de la 1.26 (H1-H2, arriba, con el ciclo)
+# H3 la version que escribe set-version se lee en view (no se veia sin abrir el .dproj), y si los numeros y la
+# clave FileVersion no dicen lo mismo, view lo dice
+V3 = os.path.join(JAIL, 'Ver')
+s.call('delphi_create', {'kind': 'project-vcl', 'dir': V3, 'name': 'Ver'})
+DV = os.path.join(V3, 'Ver.dproj')
+t = s.call('delphi_config', {'command': 'set-version', 'project': DV, 'version': '2.1.0', 'include': True})
+check('H3 fixture: set-version 2.1.0 con include', mc.es(t, 'SN_CONFIG_VERSION_OK_FMT'), t[:300])
+j = mc.como_json(s.call('delphi_config', {'command': 'view', 'project': DV}))
+check('H3 view dice la version que escribio set-version y que los binarios la llevan',
+      j.get('version') == '2.1.0.0' and j.get('versionIncluded') is True and 'versionMismatch' not in j, str(j)[:400])
+t = s.call('delphi_config', {'command': 'set-property', 'project': DV, 'name': 'VerInfo_MajorVer', 'value': '3'})
+check('H3 fixture: los numeros a mano, descuadrados de la clave', not mc.fallo(t), t[:300])
+j = mc.como_json(s.call('delphi_config', {'command': 'view', 'project': DV}))
+check('H3 ...y con los numeros descuadrados, la version del binario (la clave) y lo que dicen los numeros',
+      j.get('version') == '2.1.0.0' and '3.1.0.0' in (j.get('versionMismatch') or ''), str(j)[:400])
 
 s.cierra()
 mc.borra(BASE)

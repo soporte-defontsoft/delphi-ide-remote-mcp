@@ -166,10 +166,13 @@ PHASE=packages | form         when it starts and ends loading the IDE's design
                               last one says which phase it was in
 COMPONENTS=<n>
 SUBSTITUTED=<classes>         not found in any package: pink box with the name
-IGNORED=<reader error>        repeatable; also before a failure: what the
+IGNORED=<who>|<file>|<error>  repeatable; also before a failure: what the
                               reader skipped is usually WHY it failed (a value
                               skipped without being consumed leaves the reader
-                              lost, and the failure says only "Stream read error")
+                              lost, and the failure says only "Stream read error").
+                              <file> is the one it was reading: an inline frame's
+                              or an ancestor's when it was there, so the server
+                              gives the line in that file
 WARNING=<text>                repeatable
 PARTIAL=<ancestor or file>    repeatable: the form was read WITHOUT it (an
                               ancestor with no .pas saying which, or with no
@@ -179,6 +182,10 @@ WRITTEN=<line>                repeatable, --writeback on: the form as the
 NONVISUAL=<n>                 icons drawn (only with --nonvisual on)
 NONVISUALS=<Name:Class,...>   the root's non-visual components, drawn or not
 RECT=<name>=<l>,<t>,<w>,<h>   with --component
+BOX=<path>|<class>|<parent>|<l>,<t>,<w>,<h>|<visible>|<content>|<file>|<path in file>
+                              repeatable, --boxes (layout): where each control
+                              ends up, and the file that writes it (an inline
+                              frame's, an ancestor's) with its path there
 FIDELITY=window|print|canvas  VCL: real painting (needs DWM, an interactive
                               session) or WM_PRINT per control (works from a
                               service; controls that paint their own way come
@@ -186,7 +193,7 @@ FIDELITY=window|print|canvas  VCL: real painting (needs DWM, an interactive
 SIZE=<w>x<h>
 CAPTURE=<png>
 MS=<load>,<paint>
-NOTLOADED=<exception class>   before ERROR=: what failed was the form READER
+NOTLOADED=<class>|<file>|<error> before ERROR=: what failed was the form READER
                               while loading (EFilerError or EParserError) - the
                               file, not the renderer; the server answers DSGN-153
                               with the reader's words and the line, not DSGN-061

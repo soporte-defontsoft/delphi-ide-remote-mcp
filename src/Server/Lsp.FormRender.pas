@@ -92,6 +92,9 @@ type
     // componente: IBX sin gds32.dll, un AV de un bpl); '' si era del lector
     // (EFilerError, EParserError: el fichero). Lo dice el ayudante (IGNORED=)
     Origen: string;
+    // el fichero que leia el lector: el form, o el de un frame en linea o un
+    // ancestro si fue ahi (IGNORED=, NOTLOADED=; 1.26). '' si no lo dijo
+    Fichero: string;
   end;
 
   { Un no visual de la raiz (NONVISUALS=<Nombre:Clase,...>): el ayudante lo
@@ -116,6 +119,9 @@ type
     // donde esta de verdad, si no es su padre: el contenido de un TTabItem o un TScrollBox
     EnContenido: Boolean;
     CX, CY, CW, CH: Integer;
+    // el fichero que lo escribe (el de un frame en linea o un ancestro, si es ahi)
+    // y su ruta desde la raiz de ese fichero (1.26)
+    Fichero, EnFichero: string;
   end;
 
   TRespuestaRender = record
@@ -160,6 +166,27 @@ type
     Leidos: TArray<TLeidoPorElJuez>; // READ=: lo que leyo para cargarlo, con su huella
   end;
 
+  { Los documentos de lo que el ayudante leyo para un form: el del form (de quien
+    llama, que lo libera) y, uno por fichero, el de cada frame en linea o ancestro
+    que nombra lo que dijo (IGNORED=, NOTLOADED=, BOX=). EL sitio donde se busca lo
+    que no esta escrito en el form pedido (Hermes, dirigido de la 1.26: salia sin
+    linea, o con line=0, y sin decir donde estaba). }
+  TFicherosDelForm = class
+  private
+    FForm: string;
+    FDoc: TStyleDoc;
+    FRutas: TArray<string>;
+    FDocs: TArray<TStyleDoc>; // los de FRutas, en su orden; nil el que no se lee
+  public
+    { ADoc, el documento de AForm (puede ser el de una propuesta, la del juez) }
+    constructor Create(ADoc: TStyleDoc; const AForm: string);
+    destructor Destroy; override;
+    { El documento de AFichero: el del form si es el o si es ''; nil si no se lee
+      (la puerta de lectura de la jaula, la de todo designer). AOtro, AFichero si
+      no es el form; '' si lo es }
+    function Doc(const AFichero: string; out AOtro: string): TStyleDoc;
+  end;
+
 { El renderizador de AFramework (vcl|fmx) junto al exe del servidor; '' si
   no esta. ANombre sale siempre, para decir cual falta. }
 function FormRenderExe(const AFramework: string; out ANombre: string): string;
@@ -194,11 +221,14 @@ function ClaseDelSustituto(const ARaizTipo: string): string;
   de Windows (medido el 18-oct-2026: en aleman no nombraba nada). }
 function PartesDeLectura(const AValor: string): TIgnorada;
 
-{ La linea (1-based) de ADoc que nombra lo que dijo el lector en AI - su
-  componente y su propiedad -, o 0 si no esta en ESTE fichero (de un
-  ancestro, de un frame) o no nombra ninguna. EL localizador: lo hacia a mano
-  el preview para sus ignored, y ahora lo piden tambien LoQueNoCargo. }
-function LineaDeLoLeido(ADoc: TStyleDoc; const AI: TIgnorada): Integer;
+{ La linea (1-based) que nombra lo que dijo el lector en AI - su componente y
+  su propiedad - en el fichero que leia (AI.Fichero: el form, o el de un frame
+  en linea o un ancestro), o 0 si no nombra ninguna. ADoc, el documento en el que
+  esta (de AFicheros, que lo libera; nil si no se lee); AFichero, ese fichero si
+  no es el form ('' si lo es). EL localizador: lo hacia a mano el preview para
+  sus ignored, y lo piden tambien LoQueNoCargo y lint. }
+function LineaDeLoLeido(AFicheros: TFicherosDelForm; const AI: TIgnorada; out ADoc: TStyleDoc;
+  out AFichero: string): Integer;
 
 { Si lo que el lector se salto (AI) es una propiedad de la RAIZ (ARaizNombre)
   que publica una clase del USUARIO (APublicadas: PublicadasPorElUsuario): el
@@ -211,7 +241,9 @@ function IgnoradaDelUsuario(const ARaizNombre: string; const AI: TIgnorada;
 { Lo que el LECTOR del IDE no cargo de un form (R: lo que se salto y, si fue
   suyo - NoCarga -, el error que lo paro), uno por linea, lo que dijo TAL
   CUAL con la linea de ADoc que nombra (SF_DSGN_LINEA_AVISO_FMT, la forma de
-  los avisos del lint); sin linea, solo lo que dijo. Sin repetir: el error
+  los avisos del lint), o la del fichero que leia el lector, con su nombre (el de
+  un frame en linea o un ancestro: SF_DSGN_LINEA_AVISO_EN_FMT); sin linea, solo lo
+  que dijo, y el fichero si no es el form. Sin repetir: el error
   que lo paro suele ser el ultimo que se salto. ADoc nil: todo sin linea.
   AForm, el form de verdad (su .pas dice lo que publica el usuario).
   ANoConfirmado: el motivo de DSGN-154 por lo que NO va entre lo que no carga,
@@ -550,21 +582,26 @@ begin
   Result.Texto := AValor.Substring(P3 + 1);
 end;
 
-{ EL lector de un valor <cabeza>|<mensaje en partes> (IGNORED=, NOTLOADED=),
-  la inversa de EnCabezaYPartes (FormRender.Comun): la cabeza en ACabeza y el
-  mensaje en sus partes. Sin separador no hay cabeza y todo es el texto: lo
-  que no se sabe partir no se pierde. V106 de la 1.23.1: eran dos lectores, y
-  el de NOTLOADED= no leia nada sin cabeza o sin separador. }
+{ EL lector de un valor <cabeza>|<fichero>|<mensaje en partes> (IGNORED=,
+  NOTLOADED=), la inversa de EnCabezaYPartes (FormRender.Comun): la cabeza en
+  ACabeza, el fichero en Fichero y el mensaje en sus partes. Sin separador no hay
+  cabeza y todo es el texto: lo que no se sabe partir no se pierde. V106 de la
+  1.23.1: eran dos lectores, y el de NOTLOADED= no leia nada sin cabeza o sin
+  separador. Ni la cabeza ni una ruta llevan el separador. }
 function DeCabezaYPartes(const AValor: string; out ACabeza: string): TIgnorada;
 var
-  P: Integer;
+  P, Q: Integer;
 begin
   ACabeza := '';
   P := AValor.IndexOf(FR_PARTES_SEP);
   if P < 0 then
     Exit(PartesDeLectura(AValor));
   ACabeza := AValor.Substring(0, P);
-  Result := PartesDeLectura(AValor.Substring(P + 1));
+  Q := AValor.IndexOf(FR_PARTES_SEP, P + 1);
+  if Q < 0 then
+    Exit(PartesDeLectura(AValor.Substring(P + 1)));
+  Result := PartesDeLectura(AValor.Substring(Q + 1));
+  Result.Fichero := AValor.Substring(P + 1, Q - P - 1);
 end;
 
 { <x>,<y>,<ancho>,<alto>, la inversa de FormRender.Comun.MedidasEnTexto }
@@ -692,9 +729,10 @@ begin
       Result.ClasesSinLeer := Result.ClasesSinLeer + [V]
     else if Es(FR_BOX) then
     begin
-      // <ruta>|<clase>|<padre>|<x>,<y>,<ancho>,<alto>|<visible>|<contenido>: un nombre no lleva '|'
+      // <ruta>|<clase>|<padre>|<x>,<y>,<ancho>,<alto>|<visible>|<contenido>|<fichero>|<ruta en
+      // el fichero>: ni un nombre ni una ruta llevan '|'
       Trozos := V.Split(['|']);
-      if Length(Trozos) = 6 then
+      if Length(Trozos) = 8 then
       begin
         var Caja: TCajaDeRender;
         if LeeCuatroEnteros(Trozos[3], Caja.X, Caja.Y, Caja.W, Caja.H) then
@@ -704,6 +742,8 @@ begin
           Caja.Padre := Trozos[2];
           Caja.Visible := Trozos[4] = '1';
           Caja.EnContenido := LeeCuatroEnteros(Trozos[5], Caja.CX, Caja.CY, Caja.CW, Caja.CH);
+          Caja.Fichero := Trozos[6];
+          Caja.EnFichero := Trozos[7];
           Result.Cajas := Result.Cajas + [Caja];
         end;
       end;
@@ -751,11 +791,50 @@ begin
   end;
 end;
 
-function LineaDeLoLeido(ADoc: TStyleDoc; const AI: TIgnorada): Integer;
+{ TFicherosDelForm }
+
+constructor TFicherosDelForm.Create(ADoc: TStyleDoc; const AForm: string);
+begin
+  inherited Create;
+  FDoc := ADoc;
+  FForm := AForm;
+end;
+
+destructor TFicherosDelForm.Destroy;
+begin
+  for var D in FDocs do
+    D.Free;
+  inherited;
+end;
+
+function TFicherosDelForm.Doc(const AFichero: string; out AOtro: string): TStyleDoc;
+begin
+  AOtro := '';
+  if (AFichero = '') or (FForm = '') or SameFileName(AFichero, FForm) then
+    Exit(FDoc);
+  AOtro := AFichero;
+  for var I := 0 to High(FRutas) do
+    if SameFileName(FRutas[I], AFichero) then
+      Exit(FDocs[I]);
+  // uno por fichero, tambien el que no se lee: no se vuelve a intentar
+  Result := nil;
+  try
+    if TStyleDoc.Lee(AFichero, Result) <> '' then
+      Result := nil;
+  except
+    Result := nil; // fuera de lo que se lee, o ilegible: sin linea
+  end;
+  FRutas := FRutas + [AFichero];
+  FDocs := FDocs + [Result];
+end;
+
+function LineaDeLoLeido(AFicheros: TFicherosDelForm; const AI: TIgnorada; out ADoc: TStyleDoc;
+  out AFichero: string): Integer;
 var
   Ini, Fin: Integer;
 begin
   Result := 0;
+  ADoc := AFicheros.Doc(AI.Fichero, AFichero);
   if (ADoc = nil) or (AI.Componente = '') then
     Exit;
   // el lector nombra a secas, tambien a uno de dentro de un frame en linea
@@ -851,18 +930,35 @@ var
   RaizNombre, RaizClase, Sustituto, NoVistas, PropCn, ClaseCn: string;
   Raiz: TRaizParaElLector;
   Proyecto: TArray<TPartesDelProyecto>;
+  Ficheros: TFicherosDelForm;
 
   procedure Pon(const AI: TIgnorada);
+  var
+    D: TStyleDoc;
+    Otro: string;
   begin
     for var V in Vistos do
       if V = AI.Texto then
         Exit;
     Vistos := Vistos + [AI.Texto];
-    var N := LineaDeLoLeido(ADoc, AI);
-    if N > 0 then
-      Lineas := Lineas + [MsgFmt(SF_DSGN_LINEA_AVISO_FMT, [N, ADoc.Lines[N - 1].Trim, AI.Texto])]
+    // en el fichero que leia: el de un frame o un ancestro se nombra
+    var N := LineaDeLoLeido(Ficheros, AI, D, Otro);
+    if (N > 0) and (Otro <> '') then
+      Lineas := Lineas + [MsgFmt(SF_DSGN_LINEA_AVISO_EN_FMT, [Otro, N, D.Lines[N - 1].Trim, AI.Texto])]
+    else if N > 0 then
+      Lineas := Lineas + [MsgFmt(SF_DSGN_LINEA_AVISO_FMT, [N, D.Lines[N - 1].Trim, AI.Texto])]
+    else if Otro <> '' then
+      Lineas := Lineas + [MsgFmt(SF_DSGN_LECTOR_EN_FICHERO_FMT, [Otro, AI.Texto])]
     else
       Lineas := Lineas + [MsgFmt(SF_DSGN_LECTOR_SIN_LINEA_FMT, [AI.Texto])];
+  end;
+
+  // el documento en el que esta escrito lo que dijo el lector en AI
+  function DocDe(const AI: TIgnorada): TStyleDoc;
+  var
+    Otro: string;
+  begin
+    Result := Ficheros.Doc(AI.Fichero, Otro);
   end;
 
   // lo que se salto de un objeto cuya clase el ayudante SUSTITUYO (no esta
@@ -871,9 +967,10 @@ var
   function DeSustituida(const AI: TIgnorada): Boolean;
   begin
     Result := False;
-    if (ADoc = nil) or (AI.Componente = '') then
+    var D := DocDe(AI);
+    if (D = nil) or (AI.Componente = '') then
       Exit;
-    var Obj := ADoc.ObjetoDeNombre(AI.Componente, True);
+    var Obj := D.ObjetoDeNombre(AI.Componente, True);
     if Obj <> nil then
       for var S in R.Sustituidas do
         if SameText(S, Obj.ClassName_) then
@@ -881,6 +978,10 @@ var
   end;
 
 begin
+  // los documentos de lo leido, el form y los ficheros que nombra el lector (el
+  // cuerpo, sin reindentar)
+  Ficheros := TFicherosDelForm.Create(ADoc, AForm);
+  try
   Vistos := [];
   Lineas := [];
   SinProp := [];
@@ -920,7 +1021,7 @@ begin
       SinProp := SinProp + [TextoDeIgnorada(I)];
       Continue;
     end;
-    if PartesDeClaseNoInstalada(ADoc, I, EsDesignerFmx(AForm), PropCn, ClaseCn) then
+    if PartesDeClaseNoInstalada(DocDe(I), I, EsDesignerFmx(AForm), PropCn, ClaseCn) then
     begin
       var K := -1;
       for var J := 0 to High(Proyecto) do
@@ -960,6 +1061,9 @@ begin
     Pon(E);
   end;
   Result := Lineas;
+  finally
+    Ficheros.Free;
+  end;
 end;
 
 { Lo que el contenedor SI puede leer: gramatica de la casa, porque el juez (que

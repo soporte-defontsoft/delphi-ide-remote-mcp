@@ -470,38 +470,38 @@ begin
 end;
 
 { Las propiedades que el lector se salto en un preview, como objetos que
-  guian: el componente, la propiedad, el motivo de TReader y su linea en el
-  form - la localiza el servidor, que el renderizador no sabe lineas (en un
-  binario, la del texto que ensenan delphi_read y get) -. Una que no esta en
-  este fichero (de un ancestro, de un frame) va sin linea; lo que no casa con
-  la forma de TReader, como texto (David, 7-oct-2026). }
-function IgnoradasConLinea(const ARuta: string; const AIgnoradas: TArray<TIgnorada>): TJSONArray;
-var
-  Doc: TStyleDoc;
+  guian: el componente, la propiedad, el motivo de TReader y su linea - la
+  localiza el servidor, que el renderizador no sabe lineas (en un binario, la
+  del texto que ensenan delphi_read y get) -. Una escrita en otro fichero que el
+  form carga (un frame en linea, un ancestro) lleva ese fichero, y su linea alli
+  (Hermes, dirigido de la 1.26: iba sin linea y sin decir donde); lo que no casa
+  con la forma de TReader, como texto, con su fichero si no es el form (David,
+  7-oct-2026). }
+function IgnoradasConLinea(AFicheros: TFicherosDelForm; const AIgnoradas: TArray<TIgnorada>): TJSONArray;
 begin
   Result := TJSONArray.Create;
-  if LoadDoc(ARuta, Doc) <> '' then
-    Doc := nil;
-  try
-    for var I in AIgnoradas do
+  for var I in AIgnoradas do
+  begin
+    var Uno := TJSONObject.Create;
+    Result.Add(Uno);
+    // EL localizador (Lsp.FormRender), el de lo que no carga
+    var D: TStyleDoc;
+    var Otro: string;
+    var Linea := LineaDeLoLeido(AFicheros, I, D, Otro);
+    if I.Componente = '' then
     begin
-      var Uno := TJSONObject.Create;
-      Result.Add(Uno);
-      if I.Componente = '' then
-      begin
-        Uno.AddPair('text', I.Texto);
-        Continue;
-      end;
-      Uno.AddPair('component', I.Componente);
-      Uno.AddPair('property', I.Propiedad);
-      Uno.AddPair('reason', I.Motivo);
-      // EL localizador (Lsp.FormRender), el de lo que no carga
-      var Linea := LineaDeLoLeido(Doc, I);
-      if Linea > 0 then
-        Uno.AddPair('line', TJSONNumber.Create(Linea));
+      Uno.AddPair('text', I.Texto);
+      if Otro <> '' then
+        Uno.AddPair('file', Otro);
+      Continue;
     end;
-  finally
-    Doc.Free;
+    Uno.AddPair('component', I.Componente);
+    Uno.AddPair('property', I.Propiedad);
+    Uno.AddPair('reason', I.Motivo);
+    if Otro <> '' then
+      Uno.AddPair('file', Otro);
+    if Linea > 0 then
+      Uno.AddPair('line', TJSONNumber.Create(Linea));
   end;
 end;
 
@@ -734,7 +734,7 @@ end;
   VCL, el renderizador en FMX y lo que el renderizador anade al texto VCL): align
   solo cuando se sabe (el texto), visible solo cuando lo dijo el renderizador. }
 function CajaJson(const ANombre, AClase, AAlign: string; AConAlign: Boolean; const APadre: string;
-  AX, AY, AW, AH, ALinea, AVisible: Integer): TJSONObject;
+  AX, AY, AW, AH, ALinea, AVisible: Integer; const AFichero: string = ''): TJSONObject;
 begin
   Result := TJSONObject.Create;
   Result.AddPair('name', ANombre);
@@ -748,6 +748,9 @@ begin
   Result.AddPair('h', TJSONNumber.Create(AH));
   if AVisible >= 0 then
     Result.AddPair('visible', TJSONBool.Create(AVisible = 1));
+  // la linea es de ese fichero, si no es el form (LineaDeCaja)
+  if AFichero <> '' then
+    Result.AddPair('file', AFichero);
   Result.AddPair('line', TJSONNumber.Create(ALinea));
 end;
 
@@ -760,6 +763,27 @@ function LineaEnElForm(ADoc: TStyleDoc; const ARuta: string): Integer;
 begin
   var O := ADoc.ObjetoDeNombre(ARuta);
   Result := (if O <> nil then O.StartLine else 0);
+end;
+
+{ La linea de la caja C: la del form si el form la escribe (su inherited, si lo
+  sobrescribe; AFichero ''), y si no, la del fichero que la escribe - un frame en
+  linea, un ancestro: lo dice el renderizador (BOX=) -, con ese fichero en
+  AFichero; 0 y '' si no se sabe (Hermes, dirigido de la 1.26: salia line=0 sin
+  decir donde estaba) }
+function LineaDeCaja(AFicheros: TFicherosDelForm; const C: TCajaDeRender; out AFichero: string): Integer;
+var
+  Form, Otro: string;
+begin
+  AFichero := '';
+  Result := LineaEnElForm(AFicheros.Doc('', Form), C.Ruta);
+  if (Result > 0) or (C.Fichero = '') then
+    Exit;
+  var D := AFicheros.Doc(C.Fichero, Otro);
+  if (D = nil) or (Otro = '') then
+    Exit;
+  Result := LineaEnElForm(D, C.EnFichero);
+  if Result > 0 then
+    AFichero := Otro;
 end;
 
 { layout de un form FMX: lo que FMX resuelve, medido; no hay un modelo que imitar
@@ -782,6 +806,8 @@ begin
     if R.Fallo <> '' then
       Exit(MsgFmt(SR_DESIGNER_LAYOUT_FMX_FMT, [R.Fallo]));
     var Ret := TJSONObject.Create;
+    // y los ficheros que escriben lo que no esta en el form (frames, ancestros)
+    var Ficheros := TFicherosDelForm.Create(Doc, APath);
     try
       Ret.AddPair('form', Doc.Root.ObjName);
       Ret.AddPair('class', Doc.Root.ClassName_);
@@ -815,7 +841,10 @@ begin
             Padre.H := R.Alto;
             Padre.Visible := True;
           end;
-          Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False, Padre.Ruta, C.X, C.Y, C.W, C.H, Linea, Ord(C.Visible)));
+          var FicheroCaja: string;
+          var LineaCaja := LineaDeCaja(Ficheros, C, FicheroCaja);
+          Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False, Padre.Ruta, C.X, C.Y, C.W, C.H, LineaCaja,
+            Ord(C.Visible), FicheroCaja));
           if not C.Visible or not Padre.Visible then
             Continue;
           if (C.W = 0) or (C.H = 0) then
@@ -849,6 +878,7 @@ begin
       Ret.AddPair('howMeasured', MsgText(SN_DESIGNER_LAYOUT_FMX_HOW));
       Result := Ret.ToJSON;
     finally
+      Ficheros.Free;
       Ret.Free;
     end;
   finally
@@ -1236,8 +1266,11 @@ begin
               Break;
             end;
         // lo que el texto no lista -un frame inline y lo que lleva dentro- entra con lo
-        // que el renderizador midio, con la linea de su bloque si lo tiene (0 dentro de
-        // un frame): se lista y no se juzga (dirigido de Hermes de la 1.24, punto 4)
+        // que el renderizador midio, con la linea de su bloque, en el form o en el
+        // fichero del frame (LineaDeCaja): se lista y no se juzga (dirigido de Hermes
+        // de la 1.24, punto 4; el fichero, el de la 1.26)
+        var Ficheros := TFicherosDelForm.Create(Doc, APath);
+        try
         for var C in Medido.Cajas do
         begin
           if not C.Visible then
@@ -1250,9 +1283,16 @@ begin
               Break;
             end;
           if not Esta then
+          begin
+            var FicheroCaja: string;
+            var LineaCaja := LineaDeCaja(Ficheros, C, FicheroCaja);
             Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False,
               (if C.Padre = '' then Doc.Root.ObjName else C.Padre), C.X, C.Y, C.W, C.H,
-              LineaEnElForm(Doc, C.Ruta), -1));
+              LineaCaja, -1, FicheroCaja));
+          end;
+        end;
+        finally
+          Ficheros.Free;
         end;
         Ret.AddPair('boxesFrom', 'renderer');
       end
@@ -1745,7 +1785,6 @@ begin
     end;
     if Length(R.Ignoradas) > 0 then
     begin
-      Return.AddPair('ignored', IgnoradasConLinea(Ruta, R.Ignoradas));
       // lo que publica una clase del USUARIO en la raiz no lo lee el
       // renderizador (no carga sus clases): se dice cual es, que no es un
       // error del form (1.19.2). Y lo que es de la clase de la RAIZ y no de la
@@ -1758,16 +1797,24 @@ begin
       var DelForm := 0;
       var RaizL := RaizParaElLector(Ruta, R.RaizClase, Fw = 'fmx');
       var Sustituto := ClaseDelSustituto(R.RaizTipo);
-      // el documento, para las partes de una clase del proyecto (el juicio es
-      // el del lint: Lsp.FormRender.PartesDeClaseNoInstalada)
+      // los documentos de lo leido: el form y el frame o el ancestro en el que esta
+      // escrito lo que se salto (EL localizador: Lsp.FormRender.TFicherosDelForm)
       var DocP: TStyleDoc := nil;
-      if TStyleDoc.Lee(Ruta, DocP) <> '' then
-        DocP := nil;
       try
+        if TStyleDoc.Lee(Ruta, DocP) <> '' then
+          DocP := nil;
+      except
+        DocP := nil; // sin documento: lo saltado, sin linea
+      end;
+      var Ficheros := TFicherosDelForm.Create(DocP, Ruta);
+      try
+      Return.AddPair('ignored', IgnoradasConLinea(Ficheros, R.Ignoradas));
+      // las partes de una clase del proyecto, en el documento de lo saltado (el
+      // juicio es el del lint: Lsp.FormRender.PartesDeClaseNoInstalada)
       for var Ig in R.Ignoradas do
       begin
         var Suya: TPropiedadDelUsuario;
-        var PropCn, ClaseCn: string;
+        var PropCn, ClaseCn, Otro: string;
         if IgnoradaDelUsuario(R.RaizNombre, Ig, RaizL.Propias, Suya) then
         begin
           Suyas := Suyas + IfThen(Suyas <> '', ', ') + Ig.Propiedad + ' (' + Suya.Clase + ', ' +
@@ -1779,7 +1826,8 @@ begin
           NoVistas := NoVistas + IfThen(NoVistas <> '', ', ') + Ig.Propiedad
         // una excepcion del codigo de un componente (no del lector), o bajo las
         // partes de una clase del proyecto: no es del fichero que se sepa
-        else if DelCodigoDeUnComponente(Ig) or PartesDeClaseNoInstalada(DocP, Ig, Fw = 'fmx', PropCn, ClaseCn) then
+        else if DelCodigoDeUnComponente(Ig) or
+                PartesDeClaseNoInstalada(Ficheros.Doc(Ig.Fichero, Otro), Ig, Fw = 'fmx', PropCn, ClaseCn) then
           NoConfirmadas := NoConfirmadas + IfThen(NoConfirmadas <> '', ' | ') + TextoDeIgnorada(Ig)
         // un frame que se contiene a si mismo no es una propiedad con su linea:
         // RENDER-026 ya dice su fichero y que hacer (Hermes, dirigido de la 1.26)
@@ -1787,6 +1835,7 @@ begin
           Inc(DelForm);
       end;
       finally
+        Ficheros.Free;
         DocP.Free;
       end;
       // leido sin un ancestro: lo saltado puede ser solo lo que el aporta, y

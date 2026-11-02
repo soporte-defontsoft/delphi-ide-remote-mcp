@@ -176,15 +176,17 @@ begin
     FR_STYLE + 'none (as the VCL designer)'#13#10 +
     FR_ROOT + 'FormPrueba:TFormPrueba:form'#13#10 + FR_PACKAGES + '112/153'#13#10 +
     FR_COMPONENTS + '5'#13#10 + FR_SUBSTITUTED + 'TRaro,TOtro'#13#10 +
-    // IGNORED=<de quien>|<partes> desde la 1.20.2: FR_ORIGEN_LECTOR si la
-    // excepcion era del lector, la clase si la lanzo el codigo de un componente
-    FR_IGNORED + FR_ORIGEN_LECTOR + '||||Property Alineacion does not exist'#13#10 +
-    FR_IGNORED + FR_ORIGEN_LECTOR + '||||Invalid property value'#13#10 +
-    FR_IGNORED + FR_ORIGEN_LECTOR + '|Panel1|Font.Size|Invalid property value|Error reading Panel1.Font.Size: Invalid property value'#13#10 +
-    FR_IGNORED + FR_ORIGEN_LECTOR + '|Edit1|FontColor|Ungültiger Eigenschaftswert|Fehler beim Lesen von Edit1.FontColor: ' +
+    // IGNORED=<de quien>|<fichero>|<partes>: de quien desde la 1.20.2 (FR_ORIGEN_LECTOR
+    // si la excepcion era del lector, la clase si la lanzo el codigo de un
+    // componente), y el fichero que leia desde la 1.26 (el de un frame, si fue ahi)
+    FR_IGNORED + FR_ORIGEN_LECTOR + '|C:\w\UForm.dfm||||Property Alineacion does not exist'#13#10 +
+    FR_IGNORED + FR_ORIGEN_LECTOR + '|C:\w\UForm.dfm||||Invalid property value'#13#10 +
+    FR_IGNORED + FR_ORIGEN_LECTOR + '|C:\w\UMarco.dfm|Panel1|Font.Size|Invalid property value|' +
+      'Error reading Panel1.Font.Size: Invalid property value'#13#10 +
+    FR_IGNORED + FR_ORIGEN_LECTOR + '|C:\w\UForm.dfm|Edit1|FontColor|Ungültiger Eigenschaftswert|Fehler beim Lesen von Edit1.FontColor: ' +
       'Ungültiger Eigenschaftswert'#13#10 +
-    FR_IGNORED + 'EIBClientError||||a|b'#13#10 +
-    FR_NOT_LOADED + 'EReadError|EditRight|FontColor|Invalid property value|Error reading EditRight.FontColor: ' +
+    FR_IGNORED + 'EIBClientError|||||a|b'#13#10 +
+    FR_NOT_LOADED + 'EReadError|C:\w\UForm.dfm|EditRight|FontColor|Invalid property value|Error reading EditRight.FontColor: ' +
       'Invalid property value'#13#10 +
     FR_WARNING + '[RENDER-016] component: there is no Z in FormPrueba.'#13#10 +
     FR_NONVISUALS + 'Timer1:TTimer,ActionList1:TActionList'#13#10 + FR_NONVISUAL + '2'#13#10 +
@@ -211,6 +213,9 @@ begin
   Assert.AreEqual('Font.Size', R.Ignoradas[2].Propiedad);
   Assert.AreEqual('Invalid property value', R.Ignoradas[2].Motivo);
   Assert.AreEqual('Error reading Panel1.Font.Size: Invalid property value', R.Ignoradas[2].Texto);
+  // el fichero que leia el lector: el del frame, donde esta escrito (1.26)
+  Assert.AreEqual('C:\w\UMarco.dfm', R.Ignoradas[2].Fichero);
+  Assert.AreEqual('C:\w\UForm.dfm', R.Ignoradas[0].Fichero);
   // un lector aleman: el servidor ya no parte el texto con el ingles
   Assert.AreEqual('Edit1', R.Ignoradas[3].Componente);
   Assert.AreEqual('FontColor', R.Ignoradas[3].Propiedad);
@@ -218,14 +223,16 @@ begin
   // el texto puede llevar el separador: es lo ultimo
   Assert.AreEqual('a|b', R.Ignoradas[4].Texto);
   Assert.AreEqual('', R.Ignoradas[4].Componente);
+  Assert.AreEqual('', R.Ignoradas[4].Fichero, 'sin fichero');
   // el origen: '' si era del lector, la clase si no (DelCodigoDeUnComponente)
   Assert.AreEqual('', R.Ignoradas[0].Origen, 'del lector');
   Assert.IsFalse(DelCodigoDeUnComponente(R.Ignoradas[2]));
   Assert.AreEqual('EIBClientError', R.Ignoradas[4].Origen, 'el codigo de un componente');
   Assert.IsTrue(DelCodigoDeUnComponente(R.Ignoradas[4]));
   Assert.AreEqual('EIBClientError: a|b', TextoDeIgnorada(R.Ignoradas[4]));
-  // NOTLOADED=<clase>|<partes>: el error que paro al lector
+  // NOTLOADED=<clase>|<fichero>|<partes>: el error que paro al lector, y donde
   Assert.IsTrue(R.NoCarga, 'NOTLOADED=');
+  Assert.AreEqual('C:\w\UForm.dfm', R.Parada.Fichero);
   Assert.AreEqual('EditRight', R.Parada.Componente);
   Assert.AreEqual('FontColor', R.Parada.Propiedad);
   Assert.AreEqual('Error reading EditRight.FontColor: Invalid property value', R.Parada.Texto);
@@ -740,8 +747,9 @@ begin
 end;
 
 { V106 de la 1.23.1: IGNORED= y NOTLOADED= son la MISMA forma,
-  <cabeza>|<partes>, con UN lector: el de NOTLOADED= no leia nada sin cabeza o
-  sin separador, y el de IGNORED= se quedaba el valor entero como texto }
+  <cabeza>|<fichero>|<partes> (el fichero, desde la 1.26), con UN lector: el de
+  NOTLOADED= no leia nada sin cabeza o sin separador, y el de IGNORED= se
+  quedaba el valor entero como texto }
 procedure TFormRenderTests.LaCabezaYSusPartesTienenUnLector;
 var
   R: TRespuestaRender;
@@ -750,9 +758,18 @@ begin
   Assert.IsTrue(R.NoCarga, 'NOTLOADED=');
   Assert.AreEqual('mensaje sin partes', R.Parada.Texto, 'sin separador, todo es el texto');
   Assert.AreEqual('', R.ClaseDeLaParada, 'y no hay cabeza');
-  R := LeeRespuestaDeRender(FR_NOT_LOADED + '|||motivo|el texto'#13#10);
-  Assert.AreEqual('motivo', R.Parada.Motivo, 'sin cabeza, sus partes');
+  R := LeeRespuestaDeRender(FR_NOT_LOADED + '||||motivo|el texto'#13#10);
+  Assert.AreEqual('motivo', R.Parada.Motivo, 'sin cabeza ni fichero, sus partes');
   Assert.AreEqual('el texto', R.Parada.Texto);
+  // una cabeza sin el fichero detras: lo que queda es el texto, no se pierde
+  R := LeeRespuestaDeRender(FR_NOT_LOADED + 'EReadError|solo el texto'#13#10);
+  Assert.AreEqual('solo el texto', R.Parada.Texto);
+  Assert.AreEqual('', R.Parada.Fichero);
+  // BOX=: el fichero que escribe el control y su ruta en el (1.26)
+  R := LeeRespuestaDeRender(FR_BOX + 'Marco1.Edit1|TEdit|Marco1|18,18,121,23|1||C:\w\UMarco.dfm|Edit1'#13#10);
+  Assert.AreEqual<NativeInt>(1, Length(R.Cajas), 'BOX= con sus ocho campos');
+  Assert.AreEqual('C:\w\UMarco.dfm', R.Cajas[0].Fichero);
+  Assert.AreEqual('Edit1', R.Cajas[0].EnFichero);
   R := LeeRespuestaDeRender(FR_IGNORED + 'mensaje sin partes'#13#10);
   Assert.AreEqual('mensaje sin partes', R.Ignoradas[0].Texto, 'IGNORED=, igual');
 end;

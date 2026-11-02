@@ -209,6 +209,60 @@ begin
   end;
 end;
 
+const
+  // los cuatro numeros del VERSIONINFO de Windows, en su orden
+  ETIQUETAS_DE_VERSION: array[0..3] of string = ('VerInfo_MajorVer', 'VerInfo_MinorVer', 'VerInfo_Release',
+    'VerInfo_Build');
+
+{ Cuantos caracteres del valor de AClave son su numero (los digitos y
+  puntos del principio): lo que cambiaba FileVersion=[\d.]*. }
+function Numerico(const AXml: string; const AClave: TClaveDeVersion): Integer;
+begin
+  Result := 0;
+  while (AClave.Ini + Result < AClave.Fin) and
+        CharInSet(AXml[AClave.Ini + Result], ['0'..'9', '.']) do
+    Inc(Result);
+end;
+
+{ Si el proyecto mete la version en sus binarios en alguna configuracion. }
+function IncluyeVersion(const AXml: string): Boolean;
+begin
+  for var T in TramosDeEtiqueta(AXml, 'VerInfo_IncludeVerInfo') do
+    if EsVerdadDeMsbuild(ValorDeTramo(AXml, T).Trim) then // como msbuild (A33)
+      Exit(True);
+  Result := False;
+end;
+
+type
+  { La version de un proyecto donde la dejan el IDE y set-version: los cuatro
+    numeros del VERSIONINFO ('' si no los escribe: el IDE no los pone mientras
+    es 1.0.0.0) y la parte numerica de la clave FileVersion, de la que el build
+    saca la del binario ('' si no hay); Incluida, si los binarios la llevan }
+  TVersionDelProyecto = record
+    Numeros, Clave: string;
+    Incluida: Boolean;
+  end;
+
+{ EL lector de la version: lo que habia, para set-version, y lo que ensena view
+  (Hermes, dirigido de la 1.26: no se veia sin abrir el .dproj) }
+function VersionDelProyecto(const AXml: string): TVersionDelProyecto;
+begin
+  Result := Default(TVersionDelProyecto);
+  if Length(TramosDeEtiqueta(AXml, ETIQUETAS_DE_VERSION[0])) > 0 then
+    for var I := 0 to 3 do
+    begin
+      var V := AllTagValues(AXml, ETIQUETAS_DE_VERSION[I]);
+      Result.Numeros := Result.Numeros + IfThen(I > 0, '.') + (if Length(V) > 0 then V[0] else '0');
+    end;
+  for var C in ClavesDeVersion(AXml) do
+    if SameText(C.Nombre, 'FileVersion') and (Numerico(AXml, C) > 0) then
+    begin
+      Result.Clave := Copy(AXml, C.Ini, Numerico(AXml, C));
+      Break;
+    end;
+  Result.Incluida := IncluyeVersion(AXml);
+end;
+
 function ViewConfig(const ADproj, ASection: string): string;
 var
   Info: TDprojInfo;
@@ -322,6 +376,19 @@ begin
         Return.AddPair('crossPlatform', MsgText(SF_CFG_NO_VCL_WINDOWS_ONLY))
       else
         Return.AddPair('crossPlatform', MsgText(SF_CFG_YES_FMX_CONSOLE_TARGET));
+      // la version: la del binario es la de la clave FileVersion; si los numeros
+      // dicen otra cosa, se dice (es lo que descuadra subirla a mano)
+      if Xml = '' then
+        Xml := LeeTexto(ADproj, [ltJaula]);
+      var Ver := VersionDelProyecto(Xml);
+      if Ver.Clave <> '' then
+        Return.AddPair('version', Ver.Clave)
+      else if Ver.Numeros <> '' then
+        Return.AddPair('version', Ver.Numeros);
+      if (Ver.Clave <> '') and (Ver.Numeros <> '') and (Ver.Numeros <> Ver.Clave) then
+        Return.AddPair('versionMismatch', MsgFmt(SF_CFG_EN_NUMEROS_Y_CLAVES_FMT, [Ver.Numeros, Ver.Clave]));
+      if (Ver.Clave <> '') or (Ver.Numeros <> '') then
+        Return.AddPair('versionIncluded', TJSONBool.Create(Ver.Incluida));
     end;
     if (Sec = 'summary') or (Sec = 'all') or (Sec = 'platforms') then
     begin
@@ -1505,36 +1572,17 @@ end;
 function SetVersion(const ADproj, ARawVersion: string; AIncluir: Boolean): string;
 var
   Enc, Xml, Pedida, Sufijo, Cuatro, AntesNum, AntesKey, Nota, Eol: string;
-  Partes, Tags: TArray<string>;
+  Partes: TArray<string>;
   N: array [0 .. 3] of Integer;
   I: Integer;
   Previo: string;
   SinNumeros: Boolean;
-
-  { Cuantos caracteres del valor de AClave son su numero (los digitos y
-    puntos del principio): lo que cambiaba FileVersion=[\d.]*. }
-  function Numerico(const AXml: string; const AClave: TClaveDeVersion): Integer;
-  begin
-    Result := 0;
-    while (AClave.Ini + Result < AClave.Fin) and
-          CharInSet(AXml[AClave.Ini + Result], ['0'..'9', '.']) do
-      Inc(Result);
-  end;
 
   { Si alguna de AClaves es una FileVersion que empieza en [ADesde, AHasta). }
   function ConFileVersion(const AClaves: TArray<TClaveDeVersion>; ADesde, AHasta: Integer): Boolean;
   begin
     for var C in AClaves do
       if SameText(C.Nombre, 'FileVersion') and (C.Ini >= ADesde) and (C.Ini < AHasta) then
-        Exit(True);
-    Result := False;
-  end;
-
-  { Si el proyecto mete la version en sus binarios en alguna configuracion. }
-  function IncluyeVersion(const AXml: string): Boolean;
-  begin
-    for var T in TramosDeEtiqueta(AXml, 'VerInfo_IncludeVerInfo') do
-      if EsVerdadDeMsbuild(ValorDeTramo(AXml, T).Trim) then // como msbuild (A33)
         Exit(True);
     Result := False;
   end;
@@ -1570,32 +1618,18 @@ begin
   // el IDE solo los escribe cuando dejan de ser 1.0.0.0: exigirlos dejaba
   // fuera todo proyecto nuevo del IDE y 284 de los 296 .dproj de los Samples
   // de la 37.0 con la version incluida (Hermes, dirigido de la 1.20.1).
-  SinNumeros := Length(TramosDeEtiqueta(Xml, 'VerInfo_MajorVer')) = 0;
+  SinNumeros := Length(TramosDeEtiqueta(Xml, ETIQUETAS_DE_VERSION[0])) = 0;
   var Claves0 := ClavesDeVersion(Xml);
   if SinNumeros and not ConFileVersion(Claves0, 1, MaxInt) then
     Exit(MsgText(SR_CONFIG_VERSION_SIN_VERINFO));
   Eol := SaltoDominante(Xml); // el salto del fichero, la regla de todos
 
-  // Lo que habia, para poder decirlo: los numeros por un lado y la clave por
-  // otro, que es donde se ve si estaban descuadrados.
-  AntesNum := '';
-  Tags := ['VerInfo_MajorVer', 'VerInfo_MinorVer', 'VerInfo_Release',
-    'VerInfo_Build'];
-  for I := 0 to 3 do
-  begin
-    var V := AllTagValues(Xml, Tags[I]);
-    if Length(V) > 0 then
-      AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + V[0]
-    else
-      AntesNum := AntesNum + IfThen(AntesNum = '', '', '.') + '0';
-  end;
-  AntesKey := MsgText(SF_NINGUNO);
-  for var C in Claves0 do
-    if SameText(C.Nombre, 'FileVersion') and (Numerico(Xml, C) > 0) then
-    begin
-      AntesKey := Copy(Xml, C.Ini, Numerico(Xml, C));
-      Break;
-    end;
+  // Lo que habia, para poder decirlo, por EL lector de la version (el de view):
+  // los numeros por un lado y la clave por otro, que es donde se ve si estaban
+  // descuadrados
+  var Antes := VersionDelProyecto(Xml);
+  AntesNum := Antes.Numeros;
+  AntesKey := (if Antes.Clave <> '' then Antes.Clave else MsgText(SF_NINGUNO));
 
   // Sin numeros (un proyecto que nadie subio de 1.0.0.0) lo que tenia es lo
   // que decia la clave, y los cuatro entran en cada grupo que la lleva,
@@ -1613,8 +1647,8 @@ begin
         begin
           var Nuevos := '';
           for I := 0 to 3 do
-            if Length(TramosEnGrupo(Xml, Tags[I], Grupos[G])) = 0 then
-              Nuevos := Nuevos + XmlElemento(Tags[I], N[I].ToString) + Eol +
+            if Length(TramosEnGrupo(Xml, ETIQUETAS_DE_VERSION[I], Grupos[G])) = 0 then
+              Nuevos := Nuevos + XmlElemento(ETIQUETAS_DE_VERSION[I], N[I].ToString) + Eol +
                 SangriaDeLaLineaEn(Xml, T.Abre);
           Xml := Copy(Xml, 1, T.Abre - 1) + Nuevos + Copy(Xml, T.Abre, MaxInt);
           Break;
@@ -1628,7 +1662,7 @@ begin
   Previo := '';
   for I := 0 to 3 do
   begin
-    var Ts := TramosDeEtiqueta(Xml, Tags[I]);
+    var Ts := TramosDeEtiqueta(Xml, ETIQUETAS_DE_VERSION[I]);
     if Length(Ts) > 0 then
       for var K := High(Ts) downto 0 do
         Xml := Copy(Xml, 1, Ts[K].Ini - 1) + XmlEscape(N[I].ToString) + Copy(Xml, Ts[K].Fin, MaxInt)
@@ -1637,9 +1671,9 @@ begin
       var Ps := TramosDeEtiqueta(Xml, Previo);
       for var K := High(Ps) downto 0 do
         Xml := Copy(Xml, 1, Ps[K].Cierra - 1) + Eol + SangriaDeLaLineaEn(Xml, Ps[K].Abre) +
-          XmlElemento(Tags[I], N[I].ToString) + Copy(Xml, Ps[K].Cierra, MaxInt);
+          XmlElemento(ETIQUETAS_DE_VERSION[I], N[I].ToString) + Copy(Xml, Ps[K].Cierra, MaxInt);
     end;
-    Previo := Tags[I];
+    Previo := ETIQUETAS_DE_VERSION[I];
   end;
 
   // Y las claves de texto, solo donde ya existen: las de Android e iOS no

@@ -2543,7 +2543,7 @@ check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
 # FormRenderProtocolo.inc) y lo que entienden (los argumentos de ParseaArgumentos). Si cambia uno sin
 # subirlo, un ayudante viejo y un servidor nuevo se creen iguales. Cambia: sube FR_PROTOCOLO_VERSION y
 # pon aqui el numero y la firma que dice el fallo
-FIRMA_DEL_PROTOCOLO = (3, '69f983c7636e06bf')
+FIRMA_DEL_PROTOCOLO = (4, '69f983c7636e06bf')
 
 
 def firma_del_protocolo(inc, comun):

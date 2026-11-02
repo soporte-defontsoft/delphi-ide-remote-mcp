@@ -7,7 +7,7 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 3;
+  FR_PROTOCOLO_VERSION = 4;
   FR_CAPTURE = 'CAPTURE=';       // CAPTURE=<ruta del png> (la misma clave que el nodo de escritorio)
   FR_SIZE = 'SIZE=';             // SIZE=<ancho>x<alto> del png
   FR_DPI = 'DPI=';               // DPI=96: el proceso no es consciente del DPI, un pixel = una unidad del dfm
@@ -21,7 +21,8 @@
   FR_FASE_FORM = 'form';
   FR_COMPONENTS = 'COMPONENTS='; // COMPONENTS=<n> leidos de la raiz
   FR_SUBSTITUTED = 'SUBSTITUTED='; // SUBSTITUTED=<TClase,TClase> que no existen en ningun paquete (sustituto rosa con el nombre)
-  FR_IGNORED = 'IGNORED=';       // IGNORED=<de quien>|<error que se salto, EN PARTES> (repetible; FR_PARTES_SEP): <de quien> =
+  FR_IGNORED = 'IGNORED=';       // IGNORED=<de quien>|<fichero que leia>|<error que se salto, EN PARTES> (repetible;
+                                 // FR_PARTES_SEP; el fichero, el de un frame o un ancestro si fue ahi: 1.26): <de quien> =
                                  // FR_ORIGEN_LECTOR si la excepcion era del lector (EFilerError, EParserError: el
                                  // fichero), o la clase de la excepcion si la lanzo el codigo de un componente al
                                  // crearlo o nombrarlo (IBX sin gds32.dll, un AV de un bpl: no es del fichero, que se
@@ -54,14 +55,16 @@
                                  // nombre del metodo de un evento (no hay codigo) o una referencia a un
                                  // componente que no resolvio en el form (la de otro modulo). El escritor no
                                  // lo escribe, y el servidor conserva esa linea (1.22.1)
-  FR_BOX = 'BOX=';               // BOX=<ruta>|<clase>|<ruta del padre>|<x>,<y>,<ancho>,<alto>|<visible 0|1>|<contenido> (repetible;
-                                 // --boxes): cada control, donde queda de verdad, en coordenadas del form (V74, V24);
-                                 // <contenido>, x,y,ancho,alto de donde esta si no es su padre (un TTabItem), o vacio
+  FR_BOX = 'BOX=';               // BOX=<ruta>|<clase>|<ruta del padre>|<x>,<y>,<ancho>,<alto>|<visible 0|1>|<contenido>|
+                                 // <fichero>|<ruta en el fichero> (repetible; --boxes): cada control, donde queda de
+                                 // verdad, en coordenadas del form (V74, V24); <contenido>, x,y,ancho,alto de donde esta
+                                 // si no es su padre (un TTabItem), o vacio; <fichero>, el que lo escribe - el de un
+                                 // frame en linea o un ancestro, si es ahi - y su ruta desde la raiz de ese (1.26)
   FR_UNREADABLE_CLASS = 'UNREADABLECLASS='; // UNREADABLECLASS=<clsid> (repetible; --unreadableclasses): una clase
                                  // COM cuya clave InprocServer32 no se deja leer desde el contenedor
   FR_MS = 'MS=';                 // MS=<carga>,<pintado> en milisegundos
   FR_ERROR = 'ERROR=';           // ERROR=<motivo>; va con codigo de salida 1 (3 si fue el tiempo limite)
-  FR_NOT_LOADED = 'NOTLOADED=';  // NOTLOADED=<clase de la excepcion>|<su mensaje EN PARTES>, antes del ERROR=:
+  FR_NOT_LOADED = 'NOTLOADED=';  // NOTLOADED=<clase de la excepcion>|<fichero que leia>|<su mensaje EN PARTES>, antes del ERROR=:
                                  // lo que fallo fue el LECTOR mientras cargaba el form (EFilerError o
                                  // EParserError, lo dice la jerarquia de la RTL): es el contenido del
                                  // fichero, no el ayudante ni un paquete al pintar (DSGN-061 de la 1.20).

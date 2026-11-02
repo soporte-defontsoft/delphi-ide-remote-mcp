@@ -415,8 +415,10 @@ var
 begin
   R := Fmx(Format('--path "%s" --out "%s"', [Pruebas + 'NoCargaPorCodigo.fmx', Salida('nocarga_fmx')]));
   Assert.AreEqual<Cardinal>(FR_RC_ERROR, R.Rc, string.Join(' | ', R.Lineas));
-  Assert.IsTrue(R.Valor(FR_NOT_LOADED).StartsWith('EReadError|EditRight|FontColor|'),
-    'lo que fallo fue el lector, con su error en partes: ' + R.Valor(FR_NOT_LOADED));
+  // <clase>|<fichero que leia>|<partes> (el fichero, desde la 1.26)
+  Assert.IsTrue(R.Valor(FR_NOT_LOADED).StartsWith('EReadError|') and
+    R.Valor(FR_NOT_LOADED).Contains('NoCargaPorCodigo.fmx|EditRight|FontColor|'),
+    'lo que fallo fue el lector, en ese fichero, con su error en partes: ' + R.Valor(FR_NOT_LOADED));
   Assert.IsTrue(R.Valor(FR_ERROR).Contains('Error reading EditRight.FontColor'), R.Valor(FR_ERROR));
 end;
 
