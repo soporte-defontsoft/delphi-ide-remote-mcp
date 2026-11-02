@@ -56,6 +56,12 @@ type
     InicioArg: Integer;     // donde empieza Argumento en el texto
   end;
 
+  // Que hace con su bloque una directiva condicional (lo dice CondicionalDe):
+  // lo abre (IF, IFDEF, IFNDEF, IFOPT), pasa a otra rama con su condicion
+  // (ELSEIF) o a la de lo demas (ELSE), o lo cierra (ENDIF, IFEND); cdNinguno,
+  // cualquier otra directiva.
+  TCondicional = (cdNinguno, cdAbre, cdRama, cdSiNo, cdCierra);
+
   // Un trozo del argumento de una directiva de FICHERO (I, R, L): una ruta
   // entre comillas, o hasta el primer blanco si va sin ellas.
   TTrozoDeDirectiva = record
@@ -117,6 +123,14 @@ function ComentariosDeLinea(const ALineas: TArray<string>): TArray<Integer>;
 // compilador; '%' las marcas que escribe el IDE y el compilador no lee
 // ({%CLASSGROUP 'FMX.Controls.TControl'} de un modulo de datos).
 function DirectivasPascal(const ATexto: string; AMarca: Char = '$'): TArray<TDirectivaPascal>;
+
+// LA gramatica de los condicionales de Pascal, la unica: la clase de la
+// directiva de nombre ANombre (el de DirectivasPascal, en mayusculas). No hay
+// juez a quien preguntarselo -ni dcc ni el motor dicen que nombres abren un
+// condicional-: es gramatica propia, UNA. Estaba dos veces, en las constantes
+// de los lectores de un uses partido (Lsp.ProjectUnits) y en linea en el
+// evaluador de ramas (Lsp.Preproceso): forma 4 de la 1.26.
+function CondicionalDe(const ANombre: string): TCondicional;
 
 // Los primeros AMaximo trozos de AArgumento, el argumento de una directiva de
 // fichero: {$R a.res a.rc} da dos, y {$R *.iPad.fmx IOS} el comodin y la
@@ -718,6 +732,20 @@ begin
     end;
     Inc(I, N);
   end;
+end;
+
+function CondicionalDe(const ANombre: string): TCondicional;
+begin
+  if (ANombre = 'IF') or (ANombre = 'IFDEF') or (ANombre = 'IFNDEF') or (ANombre = 'IFOPT') then
+    Result := cdAbre
+  else if ANombre = 'ELSEIF' then
+    Result := cdRama
+  else if ANombre = 'ELSE' then
+    Result := cdSiNo
+  else if (ANombre = 'ENDIF') or (ANombre = 'IFEND') then
+    Result := cdCierra
+  else
+    Result := cdNinguno;
 end;
 
 function TrozosDeDirectiva(const AArgumento: string; AMaximo: Integer): TArray<TTrozoDeDirectiva>;

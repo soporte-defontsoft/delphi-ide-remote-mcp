@@ -860,17 +860,11 @@ end;
   se salta entera. Nunca una dentro de un comentario; cerrada por el primer
   `;` fuera de comillas y comentarios. }
 const
-  // Los condicionales de Pascal: los que ABREN, los que cambian de RAMA y los
-  // que CIERRAN. Una lista para los lectores de un uses de esta unidad: estaba
-  // escrita a mano en CondicionalesAbiertos, EntradasDeOtrasRamas y EsEnvuelta
-  CONDICIONAL_ABRE: array[0..3] of string = ('IF', 'IFDEF', 'IFNDEF', 'IFOPT');
-  CONDICIONAL_RAMA: array[0..1] of string = ('ELSE', 'ELSEIF');
-  CONDICIONAL_CIERRA: array[0..1] of string = ('ENDIF', 'IFEND');
   // las combinaciones de ramas que ListaEnCadaRama recorre como mucho
   MAX_COMBINACIONES_DE_RAMAS = 256;
 
-// EL paseo por los condicionales de ATexto (IF, IFDEF, IFNDEF e IFOPT abren;
-// ENDIF e IFEND cierran), por EL lector de directivas: AAbiertos, los que
+// EL paseo por los condicionales de ATexto (los que abren y los que cierran,
+// por CondicionalDe), por EL lector de directivas: AAbiertos, los que
 // quedan abiertos al final (negativo con un cierre de mas), y APrimero, donde
 // empieza el abierto mas EXTERNO (0 si no queda ninguno)
 procedure RecorreCondicionales(const ATexto: string; out AAbiertos, APrimero: Integer);
@@ -880,12 +874,12 @@ begin
   AAbiertos := 0;
   Pila := [];
   for var D in DirectivasPascal(ATexto) do
-    if MatchText(D.Nombre, CONDICIONAL_ABRE) then
+    if CondicionalDe(D.Nombre) = cdAbre then
     begin
       Inc(AAbiertos);
       Pila := Pila + [D.Inicio];
     end
-    else if MatchText(D.Nombre, CONDICIONAL_CIERRA) then
+    else if CondicionalDe(D.Nombre) = cdCierra then
     begin
       Dec(AAbiertos);
       if Length(Pila) > 0 then
@@ -917,8 +911,7 @@ end;
 function LlevaCondicional(const ATexto: string): Boolean;
 begin
   for var D in DirectivasPascal(ATexto) do
-    if MatchText(D.Nombre, CONDICIONAL_ABRE) or MatchText(D.Nombre, CONDICIONAL_RAMA) or
-       MatchText(D.Nombre, CONDICIONAL_CIERRA) then
+    if CondicionalDe(D.Nombre) <> cdNinguno then
       Exit(True);
   Result := False;
 end;
@@ -969,24 +962,24 @@ begin
   begin
     if (DI <= High(Ds)) and (Ds[DI].Inicio = I) then
     begin
-      var Nombre := Ds[DI].Nombre;
-      if MatchText(Nombre, CONDICIONAL_ABRE) then
+      var Clase := CondicionalDe(Ds[DI].Nombre);
+      if Clase = cdAbre then
       begin
         Ramas := Ramas + [1];
         ConElse := ConElse + [False];
         Pila := Pila + [High(Ramas)];
         Anota(2, High(Ramas));
       end
-      else if MatchText(Nombre, CONDICIONAL_RAMA) then
+      else if Clase in [cdRama, cdSiNo] then
       begin
         if Length(Pila) = 0 then
           Exit(-1);
         Inc(Ramas[Pila[High(Pila)]]);
-        if SameText(Nombre, 'ELSE') then
+        if Clase = cdSiNo then
           ConElse[Pila[High(Pila)]] := True;
         Anota(3, Pila[High(Pila)]);
       end
-      else if MatchText(Nombre, CONDICIONAL_CIERRA) then
+      else if Clase = cdCierra then
       begin
         if Length(Pila) = 0 then
           Exit(-1);
@@ -1086,9 +1079,9 @@ begin
   Fin := Length(ATexto) + 1;
   for var D in DirectivasPascal(Copy(ATexto, ADesde, MaxInt)) do
   begin
-    if MatchText(D.Nombre, CONDICIONAL_ABRE) then
+    if CondicionalDe(D.Nombre) = cdAbre then
       Inc(Prof)
-    else if MatchText(D.Nombre, CONDICIONAL_CIERRA) then
+    else if CondicionalDe(D.Nombre) = cdCierra then
       Dec(Prof);
     if Prof <= 0 then
     begin
@@ -1453,13 +1446,13 @@ function EsEnvuelta(const AEntrada: string): Boolean;
 var
   L: TArray<string>;
 
-  // la linea es UNA directiva de esas y nada de codigo (un comentario si)
-  function SoloDirectiva(const ALinea: string; const ANombres: array of string): Boolean;
+  // la linea es UNA directiva de esa clase y nada de codigo (un comentario si)
+  function SoloDirectiva(const ALinea: string; AClase: TCondicional): Boolean;
   var
     Ds: TArray<TDirectivaPascal>;
   begin
     Ds := DirectivasPascal(ALinea);
-    Result := (Length(Ds) = 1) and MatchText(Ds[0].Nombre, ANombres) and
+    Result := (Length(Ds) = 1) and (CondicionalDe(Ds[0].Nombre) = AClase) and
       (CodigoPascal(ALinea).Trim = '');
   end;
 
@@ -1468,8 +1461,8 @@ begin
   for var S in SplitToLines(AEntrada) do
     if S.Trim <> '' then
       L := L + [S.Trim];
-  Result := (Length(L) >= 3) and SoloDirectiva(L[0], CONDICIONAL_ABRE) and
-    SoloDirectiva(L[High(L)], CONDICIONAL_CIERRA);
+  Result := (Length(L) >= 3) and SoloDirectiva(L[0], cdAbre) and
+    SoloDirectiva(L[High(L)], cdCierra);
 end;
 
 // Que entrada NUEVA es cada una de la clausula ORIGINAL (-1: se quito). Los

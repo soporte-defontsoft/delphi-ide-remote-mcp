@@ -23,6 +23,7 @@ type
     [Test] procedure ElGrupoDeClasesDelIde;
     [Test] procedure UnNombreNuevoNoEsPalabraReservada;
     [Test] procedure UnPaqueteLoEsPorSuCabecera;
+    [Test] procedure LosCondicionalesPorSuNombre;
   end;
 
   // EL lexico (Lsp.Pascal): que es codigo, cadena, comentario y directiva.
@@ -98,6 +99,28 @@ begin
   Assert.AreEqual('I', D[1].Nombre);
   Assert.AreEqual('parentesis.inc', D[1].Argumento.Trim);
   Assert.AreEqual('ENDIF', D[2].Nombre);
+end;
+
+// LA gramatica de los condicionales (CondicionalDe, forma 4 de la 1.26): cada
+// nombre en su clase, y el nombre llega en mayusculas aunque el fuente lo
+// escriba en minusculas (los lectores de un uses lo comparaban con MatchText)
+procedure TDirectivasTests.LosCondicionalesPorSuNombre;
+var
+  D: TArray<TDirectivaPascal>;
+begin
+  for var N in ['IF', 'IFDEF', 'IFNDEF', 'IFOPT'] do
+    Assert.IsTrue(CondicionalDe(N) = cdAbre, N);
+  Assert.IsTrue(CondicionalDe('ELSEIF') = cdRama, 'ELSEIF');
+  Assert.IsTrue(CondicionalDe('ELSE') = cdSiNo, 'ELSE');
+  for var N in ['ENDIF', 'IFEND'] do
+    Assert.IsTrue(CondicionalDe(N) = cdCierra, N);
+  for var N in ['DEFINE', 'UNDEF', 'I', 'INCLUDE', 'IFDEFX', 'ELSES', ''] do
+    Assert.IsTrue(CondicionalDe(N) = cdNinguno, N);
+  D := DirectivasPascal('{$ifdef X} A (*$Else*) B {$IfEnd}');
+  Assert.IsTrue(Length(D) = 3, 'directivas: ' + IntToStr(Length(D)));
+  Assert.IsTrue(CondicionalDe(D[0].Nombre) = cdAbre, D[0].Nombre);
+  Assert.IsTrue(CondicionalDe(D[1].Nombre) = cdSiNo, D[1].Nombre);
+  Assert.IsTrue(CondicionalDe(D[2].Nombre) = cdCierra, D[2].Nombre);
 end;
 
 procedure TDirectivasTests.LasDeFicheroNoVenLasComentadas;

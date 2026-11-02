@@ -640,8 +640,10 @@ begin
       Desde := D.Inicio + D.Largo;
       Sb.Append(' '); // la directiva separa lo de antes de lo de despues
       Arg := D.Argumento.Trim;
-      if (D.Nombre = 'IFDEF') or (D.Nombre = 'IFNDEF') or (D.Nombre = 'IF') or
-         (D.Nombre = 'IFOPT') then
+      // que hace con su bloque lo dice LA gramatica (Lsp.Pascal); como se
+      // evalua la condicion que lo abre es de este evaluador
+      var Clase := CondicionalDe(D.Nombre);
+      if Clase = cdAbre then
       begin
         Cond := False;
         if Activo then
@@ -659,7 +661,7 @@ begin
         Pila.Add(R);
         Activo := Activo and Cond;
       end
-      else if D.Nombre = 'ELSEIF' then
+      else if Clase = cdRama then
       begin
         if Pila.Count > 0 then
         begin
@@ -673,7 +675,7 @@ begin
           Pila[Pila.Count - 1] := R;
         end;
       end
-      else if D.Nombre = 'ELSE' then
+      else if Clase = cdSiNo then
       begin
         if Pila.Count > 0 then
         begin
@@ -683,7 +685,7 @@ begin
           Pila[Pila.Count - 1] := R;
         end;
       end
-      else if (D.Nombre = 'ENDIF') or (D.Nombre = 'IFEND') then
+      else if Clase = cdCierra then
       begin
         if Pila.Count > 0 then
         begin

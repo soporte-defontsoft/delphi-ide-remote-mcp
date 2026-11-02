@@ -354,6 +354,13 @@ REGLAS = [
      r"\b(?:(?:Ansi)?(?:MatchText|IndexText)|AnsiSameText|AnsiCompareText)\s*\(\s*(?:TPath\.GetExtension|ExtractFileExt)\b",
      [],
      'TieneExtension (Lsp.Rutas, forma 25 de la 1.26): la extension como la compara NTFS (RutaEnLista)'),
+    # LA gramatica de los condicionales de Pascal (que nombre abre, cambia de rama o cierra): estaba en las
+    # constantes de Lsp.ProjectUnits y en linea en el evaluador de Lsp.Preproceso (forma 4 de la 1.26). No hay juez
+    # (ni dcc ni el motor dicen que nombres abren un condicional): gramatica PROPIA, UNA. TextoActivoEn distingue
+    # IFDEF de IFNDEF porque EVALUA la condicion que abre
+    ('los nombres de los condicionales de Pascal a mano', r"'(?:IFDEF|IFNDEF|IFOPT|ELSEIF|ENDIF|IFEND)'",
+     [('Lsp.Pascal.pas', 'CondicionalDe'), ('Lsp.Preproceso.pas', 'TextoActivoEn')],
+     'CondicionalDe (Lsp.Pascal, forma 4 de la 1.26): que hace con su bloque cada directiva condicional'),
     # los nombres de gobierno del vault a mano: estaban en cuatro sitios y la puerta de escritura conocia
     # tres - VAULT-INSTRUCTIONS.md, las instrucciones de TODOS los clientes, lo creaba un agente (V191)
     ('un fichero de gobierno del vault nombrado a mano',
@@ -1834,6 +1841,7 @@ PLANTADO = {
     'las ordenes de red de git a mano': "    if MatchText(Cmd, ['pull', 'fetch', 'push', 'ls-remote']) then",
     'una clausula uses nueva compuesta a mano':
         "    EstrenaClausula(AText, FinLinea, 'uses' + NL + '  ' + string.Join(', ', AFaltan) + ';');",
+    'los nombres de los condicionales de Pascal a mano': "    else if MatchText(D.Nombre, ['ENDIF', 'IFEND']) then",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",
