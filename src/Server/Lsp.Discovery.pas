@@ -205,6 +205,13 @@ function SysrootDeSdk(const AVersion, AXml: string): string;
   enlaces de un SDK (una macro) y los paquetes del renderizador (tres): forma
   21 del revisor del paisaje de la 1.26. }
 function ConMacrosDelIde(const AVersion, ATexto: string): string;
+{ LA carpeta de la biblioteca compilada del IDE para APlat, como la nombran su
+  Library Path y msbuild: $(BDSLIB)\<plat>\release, con $(BDSLIB) de SU tabla
+  (IdeMacroVars: el operador la puede redefinir en Environment Variables). La
+  componian a mano con la raiz del IDE los ajustes del motor y el mapa de
+  paquetes, y con BDSLIB redefinida eran otra carpeta (forma 20 del revisor del
+  paisaje de la 1.26). }
+function LibDelIde(const AInfo: TRadStudioInfo; const APlat: string): string;
 { Las carpetas de un sysroot donde vive su libc.so.6: las de la familia de
   Debian, las de la de Red Hat, juntas. Las tenian escritas VersionDeGlibc y los
   dos que miran si esta mezclado (P8 del revisor). }
@@ -1599,6 +1606,19 @@ begin
   // (una redefinida con macros dentro la expande ExpandIdeMacros, que anida)
   if ADest.Values['BDSPLATFORMSDKSDIR'] = '' then
     ADest.Values['BDSPLATFORMSDKSDIR'] := IdeSdksDir(AInfo.Version);
+end;
+
+function LibDelIde(const AInfo: TRadStudioInfo; const APlat: string): string;
+var
+  Vars: TStringList;
+begin
+  Vars := TStringList.Create;
+  try
+    IdeMacroVars(AInfo, Vars);
+    Result := ExpandIdeMacros('$(BDSLIB)\' + APlat + '\release', Vars);
+  finally
+    Vars.Free;
+  end;
 end;
 
 function ConMacrosDelIde(const AVersion, ATexto: string): string;

@@ -5,16 +5,19 @@
   GetPackageInfo) y nunca de una tabla escrita a mano: es lo que el IDE sabe
   cuando ofrece "anadir al requires". El nombre del paquete es el del .dcp,
   no el del .bpl con su sufijo de version (vcl290.bpl -> vcl.dcp): se
-  comprueba en lib\Win32\release. Un mapa por instalacion, cargado la primera
+  comprueba en la biblioteca Win32 del IDE (LibDelIde). Un mapa por instalacion, cargado la primera
   vez que hace falta (unos 300 BPL, menos de un segundo). Medido 2026-09-23:
   un paquete propio con una unit que usa Vcl.Dialogs compilaba en verde con
   25 W1033 y 4,6 MB de VCL dentro, y en quiet el agente no veia nada. }
 
 interface
 
-{ El paquete que contiene AUnit en la instalacion de ARootDir, o '' si
-  ningun BPL de la instalacion la declara. }
-function PaqueteDeUnit(const ARootDir, AUnit: string): string;
+uses
+  Lsp.Discovery; // TRadStudioInfo
+
+{ El paquete que contiene AUnit en la instalacion AInfo, o '' si ningun BPL
+  de la instalacion la declara. }
+function PaqueteDeUnit(const AInfo: TRadStudioInfo; const AUnit: string): string;
 
 implementation
 
@@ -44,9 +47,9 @@ begin
     TDictionary<string, string>(Param).AddOrSetValue(ClaveDeIdentificador(Name), GPaqueteActual);
 end;
 
-{ vcl290.bpl -> vcl si existe lib\Win32\release\vcl.dcp; si no, el nombre
-  entero: la instalacion decide, no una regla de sufijos. }
-function NombreDePaquete(const ARootDir, ABpl: string): string;
+{ vcl290.bpl -> vcl si existe vcl.dcp en ALib (la biblioteca Win32 del IDE); si
+  no, el nombre entero: la instalacion decide, no una regla de sufijos. }
+function NombreDePaquete(const ALib, ABpl: string): string;
 var
   Stem, SinSufijo: string;
   I: Integer;
@@ -57,21 +60,22 @@ begin
     Dec(I);
   SinSufijo := Copy(Stem, 1, I);
   if (SinSufijo <> '') and (SinSufijo <> Stem) and
-     TFile.Exists(TPath.Combine(ARootDir, 'lib\Win32\release\' + SinSufijo + '.dcp')) then
+     TFile.Exists(TPath.Combine(ALib, SinSufijo + '.dcp')) then
     Result := SinSufijo
   else
     Result := Stem;
 end;
 
-procedure CargaMapa(const ARootDir: string);
+procedure CargaMapa(const AInfo: TRadStudioInfo);
 var
-  Bin, F: string;
+  Bin, Lib, F: string;
   H: HMODULE;
   Flags: Integer;
 begin
   GMapa.Clear;
-  GRoot := ARootDir;
-  Bin := BinDelIde(ARootDir);
+  GRoot := AInfo.RootDir;
+  Bin := BinDelIde(AInfo.RootDir);
+  Lib := LibDelIde(AInfo, 'Win32'); // los BPL del IDE son de 32 bits
   if not TDirectory.Exists(Bin) then
     Exit;
   for F in TDirectory.GetFiles(Bin, '*.bpl') do
@@ -81,7 +85,7 @@ begin
     if H = 0 then
       Continue;
     try
-      GPaqueteActual := NombreDePaquete(ARootDir, F);
+      GPaqueteActual := NombreDePaquete(Lib, F);
       try
         Flags := 0;
         GetPackageInfo(H, GMapa, Flags, Recoge);
@@ -94,16 +98,16 @@ begin
   end;
 end;
 
-function PaqueteDeUnit(const ARootDir, AUnit: string): string;
+function PaqueteDeUnit(const AInfo: TRadStudioInfo; const AUnit: string): string;
 begin
   Result := '';
-  if (ARootDir = '') or (AUnit = '') then
+  if (AInfo.RootDir = '') or (AUnit = '') then
     Exit;
   GLock.Enter;
   try
     // una ruta, como el disco: tambien la Ñ, y no lo que el locale junta (V105)
-    if not SameFileName(GRoot, ARootDir) then
-      CargaMapa(ARootDir);
+    if not SameFileName(GRoot, AInfo.RootDir) then
+      CargaMapa(AInfo);
     if not GMapa.TryGetValue(ClaveDeIdentificador(AUnit), Result) then
       Result := '';
   finally

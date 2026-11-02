@@ -137,6 +137,11 @@ REGLAS = [
     ('lanzar el conversor de estilos', '(?:' + LANZA + r""".*ComillasSinEscape\(A?Exe\))|ComillasSinEscape\([^;]*StyleConverterExe""",
      [('Lsp.Styles.pas', 'CorreStyleConvert')],
      'CorreStyleConvert (1.16.0: defaults y tobin componian la orden a mano; 1.26: corre en su contenedor)'),
+    # forma 20 de la 1.26: <raiz>\lib\<plat>\release a mano en los ajustes del motor y el mapa de
+    # paquetes; msbuild y el Library Path del IDE dicen $(BDSLIB), que el operador puede redefinir
+    ('la carpeta de la biblioteca del IDE a mano', r"'\\lib\\'\s*\+|lib\\Win(?:32|64)\\release|\\release'",
+     [('Lsp.Discovery.pas', 'LibDelIde')],
+     'LibDelIde (Lsp.Discovery): $(BDSLIB)\\<plat>\\release por la tabla de macros del IDE'),
     ('nombre de un .profile', r"\+\s*'\.profile'",
      [('Lsp.Discovery.pas', 'RutaDePerfil')], 'RutaDePerfil, y NombreDePerfil su inversa (1.16.0)'),
     ('listar los perfiles a mano', r"(?:GetFiles|FicherosDePerfilesDelIde)\s*\([^)]*'\*\.profile'",
@@ -1770,6 +1775,7 @@ PLANTADO = {
     'lanzar un programa por su nombre a secas': "  Out := RunCapturedIn('git.exe status', '', 1000, C);",
     'una orden que empieza por un programa a secas': "  Linea := 'git.exe -c core.fsmonitor=false status';",
     'lanzar el conversor de estilos': "  Out := RunCapturedIn(ComillasSinEscape(Exe) + ' tobin', Dir, 1000, C);",
+    'la carpeta de la biblioteca del IDE a mano': r"  Lib := ARaiz + '\lib\' + Plat + '\release';",
     'nombre de un .profile': "  F := TPath.Combine(Dir, Nombre + '.profile');",
     'listar los perfiles a mano': "  for F in TDirectory.GetFiles(Dir, '*.profile') do",
     'listar los SDK a mano': "  for F in TDirectory.GetFiles(Dir, '*.sdk') do",

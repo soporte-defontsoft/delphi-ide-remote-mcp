@@ -2933,7 +2933,7 @@ begin
         for var MI in TRegEx.Matches(string.Join(#10, AvisosDelLog), 'W1033:?[^'']*''([^'']+)''', [roIgnoreCase]) do
         begin
           Implicitas.Add(MI.Groups[1].Value);
-          var Pk := PaqueteDeUnit(Info.RootDir, MI.Groups[1].Value);
+          var Pk := PaqueteDeUnit(Info, MI.Groups[1].Value);
           if Pk <> '' then
           begin
             Sugeridos.Add(Pk);

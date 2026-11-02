@@ -549,7 +549,7 @@ begin
   // linea 43 de los targets es su RESPALDO (Condition DelphiLibraryPath=='')
   // y no lo que compila msbuild. release va aunque el Library Path no la
   // traiga (un servicio sin el HKCU del IDE).
-  Lib := PrefijoSinBarra(AInfo.RootDir) + '\lib\' + Plat + '\release';
+  Lib := LibDelIde(AInfo, Plat); // $(BDSLIB) de la tabla del IDE, no la raiz a mano
   Depuracion := nil;
   if EsVerdadDeMsbuild(EffectiveProperty(Xml, 'DCC_DebugDCUs', Plat, Cfg)) then // como msbuild (A33)
     Depuracion := IdePlatformLibraryPaths(AInfo, Plat, 'Debug DCU Path', Cfg);
