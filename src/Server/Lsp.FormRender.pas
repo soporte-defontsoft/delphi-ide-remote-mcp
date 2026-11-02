@@ -28,6 +28,7 @@
 interface
 
 uses
+  System.Classes,   // TStrings: la tabla de macros del IDE (RutaDePaqueteDelIde)
   Lsp.Styles,       // TStyleDoc: la linea de lo que dijo el lector (LineaDeLoLeido)
   Lsp.DesignerMeta; // TPropiedadDelUsuario: lo que publica una clase del usuario
 
@@ -318,7 +319,12 @@ function EsEjecutable(const ABytes: TArray<Byte>): Boolean;
   lo escribian a mano seis sitios (P14 del revisor). }
 function CarpetaDelFormDeVerdad(const APeticion: TPeticionRender): string;
 function FormDeVerdad(const APeticion: TPeticionRender): string;
-function RutaDePaqueteDelIde(const AValor, ARaiz, AComun: string): string;
+{ Un paquete del IDE como lo escribe su registro (Known Packages), con sus
+  macros por EL expansor del IDE (ExpandIdeMacros con AVars, la tabla de
+  IdeMacroVars); una que no conoce se queda, y el paquete sale como que falta.
+  Sabia tres a mano ($(BDS), $(BDSBIN), $(BDSCOMMONDIR)): uno de GetIt o del
+  usuario salia como que faltaba (forma 21 del revisor del paisaje de la 1.26). }
+function RutaDePaqueteDelIde(const AValor: string; AVars: TStrings): string;
 
 type
   { Una clase COM en proceso: su CLSID, su biblioteca y su modelo de hilos }
@@ -1376,13 +1382,9 @@ begin
   Result := TPath.Combine(CarpetaDelFormDeVerdad(APeticion), TPath.GetFileName(APeticion.Path));
 end;
 
-function RutaDePaqueteDelIde(const AValor, ARaiz, AComun: string): string;
+function RutaDePaqueteDelIde(const AValor: string; AVars: TStrings): string;
 begin
-  Result := ConBarrasDeWindows(AValor);
-  if AComun <> '' then
-    Result := StringReplace(Result, '$(BDSCOMMONDIR)', AComun, [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, '$(BDSBIN)', BinDelIde(ARaiz), [rfReplaceAll, rfIgnoreCase]);
-  Result := StringReplace(Result, '$(BDS)', ARaiz, [rfReplaceAll, rfIgnoreCase]);
+  Result := ExpandIdeMacros(ConBarrasDeWindows(AValor), AVars);
 end;
 
 { Los paquetes del IDE de 32 bits del usuario, sin los desactivados (V124, por el
@@ -1391,11 +1393,15 @@ function PaquetesDelIde(const AInfo: TRadStudioInfo): TArray<string>;
 begin
   Result := [];
   var Off := IdeBplsDesactivados32(AInfo.Version);
-  var Raiz := PrefijoSinBarra(AInfo.RootDir);
-  var Comun := BdsCommonDir(AInfo);
-  for var V in IdeValoresDeClave(AInfo.Version, 'Known Packages', False) do
-    if not EsBplDesactivado(V.Nombre, Off) then
-      Result := Result + [RutaDePaqueteDelIde(V.Nombre, Raiz, Comun)];
+  var Vars := TStringList.Create;
+  try
+    IdeMacroVars(AInfo, Vars);
+    for var V in IdeValoresDeClave(AInfo.Version, 'Known Packages', False) do
+      if not EsBplDesactivado(V.Nombre, Off) then
+        Result := Result + [RutaDePaqueteDelIde(V.Nombre, Vars)];
+  finally
+    Vars.Free;
+  end;
 end;
 
 function ManifiestoDeClases(const AClases: TArray<TClaseCom>): string;

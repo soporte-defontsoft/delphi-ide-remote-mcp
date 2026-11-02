@@ -192,12 +192,19 @@ function NombreSinSdk(const ANombreSdk: string): string;
   sysroot ($(BDSPLATFORMSDKSDIR)\<nombre>.sdk), por el MISMO nombrador. }
 function RutaDeSdk(const AVersion, ANombre: string): string;
 function CarpetaDeSdk(const AVersion, ANombre: string): string;
-{ EL sysroot que nombra el texto de un .sdk (Profile_sysroot), con la macro
-  del IDE ($(BDSPLATFORMSDKSDIR)) resuelta para ESA version: '' si no lo
-  nombra; con otra macro, vuelve con ella (quien mire el disco, que lo
+{ EL sysroot que nombra el texto de un .sdk (Profile_sysroot), con las macros
+  del IDE de ESA version resueltas (ConMacrosDelIde): '' si no lo nombra; con
+  una macro que el IDE no conoce, vuelve con ella (quien mire el disco, que lo
   compruebe). Lo componian a mano el escaner de sysroots mezclados, la ficha
   de profiles y reseat-sdk, y la puerta de leer iba a por la cuarta. }
 function SysrootDeSdk(const AVersion, AXml: string): string;
+{ ATexto con las $(...) del IDE de AVersion expandidas por EL expansor
+  (ExpandIdeMacros) con LA tabla (IdeMacroVars: la del IDE, sus Environment
+  Variables, $(BDSPLATFORMSDKSDIR)...); lo que no conoce queda como esta, y
+  sin esa instalacion, todo. Lo hacian a mano el sysroot de un .sdk, los
+  enlaces de un SDK (una macro) y los paquetes del renderizador (tres): forma
+  21 del revisor del paisaje de la 1.26. }
+function ConMacrosDelIde(const AVersion, ATexto: string): string;
 { Las carpetas de un sysroot donde vive su libc.so.6: las de la familia de
   Debian, las de la de Red Hat, juntas. Las tenian escritas VersionDeGlibc y los
   dos que miran si esta mezclado (P8 del revisor). }
@@ -1323,10 +1330,7 @@ end;
 
 function SysrootDeSdk(const AVersion, AXml: string): string;
 begin
-  Result := TagValue(AXml, 'Profile_sysroot');
-  if Result.Contains('$(BDSPLATFORMSDKSDIR)') then
-    Result := Result.Replace('$(BDSPLATFORMSDKSDIR)', IdeSdksDir(AVersion),
-      [rfIgnoreCase]);
+  Result := ConMacrosDelIde(AVersion, TagValue(AXml, 'Profile_sysroot'));
 end;
 
 const
@@ -1591,6 +1595,38 @@ begin
   if (ADest.Values['BDSCatalogRepositoryAllUsers'] = '') and (CommonDocs <> '') then
     ADest.Values['BDSCatalogRepositoryAllUsers'] :=
       IncludeTrailingPathDelimiter(CommonDocs) + 'CatalogRepository';
+  // ...y donde guarda los sysroots de sus SDK, si el operador no la redefinio
+  // (una redefinida con macros dentro la expande ExpandIdeMacros, que anida)
+  if ADest.Values['BDSPLATFORMSDKSDIR'] = '' then
+    ADest.Values['BDSPLATFORMSDKSDIR'] := IdeSdksDir(AInfo.Version);
+end;
+
+function ConMacrosDelIde(const AVersion, ATexto: string): string;
+var
+  Info: TRadStudioInfo;
+  Vars: TStringList;
+begin
+  Result := ATexto;
+  if not Result.Contains('$(') then
+    Exit;
+  // la instalacion de ESA version: la del servidor sin volver al registro
+  Info := DiscoverRadStudio;
+  if not SameText(Info.Version, AVersion) then
+  begin
+    Info := Default(TRadStudioInfo);
+    for var I in DiscoverAllRadStudios do
+      if I.Found and SameText(I.Version, AVersion) then
+        Info := I;
+  end;
+  if not Info.Found then
+    Exit;
+  Vars := TStringList.Create;
+  try
+    IdeMacroVars(Info, Vars);
+    Result := ExpandIdeMacros(Result, Vars);
+  finally
+    Vars.Free;
+  end;
 end;
 
 { La clave Library del IDE de una plataforma: la inversa de

@@ -461,17 +461,32 @@ begin
 end;
 
 procedure TFormRenderTests.RutaDePaqueteConSusMacros;
-const
-  RAIZ = 'C:\Ide';
-  COMUN = 'C:\Comun';
+var
+  V: TStringList;
 begin
-  Assert.AreEqual('C:\Ide\bin\x.bpl', RutaDePaqueteDelIde('$(BDSBIN)\x.bpl', RAIZ, COMUN));
-  Assert.AreEqual('C:\Ide\bin\x.bpl', RutaDePaqueteDelIde('$(BDS)\bin\x.bpl', RAIZ, COMUN),
-    'la otra forma con la que el registro escribe la misma ruta');
-  Assert.AreEqual('C:\Comun\Bpl\x.bpl', RutaDePaqueteDelIde('$(bdscommondir)\Bpl\x.bpl', RAIZ, COMUN));
-  Assert.AreEqual('D:\Otro\x.bpl', RutaDePaqueteDelIde('D:/Otro/x.bpl', RAIZ, COMUN));
-  Assert.AreEqual('$(BDSCOMMONDIR)\Bpl\x.bpl', RutaDePaqueteDelIde('$(BDSCOMMONDIR)\Bpl\x.bpl', RAIZ, ''),
-    'sin valor se queda, y el paquete sale como que falta: vacia daria la raiz de la unidad');
+  // la tabla de IdeMacroVars, con lo que pondria la del IDE
+  V := TStringList.Create;
+  try
+    V.Values['BDS'] := 'C:\Ide';
+    V.Values['BDSBIN'] := 'C:\Ide\bin';
+    V.Values['BDSCOMMONDIR'] := 'C:\Comun';
+    V.Values['BDSUSERDIR'] := 'C:\Usuario';
+    V.Values['BDSCatalogRepository'] := 'C:\Usuario\CatalogRepository';
+    Assert.AreEqual('C:\Ide\bin\x.bpl', RutaDePaqueteDelIde('$(BDSBIN)\x.bpl', V));
+    Assert.AreEqual('C:\Ide\bin\x.bpl', RutaDePaqueteDelIde('$(BDS)\bin\x.bpl', V),
+      'la otra forma con la que el registro escribe la misma ruta');
+    Assert.AreEqual('C:\Comun\Bpl\x.bpl', RutaDePaqueteDelIde('$(bdscommondir)\Bpl\x.bpl', V));
+    Assert.AreEqual('D:\Otro\x.bpl', RutaDePaqueteDelIde('D:/Otro/x.bpl', V));
+    // las que no sabia: un paquete de GetIt o del usuario salia como que faltaba (forma 21 de la 1.26)
+    Assert.AreEqual('C:\Usuario\CatalogRepository\P\x.bpl',
+      RutaDePaqueteDelIde('$(BDSCatalogRepository)\P\x.bpl', V));
+    Assert.AreEqual('C:\Usuario\Bpl\x.bpl', RutaDePaqueteDelIde('$(BDSUSERDIR)\Bpl\x.bpl', V));
+    V.Values['BDSCOMMONDIR'] := '';
+    Assert.AreEqual('$(BDSCOMMONDIR)\Bpl\x.bpl', RutaDePaqueteDelIde('$(BDSCOMMONDIR)\Bpl\x.bpl', V),
+      'sin valor se queda, y el paquete sale como que falta: vacia daria la raiz de la unidad');
+  finally
+    V.Free;
+  end;
 end;
 
 procedure TFormRenderTests.ManifiestoDeLasClases;

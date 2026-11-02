@@ -1594,8 +1594,8 @@ begin
   Rutas := TagValue(Xml, 'Profile_LibraryPath');
   if Rutas = '' then
     Exit;
-  Rutas := Rutas.Replace('$(BDSPLATFORMSDKSDIR)',
-    IdeSdksDir(AVersion), [rfReplaceAll, rfIgnoreCase]); // es una lista: todas, no la primera
+  // por EL expansor del IDE: todas las de la lista, y cualquier macro suya
+  Rutas := ConMacrosDelIde(AVersion, Rutas);
   Hechos := '';
   Faltan := '';
   Negadas := '';

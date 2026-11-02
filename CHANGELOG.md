@@ -45,6 +45,8 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - `DelphiLspMcp.exe --install` (or `--uninstall`) says that the Windows service installer reads `/install` or `-install`, instead of installing nothing in silence: the server took the three spellings of a mode, but the installer only reads those two.
 
+- The form renderer loads an IDE package registered with any of the IDE's macros: it knew `$(BDS)`, `$(BDSBIN)` and `$(BDSCOMMONDIR)` by hand, so a package under `$(BDSCatalogRepository)` or `$(BDSUSERDIR)` (GetIt's, the user's) came out as missing. An SDK's sysroot and libraries take every IDE macro too, `$(BDSPLATFORMSDKSDIR)` among them, from the same table.
+
 ### Changed
 
 - `delphi_config`'s description says again that `add-platform` enables a platform in the `.dproj`. The second pass had dropped it, and with Qwen3.8 Flash Next the task "build Linux64 with the SDK zorin18" fell from 3 of 5 to 2 of 18; with it back, 9 of 18 (`docs/TOOL-DESCRIPTIONS.md`).
