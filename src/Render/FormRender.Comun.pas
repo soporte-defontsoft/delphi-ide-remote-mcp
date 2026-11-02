@@ -156,6 +156,10 @@ var
 { Linea de comandos -> GPeticion. '' si bien; si no, el error de uso. }
 function ParseaArgumentos(out AUso: string): string;
 function TextoDeUso(const AExe: string): string;
+{ El arranque de los dos renderizadores: la peticion, lo que no carga ningun form
+  (--convert, --unreadableclasses) y el vigia. False = ya se contesto, y el proceso
+  sale con ACodigo. }
+function ArrancaAyudante(out ACodigo: Integer): Boolean;
 
 { EL escritor del protocolo: una linea CLAVE=valor en stdout }
 procedure Responde(const AClave, AValor: string);
@@ -231,6 +235,16 @@ procedure RespondePaquetes(ACargados, AConocidos: Integer);
 procedure RespondeRect(const ANombre: string; AX, AY, AAncho, AAlto: Integer);
 procedure RespondeTamano(AAncho, AAlto: Integer);
 procedure RespondeMs(ACarga, APintado: Int64);
+{ <x>,<y>,<ancho>,<alto>: EL formato de una medida, el de RECT= y BOX=; lo lee
+  Lsp.FormRender.LeeCuatroEnteros }
+function MedidasEnTexto(AX, AY, AAncho, AAlto: Integer): string;
+{ Lo leido, igual en los dos renderizadores: ROOT=, PACKAGES=, COMPONENTS=, lo del
+  cargador (RespondeLoLeido) y NONVISUALS=. AYaLeido se pone en cuanto lo del
+  cargador se dijo, para que RespondeFallo no lo repita. }
+procedure RespondeLoCargado(ACargador: TCargador; ARaiz: TComponent; AEsFrame: Boolean;
+  ACargados, AConocidos: Integer; AClaseControl: TClass; var AYaLeido: Boolean);
+{ El final de un render: FIDELITY=, SIZE=, CAPTURE= y MS= }
+procedure RespondeElPintado(const AFidelidad: string; AAncho, AAlto: Integer; AMsCarga, AMsPintado: Int64);
 { Lo que el cargador dice de lo leido, igual en los dos renderizadores:
   SUBSTITUTED=, IGNORED=, WARNING=, PARTIAL= y READ= }
 procedure RespondeLoLeido(ACargador: TCargador);
@@ -585,7 +599,7 @@ end;
 procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean;
   const AContenido: string);
 begin
-  Responde(FR_BOX, Format('%s|%s|%s|%d,%d,%d,%d|%d|%s', [ARuta, AClase, APadre, AX, AY, AAncho, AAlto, Ord(AVisible), AContenido]));
+  Responde(FR_BOX, Format('%s|%s|%s|%s|%d|%s', [ARuta, AClase, APadre, MedidasEnTexto(AX, AY, AAncho, AAlto), Ord(AVisible), AContenido]));
 end;
 
 procedure RespondeRaiz(const ANombre, AClase: string; AEsFrame: Boolean);
@@ -600,7 +614,7 @@ end;
 
 procedure RespondeRect(const ANombre: string; AX, AY, AAncho, AAlto: Integer);
 begin
-  Responde(FR_RECT, Format('%s=%d,%d,%d,%d', [ANombre, AX, AY, AAncho, AAlto]));
+  Responde(FR_RECT, ANombre + '=' + MedidasEnTexto(AX, AY, AAncho, AAlto));
 end;
 
 procedure RespondeTamano(AAncho, AAlto: Integer);
@@ -611,6 +625,60 @@ end;
 procedure RespondeMs(ACarga, APintado: Int64);
 begin
   Responde(FR_MS, Format('%d,%d', [ACarga, APintado]));
+end;
+
+function MedidasEnTexto(AX, AY, AAncho, AAlto: Integer): string;
+begin
+  Result := Format('%d,%d,%d,%d', [AX, AY, AAncho, AAlto]);
+end;
+
+procedure RespondeLoCargado(ACargador: TCargador; ARaiz: TComponent; AEsFrame: Boolean;
+  ACargados, AConocidos: Integer; AClaseControl: TClass; var AYaLeido: Boolean);
+begin
+  RespondeRaiz(ARaiz.Name, Cabecera(GPeticion.Path).Clase, AEsFrame);
+  RespondePaquetes(ACargados, AConocidos);
+  Responde(FR_COMPONENTS, IntToStr(ARaiz.ComponentCount));
+  RespondeLoLeido(ACargador);
+  AYaLeido := True;
+  // los no visuales, SIEMPRE: se dibujen o no, el agente sabe que estan
+  Responde(FR_NONVISUALS, ListaDeNoVisuales(NoVisualesDe(ARaiz, AClaseControl)));
+end;
+
+procedure RespondeElPintado(const AFidelidad: string; AAncho, AAlto: Integer; AMsCarga, AMsPintado: Int64);
+begin
+  Responde(FR_FIDELITY, AFidelidad);
+  RespondeTamano(AAncho, AAlto);
+  Responde(FR_CAPTURE, GPeticion.Salida);
+  RespondeMs(AMsCarga, AMsPintado);
+end;
+
+function ArrancaAyudante(out ACodigo: Integer): Boolean;
+var
+  Uso, Error: string;
+begin
+  Result := False;
+  Error := ParseaArgumentos(Uso);
+  if Error <> '' then
+  begin
+    Responde(FR_ERROR, Error);
+    Writeln(ErrOutput, Uso);
+    ACodigo := FR_RC_USAGE;
+    Exit;
+  end;
+  // el conversor del IDE no carga ningun form (V71)
+  if GPeticion.Convierte <> '' then
+  begin
+    ACodigo := ConvierteComoElIde;
+    Exit;
+  end;
+  if GPeticion.ClasesSinLeer then
+  begin
+    ACodigo := ListaClasesSinLeer;
+    Exit;
+  end;
+  ACodigo := FR_RC_OK;
+  ArrancaVigia(GPeticion.TiempoMs);
+  Result := True;
 end;
 
 function ListaClasesSinLeer: Integer;
@@ -1658,10 +1726,17 @@ begin
     // el que ya se esta leyendo, o el form pedido: la lectura no acabaria nunca
     if SameFileName(Fichero, GPeticion.Path) or (FFramesEnCurso.IndexOf(Fichero) >= 0) then
     begin
+      // lo lleva el ultimo de la cadena; se dice su clase y su fichero, porque
+      // OnCreateComponent no recibe el nombre del componente
       var Cadena := ExtractFileName(GPeticion.Path);
+      var LoLleva := Cadena;
       for var EnCurso in FFramesEnCurso do
-        Cadena := Cadena + ' > ' + ExtractFileName(EnCurso);
-      raise EFrameCiclico.Create(MsgFmt(SR_RENDER_FRAME_CICLICO_FMT, [FClaseFrame, Cadena + ' > ' + ExtractFileName(Fichero)]));
+      begin
+        LoLleva := ExtractFileName(EnCurso);
+        Cadena := Cadena + ' > ' + LoLleva;
+      end;
+      raise EFrameCiclico.Create(MsgFmt(SR_RENDER_FRAME_CICLICO_FMT,
+        [FClaseFrame, Cadena + ' > ' + ExtractFileName(Fichero), LoLleva]));
     end;
     Component := ClaseFrame.Create(Reader.Owner);
     FEscritas.AddOrSetValue(Component, FClaseFrame);

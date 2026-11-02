@@ -474,7 +474,7 @@ end;
 
 function Main: Integer;
 var
-  Uso, Error, Captor, Usado: string;
+  Captor, Usado: string;
   Cargador: TCargador;
   F: TForm;
   Raiz: TComponent;
@@ -490,20 +490,8 @@ var
 begin
   Cargando := False;
   YaLeido := False;
-  Error := ParseaArgumentos(Uso);
-  if Error <> '' then
-  begin
-    Responde(FR_ERROR, Error);
-    Writeln(ErrOutput, Uso);
-    Exit(FR_RC_USAGE);
-  end;
-  // el conversor del IDE no carga ningun form (V71)
-  if GPeticion.Convierte <> '' then
-    Exit(ConvierteComoElIde);
-  if GPeticion.ClasesSinLeer then
-    Exit(ListaClasesSinLeer);
-  Result := FR_RC_OK;
-  ArrancaVigia(GPeticion.TiempoMs);
+  if not ArrancaAyudante(Result) then
+    Exit;
   SinCuadro := TSinCuadro.Create;
   Cargador := TCargadorVcl.Create;
   F := nil;
@@ -547,13 +535,7 @@ begin
         end, Raiz, Cargados, Conocidos));
       Cargando := False;
       MsCarga := Reloj.ElapsedMilliseconds;
-      RespondeRaiz(Raiz.Name, Cabecera(GPeticion.Path).Clase, Raiz is TFrame);
-      RespondePaquetes(Cargados, Conocidos);
-      Responde(FR_COMPONENTS, IntToStr(Raiz.ComponentCount));
-      RespondeLoLeido(Cargador);
-      YaLeido := True;
-      // los no visuales, SIEMPRE: se dibujen o no, el agente sabe que estan
-      Responde(FR_NONVISUALS, ListaDeNoVisuales(NoVisualesDe(Raiz, TControl)));
+      RespondeLoCargado(Cargador, Raiz, Raiz is TFrame, Cargados, Conocidos, TControl, YaLeido);
       // el juez de lo que guarda el IDE (3.11): escrito por TWriter, sin pintar
       if GPeticion.Escribe then
       begin
@@ -600,10 +582,7 @@ begin
       else
         GuardaPng(Bmp, GPeticion.Salida);
       MsPintado := Reloj.ElapsedMilliseconds;
-      Responde(FR_FIDELITY, Usado);
-      RespondeTamano(Bmp.Width, Bmp.Height);
-      Responde(FR_CAPTURE, GPeticion.Salida);
-      RespondeMs(MsCarga, MsPintado);
+      RespondeElPintado(Usado, Bmp.Width, Bmp.Height, MsCarga, MsPintado);
     except
       on E: Exception do
         Result := RespondeFallo(E, Cargador, Cargando, YaLeido);

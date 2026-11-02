@@ -161,8 +161,7 @@ end;
 
 procedure TOjos.PrepararEntorno;
 var
-  Mejor, F: string;
-  MejorFecha: TDateTime;
+  Mejor, Motivo: string;
   U, N: UTF8String;
 begin
   if GetEnvironmentVariable('DISPLAY') = '' then
@@ -176,19 +175,9 @@ begin
   end;
   if GetEnvironmentVariable('XAUTHORITY') <> '' then
     Exit;
-  Mejor := '';
-  MejorFecha := 0;
-  try
-    for F in TDirectory.GetFiles(RuntimeDelUsuario, '.mutter-Xwaylandauth.*') do
-      if (Mejor = '') or (TFile.GetLastWriteTime(F) > MejorFecha) then
-      begin
-        Mejor := F;
-        MejorFecha := TFile.GetLastWriteTime(F);
-      end;
-  except
-    on E: Exception do
-      FError := MsgFmt(SF_NODE_NO_PUDE_MIRAR_FMT, [RuntimeDelUsuario, E.Message]);
-  end;
+  Mejor := XauthorityMasReciente(RuntimeDelUsuario, Motivo);
+  if Motivo <> '' then
+    FError := MsgFmt(SF_NODE_NO_PUDE_MIRAR_FMT, [RuntimeDelUsuario, Motivo]);
   if Mejor <> '' then
   begin
     N := Cadena('XAUTHORITY');
@@ -372,8 +361,7 @@ begin
   if not S.Hay then
     Exit(S.Motivo);
   try
-    HayXauth := Length(TDirectory.GetFileSystemEntries(RuntimeDelUsuario,
-      '.mutter-Xwaylandauth.*')) > 0;
+    HayXauth := Length(TDirectory.GetFileSystemEntries(RuntimeDelUsuario, MASCARA_XWAYLANDAUTH)) > 0;
   except
     on E: Exception do
       Exit(MsgFmt(SF_NODE_NO_PUDE_MIRAR_FMT, [RuntimeDelUsuario, E.Message]));

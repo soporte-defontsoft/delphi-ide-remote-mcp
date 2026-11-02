@@ -85,11 +85,19 @@ REGLAS = [
      'VariableQueVeElBuild y EntornoSinConfiguracion (Lsp.Sandbox, P5): lo que msbuild ve del entorno'),
     ('los comandos de adb con dispositivo en otra lista', r"'install'\s*,\s*'run'\s*,\s*'stop'", [],
      'ADB_CAMPOS (Lsp.Guard, P6): la tabla de la tool y de la puerta'),
-    ('una linea del pintado del ayudante a mano', r"\bResponde\(\s*FR_(?:ROOT|PACKAGES|RECT|SIZE|MS)\b",
+    ('una linea del pintado del ayudante a mano',
+     r"\bResponde\(\s*FR_(?:ROOT|PACKAGES|RECT|SIZE|MS|COMPONENTS|NONVISUALS|FIDELITY|CAPTURE)\b",
      [('FormRender.Comun.pas', 'RespondeRaiz'), ('FormRender.Comun.pas', 'RespondePaquetes'),
       ('FormRender.Comun.pas', 'RespondeRect'), ('FormRender.Comun.pas', 'RespondeTamano'),
-      ('FormRender.Comun.pas', 'RespondeMs')],
-     'RespondeRaiz, RespondePaquetes, RespondeRect, RespondeTamano y RespondeMs (FormRender.Comun, P7)'),
+      ('FormRender.Comun.pas', 'RespondeMs'), ('FormRender.Comun.pas', 'RespondeLoCargado'),
+      ('FormRender.Comun.pas', 'RespondeElPintado')],
+     'RespondeRaiz, RespondePaquetes, RespondeRect, RespondeTamano, RespondeMs, RespondeLoCargado y '
+     'RespondeElPintado (FormRender.Comun, P7)'),
+    ('una medida del ayudante a mano', r"%d,%d,%d,%d",
+     [('FormRender.Comun.pas', 'MedidasEnTexto'),
+      # lo que se le contesta al agente, no el protocolo del ayudante
+      ('Mcp.Tools.Designer.pas', 'PreviewDeForm'), ('Mcp.Tools.Desktop.pas', 'GestoEnElTarget')],
+     'MedidasEnTexto (FormRender.Comun), y su inversa LeeCuatroEnteros (Lsp.FormRender)'),
     # V60 de la 1.25: la identidad y la version de una peticion moderna las lee UNO, el de
     # los dos transportes; un segundo lector es una segunda puerta a quien eres
     ('el _meta del protocolo moderno leido a mano', r'\bMETA_MCP_(?:VERSION|CLIENTE|CAPACIDADES)\b',
@@ -167,8 +175,8 @@ REGLAS = [
                          'Lsp.Patch.pas', 'Lsp.ProjectUnits.pas', 'Lsp.Session.pas', 'Lsp.Styles.pas',
                          'Mcp.Tools.Messages.pas', 'Mcp.Tools.PAServer.pas',
                          'Mcp.Tools.Report.pas', 'Mcp.Tools.Styles.pas', 'Mcp.Tools.Vault.pas',
-                         'Mcp.Tools.Workspace.pas', 'Mcp.Vault.Seed.pas', 'Mld.Sesion.pas', 'Mld.X11.pas',
-                         'FormRender.Comun.pas', 'McpRunJob.dpr')],
+                         'Mcp.Tools.Workspace.pas', 'Mcp.Vault.Seed.pas', 'Mld.Sesion.pas',
+                         'FormRender.Comun.pas')],
      'GetFiles y GetDirectories pasan por el MISMO WalkThroughDirectory que GetFileSystemEntries (VACIO si '
      'Windows no deja listar): unos 50 sitios en 24 unidades el 14-oct-2026, todos detras del recorrido '
      'cerrado de la puerta o fuera de la jaula (B2 del cierre de la 1.19.0, medido por el revisor). La lista '
@@ -1716,6 +1724,7 @@ PLANTADO = {
     'el prefijo de la configuracion a mano': "  if StartsText('DELPHI_MCP_', N) then X := 1;",
     'los comandos de adb con dispositivo en otra lista': "  if MatchText(C, ['install', 'run', 'stop']) then X := 1;",
     'una linea del pintado del ayudante a mano': "  Responde(FR_SIZE, Format('%dx%d', [W, H]));",
+    'una medida del ayudante a mano': "  Dentro := Format('%d,%d,%d,%d', [X, Y, W, H]);",
     'el _meta del protocolo moderno leido a mano': "  N := CampoDeTexto(Meta.GetValue(META_MCP_CLIENTE), 'name');",
     'la identidad propia compuesta a mano': "  TCurrentAgent := SESION_SIN_NOMBRE + FragmentoUnico;",
     'elegir el grupo de un build a mano': "  if GrupoConCondicion(Xml, GroupCondition(Plat), G) then",

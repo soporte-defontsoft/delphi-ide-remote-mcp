@@ -450,6 +450,15 @@ procedure MacrosDelProyecto(const AInfo: TRadStudioInfo; const ADprojDir, ANombr
 function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
   const AValor: string = 'Search Path'; const AConfig: string = ''): TArray<string>;
 
+{ Las carpetas de una lista (a;b;c) como las ve quien la usa: los macros
+  expandidos con AVars (la tabla del IDE, IdeMacroVars) ANTES de partir - uno que
+  expande a una lista son varias carpetas -, sin lo que no expande ni lo vacio,
+  lo relativo contra ABaseDir ('' = solo las completas), y cada carpeta una vez,
+  como las compara Windows: sin distinguir mayusculas ni la barra final. Los
+  ajustes del motor y la biblioteca del IDE lo hacian cada uno, y cada uno quitaba
+  repetidos a su manera (revisor del paisaje, 1-nov-2026). }
+function CarpetasDeUnaLista(const ARaw, ABaseDir: string; AVars: TStrings): TArray<string>;
+
 { La raiz de instalacion de una carpeta que registra una biblioteca: un nivel
   por encima (X\Source -> X, X\Lib\Linux64 -> X\Lib), nunca la raiz de una
   unidad ('' entonces). La zona de biblioteca (Lsp.Lugares) y delphi_components
@@ -1599,41 +1608,54 @@ end;
 function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
   const AValor: string; const AConfig: string): TArray<string>;
 var
-  Vars, List: TStringList;
-  Item, Expanded: string;
+  Vars: TStringList;
 begin
   Result := nil;
   if not AInfo.Found then
     Exit;
   Vars := TStringList.Create;
-  List := TStringList.Create;
   try
     IdeMacroVars(AInfo, Vars);
     var Plat := NombreDeClaveLibrary(APlatform);
     Vars.Values['Platform'] := Plat;
     if AConfig <> '' then
       Vars.Values['Config'] := AConfig;
-    // expandido ANTES de partir, como los ajustes del motor: un macro que
-    // expande a una lista era UN trozo con ';' dentro (revisor C, 21-oct-2026);
-    // EL troceador, el de la puerta del build (TrozosDeLista)
-    for Item in TrozosDeLista(ExpandIdeMacros(IdeConfigValue(AInfo.Version,
-      'Library\' + ClaveLibraryDePlataforma(AInfo.Version, Plat), AValor), Vars)) do
-    begin
-      // solo las completas: un valor del registro no tiene carpeta, y "\x" o
-      // "X:y" se resolvian contra el PROCESO del servidor (EL resolutor)
-      if Item.Contains('$(') then
-        Continue;
-      Expanded := RutaDesde('', Item);
-      if Expanded = '' then
-        Continue;
-      Expanded := PrefijoSinBarra(Expanded);
-      if List.IndexOf(Expanded) < 0 then
-        List.Add(Expanded);
-    end;
-    Result := List.ToStringArray;
+    // solo las completas: un valor del registro no tiene carpeta, y "\x" o
+    // "X:y" se resolvian contra el PROCESO del servidor (EL resolutor)
+    for var Carpeta in CarpetasDeUnaLista(IdeConfigValue(AInfo.Version,
+      'Library\' + ClaveLibraryDePlataforma(AInfo.Version, Plat), AValor), '', Vars) do
+      Result := Result + [PrefijoSinBarra(Carpeta)];
   finally
-    List.Free;
     Vars.Free;
+  end;
+end;
+
+function CarpetasDeUnaLista(const ARaw, ABaseDir: string; AVars: TStrings): TArray<string>;
+var
+  Vistas: TStringList;
+begin
+  Result := nil;
+  Vistas := TStringList.Create;
+  try
+    // expandido ANTES de partir: un macro que expande a una lista ($(Path), una
+    // variable del entorno con dos carpetas) era UN trozo con ';' dentro, y no se
+    // veian las que nombraba (revisor C, 21-oct-2026). EL troceador, el de la
+    // puerta del build (TrozosDeLista)
+    for var Item in TrozosDeLista(ExpandIdeMacros(ARaw, AVars)) do
+    begin
+      if (Item = '') or Item.Contains('$(') then
+        Continue;
+      var Carpeta := RutaDesde(ABaseDir, Item);
+      if Carpeta = '' then
+        Continue;
+      if Vistas.IndexOf(PrefijoSinBarra(Carpeta)) < 0 then
+      begin
+        Vistas.Add(PrefijoSinBarra(Carpeta));
+        Result := Result + [Carpeta];
+      end;
+    end;
+  finally
+    Vistas.Free;
   end;
 end;
 

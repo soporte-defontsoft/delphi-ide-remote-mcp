@@ -130,7 +130,8 @@ const
   // nunca y el renderizador caia con $C0000005 a los 3,3 s (medido el 1-nov-2026)
   SR_RENDER_FRAME_CICLICO_FMT =
     '[RENDER-026 DENIED] The frame %s contains itself (%s): it could never ' +
-    'finish loading. Take the inline out of one of those files.';
+    'finish loading. Its inline in %s was left out: take it out of that file, ' +
+    'or take out another inline of the chain.';
 
   // Lo que dice STYLE= del StyleBook de la form, y la coletilla de un style=
   // de la peticion: lo que lleva la form ES lo que vera la app. Decia "(1

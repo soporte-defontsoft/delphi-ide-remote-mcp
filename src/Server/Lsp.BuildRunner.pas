@@ -3125,7 +3125,7 @@ begin
         for var MP in TRegEx.Matches(Output, '--put="?([^"\r\n]+)', [roIgnoreCase]) do
           Shipped := Shipped + Length(MP.Groups[1].Value.Split([';']));
         Result.AddPair('deployNote', MsgFmt(SN_BUILD_DEPLOYED_FMT,
-          [Perfil, GetEnvironmentVariable('USERNAME'), Perfil,
+          [Perfil, NombreDeEstaCuenta, Perfil,
            TPath.GetFileNameWithoutExtension(ADprojPath)]));
         // de donde salio: call | project | ide-default (los de delphi_config view)
         Result.AddPair('profileSource', FuenteDelPerfil);
@@ -3164,17 +3164,24 @@ begin
     // de un remote-run anterior (<job>.wait.exe) sigue vivo: ese programa
     // sigue corriendo alli. El E0017 crudo de msbuild no lo dice; el nombre
     // del fichero lleva el id del trabajo, asi que se le da la orden de kill.
-    // Medido 2026-09-23 contra una maquina de la red con una GUI viva.
-    if (ExitCode <> 0) and Target.Contains('Deploy') and Output.Contains('E0017') then
-    begin
-      // el id del trabajo por el patron de su nombrador (Lsp.Casa.SelloUnico)
-      // y el del vigia, por SU nombrador (Lsp.NombresDeTrabajo)
-      var MLock := TRegEx.Match(Output, '(' + SELLO_UNICO_PATRON + ')' +
-        PATRON_DEL_VIGIA_TRAS_EL_ID, [roIgnoreCase]);
-      if MLock.Success then
-        Result.AddPair('deployLockedNote', MsgFmt(SN_BUILD_DEPLOY_LOCKED_FMT,
-          [MLock.Groups[1].Value, Perfil, ADprojPath, MLock.Groups[1].Value]));
-    end;
+    // Medido 2026-09-23 contra una maquina de la red con una GUI viva. En lo que
+    // msbuild clasifica como error, y en una misma linea (medido 2026-11-01): en
+    // la consola, una carpeta que se llamara asi mandaba matar a un trabajo que no
+    // existe.
+    if (ExitCode <> 0) and Target.Contains('Deploy') then
+      for var IErr := 0 to Errors.Count - 1 do
+      begin
+        // el id del trabajo por el patron de su nombrador (Lsp.Casa.SelloUnico)
+        // y el del vigia, por SU nombrador (Lsp.NombresDeTrabajo)
+        var MLock := TRegEx.Match(Errors.Items[IErr].Value, '\bE0017\b.*(' + SELLO_UNICO_PATRON + ')' +
+          PATRON_DEL_VIGIA_TRAS_EL_ID, [roIgnoreCase]);
+        if MLock.Success then
+        begin
+          Result.AddPair('deployLockedNote', MsgFmt(SN_BUILD_DEPLOY_LOCKED_FMT,
+            [MLock.Groups[1].Value, Perfil, ADprojPath, MLock.Groups[1].Value]));
+          Break;
+        end;
+      end;
     // El PAServer del perfil es de otro Delphi (u otra plataforma): la tarea
     // PAClient de msbuild lo dice en crudo; aqui, que hacer.
     if (ExitCode <> 0) and Target.Contains('Deploy') then

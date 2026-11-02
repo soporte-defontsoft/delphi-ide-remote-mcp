@@ -8,6 +8,16 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- `delphi_build target=Deploy` that fails no longer tells you to kill a remote-run job that does not exist. `deployLockedNote` looked for `E0017` and the watcher's name anywhere in msbuild's console, so a folder with such a name was enough; it now reads the lines msbuild classifies as errors, with both on the same line.
+- `RENDER-026` says which file holds the inline it left out: the form you asked for may not be the one that closes the cycle.
+- A search path that names one folder twice, differing only in case or in a final backslash, reaches the language server once, as the IDE's library already did.
+
+### Changed
+
+- Internal, nothing in a contract: one reader of a list of folders (`CarpetasDeUnaLista`), of the account's name, by Windows and no longer by the environment for a deploy's note (`NombreDeEstaCuenta`), of the X authorization on Linux (`XauthorityMasReciente`), and one start, one report of what was read and one writer of a measure for the two form renderers.
+
 ## [1.25.1] - 2026-11-02
 
 A patch for what measuring everything left pending after 1.25.0 found, and for what two

@@ -30,7 +30,7 @@ interface
 
 uses
   System.SysUtils,
-  System.Classes, // TStrings: la tabla de macros de CleanPathList
+  System.Classes,
   Lsp.Discovery;
 
 type
@@ -118,12 +118,6 @@ function NotaDeRecorte(const ASettingsFile: string): string;
   sus ajustes sea la suya: FabricateSettings con ACarpetaDeLint (V61 de la 1.25).
   '' en otro caso, y nunca lanza. }
 function CarpetaDebajoDelProyecto(const ASettingsFile, AFile: string): string;
-{ Las carpetas de una lista de search path (a;b;c) como las ve el motor: los
-  macros expandidos con AVars (la tabla del IDE, IdeMacroVars, con Platform y
-  Config) ANTES de partir - uno que expande a una lista son varias carpetas -,
-  sin lo que no expande ni lo vacio, lo relativo contra ABaseDir, cada una una
-  vez. Expuesta para medirla (LspTests.Motor). }
-function CleanPathList(const ARaw, ABaseDir: string; AVars: TStrings): TArray<string>;
 
 implementation
 
@@ -148,42 +142,6 @@ uses
 
 { AllTagValues / XmlUnescape now live in Lsp.Dproj (shared); MergeProperty is
   gone: the value of ONE build is EffectiveProperty (1.22.0). }
-
-{ Expand variables, THEN split the ;-list, drop unexpanded/$-laden or empty entries,
-  absolutize relative entries against ABaseDir, keep only unique. AVars: LA
-  tabla de macros del IDE (Lsp.Discovery.IdeMacroVars) con la plataforma y la
-  configuracion de los ajustes. Aqui habia otra con cuatro clavadas (BDS,
-  BDSLIB, Platform y Config, y Config a fuego en Release): un
-  $(BDSCatalogRepository) o un $(BDSCOMMONDIR) en el search path de un
-  proyecto se tiraba, y msbuild si lo compila (revision del 18-oct-2026). }
-function CleanPathList(const ARaw, ABaseDir: string; AVars: TStrings): TArray<string>;
-var
-  List: TList<string>;
-  Item, Expanded: string;
-begin
-  List := TList<string>.Create;
-  try
-    // expandido ANTES de partir: un macro que expande a una lista ($(Path),
-    // una variable del entorno con dos carpetas) era UN trozo con ';' dentro,
-    // una carpeta que no existe, y el motor no veia las que nombraba (revisor
-    // C, 21-oct-2026). EL troceador, el de la puerta del build (TrozosDeLista)
-    for Item in TrozosDeLista(ExpandIdeMacros(ARaw, AVars)) do
-    begin
-      if (Item = '') or Item.Contains('$(') then
-        Continue;
-      // como la lee el motor, que corre en la carpeta del proyecto (EL
-      // resolutor: "\x" y "X:y" se resolvian contra el PROCESO del servidor)
-      Expanded := RutaDesde(ABaseDir, Item);
-      if Expanded = '' then
-        Continue;
-      if not List.Contains(Expanded) then
-        List.Add(Expanded);
-    end;
-    Result := List.ToArray;
-  finally
-    List.Free;
-  end;
-end;
 
 const
   // Bump when the fabrication rules change: cached settings older than the
@@ -239,7 +197,7 @@ begin
 end;
 
 { Las carpetas del search path del proyecto para ESE build (APlat/ACfg, por
-  EL evaluador) como las ve el motor (CleanPathList), partidas en las que
+  EL evaluador) como las ve el motor (CarpetasDeUnaLista), partidas en las que
   puede ensenar y las que no. Las de fuera se quedan fuera de los ajustes: el
   motor veia por ellas lo que ninguna tool deja leer (medido el 9-oct-2026: el
   VALOR de una constante de fuera en completion, su firma y su ruta en
@@ -254,13 +212,13 @@ begin
   Vars := TStringList.Create;
   try
     // EL lector de la tabla (Lsp.Discovery.MacrosDelProyecto), con las
-    // reservadas de msbuild: sin ellas CleanPathList tiraba un search path con
+    // reservadas de msbuild: sin ellas CarpetasDeUnaLista tiraba un search path con
     // $(MSBuildProjectDirectory) -que la puerta del build expande y dcc
     // compila- y el motor no veia esas unidades (hover LSP-029 de una unidad
     // que SI compila; V160d de la 1.23.1, medido). El juez de la jaula
     // (MotorPuedeEnsenar) sigue recortando lo que caiga fuera.
     MacrosDelProyecto(AInfo, ADprojDir, ANombreRaiz, APlat, ACfg, Vars);
-    for var P in CleanPathList(EffectiveProperty(AXml, 'DCC_UnitSearchPath', APlat, ACfg),
+    for var P in CarpetasDeUnaLista(EffectiveProperty(AXml, 'DCC_UnitSearchPath', APlat, ACfg),
       ADprojDir, Vars) do
       if MotorPuedeEnsenar(P) then
         ADentro := ADentro + [P]

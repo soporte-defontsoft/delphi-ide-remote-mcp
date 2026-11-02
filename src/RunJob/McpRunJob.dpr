@@ -266,15 +266,14 @@ end;
   ___ENV= con el mismo formato que lee el servidor: <1|0>|<lo anadido>. }
 function CompletaEntornoGrafico: string;
 var
-  Runtime, Anadido, A, Mejor: string;
+  Runtime, Anadido, Mejor, Ignorado: string;
   Sesion: TSesionGrafica;
-  Mas: TDateTime;
 begin
   Anadido := '';
   Runtime := Entorno('XDG_RUNTIME_DIR');
-  if (Runtime = '') and TDirectory.Exists('/run/user/' + IntToStr(getuid)) then
+  if (Runtime = '') and TDirectory.Exists(RuntimeDelUsuario) then
   begin
-    Runtime := '/run/user/' + IntToStr(getuid);
+    Runtime := RuntimeDelUsuario;
     PonEntorno('XDG_RUNTIME_DIR', Runtime);
     Anadido := Anadido + ' XDG_RUNTIME_DIR';
   end;
@@ -300,22 +299,7 @@ begin
   end;
   if (Entorno('DISPLAY') <> '') and (Entorno('XAUTHORITY') = '') then
   begin
-    // el de mutter cambia de sufijo en cada inicio de sesion: el mas reciente
-    Mejor := '';
-    Mas := 0;
-    if Runtime <> '' then
-      try
-        for A in TDirectory.GetFiles(Runtime, '.mutter-Xwaylandauth.*') do
-          if TFile.GetLastWriteTime(A) > Mas then
-          begin
-            Mas := TFile.GetLastWriteTime(A);
-            Mejor := A;
-          end;
-      except
-        Mejor := '';
-      end;
-    if (Mejor = '') and TFile.Exists(Entorno('HOME') + '/.Xauthority') then
-      Mejor := Entorno('HOME') + '/.Xauthority';
+    Mejor := XauthorityMasReciente(Runtime, Ignorado);
     if Mejor <> '' then
     begin
       PonEntorno('XAUTHORITY', Mejor);

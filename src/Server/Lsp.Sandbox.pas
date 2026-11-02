@@ -107,6 +107,10 @@ const
 { El SID de la cuenta de este proceso, leido de su token ('' si no se pudo). }
 function SidDeEstaCuenta: string;
 
+{ El nombre de la cuenta de este proceso, el que dice Windows. Del entorno se leia
+  en dos sitios (USERNAME), y ese lo pone quien lanza el proceso. }
+function NombreDeEstaCuenta: string;
+
 { Un solo lector del entorno: sin secretos del servidor y con ajustes fijos
   del hijo. No modifica el entorno del servidor ni carreras entre llamadas. }
 function EntornoSinConfiguracion(const AFijas: TArray<string> = nil): string;
@@ -587,6 +591,18 @@ begin
   except
     // arrancar no puede fallar por no poder limpiar
   end;
+end;
+
+function NombreDeEstaCuenta: string;
+var
+  Buf: array[0..256] of Char;
+  Len: DWORD;
+begin
+  Len := Length(Buf);
+  if GetUserName(Buf, Len) then
+    Result := Buf
+  else
+    Result := '';
 end;
 
 initialization

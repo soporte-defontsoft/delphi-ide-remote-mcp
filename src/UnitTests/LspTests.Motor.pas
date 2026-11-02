@@ -1394,7 +1394,7 @@ var
   R: TArray<string>;
 begin
   // un macro de la tabla del IDE que expande a DOS carpetas (una variable de
-  // entorno del IDE con ';'): CleanPathList partia por ';' ANTES de expandir y
+  // entorno del IDE con ';'): la lista se partia por ';' ANTES de expandir y
   // era UN trozo "C:\a;C:\b", una carpeta que no existe, y el motor no veia
   // ninguna de las dos (revisor C, 21-oct-2026). Lo que no expande se tira, lo
   // relativo va contra la carpeta del proyecto, y cada carpeta una vez
@@ -1402,12 +1402,18 @@ begin
   try
     Vars.Values['LM'] := 'C:\a;C:\b';
     Vars.Values['BDS'] := 'C:\bds';
-    R := CleanPathList('$(LM);lib;$(BDS)\lib;$(NADIE);C:\a', 'C:\p', Vars);
+    R := CarpetasDeUnaLista('$(LM);lib;$(BDS)\lib;$(NADIE);C:\a', 'C:\p', Vars);
     Assert.IsTrue(Length(R) = 4, string.Join(' | ', R));
     Assert.AreEqual('C:\a', R[0]);
     Assert.AreEqual('C:\b', R[1]);
     Assert.AreEqual('C:\p\lib', R[2]);
     Assert.AreEqual('C:\bds\lib', R[3]);
+    // la misma carpeta para Windows, una vez: los ajustes del motor distinguian
+    // mayusculas y la biblioteca no (revisor del paisaje, 1-nov-2026)
+    R := CarpetasDeUnaLista('C:\Uno;c:\uno;C:\UNO\;C:\dos', '', Vars);
+    Assert.IsTrue(Length(R) = 2, string.Join(' | ', R));
+    Assert.AreEqual('C:\Uno', R[0]);
+    Assert.AreEqual('C:\dos', R[1]);
   finally
     Vars.Free;
   end;

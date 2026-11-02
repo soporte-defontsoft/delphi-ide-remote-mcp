@@ -556,6 +556,22 @@ begin
   Result := PartesDeLectura(AValor.Substring(P + 1));
 end;
 
+{ <x>,<y>,<ancho>,<alto>, la inversa de FormRender.Comun.MedidasEnTexto }
+function LeeCuatroEnteros(const ATexto: string; out AX, AY, AAncho, AAlto: Integer): Boolean;
+var
+  Trozos: TArray<string>;
+begin
+  Trozos := ATexto.Split([',']);
+  Result := Length(Trozos) = 4;
+  if Result then
+  begin
+    AX := StrToIntDef(Trozos[0], 0);
+    AY := StrToIntDef(Trozos[1], 0);
+    AAncho := StrToIntDef(Trozos[2], 0);
+    AAlto := StrToIntDef(Trozos[3], 0);
+  end;
+end;
+
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
 var
   L, V: string;
@@ -641,15 +657,8 @@ begin
     begin
       // <Nombre>=<izq>,<arriba>,<ancho>,<alto>: el nombre no lleva '='
       P := V.LastIndexOf('=');
-      Trozos := V.Substring(P + 1).Split([',']);
-      if (P > 0) and (Length(Trozos) = 4) then
-      begin
-        Result.HayRect := True;
-        Result.RectX := StrToIntDef(Trozos[0], 0);
-        Result.RectY := StrToIntDef(Trozos[1], 0);
-        Result.RectW := StrToIntDef(Trozos[2], 0);
-        Result.RectH := StrToIntDef(Trozos[3], 0);
-      end;
+      Result.HayRect := (P > 0) and LeeCuatroEnteros(V.Substring(P + 1), Result.RectX, Result.RectY,
+        Result.RectW, Result.RectH);
     end
     else if Es(FR_STYLE) then
       Result.Estilo := V
@@ -674,27 +683,14 @@ begin
       Trozos := V.Split(['|']);
       if Length(Trozos) = 6 then
       begin
-        var Medidas := Trozos[3].Split([',']);
-        if Length(Medidas) = 4 then
+        var Caja: TCajaDeRender;
+        if LeeCuatroEnteros(Trozos[3], Caja.X, Caja.Y, Caja.W, Caja.H) then
         begin
-          var Caja: TCajaDeRender;
           Caja.Ruta := Trozos[0];
           Caja.Clase := Trozos[1];
           Caja.Padre := Trozos[2];
-          Caja.X := StrToIntDef(Medidas[0], 0);
-          Caja.Y := StrToIntDef(Medidas[1], 0);
-          Caja.W := StrToIntDef(Medidas[2], 0);
-          Caja.H := StrToIntDef(Medidas[3], 0);
           Caja.Visible := Trozos[4] = '1';
-          var Contenido := Trozos[5].Split([',']);
-          Caja.EnContenido := Length(Contenido) = 4;
-          if Caja.EnContenido then
-          begin
-            Caja.CX := StrToIntDef(Contenido[0], 0);
-            Caja.CY := StrToIntDef(Contenido[1], 0);
-            Caja.CW := StrToIntDef(Contenido[2], 0);
-            Caja.CH := StrToIntDef(Contenido[3], 0);
-          end;
+          Caja.EnContenido := LeeCuatroEnteros(Trozos[5], Caja.CX, Caja.CY, Caja.CW, Caja.CH);
           Result.Cajas := Result.Cajas + [Caja];
         end;
       end;

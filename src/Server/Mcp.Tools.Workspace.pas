@@ -973,15 +973,8 @@ end;
   IDE, 1 como LocalSystem). Estaba escrito en el README y en ningun sitio que
   el servidor pudiera DECIR. }
 function CuentaDelProceso(out AEsSistema: Boolean): string;
-var
-  Buf: array[0..256] of Char;
-  Len: DWORD;
 begin
-  Len := Length(Buf);
-  if GetUserName(Buf, Len) then
-    Result := Buf
-  else
-    Result := GetEnvironmentVariable('USERNAME');
+  Result := NombreDeEstaCuenta;
   if GetEnvironmentVariable('USERDOMAIN') <> '' then
     Result := GetEnvironmentVariable('USERDOMAIN') + '\' + Result;
   // el juez es el SID, que no depende del idioma de Windows ni del entorno

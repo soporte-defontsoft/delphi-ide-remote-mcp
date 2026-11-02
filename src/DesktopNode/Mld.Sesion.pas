@@ -39,6 +39,15 @@ type
   autorizacion de Xwayland. }
 function RuntimeDelUsuario: string;
 
+const
+  { La autorizacion de Xwayland de mutter: cambia de sufijo en cada inicio de sesion }
+  MASCARA_XWAYLANDAUTH = '.mutter-Xwaylandauth.*';
+
+{ El fichero de autorizacion de X para ponerlo en XAUTHORITY: el mas reciente de
+  Xwayland en ARuntime, o el ~/.Xauthority de siempre. '' si no hay. Lo que impida
+  mirar ARuntime, en AError. El nodo y el lanzador lo buscaban cada uno. }
+function XauthorityMasReciente(const ARuntime: string; out AError: string): string;
+
 function SesionGrafica: TSesionGrafica;
 
 implementation
@@ -56,6 +65,32 @@ begin
   Result := GetEnvironmentVariable('XDG_RUNTIME_DIR');
   if Result = '' then
     Result := '/run/user/' + IntToStr(getuid);
+end;
+
+function XauthorityMasReciente(const ARuntime: string; out AError: string): string;
+var
+  Mas: TDateTime;
+begin
+  Result := '';
+  AError := '';
+  Mas := 0;
+  if ARuntime <> '' then
+    try
+      for var F in TDirectory.GetFiles(ARuntime, MASCARA_XWAYLANDAUTH) do
+        if (Result = '') or (TFile.GetLastWriteTime(F) > Mas) then
+        begin
+          Result := F;
+          Mas := TFile.GetLastWriteTime(F);
+        end;
+    except
+      on E: Exception do
+      begin
+        Result := '';
+        AError := E.Message;
+      end;
+    end;
+  if (Result = '') and TFile.Exists(GetEnvironmentVariable('HOME') + '/.Xauthority') then
+    Result := GetEnvironmentVariable('HOME') + '/.Xauthority';
 end;
 
 { El nombre del primer socket AMascara de ESTE usuario en ACarpeta
