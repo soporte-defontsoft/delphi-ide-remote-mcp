@@ -17,6 +17,9 @@ r"""Lo de la 1.26.
      y uno que ya dijo PHASE=form, DSGN-062. Con ayudantes de mentira, como
      test_protocolo_render_125: lo que se mide es lo que el servidor lee.
   P1-P7 lo que encontro el revisor del paisaje de la 1.26 (ver cada uno abajo).
+  H1-H2 lo que encontro Hermes en el dirigido de la 1.26: la nota DSGN-114 del preview prometia
+     "line says where each one is" para un inline que se salto (RENDER-026) y para una propiedad
+     escrita en el fichero de un frame, que no traen linea.
 
 Uso:  python tests/test_capacidades_126.py [exe]
 """
@@ -73,6 +76,41 @@ for uni, clase, otro in (('UUno', 'TFrUno', 'TFrDos'), ('UDos', 'TFrDos', 'TFrUn
 r = s.call('delphi_designer', {'command': 'preview', 'path': os.path.join(C1, 'UUno.dfm'), 'maxwidth': 100}, t=400)
 check('C1 RENDER-026 dice en que fichero esta el inline que se salto: UDos.dfm, no el pedido',
       mc.es(r, 'SR_RENDER_FRAME_CICLICO_FMT') and 'Its inline in UDos.dfm' in r, r[:500])
+# H1 (Hermes, dirigido de la 1.26) ese inline no es una propiedad con su linea: RENDER-026 ya dice su fichero y que
+# hacer, y la nota DSGN-114 ("line says where each one is") prometia una linea que la entrada no trae
+nota = mc.como_json(r).get('ignoredNote') or ''
+check('H1 un frame que se contiene a si mismo no lleva la nota DSGN-114, que promete una linea que no trae',
+      not mc.es(nota, 'SN_DESIGNER_PREVIEW_IGNORADAS'), nota[:300])
+
+# H2 una propiedad mala en el fichero de un frame en linea: el lector la salta leyendo el form, sin linea en el
+# form (no esta en el), y la nota dice que hacer con una sin linea; el preview del frame si la da
+H2 = os.path.join(JAIL, 'marcov')
+os.makedirs(H2)
+USOS_VCL = 'Vcl.Forms, Vcl.Controls, Vcl.StdCtrls'
+escribe(os.path.join(H2, 'UMarcoV.pas'), 'unit UMarcoV;\n\ninterface\n\nuses\n  %s;\n\ntype\n  TMarcoV = class(TFrame)\n'
+        '    Edit1: TEdit;\n  end;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n' % USOS_VCL)
+MARCO_V = ("object MarcoV: TMarcoV\n  Left = 0\n  Top = 0\n  Width = 200\n  Height = 60\n  TabOrder = 0\n"
+           "  object Edit1: TEdit\n    Left = 8\n    Top = 8\n    Width = 121\n    Height = 23\n    TabOrder = 0\n"
+           "    NoExiste = 1\n  end\nend\n")
+escribe(os.path.join(H2, 'UMarcoV.dfm'), MARCO_V)
+escribe(os.path.join(H2, 'UFV.pas'), 'unit UFV;\n\ninterface\n\nuses\n  %s, UMarcoV;\n\ntype\n  TFormV = class(TForm)\n'
+        '    MarcoV1: TMarcoV;\n  end;\n\nvar\n  FormV: TFormV;\n\nimplementation\n\n{$R *.dfm}\n\nend.\n' % USOS_VCL)
+escribe(os.path.join(H2, 'UFV.dfm'), "object FormV: TFormV\n  Left = 0\n  Top = 0\n  Caption = 'V'\n  ClientHeight = 200\n"
+        "  ClientWidth = 300\n  inline MarcoV1: TMarcoV\n    Left = 10\n    Top = 10\n    TabOrder = 0\n  end\nend\n")
+r = s.call('delphi_designer', {'command': 'preview', 'path': os.path.join(H2, 'UFV.dfm'), 'maxwidth': 100}, t=400)
+j = mc.como_json(r)
+mala = [x for x in (j.get('ignored') or []) if x.get('property') == 'NoExiste']
+nota = j.get('ignoredNote') or ''
+TEXTO_114 = mc.catalogo()['SN_DESIGNER_PREVIEW_IGNORADAS']
+check('H2 la propiedad mala del frame sale sin linea en el preview del form, y la nota dice que hacer con una '
+      'sin linea (no solo "line says where each one is")',
+      len(mala) == 1 and 'line' not in mala[0] and mc.es(nota, 'SN_DESIGNER_PREVIEW_IGNORADAS')
+      and 'without line' in TEXTO_114 and nota.startswith(TEXTO_114.split(' - ')[0]) and 'without line' in nota,
+      (mala, nota[:400]))
+r = s.call('delphi_designer', {'command': 'preview', 'path': os.path.join(H2, 'UMarcoV.dfm'), 'maxwidth': 100}, t=400)
+mala = [x for x in (mc.como_json(r).get('ignored') or []) if x.get('property') == 'NoExiste']
+check('H2 ...y el preview del frame, al que manda la nota, la da con su linea',
+      len(mala) == 1 and mala[0].get('line') == MARCO_V.split('\n').index('    NoExiste = 1') + 1, (mala, r[:300]))
 
 # ---- F: la fase de los paquetes
 F1 = os.path.join(JAIL, 'fases')

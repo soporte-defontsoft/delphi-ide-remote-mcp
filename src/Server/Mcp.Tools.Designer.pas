@@ -1781,7 +1781,9 @@ begin
         // partes de una clase del proyecto: no es del fichero que se sepa
         else if DelCodigoDeUnComponente(Ig) or PartesDeClaseNoInstalada(DocP, Ig, Fw = 'fmx', PropCn, ClaseCn) then
           NoConfirmadas := NoConfirmadas + IfThen(NoConfirmadas <> '', ' | ') + TextoDeIgnorada(Ig)
-        else
+        // un frame que se contiene a si mismo no es una propiedad con su linea:
+        // RENDER-026 ya dice su fichero y que hacer (Hermes, dirigido de la 1.26)
+        else if not EsFrameCiclico(Ig) then
           Inc(DelForm);
       end;
       finally

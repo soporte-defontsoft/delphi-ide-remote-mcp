@@ -5571,12 +5571,17 @@ const
     'reader said:%s'#10'Fix that line (delphi_designer set, or delphi_edit) ' +
     'and preview again.';
   { preview con propiedades que el lector se salto (el Ignore del IDE): que
-    guie al modelo, no solo que lo cuente (David, 7-oct-2026) }
+    guie al modelo, no solo que lo cuente (David, 7-oct-2026). Una sin linea
+    no esta escrita en este fichero: la de un frame en linea o un ancestro
+    (Hermes, dirigido de la 1.26: la nota prometia una linea que no traia) }
   SN_DESIGNER_PREVIEW_IGNORADAS =
     '[DSGN-114] These properties were skipped as the IDE''s Ignore would, and ' +
     'the rest was drawn. The form will fail to open until they are fixed (the ' +
     'program cannot create it, and the IDE asks to ignore each one): set them ' +
-    'with delphi_designer set, or remove them - line says where each one is.';
+    'with delphi_designer set, or remove them - line says where each one is in ' +
+    'this file. One without line is not written in this file: it comes from one ' +
+    'this form loads (an inline frame''s, an ancestor''s) - fix it there; a ' +
+    'preview of that file gives its line.';
   { ...salvo si el form se leyo SIN un ancestro (PARTIAL=): lo saltado puede
     ser solo lo que ese ancestro aporta, no un defecto del form (una vista FMX
     sin su maestro salia en blanco y "no abrira"; 18-oct-2026). %s: lo que falto }
