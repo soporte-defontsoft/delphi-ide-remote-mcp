@@ -1142,6 +1142,7 @@ uses
   Lsp.Styles, // NotaDeLookupsSinEstilo: los StyleLookup contra los estilos que el form ve (LintDeForm)
   Lsp.Herencia, // VedaElMotor: con el cerrojo, el lint no arranca motores (LintDeForm)
   Lsp.Listas, // PrincipioDeTexto: EL corte de un texto por la cabeza, sin partir un par
+  Lsp.Json, // ListaJson: los edits de una tanda, desenvueltos si llegaron dos veces codificados
   System.Win.Registry, // EscribeClaveDelIde: la puerta del registro del IDE
   Lsp.BuildRunner,     // RunCaptured: reg.exe, la copia de una clave
   Lsp.ProcessLaunch;   // EnComillas: los argumentos de esa linea
@@ -4064,24 +4065,13 @@ var
   Borra, Aplazado: Boolean;
 begin
   Aplazado := False;
-  V := TJSONObject.ParseJSONValue(AEditsJson);
-  // Un cliente que codifica dos veces manda el array como CADENA JSON
-  // (hermes, 25-sep-2026): se desenvuelve UNA vez. Lo que siga sin ser un
-  // array se rechaza diciendo cuanto llego y como empieza, no solo "no es
+  // la lista, desenvuelta si llego codificada dos veces (ListaJson). Lo que no
+  // lo sea se rechaza diciendo cuanto llego y como empieza, no solo "no es
   // array", que llevaba al cliente a reenviar lo mismo en bucle.
-  if V is TJSONString then
-  begin
-    Una := TJSONString(V).Value;
-    V.Free;
-    V := TJSONObject.ParseJSONValue(Una);
-  end;
-  if not (V is TJSONArray) then
-  begin
-    V.Free;
+  Arr := ListaJson(AEditsJson);
+  if Arr = nil then
     Exit(MsgFmt(SR_PATCH_EDITS_JSON_FMT,
       [Length(AEditsJson), PrincipioDeTexto(AEditsJson.Trim, 60)]));
-  end;
-  Arr := TJSONArray(V);
   // El cerrojo de escritura para la tanda ENTERA: la rama de bloque escribia
   // sin el, y dos agentes sobre el mismo fichero perdian ediciones con OK
   // (tercera revision, 27-sep-2026, medido en vivo). Recursivo: la edicion
@@ -4201,7 +4191,7 @@ begin
               end;
               var Cabeza := PrimerTrozo(Anc2, [#10]).Trim;
               Exit(MsgFmt(SR_PATCH_OCCURRENCE_FMT, [N + 1, Nth,
-                Cabeza.Substring(0, Min(60, Length(Cabeza))), Hay]));
+                PrincipioDeTexto(Cabeza, 60), Hay]));
             end;
             // ...y si el ancla trae sangria, la linea elegida lleva ESA: si no,
             // se dicen las candidatas y no se escribe (la guarda de sangria,
@@ -4466,14 +4456,14 @@ begin
           // no cambio nada: se dice, no se cuenta como OK (sexta revision)
           Inc(SinCambios);
           Una := MsgFmt(SF_EDIT_SIN_CAMBIOS_ANCLA_FMT,
-            [N, Pedido.Trim.Substring(0, Min(70, Length(Pedido.Trim)))]);
+            [N, PrincipioDeTexto(Pedido.Trim, 70)]);
         end
         else if EsBloque then
           Una := MsgFmt(SF_EDIT_OK_BLOQUE_LINEAS_FMT,
             [N, Length(LineasDelAncla(Anc))])
         else
           Una := MsgFmt(SF_EDIT_OK_ANCLA_FMT,
-            [N, Pedido.Trim.Substring(0, Min(70, Length(Pedido.Trim)))]);
+            [N, PrincipioDeTexto(Pedido.Trim, 70)]);
         // EL ECO, en una linea SUYA ('N| texto', la forma de las citas del
         // disco: el enmascarador deja tal cual en una negativa -un ROLLBACK-
         // las lineas que empiezan por 'N|') mientras enmascara la de lo
@@ -6590,7 +6580,7 @@ begin
             Donde := MsgText(SF_EDIT_TRAS_LAS_DECLARACIONES);
           if Donde <> '' then
           begin
-            Warnings.Add(MsgFmt(SN_EDIT_POSIBLE_INSERCION_METODO_FMT, [Copy(Nuevas[J], 1, 60), Donde]));
+            Warnings.Add(MsgFmt(SN_EDIT_POSIBLE_INSERCION_METODO_FMT, [PrincipioDeTexto(Nuevas[J], 60), Donde]));
             Break;
           end;
         end;

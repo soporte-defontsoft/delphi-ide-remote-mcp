@@ -1394,7 +1394,7 @@ begin
     while (K < Length(Lineas)) and
           ((K = ADesde) or (Sb.Length + Length(Lineas[K]) + 1 <= TOPE_SALIDA_GIT)) do
     begin
-      Sb.Append(Copy(Lineas[K], 1, TOPE_SALIDA_GIT)).Append(#10);
+      Sb.Append(PrincipioDeTexto(Lineas[K], TOPE_SALIDA_GIT)).Append(#10);
       if Length(Lineas[K]) > TOPE_SALIDA_GIT then
         Cortadas := Cortadas + IfThen(Cortadas <> '', ', ') + IntToStr(K + 1);
       Inc(K);

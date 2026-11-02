@@ -1632,10 +1632,13 @@ end;
 
 function CarpetasDeUnaLista(const ARaw, ABaseDir: string; AVars: TStrings): TArray<string>;
 var
-  Vistas: TStringList;
+  // por ClaveDeRuta, como Windows: un TStringList sin mayusculas compara con el
+  // idioma y junta ss y la eszett (V82), dos carpetas para NTFS (revisor del
+  // paisaje de la 1.26)
+  Vistas: TDictionary<string, Boolean>;
 begin
   Result := nil;
-  Vistas := TStringList.Create;
+  Vistas := TDictionary<string, Boolean>.Create;
   try
     // expandido ANTES de partir: un macro que expande a una lista ($(Path), una
     // variable del entorno con dos carpetas) era UN trozo con ';' dentro, y no se
@@ -1648,9 +1651,9 @@ begin
       var Carpeta := RutaDesde(ABaseDir, Item);
       if Carpeta = '' then
         Continue;
-      if Vistas.IndexOf(PrefijoSinBarra(Carpeta)) < 0 then
+      if not Vistas.ContainsKey(ClaveDeRuta(PrefijoSinBarra(Carpeta))) then
       begin
-        Vistas.Add(PrefijoSinBarra(Carpeta));
+        Vistas.Add(ClaveDeRuta(PrefijoSinBarra(Carpeta)), True);
         Result := Result + [Carpeta];
       end;
     end;

@@ -12,7 +12,14 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - `delphi_build target=Deploy` that fails no longer tells you to kill a remote-run job that does not exist. `deployLockedNote` looked for `E0017` and the watcher's name anywhere in msbuild's console, so a folder with such a name was enough; it now reads the lines msbuild classifies as errors, with both on the same line.
 - `RENDER-026` says which file holds the inline it left out: the form you asked for may not be the one that closes the cycle.
-- A search path that names one folder twice, differing only in case or in a final backslash, reaches the language server once, as the IDE's library already did.
+- A search path that names one folder twice, differing only in case or in a final backslash, reaches the language server once, as the IDE's library already did; two folders that differ only in `ss` and `ß` stay two, as they are on disk.
+- `delphi_designer set` no longer refuses a sound value with `DSGN-158` ("the form would not open") when the IDE's form reader was stopped for time instead of judging it: a renderer that ran out of time judged nothing, and the value is now written with `readerNote` saying it was not judged, as when the reader could not be asked.
+- A conversion of a form (`to-text`, `to-binary`, reading a binary `.dfm`) stopped by the renderer's own budget says it was the converter's time, not that something in the form waits.
+- `delphi_designer layout` on an FMX form gives a control of the form its own line, not the line of a control with the same name inside an inline frame that comes before it.
+- The rows of a batch (`edits`) and a few other echoes no longer cut a character in two: an emoji at the cut left half of it in the answer.
+- `delphi_changeset stage` takes `ops` encoded twice (a JSON string holding the list), as `edits` already did.
+- `vault_append` finds an `anchor` of several lines sent with Windows line breaks; it never matched, while `vault_patch` already took them.
+- A project in a folder whose name has a comma builds when the build supplies its `.dcu` folder: msbuild split the value at the comma.
 - A first load of the IDE's design packages answers before an MCP client gives up, and says it was the packages. Under Microsoft Defender it can take more than a minute once (each package it has not seen is checked), and the renderer went on until its 60 s, past what many clients wait, to answer `RENDER-007`, which then said "repeat" and also "something in the form waits". Now loading the packages has a budget of its own, 50 s, and a renderer still loading them answers `RENDER-027` with how many it loaded; repeating the call goes on from there (measured on a 4-core VM, three times with new bytes: 50 s and then 17 to 20 s, against 69 s in one go). `RENDER-007` is left for a form that does not finish, and when the server itself stops a renderer it says which phase it was in (`DSGN-187` while loading packages, `DSGN-062` after).
 
 ### Changed

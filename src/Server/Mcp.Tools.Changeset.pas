@@ -83,6 +83,7 @@ uses
   Lsp.Patch,   // AvisosDelLector: el lector del IDE, fuera del cerrojo
   Lsp.Pascal,  // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.TextEdit, // NotaDeEstiloFmx: lo que FMX dice de un .style, fuera del cerrojo
+  Lsp.Json,     // ListaJson: las ops, desenvueltas si llegaron dos veces codificadas
   Lsp.Changeset;
 
 constructor TDelphiChangesetTool.Create;
@@ -131,16 +132,15 @@ const
   end;
 
 var
-  Valor: TJSONValue;
+  Lista: TJSONArray;
   Linea, Negativa: string;
 begin
   Result := '';
-  Valor := TJSONObject.ParseJSONValue(AOps);
+  // desenvuelta si llego codificada dos veces, como los edits de una tanda
+  Lista := ListaJson(AOps);
   try
-    if not (Valor is TJSONArray) or (TJSONArray(Valor).Count = 0) or
-       (TJSONArray(Valor).Count > TOPE_OPS) then
+    if (Lista = nil) or (Lista.Count = 0) or (Lista.Count > TOPE_OPS) then
       Exit(MsgFmt(SR_CHANGESET_OPS_LISTA_FMT, [TOPE_OPS]));
-    var Lista := TJSONArray(Valor);
     for var I := 0 to Lista.Count - 1 do
     begin
       Negativa := Uno(Lista.Items[I], I + 1, Lista.Count, Linea);
@@ -164,7 +164,7 @@ begin
     end;
     Result := Result + MsgText(SF_CHANGESET_TRAS_STAGED);
   finally
-    Valor.Free;
+    Lista.Free;
   end;
 end;
 

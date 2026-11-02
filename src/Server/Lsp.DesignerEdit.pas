@@ -170,7 +170,7 @@ const
   INSERT_Y = 10;
   MAX_USOS = 30;
   MAX_NOMBRES = 40;
-  // hay clientes MCP que se rinden al minuto (el mismo de ESPERA_TABLA_MS)
+  // hay clientes MCP que se rinden al minuto: lo que espera uno (Lsp.FormRender)
   PLAZO_DEL_JUICIO_MS = ESPERA_DEL_CLIENTE_MS;
   // (que valor toma cada tipo lo dice la tabla, leido del fuente: la base
   // de un tipo 'o' y las constantes de un entero, BaseQueNoCasa; aqui habia
@@ -545,7 +545,7 @@ begin
         var L := LineaDePosicion(Codigo, Mt.Index) - 1;
         if ((AFuera <> nil) and AFuera.ContainsKey(L)) or (L > High(Pas)) then
           Continue;
-        var Uso := Donde(APasNombre, L + 1) + ': ' + Copy(Trim(Pas[L]), 1, 120);
+        var Uso := Donde(APasNombre, L + 1) + ': ' + ExtractoDeLinea(Pas, L + 1);
         if Usos.IndexOf(Uso) < 0 then
           Usos.Add(Uso);
       end;

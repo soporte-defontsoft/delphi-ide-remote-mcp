@@ -1439,9 +1439,12 @@ REGLAS = [
     # X.Substring(0, N) a un tope que es una cifra de dos o mas o una CONSTANTE; un tope calculado (una
     # posicion) no es un corte de texto y no se mira. Las casas cortan lo que es ASCII por construccion
     # (un hash, un sello, un nombre ya saneado) o lo que va a un registro, no a una respuesta
+    # (revisor del paisaje de la 1.26: siete copias se escapaban por la FORMA - un indice o una llamada en el
+    # texto, Copy(Lineas[K], 1, N) o Copy(Trim(X), 1, N), y un tope con Min(N, Length(X)) -; ahora se miran)
     ('cortar un texto por la cabeza a mano',
-     r"\bCopy\(\s*[\w.]+\s*,\s*1\s*,\s*(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*\)|"
-     r"\.Substring\(\s*0\s*,\s*(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*\)",
+     r"\bCopy\(\s*(?:[^;,()\[\]]|\[[^\]]*\]|\([^()]*\))+,\s*1\s*,\s*"
+     r"(?:(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*\)|Min\(\s*(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*,)|"
+     r"\.Substring\(\s*0\s*,\s*(?:(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*\)|Min\(\s*(?:\d{2,}|[A-Z_][A-Z_0-9]{2,})\s*,)",
      [('Lsp.DesignerMetaGen.pas', 'HuellaDeCarpetas'),      # un hash en hexadecimal
       ('Lsp.RemoteRun.pas', 'EnsureNodeCurrent'),           # el SHA-256 en hexadecimal de un nombre
       ('Lsp.Casa.pas', 'NombreDeAgente'),                   # un nombre que se sanea a ASCII

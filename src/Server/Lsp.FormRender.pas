@@ -297,7 +297,8 @@ function ManifiestoDeClases(const AClases: TArray<TClaseCom>): string;
   escribe el IDE); ASinLeer, los ancestros sin los que leyo el form (PARTIAL=:
   un juicio a medias); ALeidos, los ficheros que leyo para cargarlo (READ=:
   quien escribe lo juzgado los vuelve a mirar, CambioEnLoLeido). '' si bien;
-  si no, el fallo, en AError el ERROR= del ayudante tal cual y, si lo que
+  si no, el fallo, en AError el ERROR= del ayudante tal cual ('' si se paro
+  por tiempo: no juzgo, como uno que no contesto) y, si lo que
   fallo fue el lector (NOTLOADED=), en AParada su error en partes. La
   propuesta se escribe en una carpeta de descarga del temporal del disenador
   y se borra siempre. ASoltado: el componente que se acaba de soltar en el
@@ -1942,15 +1943,17 @@ begin
       Doc.Free;
     end;
   end
+  else if (APeticion.Convierte <> '') and (Vencido or (Codigo = FR_RC_TIMEOUT)) then
+    // el conversor no carga el form: "algo del form espera" no es su causa (V102),
+    // tampoco cuando lo para su propio vigia (RENDER-007)
+    Result.Fallo := FalloDelAyudante(MsgFmt(SF_DSGN_CONVERSOR_TIEMPO_FMT,
+      [(if Vencido then PlazoDeRender(APeticion) else RENDER_TIEMPO_AYUDANTE_MS) div 1000]))
   else if Result.Error <> '' then
     // con etiqueta (un estado que no existe, el vigia) sale tal cual
     Result.Fallo := FalloDelAyudante(Result.Error)
   else if (Codigo = STATUS_DLL_NOT_FOUND_) or (Codigo = STATUS_ENTRYPOINT_NOT_FOUND_) or
     (Codigo = STATUS_INVALID_IMAGE_FORMAT_) then
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_SIN_BPL_FMT, [Nombre, APeticion.Bds, Codigo])
-  else if Vencido and (APeticion.Convierte <> '') then
-    // el conversor no carga el form: "algo del form espera" no es su causa (V102)
-    Result.Fallo := FalloDelAyudante(MsgFmt(SF_DSGN_CONVERSOR_TIEMPO_FMT, [PlazoDeRender(APeticion) div 1000]))
   else if Vencido and (Result.Fase = FR_FASE_PAQUETES) then
     // lo paramos nosotros mientras cargaba los paquetes del IDE: no es el form
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_PAQUETES_TIEMPO_FMT, [Nombre, PlazoDeRender(APeticion) div 1000])
@@ -2108,7 +2111,11 @@ begin
   ASinLeer := [];
   ALeidos := [];
   var R := JuezDelIde(APath, ATexto, AEnc, '', ASoltado, AUnidad);
-  AError := R.Error;
+  // el que se paro por tiempo (su vigia: RENDER-027, RENDER-007) no juzgo nada.
+  // CargaLoPuesto lo tomaba por un juicio, juzgaba el form de antes y, si ese
+  // cargaba ya con los paquetes revisados, negaba DSGN-158 un valor sano
+  // (revisor del paisaje de la 1.26)
+  AError := (if R.Codigo = FR_RC_TIMEOUT then '' else R.Error);
   AParada := R.Parada;
   // un ciclo de frames no para al lector, que lo salta, y el form propuesto no se
   // cargaria nunca en el IDE: quien juzga una edicion lo tiene que ver

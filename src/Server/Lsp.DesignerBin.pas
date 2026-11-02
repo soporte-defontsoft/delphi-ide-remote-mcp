@@ -287,6 +287,13 @@ function AvisoDeFormaDeLineas(const ALineas: TArray<string>): string;
   cada valor lo juzgan despues set y el parser del IDE (3.10 de la 1.18.0). }
 function TrozosDeEstado(const AEspec: string; out ATrozos: TArray<string>): string;
 
+{ La linea ALinea (1-based) de ALineas como la nombra una respuesta: su texto,
+  sin blancos alrededor y hasta 120 caracteres, sin partir un par UTF-16. La
+  de un error del parser, la de una forma que no es la del IDE y la de un uso
+  que impide borrar (la cita numerada 'N|texto' es otra cosa:
+  Lsp.Mascara.CitaDeLinea) }
+function ExtractoDeLinea(const ALineas: TArray<string>; ALinea: Integer): string;
+
 implementation
 
 uses
@@ -300,6 +307,7 @@ uses
   Lsp.DesignerForma, // la forma del fichero: texto, TPF0 o recurso
   Lsp.FormRender, // ConversionDelIde: EL conversor, en el ayudante de 32 bits
   Lsp.ShaCache, // Sha256DeBytes: la huella de un binario ya convertido
+  Lsp.Listas, // PrincipioDeTexto: EL corte por la cabeza, sin partir un par
   Lsp.Texts;
 
 const
@@ -334,13 +342,9 @@ begin
   Result := EncodeText(ATexto, AK, False);
 end;
 
-// la linea ALinea (1-based) de ALineas como la nombra una respuesta: su texto,
-// sin blancos alrededor y hasta 120 caracteres. La de un error del parser y
-// la de una forma que no es la del IDE (la cita numerada 'N|texto' es otra
-// cosa: Lsp.Mascara.CitaDeLinea)
 function ExtractoDeLinea(const ALineas: TArray<string>; ALinea: Integer): string;
 begin
-  Result := Copy(ALineas[ALinea - 1].Trim, 1, 120);
+  Result := PrincipioDeTexto(ALineas[ALinea - 1].Trim, 120);
 end;
 
 function ParserDeForm(const ATexto, AEnc: string; out ALinea: Integer;

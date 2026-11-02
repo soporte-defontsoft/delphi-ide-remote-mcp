@@ -751,18 +751,15 @@ begin
   Result.AddPair('line', TJSONNumber.Create(ALinea));
 end;
 
-{ La linea del objeto ANombre en el form, 0 si es de dentro de un frame o no esta }
-function LineaDeObjeto(AObj: TStyleObj; const ANombre: string): Integer;
+{ La linea en el form del componente de ARuta (la del renderizador: Edit1, o
+  Frame11.Edit1 dentro de un frame en linea, su inherited si el form lo
+  sobrescribe); 0 si el form no lo escribe. Por EL buscador del documento: el
+  recorrido propio de aqui daba, para el Edit1 del form, el del frame que iba
+  antes (revisor del paisaje de la 1.26) }
+function LineaEnElForm(ADoc: TStyleDoc; const ARuta: string): Integer;
 begin
-  if SameText(AObj.ObjName, ANombre) then
-    Exit(AObj.StartLine);
-  Result := 0;
-  for var I := 0 to AObj.Children.Count - 1 do
-  begin
-    Result := LineaDeObjeto(AObj.Children[I], ANombre);
-    if Result > 0 then
-      Exit;
-  end;
+  var O := ADoc.ObjetoDeNombre(ARuta);
+  Result := (if O <> nil then O.StartLine else 0);
 end;
 
 { layout de un form FMX: lo que FMX resuelve, medido; no hay un modelo que imitar
@@ -806,7 +803,7 @@ begin
         for var I := 0 to High(R.Cajas) do
         begin
           var C := R.Cajas[I];
-          var Linea := LineaDeObjeto(Doc.Root, C.Ruta);
+          var Linea := LineaEnElForm(Doc, C.Ruta);
           var Padre: TCajaDeRender;
           if Padres.ContainsKey(ClaveDeIdentificador(C.Padre)) then
             Padre := Padres[ClaveDeIdentificador(C.Padre)]
@@ -839,7 +836,7 @@ begin
             var O := R.Cajas[J];
             if O.Visible and SameText(O.Padre, C.Padre) and (C.W > 0) and (C.H > 0) and (O.W > 0) and (O.H > 0) and
                (C.X < O.X + O.W) and (O.X < C.X + C.W) and (C.Y < O.Y + O.H) and (O.Y < C.Y + C.H) then
-              Overlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT, [C.Ruta, Linea, O.Ruta, LineaDeObjeto(Doc.Root, O.Ruta), Padre.Ruta,
+              Overlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT, [C.Ruta, Linea, O.Ruta, LineaEnElForm(Doc, O.Ruta), Padre.Ruta,
                 Max(C.X, O.X), Max(C.Y, O.Y), Min(C.X + C.W, O.X + O.W), Min(C.Y + C.H, O.Y + O.H)]));
           end;
         end;
@@ -1255,7 +1252,7 @@ begin
           if not Esta then
             Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False,
               (if C.Padre = '' then Doc.Root.ObjName else C.Padre), C.X, C.Y, C.W, C.H,
-              LineaDeObjeto(Doc.Root, C.Ruta), -1));
+              LineaEnElForm(Doc, C.Ruta), -1));
         end;
         Ret.AddPair('boxesFrom', 'renderer');
       end

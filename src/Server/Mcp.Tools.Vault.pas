@@ -802,6 +802,17 @@ begin
     Exit(MsgText(SR_VAULT_GOVERNANCE));
 end;
 
+{ Donde esta AQue en ATexto si esta UNA vez (1-based); 0 si no esta, -1 si esta
+  mas de una. Los dos en LF, lo que da EditNoteLocked: el ancla de append no se
+  pasaba y una de varias lineas en CRLF no casaba nunca (revisor del paisaje
+  de la 1.26); el old de patch, si. Una busqueda para los dos }
+function PosicionUnica(const AQue, ATexto: string): Integer;
+begin
+  Result := Pos(AQue, ATexto);
+  if (Result > 0) and (Pos(AQue, ATexto, Result + Length(AQue)) > 0) then
+    Result := -1;
+end;
+
 function TVaultAppendTool.ExecuteWithParams(const Params: TVaultAppendParams): string;
 var
   Full, Add, Anchor, Backup: string;
@@ -815,7 +826,7 @@ begin
   Add := ConSalto(Params.Content, #10); // el transform trabaja en LF (EditNoteLocked)
   if Add.Trim = '' then
     Exit(MsgText(SR_VAULT_FALTA_CONTENT_APPEND));
-  Anchor := Params.Anchor;
+  Anchor := ConSalto(Params.Anchor, #10);
 
   // The read, the anchor search and the write happen as one atomic step under
   // the lock: the base this append reads is the base it writes back.
@@ -828,10 +839,10 @@ begin
       ALargo := 0; // anadir no quita nada: el tramo es un punto
       if Anchor.Trim <> '' then
       begin
-        P := Pos(Anchor, ACurrent);
+        P := PosicionUnica(Anchor, ACurrent);
         if P = 0 then
           Exit(MsgText(SR_VAULT_ANCHOR_APARECE_NOTA_LEE));
-        if Pos(Anchor, ACurrent, P + Length(Anchor)) > 0 then
+        if P < 0 then
           Exit(MsgText(SR_VAULT_ANCHOR_APARECE_VARIAS_VECES));
         ADesde := P - 1 + Length(Anchor);
         ANuevo := #10 + Add.TrimRight + #10;
@@ -922,10 +933,10 @@ begin
       Result := '';
       // ACurrent llega en LF (EditNoteLocked): old y new, igual
       var Viejo := ConSalto(Params.Old_Text, #10);
-      P := Pos(Viejo, ACurrent);
+      P := PosicionUnica(Viejo, ACurrent);
       if P = 0 then
         Exit(MsgText(SR_VAULT_OLD_TEXT_APARECE_NOTA));
-      if Pos(Viejo, ACurrent, P + Length(Viejo)) > 0 then
+      if P < 0 then
         Exit(MsgText(SR_VAULT_OLD_TEXT_APARECE_VARIAS));
       ADesde := P - 1;
       ALargo := Length(Viejo);

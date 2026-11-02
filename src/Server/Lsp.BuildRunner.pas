@@ -2659,11 +2659,13 @@ begin
   // propiedad global de msbuild (BuildOutputDefault, ya juzgadas por
   // SalidaDenegada): msbuild la usa como si el .dproj la trajera y el .dproj
   // no se toca. Lo declarado nunca se pisa: solo va lo que falta. Sin barra
-  // final (dcc no la quiere; EnComillas la escaparia bien de todos modos).
+  // final (dcc no la quiere). Con comillas SIEMPRE, como los otros /p: (V115):
+  // EnComillas no las pone sin un blanco, y msbuild parte por ',' y ';' una
+  // carpeta que los lleve (revisor del paisaje de la 1.26)
   var SalidaArg := '';
   for var Sup in Suplidas do
     SalidaArg := SalidaArg + Format(' /p:%s=%s',
-      [Sup.Tag, EnComillas(SinBarraFinal(Sup.Dir))]); // EL quitabarras de la casa (Lsp.NetDrives)
+      [Sup.Tag, ComillasSinEscape(SinBarraFinal(Sup.Dir))]); // EL quitabarras de la casa (Lsp.NetDrives)
   // Security audit trail: a build can run arbitrary pre/post-build steps
   // declared in the .dproj, so record every one - and what the build supplies.
   TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_TARGET_FMT,

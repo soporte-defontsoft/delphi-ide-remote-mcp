@@ -44,6 +44,14 @@ function CadenasDeValor(const AValor: TJSONValue): TArray<string>;
   un array con otra cosa dentro). '' = la lista vacia. }
 function ListaDeTextos(const ATexto: string; out ALista: TArray<string>): Boolean;
 
+{ El texto de un parametro [JsonComoTexto] que es una LISTA de lo que sea (los
+  edits de una tanda, las ops de un changeset) como su array; nil si no lo es.
+  Un cliente que codifica dos veces la manda como CADENA JSON (hermes,
+  25-sep-2026): se desenvuelve UNA vez. Lo hacia solo la tanda, y el mismo
+  cliente fallaba con ops (revisor del paisaje de la 1.26). Quien llama libera
+  el resultado. }
+function ListaJson(const ATexto: string): TJSONArray;
+
 implementation
 
 uses
@@ -143,6 +151,23 @@ begin
     for var E in TJSONArray(AValor) do
       if (E is TJSONString) and not (E is TJSONNumber) then
         Result := Result + [TJSONString(E).Value];
+end;
+
+function ListaJson(const ATexto: string): TJSONArray;
+var
+  V: TJSONValue;
+begin
+  V := TJSONObject.ParseJSONValue(ATexto);
+  if V is TJSONString then
+  begin
+    var Una := TJSONString(V).Value;
+    V.Free;
+    V := TJSONObject.ParseJSONValue(Una);
+  end;
+  if V is TJSONArray then
+    Exit(TJSONArray(V));
+  V.Free;
+  Result := nil;
 end;
 
 function ListaDeTextos(const ATexto: string; out ALista: TArray<string>): Boolean;

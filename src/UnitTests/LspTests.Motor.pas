@@ -1414,6 +1414,10 @@ begin
     Assert.IsTrue(Length(R) = 2, string.Join(' | ', R));
     Assert.AreEqual('C:\Uno', R[0]);
     Assert.AreEqual('C:\dos', R[1]);
+    // ...y dos que NTFS distingue, dos: el pliegue del idioma juntaba la eszett y
+    // ss (V82; revisor del paisaje de la 1.26)
+    R := CarpetasDeUnaLista('C:\Stra' + #$00DF + 'e;C:\Strasse', '', Vars);
+    Assert.IsTrue(Length(R) = 2, string.Join(' | ', R));
   finally
     Vars.Free;
   end;
