@@ -43,6 +43,8 @@ the MCP `initialize` response (`serverInfo.version`).
 - The style converter `delphi_styles` uses (`build`, `lint`, `set`, the platform defaults) runs inside a Windows container of its own, on a copy of the style in a folder of that call, as the form renderers do. It ran outside any container, reading the agent's file directly, and `build` ran it in the agent's folder: a converter that wrote a file there did it. Its output now carries a protocol number, like the renderers' (`STYLE-066` when a converter of another version answers; `STYLE-065` when its container cannot be prepared), and when it does not answer, the server's log says why.
 - When the shared folder of the renderers' packages could not be prepared, the call that asked for it could release the folder from under another call still using it.
 
+- `DelphiLspMcp.exe --install` (or `--uninstall`) says that the Windows service installer reads `/install` or `-install`, instead of installing nothing in silence: the server took the three spellings of a mode, but the installer only reads those two.
+
 ### Changed
 
 - `delphi_config`'s description says again that `add-platform` enables a platform in the `.dproj`. The second pass had dropped it, and with Qwen3.8 Flash Next the task "build Linux64 with the SDK zorin18" fell from 3 of 5 to 2 of 18; with it back, 9 of 18 (`docs/TOOL-DESCRIPTIONS.md`).

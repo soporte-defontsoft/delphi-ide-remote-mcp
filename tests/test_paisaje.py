@@ -2597,4 +2597,25 @@ for _nombre, _sub in (('DelphiStyleConvert.dpr', 'StyleConvert'), ('Lsp.Styles.p
 check('mutante del conversor: una orden a mano se caza',
       re.findall(r"'IGNORED'#9|'ERROR: '|'(?:tobin|totext|defaults|check) ", "  A := 'check ' + F;") != [])
 
+# El instalador del servicio es de la RTL (Vcl.SvcMgr): lee /install y -install con SU juez
+# (Installing, FindCmdLineSwitch). La rama del servicio del .dpr le pregunta a el; con HasMode('install')
+# aceptaba --install, entraba en RunService y no se instalaba nada, en silencio (forma 12 de la 1.26).
+# Y el modo, por SU nombre (Lsp.Service.SERVICE_MODE): el .dpr lo escribia a mano otra vez
+
+
+def rama_del_servicio(dpr):
+    m = re.search(r"if ([^\n]*) then\s*begin\s*GModoServidor := SERVICE_MODE;", dpr)
+    return m.group(1) if m else None
+
+
+with open(os.path.join(SRC, 'Server', 'DelphiLspMcp.dpr'), encoding='utf-8-sig') as _f:
+    _rama = rama_del_servicio(_f.read())
+check('la rama del servicio pregunta al instalador de la RTL (Installing), no a HasMode(install), y nombra el '
+      'modo por SERVICE_MODE', _rama is not None and 'Installing' in _rama and "'install'" not in _rama and
+      "'service'" not in _rama, _rama)
+_vieja = rama_del_servicio("    if HasMode('service') or HasMode('install') or HasMode('uninstall') then\n"
+                           "    begin\n      GModoServidor := SERVICE_MODE;")
+check('mutante del servicio: la rama de antes (HasMode de install) se caza',
+      _vieja is not None and ("'install'" in _vieja or 'Installing' not in _vieja), _vieja)
+
 mc.fin('paisaje battery')

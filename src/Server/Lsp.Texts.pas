@@ -11482,6 +11482,14 @@ const
   SE_BUILD_CREATEPIPE_FAILED =
     'CreatePipe failed';
 
+  { --install o --uninstall: el instalador de servicios de la RTL (Vcl.SvcMgr,
+    FindCmdLineSwitch) solo lee /x y -x, asi que no instalaba nada, en silencio
+    (forma 12 del revisor del paisaje de la 1.26) }
+  SE_SERVICIO_INTERRUPTOR_DOBLE_GUION =
+    'The Windows service installer reads /install or -install (and /uninstall or ' +
+    '-uninstall), not --install or --uninstall: nothing was installed or removed. ' +
+    'Run it again with /install or /uninstall, elevated.';
+
   SE_BUILD_CREATEPROCESS_FAILED_FMT =
     'CreateProcess failed (%d)';
 

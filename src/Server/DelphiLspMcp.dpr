@@ -172,7 +172,8 @@ begin
 end;
 
 { A mode switch is accepted as /x, -x or --x: the operator types it by hand and
-  the three spellings are all reasonable. }
+  the three spellings are all reasonable. Install and uninstall are not ours:
+  the RTL's service installer reads them (see the main block). }
 function HasMode(const AName: string): Boolean;
 begin
   Result := HasFlag('/' + AName) or HasFlag('-' + AName) or
@@ -305,13 +306,23 @@ begin
     SacaLaCarpetaActualDeLasDll;
     // /install and /uninstall are TServiceApplication's own switches, so they
     // have to reach the service branch too - otherwise installing the service
-    // would just start a terminal.
+    // would just start a terminal. Y quien dice si este arranque instala es SU
+    // juez (Installing: FindCmdLineSwitch, '/x' o '-x'): HasMode aceptaba tambien
+    // '--install', entraba aqui y el instalador no lo reconocia - no instalaba
+    // nada, en silencio (forma 12 del revisor del paisaje de la 1.26).
     // la rama elegida es la que cuenta delphi_workspace (un solo lector)
-    if HasMode('service') or HasMode('install') or HasMode('uninstall') then
+    if HasMode(SERVICE_MODE) or Vcl.SvcMgr.Application.Installing then
     begin
-      GModoServidor := 'service';
+      GModoServidor := SERVICE_MODE;
       GTransporteServidor := 'http';
       RunService;
+    end
+    else if HasMode('install') or HasMode('uninstall') then
+    begin
+      // '--install' o '--uninstall': se dice, en la consola de quien lo tecleo (el
+      // log aun no esta), y no se arranca otra cosa
+      Writeln(ErrOutput, MsgText(SE_SERVICIO_INTERRUPTOR_DOBLE_GUION));
+      ExitCode := 2;
     end
     else if HasMode('gui') or HasMode('tray') then
     begin

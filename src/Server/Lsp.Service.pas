@@ -40,9 +40,12 @@ type
 const
   SERVICE_NAME = 'DelphiLspMcp';
   SERVICE_DISPLAY = 'DelphiLSP MCP Service';
-  { The switch that tells this exe to run under the SCM. Baked into the
-    registered ImagePath by ServiceAfterInstall - see there for why. }
-  SERVICE_SWITCH = '/service';
+  { The mode that tells this exe to run under the SCM, and its switch: EL
+    nombre (el .dpr lo escribia a mano otra vez, HasMode('service')). The
+    switch is baked into the registered ImagePath by ServiceAfterInstall - see
+    there for why. }
+  SERVICE_MODE = 'service';
+  SERVICE_SWITCH = '/' + SERVICE_MODE;
 
 var
   DelphiLspMcpService: TDelphiLspMcpService;
