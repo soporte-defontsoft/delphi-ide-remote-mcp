@@ -345,6 +345,11 @@ REGLAS = [
      r"\s*'(?:clone|pull|fetch|push|ls-remote)'",
      [('Lsp.Args.pas', 'EsOrdenDeRed'), ('Mcp.Tools.Git.pas', 'GitLinea')],
      'EsOrdenDeRed (Lsp.Args, forma 2 de la 1.26)'),
+    # la clausula uses NUEVA compuesta a mano ('uses', salto, dos espacios, entradas): la escribian los dos llamadores
+    # de EstrenaClausula, que la inserta (forma 3 de la 1.26). Las plantillas de Lsp.Scaffold son esqueletos enteros
+    ('una clausula uses nueva compuesta a mano', r"'uses'\s*\+\s*\w+\s*\+\s*'  '",
+     [('Lsp.ProjectUnits.pas', 'EstrenaClausula')],
+     'EstrenaClausula (Lsp.ProjectUnits): el escritor de una clausula uses nueva y su forma, la del IDE'),
     ('una extension juzgada con el locale',
      r"\b(?:(?:Ansi)?(?:MatchText|IndexText)|AnsiSameText|AnsiCompareText)\s*\(\s*(?:TPath\.GetExtension|ExtractFileExt)\b",
      [],
@@ -1827,6 +1832,8 @@ PLANTADO = {
     'el nombre de una carpeta del servidor juzgado a mano': "        if SameText(Nombre, TrashFolderName) then",
     'una extension juzgada con el locale': "  Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS);",
     'las ordenes de red de git a mano': "    if MatchText(Cmd, ['pull', 'fetch', 'push', 'ls-remote']) then",
+    'una clausula uses nueva compuesta a mano':
+        "    EstrenaClausula(AText, FinLinea, 'uses' + NL + '  ' + string.Join(', ', AFaltan) + ';');",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",

@@ -2102,29 +2102,34 @@ begin
   Result := Copy(Xml, 1, At - 1) + AElement + Copy(Xml, At, MaxInt);
 end;
 
-{ Estrena la clausula ACuerpo ('uses ...;') en APos de AText, donde empieza el
-  salto que sigue a la palabra de seccion o a la cabecera: con la MISMA
-  separacion que habia alli, delante y detras. Asi removeuses, que quita la
+{ Estrena la clausula uses de AEntradas (ya escritas, sin el ';') en APos de
+  AText, donde empieza el salto que sigue a la palabra de seccion o a la
+  cabecera: con la MISMA separacion que habia alli, delante y detras. Asi
+  removeuses, que quita la
   clausula con los saltos que la siguen (ReplaceUses), es su inversa: con dos
   saltos fijos delante, una unit compacta ('interface' y el codigo justo
   debajo) ganaba una linea en blanco tras adduses + removeuses (test completo
   de Opus de la 1.22.0); con una linea en blanco, la forma del IDE, salen los
   mismos bytes que antes. Sin salto en APos, dos delante, como antes. EL
-  escritor de una clausula nueva de un .pas y de un .dpr (eran dos). }
-procedure EstrenaClausula(var AText: string; APos: Integer; const ACuerpo: string);
+  escritor de una clausula nueva de un .pas y de un .dpr (eran dos), y su
+  forma, la del IDE ('uses', salto, dos espacios, las entradas): la componian
+  a mano sus dos llamadores (forma 3 de la 1.26). }
+procedure EstrenaClausula(var AText: string; APos: Integer; const AEntradas: string);
 var
   Fin: Integer;
+  NL, Cuerpo: string;
 begin
+  NL := SaltoDominante(AText);
+  Cuerpo := 'uses' + NL + '  ' + AEntradas + ';';
   Fin := APos;
   while (Fin <= Length(AText)) and CharInSet(AText[Fin], [#10, #13]) do
     Inc(Fin);
   if Fin = APos then
-    AText := Copy(AText, 1, APos - 1) + SaltoDominante(AText) + SaltoDominante(AText) +
-      ACuerpo + Copy(AText, APos, MaxInt)
+    AText := Copy(AText, 1, APos - 1) + NL + NL + Cuerpo + Copy(AText, APos, MaxInt)
   else
   begin
     var Sep := Copy(AText, APos, Fin - APos);
-    AText := Copy(AText, 1, APos - 1) + Sep + ACuerpo + Sep + Copy(AText, Fin, MaxInt);
+    AText := Copy(AText, 1, APos - 1) + Sep + Cuerpo + Sep + Copy(AText, Fin, MaxInt);
   end;
 end;
 
@@ -2140,10 +2145,7 @@ begin
   Result := CabeceraDeFuente(CodigoPascal(AText), Cab) and
     MatchText(Cab.Palabra, ['program', 'library']);
   if Result then
-  begin
-    var NL := SaltoDominante(AText);
-    EstrenaClausula(AText, Cab.Fin, 'uses' + NL + '  ' + AEntradas + ';');
-  end;
+    EstrenaClausula(AText, Cab.Fin, AEntradas);
 end;
 
 { ---- public operations ---- }
@@ -3009,7 +3011,7 @@ function UsesConUnidades(var AText: string; const ANames: TArray<string>;
   out AFaltan, AYaEstan, AEnOtra: TArray<string>;
   out ACreada: Boolean): string;
 var
-  Blank, OtraSec, NL, Nombre, E: string;
+  Blank, OtraSec, Nombre, E: string;
   U, UOtra: TUsesClause;
   Entries: TArray<string>;
   PosSec, FinLinea: Integer;
@@ -3023,7 +3025,6 @@ begin
   PosSec := FinDeSeccion(Blank, ASec);
   if PosSec = 0 then
     Exit(MsgFmt(SR_ADDUSES_NO_SECTION_FMT, [ASec, AFichero]));
-  NL := SaltoDominante(AText);
   U := FindUses(AText, PosSec);
   if U.Found then
   begin
@@ -3066,7 +3067,7 @@ begin
       AText := Copy(AText, 1, PosSec - 1) + ' uses ' + string.Join(', ', AFaltan) + ';' +
         Copy(AText, PosSec, MaxInt)
     else
-      EstrenaClausula(AText, FinLinea, 'uses' + NL + '  ' + string.Join(', ', AFaltan) + ';');
+      EstrenaClausula(AText, FinLinea, string.Join(', ', AFaltan));
   end;
 end;
 
