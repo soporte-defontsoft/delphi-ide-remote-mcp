@@ -3158,6 +3158,12 @@ begin
   end;
 end;
 
+const
+  // los ficheros cuyo uses editan adduses y removeuses (un .dpk lleva
+  // contains/requires: add-unit y add-requires); cada puerta tenia su copia
+  // de la lista (C15 de la 1.26)
+  EXTS_CON_USES: array[0..1] of string = ('.pas', '.dpr');
+
 { adduses de delphi_edit (David, 2026-09-23): una unit entra en el uses de
   OTRA unit, en la seccion que se diga, y la clausula la escribe el motor:
   comas, terminador y, si no existia, la clausula entera bajo la palabra de
@@ -3171,7 +3177,7 @@ var
   Names, Faltan, YaEstan, EnOtra: TArray<string>;
   Creada: Boolean;
 begin
-  if not TieneExtension(APasPath, ['.pas', '.dpr']) then
+  if not TieneExtension(APasPath, EXTS_CON_USES) then
     Exit(MsgFmt(SR_ADDUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   Names := [];
   for Nombre in ANames do
@@ -3321,7 +3327,7 @@ var
   end;
 
 begin
-  if not TieneExtension(APasPath, ['.pas', '.dpr']) then
+  if not TieneExtension(APasPath, EXTS_CON_USES) then
     Exit(MsgFmt(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   Names := [];
   for Nombre in ANames do

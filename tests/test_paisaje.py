@@ -1009,6 +1009,13 @@ REGLAS = [
     ('lo que recibe ParamStr juzgado a mano', r"\.Contains\(\s*(?:'\"'|#34)\s*\)",
      [('Lsp.ProcessLaunch.pas', 'LlegaAParamStr')],
      'LlegaAParamStr (Lsp.ProcessLaunch): EL juez de un argumento para un programa Delphi, junto a ComillasSinEscape'),
+    # una linea de un fichero citada en una respuesta sin su corte: el lint de tablas, lo que salto el ayudante, la
+    # clase de un insert, el aviso de rename y la posicion fuera de su linea la citaban entera, y ExtractoDeLinea la
+    # cortaba sin decirlo (C15 del cierre de la 1.26). El eco del ancla de un bloque (ApplyBlockEdit) es texto del
+    # agente, no de un fichero
+    ('una linea citada sin su corte', r"(?:\bMsg(?:Fmt)?\(|^\s*\[).*\b\w*(?:Lines|Lineas)\[[^\]]+\]\.Trim\b",
+     [('Lsp.Patch.pas', 'ApplyBlockEdit')],
+     'ExtractoDeLinea / LineaCitada (Lsp.Listas): LA cita de una linea en una respuesta, cortada y diciendolo'),
     # ---- C11 del revisor del paisaje del cierre de la 1.26: formatos que ninguna regla miraba
     # una macro $(X) sustituida a mano. Los expansores son DOS, deuda declarada: ExpandIdeMacros (la tabla del IDE,
     # con macros dentro de macros) y ExpandeReservadas (las propiedades reservadas de msbuild, una pasada); y
@@ -2065,6 +2072,7 @@ PLANTADO = {
     'el exe de un renderizador de forms': "  E := ServerDir('DelphiFormRenderVcl.exe');",
     'el exe del conversor de estilos': "      Mira(ServerDir, 'DelphiStyleConvert.*');",
     'lo que recibe ParamStr juzgado a mano': "  if AArg.Contains('\"') then",
+    'una linea citada sin su corte': "    Warns.Add(MsgFmt(SF_DSGN_LINEA_AVISO_FMT, [I + 1, ALines[I].Trim, AMsg]));",
     'una macro sustituida a mano': "  T := T.Replace('$(BDS)', Raiz, [rfReplaceAll]);",
     'la autorizacion de X de Wayland a mano': "  M := Home + '/.mutter-Xwaylandauth.*';",
     'la cuenta leida del entorno': "  U := GetEnvironmentVariable('USERNAME');",

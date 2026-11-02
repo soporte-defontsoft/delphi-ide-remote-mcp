@@ -237,7 +237,7 @@ begin
             // (en su codigo: un 'X.Nombre' de un comentario no la cualifica)
             if TRegEx.IsMatch(CodigoPascal(Lines[DefLine]),
               '(?i)' + PATRON_IDENT + '\.' + PatronIdentEntero(Ident)) then
-              Warnings.Add(MsgFmt(SN_RENAME_QUALIFIED_FMT, [Lines[DefLine].Trim]));
+              Warnings.Add(MsgFmt(SN_RENAME_QUALIFIED_FMT, [ExtractoDeLinea(Lines, DefLine + 1)]));
           end;
         end;
       end;

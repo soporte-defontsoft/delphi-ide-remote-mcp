@@ -161,7 +161,8 @@ uses
   Lsp.TodoONada,       // FicherosTodoONada
   Lsp.FormRender,      // ComoLoEscribeElIde: el juez del orden entre hermanos (3.11)
   Lsp.Args,
-  Winapi.Windows;
+  Winapi.Windows,
+  Lsp.Listas;          // ExtractoDeLinea: la cita de una linea en una respuesta
 
 const
   // (las identidades de la tabla, ID_VCL_CONTROL y las demas: Lsp.DesignerMeta)

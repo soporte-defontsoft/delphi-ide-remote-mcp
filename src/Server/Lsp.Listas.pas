@@ -173,6 +173,23 @@ function FinalDeTexto(const ATexto: string; AMax: Integer): string;
   una vez con la guarda y once sin ella (V106 de la 1.23.1): un emoji en el
   tope dejaba medio caracter en la respuesta. }
 function PrincipioDeTexto(const ATexto: string; AMax: Integer): string;
+{ EL texto de una linea de un fichero como lo cita una respuesta: sin blancos
+  alrededor y, si pasa de AMax, sus AMax primeros caracteres (sin partir un
+  par UTF-16) con '...' detras: cortada en silencio parecia la linea entera
+  (V189). La de ExtractoDeLinea y la del eco numerado de delphi_edit
+  (Lsp.Patch.EcoDeLinea), que cortaban cada uno a su manera, el extracto sin
+  marca (C15 de la 1.26). }
+function LineaCitada(const ALinea: string; AMax: Integer): string;
+{ La linea ALinea (1-based) de ALineas como la nombra una respuesta: LineaCitada
+  a 120. La de un error del parser, la de una forma que no es la del IDE, la
+  de un uso que impide borrar, la que el lector de un form salto o la que su
+  clase no publica, la de una clase o una cabecera de un fuente y la de una
+  posicion que se sale de su linea. Vivia en Lsp.DesignerBin, y el lint de
+  tablas, lo que salto el ayudante, la clase de un insert, el aviso de rename
+  y la posicion fuera de rango citaban la linea entera (C15 de la 1.26: un
+  dato de 300 caracteres iba entero en el aviso). La cita numerada 'N|texto'
+  es otra cosa: Lsp.Mascara.CitaDeLinea. }
+function ExtractoDeLinea(const ALineas: TArray<string>; ALinea: Integer): string;
 
 implementation
 
@@ -494,6 +511,18 @@ begin
   if (N > 0) and ATexto[N].IsHighSurrogate then
     Dec(N); // no partir un par UTF-16
   Result := Copy(ATexto, 1, N);
+end;
+
+function LineaCitada(const ALinea: string; AMax: Integer): string;
+begin
+  Result := ALinea.Trim;
+  if Length(Result) > AMax then
+    Result := PrincipioDeTexto(Result, AMax) + '...';
+end;
+
+function ExtractoDeLinea(const ALineas: TArray<string>; ALinea: Integer): string;
+begin
+  Result := LineaCitada(ALineas[ALinea - 1], 120);
 end;
 
 function ColaDeSalida(const ATexto: string; AMaxLineas: Integer;

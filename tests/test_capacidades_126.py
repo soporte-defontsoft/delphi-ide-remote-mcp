@@ -441,6 +441,12 @@ ADB = de_mentira('AdbFalso',
                  "    A := Copy(A, 2, MaxInt);\n"
                  "  if (Length(A) >= 4) and (A[0] = 'shell') and (A[1] = 'screencap') then\n"
                  "  begin\n"
+                 "    if TFile.Exists(TPath.Combine(ExtractFilePath(ParamStr(0)), 'falla')) then\n"
+                 "    begin\n"
+                 "      TFile.WriteAllText(TPath.Combine(Dev, TPath.GetFileName(A[3])), '');\n"
+                 "      Writeln('screencap: capture failed');\n"
+                 "      Halt(1);\n"
+                 "    end;\n"
                  "    TFile.WriteAllBytes(TPath.Combine(Dev, TPath.GetFileName(A[3])),\n"
                  "      TFile.ReadAllBytes(TPath.Combine(ExtractFilePath(ParamStr(0)), 'base.png')) +\n"
                  "      TEncoding.ASCII.GetBytes(TGUID.NewGuid.ToString));\n"
@@ -515,6 +521,20 @@ pa, pb = (open(os.path.join(RF, n + '.png'), 'rb').read() if os.path.exists(os.p
 check('RF dos capturas a la vez del mismo dispositivo: las dos salen, y cada una es la suya',
       pa and pb and pa != pb and not mc.fallo(res.get('a', '')) and not mc.fallo(res.get('b', '')),
       (len(pa), len(pb), pa == pb, res.get('a', '')[:300], res.get('b', '')[:300]))
+
+# RF2 una captura que falla EN el dispositivo: screencap abre el fichero antes de capturar (AOSP), y uno que falla deja
+# alli un PNG vacio con el nombre unico de esta captura, que nadie volveria a borrar. El rm iba detras del pull y el
+# fallo salia antes. El adb de mentira hace lo mismo mientras haya un 'falla' junto a el
+FALLA = os.path.join(os.path.dirname(ADB), 'falla')
+open(FALLA, 'w').close()
+try:
+    captura('c', res)
+finally:
+    os.remove(FALLA)
+DEV = os.path.join(os.path.dirname(ADB), 'Dev')
+quedan = os.listdir(DEV) if os.path.isdir(DEV) else ['(sin Dev)']
+check('RF2 una captura que falla en el dispositivo no deja alli su fichero (el rm, pase lo que pase)',
+      mc.fallo(res.get('c', '')) and not quedan, (quedan, res.get('c', '')[:300]))
 
 # RA un search path con prefijo de dispositivo que no es una unidad ni un UNC (\\?\GLOBALROOT\Device\...): la puerta
 # del build le quitaba el prefijo y juzgaba lo que quedaba, una ruta RELATIVA que caia dentro del proyecto, mientras

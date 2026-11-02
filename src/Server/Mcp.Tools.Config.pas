@@ -1707,7 +1707,7 @@ begin
           else
           begin
             var Delante := T.Abre;
-            for var M in TramosEnGrupo(Xml, 'VerInfo_MajorVer', Grupos[G]) do
+            for var M in TramosEnGrupo(Xml, ETIQUETAS_DE_VERSION[0], Grupos[G]) do
               if M.Abre < Delante then
                 Delante := M.Abre;
             Xml := Copy(Xml, 1, Delante - 1) + XmlElemento('VerInfo_IncludeVerInfo', 'true') + Eol +

@@ -445,7 +445,8 @@ uses
   Lsp.Pascal,
   Lsp.Herencia, // LA cadena de ancestros por el motor (la base de la raiz)
   Lsp.DesignerForma, // UnidadDeDesigner: el .pas de un designer (PublicadasPorElUsuario)
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.Listas; // ExtractoDeLinea: la cita de una linea en una respuesta
 
 type
   TJubilada = record
@@ -1838,14 +1839,14 @@ var
   procedure Warn(const AMsg: string);
   begin
     Warns.Add(MsgFmt(SF_DSGN_LINEA_AVISO_FMT,
-      [I + 1, ALines[I].Trim, AMsg]));
+      [I + 1, ExtractoDeLinea(ALines, I + 1), AMsg]));
   end;
 
   // lo que no se ha podido comprobar, con la misma forma de linea
   procedure Nota(const AMsg: string);
   begin
     Notas.Add(MsgFmt(SF_DSGN_LINEA_AVISO_FMT,
-      [I + 1, ALines[I].Trim, AMsg]));
+      [I + 1, ExtractoDeLinea(ALines, I + 1), AMsg]));
   end;
 
 begin

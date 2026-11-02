@@ -2623,17 +2623,13 @@ begin
 end;
 
 { Una linea en un informe: ANumero|texto, cortada si es larga, y diciendolo (V189:
-  se cortaba a 90 en silencio y parecia la linea entera). }
+  se cortaba a 90 en silencio y parecia la linea entera). El corte, el de toda
+  linea citada (Lsp.Listas.LineaCitada; C15 de la 1.26). }
 function EcoDeLinea(ANumero: Integer; const ALinea: string): string;
 const
   TOPE_DEL_ECO = 90;
-var
-  Texto: string;
 begin
-  Texto := ALinea.Trim;
-  if Length(Texto) > TOPE_DEL_ECO then
-    Texto := PrincipioDeTexto(Texto, TOPE_DEL_ECO) + '...';
-  Result := CitaDeLinea(ANumero, Texto);
+  Result := CitaDeLinea(ANumero, LineaCitada(ALinea, TOPE_DEL_ECO));
 end;
 
 function LineaEnBlancoDenegada(const ALines: TArray<string>;
@@ -4608,7 +4604,7 @@ begin
       [ALine, TPath.GetFileName(APath), Length(Lines), Length(Lines) - 1]))
   else if AChar > Length(Lines[ALine]) then
     Exit(MsgFmt(SR_LSP_CHAR_RANGE_FMT,
-      [AChar, ALine, ALine + 1, Length(Lines[ALine]), Lines[ALine].Trim]));
+      [AChar, ALine, ALine + 1, Length(Lines[ALine]), ExtractoDeLinea(Lines, ALine + 1)]));
 end;
 
 function PosicionQueNoSePregunta(const APath: string; ALine, AChar: Integer): string;
@@ -5705,11 +5701,11 @@ begin
         if IClase = -1 then
           Exit(MsgFmt(SR_EDIT_ENCUENTRO_CLASS_FMT, [A.ClassName_, TPath.GetFileName(A.Path)]));
         if SinCuerpo then
-          Exit(MsgFmt(SR_EDIT_CLASE_SIN_CUERPO_FMT, [A.ClassName_, IClase + 1, Lines[IClase].Trim]));
+          Exit(MsgFmt(SR_EDIT_CLASE_SIN_CUERPO_FMT, [A.ClassName_, IClase + 1, ExtractoDeLinea(Lines, IClase + 1)]));
         if IFin = -1 then
           Exit(MsgFmt(SR_EDIT_ENCUENTRO_END_CIERRE_CLASE_FMT, [A.ClassName_]));
         if IFin <= IClase then
-          Exit(MsgFmt(SR_EDIT_CLASE_EN_UNA_LINEA_FMT, [A.ClassName_, IClase + 1, Lines[IClase].Trim]));
+          Exit(MsgFmt(SR_EDIT_CLASE_EN_UNA_LINEA_FMT, [A.ClassName_, IClase + 1, ExtractoDeLinea(Lines, IClase + 1)]));
 
         // COLISION (campo, hermes 17-sep): la firma de un metodo vive DOS
         // veces (interface + implementation) y la tool escribia las dos a

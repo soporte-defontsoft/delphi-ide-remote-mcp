@@ -1002,9 +1002,9 @@ var
     // en el fichero que leia: el de un frame o un ancestro se nombra
     var N := LineaDeLoLeido(Ficheros, AI, D, Otro);
     if (N > 0) and (Otro <> '') then
-      Lineas := Lineas + [MsgFmt(SF_DSGN_LINEA_AVISO_EN_FMT, [Otro, N, D.Lines[N - 1].Trim, AI.Texto])]
+      Lineas := Lineas + [MsgFmt(SF_DSGN_LINEA_AVISO_EN_FMT, [Otro, N, ExtractoDeLinea(D.Lines, N), AI.Texto])]
     else if N > 0 then
-      Lineas := Lineas + [MsgFmt(SF_DSGN_LINEA_AVISO_FMT, [N, D.Lines[N - 1].Trim, AI.Texto])]
+      Lineas := Lineas + [MsgFmt(SF_DSGN_LINEA_AVISO_FMT, [N, ExtractoDeLinea(D.Lines, N), AI.Texto])]
     else if Otro <> '' then
       Lineas := Lineas + [MsgFmt(SF_DSGN_LECTOR_EN_FICHERO_FMT, [Otro, AI.Texto])]
     else
@@ -1702,9 +1702,10 @@ begin
       // donde el IDE deja lo compilado, los paquetes declarados, y lo que el
       // PATH le da a sus dependencias (por donde las busca Windows). Un nombre
       // repetido: el primero, como el cargador
-      var Comun := BdsCommonDir(AInfo);
-      if Comun <> '' then
-        MiraCarpeta(TPath.Combine(Comun, 'Bpl'));
+      // la de lo compilado, la que el IDE dice para Win32 (la de los
+      // ayudantes): era $(BDSCOMMONDIR)\Bpl compuesto aqui (C15 de la 1.26)
+      for var D in IdePlatformLibraryPaths(AInfo, 'Win32', 'Package DPL Output') do
+        MiraCarpeta(D);
       for var P in APaquetes do
         MiraCarpeta(TPath.GetDirectoryName(P));
       PathDelServidor := CarpetasDelPath(GetEnvironmentVariable('PATH'));

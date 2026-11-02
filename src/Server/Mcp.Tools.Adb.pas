@@ -609,15 +609,21 @@ begin
     end;
     CrearCarpeta(TPath.GetDirectoryName(Destino));
     DevPng := DevDir + TPath.GetFileName(Destino);
-    Output := RunAdb(Adb, DevArg + 'shell screencap -p ' + DevPng, 30000,
-      ExitCode);
-    if (ExitCode <> 0) or DeviceGone(Output) then
-      Exit(FalloDeAdb(Output, ExitCode)); // tambien con exit 0 (V63)
-    Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' ' + EnComillas(Destino), 60000, ExitCode);
-    // el rm, con su propio codigo: pisaba el del pull, y el fallo de abajo
-    // decia el exit del rm junto a la salida del pull (V63 de la 1.23)
     var ExitRm: Cardinal;
-    RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitRm);
+    try
+      Output := RunAdb(Adb, DevArg + 'shell screencap -p ' + DevPng, 30000,
+        ExitCode);
+      if (ExitCode <> 0) or DeviceGone(Output) then
+        Exit(FalloDeAdb(Output, ExitCode)); // tambien con exit 0 (V63)
+      Output := RunAdb(Adb, DevArg + 'pull ' + DevPng + ' ' + EnComillas(Destino), 60000, ExitCode);
+    finally
+      // el rm, pase lo que pase: screencap abre el fichero ANTES de capturar
+      // (AOSP), y uno que fallaba salia sin rm y dejaba alli un PNG vacio
+      // con el nombre unico de esta captura (C15 de la 1.26). Con su propio
+      // codigo: pisaba el del pull, y el fallo de abajo decia el exit del rm
+      // junto a la salida del pull (V63 de la 1.23)
+      RunAdb(Adb, DevArg + 'shell rm ' + DevPng, 15000, ExitRm);
+    end;
     // no hay captura: es un fallo aunque adb dijera 0, con el exit de verdad
     // (se ponia un 1 a mano para que ResultadoAdb lo viera)
     if not TFile.Exists(Destino) then

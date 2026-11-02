@@ -36,6 +36,8 @@ type
     [Test] procedure ElFinalNoParteUnPar;
     [Test]
     procedure ElPrincipioNoParteUnPar;
+    [Test]
+    procedure LaLineaCitadaDiceQueSeCorta;
   end;
 
 implementation
@@ -266,6 +268,18 @@ begin
   Assert.AreEqual('ab'#$D83D#$DE00, PrincipioDeTexto('ab'#$D83D#$DE00'cd', 4));
   Assert.AreEqual('', PrincipioDeTexto('abc', 0), 'nada');
   Assert.AreEqual('', PrincipioDeTexto(#$D83D#$DE00'x', 1), 'ni la mitad de uno');
+end;
+
+procedure TColaDeSalidaTests.LaLineaCitadaDiceQueSeCorta;
+begin
+  // C15 de la 1.26: la cita de una linea iba entera en ocho sitios, y cortada
+  // en silencio en ExtractoDeLinea (lo que V189 ya habia quitado del eco)
+  Assert.AreEqual('abc', LineaCitada('  abc  ', 3), 'cabe: solo sin blancos');
+  Assert.AreEqual('ab...', LineaCitada('abc', 2), 'cortada: lo dice');
+  Assert.AreEqual('ab...', LineaCitada('ab'#$D83D#$DE00'cd', 3), 'sin partir un par');
+  Assert.AreEqual('b', ExtractoDeLinea(['a', '  b  '], 2), 'la linea N, contada desde 1');
+  Assert.AreEqual(StringOfChar('x', 120) + '...', ExtractoDeLinea([StringOfChar('x', 300)], 1),
+    'a 120, y lo dice');
 end;
 
 initialization
