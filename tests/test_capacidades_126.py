@@ -665,6 +665,17 @@ b9 = s.call('delphi_search', {'root': os.path.dirname(R9), 'query': 'unit Copia9
 check('R9 una carpeta de copias de otro nombre se lista y se busca como cualquier otra (no es la papelera del servidor)',
       'Copia9.pas' in l9 and 'Copia9.pas' in b9 and 'hiddenTrash' not in l9 + b9, l9[:300] + ' | ' + b9[:300])
 
+# R25 una extension se juzga como la compara NTFS, no con el locale (MatchText): 'nota.pa' + U+02E2 (una s
+# modificadora) no es un .pas para el disco ni para dcc, y delphi_textedit la negaba como fuente de Delphi;
+# 'x.dpr' + U+1D3C + 'j', como proyecto del IDE. Medido el 2-nov-2026: 123 caracteres asi en las extensiones
+# del servidor, todos de mas (NTFS no iguala ningun caracter que no sea ASCII a uno que lo sea)
+R25 = os.path.join(JAIL, 'r25')
+os.makedirs(R25)
+for nombre in ('nota.pa' + chr(0x2E2), 'x.dpr' + chr(0x1D3C) + 'j'):
+    r = s.call('delphi_textedit', {'path': os.path.join(R25, nombre), 'create': True, 'content': 'hola\n'})
+    check('R25 %s no es de Delphi para el disco: delphi_textedit lo crea' % ascii(nombre),
+          os.path.isfile(os.path.join(R25, nombre)), r[:300])
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')

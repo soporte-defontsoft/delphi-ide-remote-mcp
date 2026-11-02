@@ -593,7 +593,7 @@ begin
           // remoto: 18 MB en un test vacio, medido)
           if TDirectory.Exists(APath) then
             Exit(EsCarpetaDesechable(TPath.GetFileName(APath)));
-          Result := MatchText(TPath.GetExtension(APath), ['.dcu', '.rsm']);
+          Result := TieneExtension(APath, ['.dcu', '.rsm']);
           // lo que SI se copia, se cuenta: el copiador pregunta esto lo
           // ultimo, por lo que va a copiar de verdad
           // (un enlace que se sigue copia lo de DETRAS: se cuenta eso, no

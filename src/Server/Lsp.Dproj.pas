@@ -1930,7 +1930,7 @@ end;
 
 function EsFuentePrincipal(const APath: string): Boolean;
 begin
-  Result := MatchText(TPath.GetExtension(APath), ['.dpr', '.dpk']);
+  Result := TieneExtension(APath, ['.dpr', '.dpk']);
 end;
 
 function EsProyectoOSuFuente(const APath: string): Boolean;

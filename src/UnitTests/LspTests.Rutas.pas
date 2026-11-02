@@ -94,6 +94,7 @@ type
     [Test] procedure LaBarraFinalNoCambiaLaClave;
     [Test] procedure UnaListaDeRutasSeparaLoQueNtfsSepara;
     [Test] procedure LasCarpetasDelServidorPorSuNombreComoNtfs;
+    [Test] procedure LaExtensionComoLaComparaNtfs;
   end;
 
   { V204 de la 1.23.1: el Include de un proyecto se resuelve por EL resolutor
@@ -1742,6 +1743,16 @@ begin
   Assert.IsTrue(EsCarpetaDesechable('__Delphi-Temp'), 'la temporal');
   Assert.IsTrue(EsCarpetaDesechable('__delphi-patch'), 'la papelera');
   Assert.IsFalse(EsCarpetaDesechable('__delphi'#$FE63'temp'), 'otro guion: otra carpeta');
+end;
+
+procedure TClaveDeCarpetaTests.LaExtensionComoLaComparaNtfs;
+begin
+  // la extension como NTFS compara dos nombres: con MatchText, el locale,
+  // estas dos eran un .pas y un proyecto del IDE (forma 25 de la 1.26)
+  Assert.IsTrue(TieneExtension('C:\x\U.PAS', ['.pas', '.dpr']), 'las mayusculas no cuentan');
+  Assert.IsFalse(TieneExtension('C:\x\nota.pa'#$02E2, ['.pas']), 'una s modificadora no es una s');
+  Assert.IsFalse(TieneExtension('C:\x\x.dpr'#$1D3C'j', ['.dproj']), 'ni una O modificadora una o');
+  Assert.IsFalse(TieneExtension('C:\x\sinextension', ['.pas']), 'sin extension');
 end;
 
 initialization

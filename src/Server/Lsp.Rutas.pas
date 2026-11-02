@@ -82,6 +82,17 @@ function EnLugar(const APath, ALugar: string;
   Solo yerran hacia "fuera" / "distintas": niegan de mas, nunca de menos. }
 function RutaDentroDe(const AContenedor, ARuta: string): Boolean;
 function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
+{ La extension de ARuta es una de AExts ('.pas'...), como NTFS compara dos
+  nombres (RutaEnLista). Con MatchText, el locale, 'nota.pa' + U+02E2 era un
+  .pas y 'x.dpr' + U+1D3C + 'j' un proyecto del IDE: 123 caracteres asi en
+  las extensiones del servidor (medido el 2-nov-2026), todos de mas: NTFS no
+  iguala ningun caracter que no sea ASCII a uno que lo sea, asi que SameText
+  contra una extension ASCII dice lo mismo que el disco (forma 25 de la 1.26).
+  AExts abierto (toma las listas fijas, SOURCE_EXTS...) y RutaEnLista no: con
+  el suyo abierto, Lsp.Changeset:1208 (un ToStringArray dentro de un and)
+  daba un access violation en el commit de un move, Win64 Release, medido con
+  el mapa; con TArray<string>, como estaba, no. }
+function TieneExtension(const ARuta: string; const AExts: array of string): Boolean;
 { LA lista de rutas (o de nombres de fichero) ordenada y sin repetir como las
   compara NTFS: AnsiCompareFileName, el juez de SameFileName. Un TStringList
   compara con el locale (AnsiCompareText, lingueistica): ordenado y con su
@@ -711,6 +722,17 @@ begin
     if SameFileName(ARuta, L) then
       Exit(True);
   Result := False;
+end;
+
+function TieneExtension(const ARuta: string; const AExts: array of string): Boolean;
+var
+  Lista: TArray<string>;
+  I: Integer;
+begin
+  SetLength(Lista, Length(AExts));
+  for I := 0 to High(AExts) do
+    Lista[I] := AExts[I];
+  Result := RutaEnLista(TPath.GetExtension(ARuta), Lista);
 end;
 
 function TListaDeRutas.CompareStrings(const S1, S2: string): Integer;

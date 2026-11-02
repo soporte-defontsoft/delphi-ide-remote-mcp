@@ -1985,7 +1985,7 @@ end;
 
 function EsRutaDeDesigner(const APath: string): Boolean;
 begin
-  Result := MatchText(TPath.GetExtension(APath), DESIGNER_EXTS);
+  Result := TieneExtension(APath, DESIGNER_EXTS);
 end;
 
 function EsRutaDeEstilo(const APath: string): Boolean;
@@ -1995,12 +1995,12 @@ end;
 
 function EsRutaDeFuente(const APath: string): Boolean;
 begin
-  Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS);
+  Result := TieneExtension(APath, SOURCE_EXTS);
 end;
 
 function EsRutaDeProyecto(const APath: string): Boolean;
 begin
-  Result := MatchText(TPath.GetExtension(APath), PROJECT_EXTS);
+  Result := TieneExtension(APath, PROJECT_EXTS);
 end;
 
 function EsXmlDelIde(const APath: string): Boolean;

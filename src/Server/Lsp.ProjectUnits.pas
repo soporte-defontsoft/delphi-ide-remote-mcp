@@ -3170,7 +3170,7 @@ var
   Names, Faltan, YaEstan, EnOtra: TArray<string>;
   Creada: Boolean;
 begin
-  if not MatchText(TPath.GetExtension(APasPath), ['.pas', '.dpr']) then
+  if not TieneExtension(APasPath, ['.pas', '.dpr']) then
     Exit(MsgFmt(SR_ADDUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   Names := [];
   for Nombre in ANames do
@@ -3320,7 +3320,7 @@ var
   end;
 
 begin
-  if not MatchText(TPath.GetExtension(APasPath), ['.pas', '.dpr']) then
+  if not TieneExtension(APasPath, ['.pas', '.dpr']) then
     Exit(MsgFmt(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
   Names := [];
   for Nombre in ANames do

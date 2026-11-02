@@ -631,7 +631,7 @@ begin
     Result := ReadPathDenied(APas);
     if Result <> '' then
       Exit;
-    if not MatchText(TPath.GetExtension(APas), ['.pas']) then
+    if not TieneExtension(APas, ['.pas']) then
       Exit(MsgText(SR_DESIGNER_BINDING_UNIT_EXT));
   end;
   Result := DesignerBindingJson(ADfm, APas);

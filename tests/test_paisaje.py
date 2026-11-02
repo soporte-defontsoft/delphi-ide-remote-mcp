@@ -333,6 +333,13 @@ REGLAS = [
     ('un paquete juzgado por su extension', r"(?i)SameText\([^;]*GetExtension\([^;]*\)\s*,\s*'\.dpk'\s*\)",
      [],
      'EsFuenteDePaquete (Lsp.Pascal, A30 de la 1.23)'),
+    # una extension comparada con el LOCALE (MatchText, IndexText, AnsiSameText): daba por '.pas' un 'nota.pa' +
+    # U+02E2 y por proyecto un 'x.dpr' + U+1D3C + 'j', y delphi_textedit los negaba (123 caracteres asi, medido el
+    # 2-nov-2026, forma 25 de la 1.26). SameText contra una extension ASCII dice lo mismo que NTFS (medido)
+    ('una extension juzgada con el locale',
+     r"\b(?:(?:Ansi)?(?:MatchText|IndexText)|AnsiSameText|AnsiCompareText)\s*\(\s*(?:TPath\.GetExtension|ExtractFileExt)\b",
+     [],
+     'TieneExtension (Lsp.Rutas, forma 25 de la 1.26): la extension como la compara NTFS (RutaEnLista)'),
     # los nombres de gobierno del vault a mano: estaban en cuatro sitios y la puerta de escritura conocia
     # tres - VAULT-INSTRUCTIONS.md, las instrucciones de TODOS los clientes, lo creaba un agente (V191)
     ('un fichero de gobierno del vault nombrado a mano',
@@ -1033,7 +1040,7 @@ REGLAS = [
      # (una LISTA, con comas: comparar una extension con .pas y con .inc es otra familia,
      # la de HuellaDeCarpetas del generador de tablas)
      r"^(?!\s*SOURCE_EXTS\s*:).*(?:'\*?\.pas'\s*,[^;]*'\*?\.inc'|'\*?\.inc'\s*,[^;]*'\*?\.pas')|"
-     r"MatchText\s*\([^;]*\bSOURCE_EXTS\s*\)|\bin\s+SOURCE_EXTS\b",
+     r"(?:MatchText|TieneExtension)\s*\([^;]*\bSOURCE_EXTS\s*\)|\bin\s+SOURCE_EXTS\b",
      # (la deuda de delphi_references -*.pas, *.dpr e *.inc SIN .dpk- se pago en el punto 8
      # de la 1.18.2: recorre MascarasDe(SOURCE_EXTS))
      [('Lsp.Patch.pas', 'EsRutaDeFuente')],
@@ -1046,7 +1053,7 @@ REGLAS = [
      # 9-oct-2026: una excepcion por posicion tapaba tambien una copia dentro
      # de la funcion bajo la que cae la constante)
      r"^(?!\s*DESIGNER_EXTS\s*:).*'\*?\.(?:dfm|fmx)'\s*,\s*'\*?\.(?:dfm|fmx)'|"
-     r"MatchText\s*\([^;]*\bDESIGNER_EXTS\s*\)|\bin\s+DESIGNER_EXTS\b",
+     r"(?:MatchText|TieneExtension)\s*\([^;]*\bDESIGNER_EXTS\s*\)|\bin\s+DESIGNER_EXTS\b",
      [('Lsp.Patch.pas', 'EsRutaDeDesigner'), ('Lsp.Patch.pas', 'DesignersDeUnidad')],
      'DESIGNER_EXTS, EsRutaDeDesigner y DesignersDeUnidad (Lsp.Patch): la lista estaba escrita a mano en '
      'nueve sitios, y el detector necesita saber si un fichero es un form (4.1 de la 1.18.0)'),
@@ -1077,7 +1084,7 @@ REGLAS = [
      # .dpk, que es un fuente, y negaba apilarlo diciendo que el commit lo negaria
      # (18-oct-2026). Una comparacion con '.groupproj' sola (es un grupo?) es otra pregunta
      r"^(?!\s*PROJECT_EXTS\s*:).*'\*?\.(?:dproj|groupproj)'\s*,\s*'\*?\.(?:dproj|groupproj)'|"
-     r"MatchText\s*\([^;]*\bPROJECT_EXTS\s*\)|\bin\s+PROJECT_EXTS\b",
+     r"(?:MatchText|TieneExtension)\s*\([^;]*\bPROJECT_EXTS\s*\)|\bin\s+PROJECT_EXTS\b",
      [('Lsp.Patch.pas', 'EsRutaDeProyecto')],
      'EsRutaDeProyecto (Lsp.Patch): lo que lleva delphi_config y ni delphi_edit, ni delphi_textedit, '
      'ni el changeset escriben'),
@@ -1809,6 +1816,7 @@ PLANTADO = {
     '__delphi-temp': "  if ContainsText(P, '\\__delphi-temp\\') then",
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
     'el nombre de una carpeta del servidor juzgado a mano': "        if SameText(Nombre, TrashFolderName) then",
+    'una extension juzgada con el locale': "  Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS);",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",
