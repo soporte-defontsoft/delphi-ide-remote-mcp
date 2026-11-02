@@ -4060,7 +4060,7 @@ begin
         end;
         for var T in TrozosDeLista(DesescapaDeMsbuild(Antes[I].Expandido)) do
         begin
-          if MatchText(T.Trim, Escritos) then
+          if RutaEnLista(T.Trim, Escritos) then
             Continue;
           var R := Resuelto(T, ABaseVieja);
           if R = '' then
@@ -4156,7 +4156,7 @@ var
             if (AIndice < 0) or (AIndice = I) then
               for var N in RutasQueYaNoLlegan(AFichero, PatchLoadText(AFichero, Enc), ABase,
                 Viejos[I], Nuevos[I]) do
-                if not MatchText(N, NoLlegan) then
+                if not RutaEnLista(N, NoLlegan) then
                   NoLlegan := NoLlegan + [N];
       end;
       if EsManifiesto(AFichero) then
@@ -4235,7 +4235,7 @@ begin
     for var V in Viejos do
     begin
       var B := BordeDeMudanza(TPath.GetDirectoryName(V));
-      if not MatchText(B, Bordes) then
+      if not RutaEnLista(B, Bordes) then
         Bordes := Bordes + [B];
     end;
     for var B in Bordes do
@@ -4745,7 +4745,7 @@ begin
       for var R in RutasDeBusqueda(Dproj, Xml) do
         if ((R.Carpeta = '') or ((ReadPathDenied(R.Carpeta) = '') and
             not TDirectory.Exists(R.Carpeta))) and
-           not MatchText(R.Escrita, RutasFaltan) then
+           not RutaEnLista(R.Escrita, RutasFaltan) then
           RutasFaltan := RutasFaltan + [R.Escrita];
     end;
   end;

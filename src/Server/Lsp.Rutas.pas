@@ -82,6 +82,11 @@ function EnLugar(const APath, ALugar: string;
   Solo yerran hacia "fuera" / "distintas": niegan de mas, nunca de menos. }
 function RutaDentroDe(const AContenedor, ARuta: string): Boolean;
 function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
+{ ...y DONDE esta: el indice en ALista de la primera igual a ARuta, -1 si
+  ninguna. El elector de un perfil o un SDK del IDE: la lista sale de
+  TListaDeRutas y se elegia en ella con IndexText, el locale (C5 del cierre
+  de la 1.26). }
+function IndiceDeRuta(const ARuta: string; const ALista: TArray<string>): Integer;
 { La extension de ARuta es una de AExts ('.pas'...), como NTFS compara dos
   nombres (RutaEnLista). Con MatchText, el locale, 'nota.pa' + U+02E2 era un
   .pas y 'x.dpr' + U+1D3C + 'j' un proyecto del IDE: 123 caracteres asi en
@@ -715,13 +720,16 @@ begin
 end;
 
 function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
-var
-  L: string;
 begin
-  for L in ALista do
-    if SameFileName(ARuta, L) then
-      Exit(True);
-  Result := False;
+  Result := IndiceDeRuta(ARuta, ALista) >= 0;
+end;
+
+function IndiceDeRuta(const ARuta: string; const ALista: TArray<string>): Integer;
+begin
+  for var I := 0 to High(ALista) do
+    if SameFileName(ARuta, ALista[I]) then
+      Exit(I);
+  Result := -1;
 end;
 
 function TieneExtension(const ARuta: string; const AExts: array of string): Boolean;

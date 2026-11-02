@@ -1497,7 +1497,10 @@ begin
   Result := [];
   AIlegibles := [];
   Patron := '(?i)' + PatronIdentEntero(AIdent);
-  Lista := TStringList.Create;
+  // sin repetir COMO NTFS: un TStringList compara con el locale y juntaba dos
+  // designers que el disco separa, y el rename se saltaba el segundo (C5 del
+  // cierre de la 1.26)
+  Lista := TListaDeRutas.Create;
   Lineas := TStringList.Create;
   try
     // el hermano de cada unidad con usos...

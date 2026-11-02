@@ -260,9 +260,8 @@ REGLAS = [
     # el marco de un designer por su extension: un .dfm de un modulo de datos de FMX (su CLASSGROUP) es FMX, y
     # layout lo media con la VCL (A13 de la 1.23)
     ('el marco de un designer por su extension', r"(?:EndsWith|SameText|MatchText|MatchStr)\([^;]*'\.(?:dfm|fmx)'",
-     [('Lsp.DesignerForma.pas', 'EsDesignerFmx'), ('Lsp.DesignerForma.pas', 'EsDesignerVcl'),
-      # que ficheros pueden llevar un StyleLookup (un .fmx o codigo): un filtro de ficheros, no el marco
-      ('Mcp.Tools.Styles.pas', 'LintStyles')],
+     # (el filtro de ficheros del lint de estilos fue casa hasta C5 del cierre de la 1.26: TieneExtension)
+     [('Lsp.DesignerForma.pas', 'EsDesignerFmx'), ('Lsp.DesignerForma.pas', 'EsDesignerVcl')],
      'EsDesignerFmx / EsDesignerVcl (Lsp.DesignerForma, A13 de la 1.23)'),
     # la negativa de un nombre que no es una plataforma: cinco textos y cinco codigos para el mismo hecho
     # (delphi_config cuatro, la puerta del build uno; A14 de la 1.23)
@@ -353,9 +352,18 @@ REGLAS = [
      [('Lsp.ProjectUnits.pas', 'EstrenaClausula')],
      'EstrenaClausula (Lsp.ProjectUnits): el escritor de una clausula uses nueva y su forma, la del IDE'),
     ('una extension juzgada con el locale',
-     r"\b(?:(?:Ansi)?(?:MatchText|IndexText)|AnsiSameText|AnsiCompareText)\s*\(\s*(?:TPath\.GetExtension|ExtractFileExt)\b",
-     [],
+     # (y las otras dos formas de juzgar el final de un nombre con el locale: EndsWith con IgnoreCase y
+     # EndsText, CompareString del usuario; las vio el revisor del cierre de la 1.26, C5)
+     r"\b(?:(?:Ansi)?(?:MatchText|IndexText)|AnsiSameText|AnsiCompareText)\s*\(\s*(?:TPath\.GetExtension|ExtractFileExt)\b|"
+     r"\.EndsWith\(\s*'\.\w+'\s*,\s*True\s*\)|\bEndsText\(\s*(?:'\.|\w*_EXT\b)",
+     # los nombres de DENTRO de un .chm (ITSS): no son del disco, y su juez es el del archivo
+     [('Lsp.Docs.pas', '*')],
      'TieneExtension (Lsp.Rutas, forma 25 de la 1.26): la extension como la compara NTFS (RutaEnLista)'),
+    # un perfil o un SDK del IDE (ficheros .profile y .sdk de su carpeta) elegido con el locale: la lista sale
+    # de TListaDeRutas, el juez de NTFS, y el elector la recorria con MatchText/IndexText (C5 del cierre de la 1.26)
+    ('un perfil o un SDK del IDE elegido con el locale',
+     r"\b(?:MatchText|IndexText|AnsiSameText|AnsiIndexText)\(\s*[^;]*?(?:Sdk|Perfil|Profile)", [],
+     'IndiceDeRuta / RutaEnLista (Lsp.Rutas): el nombre de un fichero del IDE como lo compara NTFS'),
     # LA gramatica de los condicionales de Pascal (que nombre abre, cambia de rama o cierra): estaba en las
     # constantes de Lsp.ProjectUnits y en linea en el evaluador de Lsp.Preproceso (forma 4 de la 1.26). No hay juez
     # (ni dcc ni el motor dicen que nombres abren un condicional): gramatica PROPIA, UNA. TextoActivoEn distingue
@@ -498,9 +506,8 @@ REGLAS = [
      'DprojDe (1.17.0: diez a mano, y delphi_build rechazaba el .dpr que delphi_config resolvia)'),
     ('de que marco es un designer',
      r"(?i)(?:EndsWith\s*\(\s*'\.fmx'|(?:GetExtension|ExtractFileExt)\s*\([^)]*\)\s*,\s*'\.fmx')",
-     [('Lsp.DesignerForma.pas', 'EsDesignerFmx'),
-      # el filtro de ficheros del lint (un .fmx o un .pas), no el marco de un form
-      ('Mcp.Tools.Styles.pas', 'LintStyles')],
+     # (el filtro de ficheros del lint de estilos fue casa hasta C5 del cierre de la 1.26: TieneExtension)
+     [('Lsp.DesignerForma.pas', 'EsDesignerFmx')],
      'EsDesignerFmx (2.3 de la 1.18.0: siete a mano, de tres formas)'),
     ('la sangria de un nivel de un designer', r"StringOfChar\s*\(\s*' '\s*,.*\*\s*2\s*\)",
      [('Lsp.DesignerBin.pas', 'SangriaDeNivel')],
@@ -1891,6 +1898,7 @@ PLANTADO = {
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
     'el nombre de una carpeta del servidor juzgado a mano': "        if SameText(Nombre, TrashFolderName) then",
     'una extension juzgada con el locale': "  Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS);",
+    'un perfil o un SDK del IDE elegido con el locale': "  if MatchText(AProfile.Trim, Sirven) then",
     'las ordenes de red de git a mano': "    if MatchText(Cmd, ['pull', 'fetch', 'push', 'ls-remote']) then",
     'una clausula uses nueva compuesta a mano':
         "    EstrenaClausula(AText, FinLinea, 'uses' + NL + '  ' + string.Join(', ', AFaltan) + ';');",

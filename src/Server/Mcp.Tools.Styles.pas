@@ -819,14 +819,18 @@ begin
       // (WalkBajoLaRaiz, V114 de la 1.23.1)
       for F in WalkBajoLaRaiz(ProjDir, ['*.*']) do
       begin
-        if not (F.EndsWith('.fmx', True) or F.EndsWith('.pas', True)) then
+        // la extension como NTFS (TieneExtension): EndsWith con IgnoreCase es
+        // el locale (C5 del cierre de la 1.26)
+        var EsFmx := TieneExtension(F, ['.fmx']);
+        var EsPas := TieneExtension(F, ['.pas']);
+        if not (EsFmx or EsPas) then
           Continue;
         if ReadPathDenied(F) <> '' then
         begin
           Inc(Negados);
           Continue;
         end;
-        if F.EndsWith('.fmx', True) then
+        if EsFmx then
           Inc(FmxMirados)
         else
           Inc(PasMirados);
@@ -836,7 +840,7 @@ begin
         // "No mapping for the Unicode character" (medido en vivo 2026-09-21).
         var EncF: string;
         Text := PatchLoadText(F, EncF);
-        if F.EndsWith('.pas', True) then
+        if EsPas then
           Text := BlankComments(Text); // a lookup in a comment is not a lookup
         Lines := SplitToLines(Text); // las lineas como las numera delphi_read
         // EL lector de un literal de form (#N y trozos incluidos): con la regex
@@ -847,7 +851,7 @@ begin
         // salian como faltas (V123 de la 1.23.1, medido); un frame, el de la
         // form que lo aloja (LookupsDeDesigner, V151)
         var Lookups: TArray<TLookupDeForm> := [];
-        if F.EndsWith('.pas', True) then
+        if EsPas then
         begin
           for I := 0 to High(Lines) do
           begin

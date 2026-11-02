@@ -117,6 +117,7 @@ uses
   Lsp.Guard, // CrearCarpeta, EsEnlace
   Lsp.Texts,
   Lsp.Casa,  // ServerDir
+  Lsp.Rutas, // TieneExtension: la extension como NTFS
   Lsp.Settings; // LogIniSettings
 
 const
@@ -248,7 +249,7 @@ var
   N, I: Integer;
 begin
   Result := '';
-  if not ANombre.EndsWith('.log', True) then
+  if not TieneExtension(ANombre, ['.log']) then
     Exit;
   S := ANombre.Substring(0, ANombre.Length - 4);
   if (S.Length < 15) or (S.Chars[8] <> '-') then

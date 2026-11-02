@@ -1295,7 +1295,7 @@ function PerfilDelIde(const AVersion, APedido: string): string;
 begin
   Result := '';
   for var P in PerfilesDelIde(AVersion) do
-    if SameText(P, APedido.Trim) then
+    if SameFileName(P, APedido.Trim) then // el nombre de su fichero, como NTFS
       Exit(P);
 end;
 
@@ -1450,7 +1450,7 @@ var
   Sirven: TArray<string>;
 begin
   Sirven := PerfilesDePlataforma(AVersion, APlatform);
-  if MatchText(AProfile.Trim, Sirven) then
+  if RutaEnLista(AProfile.Trim, Sirven) then // como NTFS, el juez de la lista
     Exit('');
   Result := MsgFmt(SR_CONFIG_PROFILE_OTRO_SISTEMA_FMT, [AProfile.Trim,
     ONinguno(PlataformaDePerfil(AVersion, AProfile)), APlatform,

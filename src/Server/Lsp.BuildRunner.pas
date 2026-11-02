@@ -1512,7 +1512,8 @@ function SdkDelIde(const AVersion, APlat, APedido: string): string;
 begin
   Result := '';
   var Lista := SdksDePlataforma(AVersion, APlat);
-  var I := IndexText(NombreDeSdk(APedido.Trim), Lista);
+  // la lista sale de TListaDeRutas: se elige en ella con el MISMO juez, NTFS
+  var I := IndiceDeRuta(NombreDeSdk(APedido.Trim), Lista);
   if I >= 0 then
     Result := Lista[I];
 end;

@@ -545,7 +545,8 @@ end;
 
 function EsMarcaDeDueno(const ARuta: string): Boolean;
 begin
-  Result := EndsText(MARCA_DUENO_EXT, ARuta);
+  // como NTFS (TieneExtension): EndsText es el locale (C5 del cierre de la 1.26)
+  Result := TieneExtension(ARuta, [MARCA_DUENO_EXT]);
 end;
 
 function MascaraDeMarcas: string;
