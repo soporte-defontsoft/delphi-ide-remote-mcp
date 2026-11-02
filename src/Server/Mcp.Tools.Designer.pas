@@ -826,13 +826,26 @@ begin
     AFichero := Otro;
 end;
 
+{ Donde esta escrito un control, para un aviso de layout: su linea en el form, o su
+  linea y el fichero que lo escribe (LineaDeCaja). Los avisos de un control de un
+  frame en linea decian "line 0" mientras su caja ya decia el fichero (C9 del
+  revisor del paisaje del cierre de la 1.26) }
+function DondeDeCaja(ALinea: Integer; const AFichero: string): string;
+begin
+  if AFichero = '' then
+    Result := MsgFmt(SF_DSGN_EN_LINEA_FMT, [ALinea])
+  else
+    Result := MsgFmt(SF_DSGN_EN_LINEA_DE_FMT, [ALinea, AFichero]);
+end;
+
 { layout de un form FMX: lo que FMX resuelve, medido; no hay un modelo que imitar
   (Size, Position, Align, Margins, Padding, los estilos). Un control oculto no se
   juzga. Lo que se solapa se dice, y no quita clean: en FMX un control sobre otro es
   como se compone un form, con un TRectangle de fondo y un TText encima. Sin
   renderizador se dice, nunca clean:true (DSGN-027). AFuera: los nombres de lo que
-  se sale de su padre, en el orden de outsideParent (ConFueraDelPadre). }
-function LayoutFmx(const APath: string; out AFuera: TArray<string>): string;
+  se sale de su padre, en el orden de outsideParent (ConFueraDelPadre). APlazoMs,
+  el de CajasDelRender (LayoutOf). }
+function LayoutFmx(const APath: string; out AFuera: TArray<string>; APlazoMs: Integer): string;
 var
   Doc: TStyleDoc;
 begin
@@ -848,7 +861,7 @@ begin
     // la tabla FMX si ya esta, como la VCL en LayoutOf
     var FaltaFmx: TFaltaTabla;
     var TablaFmx := MetaTable(True, FaltaFmx, 0);
-    var R := CajasDelRender(APath);
+    var R := CajasDelRender(APath, APlazoMs);
     if R.Fallo <> '' then
       Exit(MsgFmt(SR_DESIGNER_LAYOUT_FMX_FMT, [R.Fallo]));
     var Ret := TJSONObject.Create;
@@ -875,7 +888,9 @@ begin
         for var I := 0 to High(R.Cajas) do
         begin
           var C := R.Cajas[I];
-          var Linea := LineaEnElForm(Doc, C.Ruta);
+          var FicheroCaja: string;
+          var LineaCaja := LineaDeCaja(Ficheros, C, FicheroCaja);
+          var Donde := DondeDeCaja(LineaCaja, FicheroCaja);
           var Padre: TCajaDeRender;
           if Padres.ContainsKey(ClaveDeIdentificador(C.Padre)) then
             Padre := Padres[ClaveDeIdentificador(C.Padre)]
@@ -887,14 +902,12 @@ begin
             Padre.H := R.Alto;
             Padre.Visible := True;
           end;
-          var FicheroCaja: string;
-          var LineaCaja := LineaDeCaja(Ficheros, C, FicheroCaja);
           Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False, Padre.Ruta, C.X, C.Y, C.W, C.H, LineaCaja,
             Ord(C.Visible), FicheroCaja));
           if not C.Visible or not Padre.Visible then
             Continue;
           if (C.W = 0) or (C.H = 0) then
-            Zero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [C.Ruta, C.Clase, Linea, IntToStr(C.W), IntToStr(C.H)]));
+            Zero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [C.Ruta, C.Clase, Donde, IntToStr(C.W), IntToStr(C.H)]));
           // donde esta de verdad: el padre con nombre de un hijo de un TTabItem es su pestana
           var DX := (if C.EnContenido then C.CX else Padre.X);
           var DY := (if C.EnContenido then C.CY else Padre.Y);
@@ -903,7 +916,7 @@ begin
           if not EsDeFamilia(TablaFmx, Padre.Clase, fcScroll, True) and ((C.X < DX) or (C.Y < DY) or
              (C.X + C.W > DX + DW) or (C.Y + C.H > DY + DH)) then
           begin
-            Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [C.Ruta, C.Clase, Linea, C.X, C.Y, C.X + C.W, C.Y + C.H,
+            Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [C.Ruta, C.Clase, Donde, C.X, C.Y, C.X + C.W, C.Y + C.H,
               Padre.Ruta, DW, DH]));
             AFuera := AFuera + [C.Ruta];
           end;
@@ -914,8 +927,12 @@ begin
             var O := R.Cajas[J];
             if O.Visible and SameText(O.Padre, C.Padre) and (C.W > 0) and (C.H > 0) and (O.W > 0) and (O.H > 0) and
                (C.X < O.X + O.W) and (O.X < C.X + C.W) and (C.Y < O.Y + O.H) and (O.Y < C.Y + C.H) then
-              Overlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT, [C.Ruta, Linea, O.Ruta, LineaEnElForm(Doc, O.Ruta), Padre.Ruta,
+            begin
+              var FicheroO: string;
+              var LineaO := LineaDeCaja(Ficheros, O, FicheroO);
+              Overlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT, [C.Ruta, Donde, O.Ruta, DondeDeCaja(LineaO, FicheroO), Padre.Ruta,
                 Max(C.X, O.X), Max(C.Y, O.Y), Min(C.X + C.W, O.X + O.W), Min(C.Y + C.H, O.Y + O.H)]));
+            end;
           end;
         end;
       finally
@@ -961,8 +978,10 @@ end;
   ClientWidth) has its window frame estimated at 96 dpi, and Anchors - which
   govern RESIZE - are not what this measures. Lo que se juzga sale de este texto; las
   cajas, si hay renderizador, de lo que resuelve la VCL (V24 de la 1.24: la banda de
-  pestanas de un TPageControl no la descontaba). FMX, LayoutFmx. }
-function LayoutOf(const APath: string; out AFuera: TArray<string>): string;
+  pestanas de un TPageControl no la descontaba). FMX, LayoutFmx. AConOtraRespuesta: la
+  llamada ya tiene su respuesta (insert, set parent=), y el renderizador FMX espera lo
+  que el de la VCL, LAYOUT_PLAZO_MS (C9 del revisor del paisaje del cierre de la 1.26). }
+function LayoutOf(const APath: string; out AFuera: TArray<string>; AConOtraRespuesta: Boolean = False): string;
 type
   TBox = record
     Nm, Cls, Align: string;
@@ -1073,7 +1092,7 @@ var
       if not InhUnknown then
       begin
         if (HasW and (W = 0)) or (HasH and (H = 0)) then
-          Zero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [Nm, Cls, Kid.StartLine,
+          Zero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [Nm, Cls, DondeDeCaja(Kid.StartLine, ''),
             IfThen(HasW, IntToStr(W), '?'), IfThen(HasH, IntToStr(H), '?')]));
         if (NeedW and not HasW) or (NeedH and not HasH) then
           // un control sin tamano en el .dfm tiene el de su constructor: lo
@@ -1157,7 +1176,7 @@ var
            ((X < 0) or (Y < 0) or (X + W > AClientW) or (Y + H > AClientH)) then
         begin
           Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [Nm, Cls,
-            Kid.StartLine, X, Y, X + W, Y + H, AWhere, AClientW, AClientH]));
+            DondeDeCaja(Kid.StartLine, ''), X, Y, X + W, Y + H, AWhere, AClientW, AClientH]));
           AFuera := AFuera + [Nm];
         end;
       end;
@@ -1201,7 +1220,7 @@ var
                   Kids[J].Nm, Kids[J].Line, AWhere]))
               else
                 Overlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT,
-                  [Kids[K].Nm, Kids[K].Line, Kids[J].Nm, Kids[J].Line, AWhere,
+                  [Kids[K].Nm, DondeDeCaja(Kids[K].Line, ''), Kids[J].Nm, DondeDeCaja(Kids[J].Line, ''), AWhere,
                    Max(Kids[K].X1, Kids[J].X1), Max(Kids[K].Y1, Kids[J].Y1),
                    Min(Kids[K].X2, Kids[J].X2), Min(Kids[K].Y2, Kids[J].Y2)]));
             end;
@@ -1237,8 +1256,9 @@ begin
   // es FMX): layout solo mide la VCL
   if not EsDesignerVcl(APath) then
   begin
+    // sin otra respuesta, la del renderizador es la unica: el plazo de un preview
     if EsDesignerFmx(APath) then
-      Exit(LayoutFmx(APath, AFuera));
+      Exit(LayoutFmx(APath, AFuera, (if AConOtraRespuesta then LAYOUT_PLAZO_MS else 0)));
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   end;
   Result := LoadDoc(APath, Doc);
@@ -1960,7 +1980,8 @@ end;
   tambien en FMX, que layout mide desde la 1.24. Lo suyo, por los NOMBRES que
   layout da con sus avisos: se leia el texto del aviso por su prefijo, y un .fmx
   pasaba tal cual con la razon de antes (revisor del paisaje de la 1.26, G). Un
-  fallo pasa tal cual. }
+  fallo pasa tal cual. La respuesta ya esta escrita: el renderizador, con el plazo
+  de layout, no el de un preview (C9 del revisor del paisaje del cierre de la 1.26). }
 function ConFueraDelPadre(const AResult, APath: string): string;
 var
   Ret, Lay: TJSONObject;
@@ -1977,7 +1998,7 @@ begin
   try
     if not (Ret.TryGetValue<string>('inserted', Nombre) or Ret.TryGetValue<string>('moved', Nombre)) then
       Exit;
-    Lay := ObjetoJson(LayoutOf(APath.Trim, Nombres));
+    Lay := ObjetoJson(LayoutOf(APath.Trim, Nombres, True));
     if Lay = nil then
       Exit;
     try

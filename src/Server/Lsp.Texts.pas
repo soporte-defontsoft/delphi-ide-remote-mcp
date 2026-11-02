@@ -12180,7 +12180,7 @@ const
     '%s';
 
   SF_DSGN_LADO_A_CERO_FMT =
-    '%s: %s (line %d) is %s x %s: with one side at zero it is not ' +
+    '%s: %s (%s) is %s x %s: with one side at zero it is not ' +
     'visible, even if the form loads';
 
   // un control sin Width/Height en el .dfm: el tamano de su constructor (lo
@@ -12207,7 +12207,7 @@ const
     '%d are visible';
 
   SF_DSGN_OCUPA_SE_SALE_FMT =
-    '%s: %s (line %d) spans from (%d,%d) to (%d,%d), and "%s" is only %d ' +
+    '%s: %s (%s) spans from (%d,%d) to (%d,%d), and "%s" is only %d ' +
     'x %d: it sticks out and that part is not visible';
 
   SF_DSGN_AMBOS_ALCLIENT_FMT =
@@ -12215,8 +12215,16 @@ const
     'gives the WHOLE rectangle to both, so they cover each other 100%%';
 
   SF_DSGN_SE_SOLAPAN_FMT =
-    '%s (line %d) and %s (line %d) overlap in "%s": they share from ' +
+    '%s (%s) and %s (%s) overlap in "%s": they share from ' +
     '(%d,%d) to (%d,%d), one covers the other';
+
+  // donde esta escrito un control en SF_DSGN_LADO_A_CERO_FMT, SF_DSGN_OCUPA_SE_SALE_FMT
+  // y SF_DSGN_SE_SOLAPAN_FMT (DondeDeCaja): su linea en el form, o su linea y el
+  // fichero que lo escribe (un frame en linea, un ancestro)
+  SF_DSGN_EN_LINEA_FMT =
+    'line %d';
+  SF_DSGN_EN_LINEA_DE_FMT =
+    'line %d of %s';
 
   SF_DSGN_NO_DICE_CUANTO_MIDE_FMT =
     '%s does not say how big it is (%d x %d): without the size of the ' +

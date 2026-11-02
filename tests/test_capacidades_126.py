@@ -693,6 +693,66 @@ s.call('delphi_changeset', {'command': 'rollback', 'id': cid})
 check('CI4 el changeset no crea un .dproj: EDIT-128 al apilarlo, como delphi_textedit',
       mc.rechazado(r) and mc.es(r, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT') and not os.listdir(CI4), r[:300])
 
+# CI9 layout FMX: los avisos de un control de un frame en linea que el form no sobrescribe dicen su linea en el
+# fichero del frame, como su caja (decian "line 0"), y tras un insert el renderizador tiene el plazo de layout,
+# 30 s, no el de un preview, 75: la respuesta del insert ya existe sin el, y un cliente que se cansa antes lo
+# repite (C9 del revisor del paisaje del cierre de la 1.26; medido contra p127l: --boxes --timeout 60000)
+escribe(os.path.join(M, 'UMarcoG.pas'), 'unit UMarcoG;\n\ninterface\n\nuses\n  %s;\n\ntype\n  TMarcoG = class(TFrame)\n'
+        '    Edit1: TEdit;\n    Edit2: TEdit;\n  end;\n\nimplementation\n\n{$R *.fmx}\n\nend.\n' % USOS_FMX)
+escribe(os.path.join(M, 'UMarcoG.fmx'), 'object MarcoG: TMarcoG\n  Size.Width = 200.000000000000000000\n'
+        '  Size.Height = 60.000000000000000000\n  Size.PlatformDefault = False\n  object Edit1: TEdit\n    TabOrder = 0\n'
+        '    Position.X = 8.000000000000000000\n    Position.Y = 8.000000000000000000\n  end\n  object Edit2: TEdit\n'
+        '    TabOrder = 1\n    Position.X = 8.000000000000000000\n    Position.Y = 8.000000000000000000\n  end\nend\n')
+escribe(os.path.join(M, 'UF5.pas'), 'unit UF5;\n\ninterface\n\nuses\n  %s, UMarcoG;\n\ntype\n  TFormK = class(TForm)\n'
+        '    MarcoG1: TMarcoG;\n  end;\n\nvar\n  FormK: TFormK;\n\nimplementation\n\n{$R *.fmx}\n\nend.\n' % USOS_FMX)
+escribe(os.path.join(M, 'UF5.fmx'), "object FormK: TFormK\n  Left = 0\n  Top = 0\n  Caption = 'K'\n  ClientHeight = 300\n"
+        "  ClientWidth = 400\n  FormFactor.Width = 320\n  FormFactor.Height = 480\n  FormFactor.Devices = [Desktop]\n"
+        "  DesignerMasterStyle = 0\n  inline MarcoG1: TMarcoG\n    Size.Width = 50.000000000000000000\n"
+        "    Size.Height = 60.000000000000000000\n    Size.PlatformDefault = False\n  end\nend\n")
+j = mc.como_json(s.call('delphi_designer', {'command': 'layout', 'path': os.path.join(M, 'UF5.fmx')}, t=240))
+EN_LINEA_DE = mc.catalogo()['SF_DSGN_EN_LINEA_DE_FMT']
+donde = {b.get('name'): '(%s)' % (EN_LINEA_DE % (b.get('line'), b.get('file'))) for b in j.get('boxes') or []
+         if b.get('file') and b.get('line')}
+fuera = j.get('outsideParent') or []
+check('CI9 layout FMX: los dos controles del frame que se salen dicen su linea en UMarcoG.fmx, como su caja',
+      len(donde) == 2 and len(fuera) == 2 and
+      all(any(f.startswith(n + ':') and d in f for f in fuera) for n, d in donde.items()), (donde, fuera))
+sol = j.get('overlapping') or []
+check('CI9 ...y al solaparse, cada uno en su linea de ese fichero',
+      len(donde) == 2 and len(sol) == 1 and all(d in sol[0] for d in donde.values()), (donde, sol))
+# ...y el plazo: un renderizador de mentira que con --boxes se queda esperando y, si no, devuelve lo que le dan
+# (el escritor del IDE)
+CI9 = os.path.join(JAIL, 'ci9')
+os.makedirs(CI9)
+escribe(os.path.join(CI9, 'UL.pas'), 'unit UL;\n\ninterface\n\nuses\n  %s;\n\ntype\n  TFormL = class(TForm)\n'
+        '    Edit1: TEdit;\n  end;\n\nvar\n  FormL: TFormL;\n\nimplementation\n\n{$R *.fmx}\n\nend.\n' % USOS_FMX)
+escribe(os.path.join(CI9, 'UL.fmx'), "object FormL: TFormL\n  Left = 0\n  Top = 0\n  Caption = 'L'\n  ClientHeight = 480\n"
+        "  ClientWidth = 640\n  FormFactor.Width = 320\n  FormFactor.Height = 480\n  FormFactor.Devices = [Desktop]\n"
+        "  DesignerMasterStyle = 0\n  object Edit1: TEdit\n    Position.X = 10.000000000000000000\n"
+        "    Position.Y = 10.000000000000000000\n    TabOrder = 0\n  end\nend\n")
+CAJAS = de_mentira('SeQuedaConLasCajas',
+                   "  Writeln('PROTOCOL=%s');\n"
+                   "  Flush(Output);\n"
+                   "  var Ruta := '';\n"
+                   "  for var I := 1 to ParamCount do\n"
+                   "    if ParamStr(I) = '--boxes' then\n"
+                   "      Sleep(600000)\n"
+                   "    else if (ParamStr(I) = '--path') and (I < ParamCount) then\n"
+                   "      Ruta := ParamStr(I + 1);\n"
+                   "  for var L in TFile.ReadAllText(Ruta).Split([#13#10, #10]) do\n"
+                   "    Writeln('WRITTEN=' + L);\n"
+                   "  Flush(Output);\n" % PROTOCOLO)
+otro = servidor_con(CAJAS, 'cajas', CI9, 'DelphiFormRenderFmx.exe')
+try:
+    t0 = time.time()
+    r = otro.call('delphi_designer', {'command': 'insert', 'path': os.path.join(CI9, 'UL.fmx'), 'classname': 'TButton'},
+                  t=240)
+    tarda = time.time() - t0
+finally:
+    otro.cierra()
+check('CI9 un insert FMX cuyo layout no contesta acaba al plazo de layout (30 s), no al de un preview (75 s)',
+      mc.como_json(r).get('inserted') == 'Button1' and tarda < 55, '%.0f s: %s' % (tarda, r[:300]))
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')
