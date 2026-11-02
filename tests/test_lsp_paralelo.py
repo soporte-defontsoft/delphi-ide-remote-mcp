@@ -147,7 +147,7 @@ def finales_de_motor():
         with open(os.path.join(SRVDIR, 'logs', 'actual.log'), encoding='utf-8', errors='replace') as f:
             return [l.strip()[-160:] for l in f if 'lsp: ENGINE' in l]
     except OSError as e:
-        return 'sin log: %s' % e
+        return ['sin log: %s' % e]  # una lista, como la de arriba: P8 se queda con las ultimas
 
 
 def choca(v):
@@ -520,9 +520,10 @@ def p8(uno, colgados):
           codigos != [] and all(c == 0 for c in codigos),
           # el rojo se lleva lo que hace falta para medirlo (2-nov-2026: 0x1 en un
           # run_all y limpio suelto, sin nada con que saber por que): si el motor
-          # habia contestado a shutdown, y lo que habia vivo. Lo del log, DELANTE:
-          # run_all recorta la linea
-          '%s | %s | al empezar P8: %s' % (finales_de_motor(), [hex(c) for c in codigos], foto))
+          # habia contestado a shutdown, y lo que habia vivo. Los CODIGOS delante y
+          # solo las ultimas lineas del log: check() recorta a 300, y un log largo
+          # delante se llevaba los codigos (C10 del cierre de la 1.26)
+          'codigos %s | %s | al empezar P8: %s' % ([hex(c) for c in codigos], finales_de_motor()[-3:], foto))
 
 
 def p9(uno, colgados):

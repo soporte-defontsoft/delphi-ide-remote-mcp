@@ -49,6 +49,9 @@ s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': APPD, 'DELPHI
              nombre='capacidades-126', t=400)
 
 # ---- D: lo que dice la consola no es lo que clasifica msbuild
+# D1 la carpeta lleva E0017 y el nombre del vigia, y msbuild la nombra en su consola, que la respuesta no ensena
+# (outputTail son las lineas del compilador): la roja se midio contra 1.25.1 (6ff6918), y lo que este check mide es
+# lo que el servidor ya NO dice. El camino bueno (E0017 clasificado, con el vigia en su linea) se mide en vivo
 s.call('delphi_create', {'kind': 'project-console', 'dir': D1, 'name': 'Bloqueo'})
 s.call('delphi_config', {'command': 'add-platform', 'platform': 'Linux64', 'project': DPROJ})
 t = s.call('delphi_build', {'project': DPROJ, 'platform': 'Linux64', 'config': 'Debug', 'target': 'Deploy',
@@ -79,9 +82,13 @@ check('C1 RENDER-026 dice en que fichero esta el inline que se salto: UDos.dfm, 
       mc.es(r, 'SR_RENDER_FRAME_CICLICO_FMT') and 'Its inline in UDos.dfm' in r, r[:500])
 # H1 (Hermes, dirigido de la 1.26) ese inline no es una propiedad con su linea: RENDER-026 ya dice su fichero y que
 # hacer, y la nota DSGN-114 ("line says where each one is") prometia una linea que la entrada no trae
+# Sin la entrada la nota faltaria por nada: el check pide las dos cosas (C10 del cierre de la 1.26)
 nota = mc.como_json(r).get('ignoredNote') or ''
-check('H1 un frame que se contiene a si mismo no lleva la nota DSGN-114, que promete una linea que no trae',
-      not mc.es(nota, 'SN_DESIGNER_PREVIEW_IGNORADAS'), nota[:300])
+ciclo = [x for x in (mc.como_json(r).get('ignored') or []) if mc.es(x.get('text') or '', 'SR_RENDER_FRAME_CICLICO_FMT')]
+check('H1 un frame que se contiene a si mismo: su entrada en ignored, con el fichero del inline (UDos.dfm), y sin '
+      'la nota DSGN-114, que promete una linea que no trae',
+      len(ciclo) == 1 and (ciclo[0].get('file') or '').endswith('UDos.dfm')
+      and not mc.es(nota, 'SN_DESIGNER_PREVIEW_IGNORADAS'), (ciclo, nota[:300]))
 
 # H2 una propiedad mala en el fichero de un frame en linea: el lector la salta leyendo el form; la entrada dice el
 # fichero del frame y su linea alli (el ayudante dice que fichero leia: protocolo 4), y lint lo mismo
@@ -136,7 +143,10 @@ escribe(os.path.join(H5, 'UFR.pas'), 'unit UFR;\n\ninterface\n\nuses\n  %s, UMar
 escribe(os.path.join(H5, 'UFR.dfm'), "object FormR: TFormR\n  Left = 0\n  Top = 0\n  Caption = 'R'\n  ClientHeight = 200\n"
         "  ClientWidth = 300\n  inline MarcoR1: TMarcoR\n    Left = 10\n    Top = 10\n    TabOrder = 0\n  end\nend\n")
 r = s.call('delphi_designer', {'command': 'preview', 'path': os.path.join(H5, 'UFR.dfm'), 'maxwidth': 100}, t=400)
-check('H5 un frame que no se lee: el preview del form nombra el fichero del frame', 'UMarcoR.dfm' in r, r[:600])
+# ...en SU entrada de ignored: el nombre suelto en cualquier sitio de la respuesta no lo probaba (C10 del cierre)
+roto = [x for x in (mc.como_json(r).get('ignored') or []) if (x.get('file') or '').endswith('UMarcoR.dfm')]
+check('H5 un frame que no se lee: su entrada en ignored nombra el fichero del frame (UMarcoR.dfm)',
+      not mc.fallo(r) and len(roto) == 1, r[:600])
 
 # ---- F: la fase de los paquetes
 F1 = os.path.join(JAIL, 'fases')
@@ -244,7 +254,11 @@ t = s.call('delphi_changeset', {'command': 'stage', 'id': ID,
                                 'ops': json.dumps(json.dumps([{'kind': 'edit', 'path': A, 'old': 'uno', 'new': 'UNO'}]))})
 check('P2 ops codificadas dos veces (una cadena JSON dentro de la cadena): se apilan, no SR_CHANGESET_OPS_LISTA',
       not mc.fallo(t) and not mc.es(t, 'SR_CHANGESET_OPS_LISTA_FMT'), t[:300])
-s.call('delphi_changeset', {'command': 'rollback', 'id': ID})
+# ...y lo apilado es lo pedido: apilar sin error no lo decia (C10 del cierre de la 1.26)
+p = s.call('delphi_changeset', {'command': 'preview', 'id': ID})
+c = s.call('delphi_changeset', {'command': 'commit', 'id': ID})
+check('P2 ...y la op apilada es la que se pidio: su preview limpio y el commit dejan UNO en su sitio',
+      not mc.fallo(p) and not mc.fallo(c) and open(A, 'rb').read() == b'UNO\r\ndos\r\n', p[:200] + ' | ' + c[:300])
 
 # P3 layout FMX: la linea del Edit1 del form, no la del inherited Edit1 del frame que va antes
 M = os.path.join(JAIL, 'marco')
@@ -661,13 +675,16 @@ check('R6 ...y uno que dice otro protocolo no se lee (STYLE-066)',
 # R9 la papelera del servidor es UNA, __delphi-patch: la carpeta de copias de una tool que no es del servidor
 # se escondia en delphi_list y delphi_search como si fuera papelera, sin serlo para nadie mas (se escribia y se
 # borraba como cualquier carpeta; roja medida contra p126u con su nombre). Una carpeta de copias de otro nombre
-# es una carpeta como las demas; que ningun nombre asi vuelva escrito a mano lo vigila test_paisaje
+# es una carpeta como las demas; que ningun nombre asi vuelva escrito a mano lo vigila test_paisaje. GUARDA: el
+# nombre medido es interno y no va a un repo publico, y contra el fallo de entonces este otro tambien sale verde
+# (solo se escondia aquel): lo que cubre la roja es la regla de test_paisaje (C10 del cierre de la 1.26)
 R9 = os.path.join(JAIL, 'r9', '__copias-patch')
 os.makedirs(R9)
 escribe(os.path.join(R9, 'Copia9.pas'), 'unit Copia9;\ninterface\nimplementation\nend.\n')
 l9 = s.call('delphi_list', {'root': os.path.dirname(R9)})
 b9 = s.call('delphi_search', {'root': os.path.dirname(R9), 'query': 'unit Copia9'})
-check('R9 una carpeta de copias de otro nombre se lista y se busca como cualquier otra (no es la papelera del servidor)',
+check('R9 GUARDA: una carpeta de copias de otro nombre se lista y se busca como cualquier otra (no es la papelera '
+      'del servidor)',
       'Copia9.pas' in l9 and 'Copia9.pas' in b9 and 'hiddenTrash' not in l9 + b9, l9[:300] + ' | ' + b9[:300])
 
 # R25 una extension se juzga como la compara NTFS, no con el locale (MatchText): 'nota.pa' + U+02E2 (una s
