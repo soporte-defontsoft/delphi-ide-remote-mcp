@@ -80,6 +80,10 @@ const
   quien la lee (estaba escrita a mano dos veces). }
 const
   COMO_YA_TERMINADO = 'already finished';
+  { El interruptor con el que este programa se relanza como VIGIA de un
+    trabajo: lo escribe LanzarYVigilar y lo lee el principio del programa
+    (estaba a mano en los dos; forma 17 de la 1.26). }
+  MODO_VIGIA = '--wait';
 { Las marcas que el SERVIDOR lee de la salida: del nombrador compartido con
   el nodo y con Lsp.RemoteRun. }
 {$I ..\DesktopNode\NodeProtocolo.inc}
@@ -624,8 +628,8 @@ begin
   // el handle del programa viaja HEREDADO al vigia (ver Vigilar): por eso el
   // vigia declara ese handle en la lista, y su numero vale alli igual
   SetHandleInformation(HProc, HANDLE_FLAG_INHERIT, HANDLE_FLAG_INHERIT);
-  if Arrancar('"' + Vigia + '" --wait ' + IntToStr(Pid) + ' "' + ASalida + '" ' +
-    IntToStr(HProc), ACarpeta, ASalida, True, Err, nil, HProc) = 0 then
+  if Arrancar(ComillasSinEscape(Vigia) + ' ' + MODO_VIGIA + ' ' + IntToStr(Pid) + ' ' +
+    ComillasSinEscape(ASalida) + ' ' + IntToStr(HProc), ACarpeta, ASalida, True, Err, nil, HProc) = 0 then
     Vigilar(Pid, ASalida, HProc)
   else
     CloseHandle(HProc);
@@ -641,7 +645,7 @@ begin
   try
 {$IFDEF MSWINDOWS}
     // ---- modo vigia: run --wait <pid> <fichero de salida> [<handle heredado>]
-    if (ParamCount >= 3) and SameText(ParamStr(1), '--wait') then
+    if (ParamCount >= 3) and SameText(ParamStr(1), MODO_VIGIA) then
     begin
       Vigilar(StrToIntDef(ParamStr(2), 0), ParamStr(3), THandle(StrToInt64Def(ParamStr(4), 0)));
       Exit;
@@ -678,9 +682,9 @@ begin
     // 1. el entorno / la sesion
 {$IFDEF MSWINDOWS}
     if SesionPropia = 0 then
-      Anade(Salida, LineaEnv(False, 'win:0'))
+      Anade(Salida, LineaEnv(False, JOB_ENV_WIN + '0'))
     else
-      Anade(Salida, LineaEnv(True, 'win:' + IntToStr(SesionPropia)));
+      Anade(Salida, LineaEnv(True, JOB_ENV_WIN + IntToStr(SesionPropia)));
 {$ELSE}
     Anade(Salida, CompletaEntornoGrafico);
 {$ENDIF}

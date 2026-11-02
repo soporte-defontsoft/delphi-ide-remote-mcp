@@ -144,7 +144,7 @@ begin
     { Mismas ordenes que en Linux y mismas coordenadas: las de LA CAPTURA. }
     Orden := LowerCase(Arg(1));
     Hizo := False;
-    if Orden = 'ventanas' then
+    if Orden = NODO_ORDEN_VENTANAS then
     begin
       { En Windows no hace falta pedirle al escritorio que las ensene: la
         lista con titulo y sitio va CON CADA captura (24-sep), asi que esta
@@ -152,7 +152,7 @@ begin
       Writeln(MsgText(SN_NODE_VENTANAS_LISTA_CAPTURA));
       Hizo := True;
     end
-    else if (Orden = 'escribe') and (Args >= 4) then
+    else if (Orden = NODO_ORDEN_ESCRIBE) and (Args >= 4) then
     begin
       ObjX := StrToIntDef(Arg(2), -1);
       ObjY := StrToIntDef(Arg(3), -1);
@@ -170,7 +170,7 @@ begin
           Writeln(MsgFmt(SR_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Escritorio.Error]));
       end;
     end
-    else if (Orden = 'texto') and (Args >= 2) then
+    else if (Orden = NODO_ORDEN_TEXTO) and (Args >= 2) then
     begin
       Frase := TextoDesde(2);
       Hizo := Escritorio.Escribir(Frase);
@@ -179,7 +179,7 @@ begin
       else
         Writeln(MsgFmt(SR_NODE_NO_PUDE_ESCRIBIR_FMT, [Escritorio.Error]));
     end
-    else if (Orden = 'tecla') and (Args >= 2) then
+    else if (Orden = NODO_ORDEN_TECLA) and (Args >= 2) then
     begin
       { Por NOMBRE ('escape', 'enter'), que es lo mismo en los dos sistemas;
         una cifra sola es su tecla, y un numero de dos o mas cifras se toma
@@ -209,7 +209,7 @@ begin
           Writeln(MsgFmt(SR_NODE_NO_ENVIAR_TECLA_FMT, [Escritorio.Error]));
       end;
     end
-    else if Orden = 'altab' then
+    else if Orden = NODO_ORDEN_ALTAB then
     begin
       Hizo := Escritorio.Combinacion([TeclaPorNombre('alt'), TeclaPorNombre('tab')]);
       if Hizo then
@@ -511,7 +511,7 @@ begin
             imagen y ya esta. La escala la aplica el nodo. }
           Orden := LowerCase(Arg(1));
           Hizo := False;
-          if Orden = 'ventanas' then
+          if Orden = NODO_ORDEN_VENTANAS then
           begin
             { Cuando varias ventanas se tapan, no vale con pulsar: hay que
               pedirle al escritorio que las ensene TODAS. La tecla Super abre
@@ -523,7 +523,7 @@ begin
             else
               Writeln(MsgFmt(SR_NODE_NO_ABRIR_VISTA_FMT, [Manos.Error]));
           end
-          else if (Orden = 'escribe') and (Args >= 4) then
+          else if (Orden = NODO_ORDEN_ESCRIBE) and (Args >= 4) then
           begin
             { Un solo viaje: pulsa para dar el foco y teclea. Es el gesto
               real -"escribe esto ahi"- y paga el arranque UNA vez. }
@@ -544,7 +544,7 @@ begin
                 Writeln(MsgFmt(SR_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Manos.Error]));
             end;
           end
-          else if (Orden = 'texto') and (Args >= 2) then
+          else if (Orden = NODO_ORDEN_TEXTO) and (Args >= 2) then
           begin
             { Todo lo que venga detras es el texto, espacios incluidos. }
             Frase := TextoDesde(2);
@@ -554,7 +554,7 @@ begin
             else
               Writeln(MsgFmt(SR_NODE_NO_PUDE_ESCRIBIR_FMT, [Manos.Error]));
           end
-          else if (Orden = 'tecla') and (Args >= 2) then
+          else if (Orden = NODO_ORDEN_TECLA) and (Args >= 2) then
           begin
             { Teclas en codigo evdev: Escape 1, Tab 15, Enter 28. VARIAS =
               una combinacion, pulsadas en orden y soltadas al reves: los
@@ -573,7 +573,7 @@ begin
             else
               Writeln(MsgFmt(SR_NODE_NO_ENVIAR_TECLA_FMT, [Manos.Error]));
           end
-          else if Orden = 'altab' then
+          else if Orden = NODO_ORDEN_ALTAB then
           begin
             { Alt+Tab: la via de teclado para cambiar de ventana. }
             Hizo := Manos.Combinacion([56, 15]);

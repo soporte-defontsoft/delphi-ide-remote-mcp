@@ -370,14 +370,14 @@ begin
       var FT := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
       if FT <> '' then
         Exit(FT);
-      Args := Args + ['escribe', IntToStr(PX), IntToStr(PY), TextoParaElNodo(Params.Text.Trim)];
+      Args := Args + [NODO_ORDEN_ESCRIBE, IntToStr(PX), IntToStr(PY), TextoParaElNodo(Params.Text.Trim)];
     end
     else
       // codificado: el nodo lo lee con ParamStr, que no recibe una comilla (Lsp.TextoDelNodo)
-      Args := Args + ['texto', TextoParaElNodo(Params.Text.Trim)];
+      Args := Args + [NODO_ORDEN_TEXTO, TextoParaElNodo(Params.Text.Trim)];
   end
   else if Cmd = 'overview' then
-    Args := Args + ['ventanas'];
+    Args := Args + [NODO_ORDEN_VENTANAS];
 
   { Ejecutar en el destino es remote-run con otro volante: la MISMA puerta que
     delphi_paserver (EjecucionRemotaDenegada): AllowRemoteRun, perfil, host del
@@ -430,13 +430,13 @@ begin
     begin
       if not NombreDeTeclaValido(Params.Code.Trim) then
         Exit(MsgText(SR_DESKTOP_NEEDCODE));
-      Args := Args + ['tecla'] + Mods + [Params.Code.Trim];
+      Args := Args + [NODO_ORDEN_TECLA] + Mods + [Params.Code.Trim];
     end
     else
     begin
       if (Params.Code.Trim = '') or (StrToIntDef(Params.Code.Trim, 0) <= 0) then
         Exit(MsgText(SR_ADBLINUX_NEEDCODE));
-      Args := Args + ['tecla'] + Mods + [IntToStr(StrToIntDef(Params.Code.Trim, 0))];
+      Args := Args + [NODO_ORDEN_TECLA] + Mods + [IntToStr(StrToIntDef(Params.Code.Trim, 0))];
     end;
   end;
   { La lista de ventanas viaja con CADA captura (24-sep): window= no manda

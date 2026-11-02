@@ -381,6 +381,12 @@ REGLAS = [
      r"\b(?:CurrentAgent|TCurrentAgent)\s*=\s*[A-Za-z]",
      [('Lsp.Identidad.pas', 'EsDelAgente')],
      'EsDelAgente y EsDeOtroAgente (Lsp.Identidad, forma 15 de la 1.26): el agente de la llamada por su nombre'),
+    # las PALABRAS del protocolo del nodo a mano: las ordenes que el servidor le da (Mcp.Tools.Desktop) y que leen
+    # sus dos escritorios (Windows y Linux, McpDesktopNode), y la sesion del lanzador en su linea ___ENV (la escribe
+    # McpRunJob, la leia Lsp.RemoteRun con un Substring(4)). Viven en NodeProtocolo.inc, que esta regla no recorre:
+    # sin casa (forma 17 de la 1.26)
+    ('las palabras del protocolo del nodo a mano', r"'(?:(?:ventanas|escribe|texto|tecla|altab)'|win:)", [],
+     'NodeProtocolo.inc (src\\DesktopNode): NODO_ORDEN_* y JOB_ENV_WIN, la orden y la sesion por su nombre'),
     # los nombres de gobierno del vault a mano: estaban en cuatro sitios y la puerta de escritura conocia
     # tres - VAULT-INSTRUCTIONS.md, las instrucciones de TODOS los clientes, lo creaba un agente (V191)
     ('un fichero de gobierno del vault nombrado a mano',
@@ -541,7 +547,8 @@ REGLAS = [
     # el CRT (git, adb, msbuild), ComillasSinEscape para lo que lee la RTL de Delphi y para el
     # programa (V115). Y las operaciones de paclient, cada una con su compositor (V222)
     ('una linea de orden con comillas a mano',
-     r"(?:RunCaptured\w*|RunDetached|RunAdb|CorreStyleConvert)\(.*'[^']*\"|:=\s*'-s\s+\"",
+     # (y Arrancar, el del lanzador de remote-run: la linea de su vigia iba a mano; forma 17 de la 1.26)
+     r"(?:RunCaptured\w*|RunDetached|RunAdb|CorreStyleConvert|Arrancar)\(.*'[^']*\"|:=\s*'-s\s+\"",
      # el -fo"r.res" de brcc32: una constante, la que siempre se le dio
      [('Mcp.Tools.Styles.pas', 'CompilaRcEnContenedor')],
      'Lsp.ProcessLaunch: EnComillas (CRT) y ComillasSinEscape (RTL de Delphi, y el programa)'),
@@ -1870,6 +1877,7 @@ PLANTADO = {
     'los nombres de los condicionales de Pascal a mano': "    else if MatchText(D.Nombre, ['ENDIF', 'IFEND']) then",
     'el trozo unico de la casa fuera de su nombrador': "  Tmp := ServerTempDir('sdk-' + FragmentoUnico);",
     'el agente de la llamada comparado a mano': "  if (Owner <> '') and not SameText(Owner, Me) then",
+    'las palabras del protocolo del nodo a mano': "    Args := Args + ['tecla'] + Mods + [Code];",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",

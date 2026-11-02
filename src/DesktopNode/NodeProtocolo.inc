@@ -23,8 +23,21 @@
     agente. Un agente lo tomo por comandos de la tool (command=tecla, escribe;
     Hermes, 16-oct-2026). }
   NODO_USO = 'NODE-016 NODE-041';
+  { Las ORDENES que el servidor le da al nodo: una palabra y lo suyo detras
+    (sin palabra, 'x y' es un clic). Las compone Mcp.Tools.Desktop y las leen
+    los dos escritorios del nodo, el de Windows y el de Linux: estaban a mano
+    en los tres (forma 17 de la 1.26). }
+  NODO_ORDEN_VENTANAS = 'ventanas';    // ensenar las ventanas
+  NODO_ORDEN_ESCRIBE = 'escribe';      // escribe x y <texto>: pulsa y teclea
+  NODO_ORDEN_TEXTO = 'texto';          // texto <texto>: teclea donde este el foco
+  NODO_ORDEN_TECLA = 'tecla';          // tecla [modificadores] <tecla>
+  NODO_ORDEN_ALTAB = 'altab';          // Alt+Tab (desde la consola del nodo)
   { Y la salida de un TRABAJO del lanzador (src\RunJob): la escribe
     McpRunJob y la lee Lsp.RemoteRun. Estaban a mano en diecinueve sitios
     del lanzador y dos del servidor (28-sep-2026). }
   JOB_ENV = '___ENV=';                 // la primera: ___ENV=<1|0>|<lo anadido>
+  { ...y en Windows, lo anadido es la SESION en la que corre el lanzador:
+    win:<n>, y la 0 es la de los servicios, sin escritorio. La leia
+    Lsp.RemoteRun con un Substring(4) a mano (forma 17 de la 1.26). }
+  JOB_ENV_WIN = 'win:';
   JOB_RC = '___RC=';                   // la ultima: ___RC=<codigo de salida>

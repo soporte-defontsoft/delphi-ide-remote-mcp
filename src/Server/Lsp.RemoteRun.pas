@@ -519,12 +519,12 @@ begin
   Resto := Linea.Substring(P + 1).Trim;
   // el lanzador Windows dice en que SESION corre: la 0 es la de los servicios
   // y no tiene escritorio (gemela del "sin DISPLAY")
-  if Resto.StartsWith('win:') then
+  if Resto.StartsWith(JOB_ENV_WIN) then
   begin
     if Linea.StartsWith('0') then
       Result := MsgText(SN_REMOTERUN_ENV_WIN0)
     else
-      Result := MsgFmt(SN_REMOTERUN_ENV_WIN_FMT, [Resto.Substring(4)]);
+      Result := MsgFmt(SN_REMOTERUN_ENV_WIN_FMT, [Resto.Substring(Length(JOB_ENV_WIN))]);
     Exit;
   end;
   if Linea.StartsWith('0') then
