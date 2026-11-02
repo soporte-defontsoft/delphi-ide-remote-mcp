@@ -235,6 +235,10 @@ function IsBinaryStyle(const APath: string): Boolean;
 { The text .style files of a folder (binary ones and *.bin.style excluded). }
 function TextStylesIn(const ADir: string): TArray<string>;
 
+{ EL nombre del conversor de estilos: el que se lanza (StyleConverterExe) y el
+  que la caja de los contenedores copia (Lsp.FormRender.CajaDePaquetes), que lo
+  tenia escrito aparte (C1 del cierre de la 1.26). }
+function NombreDelConversor: string;
 { Path of the DelphiStyleConvert helper next to the server exe ('' if absent). }
 function StyleConverterExe: string;
 
@@ -1534,9 +1538,14 @@ begin
   end;
 end;
 
+function NombreDelConversor: string;
+begin
+  Result := 'DelphiStyleConvert.exe';
+end;
+
 function StyleConverterExe: string;
 begin
-  Result := ServerDir('DelphiStyleConvert.exe');
+  Result := ServerDir(NombreDelConversor);
   if not TFile.Exists(Result) then
     Result := '';
 end;

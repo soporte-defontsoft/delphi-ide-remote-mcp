@@ -1678,7 +1678,7 @@ begin
           Ayudantes := Ayudantes + [Ayudante];
       end;
       // y el conversor de estilos, que corre en un contenedor como ellos (Lsp.Styles)
-      Mira(ServerDir, 'DelphiStyleConvert.*');
+      Mira(ServerDir, ChangeFileExt(NombreDelConversor, '.*'));
       // donde el IDE deja lo compilado, los paquetes declarados, y lo que el
       // PATH le da a sus dependencias (por donde las busca Windows). Un nombre
       // repetido: el primero, como el cargador

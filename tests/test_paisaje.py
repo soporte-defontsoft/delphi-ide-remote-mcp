@@ -969,6 +969,11 @@ REGLAS = [
     ('el exe de un renderizador de forms', r"'DelphiFormRender",
      [('Lsp.FormRender.pas', 'FormRenderExe')],
      'FormRenderExe (1.17.0, delphi_designer preview): el nombre del ayudante se compone en UN sitio'),
+    # ...y su gemela del conversor de estilos: la caja de los contenedores lo copiaba por su literal
+    # mientras CorreStyleConvert lo lanza por el nombre de StyleConverterExe (C1 del cierre de la 1.26)
+    ('el exe del conversor de estilos', r"'DelphiStyleConvert",
+     [('Lsp.Styles.pas', 'NombreDelConversor')],
+     'NombreDelConversor (Lsp.Styles): el nombre del conversor en UN sitio, el que lanza y el que se copia'),
     ('la orden del renderizador de forms', r"'[^']*--(?:path|state|component|nonvisual|root|style|bds)\b",
      [('Lsp.FormRender.pas', 'ComponeOrdenDeRender'), ('FormRender.Comun.pas', 'ParseaArgumentos'),
       ('FormRender.Textos.pas', '*')],
@@ -1971,6 +1976,7 @@ PLANTADO = {
     'leer la linea de objeto de un form': r"  I := TRegEx.IsMatch(Doc.Lines[N].Trim, '(?i)^inherited\b');",
     'el literal de cadena de un form a mano': "  T := Ind + 'Caption = ''' + Nombre + '''';",
     'el exe de un renderizador de forms': "  E := ServerDir('DelphiFormRenderVcl.exe');",
+    'el exe del conversor de estilos': "      Mira(ServerDir, 'DelphiStyleConvert.*');",
     'la orden del renderizador de forms': "  O := '\"' + Exe + '\" --path \"' + P + '\"';",
     'la linea de objeto de un form': "  L := 'object ' + Nombre + ': ' + Clase;",
     'un componente por su ruta en el renderizador': "  C := FindNestedComponent(ARaiz, ANombre);",
