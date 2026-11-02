@@ -38,6 +38,8 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - The renderer's own time limit comes from the call's. `delphi_designer layout` waits 30 s for it, but the renderer was told 60 s, and 50 s for the IDE's packages, so its watcher never spoke and the server stopped it without the reason; it now gets 15 s for both, and a preview keeps 60 s and 50 s. A call that renders again with forms brought from other folders gives each new round what is left of its time, not all of it again.
 
+- `delphi_designer layout` knows what a container does with its children by its class's ancestry, in that framework's class table, not by a list of names that mixed VCL and FMX. Two overlapping buttons inside a VCL `TTabControl`, which has one area, were not reported, because FMX's `TTabControl` has pages; the items of an FMX `TListBox` that do not fit were reported as sticking out and not visible, although they scroll (also on `insert`); a `TMemo`, `TGrid`, `TPresentedVertScrollBox`, `TGridPanelLayout` or a component derived from one was not recognized. The `Align` a VCL class does not write is the one its source redeclares with `default`: `TActionToolBar`, `TActionMainMenuBar`, `TFormTabsBar` and `TCategoryPanelGroup` were missing, and `TCoolBar` and `TControlBar`, which do not redeclare it, were taken as `alTop`.
+
 ### Changed
 
 - `delphi_config`'s description says again that `add-platform` enables a platform in the `.dproj`. The second pass had dropped it, and with Qwen3.8 Flash Next the task "build Linux64 with the SDK zorin18" fell from 3 of 5 to 2 of 18; with it back, 9 of 18 (`docs/TOOL-DESCRIPTIONS.md`).

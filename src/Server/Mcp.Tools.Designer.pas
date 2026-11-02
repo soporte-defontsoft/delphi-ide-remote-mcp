@@ -661,59 +661,99 @@ begin
   end;
 end;
 
-{ Well-known VCL controls whose Align is not written in the .dfm because it is
-  their default. Getting a form right "blind" is exactly the case that fails
-  without this: a TStatusBar/TToolBar/TMemo trio is three disjoint bands, not a
-  pile. }
-function DefaultAlign(const ACls: string): string;
+{ ACls es una de AClases ('Unidad:TClase') o desciende de una, por la tabla del
+  marco M (Desciende): tambien la de un tercero. Sin tabla, o con una clase que
+  la tabla no tiene, por su nombre. }
+function EsDeAlguna(M: TMetaTable; const ACls: string; const AClases: TArray<string>): Boolean;
+var
+  Id: string;
 begin
-  if MatchText(ACls, ['TStatusBar']) then Exit('alBottom');
-  if MatchText(ACls, ['TToolBar', 'TCoolBar', 'TControlBar', 'THeaderControl']) then
-    Exit('alTop');
-  if MatchText(ACls, ['TSplitter']) then Exit('alLeft');
-  if MatchText(ACls, ['TTabSheet']) then Exit('alClient');
-  if MatchText(ACls, ['TCategoryPanel']) then Exit('alTop');
+  var EnTabla := (M <> nil) and M.ClaseDeNombre(ACls, Id);
+  for var C in AClases do
+    if (EnTabla and M.Desciende(Id, C)) or
+       (not EnTabla and SameText(ACls, C.Substring(C.IndexOf(':') + 1))) then
+      Exit(True);
+  Result := False;
+end;
+
+{ El Align que una clase de la VCL no escribe en el .dfm porque es el suyo: el que
+  redeclara con default en su fuente (property Align default alTop; medido el
+  2-nov-2026, y test_capacidades_126 R8 lo compara con el fuente: TCoolBar y
+  TControlBar no lo redeclaran, y sin Align escrito son alNone), y el que pone a
+  sus hijos el contenedor que los coloca (una pagina llena su TPageControl, un
+  TCategoryPanel se apila en su grupo). Sin esto, un trio TStatusBar/TToolBar/
+  TMemo era una pila y no tres bandas. }
+function DefaultAlign(M: TMetaTable; const ACls: string): string;
+begin
+  if EsDeAlguna(M, ACls, ['Vcl.ComCtrls:TStatusBar']) then Exit('alBottom');
+  if EsDeAlguna(M, ACls, ['Vcl.ComCtrls:TToolBar', 'Vcl.ComCtrls:TCustomHeaderControl',
+    'Vcl.ComCtrls:THeaderControl', 'Vcl.ActnCtrls:TActionToolBar', 'Vcl.ActnMenus:TActionMainMenuBar',
+    'Vcl.FormTabsBar:TCustomFormTabsBar', 'Vcl.FormTabsBar:TFormTabsBar']) then Exit('alTop');
+  if EsDeAlguna(M, ACls, ['Vcl.ExtCtrls:TSplitter', 'Vcl.ExtCtrls:TCategoryPanelGroup']) then Exit('alLeft');
+  if EsDeAlguna(M, ACls, ['Vcl.ComCtrls:TTabSheet']) then Exit('alClient');
+  if EsDeAlguna(M, ACls, ['Vcl.ExtCtrls:TCategoryPanel']) then Exit('alTop');
   Result := 'alNone';
 end;
 
-{ Graphic, non-focusable decoration: a TBevel frame AROUND a group, a TShape or
-  TImage behind it. Overlapping one is normal design, not "one hides the other". }
-function IsDecoration(const ACls: string): Boolean;
+type
+  { Lo que un contenedor hace con sus hijos, para no juzgarlos como sueltos: los
+    desplaza (lo que sobresale se alcanza: fcScroll), los pone en paginas, en
+    celdas (sus hijos llevan alClient: "llena tu celda") o por sus reglas (fluyen,
+    se colocan por relaciones), y el adorno, un marco ALREDEDOR de un grupo o un
+    fondo detras, que no tapa a nadie }
+  TFamiliaDeClase = (fcScroll, fcPaginas, fcCeldas, fcReglas, fcAdorno);
+
+{ Las clases que DEFINEN cada familia, por marco: lo es la que desciende de una
+  (EsDeAlguna). Eran listas de nombres que mezclaban los dos marcos -el
+  TTabControl de la VCL, de UNA area, se tomaba por uno de paginas como el de FMX,
+  y dos botones solapados en el no se decian- y dejaban fuera a los descendientes:
+  TListBox, TMemo, TGrid, TPresentedVertScrollBox, TGridPanelLayout (forma 8 del
+  revisor del paisaje de la 1.26). Con una base Custom va la clase de la paleta:
+  sin tabla, una clase se reconoce por su nombre. }
+function ClasesDeFamilia(AFamilia: TFamiliaDeClase; AFmx: Boolean): TArray<string>;
 begin
-  Result := MatchText(ACls, ['TBevel', 'TShape', 'TImage', 'TPaintBox']);
+  Result := nil;
+  case AFamilia of
+    fcScroll:
+      if AFmx then
+        Result := ['FMX.Layouts:TCustomScrollBox', 'FMX.Layouts:TScrollBox', 'FMX.Layouts:TVertScrollBox',
+          'FMX.Layouts:THorzScrollBox', 'FMX.Layouts:TFramedScrollBox',
+          'FMX.ScrollBox:TCustomPresentedScrollBox', 'FMX.ScrollBox:TPresentedScrollBox']
+      else
+        Result := ['Vcl.Forms:TScrollBox', 'Vcl.ComCtrls:TPageScroller'];
+    fcPaginas:
+      if AFmx then
+        Result := ['FMX.TabControl:TTabControl']
+      else
+        Result := ['Vcl.ComCtrls:TPageControl'];
+    fcCeldas:
+      if AFmx then
+        Result := ['FMX.Layouts:TGridPanelLayout']
+      else
+        Result := ['Vcl.ExtCtrls:TCustomGridPanel', 'Vcl.ExtCtrls:TGridPanel'];
+    fcReglas:
+      if AFmx then
+        Result := ['FMX.Layouts:TFlowLayout', 'FMX.Layouts:TGridLayout']
+      else
+        Result := ['Vcl.ExtCtrls:TCustomFlowPanel', 'Vcl.ExtCtrls:TFlowPanel',
+          'Vcl.WinXCtrls:TCustomRelativePanel', 'Vcl.WinXCtrls:TRelativePanel'];
+    fcAdorno:
+      if not AFmx then
+        Result := ['Vcl.ExtCtrls:TBevel', 'Vcl.ExtCtrls:TShape', 'Vcl.ExtCtrls:TImage', 'Vcl.ExtCtrls:TPaintBox'];
+  end;
 end;
 
-{ Containers whose children are MEANT to be larger than the visible area: what
-  spills is reached by scrolling, not clipped. }
-function IsScrollBox(const ACls: string): Boolean;
+function EsDeFamilia(M: TMetaTable; const ACls: string; AFamilia: TFamiliaDeClase; AFmx: Boolean): Boolean;
 begin
-  Result := MatchText(ACls, ['TScrollBox', 'TFramedScrollBox', 'TVertScrollBox', 'THorzScrollBox',
-    'TFramedVertScrollBox', 'TPresentedScrollBox']);
+  Result := EsDeAlguna(M, ACls, ClasesDeFamilia(AFamilia, AFmx));
 end;
 
-{ Grid containers place each child in a CELL by its ControlCollection, so every
-  child carries Align=alClient meaning "fill your cell". Without the collection
-  we cannot compute cells, so we do not judge alignment or overlap among them. }
-function IsGridPanel(const ACls: string): Boolean;
+{ Un contenedor que coloca a sus hijos el mismo (paginas, celdas, reglas): lo que
+  dicen su Left/Top y que se solapen no significa nada }
+function ColocaASusHijos(M: TMetaTable; const ACls: string; AFmx: Boolean): Boolean;
 begin
-  Result := MatchText(ACls, ['TGridPanel', 'TGridLayout']);
-end;
-
-{ Containers that arrange their children by rules at runtime, ignoring the
-  Left/Top written at design time: a TFlowPanel reflows into rows, a
-  TRelativePanel places by constraints. Judging their children by design
-  coordinates is a guaranteed false positive. }
-function IsAutoLayout(const ACls: string): Boolean;
-begin
-  Result := MatchText(ACls, ['TFlowPanel', 'TRelativePanel', 'TGridLayout',
-    'TFlowLayout']);
-end;
-
-{ Page containers keep every page as an alClient child and show one at a time:
-  the pages "overlap 100%" by design, which is not a defect. }
-function IsPageContainer(const ACls: string): Boolean;
-begin
-  Result := MatchText(ACls, ['TPageControl', 'TTabControl', 'TPageScroller']);
+  Result := EsDeFamilia(M, ACls, fcPaginas, AFmx) or EsDeFamilia(M, ACls, fcCeldas, AFmx) or
+    EsDeFamilia(M, ACls, fcReglas, AFmx);
 end;
 
 const
@@ -804,6 +844,10 @@ begin
   try
     if Doc.Root = nil then
       Exit(MsgText(SR_DESIGNER_BINDING_NO_ROOT));
+    // lo que hace cada contenedor con sus hijos, por su herencia (ClasesDeFamilia):
+    // la tabla FMX si ya esta, como la VCL en LayoutOf
+    var FaltaFmx: TFaltaTabla;
+    var TablaFmx := MetaTable(True, FaltaFmx, 0);
     var R := CajasDelRender(APath);
     if R.Fallo <> '' then
       Exit(MsgFmt(SR_DESIGNER_LAYOUT_FMX_FMT, [R.Fallo]));
@@ -856,14 +900,14 @@ begin
           var DY := (if C.EnContenido then C.CY else Padre.Y);
           var DW := (if C.EnContenido then C.CW else Padre.W);
           var DH := (if C.EnContenido then C.CH else Padre.H);
-          if not IsScrollBox(Padre.Clase) and ((C.X < DX) or (C.Y < DY) or
+          if not EsDeFamilia(TablaFmx, Padre.Clase, fcScroll, True) and ((C.X < DX) or (C.Y < DY) or
              (C.X + C.W > DX + DW) or (C.Y + C.H > DY + DH)) then
           begin
             Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [C.Ruta, C.Clase, Linea, C.X, C.Y, C.X + C.W, C.Y + C.H,
               Padre.Ruta, DW, DH]));
             AFuera := AFuera + [C.Ruta];
           end;
-          if IsPageContainer(Padre.Clase) or IsAutoLayout(Padre.Clase) or IsGridPanel(Padre.Clase) then
+          if ColocaASusHijos(TablaFmx, Padre.Clase, True) then
             Continue;
           for var J := I + 1 to High(R.Cajas) do
           begin
@@ -967,7 +1011,7 @@ var
     // skipping it hid everything inside it. Children, or a non-alNone class
     // default, give it away.
     Result := HasW or HasH or (AObj.Children.Count > 0) or
-      not SameText(DefaultAlign(AObj.ClassName_), 'alNone') or EsControl(AObj);
+      not SameText(DefaultAlign(TablaVcl, AObj.ClassName_), 'alNone') or EsControl(AObj);
   end;
 
   procedure Walk(AParent: TStyleObj; AClientW, AClientH, AAbsX, AAbsY: Integer;
@@ -982,12 +1026,11 @@ var
     Grid, Managed, NeedW, NeedH: Boolean;
     ix, iy: Integer;
   begin
-    Grid := IsGridPanel(AParent.ClassName_);
+    Grid := EsDeFamilia(TablaVcl, AParent.ClassName_, fcCeldas, False);
     // "managed" = the parent places its children itself (grid cells, flow
     // reflow, relative rules, page tabs): design Left/Top and sibling overlap
     // mean nothing there, so we do not judge them.
-    Managed := Grid or IsAutoLayout(AParent.ClassName_) or
-      IsPageContainer(AParent.ClassName_);
+    Managed := ColocaASusHijos(TablaVcl, AParent.ClassName_, False);
     RL := 0; RT := 0; RR := AClientW; RB := AClientH;
     ClientN := 0;
     SetLength(Kids, AParent.Children.Count);
@@ -1000,7 +1043,7 @@ var
       Nm := Kid.ObjName; if Nm = '' then Nm := Kid.ClassName_;
       Cls := Kid.ClassName_;
       Align := PropRaw(Doc, Kid, 'Align', Found);
-      if not Found then Align := DefaultAlign(Cls);
+      if not Found then Align := DefaultAlign(TablaVcl, Cls);
       W := PropInt(Doc, Kid, 'Width', -1, HasW);
       H := PropInt(Doc, Kid, 'Height', -1, HasH);
       X := PropInt(Doc, Kid, 'Left', 0, HasL);
@@ -1048,7 +1091,7 @@ var
       Kids[Cnt].Line := Kid.StartLine; Kids[Cnt].HasW := HasW; Kids[Cnt].HasH := HasH;
       // decoration, alCustom (runtime position), and an unresolved inherited
       // control are all left OUT of overlap: none of them is "one hides another".
-      Kids[Cnt].Deco := IsDecoration(Cls) or SameText(Align, 'alCustom') or InhUnknown;
+      Kids[Cnt].Deco := EsDeFamilia(TablaVcl, Cls, fcAdorno, False) or SameText(Align, 'alCustom') or InhUnknown;
       Kids[Cnt].Free_ := False;
       Kids[Cnt].Client := False;
       if InhUnknown then
@@ -1181,7 +1224,7 @@ var
           Walk(Kid, W, H, ix, iy, Kids[K].Nm,
             AKnown and Kids[K].HasW and Kids[K].HasH or
               MatchText(Kids[K].Align, ['alClient', 'alTop', 'alBottom', 'alLeft', 'alRight']),
-            IsScrollBox(Kids[K].Cls));
+            EsDeFamilia(TablaVcl, Kids[K].Cls, fcScroll, False));
       end;
       Inc(K);
     end;

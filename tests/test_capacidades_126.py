@@ -587,6 +587,53 @@ check('R7 layout (30 s) da al ayudante --timeout 15000 y --packagestimeout 15000
 check('R7 ...y preview (75 s), --timeout 60000 y --packagestimeout 50000, como antes',
       '--timeout 60000' in pre and '--packagestimeout 50000' in pre, re.findall(r'-\w*timeout \d+', pre) or pre[:700])
 
+# R8 lo que un contenedor hace con sus hijos se pregunta por SU herencia (la tabla del marco), no por una lista de
+# nombres que mezclaba los dos marcos: el TTabControl de la VCL, de una sola area, se tomaba por uno de paginas como
+# el de FMX (dos botones solapados en el no se decian), y un TListBox FMX, que desciende de TScrollBox, no se tomaba
+# por uno de scroll (sus items de mas salian como que se salen y no se ven)
+R8 = os.path.join(JAIL, 'r8')
+s.call('delphi_create', {'kind': 'project-vcl', 'dir': os.path.join(R8, 'V'), 'name': 'V8'})
+DFM8 = os.path.join(R8, 'V', 'UMain.dfm')
+s.call('delphi_designer', {'command': 'insert', 'path': DFM8, 'classname': 'TTabControl', 'props': 'Width=300;Height=200'})
+for pos in ('Left=20;Top=40', 'Left=30;Top=45'):
+    s.call('delphi_designer', {'command': 'insert', 'path': DFM8, 'classname': 'TButton', 'parent': 'TabControl1',
+                               'props': pos})
+j = mc.como_json(s.call('delphi_designer', {'command': 'layout', 'path': DFM8}, t=120))
+check('R8 layout VCL: dos botones solapados dentro de un TTabControl se dicen (no es uno de paginas)',
+      any('Button1' in o and 'Button2' in o for o in j.get('overlapping') or []), str(j.get('overlapping'))[:400])
+s.call('delphi_create', {'kind': 'project-fmx', 'dir': os.path.join(R8, 'F'), 'name': 'F8'})
+FMX8 = os.path.join(R8, 'F', 'UMain.fmx')
+s.call('delphi_designer', {'command': 'insert', 'path': FMX8, 'classname': 'TListBox', 'props': 'Width=120;Height=40'})
+for _ in range(3):
+    s.call('delphi_designer', {'command': 'insert', 'path': FMX8, 'classname': 'TListBoxItem', 'parent': 'ListBox1'})
+j = mc.como_json(s.call('delphi_designer', {'command': 'layout', 'path': FMX8}, t=120))
+check('R8 layout FMX: los items de un TListBox que no caben se alcanzan con su scroll, no "se salen"',
+      j.get('boxes') and not (j.get('outsideParent') or []), str(j.get('outsideParent'))[:400])
+# ...y el Align que una clase de la VCL no escribe es el que redeclara con default en su fuente (TCoolBar y
+# TControlBar no lo redeclaran; TCategoryPanelGroup, TActionToolBar... si)
+FUENTE_VCL = os.path.join(mc.raiz_del_ide(), 'source', 'vcl')
+redeclaradas = set()
+for f in os.listdir(FUENTE_VCL):
+    if f.lower().endswith('.pas'):
+        clase = None
+        for linea in open(os.path.join(FUENTE_VCL, f), encoding='utf-8-sig', errors='replace'):
+            m = re.match(r'\s+(T\w+)\s*=\s*class\b', linea)
+            if m:
+                clase = m.group(1)
+            m = re.match(r'\s+property Align\s+default\s+(al\w+)', linea, re.I)
+            if m and clase:
+                redeclaradas.add((clase, m.group(1)))
+DIS = open(os.path.join(mc.REPO, 'src', 'Server', 'Mcp.Tools.Designer.pas'), encoding='utf-8-sig').read()
+cuerpo = DIS[DIS.index('function DefaultAlign('):]
+cuerpo = cuerpo[:cuerpo.index('\nend;')]
+declaradas = set()
+for lista, al in re.findall(r"\[([^\]]*)\]\)\s*then\s*Exit\('(al\w+)'\)", cuerpo):
+    for c in re.findall(r"'[\w.]+:(T\w+)'", lista):
+        declaradas.add((c, al))
+check('R8 DefaultAlign trae cada clase de la VCL que redeclara Align con default, con ese Align, y no las que no',
+      bool(redeclaradas) and redeclaradas <= declaradas and not {c for c, _ in declaradas} & {'TCoolBar', 'TControlBar'},
+      'faltan %s; declaradas %s' % (sorted(redeclaradas - declaradas), sorted(declaradas)))
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')
