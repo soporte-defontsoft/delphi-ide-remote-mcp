@@ -757,7 +757,11 @@ begin
 end;
 
 const
-  LAYOUT_PLAZO_MS = 30000; // un form del NAS, 13 s (medido el 31-oct-2026)
+  // 45 s: el ayudante tiene 30 para el form y sus paquetes (VigiaDelAyudante). Con
+  // 30 le quedaban 15, y cargar los 110 paquetes de diseno de esta maquina, ya
+  // revisados por el antivirus, eran 12,6 de sus 13,2 s (medido el 2-nov-2026 con un
+  // form del NAS; C14 del revisor del paisaje del cierre de la 1.26)
+  LAYOUT_PLAZO_MS = 45000;
 
 { Lo que dice el renderizador de donde queda cada control de APath: el juez de un
   layout (V74 y V24 de la 1.24). Fallo en R.Fallo, por ejemplo sin renderizador.

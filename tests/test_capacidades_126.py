@@ -601,8 +601,10 @@ try:
                     t=120)
 finally:
     otro.cierra()
-check('R7 layout (30 s) da al ayudante --timeout 15000 y --packagestimeout 15000',
-      '--timeout 15000' in lay and '--packagestimeout 15000' in lay, re.findall(r'-\w*timeout \d+', lay) or lay[:700])
+# (C14 del cierre: layout espera 45 s y el ayudante tiene 30; con 30 le quedaban 15, y cargar los 110 paquetes de
+# diseno de la maquina de produccion eran 12,6 de sus 13,2 s, medido el 2-nov-2026)
+check('R7 layout (45 s) da al ayudante --timeout 30000 y --packagestimeout 30000',
+      '--timeout 30000' in lay and '--packagestimeout 30000' in lay, re.findall(r'-\w*timeout \d+', lay) or lay[:700])
 check('R7 ...y preview (75 s), --timeout 60000 y --packagestimeout 50000, como antes',
       '--timeout 60000' in pre and '--packagestimeout 50000' in pre, re.findall(r'-\w*timeout \d+', pre) or pre[:700])
 
@@ -712,7 +714,7 @@ check('CI4 el changeset no crea un .dproj: EDIT-128 al apilarlo, como delphi_tex
 
 # CI9 layout FMX: los avisos de un control de un frame en linea que el form no sobrescribe dicen su linea en el
 # fichero del frame, como su caja (decian "line 0"), y tras un insert el renderizador tiene el plazo de layout,
-# 30 s, no el de un preview, 75: la respuesta del insert ya existe sin el, y un cliente que se cansa antes lo
+# 45 s, no el de un preview, 75: la respuesta del insert ya existe sin el, y un cliente que se cansa antes lo
 # repite (C9 del revisor del paisaje del cierre de la 1.26; medido contra p127l: --boxes --timeout 60000)
 escribe(os.path.join(M, 'UMarcoG.pas'), 'unit UMarcoG;\n\ninterface\n\nuses\n  %s;\n\ntype\n  TMarcoG = class(TFrame)\n'
         '    Edit1: TEdit;\n    Edit2: TEdit;\n  end;\n\nimplementation\n\n{$R *.fmx}\n\nend.\n' % USOS_FMX)
@@ -767,8 +769,8 @@ try:
     tarda = time.time() - t0
 finally:
     otro.cierra()
-check('CI9 un insert FMX cuyo layout no contesta acaba al plazo de layout (30 s), no al de un preview (75 s)',
-      mc.como_json(r).get('inserted') == 'Button1' and tarda < 55, '%.0f s: %s' % (tarda, r[:300]))
+check('CI9 un insert FMX cuyo layout no contesta acaba al plazo de layout (45 s), no al de un preview (75 s)',
+      mc.como_json(r).get('inserted') == 'Button1' and tarda < 65, '%.0f s: %s' % (tarda, r[:300]))
 
 s.cierra()
 mc.borra(BASE)
