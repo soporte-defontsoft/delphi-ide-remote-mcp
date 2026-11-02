@@ -92,7 +92,10 @@ function RunCaptured(const ACmdLine: string; ATimeoutMs: Integer;
   puede tener uno por Delphi, cada uno en su puerto - el Zorin de David, la
   13.1 y la 13.2) o "Profile platform (A) does not match remote/host machine
   platform (B)". '' si no dice ninguna. Los textos de paclient, leidos de
-  paclient.exe (37.1.10.6). Lo usan el helper de paclient
+  su recurso (paclientcore370): no llevan codigo, solo estan en ingles (el
+  IDE no trae paclient traducido) y son iguales en 37.1.10.6 y 37.2.11.2
+  (medido el 2-nov-2026); test_paclient_ajeno los saca del paclient
+  instalado, asi que un texto nuevo la pone roja. Lo usan el helper de paclient
   (Lsp.RemoteRun.Paclient) y el deploy, que lanza paclient por la tarea
   PAClient de msbuild. }
 function AvisoDePaclient(const ASalida: string): string;

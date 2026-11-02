@@ -12,7 +12,14 @@ platform (A) does not match remote/host machine platform (B)". Desde la
 test-connection, get-sdk y add-profile lo lanzaban a mano.
 
 Sin PAServer: paclient es un .cmd FALSO (DELPHI_MCP_PACLIENT, como
-test_remoterun) que imprime esos textos y sale con 1.
+test_remoterun) que imprime esos textos y sale con 1. Los textos salen del
+recurso del paclient INSTALADO (paclientcore370.bpl del IDE), no de una copia
+escrita aqui: si una version nueva de paclient los cambia, A1-A4 se ponen
+rojos en vez de seguir verdes con la frase vieja. Medido el 2-nov-2026 (forma
+22 de la 1.26): ninguno de los dos lleva codigo, solo estan en ingles (el IDE
+no trae paclient traducido) y son iguales en 37.1.10.6 y 37.2.11.2.
+
+  A0  los dos formatos estan en el paclient instalado
 
   A1  test-connection: PAServer de otro Delphi -> PAS-056 con la version
   A2  test-connection: perfil de otra plataforma -> PAS-057
@@ -43,8 +50,21 @@ for _f in ('McpRunJob', 'McpRunJob.exe'):
     shutil.copy(os.path.join(REPO, 'node', _f), os.path.join(os.path.dirname(EXE), 'node', _f))
 AD, HOST = mc.appdata_perfil(BASE, PERFIL, '127.0.0.1', 'Linux64')
 
-MISMATCH = "Connection refused. Platform Assistant Server version mismatch - expecting version '37.1.10.6'."
-PLATAFORMA = 'Connection refused. Profile platform (Linux64) does not match remote/host machine platform (Windows)'
+def formato_de_paclient(principio):
+    """La cadena de recurso de paclient que empieza por PRINCIPIO, tal cual (con sus %s): la
+    tabla de cadenas guarda cada una tras su longitud, un WORD, y se lee con ella."""
+    t = open(os.path.join(mc.raiz_del_ide(), 'bin', 'paclientcore370.bpl'), 'rb').read().decode(
+        'utf-16-le', 'surrogatepass')
+    i = t.find(principio)
+    return t[i:i + ord(t[i - 1])] if i > 0 else ''
+
+
+F_MISMATCH = formato_de_paclient('Connection refused. Platform Assistant Server version mismatch')
+F_PLATAFORMA = formato_de_paclient('Connection refused. Profile platform')
+check('A0 los dos formatos estan en el paclient instalado (version que espera; plataforma del perfil y la de la maquina)',
+      F_MISMATCH.count('%s') == 1 and F_PLATAFORMA.count('%s') == 2, repr(F_MISMATCH) + ' | ' + repr(F_PLATAFORMA))
+MISMATCH = F_MISMATCH.replace('%s', '37.1.10.6')
+PLATAFORMA = F_PLATAFORMA.replace('%s', 'Linux64', 1).replace('%s', 'Windows', 1)
 
 
 def stub(nombre, linea, codigo):
