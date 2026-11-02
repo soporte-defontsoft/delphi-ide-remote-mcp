@@ -47,6 +47,7 @@ type
     [Test] procedure UnaCasaConLetraPorSuNombre;
     [Test] procedure LaCasaSoloComoRutaEntera;
     [Test] procedure UnaRaizQueEmpiezaComoLaCasaSeQueda;
+    [Test] procedure UnAcentoComoLoEscribeElJson;
   end;
 
   { El barrido del enmascarador de salida sobre un texto que ya es JSON: alli
@@ -261,6 +262,17 @@ type
     [Test] procedure ElBuzonNoJuntaLoQueElNombreSepara;
   end;
 
+  { El final de un trabajo remoto: lo escribe el vigia del lanzador como la ULTIMA
+    linea, entera y con su salto (McpRunJob.LineaRC), y PartirSalida es su
+    inversa. Se aceptaba en cualquier sitio de la salida (revisor del paisaje de
+    la 1.26, E): un programa que lo escribia a mitad de linea, o una escritura a
+    medias del vigia (___RC=1 de un 12), daban el trabajo por acabado }
+  [TestFixture]
+  TFinalDeUnTrabajoTests = class
+  public
+    [Test] procedure ElCentinelaEsLaUltimaLineaEntera;
+  end;
+
 implementation
 
 uses
@@ -420,6 +432,25 @@ begin
   // dentro de un JSON cada barra viaja doblada: vuelve doblada
   Assert.AreEqual('{"path":"L:\\Sandbox\\tests\\a.pas"}',
     FormaDeclaradaEnTexto('{"path":"\\\\servidor\\Recurso\\Sandbox\\tests\\a.pas"}', D, R));
+end;
+
+{ una ruta de red con un acento, dentro del JSON de una tool: la escribe el
+  codificador de la casa (ToJSON), y las agujas tienen que ser las que el escribe
+  (revisor del paisaje de la 1.26, B: salia el nombre de la maquina) }
+procedure TFormaDeclaradaEnTextoTests.UnAcentoComoLoEscribeElJson;
+const
+  REAL = '\\servidor\Recurso\A' + #$00F1 + 'o';
+begin
+  var O := TJSONObject.Create;
+  try
+    O.AddPair('path', REAL + '\a.pas');
+    var Dicho := FormaDeclaradaEnTexto(O.ToJSON, TArray<string>.Create('L:\A' + #$00F1 + 'o\'),
+      TArray<string>.Create(REAL));
+    Assert.IsFalse(Dicho.Contains('servidor'), 'la ruta de red, en su forma declarada: ' + Dicho);
+    Assert.IsTrue(Dicho.Contains('L:'), Dicho);
+  finally
+    O.Free;
+  end;
 end;
 
 procedure TFormaDeclaradaEnTextoTests.LaPistaParaElOperadorNoSeToca;
@@ -1623,7 +1654,31 @@ begin
   Assert.AreEqual('a-b', Slug('a.b'), 'el titulo de un informe sigue igual');
 end;
 
+{ TFinalDeUnTrabajoTests }
+
+procedure TFinalDeUnTrabajoTests.ElCentinelaEsLaUltimaLineaEntera;
+var
+  Salida: string;
+  Codigo: Integer;
+begin
+  Assert.IsTrue(PartirSalida('hola'#10'___RC=0'#10, Salida, Codigo), 'acabado');
+  Assert.AreEqual('hola', Salida);
+  Assert.AreEqual(0, Codigo);
+  Assert.IsTrue(PartirSalida('x'#13#10'___RC=-1'#13#10, Salida, Codigo), 'con CRLF');
+  Assert.AreEqual(-1, Codigo);
+  Assert.IsTrue(PartirSalida('___RC=3'#10, Salida, Codigo), 'sin nada del programa');
+  Assert.AreEqual('', Salida);
+  Assert.AreEqual(3, Codigo);
+  Assert.IsFalse(PartirSalida('a ___RC=5 b'#10'sigue', Salida, Codigo), 'a mitad de una linea es del programa');
+  Assert.AreEqual('a ___RC=5 b'#10'sigue', Salida, 'y la salida entera');
+  Assert.IsFalse(PartirSalida('linea'#10'___RC=1', Salida, Codigo), 'sin su salto, a medio escribir (un 12)');
+  Assert.IsFalse(PartirSalida('___RC=7'#10'mas salida'#10, Salida, Codigo), 'no es la ultima linea');
+  Assert.IsFalse(PartirSalida('linea'#10'___RC='#10, Salida, Codigo), 'sin codigo');
+  Assert.IsFalse(PartirSalida('', Salida, Codigo));
+end;
+
 initialization
+  TDUnitX.RegisterTestFixture(TFinalDeUnTrabajoTests);
   TDUnitX.RegisterTestFixture(TLectoresDeJaulaTests);
   TDUnitX.RegisterTestFixture(TFormaDeclaradaTests);
   TDUnitX.RegisterTestFixture(TIncludeDelProyectoTests);

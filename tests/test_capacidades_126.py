@@ -374,6 +374,38 @@ j = mc.como_json(s.call('delphi_config', {'command': 'view', 'project': DV}))
 check('H3 ...y con los numeros descuadrados, la version del binario (la clave) y lo que dicen los numeros',
       j.get('version') == '2.1.0.0' and '3.1.0.0' in (j.get('versionMismatch') or ''), str(j)[:400])
 
+# ---- R: lo que el revisor del paisaje de la 1.26 dejo para David, y entra (David, 2-nov: "no dejemos mierdas")
+# RD un create de un changeset que no es Pascal nace como el de textedit: en CRLF y sin un salto final que nadie
+# escribio (medido: "uno\ndos" salia "uno\r\ndos\r\n"); un .pas, como delphi_create
+RD = os.path.join(JAIL, 'rd')
+os.makedirs(RD)
+ID = mc.id_changeset(s.call('delphi_changeset', {'command': 'begin'}))
+s.call('delphi_changeset', {'command': 'stage', 'id': ID, 'ops': [
+    {'kind': 'create', 'path': os.path.join(RD, 'c.txt'), 'content': 'uno\ndos'},
+    {'kind': 'create', 'path': os.path.join(RD, 'UC.pas'), 'content': 'unit UC;\n\ninterface\n\nimplementation\n\nend.'}]})
+s.call('delphi_changeset', {'command': 'preview', 'id': ID})
+t = s.call('delphi_changeset', {'command': 'commit', 'id': ID})
+check('RD fixture: el changeset crea los dos', not mc.fallo(t), t[:300])
+txt = open(os.path.join(RD, 'c.txt'), 'rb').read() if os.path.exists(os.path.join(RD, 'c.txt')) else b''
+check('RD un .txt creado por un changeset: en CRLF y sin salto final, como textedit create', txt == b'uno\r\ndos', txt)
+pas = open(os.path.join(RD, 'UC.pas'), 'rb').read() if os.path.exists(os.path.join(RD, 'UC.pas')) else b''
+check('RD ...y un .pas, como delphi_create: en CRLF y con su salto final', pas.endswith(b'end.\r\n'), pas[-20:])
+
+# RG insert en FMX de un control que se sale de su padre: la respuesta lo dice, como en VCL (se saltaba FMX con la
+# razon de antes de que layout lo midiera, y leia el texto del aviso por su prefijo)
+RG = os.path.join(JAIL, 'rg')
+os.makedirs(RG)
+escribe(os.path.join(RG, 'UG.pas'), 'unit UG;\n\ninterface\n\nuses\n  %s;\n\ntype\n  TFormG2 = class(TForm)\n  end;\n\n'
+        'var\n  FormG2: TFormG2;\n\nimplementation\n\n{$R *.fmx}\n\nend.\n' % USOS_FMX)
+escribe(os.path.join(RG, 'UG.fmx'), "object FormG2: TFormG2\n  Left = 0\n  Top = 0\n  Caption = 'G'\n  ClientHeight = 300\n"
+        "  ClientWidth = 400\n  FormFactor.Width = 320\n  FormFactor.Height = 480\n  FormFactor.Devices = [Desktop]\n"
+        "  DesignerMasterStyle = 0\nend\n")
+r = s.call('delphi_designer', {'command': 'insert', 'path': os.path.join(RG, 'UG.fmx'), 'classname': 'TEdit',
+                               'props': 'Position.X=380'}, t=400)
+fuera = mc.como_json(r).get('outsideParent') or []
+check('RG insert FMX de un TEdit que se sale del form (380 + 100 > 400): outsideParent lo dice, y es el suyo',
+      len(fuera) == 1 and fuera[0].startswith('Edit1'), r[:500])
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')

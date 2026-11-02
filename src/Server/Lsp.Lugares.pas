@@ -213,6 +213,7 @@ uses
   Lsp.Rutas,
   Lsp.Settings,
   Lsp.Discovery,
+  Lsp.Json,             // TextoEnJson: una ruta como la escribe el JSON de una tool
   System.StrUtils;
 
 var
@@ -640,6 +641,8 @@ var
   // la unidad ("L:"), que la necesita cuando la ruta acaba ahi
   procedure Anade(const AReal, ADecl, ABarra: string);
   begin
+    if MatchStr(AReal, Agujas) then
+      Exit; // la misma escritura dos veces (sin acentos ni barras, la del JSON es la otra)
     Agujas := Agujas + [AReal];
     Cambios := Cambios + [ADecl];
     if (Length(Decl) = 2) and (Decl[2] = ':') then
@@ -660,9 +663,12 @@ begin
     Real := PrefijoSinBarra(ConBarrasDeWindows(AReales[K].Trim));
     if not EsSitioDeLetraDeRed(Decl, Real) then
       Continue;
-    // las tres escrituras de la misma ruta: dobladas dentro de un JSON, las
-    // de git y las de Windows. Cada una vuelve con SUS barras
-    Anade(Real.Replace('\', '\\'), Decl.Replace('\', '\\'), '\\');
+    // las escrituras de la misma ruta: las de git y las de Windows, y cada una
+    // como la escribe el codificador JSON de la casa (TextoEnJson: las barras
+    // dobladas y un acento como \uXXXX; se doblaban a mano, y con un acento no
+    // casaba: revisor del paisaje de la 1.26, B). Cada una vuelve con SUS barras
+    Anade(TextoEnJson(Real), TextoEnJson(Decl), TextoEnJson('\'));
+    Anade(TextoEnJson(ConBarrasNormales(Real)), TextoEnJson(ConBarrasNormales(Decl)), TextoEnJson('/'));
     Anade(ConBarrasNormales(Real), ConBarrasNormales(Decl), '/');
     Anade(Real, Decl, '\');
   end;

@@ -790,11 +790,13 @@ end;
   (Size, Position, Align, Margins, Padding, los estilos). Un control oculto no se
   juzga. Lo que se solapa se dice, y no quita clean: en FMX un control sobre otro es
   como se compone un form, con un TRectangle de fondo y un TText encima. Sin
-  renderizador se dice, nunca clean:true (DSGN-027). }
-function LayoutFmx(const APath: string): string;
+  renderizador se dice, nunca clean:true (DSGN-027). AFuera: los nombres de lo que
+  se sale de su padre, en el orden de outsideParent (ConFueraDelPadre). }
+function LayoutFmx(const APath: string; out AFuera: TArray<string>): string;
 var
   Doc: TStyleDoc;
 begin
+  AFuera := nil;
   Doc := nil;
   Result := LoadDoc(APath, Doc);
   if Result <> '' then
@@ -856,8 +858,11 @@ begin
           var DH := (if C.EnContenido then C.CH else Padre.H);
           if not IsScrollBox(Padre.Clase) and ((C.X < DX) or (C.Y < DY) or
              (C.X + C.W > DX + DW) or (C.Y + C.H > DY + DH)) then
+          begin
             Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [C.Ruta, C.Clase, Linea, C.X, C.Y, C.X + C.W, C.Y + C.H,
               Padre.Ruta, DW, DH]));
+            AFuera := AFuera + [C.Ruta];
+          end;
           if IsPageContainer(Padre.Clase) or IsAutoLayout(Padre.Clase) or IsGridPanel(Padre.Clase) then
             Continue;
           for var J := I + 1 to High(R.Cajas) do
@@ -913,7 +918,7 @@ end;
   govern RESIZE - are not what this measures. Lo que se juzga sale de este texto; las
   cajas, si hay renderizador, de lo que resuelve la VCL (V24 de la 1.24: la banda de
   pestanas de un TPageControl no la descontaba). FMX, LayoutFmx. }
-function LayoutOf(const APath: string): string;
+function LayoutOf(const APath: string; out AFuera: TArray<string>): string;
 type
   TBox = record
     Nm, Cls, Align: string;
@@ -1107,8 +1112,11 @@ var
         if AKnown and not AScroll and not Managed and not InhUnknown and
            SameText(Align, 'alNone') and
            ((X < 0) or (Y < 0) or (X + W > AClientW) or (Y + H > AClientH)) then
+        begin
           Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [Nm, Cls,
             Kid.StartLine, X, Y, X + W, Y + H, AWhere, AClientW, AClientH]));
+          AFuera := AFuera + [Nm];
+        end;
       end;
 
       Inc(Cnt);
@@ -1180,13 +1188,14 @@ var
   end;
 
 begin
+  AFuera := nil;
   Doc := nil;
   // de que marco es, por EL juez (un .dfm de un modulo de datos de FMX tambien
   // es FMX): layout solo mide la VCL
   if not EsDesignerVcl(APath) then
   begin
     if EsDesignerFmx(APath) then
-      Exit(LayoutFmx(APath));
+      Exit(LayoutFmx(APath, AFuera));
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   end;
   Result := LoadDoc(APath, Doc);
@@ -1903,17 +1912,21 @@ begin
   end;
 end;
 
-{ insert y set parent= en un .dfm: si el control cae fuera del area de su
-  padre, la respuesta lo dice - lo que calcula layout, aqui al lado (David,
-  4-oct-2026). Un fallo, o un .fmx (layout no mide FMX), pasan tal cual. }
+{ insert y set parent=: si el control cae fuera del area de su padre, la
+  respuesta lo dice - lo que calcula layout, aqui al lado (David, 4-oct-2026),
+  tambien en FMX, que layout mide desde la 1.24. Lo suyo, por los NOMBRES que
+  layout da con sus avisos: se leia el texto del aviso por su prefijo, y un .fmx
+  pasaba tal cual con la razon de antes (revisor del paisaje de la 1.26, G). Un
+  fallo pasa tal cual. }
 function ConFueraDelPadre(const AResult, APath: string): string;
 var
   Ret, Lay: TJSONObject;
   Fuera, Suyas: TJSONArray;
   Nombre: string;
+  Nombres: TArray<string>;
 begin
   Result := AResult;
-  if EsFallo(AResult) or not EsDesignerVcl(APath) then
+  if EsFallo(AResult) then
     Exit;
   Ret := ObjetoJson(AResult);
   if Ret = nil then
@@ -1921,21 +1934,21 @@ begin
   try
     if not (Ret.TryGetValue<string>('inserted', Nombre) or Ret.TryGetValue<string>('moved', Nombre)) then
       Exit;
-    Lay := ObjetoJson(LayoutOf(APath.Trim));
+    Lay := ObjetoJson(LayoutOf(APath.Trim, Nombres));
     if Lay = nil then
       Exit;
     try
       Suyas := nil;
       if Lay.TryGetValue<TJSONArray>('outsideParent', Fuera) then
-        for var V in Fuera do
-          if V.Value.StartsWith(Nombre + ':') then
+        for var I := 0 to Min(Fuera.Count, Length(Nombres)) - 1 do
+          if SameText(Nombres[I], Nombre) then
           begin
             if Suyas = nil then
             begin
               Suyas := TJSONArray.Create;
               Ret.AddPair('outsideParent', Suyas);
             end;
-            Suyas.Add(V.Value);
+            Suyas.Add(Fuera.Items[I].Value);
           end;
     finally
       Lay.Free;
@@ -2013,7 +2026,10 @@ begin
     if MatchText(Cmd, ['check-binding', 'binding']) then
       Result := CheckBinding(Params.Path, Params.Unit_)
     else if Cmd = 'layout' then
-      Result := LayoutOf(Params.Path)
+    begin
+      var Fuera: TArray<string>;
+      Result := LayoutOf(Params.Path, Fuera);
+    end
     else if Cmd = 'tree' then
       Result := TreeOf(Params.Path, Params.MaxDepth) // (un negativo lo niega la capa de parametros, SYS-016)
     else if Cmd = 'lint' then

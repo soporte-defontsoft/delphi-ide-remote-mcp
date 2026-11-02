@@ -679,7 +679,9 @@ try:
                     mc.lee(FFMX)) is not None, r[:300])
     r = dsg(command='set', path=FFMX, component='Button1', parent='Layout1')
     check('F2 set parent= en FMX: a un TLayout', J(r).get('moved') == 'Button1' and J(r).get('to') == 'Layout1' and
-          'outsideParent' not in J(r), r[:300])
+          # y, como en VCL, dice que se sale (80 de ancho en un TLayout de 50): FMX se saltaba con la razon de
+          # antes de que layout lo midiera (revisor del paisaje de la 1.26, G)
+          any(x.startswith('Button1:') for x in J(r).get('outsideParent', [])), r[:300])
     r = dsg(command='delete', path=FFMX, component='Rectangle1')
     check('F2 delete en FMX', J(r).get('deleted') == 'Rectangle1' and 'Rectangle1' not in mc.lee(FFMX) and
           'Rectangle1' not in mc.lee(FPAS), r[:400])

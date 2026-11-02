@@ -187,6 +187,12 @@ function SalidaParaElAgente(const ASalida: string; AGestoBien: Boolean): string;
 function FetchFromTarget(const AProfile, ADprojPath, ARelPath, ADestDir: string;
   out ALocalFile: string): string;
 
+{ Parte la salida de un trabajo en lo que escribio el programa y su codigo de
+  salida. El centinela solo existe cuando el proceso TERMINO: mientras no esta,
+  el trabajo sigue en marcha. }
+function PartirSalida(const ATexto: string; out ASalida: string;
+  out ACodigo: Integer): Boolean;
+
 implementation
 
 uses
@@ -529,26 +535,30 @@ begin
     Result := MsgFmt(SN_REMOTERUN_ENV_ADDED_FMT, [Resto.Replace(' ', ', ')]);
 end;
 
-{ Parte la salida en lo que escribio el programa y su codigo de salida. El
-  centinela solo existe cuando el proceso TERMINO: mientras no esta, el
-  trabajo sigue en marcha. }
 function PartirSalida(const ATexto: string; out ASalida: string;
   out ACodigo: Integer): Boolean;
 var
   P: Integer;
-  Cola: string;
+  Texto, Linea: string;
 begin
   ACodigo := -1;
   ASalida := ATexto;
-  P := ATexto.LastIndexOf(JOB_RC);
-  Result := P >= 0;
+  // la inversa de McpRunJob.LineaRC: la ULTIMA linea, entera y con su salto
+  // (el vigia la escribe de una vez). En otro sitio es del programa, y sin su
+  // salto esta a medio escribir (un ___RC=1 de un 12): el trabajo sigue. Se
+  // aceptaba en cualquier sitio (revisor del paisaje de la 1.26, E)
+  if not TieneSaltoFinal(ATexto) then
+    Exit(False);
+  Texto := ATexto.TrimRight([#13, #10]);
+  P := Texto.LastIndexOf(#10);
+  Linea := Texto.Substring(P + 1).TrimRight([#13]);
+  Result := Linea.StartsWith(JOB_RC) and TryStrToInt(Linea.Substring(Length(JOB_RC)), ACodigo);
   if not Result then
+  begin
+    ACodigo := -1;
     Exit;
-  ASalida := ATexto.Substring(0, P).TrimRight;
-  Cola := ATexto.Substring(P + Length(JOB_RC)).Trim;
-  // un ___RC= a medio escribir (output lo trae mientras el vigia escribe)
-  // deja la cola vacia: PrimerTrozo, no Split()[0]
-  ACodigo := StrToIntDef(PrimerTrozo(Cola, [#10, #13]).Trim, -1);
+  end;
+  ASalida := (if P >= 0 then Texto.Substring(0, P) else '').TrimRight;
 end;
 
 { Un "no" del LANZADOR (el programa no esta, no es nativo...) llega como la

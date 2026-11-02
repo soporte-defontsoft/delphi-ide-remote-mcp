@@ -516,24 +516,10 @@ var
   procedure Anade(const AForma, ACambio: string);
   var
     Escrituras: TArray<string>;
-    J: TJSONString;
-    S: string;
   begin
+    // y las dos primeras como las escribe el JSON de una tool (EL juez: TextoEnJson)
     Escrituras := [AForma, ConBarrasNormales(AForma),
-      ConBarrasNormales(AForma).Replace(':', '%3A')];
-    for var K := 0 to 1 do
-    begin
-      if K = 0 then
-        J := TJSONString.Create(AForma)
-      else
-        J := TJSONString.Create(ConBarrasNormales(AForma));
-      try
-        S := J.ToJSON;
-        Escrituras := Escrituras + [Copy(S, 2, Length(S) - 2)];
-      finally
-        J.Free;
-      end;
-    end;
+      ConBarrasNormales(AForma).Replace(':', '%3A'), TextoEnJson(AForma), TextoEnJson(ConBarrasNormales(AForma))];
     for var E in Escrituras do
       if (E <> '') and not MatchStr(E, Result.Agujas) then
       begin

@@ -52,11 +52,32 @@ function ListaDeTextos(const ATexto: string; out ALista: TArray<string>): Boolea
   el resultado. }
 function ListaJson(const ATexto: string): TJSONArray;
 
+{ ATexto como lo escribe DENTRO de una cadena el codificador JSON de la casa
+  (TJSONString.ToJSON, sin sus comillas): las barras dobladas y lo que no es
+  ASCII como \uXXXX. EL juez de como viaja una ruta en el JSON de una tool: lo
+  preguntaba a mano el enmascarador de la casa (Lsp.Mascara) y lo imitaba el de
+  las rutas de red (Lsp.Lugares.FormaDeclaradaEnTexto), que con un acento no
+  casaba y dejaba el nombre de la maquina (revisor del paisaje de la 1.26, B). }
+function TextoEnJson(const ATexto: string): string;
+
 implementation
 
 uses
   System.SysUtils,
   System.Classes; // TStringList: los pares a reescribir
+
+function TextoEnJson(const ATexto: string): string;
+var
+  J: TJSONString;
+begin
+  J := TJSONString.Create(ATexto);
+  try
+    Result := J.ToJSON;
+    Result := Result.Substring(1, Length(Result) - 2); // sin las comillas
+  finally
+    J.Free;
+  end;
+end;
 
 function ObjetoJson(const ATexto: string): TJSONObject;
 var

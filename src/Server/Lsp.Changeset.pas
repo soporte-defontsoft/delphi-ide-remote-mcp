@@ -823,7 +823,14 @@ begin
             // whatever arrived, so the same source produced a CRLF file one
             // way and an LF one the other (measured 2026-08-25). One project,
             // one convention.
-            Op.Content := TextoQueNace(AContent, #13#10);
+            // Un fuente o un form nace como lo crean delphi_create y createunit
+            // (CRLF y su salto final); lo demas, como delphi_textedit create: en
+            // CRLF y sin anadirle el final (revisor del paisaje de la 1.26, D:
+            // un .json o un .txt salian con un salto que nadie escribio)
+            if EsDelMotorPascal(Op.Path) then
+              Op.Content := TextoQueNace(AContent, #13#10)
+            else
+              Op.Content := ConSalto(AContent, #13#10);
             if WillExist(C, Op.Path) then
               Exit(MsgFmt(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
           end;
