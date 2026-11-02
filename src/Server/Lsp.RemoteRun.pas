@@ -311,18 +311,6 @@ begin
   Result := Paclient(APaclient, PaclientPlazo(20), AProfile, AOutput, 45000);
 end;
 
-function JsonEsc(const S: string): string;
-var
-  J: TJSONString;
-begin
-  J := TJSONString.Create(S);
-  try
-    Result := J.ToJSON;
-  finally
-    J.Free;
-  end;
-end;
-
 function FetchFromTarget(const AProfile, ADprojPath, ARelPath, ADestDir: string;
   out ALocalFile: string): string;
 var

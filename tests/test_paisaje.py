@@ -86,13 +86,16 @@ REGLAS = [
     ('los comandos de adb con dispositivo en otra lista', r"'install'\s*,\s*'run'\s*,\s*'stop'", [],
      'ADB_CAMPOS (Lsp.Guard, P6): la tabla de la tool y de la puerta'),
     ('una linea del pintado del ayudante a mano',
-     r"\bResponde\(\s*FR_(?:ROOT|PACKAGES|RECT|SIZE|MS|COMPONENTS|NONVISUALS|FIDELITY|CAPTURE)\b",
+     r"\bResponde\(\s*FR_(?:ROOT|PACKAGES|RECT|SIZE|MS|COMPONENTS|NONVISUALS|FIDELITY|CAPTURE|BOX|PHASE)\b",
      [('FormRender.Comun.pas', 'RespondeRaiz'), ('FormRender.Comun.pas', 'RespondePaquetes'),
       ('FormRender.Comun.pas', 'RespondeRect'), ('FormRender.Comun.pas', 'RespondeTamano'),
       ('FormRender.Comun.pas', 'RespondeMs'), ('FormRender.Comun.pas', 'RespondeLoCargado'),
-      ('FormRender.Comun.pas', 'RespondeElPintado')],
-     'RespondeRaiz, RespondePaquetes, RespondeRect, RespondeTamano, RespondeMs, RespondeLoCargado y '
-     'RespondeElPintado (FormRender.Comun, P7)'),
+      ('FormRender.Comun.pas', 'RespondeElPintado'),
+      # la caja de un control (BOX=) y la fase en la que esta el ayudante (PHASE=), que la regla no veia (C11 del
+      # cierre de la 1.26): sus escritores
+      ('FormRender.Comun.pas', 'RespondeCaja'), ('FormRender.Comun.pas', 'CargaPaquetesDelIde')],
+     'RespondeRaiz, RespondePaquetes, RespondeRect, RespondeTamano, RespondeMs, RespondeLoCargado, '
+     'RespondeElPintado y RespondeCaja (FormRender.Comun, P7), y las fases en CargaPaquetesDelIde'),
     ('una medida del ayudante a mano', r"%d,%d,%d,%d",
      [('FormRender.Comun.pas', 'MedidasEnTexto'),
       # lo que se le contesta al agente, no el protocolo del ayudante
@@ -368,7 +371,7 @@ REGLAS = [
     # constantes de Lsp.ProjectUnits y en linea en el evaluador de Lsp.Preproceso (forma 4 de la 1.26). No hay juez
     # (ni dcc ni el motor dicen que nombres abren un condicional): gramatica PROPIA, UNA. TextoActivoEn distingue
     # IFDEF de IFNDEF porque EVALUA la condicion que abre
-    ('los nombres de los condicionales de Pascal a mano', r"'(?:IFDEF|IFNDEF|IFOPT|ELSEIF|ENDIF|IFEND)'",
+    ('los nombres de los condicionales de Pascal a mano', r"'(?:IF|ELSE|IFDEF|IFNDEF|IFOPT|ELSEIF|ENDIF|IFEND)'",
      [('Lsp.Pascal.pas', 'CondicionalDe'), ('Lsp.Preproceso.pas', 'TextoActivoEn')],
      'CondicionalDe (Lsp.Pascal, forma 4 de la 1.26): que hace con su bloque cada directiva condicional'),
     # ...y su gemela de las directivas de FICHERO (I, R, L): la tenian a mano la mudanza y la puerta del build, el
@@ -398,8 +401,9 @@ REGLAS = [
     # raiz. Lo escribian tres sitios de la purga y el confinamiento (forma 15 de la 1.26); sin identidad (el
     # operador) nada es de otro, y la raiz misma (un nombre vacio) no es la carpeta de nadie
     ('el agente de la llamada comparado a mano',
-     r"\b(?:SameText|AnsiSameText|CompareText|SameStr)\s*\([^)]*\b(?:Me|CurrentAgent|TCurrentAgent)\b|"
-     r"\b(?:CurrentAgent|TCurrentAgent)\s*=\s*[A-Za-z]",
+     # (C11 del cierre de la 1.26: tambien a la derecha, con <> y en otra variable, Who)
+     r"\b(?:SameText|AnsiSameText|CompareText|SameStr)\s*\([^)]*\b(?:Me|Who|CurrentAgent|TCurrentAgent)\b|"
+     r"\b(?:CurrentAgent|TCurrentAgent)\s*(?:=|<>)\s*[A-Za-z]|[A-Za-z]\w*\s*(?:=|<>)\s*(?:CurrentAgent|TCurrentAgent)\b",
      [('Lsp.Identidad.pas', 'EsDelAgente')],
      'EsDelAgente y EsDeOtroAgente (Lsp.Identidad, forma 15 de la 1.26): el agente de la llamada por su nombre'),
     # las PALABRAS del protocolo del nodo a mano: las ordenes que el servidor le da (Mcp.Tools.Desktop) y que leen
@@ -1005,6 +1009,53 @@ REGLAS = [
     ('lo que recibe ParamStr juzgado a mano', r"\.Contains\(\s*(?:'\"'|#34)\s*\)",
      [('Lsp.ProcessLaunch.pas', 'LlegaAParamStr')],
      'LlegaAParamStr (Lsp.ProcessLaunch): EL juez de un argumento para un programa Delphi, junto a ComillasSinEscape'),
+    # ---- C11 del revisor del paisaje del cierre de la 1.26: formatos que ninguna regla miraba
+    # una macro $(X) sustituida a mano. Los expansores son DOS, deuda declarada: ExpandIdeMacros (la tabla del IDE,
+    # con macros dentro de macros) y ExpandeReservadas (las propiedades reservadas de msbuild, una pasada); y
+    # EffectiveProperty lee $(ATag) como msbuild, lo que valia hasta ahi
+    ('una macro sustituida a mano', r"\.Replace\(\s*'\$\(",
+     [('Lsp.Discovery.pas', 'ExpandIdeMacros'), ('Lsp.Dproj.pas', 'ExpandeReservadas'),
+      ('Lsp.Dproj.pas', 'EffectiveProperty')],
+     'ExpandIdeMacros (Lsp.Discovery) y ExpandeReservadas (Lsp.Dproj): quien sustituye una macro'),
+    # la autorizacion de X de una sesion Wayland: la mascara de su fichero vive en el nodo, con su texto
+    ('la autorizacion de X de Wayland a mano', r"mutter-Xwaylandauth",
+     [('Mld.Sesion.pas', '*'), ('Mld.Textos.pas', '*')],
+     'MASCARA_XWAYLANDAUTH (Mld.Sesion): el fichero de la autorizacion por su mascara'),
+    # la cuenta del servidor la dice Windows por el SID del proceso, nunca el entorno, que pone quien arranca el
+    # proceso (formas 13 y 19 de la 1.26)
+    ('la cuenta leida del entorno', r"'USER(?:NAME|DOMAIN)'", [],
+     'NombreDeEstaCuenta y SidDelProceso (Lsp.Sandbox): la cuenta por Windows'),
+    ('el texto del nodo codificado a mano', r"'%2[25]'",
+     [('Lsp.TextoDelNodo.pas', 'TextoParaElNodo'), ('Lsp.TextoDelNodo.pas', 'TextoDelServidor')],
+     'TextoParaElNodo y su inversa TextoDelServidor (Lsp.TextoDelNodo)'),
+    # la primera y la ultima linea de un trabajo del lanzador: viven en NodeProtocolo.inc, que esta regla no recorre
+    ('las lineas del lanzador a mano', r"'___(?:RC|ENV)='", [],
+     'JOB_RC y JOB_ENV (NodeProtocolo.inc, src\\DesktopNode)'),
+    # un texto como lo escribe el codificador JSON: JsonEsc (Lsp.RemoteRun) estaba muerto y la peticion de
+    # completion lo hacia en linea
+    ('un texto a JSON a mano', r"\b(?!Result\b)\w+\s*:=\s*TJSONString\.Create\(",
+     [('Lsp.Json.pas', 'TextoEnJson')],
+     'TextoEnJson (Lsp.Json): un texto como lo escribe el codificador JSON de la casa'),
+    ('el SID del proceso a mano', r"\bGetTokenInformation\s*\(",
+     [('Lsp.Sandbox.pas', 'SidDelProceso')],
+     'SidDelProceso (Lsp.Sandbox): la identidad del proceso, por su token'),
+    # un JSON leido a mano: 'ParseJSONValue(...) as TJSONObject' caia con un array (ronda 16) y estaba otra vez en
+    # upload; el enmascarador recorre cualquier valor
+    ('un JSON leido a mano', r"\bParseJSONValue\s*\(",
+     [('Lsp.Json.pas', 'ObjetoJson'), ('Lsp.Json.pas', 'ListaJson'), ('Lsp.Json.pas', 'ListaDeTextos'),
+      ('Lsp.Mascara.pas', 'EnmascaraConCitas'), ('Lsp.Mascara.pas', 'EnmascaraJsonSalvo'),
+      # el armazon MCP (vendor) lee SU protocolo: el cuerpo de una peticion, la respuesta de una tool, el log;
+      # las que llevan 'as TJSONObject' leen un objeto (detras de un StartsWith('{'), o el ToJSON de un objeto), y
+      # un JSON roto da nil, que el cast deja en nil
+      ('MCPServer.JsonRpcProcessor.pas', '*'), ('MCPServer.IdHTTPServer.pas', '*'), ('MCPServer.ToolsManager.pas', '*'),
+      ('MCPServer.Logger.pas', '*')],
+     'ObjetoJson, ListaJson y ListaDeTextos (Lsp.Json): un objeto, una lista (tambien dos veces codificada)'),
+    # la papelera o la temporal como un trozo de una ruta, por su texto: el juez es EnPapelera / EnTemporal
+    # (EnCarpetaLlamada, sobre la ruta canonica); SkipReason es el atajo de los recorredores, que juzgan el texto
+    # de lo que recorren sin ir al disco por cada fichero
+    ('una carpeta del servidor en una ruta por su texto', r"'\\'\s*\+\s*(?:TrashFolderName|TempFolderName)\b",
+     [('Lsp.References.pas', 'SkipReason')],
+     'EnPapelera y EnTemporal (Lsp.Guard, EnCarpetaLlamada); SkipReason, el de los recorredores'),
     ('la orden del renderizador de forms', r"'[^']*--(?:path|state|component|nonvisual|root|style|bds)\b",
      [('Lsp.FormRender.pas', 'ComponeOrdenDeRender'), ('FormRender.Comun.pas', 'ParseaArgumentos'),
       ('FormRender.Textos.pas', '*')],
@@ -2014,6 +2065,15 @@ PLANTADO = {
     'el exe de un renderizador de forms': "  E := ServerDir('DelphiFormRenderVcl.exe');",
     'el exe del conversor de estilos': "      Mira(ServerDir, 'DelphiStyleConvert.*');",
     'lo que recibe ParamStr juzgado a mano': "  if AArg.Contains('\"') then",
+    'una macro sustituida a mano': "  T := T.Replace('$(BDS)', Raiz, [rfReplaceAll]);",
+    'la autorizacion de X de Wayland a mano': "  M := Home + '/.mutter-Xwaylandauth.*';",
+    'la cuenta leida del entorno': "  U := GetEnvironmentVariable('USERNAME');",
+    'el texto del nodo codificado a mano': "  T := T.Replace('\"', '%22');",
+    'las lineas del lanzador a mano': "  if L.StartsWith('___RC=') then",
+    'un texto a JSON a mano': "  Q := TJSONString.Create(S);",
+    'el SID del proceso a mano': "  GetTokenInformation(Tok, TokenUser, @B[0], N, N);",
+    'un JSON leido a mano': "  O := TJSONObject.ParseJSONValue(T) as TJSONObject;",
+    'una carpeta del servidor en una ruta por su texto': "  if P.Contains('\\' + TrashFolderName + '\\') then",
     'la orden del renderizador de forms': "  O := '\"' + Exe + '\" --path \"' + P + '\"';",
     'la linea de objeto de un form': "  L := 'object ' + Nombre + ': ' + Clase;",
     'un componente por su ruta en el renderizador': "  C := FindNestedComponent(ARaiz, ANombre);",
@@ -2121,6 +2181,21 @@ for nombre_regla, forma in (
     regla = next(r for r in REGLAS if r[0] == nombre_regla)
     cazados = fuera_de_casa(regla, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                      'PliegaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (nombre_regla, forma.strip()), len(cazados) == 1, cazados)
+
+# ...y las formas que tres reglas no veian (C11 del revisor del paisaje del cierre de la 1.26): el agente a la
+# derecha, con <> o en otra variable; el IF y el ELSE solos; la caja y la fase del ayudante
+for nombre_regla, forma in (
+        ('el agente de la llamada comparado a mano', "  if Dueno = CurrentAgent then"),
+        ('el agente de la llamada comparado a mano', "  if TCurrentAgent <> Dueno then"),
+        ('el agente de la llamada comparado a mano', "  if SameText(Dueno, Who) then"),
+        ('los nombres de los condicionales de Pascal a mano', "    else if D.Nombre = 'ELSE' then"),
+        ('los nombres de los condicionales de Pascal a mano', "    if D.Nombre = 'IF' then"),
+        ('una linea del pintado del ayudante a mano', "  Responde(FR_PHASE, 'form');"),
+        ('una linea del pintado del ayudante a mano', "  Responde(FR_BOX, R + '|' + C);")):
+    regla = next(r for r in REGLAS if r[0] == nombre_regla)
+    cazados = fuera_de_casa(regla, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                     'OtraFormaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "%s": tambien %s' % (nombre_regla, forma.strip()), len(cazados) == 1, cazados)
 
 # el trozo de una ruta bajo una carpeta, en sus otras formas (V106 de la 1.23.1): el Copy de la

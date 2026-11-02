@@ -987,13 +987,9 @@ begin
     // As JSON, not as it comes: a quote or a backslash in it made the whole
     // request unparseable, and the engine answers NOTHING to a request it
     // cannot parse (measured 2026-09-30: not one message in 6 s) - the
-    // caller waited out its 30 s.
-    var Quoted := TJSONString.Create(ATriggerCharacter);
-    try
-      Ctx := Format(',"context":{"triggerKind":2,"triggerCharacter":%s}', [Quoted.ToJSON]);
-    finally
-      Quoted.Free;
-    end;
+    // caller waited out its 30 s. Por EL codificador de la casa (TextoEnJson),
+    // con sus comillas: lo hacia aqui en linea (C11 del cierre de la 1.26)
+    Ctx := Format(',"context":{"triggerKind":2,"triggerCharacter":"%s"}', [TextoEnJson(ATriggerCharacter)]);
   end
   else
     Ctx := ',"context":{"triggerKind":1}';

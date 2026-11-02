@@ -265,7 +265,8 @@ uses
   Lsp.Lugares,
   Lsp.Mascara,
   Lsp.DesignerForma,
-  Lsp.Sandbox;
+  Lsp.Sandbox,
+  Lsp.Json;
 
 const
   // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo
@@ -1641,7 +1642,7 @@ begin
     try
       if not ARespuesta.TrimLeft.StartsWith('{') then
         Exit;
-      J := TJSONObject.ParseJSONValue(ARespuesta) as TJSONObject;
+      J := ObjetoJson(ARespuesta); // EL lector de un JSON que tiene que ser un objeto (C11 del cierre)
       if (J = nil) or (J.GetValue('error') <> nil) or (J.GetValue('path') = nil) then
         Exit;
       var Ruta := J.GetValue('path').Value;
