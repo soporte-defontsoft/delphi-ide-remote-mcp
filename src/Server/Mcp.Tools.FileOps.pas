@@ -684,6 +684,13 @@ begin
       // orphan their copy for the taking. But an orphan marker (copy already
       // restored/purged) or your own is yours to sweep: otherwise the trash
       // could never be left clean by the agent that made it.
+      // ...pero una "marca" DENTRO de la copia de otro es de esa copia: un
+      // fichero que se llama asi (algo.by, llegado por git, copy o un zip) en
+      // la carpeta que otro tiro no tiene hermano y se purgaba sin preguntar
+      // de quien era lo que lo contiene (C5 del cierre de la 1.26, medido)
+      var Contenedor := DuenoEnLaPapelera(CanonPurge);
+      if EsDeOtroAgente(Contenedor) then
+        Exit(MsgFmt(SR_FILE_PURGE_NOT_YOURS_FMT, [Contenedor]));
       var SibMk := CopiaDeLaMarca(CanonPurge);
       var Mk := TrashOwner(SibMk); // owner is THIS marker's content
       if (TFile.Exists(SibMk) or TDirectory.Exists(SibMk)) and EsDeOtroAgente(Mk) then

@@ -107,6 +107,21 @@ try:
     check('I6 una peticion sin Mcp-Session-Id NO es el operador: no purga la copia de bob',
           mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and 'bob' in r and os.path.exists(cb[0]),
           r[:200])
+
+    # I7 - un fichero que se LLAMA como una marca (algo.by) dentro de la carpeta que bob tiro: la purga
+    # lo tomaba por una marca huerfana (no hay 'algo' a su lado) y alice lo borraba para siempre sin
+    # preguntar de quien es la copia que lo contiene (C5 del revisor del paisaje del cierre de la 1.26).
+    # La jaula niega CREAR un *.by, pero llega por git, por copy o en un zip: aqui lo planta la bateria
+    CARP = os.path.join(BASE, 'carp')
+    os.makedirs(CARP)
+    open(os.path.join(CARP, 'algo.by'), 'w').write('de bob')
+    cli.call('delphi_delete', {'path': CARP}, sid=bob)
+    cc = trashed('carp')
+    dentro = os.path.join(cc[0], 'algo.by') if cc else ''
+    r = cli.call('delphi_delete', {'path': dentro, 'purge': True}, sid=alice)
+    check('I7 un *.by dentro de la copia de bob no es una marca de alice: no lo purga',
+          mc.rechazado(r) and mc.es(r, 'SR_FILE_PURGE_NOT_YOURS_FMT') and 'bob' in r and os.path.exists(dentro),
+          (cc, r[:200]))
 finally:
     proc.kill()
 

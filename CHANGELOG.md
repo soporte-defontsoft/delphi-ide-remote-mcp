@@ -10,6 +10,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- `delphi_delete purge` does not let one agent purge a file named like an owner marker (`*.by`) inside the copy another agent sent to the trash: it was taken for an orphan marker, and nobody asked whose copy held it. Such a file arrives by git, a copy or a zip; the trash's owner rule now covers it.
 - `delphi_changeset` does not create a project file (`.dproj`, `.groupproj`), as `EDIT-128` already said and `delphi_textedit` already did: it refused only to edit one, and a `create` was staged, previewed clean and written. Moving or deleting one is still the operator's, as in `delphi_move` and `delphi_delete`.
 - `delphi_build target=Deploy` that fails no longer tells you to kill a remote-run job that does not exist. `deployLockedNote` looked for `E0017` and the watcher's name anywhere in msbuild's console, so a folder with such a name was enough; it now reads the lines msbuild classifies as errors, with both on the same line.
 - `RENDER-026` says which file holds the inline it left out: the form you asked for may not be the one that closes the cycle.
