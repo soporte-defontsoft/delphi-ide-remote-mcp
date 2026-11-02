@@ -73,8 +73,8 @@ function SkipIdeArtifacts(const APath: string): Boolean; overload;
   sent the reader looking for build output that did not exist (2026-08-25). }
 function SkipReason(const APath: string; AAllowTrash: Boolean): string;
 
-{ Same, but when AAllowTrash the recoverable-trash folders (__delphi-patch /
-  __pascal-patch) are NOT treated as skip reasons - so delphi_list can, on
+{ Same, but when AAllowTrash the recoverable trash (__delphi-patch, the
+  server's own) is NOT treated as a skip reason - so delphi_list can, on
   explicit request, show what was deleted for a restore (field round 6, R6-B).
   Every other artifact (__history, Win32/Win64, .git...) is still skipped. }
 function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean; overload;
@@ -202,7 +202,8 @@ uses
   Lsp.Settings,
   Lsp.Rutas,            // EsRutaAbsoluta: LA regla de ruta completa
   Lsp.Herencia,         // LA cadena de ancestros por el motor (TCadenaPorElMotor)
-  Lsp.Listas;
+  Lsp.Listas,
+  Lsp.Casa;
 
 function IdentifierAt(const ALineText: string; ACol: Integer; out AInicio: Integer): string;
 var
@@ -288,10 +289,12 @@ end;
     PAPELERA   se salta salvo que te lo pidan (includeTrash=true), porque de
                ahi SI se restaura.
 
-  El nombre de la carpeta de temporales lo pone TempFolderName (Lsp.Casa), y
-  el de la papelera TrashFolderName (Lsp.Casa); aqui van literales porque un
-  array const no puede llamar a una funcion. Que digan lo mismo no se deja a
-  la buena fe: lo comprueba la bateria (test_round44 T6c y T6f). }
+  Los nombres de la temporal y de la papelera los ponen sus nombradores
+  (TempFolderName y TrashFolderName, Lsp.Casa) y SkipReason compone con
+  ellos. Eran literales aqui, que test_round44 (T6c, T6f) comparaba con los
+  nombradores, y la papelera llevaba al lado otro nombre: las copias de una
+  tool que no es del servidor, escondidas como papelera sin serlo para nadie
+  mas (forma 9 de la 1.26). }
 const
   // __pycache__ es compilado (el de Python): el modo ficheros de delphi_list
   // lo ensenaba entero con pattern=* y solo el modo dirs lo escondia
@@ -300,9 +303,6 @@ const
   CARPETAS_ARTEFACTO: array [0 .. 7] of string = (
     '\' + CARPETA_HISTORIA_DEL_IDE + '\', '\' + CARPETA_RECUPERACION_DEL_IDE + '\',
     '\win32\', '\win64\', '\debug\', '\release\', '\dcu\', '\__pycache__\');
-  CARPETA_TEMPORAL = '\__delphi-temp\';
-  CARPETAS_PAPELERA: array [0 .. 1] of string = (
-    '\__pascal-patch\', '\__delphi-patch\');
 
 { Saltar y el motivo de saltar son UNA decision: la toma SkipReason. }
 function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean;
@@ -359,15 +359,13 @@ begin
   Low := ClaveDeRuta(APath);
   if Low.Contains(ClaveDeRuta('\.git\')) then
     Exit(SKIP_GIT);
-  if Low.Contains(ClaveDeRuta(CARPETA_TEMPORAL)) then
+  if Low.Contains(ClaveDeRuta('\' + TempFolderName + '\')) then
     Exit(SKIP_TEMP);
   for B in CARPETAS_ARTEFACTO do
     if Low.Contains(ClaveDeRuta(B)) then
       Exit(SKIP_ARTIFACTS);
-  if not AAllowTrash then
-    for B in CARPETAS_PAPELERA do
-      if Low.Contains(ClaveDeRuta(B)) then
-        Exit(SKIP_TRASH);
+  if not AAllowTrash and Low.Contains(ClaveDeRuta('\' + TrashFolderName + '\')) then
+    Exit(SKIP_TRASH);
 end;
 
 { THiddenCount }

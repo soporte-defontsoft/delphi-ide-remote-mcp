@@ -587,11 +587,12 @@ begin
           Tam: Int64;
           Fecha: TDateTime;
         begin
-          // ni las carpetas del servidor (CarpetasDesechables), ni los .dcu
+          // ni las carpetas del servidor (EsCarpetaDesechable: con MatchText,
+          // el locale, una que NTFS separa tampoco se copiaba), ni los .dcu
           // (son de compilar), ni los .rsm (los simbolos del depurador
           // remoto: 18 MB en un test vacio, medido)
           if TDirectory.Exists(APath) then
-            Exit(MatchText(TPath.GetFileName(APath), CarpetasDesechables));
+            Exit(EsCarpetaDesechable(TPath.GetFileName(APath)));
           Result := MatchText(TPath.GetExtension(APath), ['.dcu', '.rsm']);
           // lo que SI se copia, se cuenta: el copiador pregunta esto lo
           // ultimo, por lo que va a copiar de verdad

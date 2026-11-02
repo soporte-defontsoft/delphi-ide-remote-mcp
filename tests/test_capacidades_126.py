@@ -653,6 +653,18 @@ check('R6 el conversor de estilos no escribe en la carpeta del agente: corre en 
 check('R6 ...y uno que dice otro protocolo no se lee (STYLE-066)',
       mc.es(r, 'SR_STYLES_CONVERSOR_OTRA_VERSION_FMT'), r[:400])
 
+# R9 la papelera del servidor es UNA, __delphi-patch: la carpeta de copias de una tool que no es del servidor
+# se escondia en delphi_list y delphi_search como si fuera papelera, sin serlo para nadie mas (se escribia y se
+# borraba como cualquier carpeta; roja medida contra p126u con su nombre). Una carpeta de copias de otro nombre
+# es una carpeta como las demas; que ningun nombre asi vuelva escrito a mano lo vigila test_paisaje
+R9 = os.path.join(JAIL, 'r9', '__copias-patch')
+os.makedirs(R9)
+escribe(os.path.join(R9, 'Copia9.pas'), 'unit Copia9;\ninterface\nimplementation\nend.\n')
+l9 = s.call('delphi_list', {'root': os.path.dirname(R9)})
+b9 = s.call('delphi_search', {'root': os.path.dirname(R9), 'query': 'unit Copia9'})
+check('R9 una carpeta de copias de otro nombre se lista y se busca como cualquier otra (no es la papelera del servidor)',
+      'Copia9.pas' in l9 and 'Copia9.pas' in b9 and 'hiddenTrash' not in l9 + b9, l9[:300] + ' | ' + b9[:300])
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')

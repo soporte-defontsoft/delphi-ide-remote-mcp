@@ -93,6 +93,7 @@ type
     [Test] procedure OtrasMayusculasFueraDeAZDanLaMismaClave;
     [Test] procedure LaBarraFinalNoCambiaLaClave;
     [Test] procedure UnaListaDeRutasSeparaLoQueNtfsSepara;
+    [Test] procedure LasCarpetasDelServidorPorSuNombreComoNtfs;
   end;
 
   { V204 de la 1.23.1: el Include de un proyecto se resuelve por EL resolutor
@@ -1728,6 +1729,19 @@ begin
   finally
     L.Free;
   end;
+end;
+
+procedure TClaveDeCarpetaTests.LasCarpetasDelServidorPorSuNombreComoNtfs;
+begin
+  // los lectores de la papelera y de las desechables juzgan el NOMBRE como
+  // NTFS: las mayusculas no cuentan, y U+FE63 por el guion -que el locale de
+  // MatchText junta con el guion, medido- es otra carpeta (forma 9 de la 1.26)
+  Assert.IsTrue(EsNombreDePapelera('__DELPHI-PATCH'), 'la papelera, en mayusculas');
+  Assert.IsFalse(EsNombreDePapelera('__delphi'#$FE63'patch'), 'otro guion: otra carpeta');
+  Assert.IsFalse(EsNombreDePapelera('__delphi-patch2'), 'otro nombre');
+  Assert.IsTrue(EsCarpetaDesechable('__Delphi-Temp'), 'la temporal');
+  Assert.IsTrue(EsCarpetaDesechable('__delphi-patch'), 'la papelera');
+  Assert.IsFalse(EsCarpetaDesechable('__delphi'#$FE63'temp'), 'otro guion: otra carpeta');
 end;
 
 initialization

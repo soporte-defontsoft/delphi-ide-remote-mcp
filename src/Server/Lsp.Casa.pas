@@ -198,6 +198,11 @@ function SlugDeAgente(const S: string): string;
 { El nombre de la carpeta de copias ('__delphi-patch'), para quien tenga que
   reconocerla. Estaba declarada DOS veces, en Lsp.Patch y en Mcp.Tools.FileOps. }
 function TrashFolderName: string;
+{ ANombre (el de UNA entrada, sin su carpeta) es el de la papelera, como NTFS
+  compara dos nombres (SameFileName): el lector de TrashFolderName para quien
+  recorre una carpeta. Lo juzgaban a mano tres sitios, uno con SameText (forma
+  9 de la 1.26). Una ruta entera la juzga EnPapelera (Lsp.Guard). }
+function EsNombreDePapelera(const ANombre: string): Boolean;
 { La papelera de APath (un fichero o una carpeta): la __delphi-patch de su
   carpeta. LA forma de componerla: la escribian a mano tres sitios de
   Lsp.Patch (TrashDayDir con SinBarraFinal, BackupFile y el restore sin el;
@@ -491,6 +496,11 @@ end;
 function TrashFolderName: string;
 begin
   Result := BACKUP_SUB;
+end;
+
+function EsNombreDePapelera(const ANombre: string): Boolean;
+begin
+  Result := SameFileName(ANombre, BACKUP_SUB);
 end;
 
 function CarpetaDePapelera(const APath: string): string;

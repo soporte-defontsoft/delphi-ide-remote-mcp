@@ -230,10 +230,9 @@ REGLAS = [
      'EXT_MANIFIESTO, EsManifiesto y ManifiestoDe (Lsp.Patch, 1.22.2): tres compositores y tres '
      'reconocedores lo escribian a mano en el build, la mudanza y config'),
     # tambien con la barra delante ('\__delphi-temp\', la forma de los saltos de Lsp.References): esa no la
-    # veia y una tercera copia asi entraba sin que nadie la viera (P10 de la revision de Opus 5.5). Las dos
-    # lineas declaradas de Lsp.References (un array const no puede llamar a una funcion; las vigila
-    # test_round44 T6c/T6f) quedan fuera por su forma, como DESIGNER_EXTS
-    ('__delphi-temp', r"^(?!\s*CARPETA_TEMPORAL\s*=).*'\\?__delphi-temp",
+    # veia y una tercera copia asi entraba sin que nadie la viera (P10 de la revision de Opus 5.5). Sin
+    # excepciones desde la forma 9 de la 1.26: los saltos de Lsp.References componen con los nombradores
+    ('__delphi-temp', r"'\\?__delphi-temp",
      [('Lsp.Casa.pas', 'TempFolderName')], 'la casa del servidor tiene UN nombrador'),
     # las copias muertas del IDE por su nombre: tres formas a mano en la puerta de escribir, la segunda
     # barrera de delphi_edit y el buscador de fuentes (A10 de la 1.23); los nombres viven en Lsp.Guard
@@ -340,8 +339,20 @@ REGLAS = [
      r"'(?:AGENTS-VAULT|AGENTS-VAULT-WRITE|MEMORY|VAULT-INSTRUCTIONS)\.md'",
      [('Mcp.Vault.Seed.pas', '*')],
      'VAULT_REGLAS / EsFicheroDeGobierno (Mcp.Vault.Seed, V191 de la 1.23.1)'),
-    ('__delphi-patch', r"^(?!\s*'\\__pascal-patch\\',).*'\\?__delphi-patch",
+    # cualquier carpeta de copias por su nombre, no solo la nuestra: Lsp.References escondia como papelera
+    # una segunda, de una tool que no es del servidor, y para todo lo demas era una carpeta (forma 9 de la
+    # 1.26). La papelera es UNA, y quien la reconoce por el nombre pregunta a EsNombreDePapelera o EnPapelera
+    ('__delphi-patch', r"'\\?__[\w-]*-patch",
      [('Lsp.Casa.pas', '*')], 'BACKUP_SUB / TrashFolderName (Lsp.Casa desde el 8-oct-2026)'),
+    # el NOMBRE de una entrada comparado a mano con el de la papelera o la temporal: tres jueces distintos
+    # (SameText, SameFileName, MatchText) en cuatro sitios, y MatchText con el locale no copiaba a la caja de
+    # delphi_test una carpeta que NTFS separa de __delphi-temp (U+FE63 por el guion; forma 9 de la 1.26)
+    ('el nombre de una carpeta del servidor juzgado a mano',
+     r"\b(?:Same(?:Text|FileName)|AnsiSameText|(?:Ansi)?MatchText|(?:Ansi)?IndexText|RutaEnLista)\s*\("
+     r"[^;]*\b(?:TrashFolderName|TempFolderName|CarpetasDesechables|BACKUP_SUB)\b",
+     [('Lsp.Casa.pas', 'EsNombreDePapelera'), ('Lsp.Guard.pas', 'EsCarpetaDesechable')],
+     'EsNombreDePapelera (Lsp.Casa) y EsCarpetaDesechable (Lsp.Guard), por el juez de NTFS (forma 9 de la '
+     '1.26)'),
     ('StyleName o StyleLookup leidos con una regex', r"'Style(?:Name|Lookup)\\s",
      # la asignacion de un .pas (StyleLookup := ...;), que no es una linea de form
      [('Mcp.Tools.Styles.pas', 'LintStyles')],
@@ -1797,6 +1808,7 @@ PLANTADO = {
     'el comodin de una lista blanca a mano': "  if SameText(E.Trim, 'all') then Exit;",
     '__delphi-temp': "  if ContainsText(P, '\\__delphi-temp\\') then",
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
+    'el nombre de una carpeta del servidor juzgado a mano': "        if SameText(Nombre, TrashFolderName) then",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",

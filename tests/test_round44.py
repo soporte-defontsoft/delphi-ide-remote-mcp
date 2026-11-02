@@ -278,22 +278,21 @@ try:
     check('T8d la temporal ENTERA no: es de todos los agentes del servidor',
           mc.rechazado(d4) and mc.es(d4, 'SR_FILE_DELETE_TEMP_ROOT_FMT') and os.path.isdir(TEMP_JAULA),
           d4[:200])
-    # La promesa de Lsp.References.pas ("que los dos digan lo mismo no se
-    # deja a la buena fe: lo comprueba la bateria") no la comprobaba nadie
-    # hasta la auditoria. Esta es esa comprobacion: el nombrador
-    # (TempFolderName, Lsp.Casa) y el lector literal (CARPETAS_ARTEFACTO)
-    # tienen que decir la misma carpeta.
+    # El lector de Lsp.References (SkipReason) tenia los nombres como
+    # literales, y esto comprobaba que dijeran lo mismo que el nombrador
+    # (TempFolderName, Lsp.Casa). Desde la forma 9 de la 1.26 compone con el
+    # nombrador: lo que se comprueba es que lo haga.
     g_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Casa.pas'), 'rb').read().decode('utf-8', 'replace')
     r_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.References.pas'), 'rb').read().decode('utf-8', 'replace')
-    check('T6c el literal del lector coincide con el nombrador',
-          "Result := '__delphi-temp';" in g_src and "'\\__delphi-temp\\'" in r_src,
-          'el nombrador o el lector han cambiado de carpeta sin avisarse')
+    check('T6c el lector de la temporal compone con su nombrador',
+          "Result := '__delphi-temp';" in g_src and "'\\' + TempFolderName + '\\'" in r_src,
+          'el lector de Lsp.References ya no compone con TempFolderName')
     # ...y la PAPELERA, su hermana, por el mismo motivo: su nombrador es
     # BACKUP_SUB / TrashFolderName (Lsp.Casa, desde el 8-oct-2026)
     p_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Casa.pas'), 'rb').read().decode('utf-8', 'replace')
-    check('T6f el literal de la papelera del lector coincide con su nombrador',
-          "BACKUP_SUB = '__delphi-patch';" in p_src and "'\\__delphi-patch\\'" in r_src,
-          'el nombrador o el lector de la papelera han cambiado sin avisarse')
+    check('T6f el lector de la papelera compone con su nombrador',
+          "BACKUP_SUB = '__delphi-patch';" in p_src and "'\\' + TrashFolderName + '\\'" in r_src,
+          'el lector de Lsp.References ya no compone con TrashFolderName')
 finally:
     try:
         proc.kill()

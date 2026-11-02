@@ -423,6 +423,11 @@ procedure PurgaAlPasar(const ATrashDir: string);
   la conoce, sin tocar la logica (David, 25-sep-2026). Todas empiezan por
   __: es la tercera barrera de BorradoDenegado. }
 function CarpetasDesechables: TArray<string>;
+{ ANombre (el de UNA entrada, sin su carpeta) es el de una de ellas, como NTFS
+  compara dos nombres (RutaEnLista). La copia de delphi_test lo preguntaba con
+  MatchText, que pliega con el locale: '__delphi' + U+FE63 + 'temp', otra
+  carpeta para NTFS, se quedaba sin copiar (medido; forma 9 de la 1.26). }
+function EsCarpetaDesechable(const ANombre: string): Boolean;
 
 
 { LOS sitios que un borrado o una mudanza nunca pueden SER ni CONTENER: toda
@@ -3507,6 +3512,11 @@ begin
   Result := [TempFolderName, TrashFolderName];
 end;
 
+function EsCarpetaDesechable(const ANombre: string): Boolean;
+begin
+  Result := RutaEnLista(ANombre, CarpetasDesechables);
+end;
+
 
 function LugaresProtegidos: TArray<string>;
 begin
@@ -3651,7 +3661,7 @@ begin
     // nombre normal, o una ruta mal calculada, no habilita nada.
     if not Seg.StartsWith('__') then
       Continue;
-    if (I < High(Segs)) and RutaEnLista(Seg, CarpetasDesechables) then
+    if (I < High(Segs)) and EsCarpetaDesechable(Seg) then
       Desechable := True // DENTRO de una desechable, nunca la carpeta misma
     else if EsCarpetaDescarga(Seg) then
       Desechable := True;
@@ -3971,7 +3981,7 @@ var
           Vistos.Add(RealSub, True);
         end;
         // La papelera se purga solo despues de admitir la lectura del enlace.
-        if SameFileName(TPath.GetFileName(Sub), TrashFolderName) then
+        if EsNombreDePapelera(TPath.GetFileName(Sub)) then
           PurgaAlPasar(Sub);
         // ...y lo que quien llama omite no se recorre (despues de la purga:
         // la papelera se purga al pasar aunque no se entre en ella)
@@ -4106,7 +4116,7 @@ var
         Nombre := TPath.GetFileName(E);
         // una papelera de dentro no es contenido: tampoco en la copia de
         // seguridad de un move, que la duplicaba (viaja con la carpeta; V21)
-        if SameText(Nombre, TrashFolderName) then
+        if EsNombreDePapelera(Nombre) then
           Continue;
         // un VAULT (de cualquier workspace) es de las tools vault_*: no se
         // copia, y se dice con lo no seguido (el de OTRO workspace salia
@@ -4612,7 +4622,7 @@ begin
   // lista central de desechables, y con el __ delante. Una ruta mal
   // calculada nunca vacia otra cosa.
   var Nombre := TPath.GetFileName(SinBarraFinal(ADir));
-  if not (Nombre.StartsWith('__') and RutaEnLista(Nombre, CarpetasDesechables)) then
+  if not (Nombre.StartsWith('__') and EsCarpetaDesechable(Nombre)) then
     Exit;
   // ...y si la propia temporal es un ENLACE, lo de detras no es nuestro:
   // enumerarla seria vaciar el destino (25-sep-2026).

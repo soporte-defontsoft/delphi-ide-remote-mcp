@@ -30,6 +30,10 @@ of the new description is measured here by name:
       "noContent" says why
   K20 the list itself stops at 500 entries and says how many are left out
       (TEST-033)
+  K21 a folder next to the test that NTFS tells apart from the server's
+      __delphi-temp (a small hyphen, U+FE63, for its hyphen) is copied with the
+      rest: the copy compared the name with the user's locale, which takes the
+      two for one (EsCarpetaDesechable, item 9 of the shape of 1.26)
   K14 it does not see the server's configuration: not ONE DELPHI_MCP_* in
       its environment (the server's own unit tests passed only because they
       inherited its roots - measured the day this battery was born)
@@ -283,6 +287,14 @@ begin
   closesocket(S);
 end;
 
+procedure Existe(const AQue, ARuta: string);
+begin
+  if TFile.Exists(ARuta) then
+    Writeln('SONDA ', AQue, ' VE')
+  else
+    Writeln('SONDA ', AQue, ' NO');
+end;
+
 procedure Entorno(const AQue: string);
 var
   P, Q: PChar;
@@ -353,6 +365,7 @@ begin
   Lista('K7', '..');
   Conecta('K8', %(puerto)d);
   Entorno('K14');
+  Existe('K21', '__delphi'#$FE63'temp\dato.txt');
   TFile.WriteAllText(TPath.Combine(TPath.GetTempPath, 'temporal.txt'), 't');
   TFile.WriteAllText('grande.log', StringOfChar('g', 20000));
   TFile.WriteAllText('resultado.log', 'linea de log');
@@ -474,6 +487,13 @@ check('A1 DUnitX: la cola sin el recuadro de copyright, con el resumen',
       'License' not in _cola and '*****' not in _cola and 'Tests Passed' in _cola and
       'note' not in contrato_j, _cola[:400])
 
+# K21: junto al exe, una carpeta que NTFS separa de __delphi-temp y el locale
+# no: el guion pequeno U+FE63 en lugar del guion, de la MISMA longitud
+# (AnsiSameText descarta antes las de otra longitud: un guion blando de mas no
+# lo media, medido contra p126u); el build no la quita
+GUION_PEQUENO = os.path.join(JAIL, 'CajaTest', 'Win64', 'Debug', '__delphi' + chr(0xFE63) + 'temp')
+os.makedirs(GUION_PEQUENO)
+open(os.path.join(GUION_PEQUENO, 'dato.txt'), 'w').write('d')
 out = srv.call('delphi_test', {'command': 'run', 'project': os.path.join(JAIL, 'CajaTest', 'CajaTest.dproj')}, 600)
 j = J(out)
 sonda = {}
@@ -560,6 +580,8 @@ check('K20 la lista para en 500 entradas y dice cuantos quedan fuera (TEST-033);
       and all(files[f].get('noContent') == 'past-total' for f in _muchos),
       '%d listados (%d de zz_muchos), fuera %s' % (len(files), len(_muchos), j.get('filesNotListed')))
 _control = [k for k in ENTORNO if k.upper().startswith('DELPHI_MCP_')]
+check('K21 una carpeta que NTFS separa de __delphi-temp (un guion pequeno) se copia con las demas',
+      sonda.get('K21') == 'VE', str(sonda))
 check('K14 no ve la configuracion del servidor: NI UNA DELPHI_MCP_* en su entorno',
       sonda.get('K14') == '0' and len(_control) >= 2, '%s, el servidor tenia %s' % (sonda, _control))
 

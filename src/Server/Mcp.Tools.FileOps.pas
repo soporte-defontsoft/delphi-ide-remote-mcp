@@ -139,7 +139,7 @@ begin
   // de FindFirst, con las mayusculas de la plataforma), medido en su fuente
   for var E in Todas do
     if TPath.MatchesPattern(TPath.GetFileName(E), Mascara) and
-       not SameFileName(TPath.GetFileName(E), TrashFolderName) and not EsMarcaDeDueno(E) then
+       not EsNombreDePapelera(TPath.GetFileName(E)) and not EsMarcaDeDueno(E) then
       AEntradas := AEntradas + [E];
   if Length(AEntradas) = 0 then
     Result := MsgFmt(SR_FILE_COMODIN_NADA_FMT, [Carpeta, Mascara]);
