@@ -681,6 +681,18 @@ for nombre in ('nota.pa' + chr(0x2E2), 'x.dpr' + chr(0x1D3C) + 'j'):
     check('R25 %s no es de Delphi para el disco: delphi_textedit lo crea' % ascii(nombre),
           os.path.isfile(os.path.join(R25, nombre)), r[:300])
 
+# CI4 un fichero de proyecto no lo escribe ninguna tool de texto (EDIT-128 lo dice de las tres): el changeset
+# solo lo negaba al editar, y un create de un .dproj se apilaba, el preview decia limpio y se escribia;
+# delphi_textedit create lo niega (C4 del revisor del paisaje del cierre de la 1.26; medido contra p127g)
+CI4 = os.path.join(JAIL, 'ci4')
+os.makedirs(CI4)
+cid = re.search(r'CHANGESET (\S+) opened', s.call('delphi_changeset', {'command': 'begin'})).group(1)
+r = s.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create',
+                                'path': os.path.join(CI4, 'Nuevo.dproj'), 'content': '<Project/>\n'})
+s.call('delphi_changeset', {'command': 'rollback', 'id': cid})
+check('CI4 el changeset no crea un .dproj: EDIT-128 al apilarlo, como delphi_textedit',
+      mc.rechazado(r) and mc.es(r, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT') and not os.listdir(CI4), r[:300])
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')

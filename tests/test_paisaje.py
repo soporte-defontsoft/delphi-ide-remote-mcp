@@ -392,6 +392,12 @@ REGLAS = [
     ('la vista de codigo de un fuente del motor a mano', r'\bCodigoPascal\(\s*(?:TLspClient\.)?LoadSourceText\(',
      [('Lsp.Client.pas', 'TLspClient.LoadSourceCode')],
      'TLspClient.LoadSourceCode (Lsp.Client, forma 24 de la 1.26): el fuente por la puerta del motor, sin comentarios'),
+    # la negativa de escribir un fichero de PROYECTO por una tool de texto: estaba a mano en las tres puertas
+    # (delphi_edit, delphi_textedit, delphi_changeset) y la del changeset solo negaba editar: un create de un
+    # .dproj se escribia (C4 del revisor del paisaje del cierre de la 1.26)
+    ('la negativa de un fichero de proyecto a mano', r'\bSR_EDIT_FICHERO_DE_PROYECTO_FMT\b',
+     [('Lsp.Patch.pas', 'ProyectoDenegado')],
+     'ProyectoDenegado (Lsp.Patch): EL juez de las tres puertas que escriben texto'),
     # los nombres de gobierno del vault a mano: estaban en cuatro sitios y la puerta de escritura conocia
     # tres - VAULT-INSTRUCTIONS.md, las instrucciones de TODOS los clientes, lo creaba un agente (V191)
     ('un fichero de gobierno del vault nombrado a mano',
@@ -1891,6 +1897,8 @@ PLANTADO = {
     'el agente de la llamada comparado a mano': "  if (Owner <> '') and not SameText(Owner, Me) then",
     'las palabras del protocolo del nodo a mano': "    Args := Args + ['tecla'] + Mods + [Code];",
     'la vista de codigo de un fuente del motor a mano': "      Vista.Text := CodigoPascal(TLspClient.LoadSourceText(APath));",
+    'la negativa de un fichero de proyecto a mano':
+        "  if EsRutaDeProyecto(P) then Exit(MsgFmt(SR_EDIT_FICHERO_DE_PROYECTO_FMT, [N]));",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",

@@ -392,6 +392,13 @@ function EsRutaDeFuente(const APath: string): Boolean;
   escriben. EL predicado: los dos rechazos se mandaban el uno al otro y
   ninguno a delphi_config (Hermes, dirigido de la 1.20.1). }
 function EsRutaDeProyecto(const APath: string): Boolean;
+{ LA negativa de escribir un fichero de PROYECTO por una tool de texto
+  (EDIT-128, que manda a delphi_config y delphi_create); '' si APath no lo es.
+  La piden las tres puertas que escriben texto, delphi_edit, delphi_textedit y
+  delphi_changeset: estaba a mano en las tres, y la del changeset solo negaba
+  editar, asi que un create de un .dproj se apilaba y se escribia (C4 del
+  cierre de la 1.26). }
+function ProyectoDenegado(const APath: string): string;
 { Si APath es un fichero que el IDE carga como XML: un proyecto
   (EsRutaDeProyecto) o su manifiesto de despliegue (.deployproj). Lo que de
   ellos escribe el servidor lo juzga antes el parser del IDE (PatchSaveText). }
@@ -2001,6 +2008,13 @@ end;
 function EsRutaDeProyecto(const APath: string): Boolean;
 begin
   Result := TieneExtension(APath, PROJECT_EXTS);
+end;
+
+function ProyectoDenegado(const APath: string): string;
+begin
+  Result := '';
+  if EsRutaDeProyecto(APath) then
+    Result := MsgFmt(SR_EDIT_FICHERO_DE_PROYECTO_FMT, [TPath.GetFileName(APath)]);
 end;
 
 function EsXmlDelIde(const APath: string): Boolean;
@@ -4856,8 +4870,9 @@ begin
   if Result <> '' then
     Exit;
   Ext := LowerCase(TPath.GetExtension(APath));
-  if EsRutaDeProyecto(APath) then
-    Exit(MsgFmt(SR_EDIT_FICHERO_DE_PROYECTO_FMT, [TPath.GetFileName(APath)]));
+  Result := ProyectoDenegado(APath);
+  if Result <> '' then
+    Exit;
   if not EsRutaDeFuente(APath) and not EsRutaDeDesigner(APath) then
     Exit(MsgFmt(SR_EDIT_EXTENSION_SOPORTADA_ESTA_TOOL_FMT, [Ext]));
   if TFile.Exists(APath) then

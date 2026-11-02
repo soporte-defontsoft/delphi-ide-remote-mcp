@@ -771,8 +771,15 @@ begin
       // escritor (EsRutaDeProyecto): aqui habia otra lista, con el .dpk, que es
       // un fuente y delphi_edit escribe (medido el 18-oct-2026: CHSET-018 decia
       // que el commit lo habria negado)
-      if EsRutaDeProyecto(Op.Path) and (Op.Kind in [opEdit, opDeleteLine]) then
-        Exit(MsgFmt(SR_EDIT_FICHERO_DE_PROYECTO_FMT, [TPath.GetFileName(Op.Path)])); // EL de las tres (EDIT-128)
+      // ...y lo que escribe TEXTO -editar, quitar una linea, crear- un proyecto
+      // no, por EL juez de las tres puertas; borrarlo o moverlo si, como el
+      // operador (C4 del cierre de la 1.26: un create de un .dproj se escribia)
+      if Op.Kind in [opEdit, opDeleteLine, opCreate] then
+      begin
+        Denied := ProyectoDenegado(Op.Path);
+        if Denied <> '' then
+          Exit(Denied);
+      end;
       case Op.Kind of
         opEdit:
           begin
