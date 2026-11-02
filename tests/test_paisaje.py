@@ -361,6 +361,18 @@ REGLAS = [
     ('los nombres de los condicionales de Pascal a mano', r"'(?:IFDEF|IFNDEF|IFOPT|ELSEIF|ENDIF|IFEND)'",
      [('Lsp.Pascal.pas', 'CondicionalDe'), ('Lsp.Preproceso.pas', 'TextoActivoEn')],
      'CondicionalDe (Lsp.Pascal, forma 4 de la 1.26): que hace con su bloque cada directiva condicional'),
+    # el trozo unico de la casa (FragmentoUnico) es un INGREDIENTE: cada formato que lo lleva tiene su nombrador,
+    # y esas son sus casas. La carpeta nueva de una operacion estaba escrita a mano en cuatro sitios (la etapa de
+    # delphi_test y la del .rc de estilos, la bajada del os-release de un target y la del sello de remote-run;
+    # forma 11 de la 1.26). Por el nombre y no por '+ FragmentoUnico': dos de ellos partian la suma en dos lineas
+    ('el trozo unico de la casa fuera de su nombrador', r'\bFragmentoUnico\b',
+     [('Lsp.Casa.pas', 'SelloUnico'), ('Lsp.Casa.pas', 'CarpetaUnica'),
+      ('Lsp.Args.pas', 'NombreDeMensajeGit'),         # el fichero -F de un commit
+      ('Lsp.Changeset.pas', 'ChangesetBegin'),        # la cola del id, que es la capacidad
+      ('Lsp.Identidad.pas', 'IdentidadPropia'),       # la identidad de una sesion sin nombre
+      ('Lsp.Patch.pas', 'TemporalDeSustitucion'),     # el intermedio de una escritura atomica
+      ('Lsp.FormRender.pas', 'CajaDePaquetes')],      # la caja que se llena al lado y entra de un renombre
+     'CarpetaUnica (Lsp.Casa, forma 11 de la 1.26): la carpeta nueva de una operacion, ADentroDe\\<prefijo><8 hex>'),
     # los nombres de gobierno del vault a mano: estaban en cuatro sitios y la puerta de escritura conocia
     # tres - VAULT-INSTRUCTIONS.md, las instrucciones de TODOS los clientes, lo creaba un agente (V191)
     ('un fichero de gobierno del vault nombrado a mano',
@@ -1848,6 +1860,7 @@ PLANTADO = {
     'una clausula uses nueva compuesta a mano':
         "    EstrenaClausula(AText, FinLinea, 'uses' + NL + '  ' + string.Join(', ', AFaltan) + ';');",
     'los nombres de los condicionales de Pascal a mano': "    else if MatchText(D.Nombre, ['ENDIF', 'IFEND']) then",
+    'el trozo unico de la casa fuera de su nombrador': "  Tmp := ServerTempDir('sdk-' + FragmentoUnico);",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",

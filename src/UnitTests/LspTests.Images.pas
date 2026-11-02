@@ -345,6 +345,12 @@ begin
   Assert.IsFalse(EsCarpetaDescarga('__tmp-'), 'sin hex');
   Assert.IsFalse(EsCarpetaDescarga('tmp-abcd1234'), 'sin __');
   Assert.IsFalse(EsCarpetaDescarga('.tmp-abcd1234'), 'el prefijo viejo');
+  // ...y EL nombrador de una carpeta nueva (forma 11 de la 1.26), del que la de
+  // descarga es una: dentro de la que se le da, su prefijo y 8 hex, otra cada vez
+  var U := CarpetaUnica('C:\w', 'test-');
+  Assert.AreEqual('C:\w', ExtractFileDir(U));
+  Assert.IsTrue(ExtractFileName(U).StartsWith('test-') and (Length(ExtractFileName(U)) = Length('test-') + 8), U);
+  Assert.AreNotEqual(U, CarpetaUnica('C:\w', 'test-'), 'otra cada vez');
 end;
 
 procedure TImageTests.SinCapturaDiceElMotivo;

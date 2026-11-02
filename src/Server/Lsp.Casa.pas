@@ -175,9 +175,17 @@ const
   FRAGMENTO_UNICO_PATRON = '[0-9a-f]{8}';
   SELLO_UNICO_PATRON = '[0-9]{8}-[0-9]{9}-' + FRAGMENTO_UNICO_PATRON;
 
-{ EL nombrador de la carpeta de descarga temporal ('__tmp-' + 8 hex) que
-  crea quien baja algo de un target, y su lector: la unica carpeta fuera de
-  una desechable que BorraArbol acepta, porque la acaba de crear el servidor. }
+{ EL nombrador de la carpeta NUEVA de una operacion: ADentroDe\APrefijo +
+  FragmentoUnico ('test-' da ...\test-1a2b3c4d). La compone; crearla es de
+  quien la usa. La escribian a mano cuatro sitios (la etapa de delphi_test y
+  la del .rc de estilos, la bajada del os-release de un target y la del sello
+  de remote-run; forma 11 de la 1.26). }
+function CarpetaUnica(const ADentroDe, APrefijo: string): string;
+
+{ EL nombrador de la carpeta de descarga temporal ('__tmp-' + 8 hex, una
+  CarpetaUnica) que crea quien baja algo de un target, y su lector: la unica
+  carpeta fuera de una desechable que BorraArbol acepta, porque la acaba de
+  crear el servidor. }
 function NuevaCarpetaDescarga(const ADentroDe: string): string;
 function EsCarpetaDescarga(const ANombre: string): Boolean;
 
@@ -416,12 +424,17 @@ begin
     TS.Time div 60000 mod 60, TS.Time div 1000 mod 60, TS.Time mod 1000, FragmentoUnico]);
 end;
 
+function CarpetaUnica(const ADentroDe, APrefijo: string): string;
+begin
+  Result := TPath.Combine(ADentroDe, APrefijo + FragmentoUnico);
+end;
+
 const
   DESCARGA_PREFIJO = '__tmp-'; // empieza por __, como toda zona borrable
 
 function NuevaCarpetaDescarga(const ADentroDe: string): string;
 begin
-  Result := TPath.Combine(ADentroDe, DESCARGA_PREFIJO + FragmentoUnico);
+  Result := CarpetaUnica(ADentroDe, DESCARGA_PREFIJO);
 end;
 
 function EsCarpetaDescarga(const ANombre: string): Boolean;

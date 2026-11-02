@@ -568,7 +568,7 @@ begin
       [IntToHex(Err, 8), SysErrorMessage(Err)]));
     Exit;
   end;
-  Etapa := ServerTempDir('test-' + FragmentoUnico);
+  Etapa := CarpetaUnica(ServerTempDir, 'test-');
   Antes := nil;
   try
     CrearCarpeta(Etapa);

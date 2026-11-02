@@ -1278,7 +1278,7 @@ begin
   Err := CreaContenedor(AC);
   if Err <> 0 then
     Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, [IntToHex(Err, 8), SysErrorMessage(Err)]));
-  Etapa := ServerTempDir('styles-rc-' + FragmentoUnico);
+  Etapa := CarpetaUnica(ServerTempDir, 'styles-rc-');
   try
     CrearCarpeta(Etapa);
     Err := PreparaCarpetaDelContenedor(AC, Etapa);

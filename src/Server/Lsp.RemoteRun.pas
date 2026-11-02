@@ -1091,8 +1091,7 @@ begin
   // (node.ver), asi que con un destino comun la comprobacion de un perfil se
   // llevaba por delante la de otro - dos Linux a la vez y cada uno leyendo el
   // sello del contrario (analisis de concurrencia 2026-09-20).
-  TmpDir := TPath.Combine(ServerTempDir(REMOTERUN_SUB), 'ver-' +
-    FragmentoUnico);
+  TmpDir := CarpetaUnica(ServerTempDir(REMOTERUN_SUB), 'ver-');
   CrearCarpeta(TmpDir);
   try
     // el sello del target: ausente = nodo de antes de los sellos (o ninguno)
