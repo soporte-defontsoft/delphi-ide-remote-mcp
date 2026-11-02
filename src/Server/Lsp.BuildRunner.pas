@@ -1585,7 +1585,8 @@ function CompletaEnlacesDev(const AVersion, ASdkFile, AOutput: string;
 var
   Xml, Rutas, Nombre, Dir, Dev, Mejor, Hechos, Faltan, Negadas, Motivo: string;
   M: TMatch;
-  Vistos: TStringList;
+  Vistos, Vars: TStringList;
+  Carpetas: TArray<string>;
   Hecho: Boolean;
 begin
   Result := 0;
@@ -1598,8 +1599,17 @@ begin
   Rutas := TagValue(Xml, 'Profile_LibraryPath');
   if Rutas = '' then
     Exit;
-  // por EL expansor del IDE: todas las de la lista, y cualquier macro suya
-  Rutas := ConMacrosDelIde(AVersion, Rutas);
+  // por EL lector de listas con la tabla del IDE de esa version: las macros
+  // antes de partir, sin lo que no expande, lo vacio ni lo relativo (se miraba
+  // contra la carpeta del servidor), cada carpeta una vez. La partia a mano
+  // (C8 del revisor del paisaje del cierre de la 1.26)
+  Vars := TStringList.Create;
+  try
+    TablaDeMacrosDelIde(AVersion, Vars);
+    Carpetas := CarpetasDeUnaLista(Rutas, '', Vars);
+  finally
+    Vars.Free;
+  end;
   Hechos := '';
   Faltan := '';
   Negadas := '';
@@ -1614,9 +1624,9 @@ begin
       Dev := 'lib' + Nombre + '.so';
       Hecho := False;
       Motivo := '';
-      for Dir in Rutas.Split([';'], TStringSplitOptions.ExcludeEmpty) do
+      for Dir in Carpetas do
       begin
-        if Dir.Contains('$(') or not TDirectory.Exists(Dir) then
+        if not TDirectory.Exists(Dir) then
           Continue;
         if TFile.Exists(TPath.Combine(Dir, Dev)) then
           Continue; // existe y aun asi no lo encontro: no es este el problema

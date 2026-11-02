@@ -205,6 +205,11 @@ function SysrootDeSdk(const AVersion, AXml: string): string;
   enlaces de un SDK (una macro) y los paquetes del renderizador (tres): forma
   21 del revisor del paisaje de la 1.26. }
 function ConMacrosDelIde(const AVersion, ATexto: string): string;
+{ LA tabla de macros del IDE de AVersion (IdeMacroVars de esa instalacion) en
+  ADest; vacia sin esa instalacion. La de ConMacrosDelIde, para quien parte una
+  lista con CarpetasDeUnaLista: los enlaces de un SDK la partian a mano (C8 del
+  revisor del paisaje del cierre de la 1.26). }
+procedure TablaDeMacrosDelIde(const AVersion: string; ADest: TStrings);
 { LA carpeta de la biblioteca compilada del IDE para APlat, como la nombran su
   Library Path y msbuild: $(BDSLIB)\<plat>\release, con $(BDSLIB) de SU tabla
   (IdeMacroVars: el operador la puede redefinir en Environment Variables). La
@@ -1626,14 +1631,10 @@ begin
   end;
 end;
 
-function ConMacrosDelIde(const AVersion, ATexto: string): string;
+procedure TablaDeMacrosDelIde(const AVersion: string; ADest: TStrings);
 var
   Info: TRadStudioInfo;
-  Vars: TStringList;
 begin
-  Result := ATexto;
-  if not Result.Contains('$(') then
-    Exit;
   // la instalacion de ESA version: la del servidor sin volver al registro
   Info := DiscoverRadStudio;
   if not SameText(Info.Version, AVersion) then
@@ -1643,11 +1644,21 @@ begin
       if I.Found and SameText(I.Version, AVersion) then
         Info := I;
   end;
-  if not Info.Found then
+  if Info.Found then
+    IdeMacroVars(Info, ADest);
+end;
+
+function ConMacrosDelIde(const AVersion, ATexto: string): string;
+var
+  Vars: TStringList;
+begin
+  Result := ATexto;
+  if not Result.Contains('$(') then
     Exit;
+  // sin esa instalacion la tabla queda vacia, y el texto como esta
   Vars := TStringList.Create;
   try
-    IdeMacroVars(Info, Vars);
+    TablaDeMacrosDelIde(AVersion, Vars);
     Result := ExpandIdeMacros(Result, Vars);
   finally
     Vars.Free;
