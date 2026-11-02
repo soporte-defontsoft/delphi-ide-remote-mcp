@@ -4164,6 +4164,18 @@ const
     '[STYLE-009 INTERNAL] DelphiStyleConvert.exe (the text<->binary ' +
     'converter) is missing next to the server. Tell the operator: it is ' +
     'deployed with the server.';
+  { el conversor corre en un contenedor de Windows, como el renderizador
+    (forma 6 del revisor del paisaje de la 1.26); %s = lo que fallo }
+  SR_STYLES_CONVERSOR_CONTENEDOR_FMT =
+    '[STYLE-065 INTERNAL] The style converter runs only inside its Windows ' +
+    'container, and the container could not be prepared: %s. Nothing was ' +
+    'converted or checked. It is a problem of this server: tell the operator.';
+  { %0:s el protocolo que dijo el conversor, %1:d el del servidor }
+  SR_STYLES_CONVERSOR_OTRA_VERSION_FMT =
+    '[STYLE-066 INTERNAL] DelphiStyleConvert.exe speaks protocol %0:s and this ' +
+    'server speaks %1:d: they come from different versions, so nothing it ' +
+    'answered was used. Whoever runs this server has to install every file of ' +
+    'ONE version.';
 
   SN_STYLES_VIEW_NOTE =
     '[STYLE-010] StyleLookup of a control resolves to one of these ' +

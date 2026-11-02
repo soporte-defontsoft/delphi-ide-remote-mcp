@@ -133,9 +133,10 @@ REGLAS = [
       # reg.exe export: la copia de una clave del IDE antes de tocarla (V10 de la 1.23)
       ('Lsp.Patch.pas', 'ExportaClaveDelIde')],
      'cada programa externo se lanza desde UN sitio conocido; uno nuevo se revisa aqui'),
-    ('lanzar el conversor de estilos', LANZA + r""".*ComillasSinEscape\(A?Exe\)""",
+    # (y la orden con el conversor de la caja, que va a su contenedor: 1.26, forma 6)
+    ('lanzar el conversor de estilos', '(?:' + LANZA + r""".*ComillasSinEscape\(A?Exe\))|ComillasSinEscape\([^;]*StyleConverterExe""",
      [('Lsp.Styles.pas', 'CorreStyleConvert')],
-     'CorreStyleConvert (1.16.0: defaults y tobin componian la orden a mano)'),
+     'CorreStyleConvert (1.16.0: defaults y tobin componian la orden a mano; 1.26: corre en su contenedor)'),
     ('nombre de un .profile', r"\+\s*'\.profile'",
      [('Lsp.Discovery.pas', 'RutaDePerfil')], 'RutaDePerfil, y NombreDePerfil su inversa (1.16.0)'),
     ('listar los perfiles a mano', r"(?:GetFiles|FicherosDePerfilesDelIde)\s*\([^)]*'\*\.profile'",
@@ -2569,4 +2570,31 @@ check('mutante del protocolo: un argumento nuevo cambia la firma',
       firma_del_protocolo(INC_PROTO, COMUN_PROTO + "\n  if P = '--nuevo' then") != _ahora[1])
 check('mutante del protocolo: el numero solo no cambia la firma',
       firma_del_protocolo(INC_PROTO.replace('FR_PROTOCOLO_VERSION = 1', 'FR_PROTOCOLO_VERSION = 2'), COMUN_PROTO) == _ahora[1])
+# ...y el del conversor de estilos (forma 6 de la 1.26): sus claves, sus ordenes y sus codigos en
+# StyleConvertProtocolo.inc, que incluyen los dos lados. Cambia: sube SC_PROTOCOLO_VERSION y pon aqui la firma
+FIRMA_DEL_CONVERSOR = (1, '432b3ef55d125c3f')
+
+
+def firma_del_conversor(inc):
+    claves = sorted(x for x in re.findall(r"^\s*(SC_\w+ = (?:'[^']*'(?:#\d+)?|\d+));", inc, re.M)
+                    if not x.startswith('SC_PROTOCOLO_VERSION'))
+    return hashlib.sha256('\n'.join(claves).encode()).hexdigest()[:16]
+
+
+with open(os.path.join(SRC, 'StyleConvert', 'StyleConvertProtocolo.inc'), encoding='utf-8-sig') as _f:
+    INC_CONV = _f.read()
+_v = re.search(r'SC_PROTOCOLO_VERSION = (\d+);', INC_CONV)
+_conv = (int(_v.group(1)) if _v else None, firma_del_conversor(INC_CONV))
+check('el protocolo del conversor de estilos: cambio de claves u ordenes, cambio de numero',
+      _conv == FIRMA_DEL_CONVERSOR, 'esta %s, anotado %s' % (_conv, FIRMA_DEL_CONVERSOR))
+check('mutante del conversor: una orden nueva cambia la firma',
+      firma_del_conversor(INC_CONV + "\n  SC_NUEVA = 'nueva';") != _conv[1])
+# y ninguno de los dos lados habla el protocolo con literales: eran 'IGNORED'#9, 'ERROR: ' y las ordenes
+for _nombre, _sub in (('DelphiStyleConvert.dpr', 'StyleConvert'), ('Lsp.Styles.pas', 'Server')):
+    with open(os.path.join(SRC, _sub, _nombre), encoding='utf-8-sig') as _f:
+        _a_mano = re.findall(r"'IGNORED'#9|'ERROR: '|'(?:tobin|totext|defaults|check) ", _f.read())
+    check('%s no escribe a mano las claves ni las ordenes del conversor' % _nombre, _a_mano == [], _a_mano)
+check('mutante del conversor: una orden a mano se caza',
+      re.findall(r"'IGNORED'#9|'ERROR: '|'(?:tobin|totext|defaults|check) ", "  A := 'check ' + F;") != [])
+
 mc.fin('paisaje battery')

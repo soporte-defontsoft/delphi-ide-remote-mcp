@@ -238,12 +238,13 @@ function TextStylesIn(const ADir: string): TArray<string>;
 { Path of the DelphiStyleConvert helper next to the server exe ('' if absent). }
 function StyleConverterExe: string;
 
-{ LA llamada al conversor: "<AExe>" <AArgs> en ADir ('' = el de siempre),
-  con su salida y su codigo. La usan los nombres por defecto de la plataforma
-  (defaults) y el build de estilos (tobin): cada uno componia la orden a mano
-  (lo encontro test_paisaje en su primera pasada, 1.16.0). }
-function CorreStyleConvert(const AExe, AArgs, ADir: string; ATimeoutMs: Integer;
-  out ACode: Cardinal): string;
+{ El binario de un .style de texto (tobin) por LA llamada al conversor, en su
+  contenedor (CorreStyleConvert, aqui dentro: las ordenes y las rutas las pone
+  ella). AFuente, sus bytes; ANombre, como se llama el estilo en lo que diga el
+  conversor. ABinario, lo que escribio; ACodigo, el del conversor (0 = hecho).
+  Devuelve lo que dijo. }
+function EstiloEnBinario(const AFuente: TArray<Byte>; const ANombre: string;
+  out ABinario: TArray<Byte>; out ACodigo: Cardinal): string;
 
 { Lo que el cargador de estilos de FMX IGNORA de un .style de texto: su
   lector se traga cada error - una propiedad que la clase no publica, un valor
@@ -481,7 +482,9 @@ uses
   Lsp.Rutas, // RutaDesde: EL resolutor de una ruta leida de un fichero
   Lsp.DesignerMeta, // TRaizDeDiseno: un frame (LookupsDeDesigner)
   Lsp.ProjectUnits, // RaizDeDesigner: EL lector de la raiz de un designer
-  Lsp.ProcessLaunch;
+  Lsp.ProcessLaunch,
+  Lsp.Sandbox,      // el contenedor del conversor de estilos
+  Lsp.FormRender;   // CajaDeLosAyudantes: la caja desde la que corre
 
 { TStyleObj }
 
@@ -1162,47 +1165,139 @@ begin
   end;
 end;
 
-function CorreStyleConvert(const AExe, AArgs, ADir: string; ATimeoutMs: Integer;
-  out ACode: Cardinal): string;
+const
+  {$I ..\StyleConvert\StyleConvertProtocolo.inc}
+  // la entrada y la salida del conversor, relativas a la etapa de cada llamada
+  CONVERSOR_ENTRADA = 'e.style';
+  CONVERSOR_SALIDA = 's.style';
+  { la temporal del servidor donde corre cada llamada al conversor }
+  ESTILOS_CHECK_SUB = 'styles-check';
+  // el conversor no corrio, o no se le entendio: ni SC_RC_OK ni SC_RC_ERROR
+  SC_NO_CORRIO = High(Cardinal);
+  // lo que puede tardar una orden; un binario, el doble
+  CONVERSOR_TIEMPO_MS = 60000;
+
+{ LA llamada al conversor de estilos (DelphiStyleConvert): dentro de un
+  contenedor sin capacidades, como el renderizador pero sin ventanas (corre con
+  COM en MTA: con STA, que crea una ventana oculta, el contenedor le niega COM y
+  FMX no lee los PNG de un estilo; medido el 2-nov-2026), desde la caja de los
+  ayudantes (Lsp.FormRender), en una etapa de ESTA llamada en la casa del
+  servidor. Corria fuera, sobre el fichero del agente y en su carpeta (forma 6
+  del revisor del paisaje de la 1.26). AEntrada escribe lo que lee en la ruta que
+  recibe, en su etapa, por SU escritor (EscribeBytes, EscribeTexto; nil: nada);
+  AOrden, la suya (SC_*), y las rutas las pone esto; lo que escribe vuelve en
+  AProducido (vacio si nada). Devuelve lo que dijo, sin su PROTOCOL= y con
+  ANombre por su entrada; ACodigo, su codigo (SC_RC_*), o SC_NO_CORRIO con el
+  motivo si no corrio o es de otra version. }
+function CorreStyleConvert(const AOrden: string; const AEntrada: TProc<string>;
+  const ANombre: string; ATimeoutMs: Integer; out AProducido: TArray<Byte>;
+  out ACodigo: Cardinal): string;
+var
+  AC: TContenedor;
+  Etapa, Caja, PathHijo, Orden, Dijo: string;
+  Err: Cardinal;
+  Vencido: Boolean;
 begin
-  Result := RunCapturedIn(ComillasSinEscape(AExe) + ' ' + AArgs, ADir, ATimeoutMs, ACode);
+  AProducido := nil;
+  ACodigo := SC_NO_CORRIO;
+  if StyleConverterExe = '' then
+    Exit(MsgText(SR_STYLES_NO_CONVERTER));
+  Err := CreaContenedor(AC);
+  if Err <> 0 then
+    Exit(MsgFmt(SR_STYLES_CONVERSOR_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
+  Result := '';
+  Caja := '';
+  Etapa := NuevaCarpetaDescarga(ServerTempDir(ESTILOS_CHECK_SUB));
+  try
+    try
+      CrearCarpeta(Etapa);
+      Err := PreparaCarpetaDelContenedor(AC, Etapa);
+      if Err <> 0 then
+        Exit(MsgFmt(SR_STYLES_CONVERSOR_CONTENEDOR_FMT, [IntToHex(Err, 8) + ' ' + SysErrorMessage(Err)]));
+      Result := CajaDeLosAyudantes(Caja, PathHijo);
+      if Result <> '' then
+        Exit(MsgFmt(SR_STYLES_CONVERSOR_CONTENEDOR_FMT, [Result]));
+      Orden := ComillasSinEscape(TPath.Combine(Caja, TPath.GetFileName(StyleConverterExe))) + ' ' + AOrden;
+      if Assigned(AEntrada) then
+      begin
+        // lo que lee, en su etapa: el conversor no ve nada fuera de ella
+        AEntrada(TPath.Combine(Etapa, CONVERSOR_ENTRADA));
+        Orden := Orden + ' ' + CONVERSOR_ENTRADA;
+      end;
+      if AOrden <> SC_CHECK then
+        Orden := Orden + ' ' + CONVERSOR_SALIDA;
+      Result := RunCapturedEnContenedor(Orden, Etapa, AC, ATimeoutMs, ACodigo, Vencido, phConsola,
+        EntornoSinConfiguracion(['PATH=' + PathHijo]));
+      // su protocolo: uno de otra version se leeria mal y sin ruido. Uno que murio sin
+      // decir nada, o por el plazo, sigue con su codigo
+      Dijo := '';
+      var Resto: TArray<string> := [];
+      for var Linea in SplitToLines(Result) do
+        if (Dijo = '') and Linea.StartsWith(SC_PROTOCOL) then
+          Dijo := Linea.Substring(Length(SC_PROTOCOL)).Trim
+        else
+          Resto := Resto + [Linea];
+      if (Dijo <> IntToStr(SC_PROTOCOLO_VERSION)) and (Result.Trim <> '') and not Vencido and
+         (ACodigo <= SC_RC_USO) then
+      begin
+        if Dijo = '' then
+          Dijo := MsgText(SF_NINGUNO);
+        ACodigo := SC_NO_CORRIO;
+        Exit(MsgFmt(SR_STYLES_CONVERSOR_OTRA_VERSION_FMT, [Dijo, SC_PROTOCOLO_VERSION]));
+      end;
+      Result := string.Join(#10, Resto);
+      if ANombre <> '' then
+        Result := Result.Replace(CONVERSOR_ENTRADA, ANombre, [rfReplaceAll]);
+      if (ACodigo = SC_RC_OK) and (AOrden <> SC_CHECK) and TFile.Exists(TPath.Combine(Etapa, CONVERSOR_SALIDA)) then
+        AProducido := LeeBytes(TPath.Combine(Etapa, CONVERSOR_SALIDA), [ltTemporal]);
+    except
+      // sin Job no corre (fail-closed), o no arranco: no corrio
+      on E: Exception do
+      begin
+        ACodigo := SC_NO_CORRIO;
+        Result := MsgFmt(SR_STYLES_CONVERSOR_CONTENEDOR_FMT, [SinNuestraCasa(E.Message)]);
+      end;
+    end;
+  finally
+    if Caja <> '' then
+      SueltaCaja(Caja);
+    BorraContenedor(AC);
+    try
+      BorraArbol(Etapa); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
+    except
+      // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
+    end;
+  end;
 end;
 
-const
-  { la temporal del servidor donde se le pregunta al conversor por un texto }
-  ESTILOS_CHECK_SUB = 'styles-check';
-
-function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>;
+{ Lo que FMX ignora de un .style (check), que AEntrada escribe en la etapa del
+  conversor, o el error con el que no lo pudo cargar: IgnoradoPorFmx, para un
+  fichero y para un texto }
+function IgnoradoDe(const AEntrada: TProc<string>; out AIgnorado: TArray<string>;
   out ANoCarga: string): Boolean;
-const
-  // lo que escribe el conversor cuando la lectura lanza (DelphiStyleConvert.dpr:
-  // 'ERROR: <clase>: <mensaje>' y codigo 1); otro codigo es que no se pudo
-  // preguntar (el uso, el plazo)
-  ERROR_DEL_CONVERSOR = 'ERROR: ';
 var
-  Exe, Salida: string;
   Code: Cardinal;
+  Nada: TArray<Byte>;
   L: TList<string>;
 begin
   AIgnorado := [];
   ANoCarga := '';
-  Exe := StyleConverterExe;
-  if Exe = '' then
-    Exit(False);
-  Salida := CorreStyleConvert(Exe, 'check ' + ComillasSinEscape(AFichero), '', 60000, Code);
-  if Code <> 0 then
+  var Salida := CorreStyleConvert(SC_CHECK, AEntrada, '', CONVERSOR_TIEMPO_MS, Nada, Code);
+  if Code <> SC_RC_OK then
   begin
-    if Code = 1 then
+    // lo que escribe el conversor cuando la lectura lanza (SC_ERROR, SC_RC_ERROR);
+    // otro codigo es que no se pudo preguntar (el uso, el plazo, el contenedor)
+    if Code = SC_RC_ERROR then
       for var Linea in SplitToLines(Salida) do
-        if Linea.StartsWith(ERROR_DEL_CONVERSOR) then
-          ANoCarga := Linea.Substring(Length(ERROR_DEL_CONVERSOR)).Trim;
+        if Linea.StartsWith(SC_ERROR) then
+          ANoCarga := Linea.Substring(Length(SC_ERROR)).Trim;
     Exit(ANoCarga <> '');
   end;
   L := TList<string>.Create;
   try
     for var Linea in SplitToLines(Salida) do
-      if Linea.StartsWith('IGNORED'#9) then
-        L.Add(Linea.Substring(Length('IGNORED'#9)).Trim);
+      if Linea.StartsWith(SC_IGNORED) then
+        L.Add(Linea.Substring(Length(SC_IGNORED)).Trim);
     AIgnorado := L.ToArray;
   finally
     L.Free;
@@ -1210,72 +1305,73 @@ begin
   Result := True;
 end;
 
-{ LA pregunta al conversor sobre un texto que aun no esta en disco: su copia
-  (en AEnc), en una carpeta de ESTA llamada del temporal del servidor, como la
-  propuesta del renderizador (Lsp.FormRender): no es un entregable del agente
-  ni se escribe en la jaula. APregunta recibe la copia y la carpeta, y dice si
-  se pudo preguntar; la carpeta se borra siempre. La hacian el juicio de lo
-  que FMX ignora (check) y el de como lo escribe (totext, V141). }
-function PreguntaAlConversor(const ATexto, AEnc: string;
-  const APregunta: TFunc<string, string, Boolean>): Boolean;
+function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>;
+  out ANoCarga: string): Boolean;
 var
-  Dir: string;
+  Bytes: TArray<Byte>;
 begin
+  AIgnorado := [];
+  ANoCarga := '';
   if StyleConverterExe = '' then
     Exit(False);
-  Dir := NuevaCarpetaDescarga(ServerTempDir(ESTILOS_CHECK_SUB));
   try
-    try
-      CrearCarpeta(Dir);
-      var Cand := TPath.Combine(Dir, 'c.style');
-      EscribeTexto(Cand, ATexto, ltTemporal, EncKindOf(AEnc), False);
-      Result := APregunta(Cand, Dir);
-    except
-      Result := False; // sin la pregunta no se sabe: quien llama sigue como antes
-    end;
-  finally
-    try
-      BorraArbol(Dir); // SIEMPRE, sin cruzar enlaces: ver Lsp.Guard
-    except
-      // limpiar no puede tumbar la respuesta: la purga del arranque se la lleva
-    end;
+    // por la puerta de leer: el de un agente o una copia nuestra
+    Bytes := LeeBytes(AFichero, [ltJaula, ltTemporal]);
+  except
+    Exit(False); // sin leerlo no se sabe
   end;
+  Result := IgnoradoDe(
+    procedure(ARuta: string)
+    begin
+      EscribeBytes(ARuta, Bytes, ltTemporal);
+    end, AIgnorado, ANoCarga);
+end;
+
+{ La copia de un texto que solo se le pregunta al conversor: en la codificacion
+  de su fichero, por EL escritor, y sin estricto (un sustituto suelto no tumba la
+  pregunta) }
+function EscribeLaCopia(const ATexto, AEnc: string): TProc<string>;
+var
+  Texto: string;
+  K: TEncKind;
+begin
+  Texto := ATexto;
+  K := EncKindOf(AEnc);
+  Result :=
+    procedure(ARuta: string)
+    begin
+      EscribeTexto(ARuta, Texto, ltTemporal, K, False);
+    end;
 end;
 
 function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>;
   out ANoCarga: string): Boolean;
-var
-  Ignorado: TArray<string>;
-  NoCarga: string;
 begin
-  Ignorado := [];
-  NoCarga := '';
-  Result := PreguntaAlConversor(ATexto, AEnc,
-    function(ACand, ADir: string): Boolean
-    begin
-      Result := IgnoradoPorFmx(ACand, Ignorado, NoCarga);
-    end);
-  AIgnorado := Ignorado;
-  ANoCarga := NoCarga;
+  Result := IgnoradoDe(EscribeLaCopia(ATexto, AEnc), AIgnorado, ANoCarga);
 end;
 
 function ComoLoEscribeFmxDeTexto(const ATexto, AEnc: string; out AEscrito: string): Boolean;
 var
-  Escrito: string;
+  Code: Cardinal;
+  Escrito: TArray<Byte>;
+  Enc: string;
 begin
-  Escrito := '';
-  Result := PreguntaAlConversor(ATexto, AEnc,
-    function(ACand, ADir: string): Boolean
-    var
-      Code: Cardinal;
+  AEscrito := '';
+  CorreStyleConvert(SC_TOTEXT, EscribeLaCopia(ATexto, AEnc), '', CONVERSOR_TIEMPO_MS, Escrito, Code);
+  Result := (Code = SC_RC_OK) and (Escrito <> nil);
+  if Result then
+    AEscrito := TextoDeBytes(Escrito, False, Enc);
+end;
+
+function EstiloEnBinario(const AFuente: TArray<Byte>; const ANombre: string;
+  out ABinario: TArray<Byte>; out ACodigo: Cardinal): string;
+begin
+  var Fuente := AFuente;
+  Result := CorreStyleConvert(SC_TOBIN,
+    procedure(ARuta: string)
     begin
-      var Salida := TPath.Combine(ADir, 'escrito.style');
-      CorreStyleConvert(StyleConverterExe, 'totext ' + ComillasSinEscape(ACand) + ' ' + ComillasSinEscape(Salida), '', 60000, Code);
-      Result := (Code = 0) and TFile.Exists(Salida);
-      if Result then
-        Escrito := LeeTexto(Salida, [ltTemporal]);
-    end);
-  AEscrito := Escrito;
+      EscribeBytes(ARuta, Fuente, ltTemporal);
+    end, ANombre, 2 * CONVERSOR_TIEMPO_MS, ABinario, ACodigo);
 end;
 
 { Los objetos de ADoc en preorden: el indice con el que un candidato se
@@ -1437,21 +1533,21 @@ end;
 
 function PlatformDefaultStyleNames: TArray<string>;
 var
-  Cache, Exe: string;
+  Cache: string;
   Code: Cardinal;
+  Producido: TArray<Byte>;
   L: TList<string>;
 begin
   Result := [];
   Cache := ServerCacheDir('win10-default.style');
   if not TFile.Exists(Cache) then
   begin
-    Exe := StyleConverterExe;
-    if Exe = '' then
+    CorreStyleConvert(SC_DEFAULTS, nil, '', CONVERSOR_TIEMPO_MS, Producido, Code);
+    if (Code <> SC_RC_OK) or (Producido = nil) then
       Exit;
+    // lo escribio en su etapa: a la cache, por la puerta de la casa
     CrearCarpeta(TPath.GetDirectoryName(Cache));
-    CorreStyleConvert(Exe, 'defaults ' + ComillasSinEscape(Cache), '', 60000, Code);
-    if (Code <> 0) or not TFile.Exists(Cache) then
-      Exit;
+    EscribeBytes(Cache, Producido, ltCasa);
   end;
   L := TList<string>.Create;
   try

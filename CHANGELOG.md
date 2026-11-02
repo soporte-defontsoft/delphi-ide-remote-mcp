@@ -40,6 +40,9 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - `delphi_designer layout` knows what a container does with its children by its class's ancestry, in that framework's class table, not by a list of names that mixed VCL and FMX. Two overlapping buttons inside a VCL `TTabControl`, which has one area, were not reported, because FMX's `TTabControl` has pages; the items of an FMX `TListBox` that do not fit were reported as sticking out and not visible, although they scroll (also on `insert`); a `TMemo`, `TGrid`, `TPresentedVertScrollBox`, `TGridPanelLayout` or a component derived from one was not recognized. The `Align` a VCL class does not write is the one its source redeclares with `default`: `TActionToolBar`, `TActionMainMenuBar`, `TFormTabsBar` and `TCategoryPanelGroup` were missing, and `TCoolBar` and `TControlBar`, which do not redeclare it, were taken as `alTop`.
 
+- The style converter `delphi_styles` uses (`build`, `lint`, `set`, the platform defaults) runs inside a Windows container of its own, on a copy of the style in a folder of that call, as the form renderers do. It ran outside any container, reading the agent's file directly, and `build` ran it in the agent's folder: a converter that wrote a file there did it. Its output now carries a protocol number, like the renderers' (`STYLE-066` when a converter of another version answers; `STYLE-065` when its container cannot be prepared).
+- When the shared folder of the renderers' packages could not be prepared, the call that asked for it could release the folder from under another call still using it.
+
 ### Changed
 
 - `delphi_config`'s description says again that `add-platform` enables a platform in the `.dproj`. The second pass had dropped it, and with Qwen3.8 Flash Next the task "build Linux64 with the SDK zorin18" fell from 3 of 5 to 2 of 18; with it back, 9 of 18 (`docs/TOOL-DESCRIPTIONS.md`).

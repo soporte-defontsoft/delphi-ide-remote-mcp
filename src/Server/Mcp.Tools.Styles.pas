@@ -1406,10 +1406,13 @@ begin
       // que diga de el, con el nombre del destino
       Inc(N);
       Hecho := TPath.Combine(Tmp, IntToStr(N) + COLA_DE_ESTILO_BINARIO);
-      Out := CorreStyleConvert(Exe, 'tobin ' + ComillasSinEscape(F) + ' ' + ComillasSinEscape(Hecho), Dir, 120000, Code);
-      Out := Out.Replace(Hecho, Bin, [rfReplaceAll, rfIgnoreCase]);
+      // en su contenedor, sobre los bytes del estilo leidos por la puerta: el
+      // conversor ni lee la carpeta del agente ni corre en ella (forma 6 de la 1.26)
+      var Producido: TArray<Byte>;
+      Out := EstiloEnBinario(LeeBytes(F, [ltJaula]), TPath.GetFileName(F), Producido, Code);
       if Code = 0 then
       begin
+        EscribeBytes(Hecho, Producido, ltTemporal);
         Out := ColocaDerivado(Hecho, Bin);
         if Out <> '' then
           Code := 1;

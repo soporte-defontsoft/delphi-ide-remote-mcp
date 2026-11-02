@@ -13,7 +13,8 @@
                                               IGNORED<tab>message each (the
                                               RTL's, with class and property)
 
-  Exit codes: 0 ok, 1 error (message on stderr), 2 usage. }
+  Exit codes: 0 ok, 1 error (message on stderr), 2 usage. The output format
+  and the exit codes are StyleConvertProtocolo.inc, shared with the server. }
 
 {$APPTYPE CONSOLE}
 
@@ -21,12 +22,16 @@ uses
   System.SysUtils,
   System.Classes,
   Winapi.Windows,
+  Winapi.ActiveX, // CoInitializeEx: COM en MTA (ver el principio del programa)
   FMX.Types,
   FMX.Styles,
   FMX.Consts, // SCannotLoadStyleFromFile: la negativa de TStyleStreaming.LoadFromFile
   FMX.Controls.Win, // links the platform style resources (win10style...)
   Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas', // DesignerAFlujo, como los renderizadores
   Lsp.Pascal in '..\Server\Lsp.Pascal.pas'; // la usa Lsp.DesignerForma (GrupoDeClasesDe), como en los renderizadores
+
+const
+  {$I StyleConvertProtocolo.inc}
 
 { LA lectura del conversor: la entrada que el servidor ya paso por su puerta,
   abierta como la abre TStyleStreaming.LoadFromFile. }
@@ -134,7 +139,7 @@ begin
       end;
       Raiz.Free;
       for L in R.Ignorado do
-        Writeln('IGNORED'#9 + L);
+        Writeln(SC_IGNORED + L);
     finally
       R.Free;
     end;
@@ -165,27 +170,32 @@ end;
 var
   Cmd: string;
 begin
+  // COM en MTA: en el contenedor sin ventanas en el que lo corre el servidor, STA (que
+  // crea una ventana oculta) da E_ACCESSDENIED, y sin COM FMX no lee los PNG de un
+  // estilo (WIC; medido el 2-nov-2026). Fuera, si FMX ya lo abrio en STA, no cambia nada
+  CoInitializeEx(nil, COINIT_MULTITHREADED);
+  Writeln(SC_PROTOCOL + IntToStr(SC_PROTOCOLO_VERSION));
   try
     Cmd := LowerCase(ParamStr(1));
-    if (Cmd = 'tobin') and (ParamCount >= 3) then
+    if (Cmd = SC_TOBIN) and (ParamCount >= 3) then
       Convert(ParamStr(2), ParamStr(3), TStyleFormat.Binary)
-    else if (Cmd = 'totext') and (ParamCount >= 3) then
+    else if (Cmd = SC_TOTEXT) and (ParamCount >= 3) then
       Convert(ParamStr(2), ParamStr(3), TStyleFormat.Text)
-    else if (Cmd = 'defaults') and (ParamCount >= 2) then
+    else if (Cmd = SC_DEFAULTS) and (ParamCount >= 2) then
       Defaults(ParamStr(2))
-    else if (Cmd = 'check') and (ParamCount >= 2) then
+    else if (Cmd = SC_CHECK) and (ParamCount >= 2) then
       Check(ParamStr(2))
     else
     begin
       Writeln(ErrOutput, 'Usage: DelphiStyleConvert tobin|totext <in> <out> | defaults <out> | check <in>');
-      Halt(2);
+      Halt(SC_RC_USO);
     end;
-    Writeln('OK');
+    Writeln(SC_OK);
   except
     on E: Exception do
     begin
-      Writeln(ErrOutput, 'ERROR: ', E.ClassName, ': ', E.Message);
-      Halt(1);
+      Writeln(ErrOutput, SC_ERROR, E.ClassName, ': ', E.Message);
+      Halt(SC_RC_ERROR);
     end;
   end;
 end.

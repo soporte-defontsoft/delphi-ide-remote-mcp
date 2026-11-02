@@ -634,6 +634,25 @@ check('R8 DefaultAlign trae cada clase de la VCL que redeclara Align con default
       bool(redeclaradas) and redeclaradas <= declaradas and not {c for c, _ in declaradas} & {'TCoolBar', 'TControlBar'},
       'faltan %s; declaradas %s' % (sorted(redeclaradas - declaradas), sorted(declaradas)))
 
+# R6 el conversor de estilos corre en su contenedor, sobre una copia en su etapa (corria fuera, sobre el fichero del
+# agente y en su carpeta), y su protocolo lleva numero. Uno de mentira intenta escribir en la carpeta del estilo y
+# dice otro protocolo: no escribe nada, y lo que contesto no se usa (STYLE-066)
+R6 = os.path.join(JAIL, 'r6')
+os.makedirs(R6)
+escribe(os.path.join(R6, 'Mio.style'), 'object TStyleBook\nend\n')
+FUERA6 = os.path.join(R6, 'escrito-por-el-conversor.txt')
+CONV6 = de_mentira('ConversorFuera', "  try\n    TFile.WriteAllText('%s', 'x');\n  except\n  end;\n" % FUERA6 +
+                   dice('PROTOCOL=999', 'OK'))
+otro = servidor_con(CONV6, 'conversor-fuera', R6, 'DelphiStyleConvert.exe')
+try:
+    r = otro.call('delphi_styles', {'command': 'build', 'path': R6}, t=240)
+finally:
+    otro.cierra()
+check('R6 el conversor de estilos no escribe en la carpeta del agente: corre en su contenedor, sobre una copia',
+      not os.path.exists(FUERA6), r[:300])
+check('R6 ...y uno que dice otro protocolo no se lee (STYLE-066)',
+      mc.es(r, 'SR_STYLES_CONVERSOR_OTRA_VERSION_FMT'), r[:400])
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')

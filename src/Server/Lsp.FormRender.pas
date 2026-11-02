@@ -294,6 +294,17 @@ function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
   COPIADOS a la carpeta de esta llamada, lo que dice se traduce de vuelta a las
   rutas de verdad, y sin contenedor no se dibuja (DSGN-177). }
 function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
+
+{ LA caja de los ayudantes que corren en un contenedor (los paquetes del IDE, los
+  dos renderizadores y el conversor de estilos, CajaDePaquetes) y el PATH con el
+  que encuentran lo suyo; '' si esta, si no el motivo, sin etiqueta: quien la
+  pide lo dice con su mensaje (DSGN-177, STYLE-065). Quien la toma la suelta
+  con SueltaCaja cuando su ayudante acaba: una caja en uso no se purga. }
+function CajaDeLosAyudantes(out ACaja, APath: string): string;
+procedure SueltaCaja(const ACaja: string);
+{ Un mensaje sin la casa del servidor por dentro (su temporal): lo que dice un
+  ayudante o una excepcion de su lanzamiento puede nombrarla }
+function SinNuestraCasa(const AMensaje: string): string;
 { Si esos bytes son un programa o una biblioteca, por su cabecera y no por su nombre:
   de eso no se copia nada al lado del ayudante. }
 function EsEjecutable(const ABytes: TArray<Byte>): Boolean;
@@ -1660,6 +1671,8 @@ begin
         if Ayudante <> '' then
           Ayudantes := Ayudantes + [Ayudante];
       end;
+      // y el conversor de estilos, que corre en un contenedor como ellos (Lsp.Styles)
+      Mira(ServerDir, 'DelphiStyleConvert.*');
       // donde el IDE deja lo compilado, los paquetes declarados, y lo que el
       // PATH le da a sus dependencias (por donde las busca Windows). Un nombre
       // repetido: el primero, como el cargador
@@ -1746,15 +1759,27 @@ begin
       APath := SuPath(ACaja);
     except
       on E: Exception do
+      begin
+        // sin caja: quien la pidio no suelta (SueltaCaja) un uso que no se apunto, el
+        // de OTRA llamada que si la usa
+        ACaja := '';
+        // el motivo, sin etiqueta: lo envuelve quien pidio la caja (CajaDeLosAyudantes)
         if Paso <> '' then
-          Result := MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT,
-            [MsgFmt(SF_RENDER_CAJA_PASO_FMT, [Paso, SinNuestraCasa(E.Message)])])
+          Result := MsgFmt(SF_RENDER_CAJA_PASO_FMT, [Paso, SinNuestraCasa(E.Message)])
         else
-          Result := MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [SinNuestraCasa(E.Message)]);
+          Result := SinNuestraCasa(E.Message);
+      end;
     end;
   finally
     Fuentes.Free;
   end;
+end;
+
+function CajaDeLosAyudantes(out ACaja, APath: string): string;
+var
+  Paquetes: TArray<string>;
+begin
+  Result := CajaDePaquetes(DiscoverRadStudio, ACaja, APath, Paquetes);
 end;
 
 { Lo que el ayudante lee de las raices, COPIADO a AEtapa: el form (APeticion.Path,
@@ -1852,7 +1877,7 @@ begin
         Exit;
       Result := CajaDePaquetes(DiscoverRadStudio, Caja, PathHijo, Paquetes);
       if Result <> '' then
-        Exit;
+        Exit(MsgFmt(SR_DESIGNER_SIN_CONTENEDOR_FMT, [Result]));
       var Pet := APeticion;
       Pet.Path := CopiaLoQueLee(APeticion, Etapa, Junto);
       Pet.Carpeta := '';
