@@ -95,6 +95,7 @@ type
     [Test] procedure UnaListaDeRutasSeparaLoQueNtfsSepara;
     [Test] procedure LasCarpetasDelServidorPorSuNombreComoNtfs;
     [Test] procedure LaExtensionComoLaComparaNtfs;
+    [Test] procedure ElAgenteSeReconocePorSuNombre;
   end;
 
   { V204 de la 1.23.1: el Include de un proyecto se resuelve por EL resolutor
@@ -290,6 +291,7 @@ uses
   Lsp.Codificacion,   // ekUtf8Bom
   Lsp.Discovery,      // la instalacion del IDE
   Lsp.Rutas,          // EsRutaAbsoluta, RutaDesde
+  Lsp.Identidad,      // EsDelAgente, EsDeOtroAgente
   Lsp.Pascal,         // EsNombreSueltoEn
   Lsp.RemoteRun,      // los compositores de paclient
   Lsp.ProcessLaunch,  // ComillasSinEscape
@@ -1753,6 +1755,25 @@ begin
   Assert.IsFalse(TieneExtension('C:\x\nota.pa'#$02E2, ['.pas']), 'una s modificadora no es una s');
   Assert.IsFalse(TieneExtension('C:\x\x.dpr'#$1D3C'j', ['.dproj']), 'ni una O modificadora una o');
   Assert.IsFalse(TieneExtension('C:\x\sinextension', ['.pas']), 'sin extension');
+end;
+
+procedure TClaveDeCarpetaTests.ElAgenteSeReconocePorSuNombre;
+begin
+  // EL "es mio" (forma 15 de la 1.26): el nombre del agente es ASCII y se
+  // compara como NTFS; sin identidad (el operador) nada es suyo ni de otro
+  SetThreadIdentity('Ana');
+  try
+    Assert.IsTrue(EsDelAgente('ANA'), 'las mayusculas no cuentan');
+    Assert.IsFalse(EsDelAgente(''), 'la raiz misma no es su carpeta');
+    Assert.IsFalse(EsDelAgente('Ana2'), 'otro nombre');
+    Assert.IsTrue(EsDeOtroAgente('Luis'), 'otro dueno');
+    Assert.IsFalse(EsDeOtroAgente('ana'), 'el suyo');
+    Assert.IsFalse(EsDeOtroAgente(''), 'sin dueno no es de nadie');
+  finally
+    ClearThreadIdentity;
+  end;
+  Assert.IsFalse(EsDelAgente('Ana'), 'sin identidad nada es suyo');
+  Assert.IsFalse(EsDeOtroAgente('Luis'), '...ni de otro: el operador puede con todo');
 end;
 
 initialization

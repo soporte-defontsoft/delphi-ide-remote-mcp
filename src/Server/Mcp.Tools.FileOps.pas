@@ -395,20 +395,19 @@ end;
   marker belonging to somebody else, and it names them. }
 function PurgeOwnershipDenied(const APathIn: string): string;
 var
-  Me, Owner, F, Sib, APath: string;
+  Owner, F, Sib, APath: string;
   Others: TStringList;
 begin
   Result := '';
   APath := LongCanonical(APathIn);
-  Me := CurrentAgent;
   // No identity (stdio, the operator's own console) is trusted with everything.
-  if Me = '' then
+  if CurrentAgent = '' then
     Exit;
   // su marca o la de la copia que lo contiene (DuenoEnLaPapelera): un
   // fichero de DENTRO de la carpeta que otro tiro no lleva marca propia, y se
   // purgaba - y con el, la copia entera (V193 de la 1.23.1, medido)
   Owner := DuenoEnLaPapelera(APath);
-  if (Owner <> '') and not SameText(Owner, Me) then
+  if EsDeOtroAgente(Owner) then
     Exit(MsgFmt(SR_FILE_PURGE_NOT_YOURS_FMT, [Owner]));
   if TFile.Exists(APath) then
     Exit;
@@ -428,7 +427,7 @@ begin
       if not (TFile.Exists(Sib) or TDirectory.Exists(Sib)) then
         Continue;
       Owner := TrashOwner(Sib);
-      if (Owner <> '') and not SameText(Owner, Me) then
+      if EsDeOtroAgente(Owner) then
         Others.Add(Owner);
     end;
     if Others.Count > 0 then
@@ -687,8 +686,7 @@ begin
       // could never be left clean by the agent that made it.
       var SibMk := CopiaDeLaMarca(CanonPurge);
       var Mk := TrashOwner(SibMk); // owner is THIS marker's content
-      if (TFile.Exists(SibMk) or TDirectory.Exists(SibMk)) and
-         (CurrentAgent <> '') and (Mk <> '') and not SameText(Mk, CurrentAgent) then
+      if (TFile.Exists(SibMk) or TDirectory.Exists(SibMk)) and EsDeOtroAgente(Mk) then
         Exit(MsgFmt(SR_FILE_PURGE_NOT_YOURS_FMT, [Mk]));
     end
     else

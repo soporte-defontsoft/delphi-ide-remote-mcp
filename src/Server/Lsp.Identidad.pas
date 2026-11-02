@@ -54,6 +54,17 @@ procedure SetThreadIdentity(const AName: string); // stdio: one process, one nam
 procedure ClearThreadIdentity;
 function CurrentAgent: string;               // '' = unknown
 function CurrentAgentOr(const ADefault: string): string;
+{ EL "es mio": ANombre (el dueno de una copia de la papelera, la carpeta bajo
+  una raiz) es el agente de esta llamada, como NTFS compara dos nombres: el
+  del agente es ASCII (NombreDeAgente) y SameText, que solo pliega ASCII, dice
+  de el lo mismo que el disco. Sin identidad (stdio, el operador) nada es
+  suyo: False. }
+function EsDelAgente(const ANombre: string): Boolean;
+{ ...y lo de OTRO agente: ADueno lo marco alguien que no es el de esta
+  llamada. Sin dueno o sin identidad, no: lo que nadie marco no es de nadie,
+  y el operador puede con todo. Lo escribian a mano la purga de la papelera
+  (tres veces) y el confinamiento (forma 15 de la 1.26). }
+function EsDeOtroAgente(const ADueno: string): Boolean;
 
 { El REGISTRO de sesiones HTTP - uno solo, el mismo que guarda la identidad
   (hasta 1.0.16 el servidor HTTP llevaba un anillo aparte de ids conocidos:
@@ -314,6 +325,16 @@ begin
     Result := TCurrentAgent
   else
     Result := ADefault;
+end;
+
+function EsDelAgente(const ANombre: string): Boolean;
+begin
+  Result := (TCurrentAgent <> '') and SameText(ANombre, TCurrentAgent);
+end;
+
+function EsDeOtroAgente(const ADueno: string): Boolean;
+begin
+  Result := (TCurrentAgent <> '') and (ADueno <> '') and not EsDelAgente(ADueno);
 end;
 
 initialization

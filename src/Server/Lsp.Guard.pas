@@ -4789,7 +4789,7 @@ begin
     Seg := Rel
   else
     Seg := Rel.Substring(0, P);
-  if SameText(Seg, Me) then
+  if EsDelAgente(Seg) then
     Exit; // your own folder
   // como NTFS compara dos nombres (RutaEnLista): SameText solo plegaba ASCII y una
   // compartida con una letra no ASCII en otra mayuscula se negaba (revisor del
