@@ -132,3 +132,35 @@ Left as they were, and why:
   1,600 characters, little to win for the cost of measuring them.
   `delphi_textedit` only took the texts it shares with its twins (27
   characters more: one concept, one text).
+
+## The second pass (November 2026)
+
+| `tools/list`, 37 tools, no vault | 1.25.1 | after |
+| --- | --- | --- |
+| characters | 104,840 | 103,949 (-891) |
+| margin under the 105,000 budget | 160 | 1,051 |
+
+Seven tools: `delphi_config` (its description and `version`), the `new` that
+`delphi_edit`, `delphi_textedit` and `delphi_changeset` share, and the
+descriptions of `delphi_changeset`, `delphi_move`, `delphi_test` and
+`delphi_build`. What went: the same idea said twice ("Same rule for one-line
+and block anchors" after the rule itself), where an IDE dialog lives, a
+field the answer names by itself, checks the agent cannot act on. No rule,
+limit or default.
+
+Measured with Qwen3.8 Flash Next, the model Hermes uses, on the one slot it
+has: 25 tasks, three times each, with the current text and the trimmed one.
+After correcting the checker, 66 of 75 against 63 of 75: three tasks one
+miss apart, all against the trim, and two where the checker had lost an
+answer. Those five, five more times each: 16 of 25 against 20 of 25, none
+lost by the trim. Over the eight runs, `delphi_edit` and `delphi_changeset`
+end one call apart (8 against 7, 7 against 6), the single miss of the first
+three runs (a call with only the path; `status` before `preview`); the trim
+is ahead on the other three.
+
+The checker, measured again, failed twice: a boolean the model sent as
+`"True"`, and two calls in one answer, whose arguments were joined into
+something that is not JSON. Both texts fail the same two tasks every time:
+to set Linux64's SDK the model calls `add-platform` with `sdk`, and to ship
+a `.so` it looks first with `view`. That is a friction of `delphi_config`'s
+text, not of the trim, and it is measured apart.

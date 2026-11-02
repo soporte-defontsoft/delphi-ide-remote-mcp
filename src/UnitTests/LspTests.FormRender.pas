@@ -381,6 +381,8 @@ begin
   Assert.IsTrue(O.Contains(' --bdsroot "C:\Program Files\Ide"'), 'un valor con espacios va entero: ' + O);
   Assert.IsTrue(O.Contains(' --knownfile "C:\e tapa\paquetes.lst"'), 'un valor con espacios va entero: ' + O);
   Assert.IsTrue(O.Contains(' --timeout '), 'el vigia del ayudante va siempre: ' + O);
+  Assert.IsTrue(O.Contains(' --packagestimeout ' + IntToStr(ESPERA_DEL_CLIENTE_MS)),
+    'la fase de los paquetes, dentro de lo que espera un cliente (1.26): ' + O);
 end;
 
 procedure TFormRenderTests.OrdenNoPasaValoresVacios;

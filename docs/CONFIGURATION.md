@@ -149,11 +149,14 @@ without the container nothing is drawn (`DSGN-177`), so a form shows no live dat
 it. What the agent writes - the form - is judged first (a value with the shape of a path outside
 the roots is refused by its text before the renderer starts), and a component that waits (a
 design-time connection with nothing to open) ends at the renderer's budget (`RENDER-007`, 60 s,
-nothing left behind). So can the first render after Microsoft Defender updates its signatures,
-about three times a day, on a machine with third-party design packages: it checks each package it
-has not seen under those signatures, up to about 10 s each (measured 2026-11-01 on a 4-core VM
-with 4 GB and 41 third-party packages: 86 to 110 s once, 1.6 s afterwards). What it checked
-stays checked, so repeating the call gets through. The rest is in `src/Render/README.md`.
+nothing left behind). Loading the IDE's design packages has a budget of its own, 50 s, inside what
+an MCP client waits: the first render after Microsoft Defender updates its signatures, about three
+times a day, on a machine with third-party design packages, can need more, because it checks each
+package it has not seen under those signatures, up to about 10 s each (measured 2026-11-01 on a
+4-core VM with 4 GB and 41 third-party packages: 86 to 110 s once, 1.6 s afterwards). Then the
+answer is `RENDER-027`, with how many packages were loaded. What it checked stays checked, so the
+same call repeated goes on from there (measured 2026-11-02: 50 s and then 17 to 20 s, against 69 s
+in one go). The rest is in `src/Render/README.md`.
 
 RAD Studio 13.1 and 13.2 are both BDS 37.0: one replaces the other, they never sit side by
 side. For that, one machine (or VM) per version, each with its own server - the same model,

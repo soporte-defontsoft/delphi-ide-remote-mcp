@@ -97,12 +97,14 @@ a quote, and what followed it would be another switch.
 DelphiFormRenderVcl --path <dfm> --out <png> [--state Comp.Prop=Value]* [--component Name]
                     [--style <file.vsf>] [--nonvisual on|off] [--packages auto|none|all]
                     [--root auto|form|frame] [--fidelity auto|window|print]
-                    [--bds 37.0] [--bdsroot <dir>] [--knownfile <file>] [--timeout ms] [--verbose]
+                    [--bds 37.0] [--bdsroot <dir>] [--knownfile <file>] [--timeout ms]
+                    [--packagestimeout ms] [--verbose]
 DelphiFormRenderFmx --path <fmx> --out <png> [--state ...]* [--component Name]
                     [--style <file.style>|none|windows|win7|win8|win10|win11|mobile|android|ios|ios-dark|osx|linux|gnome]
-                    [--nonvisual on|off] [--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout] [--verbose]
+                    [--nonvisual on|off] [--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout]
+                    [--packagestimeout] [--verbose]
 DelphiFormRender*   --unreadableclasses
-DelphiFormRender*   --path <form> --boxes [--packages ...] [--bds] [--bdsroot] [--knownfile] [--timeout]
+DelphiFormRender*   --path <form> --boxes [--packages ...] [--bds] [--bdsroot] [--knownfile] [--timeout] [--packagestimeout]
 ```
 
 - `--state`: a view state applied through RTTI after the form is built and
@@ -159,6 +161,9 @@ SESSION=<n>                   0 = a service
 STYLE=<what was applied>
 ROOT=<Name>:<Class>:<form|frame>
 PACKAGES=<loaded>/<known>     0/0 = the palette was enough
+PHASE=packages | form         when it starts and ends loading the IDE's design
+                              packages: of a renderer the server stops, the
+                              last one says which phase it was in
 COMPONENTS=<n>
 SUBSTITUTED=<classes>         not found in any package: pink box with the name
 IGNORED=<reader error>        repeatable; also before a failure: what the
@@ -239,15 +244,22 @@ needed for it. The server never installs or modifies firewall policy.
 Third-party components remain available. Design mode avoids application event
 handlers, but loaded components still run their constructors and property setters,
 as the IDE runs them when it opens a form - in the container, which is what bounds
-them. A component that waits - a design-time connection with nothing to open, a
-package that hangs while loading - ends at the helper's budget with `RENDER-007`
-(measured 2026-10-14 with a `TFDConnection` set to `Connected = True` and no
-database to open: 60 s, nothing written, no process left). A first load can end there
-too: Microsoft Defender checks each design package it has not seen under its current
-signatures, up to about 10 s each, and the helper's budget counts that wait (measured
-2026-11-01, its own performance report, `TrustCheck`: 86 to 110 s with 41 third-party
-packages, 1.6 s for the same bytes afterwards, and again 92 s with 16 bytes appended to
-each). It is checked once per signature update, so repeating the call gets through.
+them. A component that waits - a design-time connection with nothing to open - ends
+at the helper's budget with `RENDER-007` (measured 2026-10-14 with a `TFDConnection`
+set to `Connected = True` and no database to open: 60 s, nothing written, no process
+left). Loading the IDE's design packages has a budget of its own, `--packagestimeout`
+(50 s from the server, inside what an MCP client waits): a helper still loading them
+then answers `RENDER-027` with how many it loaded. That is how a first load ends:
+Microsoft Defender checks each design package it has not seen under its current
+signatures, up to about 10 s each (measured 2026-11-01, its own performance report,
+`TrustCheck`: 86 to 110 s with 41 third-party packages, 1.6 s for the same bytes
+afterwards, and again 92 s with 16 bytes appended to each). What it checked stays
+checked even when the helper stops halfway, so the same call repeated goes on from
+there (measured 2026-11-02 on the same VM, three times with new bytes: 50 s and then
+17 to 20 s, against 69 s in one go). The helper says `PHASE=packages` and
+`PHASE=form` around that load, so when the SERVER stops it (its own deadline) the
+answer says which one it was in: `DSGN-187` while loading packages, `DSGN-062`
+after.
 
 A frame that contains itself, directly or through others, gets `RENDER-026` with the
 chain of files, and the rest of the form is drawn without it: the reader takes the

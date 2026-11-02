@@ -13,10 +13,12 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_build target=Deploy` that fails no longer tells you to kill a remote-run job that does not exist. `deployLockedNote` looked for `E0017` and the watcher's name anywhere in msbuild's console, so a folder with such a name was enough; it now reads the lines msbuild classifies as errors, with both on the same line.
 - `RENDER-026` says which file holds the inline it left out: the form you asked for may not be the one that closes the cycle.
 - A search path that names one folder twice, differing only in case or in a final backslash, reaches the language server once, as the IDE's library already did.
+- A first load of the IDE's design packages answers before an MCP client gives up, and says it was the packages. Under Microsoft Defender it can take more than a minute once (each package it has not seen is checked), and the renderer went on until its 60 s, past what many clients wait, to answer `RENDER-007`, which then said "repeat" and also "something in the form waits". Now loading the packages has a budget of its own, 50 s, and a renderer still loading them answers `RENDER-027` with how many it loaded; repeating the call goes on from there (measured on a 4-core VM, three times with new bytes: 50 s and then 17 to 20 s, against 69 s in one go). `RENDER-007` is left for a form that does not finish, and when the server itself stops a renderer it says which phase it was in (`DSGN-187` while loading packages, `DSGN-062` after).
 
 ### Changed
 
 - Internal, nothing in a contract: one reader of a list of folders (`CarpetasDeUnaLista`), of the account's name, by Windows and no longer by the environment for a deploy's note (`NombreDeEstaCuenta`), of the X authorization on Linux (`XauthorityMasReciente`), and one start, one report of what was read and one writer of a measure for the two form renderers.
+- Seven tool descriptions are shorter, 891 characters in all (`delphi_config`, `delphi_changeset`, `delphi_move`, `delphi_test`, `delphi_build`, and the `new` of `delphi_edit`, `delphi_textedit` and `delphi_changeset`): no rule, limit or default went, and with Qwen3.8 Flash Next no measured task was lost (`docs/TOOL-DESCRIPTIONS.md`, the second pass).
 
 ## [1.25.1] - 2026-11-02
 

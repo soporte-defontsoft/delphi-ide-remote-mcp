@@ -7,7 +7,7 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 2;
+  FR_PROTOCOLO_VERSION = 3;
   FR_CAPTURE = 'CAPTURE=';       // CAPTURE=<ruta del png> (la misma clave que el nodo de escritorio)
   FR_SIZE = 'SIZE=';             // SIZE=<ancho>x<alto> del png
   FR_DPI = 'DPI=';               // DPI=96: el proceso no es consciente del DPI, un pixel = una unidad del dfm
@@ -15,6 +15,10 @@
   FR_FIDELITY = 'FIDELITY=';     // FIDELITY=window (pintada real, sesion interactiva) | print (WM_PRINT, sesion 0) | canvas (FMX)
   FR_SESSION = 'SESSION=';       // SESSION=<id de sesion de Windows> (0 = servicio)
   FR_PACKAGES = 'PACKAGES=';     // PACKAGES=<cargados>/<conocidos> de diseno del IDE (0/0 = no hicieron falta)
+  FR_PHASE = 'PHASE=';           // PHASE=<FR_FASE_*> al empezar y al acabar los paquetes del IDE: de un ayudante que
+                                 // el servidor para, su ultima fase dice si se paro cargandolos (1.26)
+  FR_FASE_PAQUETES = 'packages';
+  FR_FASE_FORM = 'form';
   FR_COMPONENTS = 'COMPONENTS='; // COMPONENTS=<n> leidos de la raiz
   FR_SUBSTITUTED = 'SUBSTITUTED='; // SUBSTITUTED=<TClase,TClase> que no existen en ningun paquete (sustituto rosa con el nombre)
   FR_IGNORED = 'IGNORED=';       // IGNORED=<de quien>|<error que se salto, EN PARTES> (repetible; FR_PARTES_SEP): <de quien> =

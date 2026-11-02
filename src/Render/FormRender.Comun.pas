@@ -40,6 +40,9 @@ type
     Estados: TArray<string>; // --state Comp.Prop=Valor (repetible)
     NoVisuales: Boolean; // --nonvisual on|off (off, como la tool: la imagen es el form como se vera; 3.4)
     TiempoMs: Integer;   // --timeout <ms>
+    // --packagestimeout <ms>: el plazo de la fase de los paquetes del IDE, dentro de lo
+    // que espera un cliente; pasado, RENDER-027 en vez de seguir (1.26)
+    TiempoPaquetesMs: Integer;
     Verbose: Boolean;    // --verbose: trazas '#'
     // --writeback on: EL JUEZ de lo que guarda el IDE (3.11 de la 1.18.0) -
     // la form cargada como la carga el designer y escrita por TWriter, sin
@@ -174,7 +177,8 @@ procedure SinDesbordar(var S: string); // una linea: sin saltos
   lector aleman no nombraba nada. }
 function LecturaEnPartes(const AMensaje: string): string;
 
-{ El vigia: pasado AMs el proceso escribe ERROR=timeout y se mata con FR_RC_TIMEOUT }
+{ El vigia: pasado AMs (o --packagestimeout, si sigue cargando los paquetes del IDE)
+  el proceso escribe ERROR= (RENDER-007, o RENDER-027) y se mata con FR_RC_TIMEOUT }
 procedure ArrancaVigia(AMs: Integer);
 procedure ParaVigia;
 
@@ -409,6 +413,9 @@ var
   GModulosDatos: TDictionary<string, HMODULE>; // paquetes abiertos solo como datos (iconos)
   GConocidos: TStringList;           // rutas de los Known Packages
   GPaquetesCargados: Boolean = False;
+  // la fase de los paquetes, para el vigia (otro hilo: solo los lee)
+  GCargandoPaquetes: Boolean = False;
+  GPaquetesHechos, GPaquetesListados: Integer;
 
 { ---- respuesta ---- }
 
@@ -557,6 +564,7 @@ begin
       else if P = '--unreadableclasses' then GPeticion.ClasesSinLeer := True
       else if P = '--boxes' then GPeticion.Cajas := True
       else if P = '--timeout' then GPeticion.TiempoMs := StrToInt(Valor)
+      else if P = '--packagestimeout' then GPeticion.TiempoPaquetesMs := StrToInt(Valor)
       else if P = '--verbose' then GPeticion.Verbose := True
       else
         raise ERender.Create(MsgFmt(SR_RENDER_ARG_DESCONOCIDO_FMT, [P]));
@@ -864,16 +872,30 @@ type
   end;
 
 procedure TVigia.Execute;
+var
+  Reloj: TStopwatch;
+  Espera: Integer;
 begin
-  if GVigiaPara.WaitFor(FMs) = wrTimeout then
-  begin
+  Reloj := TStopwatch.StartNew;
+  // la fase de los paquetes con su plazo (--packagestimeout); acabada, lo que
+  // queda del render entero
+  Espera := FMs;
+  if (GPeticion.TiempoPaquetesMs > 0) and (GPeticion.TiempoPaquetesMs < FMs) then
+    Espera := GPeticion.TiempoPaquetesMs;
+  if GVigiaPara.WaitFor(Espera) <> wrTimeout then
+    Exit;
+  if (Espera < FMs) and not GCargandoPaquetes and (GVigiaPara.WaitFor(FMs - Espera) <> wrTimeout) then
+    Exit;
+  if GCargandoPaquetes then
+    Responde(FR_ERROR, MsgFmt(SR_RENDER_PAQUETES_CARGANDO_FMT,
+      [Reloj.ElapsedMilliseconds div 1000, GPaquetesHechos, GPaquetesListados]))
+  else
     Responde(FR_ERROR, MsgFmt(SR_RENDER_TIEMPO_FMT, [FMs]));
-    // lo que matamos, lo limpiamos: este proceso no va a finalizar, y sus
-    // atomos globales (los del exe y los de cada bpl cargado) se quedarian
-    // en la tabla de la sesion para siempre (Lsp.AtomosRtl; 18-oct-2026)
-    BorraAtomosPropios;
-    TerminateProcess(GetCurrentProcess, FR_RC_TIMEOUT);
-  end;
+  // lo que matamos, lo limpiamos: este proceso no va a finalizar, y sus
+  // atomos globales (los del exe y los de cada bpl cargado) se quedarian
+  // en la tabla de la sesion para siempre (Lsp.AtomosRtl; 18-oct-2026)
+  BorraAtomosPropios;
+  TerminateProcess(GetCurrentProcess, FR_RC_TIMEOUT);
 end;
 
 procedure ArrancaVigia(AMs: Integer);
@@ -1281,6 +1303,10 @@ begin
   end;
   GPaquetesCargados := True;
   PonGanchos;
+  GPaquetesListados := AConocidos;
+  GPaquetesHechos := 0;
+  Responde(FR_PHASE, FR_FASE_PAQUETES);
+  GCargandoPaquetes := True;
   for var Ruta in GConocidos do
   begin
     if not TFile.Exists(Ruta) then
@@ -1308,12 +1334,15 @@ begin
       LlamaRegisters(H);
       EnganchaVentanaEnFmxDelIde; // y tras su Register
       Inc(ACargados);
+      GPaquetesHechos := ACargados;
       Traza(Format('%s: %d clases, %d ms', [GPaqueteActual, GRegistradas.Count - Antes, Reloj.ElapsedMilliseconds]));
     except
       on E: Exception do
         Traza(Format('%s: no carga: %s: %s', [GPaqueteActual, E.ClassName, E.Message]));
     end;
   end;
+  GCargandoPaquetes := False;
+  Responde(FR_PHASE, FR_FASE_FORM);
   for var I := 0 to GModulosDeDiseno.Count - 1 do
     Traza('modulo de diseno: ' + GModulosDeDiseno.Names[I] + ' -> ' + GModulosDeDiseno.ValueFromIndex[I]);
 end;

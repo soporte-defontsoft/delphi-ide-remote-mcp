@@ -171,7 +171,7 @@ const
   MAX_USOS = 30;
   MAX_NOMBRES = 40;
   // hay clientes MCP que se rinden al minuto (el mismo de ESPERA_TABLA_MS)
-  PLAZO_DEL_JUICIO_MS = 50000;
+  PLAZO_DEL_JUICIO_MS = ESPERA_DEL_CLIENTE_MS;
   // (que valor toma cada tipo lo dice la tabla, leido del fuente: la base
   // de un tipo 'o' y las constantes de un entero, BaseQueNoCasa; aqui habia
   // tres listas de nombres de tipos a mano, que dejaban pasar un TColor

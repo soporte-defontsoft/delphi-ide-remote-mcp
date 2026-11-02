@@ -202,10 +202,11 @@ it. With no name, each request of that protocol is a stranger to the one before.
   `lint`, `set` and an edit also say when a string value names a path
   `preview` refuses (`DSGN-183`, a note): the form stays valid, but neither
   it nor the other forms of its folder preview until that value changes.
-- `RENDER-007` (a render that passed its time) or `DSGN-185` (an edit judged
-  too slowly, nothing written): repeat the same call. An antivirus checking
-  packages it has not seen takes that long once. Only if it happens every
-  time is it the form: something in it waits when it loads.
+- `RENDER-027` (the IDE's design packages still loading) or `DSGN-185` (an
+  edit judged too slowly, nothing written): repeat the same call. An
+  antivirus checking packages it has not seen takes that long once, and the
+  repeat goes on from there. `RENDER-007` is the form itself: something in it
+  waits when it loads.
 - SEE the form instead of imagining it: `delphi_designer command=preview
   path=<form>` returns a PNG of what the IDE designer shows. The loop is
   insert/set -> `lint` -> `preview` -> fix. To place something, measure on

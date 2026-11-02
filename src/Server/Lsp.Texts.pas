@@ -2097,8 +2097,7 @@ const
   { Lo que significa un salto de linea al FINAL de "new", dicho igual en
     delphi_edit, delphi_textedit y delphi_changeset (LineasDeNew, Lsp.Patch). }
   SP_NEW_SALTO_FINAL =
-    '. A final line break is dropped; each extra one adds a blank line. ' +
-    'Same rule for one-line and block anchors.';
+    '. A final line break is dropped; each extra one adds a blank line.';
   SP_PASERVER_JOB =
     'kill / output: the "jobId" a remote-run answer gave you; with profile ' +
     'and project (the same .dproj path) - only a job of THAT project on ' +
@@ -3262,8 +3261,7 @@ const
     'is ignored - VERSIONINFO is numeric). Written to the Windows VerInfo ' +
     'numbers AND the FileVersion/ProductVersion keys at once, which is ' +
     'what drifts by hand. Android and iOS versions are NOT touched. Needs ' +
-    'the version keys the IDE writes (Version Info page), else CFG-003. ' +
-    'With include=true the binaries carry it too.';
+    'the version keys the IDE writes (Version Info page), else CFG-003.';
 
   SP_CONFIG_INCLUDE =
     'set-version: true = the binaries carry the version too: ' +
@@ -4981,14 +4979,13 @@ const
     'that uses DUnitX, or a console one whose name says test/spec). run ' +
     '(project = the test .dproj): builds and runs that runner and returns ' +
     'the STRUCTURED result - total, passed, failed, errored (a DUnitX test ' +
-    'that raised; it fails the run too), the failures, exitCode, duration ' +
-    'and the tail of its output - read from the DUnitX summary or the ' +
+    'that raised; it fails the run too), the failures, exitCode and ' +
+    'duration - read from the DUnitX summary or the ' +
     'PASS/FAIL + ExitCode convention of a hand-written runner; verdictFrom ' +
     '(counts or exitCode) says where the verdict comes from, never ' +
     'invented, and a runner that exits with an error fails the run even ' +
-    'when its counts are green. Running tests is RUNNING, the only thing that runs on this ' +
-    'server, behind its own switch [Workspace.<name>] AllowTests (without ' +
-    'it, discover works and run is refused). The binary runs in a Windows ' +
+    'when its counts are green. Running tests has its own switch, AllowTests in ' +
+    'the workspace (without it, discover works and run is refused). The binary runs in a Windows ' +
     'container of its own, on a COPY of its output folder: it reads and ' +
     'writes that copy and only what Windows gives every container (its own ' +
     'temp folder, deleted with it, and the system files) - no other file, ' +
@@ -4996,8 +4993,7 @@ const
     'test here is for LOGIC: what it reads has to travel in its output ' +
     'folder, and a project built with runtime packages (UsePackages) is ' +
     'refused before building: build it whole. What it writes in that ' +
-    'folder comes back in "files", by folder like every file list (dir "." is ' +
-    'that folder; text files with their content, capped).';
+    'folder comes back in "files" (text files with their content, capped).';
 
   SP_TEST_COMMAND =
     'discover (list the test projects under "path") | run (build and run ' +
@@ -5628,6 +5624,14 @@ const
     '[DSGN-062 DENIED] %s did not answer in %d s and was stopped: something ' +
     'in the form waits (a package, a dialog it could not show). Nothing ' +
     'reached the server''s desktop.';
+
+  { El servidor lo paro y lo ultimo que dijo el ayudante (PHASE=) es que cargaba
+    los paquetes del IDE: no es el form (1.26; el ayudante, con su vigia, dice
+    RENDER-027 por si mismo) }
+  SR_DESIGNER_RENDER_PAQUETES_TIEMPO_FMT =
+    '[DSGN-187 DENIED] %s was stopped after %d s while it was still loading the ' +
+    'IDE''s design packages, before the form. Repeat the same call: an antivirus ' +
+    'checks a package the first time it sees it, and what it checked stays checked.';
 
   SR_DESIGNER_RENDER_SIN_BPL_FMT =
     '[DSGN-063 INTERNAL] %s could not start: Windows did not find its ' +
@@ -8205,9 +8209,8 @@ const
     'MULTI-FILE TRANSACTIONS: when one change touches several files, the ' +
     'whole batch lands or none of it. Flow: begin (gives an id) -> stage ' +
     'the operations (kind=edit|create|delete|move; nothing touches ' +
-    'disk yet) -> preview (resolves every edit anchor, rehearses each edit ' +
-    'and create with the engine - encoding, read-only attribute, binary ' +
-    'content, the write gate - and fingerprints every file the batch ' +
+    'disk yet) -> preview (resolves every anchor, rehearses each edit ' +
+    'and create with the engine, and fingerprints every file the batch ' +
     'touches) -> commit (fingerprints re-checked: a file changed since ' +
     'preview refuses the WHOLE batch; byte snapshots taken, operations ' +
     'applied in order; any failure restores every file byte-exact and says ' +
@@ -10465,20 +10468,19 @@ const
   SD_CFG_CONFIG =
     'See and manage a project''s build configurations and target PLATFORMS. ' +
     'view (read-only): the framework (VCL is Windows-only; FMX and console ' +
-    'cross platforms), the configurations (Debug/Release/custom), the ' +
+    'cross platforms), the configurations, the ' +
     'defaultConfig and defaultPlatform (what delphi_build builds without ' +
     'config= / platform=) and every ' +
     'platform - enabled or not, possible for THIS project, needing a ' +
-    'PAServer profile. add-platform / remove-platform: enable or disable a ' +
-    'platform in the .dproj (a curated edit of <Platforms> only). ' +
-    'set-version: the project VERSION everywhere it must agree ' +
-    '(include=true: in the binaries too). set-active: the configuration ' +
-    'and/or platform it builds by default, as Activate in the IDE''s Project ' +
-    'Manager - one it declares. ' +
-    'set-output: every binary under one folder (Compiled by default), ' +
+    'PAServer profile. add-platform / remove-platform: a curated edit of ' +
+    '<Platforms> only. ' +
+    'set-version: the project VERSION everywhere it must agree. ' +
+    'set-active: what it builds by default, as Activate in the IDE''s Project ' +
+    'Manager. ' +
+    'set-output: every binary under one folder, ' +
     'keeping the platform/config subfolders. add-searchpath / ' +
-    'remove-searchpath: a unit search path for ONE platform, as the IDE''s ' +
-    'Project Options > Search path; a platform added to a project inherits ' +
+    'remove-searchpath: a unit search path for ONE platform; a platform ' +
+    'added to a project inherits ' +
     'NO search paths from the others - the usual reason a unit is "not ' +
     'found" only there. add-deployfile / remove-deployfile: ship an extra ' +
     'file with the build on ONE platform, as the IDE''s Deployment Manager ' +
@@ -10497,7 +10499,6 @@ const
     'config= name, as the IDE writes it (none: the base group to write, the ' +
     'default build to read) - what no other ' +
     'command covers, an Android keystore to re-point or drop included. ' +
-    'set-sdk, set-profile and add-requires: see command. ' +
     'To BUILD a combination: delphi_build with platform+config.';
 
   // Descripciones que estaban en linea en Mcp.Tools.DelphiExtra.pas (paso 3d, 27-sep-2026)
@@ -10628,9 +10629,8 @@ const
   SD_BUILD_BUILD =
     'Build a Delphi project for real with MSBuild on this machine - the ' +
     'closing check after editing (the linter does not link). The answer ' +
-    'carries the success flag, the compiler errors/warnings (as much as ' +
-    '"verbosity" asks), the output tail, where the binary landed and, with ' +
-    'several Delphi, which one built. Compile-only: a project is refused ' +
+    'carries success, the compiler errors/warnings (as much as ' +
+    '"verbosity" asks) and where the binary landed. Compile-only: a project is refused ' +
     'when it carries what a compile-only build does not understand (a ' +
     'task, an unknown element, free compiler options, a foreign <Import>: ' +
     'AllowBuildScripts=1 in the workspace admits them) or when what the ' +
@@ -10641,10 +10641,9 @@ const
     'project for that build (outputSupplied says where), never written ' +
     'to the .dproj. For a package (.dpk) ' +
     'the answer adds implicitImports (units of OTHER packages it compiled ' +
-    'into itself, W1033) and requiresSuggested (their packages, from this ' +
-    'install''s BPLs, or a .dpk of your workspace with ' +
-    'requiresWorkspaceNote telling you to build it first), the list ' +
-    'delphi_config add-requires takes; a unit dcc cannot find at all ' +
+    'into itself, W1033) and requiresSuggested (their packages, the list ' +
+    'delphi_config add-requires takes; a .dpk of your workspace comes with ' +
+    'requiresWorkspaceNote); a unit dcc cannot find at all ' +
     '(F2613) comes back in missingUnits.';
 
   // Descripciones que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3d, 27-sep-2026)
@@ -10892,9 +10891,8 @@ const
     'unit and its form), the folder they go into. A folder that already ' +
     'exists at dest takes the entries in, one by one; a FILE is never ' +
     'overwritten: if anything would land on one, nothing is written and the ' +
-    'answer lists them (FILE-025). Before the first byte it also checks the ' +
-    'longest path and the free disk space. A move copies the source to the ' +
-    'recoverable trash first; a rename that only changes case is a rename. ' +
+    'answer lists them (FILE-025). A move copies the source to the ' +
+    'recoverable trash first. ' +
     'Jailed: dest inside the workspace roots, and so the source of a move; ' +
     'refused in read-only mode. A move is a rename on its own drive (to ' +
     'another: copy=true, then delphi_delete); links go as links. A folder ' +

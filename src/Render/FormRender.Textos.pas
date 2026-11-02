@@ -34,10 +34,18 @@ const
 
   SR_RENDER_TIEMPO_FMT =
     '[RENDER-007 DENIED] The render did not finish in %d ms: the renderer ends ' +
-    'itself. Repeat the same call: an antivirus checking design packages it ' +
-    'has not seen yet takes that long once, and what it checked stays ' +
-    'checked. If it happens every time, something in the form waits, or a ' +
-    'package hangs while loading.';
+    'itself, and it was not loading design packages: something in the form waits (a ' +
+    'component that connects or opens something while it is created).';
+
+  { %0:d: los segundos que llevaba; %1:d de %2:d: los paquetes cargados de los
+    que lista el IDE, como PACKAGES=. Medido el 2-nov-2026 en la VM: con huella
+    nueva, rendirse a los 50 s y repetir cuesta lo que la carga entera (50 + 17-20
+    s frente a 69 s): lo revisado se queda revisado }
+  SR_RENDER_PAQUETES_CARGANDO_FMT =
+    '[RENDER-027 DENIED] After %0:d s the IDE''s design packages were still ' +
+    'loading (%1:d of %2:d), so the renderer stopped before an MCP client gives ' +
+    'up. Repeat the same call: it goes on from there. An antivirus checks a ' +
+    'package the first time it sees it, and what it checked stays checked.';
 
   SR_RENDER_SIN_IDE_FMT =
     '[RENDER-008 NOT_FOUND] Nobody said where RAD Studio %s is (--bdsroot): ' +
@@ -180,12 +188,12 @@ const
     '[--component Name] [--style <file|platform|none>] [--nonvisual on|off (off)] ' +
     '[--packages auto|none|all] [--root auto|form|frame] ' +
     '[--fidelity auto|window|print] [--bds 37.0] [--bdsroot <dir>] [--knownfile <file>] ' +
-    '[--timeout ms] [--verbose] | ' +
+    '[--timeout ms] [--packagestimeout ms] [--verbose] | ' +
     '%s --path <dfm|fmx> --writeback on ' +
     '[--component Name] [--dropped Name] ' +
-    '[--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout ms] | ' +
+    '[--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout ms] [--packagestimeout ms] | ' +
     '%s --path <dfm|fmx> --convert text|binary --out <file> [--timeout ms] | ' +
-    '%s --unreadableclasses | %s --path <dfm|fmx> --boxes [--packages ...] [--bds] [--bdsroot] [--knownfile] [--timeout ms]';
+    '%s --unreadableclasses | %s --path <dfm|fmx> --boxes [--packages ...] [--bds] [--bdsroot] [--knownfile] [--timeout ms] [--packagestimeout ms]';
 
 function MsgText(const AMsg: string): string;
 function MsgFmt(const AMsg: string; const AArgs: array of const): string;

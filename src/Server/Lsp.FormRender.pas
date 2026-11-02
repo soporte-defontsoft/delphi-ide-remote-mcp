@@ -31,6 +31,13 @@ uses
   Lsp.Styles,       // TStyleDoc: la linea de lo que dijo el lector (LineaDeLoLeido)
   Lsp.DesignerMeta; // TPropiedadDelUsuario: lo que publica una clase del usuario
 
+const
+  { Lo que una llamada puede tardar en contestar: hay clientes MCP que se rinden al
+    minuto, y lo que llega despues no lo lee nadie y el reintento lo repite. Lo usan
+    el juicio de una edicion (DSGN-185) y la fase de los paquetes del renderizador
+    (RENDER-027, 1.26) }
+  ESPERA_DEL_CLIENTE_MS = 50000;
+
 type
   TPeticionRender = record
     Framework: string;         // vcl | fmx
@@ -127,6 +134,7 @@ type
     Dpi, Sesion: Integer;      // DPI=, SESSION=
     RaizNombre, RaizClase, RaizTipo: string; // ROOT=<nombre>:<clase>:<form|frame>
     Fidelidad, Estilo, Paquetes: string;     // FIDELITY=, STYLE=, PACKAGES=
+    Fase: string;              // PHASE=: la ultima (FR_FASE_*); '' si no cargo paquetes
     Componentes: Integer;      // COMPONENTS=
     Sustituidas, Avisos: TArray<string>;
     Ignoradas: TArray<TIgnorada>;
@@ -497,6 +505,8 @@ begin
     AOrden := AOrden + Arg('--out', APeticion.Salida) +
       ' --nonvisual ' + (if APeticion.NoVisuales then 'on' else 'off');
   AOrden := AOrden + ' --timeout ' + IntToStr(RENDER_TIEMPO_AYUDANTE_MS);
+  if APeticion.Convierte = '' then
+    AOrden := AOrden + ' --packagestimeout ' + IntToStr(ESPERA_DEL_CLIENTE_MS);
   if APeticion.Bds <> '' then
     AOrden := AOrden + Arg('--bds', APeticion.Bds);
   if APeticion.RaizBds <> '' then
@@ -624,6 +634,8 @@ begin
       Result.Fidelidad := V
     else if Es(FR_PACKAGES) then
       Result.Paquetes := V
+    else if Es(FR_PHASE) then
+      Result.Fase := V
     else if Es(FR_COMPONENTS) then
       Result.Componentes := StrToIntDef(V, 0)
     else if Es(FR_SUBSTITUTED) then
@@ -1939,6 +1951,9 @@ begin
   else if Vencido and (APeticion.Convierte <> '') then
     // el conversor no carga el form: "algo del form espera" no es su causa (V102)
     Result.Fallo := FalloDelAyudante(MsgFmt(SF_DSGN_CONVERSOR_TIEMPO_FMT, [PlazoDeRender(APeticion) div 1000]))
+  else if Vencido and (Result.Fase = FR_FASE_PAQUETES) then
+    // lo paramos nosotros mientras cargaba los paquetes del IDE: no es el form
+    Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_PAQUETES_TIEMPO_FMT, [Nombre, PlazoDeRender(APeticion) div 1000])
   else if Vencido then
     Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_TIEMPO_FMT, [Nombre, PlazoDeRender(APeticion) div 1000])
   else
