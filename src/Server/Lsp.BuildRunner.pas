@@ -1483,7 +1483,7 @@ var
   L: TStringList;
 begin
   Result := nil;
-  L := TStringList.Create;
+  L := TListaDeRutas.Create; // como los compara NTFS: el locale juntaba dos (Lsp.Rutas)
   try
     L.Sorted := True;
     // por LOS lectores: la lista de los .sdk del IDE (SdksDelIde) y su

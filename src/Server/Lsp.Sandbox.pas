@@ -111,6 +111,18 @@ function SidDeEstaCuenta: string;
   en dos sitios (USERNAME), y ese lo pone quien lanza el proceso. }
 function NombreDeEstaCuenta: string;
 
+{ El SID de la cuenta de este proceso, el de su token, dentro de ABuf (el
+  TOKEN_USER entero, del tamano que pide Windows); nil si no se lee. EL lector: lo
+  leian a mano SidDeEstaCuenta y el reclamo de una DACL (Lsp.Guard), cada uno con
+  su bufer (revisor del paisaje de la 1.26, 19). }
+function SidDelProceso(out ABuf: TArray<Byte>): PSID;
+
+{ DOMINIO\cuenta de este proceso como la dice Windows (LookupAccountSid de su SID:
+  NT AUTHORITY\SYSTEM para LocalSystem, en el idioma de Windows); '' si no se
+  sabe. Se componia con USERDOMAIN del entorno, que pone quien lanza el proceso
+  (revisor del paisaje de la 1.26, 13). }
+function CuentaDeEsteProceso: string;
+
 { Un solo lector del entorno: sin secretos del servidor y con ajustes fijos
   del hijo. No modifica el entorno del servidor ni carreras entre llamadas. }
 function EntornoSinConfiguracion(const AFijas: TArray<string> = nil): string;
@@ -215,21 +227,53 @@ begin
   end;
 end;
 
-function SidDeEstaCuenta: string;
+function SidDelProceso(out ABuf: TArray<Byte>): PSID;
 var
   Tok: THandle;
-  Buf: array [0 .. 511] of Byte;
-  Len: DWORD;
+  Tam: DWORD;
 begin
-  Result := '';
+  Result := nil;
+  ABuf := nil;
   if not OpenProcessToken(GetCurrentProcess, TOKEN_QUERY, Tok) then
     Exit;
   try
-    if GetTokenInformation(Tok, TokenUser, @Buf, SizeOf(Buf), Len) then
-      Result := SidComoTexto(PTokenUser(@Buf)^.User.Sid);
+    Tam := 0;
+    GetTokenInformation(Tok, TokenUser, nil, 0, Tam); // pide el tamano
+    if Tam = 0 then
+      Exit;
+    SetLength(ABuf, Tam);
+    if GetTokenInformation(Tok, TokenUser, @ABuf[0], Tam, Tam) then
+      Result := PTokenUser(@ABuf[0])^.User.Sid;
   finally
     CloseHandle(Tok);
   end;
+end;
+
+function SidDeEstaCuenta: string;
+var
+  Buf: TArray<Byte>;
+begin
+  Result := SidComoTexto(SidDelProceso(Buf));
+end;
+
+function CuentaDeEsteProceso: string;
+var
+  Buf: TArray<Byte>;
+  Nombre, Dominio: array [0 .. 255] of Char;
+  LN, LD: DWORD;
+  Uso: SID_NAME_USE;
+begin
+  Result := '';
+  var Sid := SidDelProceso(Buf);
+  if Sid = nil then
+    Exit;
+  LN := Length(Nombre);
+  LD := Length(Dominio);
+  if not LookupAccountSid(nil, Sid, Nombre, LN, Dominio, LD, Uso) then
+    Exit;
+  Result := string(PChar(@Nombre[0]));
+  if Dominio[0] <> #0 then
+    Result := string(PChar(@Dominio[0])) + '\' + Result;
 end;
 
 function VariableQueVeElBuild(const ANombre: string): string;

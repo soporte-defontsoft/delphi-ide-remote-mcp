@@ -92,6 +92,7 @@ type
   public
     [Test] procedure OtrasMayusculasFueraDeAZDanLaMismaClave;
     [Test] procedure LaBarraFinalNoCambiaLaClave;
+    [Test] procedure UnaListaDeRutasSeparaLoQueNtfsSepara;
   end;
 
   { V204 de la 1.23.1: el Include de un proyecto se resuelve por EL resolutor
@@ -296,7 +297,9 @@ uses
   System.RegularExpressions,
   System.JSON,
   Lsp.Reparse,
-  Lsp.TextoDelNodo;
+  Lsp.TextoDelNodo,
+  System.Classes,
+  System.Types;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;
@@ -1689,6 +1692,41 @@ begin
     var Ida := TextoParaElNodo(T);
     Assert.IsFalse(Ida.Contains('"'), 'sin comillas: ' + Ida);
     Assert.AreEqual(T, TextoDelServidor(Ida), 'de vuelta igual: ' + Ida);
+  end;
+end;
+
+procedure TClaveDeCarpetaTests.UnaListaDeRutasSeparaLoQueNtfsSepara;
+var
+  L: TListaDeRutas;
+begin
+  // la eszett y "ss", un guion blando: NTFS los separa y una lista con el locale
+  // los juntaba (medido el 2-nov-2026); otras mayusculas, tambien fuera de A-Z,
+  // son el mismo nombre
+  L := TListaDeRutas.Create;
+  try
+    L.Sorted := True;
+    L.Duplicates := dupIgnore;
+    L.Add('C:\x\Strasse');
+    L.Add('C:\x\Stra' + #$00DF + 'e');
+    L.Add('C:\x\ab');
+    L.Add('C:\x\a' + #$00AD + 'b');
+    L.Add('C:\X\STRASSE');
+    L.Add('C:\x\' + #$00D1 + 'u');
+    L.Add('C:\x\' + #$00F1 + 'U');
+    Assert.AreEqual(5, L.Count, L.CommaText);
+  finally
+    L.Free;
+  end;
+  // sin ordenar, IndexOf con el mismo juez: el de TStringList descartaba por la
+  // longitud antes de comparar
+  L := TListaDeRutas.Create;
+  try
+    L.Add('C:\x\Strasse');
+    L.Add('C:\x\' + #$00D1 + 'u');
+    Assert.AreEqual(-1, L.IndexOf('C:\x\Stra' + #$00DF + 'e'));
+    Assert.AreEqual(1, L.IndexOf('C:\X\' + #$00F1 + 'U'));
+  finally
+    L.Free;
   end;
 end;
 

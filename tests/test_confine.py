@@ -168,4 +168,18 @@ srv.mata()
 check('C6b control: con identidad (alice), escribir en la carpeta de bob se niega (el confinamiento esta encendido)',
       mc.es(r6, 'SR_AGENT_CONFINED_FMT') and not os.path.exists(os.path.join(base, 'bob', 'alice.txt')), r6[:300])
 
+# C11 una carpeta compartida se compara como NTFS compara sus nombres: SharedFolders=COMUN con su U acentuada en
+# mayuscula y la carpeta en disco en minuscula son la MISMA carpeta (SameText solo plegaba ASCII y la negaba;
+# revisor del paisaje de la 1.26, 16)
+base = mc.carpeta(os.path.join('confine', 'acento'))
+exe = mc.copia_exe(base)
+COMUN = 'com' + chr(0xFA) + 'n'
+os.makedirs(os.path.join(base, COMUN))
+srv = mc.Stdio(exe, mc.entorno({'DELPHI_MCP_ROOTS': base, 'DELPHI_MCP_AGENT_CONFINEMENT': '1',
+                                'DELPHI_MCP_SHARED_FOLDERS': COMUN.upper()}), nombre='alice')
+ok11 = crea(srv, os.path.join(base, COMUN, 'compartido.txt'))
+srv.mata()
+check('C11 SharedFolders con una letra no ASCII en otra mayuscula que en disco: es la carpeta compartida, se escribe',
+      ok11)
+
 mc.fin('confine battery')

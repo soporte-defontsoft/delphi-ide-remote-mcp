@@ -974,9 +974,11 @@ end;
   el servidor pudiera DECIR. }
 function CuentaDelProceso(out AEsSistema: Boolean): string;
 begin
-  Result := NombreDeEstaCuenta;
-  if GetEnvironmentVariable('USERDOMAIN') <> '' then
-    Result := GetEnvironmentVariable('USERDOMAIN') + '\' + Result;
+  // DOMINIO\cuenta por el SID del proceso (Lsp.Sandbox): con USERDOMAIN del entorno
+  // salia el dominio que dijera quien lanzo el proceso (revisor del paisaje, 13)
+  Result := CuentaDeEsteProceso;
+  if Result = '' then
+    Result := NombreDeEstaCuenta;
   // el juez es el SID, que no depende del idioma de Windows ni del entorno
   // (P11 del revisor: por el nombre de la cuenta y el texto de USERPROFILE)
   AEsSistema := SidDeEstaCuenta = SID_DE_LOCALSYSTEM;
@@ -1289,7 +1291,7 @@ begin
   except
     Exit;
   end;
-  L := TStringList.Create;
+  L := TListaDeRutas.Create; // como las compara NTFS: el locale juntaba dos (Lsp.Rutas)
   try
     L.Duplicates := dupIgnore;
     L.Sorted := True;
@@ -1381,7 +1383,7 @@ begin
   // cada repositorio UNA vez, con su rama: repo y branch iban en cada
   // proyecto, la misma ruta otra vez (1.15.0). El de un proyecto es el que
   // empieza su carpeta, y delphi_git acepta cualquier ruta de dentro
-  var Repos := TStringList.Create;
+  var Repos := TListaDeRutas.Create; // como las compara NTFS (Lsp.Rutas)
   var Ramas := TStringList.Create;
   // Donde estan, no solo cuantos: en una maquina de trabajo la lista la
   // COPAN los componentes de terceros y sus copias de seguridad (medido el

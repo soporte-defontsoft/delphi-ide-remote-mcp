@@ -215,7 +215,7 @@ begin
   Return := TJSONObject.Create;
   Arr := TJSONArray.Create;
   Return.AddPair('packages', Arr);
-  Seen := TStringList.Create;
+  Seen := TListaDeRutas.Create; // nombres de fichero: como los compara NTFS (Lsp.Rutas)
   Seen.Sorted := True;
   Seen.Duplicates := dupIgnore;
   try

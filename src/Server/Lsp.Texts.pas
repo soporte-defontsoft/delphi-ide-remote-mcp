@@ -5206,6 +5206,14 @@ const
   SR_TEST_NEED_PROJECT =
     '[TEST-016 INVALID_PARAM] run needs "project" (the .dproj of the test ' +
     'project). command=discover lists them for you.';
+  { un filtro con una comilla: el runner de DUnitX la lee con ParamStr, donde
+    solo agrupa; cerraba el filtro y lo de detras eran otras opciones del runner
+    (revisor del paisaje de la 1.26, 23; la regla de RUN-025). %s = el filtro }
+  SR_TEST_FILTRO_COMILLA_FMT =
+    '[TEST-037 INVALID_PARAM] The filter (%s) has a double quote: the test ' +
+    'runner, a Delphi program, reads its command line with ParamStr, where a ' +
+    'double quote only groups and cannot be received. Name the tests without ' +
+    'it. Nothing was run.';
 
   SR_TEST_NOPATH_FMT =
     '[TEST-017 NOT_FOUND] %s does not exist.';

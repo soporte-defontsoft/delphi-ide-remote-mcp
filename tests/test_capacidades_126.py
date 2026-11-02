@@ -509,6 +509,67 @@ r = s.call('delphi_build', {'project': os.path.join(PRA, 'Ra.dproj'), 'platform'
 check('RA el build niega un search path de dispositivo que no es una unidad ni un UNC (BUILD-050), como fuera de '
       'toda raiz', mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT'), r[:400])
 
+# R23 el filtro de delphi_test va al runner de DUnitX, un programa Delphi que lee su linea con ParamStr: con las
+# comillas del CRT de C (EnComillas) un filtro con una comilla cerraba el argumento y lo de detras eran OTRAS
+# opciones de DUnitX (el texto del agente elegia opciones). Se niega antes de nada, como RUN-025
+otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_ALLOW_TESTS': '1'}), nombre='126-test', t=120)
+try:
+    r = otro.call('delphi_test', {'command': 'run', 'project': os.path.join(JAIL, 'noexiste', 'T.dproj'),
+                                  'filter': 'NoExiste" --exitbehavior:Pause "'}, t=90)
+finally:
+    otro.cierra()
+check('R23 un filtro de delphi_test con una comilla se niega (TEST-037): no puede colar opciones al runner',
+      mc.rechazado(r) and mc.es(r, 'SR_TEST_FILTRO_COMILLA_FMT'), r[:300])
+
+# R14 dos repositorios en carpetas que NTFS separa (ss y la eszett): delphi_projects lista los dos. GUARDA: el
+# IndexOf de un TStringList SIN ordenar descarta por la longitud antes de comparar, y estos dos no se juntaban
+# (medido el 2-nov-2026: AnsiCompareText los da por iguales, IndexOf no los junta); los junta una lista ORDENADA (R15)
+R14 = os.path.join(JAIL, 'r14')
+for nombre in ('Strasse', 'Stra' + chr(0xDF) + 'e'):
+    d = os.path.join(R14, nombre)
+    s.call('delphi_create', {'kind': 'project-console', 'dir': d, 'name': 'P'})
+    s.call('delphi_git', {'command': 'init', 'repo': d})
+j = mc.como_json(s.call('delphi_projects', {'root': R14}))
+repos = j.get('repos') or []
+check('R14 dos repositorios en Strasse y en la carpeta con eszett: delphi_projects lista los dos',
+      len(repos) == 2, str(repos)[:400])
+
+# R15 una lista ORDENADA de rutas (TStringList con Sorted y su dupIgnore por defecto) compara con el locale
+# (AnsiCompareText, lingueistica) y juntaba dos carpetas que NTFS separa: la segunda desaparecia. Medido el
+# 2-nov-2026 en un proceso Delphi: de Strasse, la eszett, ab y a-guion-blando-b quedaban 2, tambien con
+# CaseSensitive (la lista "exacta" de V105); AnsiCompareFileName, el juez de NTFS, las separa
+R15 = os.path.join(JAIL, 'r15')
+ESZETT = 'Stra' + chr(0xDF) + 'e'
+for nombre in ('Strasse', ESZETT):
+    os.makedirs(os.path.join(R15, nombre))
+s.call('delphi_create', {'kind': 'project-console', 'dir': os.path.join(R15, 'P'), 'name': 'P'})
+r = s.call('delphi_config', {'command': 'add-searchpath', 'project': os.path.join(R15, 'P', 'P.dproj'),
+                             'paths': ['..\\Strasse', '..\\' + ESZETT]})
+j = mc.como_json(s.call('delphi_projects', {'root': os.path.join(R15, 'P')}))
+contra = [c for g in (j.get('projects') or []) for f in (g.get('files') or []) for c in (f.get('compilesAgainst') or [])]
+check('R15 compilesAgainst nombra las dos carpetas del search path, Strasse y la de la eszett',
+      len(contra) == 2, r[:200] + ' | ' + json.dumps(j, ensure_ascii=False)[:500])
+# ...y los perfiles del IDE (Lsp.Discovery: dos perfiles Strasse y con la eszett, delphi_paserver profiles los dos)
+APPD15, HOST15 = mc.appdata_perfil(os.path.join(BASE, 'r15-ad'), 'Strasse', '127.0.0.1', 'Linux64')
+mc.appdata_perfil(os.path.join(BASE, 'r15-ad'), ESZETT, '127.0.0.1', 'Linux64')
+otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': APPD15, 'DELPHI_MCP_REMOTE_HOSTS': HOST15}),
+                nombre='126-perfiles', t=60)
+try:
+    t = json.dumps(mc.como_json(otro.call('delphi_paserver', {'command': 'profiles'})), ensure_ascii=False)
+finally:
+    otro.cierra()
+check('R15 delphi_paserver profiles lista el perfil Strasse y el de la eszett', 'Strasse' in t and ESZETT in t, t[:600])
+
+# R13 la cuenta del servidor (delphi_workspace) la dice Windows por el SID del proceso, no el entorno: con
+# USERDOMAIN=DOMINIOFALSO salia DOMINIOFALSO\<cuenta>
+otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'USERDOMAIN': 'DOMINIOFALSO'}), nombre='126-cuenta', t=60)
+try:
+    cuenta = str((mc.como_json(otro.call('delphi_workspace', {})).get('server') or {}).get('account', ''))
+finally:
+    otro.cierra()
+check('R13 la cuenta del servidor no sale del entorno (USERDOMAIN=DOMINIOFALSO), y trae su dominio',
+      cuenta != '' and 'DOMINIOFALSO' not in cuenta and '\\' in cuenta, cuenta)
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')

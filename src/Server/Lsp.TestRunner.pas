@@ -839,9 +839,12 @@ begin
   //    (Lsp.Sandbox). Falla cerrado: sin contenedor no corre.
   Args := '';
   if AFilter <> '' then
-    // por el compositor de argumentos de la casa (EnComillas): un filtro con
-    // un espacio llegaba troceado al runner (2h de la 1.18.4)
-    Args := ' ' + EnComillas('--run:' + AFilter); // DUnitX honours it; a plain runner ignores it
+    // por el compositor de un argumento para un programa Delphi (ComillasSinEscape):
+    // el runner lee su linea con ParamStr, sin escapes; EnComillas, la del CRT de
+    // C, le doblaba una barra final (revisor del paisaje de la 1.26, 23). Un filtro
+    // con un espacio llegaba troceado (2h de la 1.18.4); uno con comilla lo niega
+    // la tool (TEST-037)
+    Args := ' ' + ComillasSinEscape('--run:' + AFilter); // DUnitX honours it; a plain runner ignores it
   if not CorreEnContenedor(Exe, Args, ATimeoutMs, Result, Output, ExitCode,
     TimedOut, Ficheros, Recortado, Fuera, DuracionMs) then
     Exit;

@@ -19,6 +19,9 @@
 
 interface
 
+uses
+  System.Classes;
+
 { The SAME directory can be named more than one way, and a guard that matches a
   path segment literally is blind to every alias. NTFS keeps an 8.3 short name
   for each entry ("__delphi-patch" also answers to "__DELP~1"), and it resolves
@@ -79,6 +82,18 @@ function EnLugar(const APath, ALugar: string;
   Solo yerran hacia "fuera" / "distintas": niegan de mas, nunca de menos. }
 function RutaDentroDe(const AContenedor, ARuta: string): Boolean;
 function RutaEnLista(const ARuta: string; const ALista: TArray<string>): Boolean;
+{ LA lista de rutas (o de nombres de fichero) ordenada y sin repetir como las
+  compara NTFS: AnsiCompareFileName, el juez de SameFileName. Un TStringList
+  compara con el locale (AnsiCompareText, lingueistica): ordenado y con su
+  dupIgnore por defecto juntaba dos entradas que el disco separa -la eszett y
+  "ss", un guion blando- y la segunda desaparecia: de compilesAgainst, de los
+  perfiles y los SDK del IDE (medido el 2-nov-2026 en un proceso Delphi, tambien
+  con CaseSensitive). Sin ordenar, su IndexOf compara con el mismo juez. }
+type
+  TListaDeRutas = class(TStringList)
+  protected
+    function CompareStrings(const S1, S2: string): Integer; override;
+  end;
 type
   TFormaDeRaiz = reference to function(const ARaiz: string): string;
 { Las carpetas del sistema y del usuario, como las contesta Windows: su API, nunca el
@@ -696,6 +711,11 @@ begin
     if SameFileName(ARuta, L) then
       Exit(True);
   Result := False;
+end;
+
+function TListaDeRutas.CompareStrings(const S1, S2: string): Integer;
+begin
+  Result := AnsiCompareFileName(S1, S2);
 end;
 
 function ClaveDeRuta(const ARuta: string): string;

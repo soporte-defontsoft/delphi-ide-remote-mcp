@@ -615,14 +615,16 @@ REGLAS = [
     # "dz") y se leia y escribia fuera de la jaula (medido contra r1222ci)
     ('comparar rutas como el sistema de ficheros',
      r'\b(?:AnsiCompareFileName|CompareStringOrdinal)\w*\s*\(',
-     [('Lsp.Rutas.pas', 'RutaDentroDe')],
+     [('Lsp.Rutas.pas', 'RutaDentroDe'), ('Lsp.Rutas.pas', 'TListaDeRutas.CompareStrings')],
      'RutaDentroDe (Lsp.Rutas, H1): el "dentro de o es" de dos rutas por la '
      'comparacion ORDINAL del sistema de ficheros (AnsiCompareFileName con '
      'CheckVolumeCase=False = CompareStringOrdinal, el motor de SameFileName). '
      'La IGUALDAD de rutas es SameFileName (RTL) y contra una lista RutaEnLista, '
      'las dos por el mismo motor; el prefijo, aqui. StartsText/SameText pliegan '
      'con el locale y daban por dentro o iguales lo que NTFS separa: se leia y '
-     'escribia fuera de la jaula (medido contra r1222ci)'),
+     'escribia fuera de la jaula (medido contra r1222ci). Y el ORDEN de una lista '
+     'de rutas, TListaDeRutas: un TStringList ordenado comparaba con el locale y '
+     'juntaba dos rutas que el disco separa (2-nov-2026, R15)'),
     # V118 (28-oct-2026): el valor de las macros RESERVADAS de msbuild que
     # dependen del proyecto y del fichero lo da UN lector,
     # MacrosReservadasDeMsbuild ('Nombre=valor'). Tres tablas las imitaban por

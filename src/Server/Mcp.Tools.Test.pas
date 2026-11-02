@@ -112,6 +112,10 @@ begin
         Exit(MsgText(SR_TEST_DISABLED));
       if Params.Project.Trim = '' then
         Exit(MsgText(SR_TEST_NEED_PROJECT));
+      // el runner lee su linea con ParamStr: una comilla cerraria el filtro y lo
+      // de detras serian otras opciones suyas (la regla de RUN-025)
+      if Params.Filter.Contains('"') then
+        Exit(MsgFmt(SR_TEST_FILTRO_COMILLA_FMT, [Params.Filter.Trim]));
       Ret := TestRun(Params.Project.Trim, Params.Config.Trim,
         Params.Filter.Trim, Params.Platform.Trim, Params.TimeoutMs,
         Params.NoBuild);

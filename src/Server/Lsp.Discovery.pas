@@ -1246,7 +1246,7 @@ begin
 end;
 
 { Los ficheros AMascara de la carpeta de perfiles del IDE, ordenados y sin
-  repetidos (sin mirar mayusculas); vacio si no hay carpeta. LA lista de esa
+  repetidos (como los compara NTFS); vacio si no hay carpeta. LA lista de esa
   carpeta: PerfilesDelIde y SdksDelIde eran el mismo cuerpo dos veces (W2 de
   la auditoria de duplicados del 16-oct; V34 de la 1.23). }
 function FicherosDePerfilesDelIde(const AVersion, AMascara: string): TArray<string>;
@@ -1256,13 +1256,12 @@ begin
   Result := nil;
   if not TDirectory.Exists(IdeProfilesDir(AVersion)) then
     Exit;
-  L := TStringList.Create;
+  // como los compara NTFS (Lsp.Rutas): con el locale juntaba dos ficheros que
+  // el disco separa (V105), y con CaseSensitive tambien (la eszett y "ss")
+  L := TListaDeRutas.Create;
   try
     L.Sorted := True;
     L.Duplicates := dupIgnore;
-    // exacta: sin mayusculas compara con el locale y juntaba dos ficheros que
-    // el disco separa (V105); una carpeta no tiene dos que solo difieran en eso
-    L.CaseSensitive := True;
     for var F in TDirectory.GetFiles(IdeProfilesDir(AVersion), AMascara) do
       L.Add(F);
     Result := L.ToStringArray;

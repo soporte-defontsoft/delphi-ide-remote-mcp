@@ -4315,32 +4315,20 @@ const
   RECLAMO_MASK = FILE_LIST_DIRECTORY or FILE_TRAVERSE or FILE_READ_ATTRIBUTES or
     FILE_DELETE_CHILD or $00010000 {DELETE} or SYNCHRONIZE;
 var
-  Tok: THandle;
-  Tam: DWORD;
-  Buf: TBytes;
+  Buf: TArray<Byte>;
   SD: TSecurityDescriptor;
   Acl: array[0 .. 127] of Byte;
 begin
-  // el SID de la cuenta del servidor (dueno de lo que dejo delphi_test en la casa)
-  if not OpenProcessToken(GetCurrentProcess, TOKEN_QUERY, Tok) then
+  // el SID de la cuenta del servidor (dueno de lo que dejo delphi_test en la
+  // casa), por EL lector del token (Lsp.Sandbox)
+  var Sid := SidDelProceso(Buf);
+  if Sid = nil then
     Exit;
-  try
-    Tam := 0;
-    GetTokenInformation(Tok, TokenUser, nil, 0, Tam); // pide el tamano
-    if Tam = 0 then
-      Exit;
-    SetLength(Buf, Tam);
-    if not GetTokenInformation(Tok, TokenUser, @Buf[0], Tam, Tam) then
-      Exit;
-  finally
-    CloseHandle(Tok);
-  end;
   if not InitializeAcl(PACL(@Acl)^, SizeOf(Acl), ACL_REVISION) then
     Exit;
   // UNA ACE de permitir para el dueno; NUNCA una DACL nula (control total a
   // todos) ni una para Todos, NUNCA heredable
-  if not AddAccessAllowedAce(PACL(@Acl)^, ACL_REVISION, RECLAMO_MASK,
-    PTokenUser(@Buf[0])^.User.Sid) then
+  if not AddAccessAllowedAce(PACL(@Acl)^, ACL_REVISION, RECLAMO_MASK, Sid) then
     Exit;
   InitializeSecurityDescriptor(@SD, SECURITY_DESCRIPTOR_REVISION);
   SetSecurityDescriptorDacl(@SD, True, PACL(@Acl), False);
@@ -4774,7 +4762,7 @@ end;
   Reading is never confined: an agent still sees the whole tree. }
 function AgentConfineDenied(const AFull, ARoot: string): string;
 var
-  Me, Rel, Seg, Sh: string;
+  Me, Rel, Seg: string;
   P: Integer;
 begin
   Result := '';
@@ -4793,9 +4781,11 @@ begin
     Seg := Rel.Substring(0, P);
   if SameText(Seg, Me) then
     Exit; // your own folder
-  for Sh in SharedFoldersNow do
-    if SameText(Seg, Sh) then
-      Exit; // a folder the operator marked shared
+  // como NTFS compara dos nombres (RutaEnLista): SameText solo plegaba ASCII y una
+  // compartida con una letra no ASCII en otra mayuscula se negaba (revisor del
+  // paisaje de la 1.26, 16)
+  if RutaEnLista(Seg, SharedFoldersNow) then
+    Exit; // a folder the operator marked shared
   Result := MsgFmt(SR_AGENT_CONFINED_FMT, [Me, Me]);
 end;
 

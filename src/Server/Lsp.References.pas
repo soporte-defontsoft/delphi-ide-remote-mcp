@@ -241,7 +241,7 @@ begin
   Result := nil;
   if ADir = '' then
     Exit;
-  L := TStringList.Create;
+  L := TListaDeRutas.Create; // como las compara NTFS: el locale juntaba dos (Lsp.Rutas)
   try
     L.Duplicates := dupIgnore;
     L.Sorted := True;

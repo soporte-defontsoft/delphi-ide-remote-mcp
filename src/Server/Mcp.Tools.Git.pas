@@ -732,7 +732,7 @@ var
 begin
   AGitDir := '';
   AComun := '';
-  Clave := LowerCase(ACarpeta);
+  Clave := ClaveDeRuta(ACarpeta); // LA clave de una ruta en un diccionario (Lsp.Rutas)
   GCacheGitDirLock.Enter;
   try
     if GCacheGitDir.TryGetValue(Clave, Guardado) then
