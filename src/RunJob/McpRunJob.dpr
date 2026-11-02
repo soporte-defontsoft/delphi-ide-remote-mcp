@@ -596,11 +596,14 @@ var
   Pid: DWORD;
   HProc: THandle;
 begin
-  // EnComillas (Lsp.ProcessLaunch): el compositor de la linea del servidor;
-  // aqui habia una gemela, ComillasWin (2.10 de la 1.18.0)
-  Linea := EnComillas(AExe);
+  // ComillasSinEscape (Lsp.ProcessLaunch): lo que se lanza aqui es un programa
+  // Delphi -el del proyecto, el nodo- y lee su linea con ParamStr, que no tiene
+  // escapes; EnComillas, la del CRT de C, le doblaba una barra final y le
+  // convertia una comilla en barras (revisor del paisaje de la 1.26, C, medido
+  // con un eco Delphi). Una comilla no llega: el servidor la niega antes
+  Linea := ComillasSinEscape(AExe);
   for A in AArgs do
-    Linea := Linea + ' ' + EnComillas(A);
+    Linea := Linea + ' ' + ComillasSinEscape(A);
   HProc := 0;
   Pid := Arrancar(Linea, ACarpeta, ASalida, True, Err, @HProc);
   if Pid = 0 then

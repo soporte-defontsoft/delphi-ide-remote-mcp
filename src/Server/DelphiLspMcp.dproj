@@ -253,6 +253,7 @@
         <DCCReference Include="Lsp.Herencia.pas"/>
         <DCCReference Include="Lsp.AtomosRtl.pas"/>
         <DCCReference Include="Lsp.Reparse.pas"/>
+        <DCCReference Include="Lsp.TextoDelNodo.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -121,7 +121,8 @@ uses
   Lsp.Dproj,     // DprojDe: un .dpr vale por su .dproj, como en delphi_build
   Lsp.Discovery, // PerfilConSuNombre: el perfil con el nombre del IDE
   Lsp.Pascal,    // SinMayusculas: EL pliegue de lo que no es una ruta
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.TextoDelNodo;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
 function ParseRegion(const ATexto: string; out X, Y, W, H: Integer): Boolean;
@@ -369,10 +370,11 @@ begin
       var FT := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
       if FT <> '' then
         Exit(FT);
-      Args := Args + ['escribe', IntToStr(PX), IntToStr(PY), Params.Text.Trim];
+      Args := Args + ['escribe', IntToStr(PX), IntToStr(PY), TextoParaElNodo(Params.Text.Trim)];
     end
     else
-      Args := Args + ['texto', Params.Text.Trim];
+      // codificado: el nodo lo lee con ParamStr, que no recibe una comilla (Lsp.TextoDelNodo)
+      Args := Args + ['texto', TextoParaElNodo(Params.Text.Trim)];
   end
   else if Cmd = 'overview' then
     Args := Args + ['ventanas'];

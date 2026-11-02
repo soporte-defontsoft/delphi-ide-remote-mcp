@@ -150,7 +150,8 @@ uses
   Lsp.Png in 'Lsp.Png.pas',
   Lsp.Herencia in 'Lsp.Herencia.pas',
   Lsp.AtomosRtl in 'Lsp.AtomosRtl.pas',
-  Lsp.Reparse in 'Lsp.Reparse.pas';
+  Lsp.Reparse in 'Lsp.Reparse.pas',
+  Lsp.TextoDelNodo in 'Lsp.TextoDelNodo.pas';
 
 {$R *.res}
 

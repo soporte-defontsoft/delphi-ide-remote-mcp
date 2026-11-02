@@ -61,7 +61,8 @@ open(os.path.join(PRJDIR, PROJNAME + '.deployproj'), 'w', encoding='utf-8').writ
     '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
     '    <ItemGroup Condition="\'$(Platform)\'==\'Win64\'">\n'
     + ''.join('        <DeployFile Include="%s"><RemoteDir>Saluda\\</RemoteDir><RemoteName>%s</RemoteName>'
-              '<DeployClass>File</DeployClass></DeployFile>\n' % (n, n) for n in ('noexiste.exe', 'run.py', '@kill')) +
+              '<DeployClass>File</DeployClass></DeployFile>\n' % (n, n) for n in ('noexiste.exe', 'run.py', '@kill',
+                                                                             'Eco.exe')) +
     '    </ItemGroup>\n</Project>\n')
 
 # paclient stub: a .cmd that calls python on the stub script
@@ -181,6 +182,29 @@ check('argumentos blindados: ( ) * # ~ y la comilla simple llegan literales',
       all(x in out for x in ("'(a)'", "'*'", "'#b'", "'~'", '"it\'s"')), r[:400])
 check('...y las comillas dobles siguen agrupando un argumento con espacios',
       "'dos palabras'" in out, r[:400])
+# C (revisor del paisaje de la 1.26): el lanzador de un destino Windows componia la linea con las reglas del CRT
+# de C (EnComillas), y un programa Delphi la lee con ParamStr, que no tiene escapes: una barra final se doblaba.
+# Una comilla no la puede recibir: se niega antes de lanzar. Con un eco Delphi de verdad (el de arriba es Python,
+# que lee como el CRT y no lo podia ver)
+ECODIR = os.path.join(BASE, 'eco')
+call('delphi_create', {'kind': 'project-console', 'name': 'Eco', 'dir': ECODIR})
+with open(os.path.join(ECODIR, 'Eco.dpr'), 'w', encoding='utf-8', newline='') as f:
+    f.write("program Eco;\r\n\r\n{$APPTYPE CONSOLE}\r\n\r\nvar\r\n  I: Integer;\r\n\r\nbegin\r\n"
+            "  for I := 1 to ParamCount do\r\n    Writeln('[' + ParamStr(I) + ']');\r\nend.\r\n")
+rb = call('delphi_build', {'project': os.path.join(ECODIR, 'Eco.dproj'), 'platform': 'Win64', 'config': 'Release'}, t=300)
+jb = json.loads(rb) if rb.startswith('{') else {}
+check('C fixture: el eco Delphi compila', jb.get('success') is True, rb[:300])
+if jb.get('success') is True:
+    shutil.copy(os.path.join(ECODIR, 'Win64', 'Release', 'Eco.exe'), os.path.join(DEPLOY, 'Eco.exe'))
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'Eco.exe',
+                             'args': '"una carpeta\\\\" fin', 'timeoutms': 30000}, t=180)
+out = (json.loads(r) if r.startswith('{') else {}).get('output') or ''
+check('C una barra final en un argumento con espacios llega a un programa Delphi tal cual, no doblada',
+      '[una carpeta\\]' in out and '[fin]' in out, r[:400])
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'Eco.exe',
+                             'args': '"di \\"hola\\""', 'timeoutms': 30000}, t=180)
+check('C ...y un argumento con una comilla, que un programa Delphi no puede recibir, se niega sin lanzar nada',
+      mc.rechazado(r) and mc.es(r, 'SR_RUN_ARG_COMILLA_FMT'), r[:400])
 # 4) exe fuera de la scratch -> runnerError
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': '..\\..\\fuera.exe', 'timeoutms': 20000})
 j = json.loads(r) if r.startswith('{') else {}

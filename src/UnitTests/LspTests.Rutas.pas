@@ -271,6 +271,7 @@ type
   TFinalDeUnTrabajoTests = class
   public
     [Test] procedure ElCentinelaEsLaUltimaLineaEntera;
+    [Test] procedure ElTextoDelNodoVaYVuelveSinComillas;
   end;
 
 implementation
@@ -294,7 +295,8 @@ uses
   Lsp.Mascara,
   System.RegularExpressions,
   System.JSON,
-  Lsp.Reparse;
+  Lsp.Reparse,
+  Lsp.TextoDelNodo;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;
@@ -1675,6 +1677,19 @@ begin
   Assert.IsFalse(PartirSalida('___RC=7'#10'mas salida'#10, Salida, Codigo), 'no es la ultima linea');
   Assert.IsFalse(PartirSalida('linea'#10'___RC='#10, Salida, Codigo), 'sin codigo');
   Assert.IsFalse(PartirSalida('', Salida, Codigo));
+end;
+
+{ el texto de type viaja al nodo por su linea, que en Windows no puede llevar una
+  comilla (ParamStr): codificado, sin comillas, y de vuelta igual (C de la 1.26) }
+procedure TFinalDeUnTrabajoTests.ElTextoDelNodoVaYVuelveSinComillas;
+begin
+  for var T in TArray<string>.Create('di "hola"', '100% seguro', '%22 escrito', '%"', '%25', '', 'sin nada',
+    'a' + #$00F1 + 'o "' + #$00E9 + '"') do
+  begin
+    var Ida := TextoParaElNodo(T);
+    Assert.IsFalse(Ida.Contains('"'), 'sin comillas: ' + Ida);
+    Assert.AreEqual(T, TextoDelServidor(Ida), 'de vuelta igual: ' + Ida);
+  end;
 end;
 
 initialization

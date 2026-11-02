@@ -16,6 +16,7 @@ uses
   System.Classes,
   Mld.Textos in 'Mld.Textos.pas', // EL catalogo de mensajes del nodo
   Lsp.Png in '..\Server\Lsp.Png.pas', // LA cabecera de un PNG: la del servidor, la misma
+  Lsp.TextoDelNodo in '..\Server\Lsp.TextoDelNodo.pas', // el texto que manda el servidor: su inversa
 {$IFDEF MSWINDOWS}
   Winapi.Windows,
   Mld.Captura in 'Mld.Captura.pas',
@@ -48,6 +49,17 @@ begin
   Result := ParamCount - 1;
   if Result < 0 then
     Result := 0;
+end;
+
+{ El texto de una orden, de AInicio al final, espacios incluidos, como lo mando
+  el servidor (TextoDelServidor: la comilla viaja codificada). Lo armaban a mano
+  las cuatro ordenes que escriben (revisor del paisaje de la 1.26, C). }
+function TextoDesde(AInicio: Integer): string;
+begin
+  Result := '';
+  for var I := AInicio to Args do
+    Result := Result + IfThen(Result = '', '', ' ') + Arg(I);
+  Result := TextoDelServidor(Result);
 end;
 
 { El pestillo: sin la clave del servidor, el nodo no mira ni toca nada.
@@ -144,9 +156,7 @@ begin
     begin
       ObjX := StrToIntDef(Arg(2), -1);
       ObjY := StrToIntDef(Arg(3), -1);
-      Frase := '';
-      for I := 4 to Args do
-        Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
+      Frase := TextoDesde(4);
       Hizo := Escritorio.Pulsar(ObjX, ObjY);
       if not Hizo then
         Writeln(MsgFmt(SR_NODE_NO_PUDE_PULSAR_CAMPO_FMT, [Escritorio.Error]))
@@ -162,9 +172,7 @@ begin
     end
     else if (Orden = 'texto') and (Args >= 2) then
     begin
-      Frase := '';
-      for I := 2 to Args do
-        Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
+      Frase := TextoDesde(2);
       Hizo := Escritorio.Escribir(Frase);
       if Hizo then
         Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_FMT, [Frase]))
@@ -521,9 +529,7 @@ begin
               real -"escribe esto ahi"- y paga el arranque UNA vez. }
             ObjX := StrToIntDef(Arg(2), -1);
             ObjY := StrToIntDef(Arg(3), -1);
-            Frase := '';
-            for I := 4 to Args do
-              Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(I);
+            Frase := TextoDesde(4);
             Hizo := Manos.Pulsar(ObjX, ObjY);
             if not Hizo then
               Writeln(MsgFmt(SR_NODE_NO_PUDE_PULSAR_CAMPO_FMT, [Manos.Error]))
@@ -541,9 +547,7 @@ begin
           else if (Orden = 'texto') and (Args >= 2) then
           begin
             { Todo lo que venga detras es el texto, espacios incluidos. }
-            Frase := '';
-            for ObjX := 2 to Args do
-              Frase := Frase + IfThen(Frase = '', '', ' ') + Arg(ObjX);
+            Frase := TextoDesde(2);
             Hizo := Manos.Escribir(Frase);
             if Hizo then
               Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_MAPA_FMT, [Frase, Manos.MapaNota]))

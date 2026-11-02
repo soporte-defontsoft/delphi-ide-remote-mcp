@@ -735,6 +735,19 @@ begin
   else
     ExeLeaf := AExeName;
   ARemoteExe := DeployRel + '/' + ExeLeaf;
+  // un programa de un destino Windows lee su linea con ParamStr de Delphi: una
+  // comilla solo agrupa y no la puede recibir (revisor del paisaje de la 1.26, C;
+  // medido con un eco Delphi: 'di "hola"' llegaba 'di \hola\'). Antes de apuntar
+  // ni subir nada. El texto del nodo viaja codificado (Lsp.TextoDelNodo)
+  Plataforma := PlataformaDelPerfil(AProfile);
+  if SistemaDePlataforma(Plataforma) = spWindows then
+    for var I := 0 to High(AArgv) do
+      if AArgv[I].Contains('"') then
+      begin
+        Result.AddPair('success', TJSONBool.Create(False));
+        Result.AddPair('error', MsgFmt(SR_RUN_ARG_COMILLA_FMT, [I + 1, AArgv[I]]));
+        Exit;
+      end;
 
   // Timestamp alone collided when two agents fired remote-run in the same
   // millisecond (hermes, release audit 2026-08-26, P2.8). The GUID fragment
@@ -750,7 +763,6 @@ begin
   // El lanzador del sistema del destino, con el nombre del trabajo: PAServer
   // arranca un ELF con flag 3 y un PE con flag 5 (y en Windows lo borra al
   // terminar). Todo lo demas es igual en los dos.
-  Plataforma := PlataformaDelPerfil(AProfile);
   Lanzador := BundledRunJobPath(Plataforma);
   if Lanzador = '' then
   begin

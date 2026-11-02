@@ -2226,6 +2226,14 @@ const
     '[RUN-024 DENIED] "exe" %s starts with "@", which is reserved for the ' +
     'launcher''s own orders on the target: it is never run as a program. ' +
     'Rename the file in the project and its deployment. Nothing was run.';
+  { un argumento con una comilla para un programa de un destino Windows: lo lee
+    con ParamStr de Delphi, que no tiene escape para ella (System.GetParamStr), y
+    llegaba con barras (revisor del paisaje de la 1.26, C). %d: cual, %s: el }
+  SR_RUN_ARG_COMILLA_FMT =
+    '[RUN-025 DENIED] Argument %d (%s) has a double quote, and a program on a ' +
+    'Windows target reads its command line by the rules of Delphi''s ParamStr, ' +
+    'where a double quote only groups and cannot be received. Pass that value ' +
+    'another way (a file the program reads) or without the quote. Nothing was run.';
   { exe= que el proyecto no despliega en esa plataforma (1.22.2: valia
     cualquier fichero de la carpeta del destino) }
   SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT =
