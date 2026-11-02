@@ -989,6 +989,11 @@ REGLAS = [
     ('el exe del conversor de estilos', r"'DelphiStyleConvert",
      [('Lsp.Styles.pas', 'NombreDelConversor')],
      'NombreDelConversor (Lsp.Styles): el nombre del conversor en UN sitio, el que lanza y el que se copia'),
+    # lo que un programa Delphi recibe por ParamStr, juzgado a mano: cuatro copias de la comilla, y ninguna miraba
+    # el vacio que GetParamStr se salta (C7 del cierre de la 1.26)
+    ('lo que recibe ParamStr juzgado a mano', r"\.Contains\(\s*(?:'\"'|#34)\s*\)",
+     [('Lsp.ProcessLaunch.pas', 'LlegaAParamStr')],
+     'LlegaAParamStr (Lsp.ProcessLaunch): EL juez de un argumento para un programa Delphi, junto a ComillasSinEscape'),
     ('la orden del renderizador de forms', r"'[^']*--(?:path|state|component|nonvisual|root|style|bds)\b",
      [('Lsp.FormRender.pas', 'ComponeOrdenDeRender'), ('FormRender.Comun.pas', 'ParseaArgumentos'),
       ('FormRender.Textos.pas', '*')],
@@ -1995,6 +2000,7 @@ PLANTADO = {
     'el literal de cadena de un form a mano': "  T := Ind + 'Caption = ''' + Nombre + '''';",
     'el exe de un renderizador de forms': "  E := ServerDir('DelphiFormRenderVcl.exe');",
     'el exe del conversor de estilos': "      Mira(ServerDir, 'DelphiStyleConvert.*');",
+    'lo que recibe ParamStr juzgado a mano': "  if AArg.Contains('\"') then",
     'la orden del renderizador de forms': "  O := '\"' + Exe + '\" --path \"' + P + '\"';",
     'la linea de objeto de un form': "  L := 'object ' + Nombre + ': ' + Clase;",
     'un componente por su ruta en el renderizador': "  C := FindNestedComponent(ARaiz, ANombre);",

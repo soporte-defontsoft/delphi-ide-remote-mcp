@@ -205,6 +205,12 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project'
                              'args': '"di \\"hola\\""', 'timeoutms': 30000}, t=180)
 check('C ...y un argumento con una comilla, que un programa Delphi no puede recibir, se niega sin lanzar nada',
       mc.rechazado(r) and mc.es(r, 'SR_RUN_ARG_COMILLA_FMT'), r[:400])
+# C7 (revisor del paisaje del cierre de la 1.26): un argumento VACIO tampoco lo recibe: GetParamStr se salta un "" y
+# los de detras se corren uno (medido en System.pas, y con este eco contra p127n: 'a "" b' llegaba [a][b])
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'Eco.exe',
+                             'args': 'a "" b', 'timeoutms': 30000}, t=180)
+check('C7 ...ni un argumento vacio, que ParamStr se salta y corre los de detras: se niega sin lanzar nada',
+      mc.rechazado(r) and mc.es(r, 'SR_RUN_ARG_COMILLA_FMT'), r[:400])
 # 4) exe fuera de la scratch -> runnerError
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': '..\\..\\fuera.exe', 'timeoutms': 20000})
 j = json.loads(r) if r.startswith('{') else {}

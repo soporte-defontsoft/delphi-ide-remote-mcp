@@ -528,13 +528,17 @@ begin
   Result := Max(APlazoMs - MARGEN_DEL_VIGIA_MS, APlazoMs div 2);
 end;
 
-{ Un valor que viaja como UN argumento entre comillas }
+{ Un valor que viaja como UN argumento entre comillas: lo que recibe el ParamStr
+  del ayudante (EL juez, LlegaAParamStr; uno vacio no se pasa nunca) y, ademas,
+  sin caracteres de control }
 function ValorDeArgumento(const AValor: string): Boolean;
 begin
+  if AValor = '' then
+    Exit(True);
   for var C in AValor do
-    if (C = '"') or (C < ' ') then
+    if C < ' ' then
       Exit(False);
-  Result := True;
+  Result := LlegaAParamStr(AValor);
 end;
 
 function ComponeOrdenDeRender(const AExe: string; const APeticion: TPeticionRender;

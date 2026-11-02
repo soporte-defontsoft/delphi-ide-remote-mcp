@@ -2230,14 +2230,16 @@ const
     '[RUN-024 DENIED] "exe" %s starts with "@", which is reserved for the ' +
     'launcher''s own orders on the target: it is never run as a program. ' +
     'Rename the file in the project and its deployment. Nothing was run.';
-  { un argumento con una comilla para un programa de un destino Windows: lo lee
-    con ParamStr de Delphi, que no tiene escape para ella (System.GetParamStr), y
-    llegaba con barras (revisor del paisaje de la 1.26, C). %d: cual, %s: el }
+  { un argumento que un programa de un destino Windows no recibe: lo lee con
+    ParamStr de Delphi, que no tiene escape para una comilla (System.GetParamStr),
+    y llegaba con barras (revisor del paisaje de la 1.26, C); y se salta uno vacio,
+    y los de detras se corrian uno (C7 del cierre). %d: cual, %s: el }
   SR_RUN_ARG_COMILLA_FMT =
-    '[RUN-025 DENIED] Argument %d (%s) has a double quote, and a program on a ' +
-    'Windows target reads its command line by the rules of Delphi''s ParamStr, ' +
-    'where a double quote only groups and cannot be received. Pass that value ' +
-    'another way (a file the program reads) or without the quote. Nothing was run.';
+    '[RUN-025 DENIED] Argument %d (%s) cannot reach a program on a Windows ' +
+    'target: it reads its command line by the rules of Delphi''s ParamStr, which ' +
+    'skips an empty argument (the ones after it move up one), where a double ' +
+    'quote only groups and a NUL character ends the line. Pass that value another ' +
+    'way (a file the program reads) or without it. Nothing was run.';
   { exe= que el proyecto no despliega en esa plataforma (1.22.2: valia
     cualquier fichero de la carpeta del destino) }
   SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT =
@@ -5226,10 +5228,10 @@ const
     solo agrupa; cerraba el filtro y lo de detras eran otras opciones del runner
     (revisor del paisaje de la 1.26, 23; la regla de RUN-025). %s = el filtro }
   SR_TEST_FILTRO_COMILLA_FMT =
-    '[TEST-037 INVALID_PARAM] The filter (%s) has a double quote: the test ' +
-    'runner, a Delphi program, reads its command line with ParamStr, where a ' +
-    'double quote only groups and cannot be received. Name the tests without ' +
-    'it. Nothing was run.';
+    '[TEST-037 INVALID_PARAM] The filter (%s) has a double quote or a NUL ' +
+    'character: the test runner, a Delphi program, reads its command line with ' +
+    'ParamStr, where a double quote only groups and a NUL ends the line. Name ' +
+    'the tests without it. Nothing was run.';
 
   SR_TEST_NOPATH_FMT =
     '[TEST-017 NOT_FOUND] %s does not exist.';

@@ -755,12 +755,13 @@ begin
   ARemoteExe := DeployRel + '/' + ExeLeaf;
   // un programa de un destino Windows lee su linea con ParamStr de Delphi: una
   // comilla solo agrupa y no la puede recibir (revisor del paisaje de la 1.26, C;
-  // medido con un eco Delphi: 'di "hola"' llegaba 'di \hola\'). Antes de apuntar
-  // ni subir nada. El texto del nodo viaja codificado (Lsp.TextoDelNodo)
+  // medido con un eco Delphi: 'di "hola"' llegaba 'di \hola\'), ni uno vacio
+  // (EL juez, LlegaAParamStr). Antes de apuntar ni subir nada. El texto del nodo
+  // viaja codificado (Lsp.TextoDelNodo)
   Plataforma := PlataformaDelPerfil(AProfile);
   if SistemaDePlataforma(Plataforma) = spWindows then
     for var I := 0 to High(AArgv) do
-      if AArgv[I].Contains('"') then
+      if not LlegaAParamStr(AArgv[I]) then
       begin
         Result.AddPair('success', TJSONBool.Create(False));
         Result.AddPair('error', MsgFmt(SR_RUN_ARG_COMILLA_FMT, [I + 1, AArgv[I]]));

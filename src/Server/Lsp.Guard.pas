@@ -1773,10 +1773,14 @@ begin
   V := ArgStr(AArguments, 'platform').Trim;
   if (V <> '') and not MatchText(V, PACLIENT_PLATFORMS) then
     Exit(MsgFmt(SR_PASERVER_PLATFORM_FMT, [V, PaclientPlatformsList]));
+  // la contrasena va a la linea de paclient, un programa Delphi: lo que recibe su
+  // ParamStr (EL juez, LlegaAParamStr) y, ademas, sin caracteres de control
   V := ArgStr(AArguments, 'password');
   for C in V do
-    if (C < ' ') or (C = '"') then
+    if C < ' ' then
       Exit(MsgText(SR_PASERVER_PASSWORD));
+  if (V <> '') and not LlegaAParamStr(V) then
+    Exit(MsgText(SR_PASERVER_PASSWORD));
 end;
 
 { '' unless APath IS one of the configured roots (the jail itself). With no

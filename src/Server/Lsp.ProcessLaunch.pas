@@ -49,6 +49,15 @@ function EnComillas(const AValor: string): string;
   analizador: estaban a mano por las unidades (V115). }
 function ComillasSinEscape(const AValor: string): string;
 
+{ Si un programa Delphi de Windows recibe AValor ENTERO como UN argumento, tal
+  como lo compone ComillasSinEscape. Medido en su lector (System.GetParamStr):
+  una comilla solo agrupa y no se recibe, un "" se salta -un valor vacio no llega
+  y los de detras se corren uno: medido con un eco Delphi, 'a "" b' llegaba [a][b]-
+  y un NUL acaba la linea. EL juez de RUN-025, TEST-037, la contrasena de paclient
+  y los valores de los renderizadores: eran cuatro copias de la comilla, y ninguna
+  miraba el vacio (C7 del revisor del paisaje del cierre de la 1.26). }
+function LlegaAParamStr(const AValor: string): Boolean;
+
 { La ruta completa de APrograma, con su extension ('msbuild.exe'), en las
   carpetas de APath (una lista con ';', la de un entorno) como la resuelve
   Windows (SearchPath, el juez) y SOLO en ellas: sin la carpeta actual ni la
@@ -283,6 +292,11 @@ end;
 function ComillasSinEscape(const AValor: string): string;
 begin
   Result := '"' + AValor + '"';
+end;
+
+function LlegaAParamStr(const AValor: string): Boolean;
+begin
+  Result := (AValor <> '') and not AValor.Contains('"') and not AValor.Contains(#0);
 end;
 
 function EnComillas(const AValor: string): string;

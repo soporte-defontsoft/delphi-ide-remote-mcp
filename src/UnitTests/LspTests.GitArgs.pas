@@ -30,6 +30,8 @@ type
     procedure ConfiguracionEnPrefijosYGruposNoPasa;
     [Test]
     procedure ValorDeUnaOpcionCortaNoEsUnGrupo;
+    [Test]
+    procedure LoQueRecibeParamStr;
   end;
 
   { EnComillas (compositor) y TrocearArgs (lector) tienen que ser INVERSOS: la
@@ -285,6 +287,17 @@ begin
   // grupo de opciones): sin args no hay nada que distinguir (1.19.0)
   for var Args in ['-bfeaturec', '-nbfeaturec', '-j4', '--branch=featurec'] do
     Assert.IsTrue(EsMsg(DenegacionDeArgumentosGit(Args), SR_GIT_ARGS_RETIRADO), Args);
+end;
+
+procedure TTrocearArgsTests.LoQueRecibeParamStr;
+begin
+  // EL juez de lo que un programa Delphi recibe por ParamStr (C7 del revisor del
+  // paisaje del cierre de la 1.26): ni vacio, ni comilla, ni NUL
+  Assert.IsTrue(LlegaAParamStr('una carpeta\'), 'barra final y espacio llegan');
+  Assert.IsTrue(LlegaAParamStr(' '), 'un espacio solo llega (entre comillas)');
+  Assert.IsFalse(LlegaAParamStr(''), 'un vacio se salta');
+  Assert.IsFalse(LlegaAParamStr('di "hola"'), 'una comilla solo agrupa');
+  Assert.IsFalse(LlegaAParamStr('a' + #0 + 'b'), 'un NUL acaba la linea');
 end;
 
 initialization
