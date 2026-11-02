@@ -280,7 +280,8 @@ function ProfileDesktopDenied(const AProfName: string; AActua: Boolean): string;
   It is asked to the install, never composed by hand, because a machine can
   host two or three Delphi versions side by side and each one answers for
   itself: (1) the IDE's own Environment Variables of that version, where an
-  operator's override lives; (2) failing that, the SDK Manager entries of that
+  operator's override lives, its macros expanded by the IDE's table
+  (ConMacrosDelIde); (2) failing that, the SDK Manager entries of that
   version - the parent of any sysroot already registered IS the folder; (3)
   and only if neither exists, the documented default, whose literal lives HERE
   and nowhere else. }
@@ -1511,7 +1512,10 @@ var
   Raiz: string;
 begin
   Result := '';
-  // 1. lo que diga ESA version, si el operador lo redefinio
+  // 1. lo que diga ESA version, si el operador lo redefinio; con macros, por EL
+  // expansor del IDE, como la lee la tabla (IdeMacroVars no llama aqui si esta
+  // redefinida): se saltaba y daba otra carpeta que la tabla (C6 del revisor del
+  // paisaje del cierre de la 1.26)
   Vars := TStringList.Create;
   try
     IdeEnvironmentVars(AVersion, Vars);
@@ -1519,6 +1523,7 @@ begin
   finally
     Vars.Free;
   end;
+  Result := ConMacrosDelIde(AVersion, Result);
   if (Result <> '') and not Result.Contains('$(') then
     Exit(SinBarraFinal(Result)); // (la raiz de una unidad, con su barra: se le unen nombres)
   // 2. donde estan los SDK que ESA version ya tiene registrados

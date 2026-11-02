@@ -54,6 +54,8 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - With `$(BDSLIB)` redefined in the IDE's Environment Variables, the language server's library folder and the package names `delphi_build` suggests for a package (`requiresSuggested`) come from that folder, as msbuild takes it: both were composed from the IDE's root.
 
+- With `$(BDSPLATFORMSDKSDIR)` redefined in the IDE's Environment Variables through another macro (`$(BDSUSERDIR)\SDKs`), the folder of the SDKs (where `delphi_paserver get-sdk` puts a sysroot, and where a profile's SDK is looked for) is the one it names, expanded by the IDE's macro table as every other path is. It fell back to the folder of the SDKs already registered, or to the default one, while that table said the redefined one.
+
 ### Changed
 
 - `delphi_config`'s description says again that `add-platform` enables a platform in the `.dproj`. The second pass had dropped it, and with Qwen3.8 Flash Next the task "build Linux64 with the SDK zorin18" fell from 3 of 5 to 2 of 18; with it back, 9 of 18 (`docs/TOOL-DESCRIPTIONS.md`).
