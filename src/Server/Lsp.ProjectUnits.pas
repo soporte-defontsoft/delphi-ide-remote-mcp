@@ -1531,8 +1531,7 @@ begin
   var PC := U.EndPos + 1;
   while (PC <= Length(Dpr)) and CharInSet(Dpr[PC], [' ', #9]) do
     Inc(PC);
-  if (CommentLen(Dpr, PC) > 0) and not Copy(Dpr, PC, 2).Equals('{$') and
-     not Copy(Dpr, PC, 3).Equals('(*$') then
+  if (CommentLen(Dpr, PC) > 0) and not AbreDirectiva(Dpr, PC) then
     Exit;
   // las que se quedan, en su orden; detras, solo nuevas
   SetLength(Quedan, Length(U.Entries));
@@ -1788,7 +1787,7 @@ begin
   // (una directiva no es un comentario de nadie: {$ o (*$ no viaja)
   if (LargoCom > 0) and (Length(U.Entries) > 0) and
      (Copy(Dpr, PosCom, LargoCom).IndexOfAny([#10, #13]) < 0) and
-     not Copy(Dpr, PosCom, 2).Equals('{$') and not Copy(Dpr, PosCom, 3).Equals('(*$') then
+     not AbreDirectiva(Dpr, PosCom) then
   begin
     // la que corresponde a la ultima original, no por su texto: el de una
     // entrada lleva delante el comentario de la anterior, que quitar esa
@@ -3571,12 +3570,12 @@ begin
   // dentro de una cadena ya no cuenta, y la forma parentesis-asterisco si
   for var X in DirectivasPascal(ATexto) do
   begin
-    if not MatchText(X.Nombre, ['I', 'INCLUDE', 'R', 'RESOURCE', 'L', 'LINK']) then
+    if DirectivaDeFicheroDe(X.Nombre) = dfNinguna then
       Continue;
     // {$R a.res a.rc}: el .rc del que sale el .res es la SEGUNDA ruta de la
     // misma directiva, y tambien es un fichero (revision 26-sep-2026)
     Maximo := 1;
-    if MatchText(X.Nombre, ['R', 'RESOURCE']) then
+    if DirectivaDeFicheroDe(X.Nombre) = dfRecurso then
       Maximo := 2;
     // los trozos, por EL troceador (Lsp.Pascal, el que lee tambien la vista
     // FMX del renderizador)

@@ -699,7 +699,7 @@ begin
         ASimbolos.Define(PrimeraPalabra(Arg))
       else if D.Nombre = 'UNDEF' then
         ASimbolos.Quita(PrimeraPalabra(Arg))
-      else if (D.Nombre = 'I') or (D.Nombre = 'INCLUDE') then
+      else if DirectivaDeFicheroDe(D.Nombre) = dfInclude then
       begin
         Inc_ := NombreDeInclude(Arg);
         if (Inc_ <> '') and Assigned(AIncluye) and (AProfundidad < MAX_INCLUDES) then

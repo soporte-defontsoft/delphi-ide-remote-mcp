@@ -24,6 +24,8 @@ type
     [Test] procedure UnNombreNuevoNoEsPalabraReservada;
     [Test] procedure UnPaqueteLoEsPorSuCabecera;
     [Test] procedure LosCondicionalesPorSuNombre;
+    [Test]
+    procedure LasDeFicheroPorSuNombre;
   end;
 
   // EL lexico (Lsp.Pascal): que es codigo, cadena, comentario y directiva.
@@ -554,6 +556,33 @@ begin
   Assert.AreEqual('İ', SinMayusculas('İ'), 'la I con punto no es la i (invariante, no el idioma de la maquina)');
   Assert.AreEqual('i', string('İ').ToLower($0C0A), 'el castellano si la plegaba a la i');
   Assert.AreEqual(SinMayusculas('Unit'), ClaveDeIdentificador('Unit'), 'la clave de un identificador es este pliegue');
+end;
+
+procedure TDirectivasTests.LasDeFicheroPorSuNombre;
+var
+  D: TArray<TDirectivaPascal>;
+begin
+  // la gemela de CondicionalDe (C12 del revisor del paisaje del cierre de la 1.26):
+  // cada nombre en su clase, en mayusculas como los da DirectivasPascal
+  for var N in ['I', 'INCLUDE'] do
+    Assert.IsTrue(DirectivaDeFicheroDe(N) = dfInclude, N);
+  for var N in ['R', 'RESOURCE'] do
+    Assert.IsTrue(DirectivaDeFicheroDe(N) = dfRecurso, N);
+  for var N in ['L', 'LINK'] do
+    Assert.IsTrue(DirectivaDeFicheroDe(N) = dfObjeto, N);
+  for var N in ['IFDEF', 'DEFINE', 'APPTYPE', 'INCLUDES', 'RX', ''] do
+    Assert.IsTrue(DirectivaDeFicheroDe(N) = dfNinguna, N);
+  D := DirectivasPascal('{$r *.res} {$link a.o}');
+  Assert.AreEqual<Integer>(2, Length(D));
+  Assert.IsTrue(DirectivaDeFicheroDe(D[0].Nombre) = dfRecurso, 'r en minusculas');
+  Assert.IsTrue(DirectivaDeFicheroDe(D[1].Nombre) = dfObjeto, 'link en minusculas');
+  // ...y lo que abre una: llave-dolar o parentesis-asterisco-dolar, no un
+  // comentario cualquiera ni lo que se sale del texto
+  Assert.IsTrue(AbreDirectiva('x {$R a}', 3), 'llave-dolar');
+  Assert.IsTrue(AbreDirectiva('(*$I a*)', 1), 'parentesis-asterisco-dolar');
+  Assert.IsFalse(AbreDirectiva('{ $R }', 1), 'un comentario con un dolar dentro');
+  Assert.IsFalse(AbreDirectiva('(* $ *)', 1), 'otro');
+  Assert.IsFalse(AbreDirectiva('{', 1), 'el final del texto');
 end;
 
 initialization

@@ -62,6 +62,11 @@ type
   // cualquier otra directiva.
   TCondicional = (cdNinguno, cdAbre, cdRama, cdSiNo, cdCierra);
 
+  // Que fichero nombra una directiva de FICHERO (lo dice DirectivaDeFicheroDe):
+  // un fuente que incluye (I, INCLUDE), un recurso que enlaza (R, RESOURCE) o un
+  // objeto que enlaza (L, LINK); dfNinguna, cualquier otra directiva.
+  TDirectivaDeFichero = (dfNinguna, dfInclude, dfRecurso, dfObjeto);
+
   // Un trozo del argumento de una directiva de FICHERO (I, R, L): una ruta
   // entre comillas, o hasta el primer blanco si va sin ellas.
   TTrozoDeDirectiva = record
@@ -131,6 +136,18 @@ function DirectivasPascal(const ATexto: string; AMarca: Char = '$'): TArray<TDir
 // de los lectores de un uses partido (Lsp.ProjectUnits) y en linea en el
 // evaluador de ramas (Lsp.Preproceso): forma 4 de la 1.26.
 function CondicionalDe(const ANombre: string): TCondicional;
+
+// ...y la de las directivas de FICHERO, la gemela: que nombra la de nombre
+// ANombre (el de DirectivasPascal, en mayusculas). Gramatica propia, UNA: la
+// tenian a mano la mudanza y la puerta del build (Lsp.ProjectUnits), el
+// evaluador de ramas (Lsp.Preproceso) y las vistas de un form (Lsp.DesignerForma):
+// C12 del revisor del paisaje del cierre de la 1.26.
+function DirectivaDeFicheroDe(const ANombre: string): TDirectivaDeFichero;
+
+// Si en ATexto[I] empieza una directiva, llave-dolar o parentesis-asterisco-
+// dolar: LA forma de abrir una, la de ClasesPascal. Un comentario que empieza
+// asi no es un comentario de nadie (Lsp.ProjectUnits lo miraba a mano, C12).
+function AbreDirectiva(const ATexto: string; I: Integer): Boolean;
 
 // Los primeros AMaximo trozos de AArgumento, el argumento de una directiva de
 // fichero: {$R a.res a.rc} da dos, y {$R *.iPad.fmx IOS} el comodin y la
@@ -621,8 +638,7 @@ begin
       end;
       if ATexto[I] = '/' then
         Clase := cpLinea
-      else if ((ATexto[I] = '{') and (I < Length(ATexto)) and (ATexto[I + 1] = '$')) or
-              ((ATexto[I] = '(') and (I + 2 <= Length(ATexto)) and (ATexto[I + 2] = '$')) then
+      else if AbreDirectiva(ATexto, I) then
         Clase := cpDirectiva
       else
         Clase := cpComentario;
@@ -746,6 +762,23 @@ begin
     Result := cdCierra
   else
     Result := cdNinguno;
+end;
+
+function DirectivaDeFicheroDe(const ANombre: string): TDirectivaDeFichero;
+begin
+  if (ANombre = 'I') or (ANombre = 'INCLUDE') then
+    Result := dfInclude
+  else if (ANombre = 'R') or (ANombre = 'RESOURCE') then
+    Result := dfRecurso
+  else if (ANombre = 'L') or (ANombre = 'LINK') then
+    Result := dfObjeto
+  else
+    Result := dfNinguna;
+end;
+
+function AbreDirectiva(const ATexto: string; I: Integer): Boolean;
+begin
+  Result := (Copy(ATexto, I, 2) = '{$') or (Copy(ATexto, I, 3) = '(*$');
 end;
 
 function TrozosDeDirectiva(const AArgumento: string; AMaximo: Integer): TArray<TTrozoDeDirectiva>;

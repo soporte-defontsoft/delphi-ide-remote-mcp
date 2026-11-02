@@ -477,7 +477,7 @@ begin
   Result := [];
   Base := ChangeFileExt(AUnidad, '');
   for var D in DirectivasPascal(ATexto) do
-    if (D.Nombre = 'R') or (D.Nombre = 'RESOURCE') then
+    if DirectivaDeFicheroDe(D.Nombre) = dfRecurso then
       // su primer trozo, por EL troceador de las directivas de fichero: '*.fmx'
       // es el maestro; '*.<Vista>.fmx', una vista
       for var T in TrozosDeDirectiva(D.Argumento, 1) do

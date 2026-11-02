@@ -371,6 +371,17 @@ REGLAS = [
     ('los nombres de los condicionales de Pascal a mano', r"'(?:IFDEF|IFNDEF|IFOPT|ELSEIF|ENDIF|IFEND)'",
      [('Lsp.Pascal.pas', 'CondicionalDe'), ('Lsp.Preproceso.pas', 'TextoActivoEn')],
      'CondicionalDe (Lsp.Pascal, forma 4 de la 1.26): que hace con su bloque cada directiva condicional'),
+    # ...y su gemela de las directivas de FICHERO (I, R, L): la tenian a mano la mudanza y la puerta del build, el
+    # evaluador de ramas y las vistas de un form (C12 del cierre de la 1.26). Los nombres de una letra no se buscan
+    # (son de todo); quien copia la lista copia los largos
+    ('los nombres de las directivas de fichero a mano', r"'(?:INCLUDE|RESOURCE|LINK)'",
+     [('Lsp.Pascal.pas', 'DirectivaDeFicheroDe')],
+     'DirectivaDeFicheroDe (Lsp.Pascal): que fichero nombra una directiva de fichero'),
+    # ...y lo que ABRE una directiva, llave-dolar o parentesis-asterisco-dolar: lo de ClasesPascal, que la mudanza de
+    # un uses volvia a mirar a mano tras un comentario (C12 del cierre de la 1.26)
+    ('lo que abre una directiva de Pascal a mano', r"'(?:\{|\(\*)\$'",
+     [('Lsp.Pascal.pas', 'AbreDirectiva')],
+     'AbreDirectiva (Lsp.Pascal): LA forma de abrir una directiva, la del clasificador ClasesPascal'),
     # el trozo unico de la casa (FragmentoUnico) es un INGREDIENTE: cada formato que lo lleva tiene su nombrador,
     # y esas son sus casas. La carpeta nueva de una operacion estaba escrita a mano en cuatro sitios (la etapa de
     # delphi_test y la del .rc de estilos, la bajada del os-release de un target y la del sello de remote-run;
@@ -1908,6 +1919,8 @@ PLANTADO = {
     'una clausula uses nueva compuesta a mano':
         "    EstrenaClausula(AText, FinLinea, 'uses' + NL + '  ' + string.Join(', ', AFaltan) + ';');",
     'los nombres de los condicionales de Pascal a mano': "    else if MatchText(D.Nombre, ['ENDIF', 'IFEND']) then",
+    'los nombres de las directivas de fichero a mano': "    if MatchText(X.Nombre, ['R', 'RESOURCE']) then",
+    'lo que abre una directiva de Pascal a mano': "  if Copy(T, P, 2).Equals('{$') then",
     'el trozo unico de la casa fuera de su nombrador': "  Tmp := ServerTempDir('sdk-' + FragmentoUnico);",
     'el agente de la llamada comparado a mano': "  if (Owner <> '') and not SameText(Owner, Me) then",
     'las palabras del protocolo del nodo a mano': "    Args := Args + ['tecla'] + Mods + [Code];",
