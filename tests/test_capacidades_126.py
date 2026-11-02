@@ -570,6 +570,23 @@ finally:
 check('R13 la cuenta del servidor no sale del entorno (USERDOMAIN=DOMINIOFALSO), y trae su dominio',
       cuenta != '' and 'DOMINIOFALSO' not in cuenta and '\\' in cuenta, cuenta)
 
+# R7 el vigia del ayudante y su fase de paquetes salen del plazo de la llamada: layout espera 30 s y le mandaba
+# --timeout 60000 y --packagestimeout 50000, asi que su vigia no hablaba nunca y lo paraba el servidor sin el
+# por que. Un ayudante de mentira contesta ERROR= con su linea de ordenes; preview (75 s) sigue en 60000 y 50000
+ORDEN = de_mentira('DiceSuOrden', dice('PROTOCOL=' + PROTOCOLO) +
+                   "  Writeln('ERROR=ORDEN ' + string(CmdLine));\n  Flush(Output);\n  Halt(1);\n")
+otro = servidor_con(ORDEN, 'orden', PRUEBA)
+try:
+    lay = otro.call('delphi_designer', {'command': 'layout', 'path': os.path.join(PRUEBA, 'UP.dfm')}, t=120)
+    pre = otro.call('delphi_designer', {'command': 'preview', 'path': os.path.join(PRUEBA, 'UP.dfm'), 'maxwidth': 100},
+                    t=120)
+finally:
+    otro.cierra()
+check('R7 layout (30 s) da al ayudante --timeout 15000 y --packagestimeout 15000',
+      '--timeout 15000' in lay and '--packagestimeout 15000' in lay, re.findall(r'-\w*timeout \d+', lay) or lay[:700])
+check('R7 ...y preview (75 s), --timeout 60000 y --packagestimeout 50000, como antes',
+      '--timeout 60000' in pre and '--packagestimeout 50000' in pre, re.findall(r'-\w*timeout \d+', pre) or pre[:700])
+
 s.cierra()
 mc.borra(BASE)
 mc.fin('capacidades 1.26')

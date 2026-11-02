@@ -36,6 +36,8 @@ the MCP `initialize` response (`serverInfo.version`).
 - A folder marked shared (`SharedFolders`) whose name has a letter that is not ASCII is shared whatever the case of that letter, as NTFS compares two names: a confined agent was refused it when the case differed.
 - `delphi_workspace` names the server's account as Windows does, from the process's own identity. The domain came from `USERDOMAIN`, which whoever starts the process sets.
 
+- The renderer's own time limit comes from the call's. `delphi_designer layout` waits 30 s for it, but the renderer was told 60 s, and 50 s for the IDE's packages, so its watcher never spoke and the server stopped it without the reason; it now gets 15 s for both, and a preview keeps 60 s and 50 s. A call that renders again with forms brought from other folders gives each new round what is left of its time, not all of it again.
+
 ### Changed
 
 - `delphi_config`'s description says again that `add-platform` enables a platform in the `.dproj`. The second pass had dropped it, and with Qwen3.8 Flash Next the task "build Linux64 with the SDK zorin18" fell from 3 of 5 to 2 of 18; with it back, 9 of 18 (`docs/TOOL-DESCRIPTIONS.md`).

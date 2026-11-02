@@ -68,8 +68,9 @@ type
     ClasesSinLeer: Boolean;
     // --boxes: sin png, donde queda cada control (BOX=). Lo pone delphi_designer layout
     Cajas: Boolean;
-    // cuanto puede tardar cada ayudante, si no es RENDER_TIEMPO_MS: quien tiene otra
-    // respuesta que dar no espera lo que espera un preview
+    // cuanto puede tardar la llamada, todas sus vueltas, si no es RENDER_TIEMPO_MS:
+    // quien tiene otra respuesta que dar no espera lo que espera un preview. El
+    // vigia del ayudante sale de el (VigiaDelAyudante)
     PlazoMs: Integer;
     // forms del proyecto, de otra carpeta, de las clases que el ayudante dijo que le
     // faltaban (ancestros y frames, V120b de la 1.24). Lo pone CorreRender
@@ -414,6 +415,7 @@ implementation
 
 uses
   System.SysUtils,
+  System.Math,      // Max y Min; antes que System.StrUtils, cuyo IfThen es el de texto
   System.IOUtils,
   System.Diagnostics,
   System.Generics.Collections,
@@ -451,7 +453,7 @@ const
   // 7-oct-2026: una form estandar 20 ms, FichaCliente con 112 paquetes del
   // IDE ~1,2 s (9,4 s la primera vez, con la cache de disco fria).
   RENDER_TIEMPO_MS = 75000;
-  RENDER_TIEMPO_AYUDANTE_MS = 60000;
+  MARGEN_DEL_VIGIA_MS = 15000;
 
   // Windows no pudo cargar el exe o sus paquetes de ejecucion (rtl/vcl/fmx
   // del Delphi): no hay ERROR= porque no llego a correr nada suyo
@@ -490,6 +492,23 @@ begin
     Result := DesignClassDeFrame(False)
   else
     Result := 'TForm';
+end;
+
+function PlazoDeRender(const APeticion: TPeticionRender): Integer;
+begin
+  Result := APeticion.PlazoMs;
+  if Result <= 0 then
+    Result := RENDER_TIEMPO_MS;
+end;
+
+{ El vigia del ayudante para un plazo: MARGEN_DEL_VIGIA_MS antes que el
+  servidor, para que sea el ayudante quien diga por que se paro (RENDER-007,
+  RENDER-027); con un plazo corto, la mitad. Salia fijo, 60 s, y un layout
+  espera 30: su vigia no hablaba nunca y lo paraba el servidor sin el por que
+  (forma 7 del revisor del paisaje de la 1.26) }
+function VigiaDelAyudante(APlazoMs: Integer): Integer;
+begin
+  Result := Max(APlazoMs - MARGEN_DEL_VIGIA_MS, APlazoMs div 2);
 end;
 
 { Un valor que viaja como UN argumento entre comillas }
@@ -537,9 +556,11 @@ begin
   else
     AOrden := AOrden + Arg('--out', APeticion.Salida) +
       ' --nonvisual ' + (if APeticion.NoVisuales then 'on' else 'off');
-  AOrden := AOrden + ' --timeout ' + IntToStr(RENDER_TIEMPO_AYUDANTE_MS);
+  // el vigia y la fase de los paquetes, del plazo de ESTA peticion
+  var Vigia := VigiaDelAyudante(PlazoDeRender(APeticion));
+  AOrden := AOrden + ' --timeout ' + IntToStr(Vigia);
   if APeticion.Convierte = '' then
-    AOrden := AOrden + ' --packagestimeout ' + IntToStr(ESPERA_DEL_CLIENTE_MS);
+    AOrden := AOrden + ' --packagestimeout ' + IntToStr(Min(ESPERA_DEL_CLIENTE_MS, Vigia));
   if APeticion.Bds <> '' then
     AOrden := AOrden + Arg('--bds', APeticion.Bds);
   if APeticion.RaizBds <> '' then
@@ -1549,13 +1570,6 @@ begin
   end;
 end;
 
-function PlazoDeRender(const APeticion: TPeticionRender): Integer;
-begin
-  Result := APeticion.PlazoMs;
-  if Result <= 0 then
-    Result := RENDER_TIEMPO_MS;
-end;
-
 { LA CAJA DE PAQUETES: los .bpl y .dll que un contenedor no leeria donde estan
   (la carpeta publica del IDE, las de terceros; las del sistema si las lee: es
   LoLeeElContenedor) y el propio ayudante (con DaSusClasesAlContenedor), copiados
@@ -1960,6 +1974,10 @@ begin
   var LoTraido: TArray<string> := [];
   for var Vuelta := 0 to VUELTAS_POR_LO_LEJANO do
   begin
+    // cada vuelta, con lo que QUEDA del plazo de la llamada: con el entero, las
+    // vueltas por lo lejano costaban hasta el doble (forma 7 de la 1.26)
+    if Vuelta > 0 then
+      Pet.PlazoMs := Max(1, PlazoDeRender(APeticion) - Integer(Reloj.ElapsedMilliseconds));
     Fallo := CorreEnSuContenedor(Pet, Exe, Salida, Codigo, Vencido);
     if Fallo <> '' then
     begin
@@ -2051,7 +2069,7 @@ begin
     // el conversor no carga el form: "algo del form espera" no es su causa (V102),
     // tampoco cuando lo para su propio vigia (RENDER-007)
     Result.Fallo := FalloDelAyudante(MsgFmt(SF_DSGN_CONVERSOR_TIEMPO_FMT,
-      [(if Vencido then PlazoDeRender(APeticion) else RENDER_TIEMPO_AYUDANTE_MS) div 1000]))
+      [(if Vencido then PlazoDeRender(APeticion) else VigiaDelAyudante(PlazoDeRender(APeticion))) div 1000]))
   else if Result.Error <> '' then
     // con etiqueta (un estado que no existe, el vigia) sale tal cual
     Result.Fallo := FalloDelAyudante(Result.Error)

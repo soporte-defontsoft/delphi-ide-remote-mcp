@@ -36,6 +36,7 @@ type
     [Test] procedure AncestroAnotaSuPasConLaHuella;
     [Test] procedure OrdenUnInterruptorPorValor;
     [Test] procedure OrdenNoPasaValoresVacios;
+    [Test] procedure OrdenConElPlazoDeLaPeticion;
     [Test] procedure OrdenRechazaComillasYControles;
     [Test] procedure RutaDePaqueteConSusMacros;
     [Test] procedure ManifiestoDeLasClases;
@@ -412,6 +413,27 @@ begin
   Assert.IsFalse(O.Contains('--knownfile'), O);
   Assert.IsFalse(O.Contains('""'), 'ningun valor vacio: ' + O);
   Assert.IsTrue(O.Contains(' --nonvisual off'), 'apagado por defecto: ' + O);
+end;
+
+procedure TFormRenderTests.OrdenConElPlazoDeLaPeticion;
+var
+  P: TPeticionRender;
+  O: string;
+begin
+  // el vigia del ayudante y su fase de paquetes salen del plazo de la peticion:
+  // fijos en 60 s y 50 s, el de un layout de 30 s no hablaba nunca (forma 7 de la 1.26)
+  P := Default(TPeticionRender);
+  P.Path := 'C:\w\F.dfm';
+  P.Cajas := True;
+  P.PlazoMs := 30000;
+  Assert.AreEqual('', ComponeOrdenDeRender('C:\s\r.exe', P, O));
+  Assert.IsTrue(O.Contains(' --timeout 15000 '), O);
+  Assert.IsTrue(O.Contains(' --packagestimeout 15000'), O);
+  // sin plazo propio, el de un preview: el vigia un margen antes, los paquetes lo que espera un cliente
+  P.PlazoMs := 0;
+  Assert.AreEqual('', ComponeOrdenDeRender('C:\s\r.exe', P, O));
+  Assert.IsTrue(O.Contains(' --timeout 60000 '), O);
+  Assert.IsTrue(O.Contains(' --packagestimeout ' + IntToStr(ESPERA_DEL_CLIENTE_MS)), O);
 end;
 
 procedure TFormRenderTests.OrdenRechazaComillasYControles;
