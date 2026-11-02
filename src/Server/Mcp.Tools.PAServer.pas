@@ -325,7 +325,7 @@ begin
   Tmp := CarpetaUnica(ServerTempDir, 'sdk-');
   try
     CrearCarpeta(Tmp);
-    Paclient(APaClient, '--timeout=30 ' + PaclientGet('/etc/os-release', Tmp), AProfName, Salida);
+    Paclient(APaClient, PaclientPlazo(30) + ' ' + PaclientGet('/etc/os-release', Tmp), AProfName, Salida);
     F := TPath.Combine(Tmp, 'os-release');
     if not TFile.Exists(F) then
       Exit;
@@ -1071,7 +1071,7 @@ begin
   if Result <> '' then
     Exit;
   ProfName := DelIde;
-  ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=20', ProfName, Output, 45000));
+  ExitCode := Cardinal(PaclientConecta(PaClient, ProfName, Output));
   Return := TJSONObject.Create;
   try
     Return.AddPair('profile', ProfName);
@@ -1396,7 +1396,7 @@ begin
   // distro (PAS-030; sexta revision); y antes de leer su os-release, que con
   // el destino apagado no se lee y no es culpa de la distro (V10). paclient
   // solo con el perfil conecta y se autentica, como test-connection.
-  ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=20', ProfName, Output, 45000));
+  ExitCode := Cardinal(PaclientConecta(PaClient, ProfName, Output));
   if ExitCode <> 0 then
     Exit(MsgFmt(SR_FETCHTARGET_FAIL_FMT, [ExitCode, Output.Trim]));
   // UNA CARPETA POR SDK Y POR DISTRO, igual que el IDE hace con los de
@@ -1444,7 +1444,7 @@ begin
       DestDir := TPath.Combine(SysRoot,
         ConBarrasDeWindows(Pull.RemoteBase.TrimLeft(['/'])));
       CrearCarpeta(DestDir);
-      ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, '--timeout=30 ' + PaclientGet(Pattern, DestDir),
+      ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient, PaclientPlazo(30) + ' ' + PaclientGet(Pattern, DestDir),
         ProfName, Output, 1200000));
       ParseCopied(Output, NFiles, NBytes);
       PullObj := TJSONObject.Create;

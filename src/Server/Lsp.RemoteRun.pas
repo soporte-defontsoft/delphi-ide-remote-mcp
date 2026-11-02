@@ -104,6 +104,13 @@ function PaclientPut(const ALocal, ACarpetaRemota: string; AFlag: Integer;
   const ANombreRemoto: string): string;
 function PaclientRemove(const ARemotos: array of string): string;
 function PaclientPerfilNuevo(const AHost, APuerto, APassword, APlataforma: string): string;
+{ ...y el PLAZO para conectar, en segundos (--timeout=N): estaba a mano en
+  cuatro sitios de Mcp.Tools.PAServer (forma 18 de la 1.26). }
+function PaclientPlazo(ASegundos: Integer): string;
+{ LA sonda: paclient solo con el perfil conecta y se autentica, y nada mas; 0
+  si el PAServer contesta y acepta. La hacen test-connection y get-sdk antes
+  de bajar nada (estaba escrita dos veces; forma 18 de la 1.26). }
+function PaclientConecta(const APaclient, AProfile: string; out AOutput: string): Integer;
 
 { Runs the program DEPLOYED for ADprojPath on the machine of PAServer profile
   AProfile. The remote path is DERIVED here, never taken from the caller:
@@ -291,6 +298,17 @@ function PaclientPerfilNuevo(const AHost, APuerto, APassword, APlataforma: strin
 begin
   Result := '--local ' + ComillasSinEscape('--host=' + AHost) + ' --port=' + APuerto + ' ' +
     ComillasSinEscape('--password=' + APassword) + ' ' + ComillasSinEscape('--platform=' + APlataforma);
+end;
+
+function PaclientPlazo(ASegundos: Integer): string;
+begin
+  Result := '--timeout=' + IntToStr(ASegundos);
+end;
+
+function PaclientConecta(const APaclient, AProfile: string; out AOutput: string): Integer;
+begin
+  // 20 s para conectar, 45 la llamada entera
+  Result := Paclient(APaclient, PaclientPlazo(20), AProfile, AOutput, 45000);
 end;
 
 function JsonEsc(const S: string): string;

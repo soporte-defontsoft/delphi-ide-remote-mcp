@@ -553,10 +553,12 @@ REGLAS = [
      [('Mcp.Tools.Styles.pas', 'CompilaRcEnContenedor')],
      'Lsp.ProcessLaunch: EnComillas (CRT) y ComillasSinEscape (RTL de Delphi, y el programa)'),
     # el '--put="?' de Lsp.BuildRunner lee la salida de msbuild: no compone nada
-    ('una operacion de paclient compuesta a mano', r"--(?:get|put|Remove|password)=(?!\"\?)",
+    # (y el plazo, --timeout=: a mano en cuatro sitios de Mcp.Tools.PAServer; forma 18 de la 1.26)
+    ('una operacion de paclient compuesta a mano', r"--(?:get|put|Remove|password|timeout)=(?!\"\?)",
      [('Lsp.RemoteRun.pas', 'PaclientGet'), ('Lsp.RemoteRun.pas', 'PaclientPut'),
-      ('Lsp.RemoteRun.pas', 'PaclientRemove'), ('Lsp.RemoteRun.pas', 'PaclientPerfilNuevo')],
-     'Lsp.RemoteRun: PaclientGet, PaclientPut, PaclientRemove y PaclientPerfilNuevo'),
+      ('Lsp.RemoteRun.pas', 'PaclientRemove'), ('Lsp.RemoteRun.pas', 'PaclientPerfilNuevo'),
+      ('Lsp.RemoteRun.pas', 'PaclientPlazo')],
+     'Lsp.RemoteRun: PaclientGet, PaclientPut, PaclientRemove, PaclientPerfilNuevo y PaclientPlazo'),
     # tres decisiones de jaula sobre el mismo texto, cada una con su lector hasta la 1.24: la raiz
     # mas honda (V174), el juez de un nombre suelto (V178) y una unidad virtual bajo su letra (V171)
     ('la raiz mas honda escrita a mano', r'RutaDentroDe\([^;]*Length\(', [],
