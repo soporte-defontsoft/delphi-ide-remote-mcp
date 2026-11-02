@@ -36,6 +36,13 @@ function NombreDeMensajeGit: string;
   anuncia tools/list y los que deja pasar GitCommandIsQuery. Eran dos listas }
 function ConsultasDeGit: TArray<string>;
 function GitCommandIsQuery(const ACmd, AAccion, ANombre, AMessage: string): Boolean;
+{ Las ordenes de delphi_git que hablan con la RED (un remoto o una URL): se
+  apuntan en el log, no toman el cerrojo de los escritores y esperan diez
+  minutos; y todas menos clone, que juzga su URL, pasan por la puerta del
+  remoto (RemotoDenegado). Era la misma lista a mano en cuatro sitios de
+  Mcp.Tools.Git (forma 2 de la 1.26): una orden de red nueva se apunta AQUI
+  y la puerta del remoto la ve. }
+function EsOrdenDeRed(const ACmd: string): Boolean;
 
 { '' when AText carries none of the shell metacharacters that would break a
   command line ( ; | & ` $ < > and newlines ), otherwise a refusal. For tool
@@ -348,6 +355,11 @@ function ConsultasDeGit: TArray<string>;
 begin
   // branch solo lista desde la 1.19.0 (crear es switch create=true)
   Result := ['status', 'diff', 'log', 'show', 'ls-remote', 'branch'];
+end;
+
+function EsOrdenDeRed(const ACmd: string): Boolean;
+begin
+  Result := MatchText(Trim(ACmd), ['clone', 'pull', 'fetch', 'push', 'ls-remote']);
 end;
 
 function GitCommandIsQuery(const ACmd, AAccion, ANombre, AMessage: string): Boolean;

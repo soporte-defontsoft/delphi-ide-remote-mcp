@@ -336,6 +336,15 @@ REGLAS = [
     # una extension comparada con el LOCALE (MatchText, IndexText, AnsiSameText): daba por '.pas' un 'nota.pa' +
     # U+02E2 y por proyecto un 'x.dpr' + U+1D3C + 'j', y delphi_textedit los negaba (123 caracteres asi, medido el
     # 2-nov-2026, forma 25 de la 1.26). SameText contra una extension ASCII dice lo mismo que NTFS (medido)
+    # las ordenes de red de delphi_git como lista a mano: estaban en cuatro sitios, y la de la puerta del remoto
+    # (RemotoDenegado) es la que decide que orden se juzga por su remoto: una orden de red nueva sin apuntar ahi
+    # saldria sin la lista blanca (forma 2 de la 1.26). La de GitLinea es otra pregunta (las que aceptan
+    # --no-recurse-submodules)
+    ('las ordenes de red de git a mano',
+     r"(?:MatchText|IndexText|AnsiMatchText)\s*\(\s*[\w.()]+\s*,\s*\[\s*'(?:clone|pull|fetch|push|ls-remote)'\s*,"
+     r"\s*'(?:clone|pull|fetch|push|ls-remote)'",
+     [('Lsp.Args.pas', 'EsOrdenDeRed'), ('Mcp.Tools.Git.pas', 'GitLinea')],
+     'EsOrdenDeRed (Lsp.Args, forma 2 de la 1.26)'),
     ('una extension juzgada con el locale',
      r"\b(?:(?:Ansi)?(?:MatchText|IndexText)|AnsiSameText|AnsiCompareText)\s*\(\s*(?:TPath\.GetExtension|ExtractFileExt)\b",
      [],
@@ -1817,6 +1826,7 @@ PLANTADO = {
     '__delphi-patch': "  if ContainsText(P, '\\__delphi-patch\\') then",
     'el nombre de una carpeta del servidor juzgado a mano': "        if SameText(Nombre, TrashFolderName) then",
     'una extension juzgada con el locale': "  Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS);",
+    'las ordenes de red de git a mano': "    if MatchText(Cmd, ['pull', 'fetch', 'push', 'ls-remote']) then",
     'las copias muertas del IDE por su nombre': "  if P.Contains('\\__history\\') then",
     'las barras de una ruta cambiadas a mano': "  P := APath.Trim.Replace('/', '\\');",
     'una subida por carpetas a mano': "  if (Padre = '') or SameText(Padre, D) then Break;",

@@ -298,6 +298,9 @@ end;
 function GitLinea(const ARepo, AFijado, AResto: string): string;
 begin
   // La orden de red no hereda una recursion a remotos de submodulos sin juzgar.
+  // (Las que la heredan por configuracion y aceptan --no-recurse-submodules:
+  // otra pregunta que EsOrdenDeRed - clone no recurre sin pedirlo y ls-remote
+  // no tiene la opcion.)
   var Comando := PrimerTrozo(AResto, [' ']);
   var Resto := AResto;
   if MatchText(Comando, ['fetch', 'pull', 'push']) then
@@ -1734,7 +1737,8 @@ begin
     // EL REMOTO antes que su endpoint LFS: un pull desde una carpeta de
     // fuera se niega por el remoto (GIT-044), no por el endpoint que de el
     // deriva. La puerta del remoto va delante de la de la configuracion.
-    if MatchText(Cmd, ['pull', 'fetch', 'push', 'ls-remote']) then
+    // TODA orden de red (EsOrdenDeRed; clone no llega aqui: juzga su URL)
+    if EsOrdenDeRed(Cmd) then
     begin
       Result := RemotoDenegado(Cmd, Repo, Fijado, IfThen(Raiz <> '', Raiz, Repo),
         Params.Remote);
@@ -2257,7 +2261,7 @@ begin
     if (Cmd = 'push') and (Campo = 'ref') and RefspecQueDestruye(Valor.Trim) then
       Exit(MsgFmt(SR_GIT_PUSH_NOMBRE_FMT, [Valor.Trim]));
   end;
-  if MatchText(Cmd, ['clone', 'pull', 'fetch', 'push', 'ls-remote']) then
+  if EsOrdenDeRed(Cmd) then
     TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT,
       [Cmd, Repo, Params.Message]));
 
@@ -2269,7 +2273,7 @@ begin
   // es la excepcion, y esta escrita (septima revision). Las consultas no
   // escriben.
   var ConCerrojo := not GitCommandIsQuery(Params.Command, Params.Action, Params.Name, Params.Message) and
-    not MatchText(Cmd, ['clone', 'pull', 'fetch', 'push']);
+    not EsOrdenDeRed(Cmd);
   // Lo que REESCRIBE el arbol puede QUITAR carpetas: una rama sin la carpeta
   // de un proyecto, y git borraba sus ficheros, no podia con la carpeta -el
   // motor de ese proyecto la tiene de directorio de trabajo- y la dejaba
@@ -2321,7 +2325,7 @@ begin
     try
       try
         Output := GitCorre(Repo, Fijado, GitArgs,
-          IfThen(MatchText(Cmd, ['push', 'clone', 'pull', 'fetch', 'ls-remote']), 600000, 60000),
+          IfThen(EsOrdenDeRed(Cmd), 600000, 60000),
           ExitCode);
         GitCorrio := True;
         // V66 de la 1.23.1: el estado que git imprime por su cuenta no pasa
