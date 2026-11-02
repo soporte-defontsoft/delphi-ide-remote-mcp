@@ -1173,7 +1173,9 @@ REGLAS = [
     # modulo como DATOS y el recurso de version de un exe
     r"\bLoadLibraryEx\w*\s*\([^;]*LOAD_LIBRARY_AS_(?:DATAFILE|IMAGE_RESOURCE)|\bGetFileVersionInfo\w*\s*\(|"
     # ...y un .chm, que abre itss.dll por la ruta (V220)
-    r"\.StgOpenStorage\s*\(",
+    r"\.StgOpenStorage\s*\(|"
+    # ...y el hash de un fichero, que lo lee entero por la ruta (forma 10 de la 1.26: la regla no lo veia)
+    r"\bGetHash\w*FromFile\s*\(",
      # excepciones DECLARADAS, cada una con su motivo; solo pueden encoger
      [# la ayuda de la instalacion, que encuentra el servidor (Lsp.Docs), no la nombra el agente
       ('Lsp.Chm.pas', 'TChm.Create'),
@@ -1184,10 +1186,14 @@ REGLAS = [
       # decodificador que usan ella y LeeTexto, tras la puerta
       ('Lsp.Patch.pas', 'LeeBytes'), ('Lsp.Patch.pas', 'LeeTrozoDeBytes'), ('Lsp.Patch.pas', 'TextoDeFichero'),
       # (RepoOf leia .git\HEAD a mano: desde la 1.22.2 la rama la da git, RamaDelRepo)
-     # BYTES de la jaula que la tool ya comprobo (delphi_fetch, el zip de delphi_package,
-     # la descarga). La captura y su recorte ya van por la puerta (1.18.2, 2b)
-     ('Mcp.Tools.Workspace.pas', 'TDelphiFetchTool.ExecuteWithParams'),
+     # BYTES de la jaula que la tool ya comprobo (la descarga). La captura y su recorte ya
+     # van por la puerta (1.18.2, 2b), y el trozo de delphi_fetch por LeeTrozoDeBytes, la
+     # de remote-run (forma 10 de la 1.26: era un TFileStream a mano)
       ('Lsp.Files.pas', 'ServeFile'),
+      # el HASH de un fichero que su tool ya paso por la puerta (delphi_fetch, la descarga, el
+      # binario de remote-run, lo recien subido): Lsp.ShaCache lo comparten los renderizadores,
+      # que no llevan la puerta ni lo que arrastra
+      ('Lsp.ShaCache.pas', 'FileSha256'),
       # el RECLAMO de una captura nuestra antes de entregarla por su enlace: apertura
       # EXCLUSIVA (CreateFile GENERIC_READ, sin compartir, borrado al cerrar) y lectura
       # por el handle de lo que su nombrador ya juzgo (CapturaConsumible); hermano de
@@ -2204,7 +2210,8 @@ for forma in ("  L := TFile.ReadAllLines(F);", "  Ini := TMemIniFile.Create(F, T
               "  S := TFile.Open(F, TFileMode.fmOpen, TFileAccess.faRead);", "  H := FileOpen(F, fmOpenRead);",
               "  H := CreateFile(PChar(F), GENERIC_READ, FILE_SHARE_READ, nil, OPEN_EXISTING, 0, 0);",
               "  H := LoadLibraryEx(PChar(F), 0, LOAD_LIBRARY_AS_DATAFILE);",
-              "  if GetFileVersionInfo(PChar(F), 0, N, @B[0]) then X := 1;"):
+              "  if GetFileVersionInfo(PChar(F), 0, N, @B[0]) then X := 1;",
+              "  S := THashSHA2.GetHashStringFromFile(F, THashSHA2.TSHA2Version.SHA256);"):
     cazados = leer_plantado(forma)
     check('mutante "%s": tambien %s' % (REGLA_LEER[0], forma.strip()), len(cazados) == 1, cazados)
 NO_CAZADO = leer_plantado("  Ini := TMemIniFile.Create('');")

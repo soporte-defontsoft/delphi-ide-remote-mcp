@@ -1527,12 +1527,11 @@ const
   SMALL_CHUNK = 1024 * 1024;
 var
   FullPath, Sha: string;
-  Stream: TFileStream;
   Size, ChunkLen: Int64;
-  MaxB: Integer;
+  MaxB, Pide: Integer;
   Buf: TBytes;
   Return: TJSONObject;
-  LinkOnly: Boolean;
+  PorEnlace, LinkOnly: Boolean;
 begin
   // la guarda PRIMERO: con path vacio, GetFullPath lanzaba el texto de la
   // RTL ("Invalid characters in path"); la guarda dice que falta la ruta
@@ -1554,62 +1553,61 @@ begin
   if Params.Offset < 0 then
     Exit(MsgText(SR_WS_OFFSET_NEGATIVO));
 
-  Stream := TFileStream.Create(FullPath, fmOpenRead or fmShareDenyWrite);
+  // el trozo y el tamano, de UNA lectura por LA puerta de leer (LeeTrozoDeBytes, la
+  // de remote-run): era un TFileStream a mano, declarado como excepcion de la puerta
+  // (forma 10 de la 1.26). Lo grande va por el enlace y sin trozo: se pide como mucho
+  // un byte mas que el trozo pequeno, lo justo para saber si se pasa
+  PorEnlace := GFilesServed and (Params.Offset = 0) and
+    ((Params.MaxBytes <= 0) or (Params.MaxBytes > SMALL_CHUNK));
+  Pide := MaxB;
+  if PorEnlace then
+    Pide := SMALL_CHUNK + 1;
+  Buf := LeeTrozoDeBytes(FullPath, [ltJaula], Params.Offset, Pide, Size);
+  if Params.Offset > Size then
+    Exit(MsgFmt(SR_WS_OFFSET_MAS_ALLA_FINAL_FMT, [Size]));
+  LinkOnly := PorEnlace and (Size > SMALL_CHUNK);
+  if LinkOnly then
+    Buf := [];
+  ChunkLen := Length(Buf);
+  Sha := '';
+  if Params.Offset = 0 then
+    // Whole-file hash so the client can verify the reassembly. Cached by
+    // (path, mtime, size): the /files download recomputed this same hash
+    // right after, so one big zip was read end-to-end three times for one
+    // download (hermes, release audit 2026-08-26).
+    // No sale del handle del trozo: si alguien escribe entre los dos, lo
+    // recompuesto no cuadra con el y el cliente lo ve (entre trozos, que
+    // son llamadas aparte, tampoco lo impedia el handle)
+    Sha := CachedFileSha256(FullPath);
+
+  Return := TJSONObject.Create;
   try
-    Size := Stream.Size;
-    Sha := '';
-    if Params.Offset = 0 then
-      // Whole-file hash so the client can verify the reassembly. Cached by
-      // (path, mtime, size): the /files download recomputed this same hash
-      // right after, so one big zip was read end-to-end three times for one
-      // download (hermes, release audit 2026-08-26).
-      Sha := CachedFileSha256(FullPath);
-
-    if Params.Offset > Size then
-      Exit(MsgFmt(SR_WS_OFFSET_MAS_ALLA_FINAL_FMT, [Size]));
-    LinkOnly := GFilesServed and (Size > SMALL_CHUNK) and (Params.Offset = 0) and
-      ((Params.MaxBytes <= 0) or (Params.MaxBytes > SMALL_CHUNK));
-    Stream.Position := Params.Offset;
-    ChunkLen := Size - Params.Offset;
-    if ChunkLen > MaxB then
-      ChunkLen := MaxB;
-    if LinkOnly then
-      ChunkLen := 0;
-    SetLength(Buf, ChunkLen);
-    if ChunkLen > 0 then
-      Stream.ReadBuffer(Buf[0], ChunkLen);
-
-    Return := TJSONObject.Create;
-    try
-      Return.AddPair('path', FullPath);
-      Return.AddPair('size', TJSONNumber.Create(Size));
-      Return.AddPair('offset', TJSONNumber.Create(Params.Offset));
-      Return.AddPair('bytes', TJSONNumber.Create(ChunkLen));
-      Return.AddPair('eof', TJSONBool.Create(Params.Offset + ChunkLen >= Size));
-      if Sha <> '' then
-        Return.AddPair('sha256', Sha);
-      if GFilesServed then
-      begin
-        // Relative on purpose: the client already knows the host:port it
-        // talks to, and the server never guesses its own public address.
-        // The path travels in its VIRTUAL form, URL-encoded (no real drive
-        // letter ever leaves, encoded or not).
-        Return.AddPair('download', DownloadLinkFor(FullPath));
-        Return.AddPair('downloadNote', MsgText(SN_FETCH_DOWNLOAD));
-      end;
-      if LinkOnly then
-        Return.AddPair('inline', TJSONBool.Create(False));
-      if LinkOnly then
-        Return.AddPair('note', MsgFmt(SN_FETCH_BIG_FMT,
-          [FormatFloat('0.0', Size / (1024 * 1024), TFormatSettings.Invariant) + ' MB']))
-      else
-        Return.AddPair('chunkBase64', BytesToBase64(Buf)); // EL codificador de la casa
-      Result := Return.ToJSON;
-    finally
-      Return.Free;
+    Return.AddPair('path', FullPath);
+    Return.AddPair('size', TJSONNumber.Create(Size));
+    Return.AddPair('offset', TJSONNumber.Create(Params.Offset));
+    Return.AddPair('bytes', TJSONNumber.Create(ChunkLen));
+    Return.AddPair('eof', TJSONBool.Create(Params.Offset + ChunkLen >= Size));
+    if Sha <> '' then
+      Return.AddPair('sha256', Sha);
+    if GFilesServed then
+    begin
+      // Relative on purpose: the client already knows the host:port it
+      // talks to, and the server never guesses its own public address.
+      // The path travels in its VIRTUAL form, URL-encoded (no real drive
+      // letter ever leaves, encoded or not).
+      Return.AddPair('download', DownloadLinkFor(FullPath));
+      Return.AddPair('downloadNote', MsgText(SN_FETCH_DOWNLOAD));
     end;
+    if LinkOnly then
+      Return.AddPair('inline', TJSONBool.Create(False));
+    if LinkOnly then
+      Return.AddPair('note', MsgFmt(SN_FETCH_BIG_FMT,
+        [FormatFloat('0.0', Size / (1024 * 1024), TFormatSettings.Invariant) + ' MB']))
+    else
+      Return.AddPair('chunkBase64', BytesToBase64(Buf)); // EL codificador de la casa
+    Result := Return.ToJSON;
   finally
-    Stream.Free;
+    Return.Free;
   end;
 end;
 
