@@ -38,14 +38,18 @@ const
     'component that connects or opens something while it is created).';
 
   { %0:d: los segundos que llevaba; %1:d de %2:d: los paquetes cargados de los
-    que lista el IDE, como PACKAGES=. Medido el 2-nov-2026 en la VM: con huella
-    nueva, rendirse a los 50 s y repetir cuesta lo que la carga entera (50 + 17-20
-    s frente a 69 s): lo revisado se queda revisado }
+    que lista el IDE, como PACKAGES=; %3:s: el paquete en el que estaba, que uno
+    que se CUELGA al cargar salia "repite" en cada llamada sin que nada lo
+    nombrase (C2 del cierre de la 1.26). Medido el 2-nov-2026 en la VM: con
+    huella nueva, rendirse a los 50 s y repetir cuesta lo que la carga entera
+    (50 + 17-20 s frente a 69 s): lo revisado se queda revisado }
   SR_RENDER_PAQUETES_CARGANDO_FMT =
     '[RENDER-027 DENIED] After %0:d s the IDE''s design packages were still ' +
-    'loading (%1:d of %2:d), so the renderer stopped before an MCP client gives ' +
-    'up. Repeat the same call: it goes on from there. An antivirus checks a ' +
-    'package the first time it sees it, and what it checked stays checked.';
+    'loading (%1:d of %2:d), on %3:s, so the renderer stopped before an MCP ' +
+    'client gives up. Repeat the same call: it goes on from there. An antivirus ' +
+    'checks a package the first time it sees it, and what it checked stays ' +
+    'checked. If the next call stops on the same package, that package hangs ' +
+    'while it loads: tell whoever runs this server which one.';
 
   SR_RENDER_SIN_IDE_FMT =
     '[RENDER-008 NOT_FOUND] Nobody said where RAD Studio %s is (--bdsroot): ' +

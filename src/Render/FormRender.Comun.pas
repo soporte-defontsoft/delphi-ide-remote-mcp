@@ -436,6 +436,10 @@ var
   // la fase de los paquetes, para el vigia (otro hilo: solo los lee)
   GCargandoPaquetes: Boolean = False;
   GPaquetesHechos, GPaquetesListados: Integer;
+  // ...y el paquete en el que esta: un INDICE de GConocidos, que no cambia en
+  // el bucle (-1, ninguno). El nombre que reescribe el hilo principal no se
+  // puede leer desde el del vigia (C2 del cierre de la 1.26)
+  GPaqueteEnCurso: Integer = -1;
 
 { ---- respuesta ---- }
 
@@ -909,8 +913,14 @@ begin
   if (Espera < FMs) and not GCargandoPaquetes and (GVigiaPara.WaitFor(FMs - Espera) <> wrTimeout) then
     Exit;
   if GCargandoPaquetes then
+  begin
+    var En := GPaqueteEnCurso;
+    var Paquete: string := '?';
+    if (En >= 0) and (En < GConocidos.Count) then
+      Paquete := ExtractFileName(GConocidos[En]);
     Responde(FR_ERROR, MsgFmt(SR_RENDER_PAQUETES_CARGANDO_FMT,
-      [Reloj.ElapsedMilliseconds div 1000, GPaquetesHechos, GPaquetesListados]))
+      [Reloj.ElapsedMilliseconds div 1000, GPaquetesHechos, GPaquetesListados, Paquete]));
+  end
   else
     Responde(FR_ERROR, MsgFmt(SR_RENDER_TIEMPO_FMT, [FMs]));
   // lo que matamos, lo limpiamos: este proceso no va a finalizar, y sus
@@ -1329,8 +1339,11 @@ begin
   GPaquetesHechos := 0;
   Responde(FR_PHASE, FR_FASE_PAQUETES);
   GCargandoPaquetes := True;
-  for var Ruta in GConocidos do
+  for var I := 0 to GConocidos.Count - 1 do
   begin
+    var Ruta := GConocidos[I];
+    // antes del Exists: lo que tarda puede ser el (una carpeta de red)
+    GPaqueteEnCurso := I;
     if not TFile.Exists(Ruta) then
     begin
       Traza('falta ' + Ruta);
@@ -1364,6 +1377,7 @@ begin
     end;
   end;
   GCargandoPaquetes := False;
+  GPaqueteEnCurso := -1;
   Responde(FR_PHASE, FR_FASE_FORM);
   for var I := 0 to GModulosDeDiseno.Count - 1 do
     Traza('modulo de diseno: ' + GModulosDeDiseno.Names[I] + ' -> ' + GModulosDeDiseno.ValueFromIndex[I]);

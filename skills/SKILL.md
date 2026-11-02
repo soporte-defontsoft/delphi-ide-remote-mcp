@@ -205,8 +205,9 @@ it. With no name, each request of that protocol is a stranger to the one before.
 - `RENDER-027` (the IDE's design packages still loading) or `DSGN-185` (an
   edit judged too slowly, nothing written): repeat the same call. An
   antivirus checking packages it has not seen takes that long once, and the
-  repeat goes on from there. `RENDER-007` is the form itself: something in it
-  waits when it loads.
+  repeat goes on from there. A `RENDER-027` that stops twice on the same
+  package names a package that hangs while it loads: tell the operator which
+  one. `RENDER-007` is the form itself: something in it waits when it loads.
 - SEE the form instead of imagining it: `delphi_designer command=preview
   path=<form>` returns a PNG of what the IDE designer shows. The loop is
   insert/set -> `lint` -> `preview` -> fix. To place something, measure on

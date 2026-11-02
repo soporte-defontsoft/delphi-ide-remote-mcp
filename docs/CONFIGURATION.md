@@ -154,7 +154,7 @@ an MCP client waits: the first render after Microsoft Defender updates its signa
 times a day, on a machine with third-party design packages, can need more, because it checks each
 package it has not seen under those signatures, up to about 10 s each (measured 2026-11-01 on a
 4-core VM with 4 GB and 41 third-party packages: 86 to 110 s once, 1.6 s afterwards). Then the
-answer is `RENDER-027`, with how many packages were loaded. What it checked stays checked, so the
+answer is `RENDER-027`, with how many packages were loaded and the one it was on. What it checked stays checked, so the
 same call repeated goes on from there (measured 2026-11-02: 50 s and then 17 to 20 s, against 69 s
 in one go). The rest is in `src/Render/README.md`.
 

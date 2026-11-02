@@ -34,6 +34,7 @@ FASE = re.search(r"FR_PHASE = '([A-Z]+=)'", INC).group(1)
 FASE_PAQUETES = re.search(r"FR_FASE_PAQUETES = '(\w+)'", INC).group(1)
 FASE_FORM = re.search(r"FR_FASE_FORM = '(\w+)'", INC).group(1)
 RC_TIEMPO = int(re.search(r'FR_RC_TIMEOUT = (\d+);', INC).group(1))
+ERROR = re.search(r"FR_ERROR = '([A-Z]+=)'", INC).group(1)
 
 BASE = mc.carpeta('capacidades_126')
 JAIL = os.path.join(BASE, 'jail')
@@ -158,6 +159,10 @@ check('F1 cargando los paquetes al vencer --packagestimeout: RENDER-027 con cuan
       u.returncode == RC_TIEMPO and mc.es(salida, 'SR_RENDER_PAQUETES_CARGANDO_FMT') and '(0 of 1)' in salida
       and (FASE + FASE_PAQUETES) in salida.splitlines() and dt < 15,
       (u.returncode, salida[-500:]))
+# ...y dice en que paquete estaba: uno que se CUELGA al cargar daba "repite" en cada llamada sin que
+# nada lo nombrase (C2 del revisor del paisaje del cierre de la 1.26). Aqui lo que no acaba es su Exists
+check('F1 ...y nombra el paquete en el que estaba (Nada370.bpl)',
+      'Nada370.bpl' in next((l for l in salida.splitlines() if l.startswith(ERROR)), ''), salida[-500:])
 
 PRUEBA = os.path.join(JAIL, 'prueba')
 os.makedirs(PRUEBA)
