@@ -8422,12 +8422,14 @@ const
     juzga aqui a proposito: borrar y volver a crear el mismo fichero vale) o
     una linea de delete-line que no existe o no es la nombrada. Hermes
     (15-oct-2026, informe 1938b) leyo "stage it again with atline" para un
-    delete. Cada entrada dice la suya en su "anchor". }
+    delete. Cada entrada dice la suya en su "anchor"; la de un ancla, la
+    negativa de delphi_edit con sus lineas o su pista (forma 1 de la 1.26:
+    eran 'NOT FOUND' y 'AMBIGUOUS', que este texto citaba). }
   SN_CHANGESET_PREVIEW_BAD =
     '[CHSET-024] There are operations the preview cannot resolve, and ' +
-    'each one says why in its "anchor" above: an anchor NOT FOUND or ' +
-    'AMBIGUOUS (stage it again correctly; atline pins one that appears ' +
-    'more than once), a line that is not there or not the one you named, ' +
+    'each one says why in its "anchor" above: an anchor that is not there ' +
+    'or appears more than once (stage it again correctly; atline pins one ' +
+    'of the lines it names), a line that is not there or not the one you named, ' +
     'or a job of another tool (it names it). Take the failing one out with ' +
     'command=unstage n=<its number>: there is NO need to throw away the ' +
     'whole batch. commit stays blocked until a clean preview.';
@@ -11933,12 +11935,6 @@ const
 
   SF_CHSET_ANCLA_PENDIENTE =
     'pending';
-
-  SF_CHSET_ANCLA_NO_ENCONTRADA =
-    'NOT FOUND';
-
-  SF_CHSET_ANCLA_AMBIGUA =
-    'AMBIGUOUS (set atline)';
 
   SF_CHSET_MISMO_NUMERO_LINEAS =
     '  (same number of lines)';

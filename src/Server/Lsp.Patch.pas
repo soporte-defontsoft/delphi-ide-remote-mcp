@@ -240,6 +240,14 @@ function IniciosDelAncla(const ALines: TArray<string>; const AAncla: string): TA
   (EDIT-062). delphi_textedit decia lo mismo con otros dos codigos (TEXT-009
   y TEXT-002, A15 de la 1.23). }
 function LineaElegida(const AHits: TArray<Integer>; AAtLine: Integer; out AIdx: Integer): string;
+{ LA linea de un ancla de UNA linea de ALines, con LAS negativas de las tools:
+  si no casa en ninguna (AHits vacio), AnclaPerdida con su pista; si no,
+  LineaElegida. '' y su indice (0-based) en AIdx. Lo hacian delphi_edit y
+  delphi_textedit, y el preview de un changeset decia 'NOT FOUND' o
+  'AMBIGUOUS' de lo mismo, sin las lineas ni la pista (forma 1 del revisor del
+  paisaje de la 1.26). AFichero es el nombre a ensenar. }
+function LineaDelAncla(const ALines: TArray<string>; const AHits: TArray<Integer>;
+  const AOld: string; AAtLine: Integer; const AFichero: string; out AIdx: Integer): string;
 function CuantasLineasReales(const ALines: TArray<string>): Integer;
 { Borrar una linea EN BLANCO (P3-L9): no tiene texto que copiar como ancla,
   asi que el ancla es la posicion (atline, 1-based) y la condicion de que
@@ -2588,6 +2596,16 @@ begin
     Result := MsgFmt(SR_EDIT_ANCLA_NO_UNICA_FMT, [Length(AHits), ListaDeLineas(AHits)])
   else
     Result := MsgFmt(SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT, [AAtLine, ListaDeLineas(AHits)]);
+end;
+
+function LineaDelAncla(const ALines: TArray<string>; const AHits: TArray<Integer>;
+  const AOld: string; AAtLine: Integer; const AFichero: string; out AIdx: Integer): string;
+begin
+  AIdx := -1;
+  if Length(AHits) = 0 then
+    // por que no casa: UN texto, con su pista (AnclaPerdida)
+    Exit(AnclaPerdida(ALines, AOld, AFichero));
+  Result := LineaElegida(AHits, AAtLine, AIdx);
 end;
 
 { Una linea en un informe: ANumero|texto, cortada si es larga, y diciendolo (V189:
@@ -6314,13 +6332,8 @@ begin
   Hits := LineasDondeCasaElAncla(Lines, AOld); // la regla del motor
   Warnings := TStringList.Create;
   try
-    if Length(Hits) = 0 then
-      // Por que no casa: UN texto para delphi_edit, delphi_textedit y la
-      // linea que falta de un bloque (AnclaPerdida).
-      Exit(AnclaPerdida(Lines, AOld, TPath.GetFileName(APath)));
-
-    // cual de ellas: LA eleccion de las dos tools (LineaElegida, A15)
-    var Eleccion := LineaElegida(Hits, AAtLine, HitIdx);
+    // cual de ellas, o por que ninguna: LA eleccion de las tools (LineaDelAncla)
+    var Eleccion := LineaDelAncla(Lines, Hits, AOld, AAtLine, TPath.GetFileName(APath), HitIdx);
     if Eleccion <> '' then
       Exit(Eleccion);
 

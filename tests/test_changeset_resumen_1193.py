@@ -14,7 +14,12 @@ que no es el ancla en K1 es ahora un fichero de solo lectura.)
      remite a la causa de cada entrada, sin culpar al ancla (ROJO en produccion)
   K2 delete-line con atline fuera del fichero: lo mismo (ROJO)
   C1 control: un edit con un ancla que no esta sigue sin resolver y el resumen sigue
-     diciendo como apilarla bien (unstage, atline)
+     diciendo como apilarla bien (unstage, atline); y su entrada dice lo que delphi_edit
+     diria del mismo ancla, con la pista (era 'NOT FOUND' a secas: forma 1 de la 1.26)
+  C2 un ancla que esta dos veces: la negativa de delphi_edit con las lineas (EDIT-077; era
+     'AMBIGUOUS (set atline)')
+  C3 un atline que no es ninguna de las lineas del ancla: la de delphi_edit, con las
+     lineas donde esta (EDIT-062; era 'NOT FOUND')
 
 Uso:  python tests/test_changeset_resumen_1193.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -29,6 +34,8 @@ UNIDAD = os.path.join(JAIL, 'UBorra1193.pas')
 TEXTO = os.path.join(JAIL, 'notas.txt')
 open(UNIDAD, 'wb').write(b'unit UBorra1193;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n')
 open(TEXTO, 'wb').write(b'uno\r\ndos\r\n')
+DOBLE = os.path.join(JAIL, 'doble.txt')
+open(DOBLE, 'wb').write(b'uno\r\nuno\r\n')
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='changeset-resumen', t=120)
 
@@ -76,7 +83,22 @@ try:
     cs(command='stage', id=cid, kind='edit', path=TEXTO, old='no esta', new='x')
     r = cs(command='preview', id=cid)
     check('C1 control: un ancla que no esta sigue sin resolver, y el resumen dice como apilarla bien',
-          mc.es(r, 'SN_CHANGESET_PREVIEW_BAD') and 'unstage' in r and 'atline' in r and ancla(r) == 'NOT FOUND', r[:900])
+          mc.es(r, 'SN_CHANGESET_PREVIEW_BAD') and 'unstage' in r and 'atline' in r and
+          mc.abre(ancla(r), 'SR_ANCLA_NO_ESTA_FMT'), r[:900])
+    cs(command='rollback', id=cid)
+
+    cid = abre()
+    cs(command='stage', id=cid, kind='edit', path=DOBLE, old='uno', new='x')
+    r = cs(command='preview', id=cid)
+    check('C2 un ancla que esta dos veces: la negativa de delphi_edit, con sus lineas (EDIT-077)',
+          mc.abre(ancla(r), 'SR_EDIT_ANCLA_NO_UNICA_FMT') and '1, 2' in ancla(r), r[:900])
+    cs(command='rollback', id=cid)
+
+    cid = abre()
+    cs(command='stage', id=cid, kind='edit', path=TEXTO, old='uno', new='x', atline=2)
+    r = cs(command='preview', id=cid)
+    check('C3 un atline que no es la linea del ancla: la negativa de delphi_edit, con donde esta (EDIT-062)',
+          mc.abre(ancla(r), 'SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT') and 'occurrences: 1.' in ancla(r), r[:900])
     cs(command='rollback', id=cid)
 finally:
     s.cierra()

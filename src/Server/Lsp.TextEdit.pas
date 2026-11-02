@@ -192,16 +192,10 @@ begin
   // el ancla de una linea, por LA regla de las dos tools (LineaEsLaDelAncla)
   Matches := LineasDondeCasaElAncla(Lines, A.OldLine);
 
-  if Length(Matches) = 0 then
-    // La negativa es la de delphi_edit, su gemela: UN texto
-    // (Lsp.Patch.AnclaPerdida). Aqui ya se ensenaban las lineas que lo
-    // contienen y alli no; ahora las dos dicen lo mismo.
-    Exit(AnclaPerdida(Lines, A.OldLine, TPath.GetFileName(A.Path)));
-
-  // cual de ellas: LA eleccion y LAS negativas de las dos tools (Lsp.Patch.
-  // LineaElegida); aqui eran otros dos codigos para lo mismo (TEXT-009 y
+  // cual de ellas, o por que ninguna: LA eleccion y LAS negativas de las tools
+  // (Lsp.Patch.LineaDelAncla); aqui eran otros codigos para lo mismo (TEXT-009 y
   // TEXT-002, A15)
-  Result := LineaElegida(Matches, A.AtLine, Target);
+  Result := LineaDelAncla(Lines, Matches, A.OldLine, A.AtLine, TPath.GetFileName(A.Path), Target);
   if Result <> '' then
     Exit;
 

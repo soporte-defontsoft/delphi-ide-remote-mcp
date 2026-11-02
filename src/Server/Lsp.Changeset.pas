@@ -234,11 +234,11 @@ end;
 
 
 { Como resuelve un ancla el motor que la va a aplicar (la misma pregunta,
-  Lsp.Patch.LineasDondeCasaElAncla): cuantas lineas casan (1 = unica, 0 =
-  no esta, >1 = ambigua) y cual (1-based, 0 si no hay una). Con atline, la
-  de atline si es de las que casan, como en los motores. El preview
-  preguntaba con OTRA regla (exacta en una funcion, recortada en la otra) y
-  decia limpio lo que el commit deshacia (octava revision). }
+  Lsp.Patch.LineasDondeCasaElAncla, y la misma eleccion, LineaDelAncla): ''
+  y la linea (1-based) si es una; si no, LA negativa de delphi_edit, con la
+  pista o las lineas (era 'NOT FOUND' o 'AMBIGUOUS': forma 1 de la 1.26). El
+  preview preguntaba con OTRA regla (exacta en una funcion, recortada en la
+  otra) y decia limpio lo que el commit deshacia (octava revision). }
 { La clave de "la linea L de ESE fichero" para el registro del preview de lo que
   cada operacion escribe (Escritas): la linea de antes del lote y la ruta sin
   mirar mayusculas ("17@d:\x\u.pas"; la forma "a|b" es la de las marcas de
@@ -249,27 +249,17 @@ begin
 end;
 
 function ResuelveAncla(const AText, ALine: string; AAtLine: Integer;
-  out ALinea: Integer): Integer;
+  const AFichero: string; out ALinea: Integer): string;
 var
-  Hits: TArray<Integer>;
-  H: Integer;
+  Lineas: TArray<string>;
+  Idx: Integer;
 begin
   ALinea := 0;
-  Hits := LineasDondeCasaElAncla(LineasDelTexto(AText), ALine);
-  if AAtLine > 0 then
-  begin
-    Result := 0;
-    for H in Hits do
-      if H + 1 = AAtLine then
-      begin
-        Result := 1;
-        ALinea := AAtLine;
-      end;
-    Exit;
-  end;
-  Result := Length(Hits);
-  if Result = 1 then
-    ALinea := Hits[0] + 1;
+  Lineas := LineasDelTexto(AText);
+  Result := LineaDelAncla(Lineas, LineasDondeCasaElAncla(Lineas, ALine), ALine, AAtLine,
+    AFichero, Idx);
+  if Result = '' then
+    ALinea := Idx + 1;
 end;
 
 { Whether APath will be there when its turn comes, GIVEN the ops already
@@ -996,35 +986,33 @@ begin
             // 10) - which is also the earliest warning that an anchor
             // resolved somewhere unexpected.
             var LineaAncla: Integer;
-            var CuantasAncla := ResuelveAncla(Text, Op.OldLine, Op.AtLine, LineaAncla);
+            var NoResuelve := ResuelveAncla(Text, Op.OldLine, Op.AtLine,
+              TPath.GetFileName(Op.Path), LineaAncla);
             Obj.AddPair('atline', TJSONNumber.Create(LineaAncla));
-            case CuantasAncla of
-              1: // el ENSAYO del motor: todo lo que el commit va a comprobar
-                 // (codificacion, binario, la puerta, el +R) sin escribir; el
-                 // preview copiaba tres reglas del commit y le faltaban las
-                 // demas (decima revision)
-                 if Escritas.ContainsKey(ClaveDeLineaEscrita(Op.Path, LineaAncla)) then
-                 begin
-                   Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_YA_ESCRITA_FMT,
-                     [LineaAncla, Escritas[ClaveDeLineaEscrita(Op.Path, LineaAncla)]]));
-                   Inc(N);
-                 end
-                 else if ApplyOne(Op, Err, True) then
-                 begin
-                   Obj.AddPair('anchor', 'ok');
-                   Escritas.AddOrSetValue(ClaveDeLineaEscrita(Op.Path, LineaAncla), I + 1);
-                 end
-                 else
-                 begin
-                   Obj.AddPair('anchor', Err);
-                   Inc(N);
-                 end;
-              0: begin
-                   Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_NO_ENCONTRADA));
-                   Inc(N);
-                 end;
+            if NoResuelve <> '' then
+            begin
+              // lo que delphi_edit diria del mismo ancla, con su pista o sus lineas
+              Obj.AddPair('anchor', NoResuelve);
+              Inc(N);
+            end
+            // el ENSAYO del motor: todo lo que el commit va a comprobar
+            // (codificacion, binario, la puerta, el +R) sin escribir; el
+            // preview copiaba tres reglas del commit y le faltaban las
+            // demas (decima revision)
+            else if Escritas.ContainsKey(ClaveDeLineaEscrita(Op.Path, LineaAncla)) then
+            begin
+              Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_YA_ESCRITA_FMT,
+                [LineaAncla, Escritas[ClaveDeLineaEscrita(Op.Path, LineaAncla)]]));
+              Inc(N);
+            end
+            else if ApplyOne(Op, Err, True) then
+            begin
+              Obj.AddPair('anchor', 'ok');
+              Escritas.AddOrSetValue(ClaveDeLineaEscrita(Op.Path, LineaAncla), I + 1);
+            end
             else
-              Obj.AddPair('anchor', MsgText(SF_CHSET_ANCLA_AMBIGUA));
+            begin
+              Obj.AddPair('anchor', Err);
               Inc(N);
             end;
           end;
