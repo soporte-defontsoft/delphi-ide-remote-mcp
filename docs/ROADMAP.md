@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-11-03 (current release v1.26.0; 42 tools).
+Status page as of 2026-11-03 (current release v1.26.1; 42 tools).
 
 ## Delivered
 
@@ -67,6 +67,8 @@ Status page as of 2026-11-03 (current release v1.26.0; 42 tools).
 - The patch of 1.25: the designer never writing an edit after the client gave up (`DSGN-185`); a frame that contains itself told apart (`RENDER-026`) and never written by `insert` (`DSGN-186`); `RENDER-007` saying to repeat a first load of design packages under an antivirus (1.25.1)
 
 - What the judges say, read from them: the build gate reading a `.dproj` as msbuild does (a `$(...)` name as written, `<Import>` paths unescaped, the body's macros as msbuild has them there, device prefixes refused); names compared as NTFS compares them; arguments composed as a Delphi program's `ParamStr` reads them (`RUN-025`, `TEST-037`); the style converter in its own container, with a protocol (`STYLE-065`, `STYLE-066`); the IDE's design packages loaded under a budget of their own (`RENDER-027`, `DSGN-187`); the file and line of what lives in another file of a form (render protocol 4); `delphi_config view` showing the version the build puts in the binary; a second, measured pass over the tool descriptions (1.26.0)
+
+- The patch of 1.26: what a build reads because the project says so judged by one rule, the workspace or the IDE's library, never the IDE's per-user data folder; the build getting the variables the IDE gives its own build, and `add-searchpath` taking `$(Config)`; `set-version` refusing what it cannot rewrite (`CFG-146`); a Linux binary without the service's temporary folder (1.26.1)
 
 ## Next
 

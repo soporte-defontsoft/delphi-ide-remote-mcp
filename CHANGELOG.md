@@ -8,6 +8,18 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.26.1] - 2026-11-03
+
+A patch for what measuring the build after 1.26.0 found. A project can no longer have the
+build read the IDE's per-user data folder, where the PAServer connection profiles keep their
+password: what a build reads because the project says so is judged by one rule, inside the
+workspace or the IDE's library. The build gets the variables the IDE gives its own build, so
+a search path through `$(BDSLIB)` or a catalog compiles as in the IDE, and `add-searchpath`
+takes `$(Config)`. `set-version` refuses what it cannot rewrite instead of answering that it
+did, a Linux binary no longer carries the service's temporary folder, and a variable that
+`rsvars.bat` empties stays empty. No setting needs to change. Validated before the release
+through Hermes on a second machine by Qwen3.8 Flash Next (directed tests of what changed).
+
 ### Fixed
 
 - A Linux binary that `delphi_build` or `delphi_test` compiles no longer carries the server's temporary folder, with the Windows user of the service in its path: the Linux linker records the path of its temporary file in the ELF, and msbuild got the service's `%TEMP%`. Each build now gets a temporary folder of its own inside its `.dcu` folder, removed when it ends, and the build gate reads a `$(TEMP)` of the project as that same folder. The compiler makes even a relative `TEMP` absolute (measured), so what the ELF records is a path of the project.
