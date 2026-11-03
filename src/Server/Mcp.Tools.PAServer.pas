@@ -1230,9 +1230,10 @@ begin
   if Denied <> '' then
     Exit(Denied);
   ExeName := Params.Exe.Trim;
-  // exe, when given, is a FILE NAME of the deploy folder - never a path
+  // exe, when given, is a FILE NAME of the deploy folder - never a path, and
+  // never a line break: it is the first line of the job file (A4 de la 1.27)
   if (ExeName <> '') and (ExeName.Contains('/') or ExeName.Contains(chr(92)) or
-     ExeName.Contains('..')) then
+     ExeName.Contains('..') or (ExeName.IndexOfAny([#0, #10, #13]) >= 0)) then
     Exit(MsgText(SR_PASERVER_RUN_EXENAME));
   // ...ni una orden del lanzador: un fichero desplegado "@kill" iba en la
   // linea del binario del .job como la orden de matar (V196 de la 1.23.1)
@@ -1244,9 +1245,10 @@ begin
     if Denied <> '' then
       Exit(Denied);
   end;
-  Denied := ShellArgDenied(Prof + ' ' + ExeName + ' ' + Params.Args);
-  if Denied <> '' then
-    Exit(Denied);
+  // Sin lista negra de metacaracteres (A4 de la 1.27, decision de David): no hay
+  // shell en ningun sitio -los argumentos van del fichero de trabajo al argv del
+  // lanzador, que solo arranca un binario nativo (execv / CreateProcess)-, y el
+  // programa es el del agente. Lo que el formato no lleva, RUN-026 (RemoteRun)
   // True: si el programa sigue vivo, su salida se queda para command=output
   Res := RemoteRun(Prof, Proj, ExeName, TrocearArgs(Params.Args.Trim),
     Params.TimeoutMs, True);

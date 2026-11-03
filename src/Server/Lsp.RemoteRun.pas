@@ -321,8 +321,14 @@ begin
   Pc := PaClientPath;
   if Pc = '' then
     Exit(MsgText(SR_REMOTERUN_NO_PACLIENT));
+  // El nombre, relativo a lo desplegado, y lo que viaja a un campo de paclient
+  // (--get=<proyecto>/<nombre>,<destino>):
+  // el nombre sale de la linea CAPTURA= del programa, y paclient parte por la
+  // primera ',' y toma el resto por destino local (2d de la 1.27, medido contra el
+  // Zorin; no era hueco: el destino siempre falla). Por EL juez de esos campos
   if (ARelPath = '') or ARelPath.Contains('..') or
-     ARelPath.StartsWith('/') or ARelPath.Contains('\') then
+     ARelPath.StartsWith('/') or ARelPath.Contains('\') or
+     ValorRompeCampoDePaclient(ARelPath) then
     Exit(MsgText(SR_FETCHTARGET_BADPATH));
   ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
   Result := NombreDeProyectoParaPaclientDenegado(ADprojPath); // V217: no a un campo de paclient
@@ -452,11 +458,20 @@ begin
   end;
 end;
 
+{ Si un argumento cabe en EL FICHERO DE TRABAJO: un salto de linea seria una
+  linea mas, otro argumento, y un NUL lo corta. Es lo unico que el formato no
+  lleva; RemoteRun lo pregunta antes de subir nada (RUN-026). Se cambiaba en
+  silencio por un espacio (A4 de la 1.27). }
+function ArgumentoCabeEnElTrabajo(const AArg: string): Boolean;
+begin
+  Result := (AArg.IndexOfAny([#0, #10, #13]) < 0);
+end;
+
 { EL FICHERO DE TRABAJO, el mismo para Linux y Windows: el binario, el fichero
   de salida y despues UN ARGUMENTO POR LINEA, tal cual - sin shell no hay
-  nada que escapar. Su unico lector es el lanzador (src\RunJob). Un salto de
-  linea dentro de un argumento seria una linea mas, asi que se cambia por un
-  espacio: es el unico caracter que el formato no puede llevar. }
+  nada que escapar. Su unico lector es el lanzador (src\RunJob). Lo que el
+  formato no lleva lo niega antes RemoteRun (ArgumentoCabeEnElTrabajo); el
+  cambio por un espacio de abajo es solo la segunda barrera. }
 function TrabajoDeEjecucion(const AExeLeaf, ASalida: string;
   const AArgv: TArray<string>): string;
 var
@@ -741,11 +756,20 @@ begin
   else
     ExeLeaf := AExeName;
   ARemoteExe := DeployRel + '/' + ExeLeaf;
+  // en cualquier destino, lo que el fichero de trabajo no lleva (RUN-026). Antes
+  // de apuntar ni subir nada. Sin shell en ningun sitio (el .job va al argv del
+  // lanzador), un ; | & $ no es nada: la lista negra de run se quito (A4 de la 1.27)
+  for var I := 0 to High(AArgv) do
+    if not ArgumentoCabeEnElTrabajo(AArgv[I]) then
+    begin
+      Result.AddPair('success', TJSONBool.Create(False));
+      Result.AddPair('error', MsgFmt(SR_RUN_ARG_SALTO_FMT, [I + 1, AArgv[I]]));
+      Exit;
+    end;
   // un programa de un destino Windows lee su linea con ParamStr de Delphi: una
   // comilla solo agrupa y no la puede recibir (revisor del paisaje de la 1.26, C;
   // medido con un eco Delphi: 'di "hola"' llegaba 'di \hola\'), ni uno vacio
-  // (EL juez, LlegaAParamStr). Antes de apuntar ni subir nada. El texto del nodo
-  // viaja codificado (Lsp.TextoDelNodo)
+  // (EL juez, LlegaAParamStr). El texto del nodo viaja codificado (Lsp.TextoDelNodo)
   Plataforma := PlataformaDelPerfil(AProfile);
   if SistemaDePlataforma(Plataforma) = spWindows then
     for var I := 0 to High(AArgv) do

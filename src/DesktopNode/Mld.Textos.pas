@@ -241,6 +241,13 @@ const
     '[JOB-010 DENIED] %s is not a native executable (ELF/PE): only the ' +
     'binary that delphi_build produced is run.';
 
+  { la segunda barrera del lanzador en Windows: un argumento que el ParamStr del
+    programa no recibe entero (una comilla, uno vacio); el servidor lo niega
+    antes (RUN-025), aqui no se compone sin mirarlo (A4 de la 1.27) }
+  SR_JOB_ARG_NO_LLEGA_FMT =
+    '[JOB-012 DENIED] Argument %d (%s) would not reach the program whole (a ' +
+    'double quote, or an empty one): nothing was run.';
+
   // Textos que estaban en linea en Mld.DBus.pas (el resto, 27-sep-2026)
   SF_NODE_FALTA_EN_FMT =
     'missing %s in %s (%s)';

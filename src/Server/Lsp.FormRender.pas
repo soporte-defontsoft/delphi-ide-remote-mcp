@@ -544,19 +544,6 @@ begin
     (ACodigo <= AUltimoCodigo);
 end;
 
-{ Un valor que viaja como UN argumento entre comillas: lo que recibe el ParamStr
-  del ayudante (EL juez, LlegaAParamStr; uno vacio no se pasa nunca) y, ademas,
-  sin caracteres de control }
-function ValorDeArgumento(const AValor: string): Boolean;
-begin
-  if AValor = '' then
-    Exit(True);
-  for var C in AValor do
-    if C < ' ' then
-      Exit(False);
-  Result := LlegaAParamStr(AValor);
-end;
-
 function ComponeOrdenDeRender(const AExe: string; const APeticion: TPeticionRender;
   out AOrden: string): string;
 
@@ -574,11 +561,12 @@ begin
     Exit;
   end;
   // un valor vacio no se pasa nunca: el lector de Delphi se salta un "" y
-  // tomaria el interruptor siguiente como valor
+  // tomaria el interruptor siguiente como valor. Cada valor que viaja, por EL
+  // juez de los nuestros (ValorDeLaCasaLlega); --dropped no estaba (A4 de la 1.27)
   for var V in TArray<string>.Create(APeticion.Path, APeticion.Salida,
     APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.RaizBds,
-    APeticion.FicheroPaquetes) + APeticion.Estados do
-    if not ValorDeArgumento(V) then
+    APeticion.FicheroPaquetes, APeticion.Soltado) + APeticion.Estados do
+    if not ValorDeLaCasaLlega(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V]));
   AOrden := ComillasSinEscape(AExe) + Arg('--path', APeticion.Path);
   // el conversor (V71) ni carga ni pinta: los bytes de --path, en --out

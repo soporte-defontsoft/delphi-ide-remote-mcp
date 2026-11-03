@@ -2067,8 +2067,10 @@ const
     'remote-run OPTIONAL: a file its .deployproj lists, to run instead of ' +
     'its binary - a name, no path.';
   SP_PASERVER_ARGS =
-    'remote-run: optional command-line arguments for the program (no shell ' +
-    'metacharacters)';
+    'remote-run: optional arguments for the program, as a command line (double ' +
+    'quotes group one). No shell: they arrive as written; none may hold a line ' +
+    'break (RUN-026), and on a Windows target a double quote or an empty one ' +
+    'cannot arrive (RUN-025)';
   SP_PASERVER_TIMEOUT =
     'remote-run: max milliseconds to wait for the program (default 30000, ' +
     'max 300000)';
@@ -2235,7 +2237,8 @@ const
 
   SR_PASERVER_RUN_EXENAME =
     '[PAS-006 INVALID_PARAM] "exe" is optional and, if given, must be a file ' +
-    'NAME of that project''s deploy folder (no "/", no "\" and no ".."). ' +
+    'NAME of that project''s deploy folder (no "/", no "\", no ".." and no ' +
+    'line break). ' +
     'By default the project binary is run.';
   { exe= con el prefijo de las ordenes del lanzador (Lsp.NombresDeTrabajo):
     un fichero desplegado "@kill" era la orden de matar (V196 de la 1.23.1). }
@@ -2253,6 +2256,14 @@ const
     'skips an empty argument (the ones after it move up one), where a double ' +
     'quote only groups and a NUL character ends the line. Pass that value another ' +
     'way (a file the program reads) or without it. Nothing was run.';
+  { un argumento con un salto de linea (o un NUL): cada argumento viaja al
+    destino en una linea del fichero de trabajo, y se cambiaba en silencio por un
+    espacio (A4 de la 1.27). %d: cual, %s: el }
+  SR_RUN_ARG_SALTO_FMT =
+    '[RUN-026 DENIED] Argument %d (%s) carries a line break or a NUL character, ' +
+    'which no argument can carry to the target: each one travels there on a ' +
+    'line of its own. Pass that value another way (a file the program reads) or ' +
+    'without it. Nothing was run.';
   { exe= que el proyecto no despliega en esa plataforma (1.22.2: valia
     cualquier fichero de la carpeta del destino) }
   SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT =
@@ -2612,8 +2623,9 @@ const
   // ---------------------------------------------------------------------
   SR_FETCHTARGET_BADPATH =
     '[FETCH-001 INVALID_PARAM] The file to fetch is named RELATIVE to the ' +
-    'folder the project deployed (e.g. "capture.png"). No absolute paths ' +
-    'and no "..".';
+    'folder the project deployed (e.g. "capture.png"). No absolute paths, ' +
+    'no "..", and only what a deployed file name takes (no ",", ";", ' +
+    'double quote, "%", "*" or "?"): paclient splits its fields at "," and ";".';
   SR_FETCHTARGET_FAIL_FMT =
     '[FETCH-004 DENIED] Could not fetch the file from the target ' +
     '(paclient %d): %s';
@@ -5264,7 +5276,7 @@ const
     solo agrupa; cerraba el filtro y lo de detras eran otras opciones del runner
     (revisor del paisaje de la 1.26, 23; la regla de RUN-025). %s = el filtro }
   SR_TEST_FILTRO_COMILLA_FMT =
-    '[TEST-037 INVALID_PARAM] The filter (%s) has a double quote or a NUL ' +
+    '[TEST-037 INVALID_PARAM] The filter (%s) has a double quote or a control ' +
     'character: the test runner, a Delphi program, reads its command line with ' +
     'ParamStr, where a double quote only groups and a NUL ends the line. Name ' +
     'the tests without it. Nothing was run.';

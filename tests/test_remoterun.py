@@ -97,9 +97,12 @@ call_off = srv_off.call
 # 1) needs name+exe
 r = call('delphi_paserver', {'command': 'remote-run'})
 check('sin name/exe rechazado', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_RUN_NEEDS'), r[:150])
-# 2) shell metachar refused
-r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'args': 'a; rm -rf /'})
-check('metacaracter rechazado', mc.rechazado(r) and mc.es(r, 'SR_SHELL_META_FMT') and ';' in r, r[:150])
+# 2) A4 de la 1.27: la lista negra de metacaracteres de shell se quito (no hay shell: el .job va al argv del
+# lanzador; abajo, A4, llegan literales). Lo que el fichero de trabajo NO lleva es un salto de linea dentro de
+# un argumento: se cambiaba en silencio por un espacio; ahora RUN-026, sin lanzar nada
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'args': '"uno\ndos" tres'})
+check('A4 un salto de linea dentro de un argumento: RUN-026, sin lanzar nada',
+      mc.rechazado(r) and mc.es(r, 'SR_RUN_ARG_SALTO_FMT'), r[:250])
 
 # 3) happy path
 # exe=<nombre simple> de la MISMA carpeta de despliegue (en Linux el binario
@@ -211,6 +214,13 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project'
                              'args': 'a "" b', 'timeoutms': 30000}, t=180)
 check('C7 ...ni un argumento vacio, que ParamStr se salta y corre los de detras: se niega sin lanzar nada',
       mc.rechazado(r) and mc.es(r, 'SR_RUN_ARG_COMILLA_FMT'), r[:400])
+# A4 de la 1.27 (decision de David: quitar la lista negra de shell de run): sin shell en ningun sitio, lo que
+# un shell leeria llega LITERAL al programa (ROJA contra la 1.26.1: SR_SHELL_META_FMT)
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'Eco.exe',
+                             'args': 'a;b "c | d" e&f $HOME `x` <y> 1>2', 'timeoutms': 30000}, t=180)
+out = (json.loads(r) if r.startswith('{') else {}).get('output') or ''
+check('A4 ; | & $ ` < > llegan literales a un programa Delphi: no hay shell que los lea',
+      all(x in out for x in ('[a;b]', '[c | d]', '[e&f]', '[$HOME]', '[`x`]', '[<y>]', '[1>2]')), r[:400])
 # 4) exe fuera de la scratch -> runnerError
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': '..\\..\\fuera.exe', 'timeoutms': 20000})
 j = json.loads(r) if r.startswith('{') else {}

@@ -58,6 +58,15 @@ function ComillasSinEscape(const AValor: string): string;
   miraba el vacio (C7 del revisor del paisaje del cierre de la 1.26). }
 function LlegaAParamStr(const AValor: string): Boolean;
 
+{ Un valor de los NUESTROS para la linea de un programa Delphi -un ayudante,
+  paclient, el filtro de delphi_test-: lo que su ParamStr recibe entero
+  (LlegaAParamStr) y sin caracteres de control (#0..#31), que ninguno de esos
+  valores lleva y que la linea no deja ver. Uno vacio vale: quien compone no lo
+  pasa nunca. Era tres copias -el render, la contrasena de paclient y el filtro,
+  que no miraba los controles- (A4 de la 1.27). Lo que el AGENTE da a SU
+  programa (remote-run) solo pregunta LlegaAParamStr: alli un tabulador vale. }
+function ValorDeLaCasaLlega(const AValor: string): Boolean;
+
 { La ruta completa de APrograma, con su extension ('msbuild.exe'), en las
   carpetas de APath (una lista con ';', la de un entorno) como la resuelve
   Windows (SearchPath, el juez) y SOLO en ellas: sin la carpeta actual ni la
@@ -297,6 +306,16 @@ end;
 function LlegaAParamStr(const AValor: string): Boolean;
 begin
   Result := (AValor <> '') and not AValor.Contains('"') and not AValor.Contains(#0);
+end;
+
+function ValorDeLaCasaLlega(const AValor: string): Boolean;
+begin
+  if AValor = '' then
+    Exit(True);
+  for var C in AValor do
+    if C < ' ' then
+      Exit(False);
+  Result := LlegaAParamStr(AValor);
 end;
 
 function EnComillas(const AValor: string): string;

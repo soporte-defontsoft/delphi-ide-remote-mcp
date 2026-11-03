@@ -596,7 +596,6 @@ procedure LanzarYVigilar(const AExe, ACarpeta, ASalida, APropio, AJobId: string;
   const AArgs: TArray<string>);
 var
   Linea, Vigia, Err: string;
-  A: string;
   Pid: DWORD;
   HProc: THandle;
 begin
@@ -604,10 +603,18 @@ begin
   // Delphi -el del proyecto, el nodo- y lee su linea con ParamStr, que no tiene
   // escapes; EnComillas, la del CRT de C, le doblaba una barra final y le
   // convertia una comilla en barras (revisor del paisaje de la 1.26, C, medido
-  // con un eco Delphi). Una comilla no llega: el servidor la niega antes
+  // con un eco Delphi). Una comilla no llega: el servidor la niega antes (RUN-025),
+  // y aqui no se compone sin mirarlo (EL juez, LlegaAParamStr; A4 de la 1.27)
   Linea := ComillasSinEscape(AExe);
-  for A in AArgs do
-    Linea := Linea + ' ' + ComillasSinEscape(A);
+  for var I := 0 to High(AArgs) do
+  begin
+    if not LlegaAParamStr(AArgs[I]) then
+    begin
+      Anade(ASalida, MsgFmt(SR_JOB_ARG_NO_LLEGA_FMT, [I + 1, AArgs[I]]) + LineaRC(-1));
+      Exit;
+    end;
+    Linea := Linea + ' ' + ComillasSinEscape(AArgs[I]);
+  end;
   HProc := 0;
   Pid := Arrancar(Linea, ACarpeta, ASalida, True, Err, @HProc);
   if Pid = 0 then

@@ -583,10 +583,16 @@ otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_ALLOW_TES
 try:
     r = otro.call('delphi_test', {'command': 'run', 'project': os.path.join(JAIL, 'noexiste', 'T.dproj'),
                                   'filter': 'NoExiste" --exitbehavior:Pause "'}, t=90)
+    # A4 de la 1.27: el filtro pregunta EL juez de los valores nuestros (ValorDeLaCasaLlega), que tampoco deja
+    # caracteres de control; solo miraba la comilla (ROJA contra la 1.26.1)
+    r2 = otro.call('delphi_test', {'command': 'run', 'project': os.path.join(JAIL, 'noexiste', 'T.dproj'),
+                                   'filter': 'Uno\tDos'}, t=90)
 finally:
     otro.cierra()
 check('R23 un filtro de delphi_test con una comilla se niega (TEST-037): no puede colar opciones al runner',
       mc.rechazado(r) and mc.es(r, 'SR_TEST_FILTRO_COMILLA_FMT'), r[:300])
+check('A4 un filtro con un caracter de control (un tabulador) se niega tambien (TEST-037)',
+      mc.rechazado(r2) and mc.es(r2, 'SR_TEST_FILTRO_COMILLA_FMT'), r2[:300])
 
 # R14 dos repositorios en carpetas que NTFS separa (ss y la eszett): delphi_projects lista los dos. GUARDA: el
 # IndexOf de un TStringList SIN ordenar descarta por la longitud antes de comparar, y estos dos no se juntaban

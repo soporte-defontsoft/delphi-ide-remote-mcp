@@ -458,6 +458,13 @@ begin
   P.Componente := 'Panel'#10'1';
   Assert.IsTrue(EsMsg(ComponeOrdenDeRender('C:\s\r.exe', P, O), SR_DESIGNER_VALOR_CON_COMILLAS_FMT),
     'un salto de linea tampoco viaja');
+  // --dropped no estaba en la lista de lo que se juzga (A4 de la 1.27): hoy
+  // siempre un identificador, pero el compositor no lo miraba
+  P.Componente := '';
+  P.Escribe := True;
+  P.Soltado := 'Boton1" --out "C:\fuera\x.png';
+  Assert.IsTrue(EsMsg(ComponeOrdenDeRender('C:\s\r.exe', P, O), SR_DESIGNER_VALOR_CON_COMILLAS_FMT),
+    '--dropped se juzga como los demas');
 end;
 
 procedure TFormRenderTests.RutaDePaqueteConSusMacros;

@@ -114,9 +114,10 @@ begin
       if Params.Project.Trim = '' then
         Exit(MsgText(SR_TEST_NEED_PROJECT));
       // el runner lee su linea con ParamStr: una comilla cerraria el filtro y lo
-      // de detras serian otras opciones suyas (EL juez de RUN-025; sin filtro no
-      // va nada a la linea)
-      if (Params.Filter.Trim <> '') and not LlegaAParamStr(Params.Filter.Trim) then
+      // de detras serian otras opciones suyas. EL juez de los valores nuestros
+      // (ValorDeLaCasaLlega: tambien sin caracteres de control; A4 de la 1.27);
+      // sin filtro no va nada a la linea
+      if not ValorDeLaCasaLlega(Params.Filter.Trim) then
         Exit(MsgFmt(SR_TEST_FILTRO_COMILLA_FMT, [Params.Filter.Trim]));
       Ret := TestRun(Params.Project.Trim, Params.Config.Trim,
         Params.Filter.Trim, Params.Platform.Trim, Params.TimeoutMs,
