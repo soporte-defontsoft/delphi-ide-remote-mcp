@@ -11985,6 +11985,12 @@ const
   SF_CFG_EN_NUMEROS_Y_CLAVES_FMT =
     '%s in the numbers and %s in the keys';
 
+  { view: la version es la del build por defecto; otros builds del proyecto
+    (otra plataforma u otra configuracion) llevan otra (C16 de la 1.26) }
+  SF_CFG_VERSION_EN_OTROS_FMT =
+    '%s in other platforms or configurations of this project (version is the ' +
+    'default build''s; set-version writes the same one in all of them)';
+
   { set-version en un proyecto que no incluye la version en sus binarios: el
     build no mete el recurso (medido el 17-oct-2026: sin IncludeVerInfo el exe
     sale sin version, con las claves y los numeros escritos). }

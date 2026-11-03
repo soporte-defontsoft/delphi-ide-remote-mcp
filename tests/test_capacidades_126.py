@@ -387,11 +387,25 @@ check('H3 fixture: set-version 2.1.0 con include', mc.es(t, 'SN_CONFIG_VERSION_O
 j = mc.como_json(s.call('delphi_config', {'command': 'view', 'project': DV}))
 check('H3 view dice la version que escribio set-version y que los binarios la llevan',
       j.get('version') == '2.1.0.0' and j.get('versionIncluded') is True and 'versionMismatch' not in j, str(j)[:400])
-t = s.call('delphi_config', {'command': 'set-property', 'project': DV, 'name': 'VerInfo_MajorVer', 'value': '3'})
-check('H3 fixture: los numeros a mano, descuadrados de la clave', not mc.fallo(t), t[:300])
+# en el grupo de la plataforma que se compila por defecto: sin platform= iba a Base, y Base_Win64 lo pisa (medido con
+# get-property: el build por defecto lee 2). Pasaba porque view leia el primer valor del fichero (C16 del cierre)
+t = s.call('delphi_config', {'command': 'set-property', 'project': DV, 'name': 'VerInfo_MajorVer', 'value': '3',
+                             'platform': j.get('defaultPlatform', '')})
+check('H3 fixture: los numeros a mano, descuadrados de la clave, donde los lee el build por defecto',
+      j.get('defaultPlatform') and not mc.fallo(t), t[:300])
 j = mc.como_json(s.call('delphi_config', {'command': 'view', 'project': DV}))
 check('H3 ...y con los numeros descuadrados, la version del binario (la clave) y lo que dicen los numeros',
       j.get('version') == '2.1.0.0' and '3.1.0.0' in (j.get('versionMismatch') or ''), str(j)[:400])
+# H3b la version es la del build por defecto, como la evalua msbuild: era el primer valor del fichero, y 102 de 2739
+# .dproj reales ensenaban otra que la del binario (C16 del cierre de la 1.26). Debug, la config por defecto, lleva la
+# suya en su grupo, detras de la de Base_Win32; la de los otros builds se dice aparte
+t = s.call('delphi_config', {'command': 'set-property', 'project': DV, 'name': 'VerInfo_Keys', 'config': 'Debug',
+                             'value': 'FileVersion=7.0.0.0;ProductVersion=7.0.0.0'})
+check('H3b fixture: Debug con su FileVersion', not mc.fallo(t), t[:300])
+j = mc.como_json(s.call('delphi_config', {'command': 'view', 'project': DV}))
+check('H3b view dice la version del build por defecto (Debug), y la de los otros builds aparte',
+      j.get('defaultConfig') == 'Debug' and j.get('version') == '7.0.0.0' and
+      '2.1.0.0' in (j.get('versionElsewhere') or ''), str(j)[:500])
 
 # ---- R: lo que el revisor del paisaje de la 1.26 dejo para David, y entra (David, 2-nov: "no dejemos mierdas")
 # RD un create de un changeset que no es Pascal nace como el de textedit: en CRLF y sin un salto final que nadie
