@@ -312,6 +312,23 @@ check('diff: las lineas de contenido salen como estan en el disco (ni %srv0: ni 
 git({'command': 'add', 'paths': ['cont.pas']}); git({'command': 'commit', 'message': 'cont 2'})
 r = git({'command': 'diff', 'ref': 'HEAD~1', 'to': 'HEAD'})
 check('...y entre dos commits, lo mismo', 'exit=0' in r and ('+' + CONT) in r, r[-300:])
+# ...y la cabecera de un trozo (@@ -a,b +c,d @@ <linea>): git pone detras la
+# linea del fuente que abre la funcion, y era la unica de contenido que el
+# barrido seguia reescribiendo ('as z:' salio 'as srv0:', medido el
+# 3-nov-2026 en un diff de la propia tool)
+CAB = "procedure Cabecera; // Q := 'Z:\\x'; S := '%s: %d'"
+open(os.path.join(REPO_T, 'cab.pas'), 'w').write(CAB + '\n' + '  x\n' * 9)
+git({'command': 'add', 'paths': ['cab.pas']}); git({'command': 'commit', 'message': 'cab'})
+open(os.path.join(REPO_T, 'cab.pas'), 'w').write(CAB + '\n' + '  x\n' * 8 + '  y\n')
+r = git({'command': 'diff', 'paths': ['cab.pas']})
+check('diff: la linea del fuente en la cabecera de un trozo (@@ ... @@) sale como esta en el disco',
+      'exit=0' in r and ('@@ ' + CAB) in r, r[-300:])
+# ...y con format=words git no pone +, - ni espacio delante del contenido: una
+# linea del fuente que empieza por letra se enmascaraba igual (su gemelo)
+r = git({'command': 'diff', 'paths': ['cab.pas'], 'format': 'words', 'context': 20})
+check('diff format=words: una linea del fuente sin prefijo sale como esta en el disco',
+      'exit=0' in r and ('\n' + CAB) in r and '[-x-]{+y+}' in r, r[-300:])
+git({'command': 'add', 'paths': ['cab.pas']}); git({'command': 'commit', 'message': 'cab 2'})
 # ...y el otro lado de la regla: una linea que NO empieza como el contenido
 # es de git y se enmascara. El log de la tool pone el mensaje detras del
 # hash: esa linea no es contenido

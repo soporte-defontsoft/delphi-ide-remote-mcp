@@ -63,6 +63,8 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - The two Linux binaries in `node\` no longer carry the Windows user name of the machine that built them: the Linux linker records the path of its temporary file, and with the profile's `%TEMP%` that path named the user. `BuildGroup.bat` builds with a temporary folder of its own, and the release gate refuses a package where any member carries that name; the versioned sources no longer name it either.
 
+- `delphi_git diff` and `show` return the line of the source that git writes after a hunk header (`@@ -7,4 +7,4 @@ procedure X;`) and, with `format=words`, every line of a hunk as they are on disk: the drive masker rewrote them as server paths (`'Z:\x'` came back `'srv0:\x'`), as it did with the `+` and `-` lines before 1.9.0. A hunk is content from its `@@` to the next file, commit or note of the tool.
+
 ### Changed
 
 - `delphi_config`'s description says again that `add-platform` enables a platform in the `.dproj`. The second pass had dropped it, and with Qwen3.8 Flash Next the task "build Linux64 with the SDK zorin18" fell from 3 of 5 to 2 of 18; with it back, 9 of 18 (`docs/TOOL-DESCRIPTIONS.md`).

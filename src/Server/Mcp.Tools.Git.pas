@@ -2488,6 +2488,8 @@ begin
   // viaja como esta en el disco: el barrido de unidades las reescribia
   // (Lsp.Mascara.EnmascaraSalvoContenido). Lo que dice git - cabeceras,
   // avisos, que si pueden nombrar una ruta del servidor - sigue enmascarado.
+  // Un trozo entero (su cabecera @@ con la linea del fuente, y las lineas
+  // sin prefijo de format=words) es contenido: lo sabe el enmascarador.
   if (ExitCode = 0) and MatchText(Cmd, ['diff', 'show', 'log']) then
     Result := EnmascaraSalvoContenido(Result, '+- ');
 end;

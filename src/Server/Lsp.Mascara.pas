@@ -49,7 +49,9 @@ uses
 function MaskDriveText(const AToolName, AText: string): string;
 { Para la tool cuya respuesta mezcla lineas SUYAS con lineas de CONTENIDO del
   disco (delphi_git diff / show / log: las de un fichero o de un mensaje de
-  commit empiezan por +, - o espacio): enmascara las demas, una a una, y
+  commit empiezan por +, - o espacio; y un trozo de un diff es contenido
+  entero, de su cabecera @@ al siguiente fichero, commit o nota con
+  etiqueta): enmascara las demas, una a una, y
   deja el contenido como esta. El filtro de salida de ESTA llamada deja pasar
   ese texto, y solo ese, tal cual (lo recuerda el hilo; OlvidaSalidaHecha lo
   borra al empezar cada llamada). El barrido entero reescribia las lineas de
@@ -856,13 +858,24 @@ end;
 function EnmascaraSalvoContenido(const ATexto, AEmpiezaPor: string): string;
 var
   Empieza: string;
+  EnTrozo: Boolean;
 begin
   Empieza := AEmpiezaPor;
+  EnTrozo := False;
   Result := EnmascaraLineas(ATexto,
     function(const L: string): Boolean
     begin
+      // Un trozo de un diff, de su cabecera @@ (que lleva detras la linea
+      // del fuente que abre la funcion) al siguiente fichero o commit, es
+      // contenido entero: con format=words git no pone +, - ni espacio
+      // delante. Las dos salian enmascaradas ('as z:' era 'as srv0:',
+      // 3-nov-2026). Una nota de la tool, con su etiqueta, cierra el trozo.
+      if L.StartsWith('@@') then
+        EnTrozo := True
+      else if L.StartsWith('diff ') or L.StartsWith('commit ') or (MsgCuerpo(L) <> L) then
+        EnTrozo := False;
       // (la linea vacia y la que no empieza como el contenido son de la tool)
-      Result := (L <> '') and (Pos(L[1], Empieza) > 0);
+      Result := EnTrozo or ((L <> '') and (Pos(L[1], Empieza) > 0));
     end);
   TSalidaHecha := Result;
 end;
