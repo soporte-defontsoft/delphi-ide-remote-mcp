@@ -512,6 +512,11 @@ function UnidadesEnCarpetas(const ACarpetas: TArray<string>): TArray<string>;
   pasada del paisaje del diff). }
 function EnLaBiblioteca(const AUnidades: TArray<string>; const ANombre: string): Boolean;
 
+{ El anidado de la tabla de macros del IDE (IdeMacroVars), en la tabla y no en
+  el texto: los valores de ANombres en AVars (las Environment Variables del IDE,
+  que el operador escribe con macros dentro) con sus $(X) expandidos. }
+procedure ResuelveAnidadas(AVars: TStrings; const ANombres: TArray<string>);
+
 implementation
 
 uses
@@ -1538,29 +1543,63 @@ begin
     TPath.GetDocumentsPath, 'Embarcadero'), 'Studio'), 'SDKs');
 end;
 
-{ Los valores de ANombres en AVars con sus $(X) expandidos con la tabla entera
-  (EL expansor, Lsp.Dproj.ExpandeMacros; el propio nombre no): vuelta tras
-  vuelta mientras alguno cambie, y a la octava se para, por si dos se nombran
-  entre si. }
+{ Por NOMBRE y con memoria: un $(X) de uno de ANombres que es otro de ANombres
+  se resuelve primero (recursivo), y lo demas de la tabla entra tal cual (lo
+  nuestro, carpetas, como lo deja msbuild), por EL expansor y sin volver a
+  mirar lo puesto; su propio nombre se queda escrito (PATH=...;$(PATH)), y en
+  un ciclo el que esta en curso entra como esta. Se resuelven todos desde lo
+  que dice el IDE y despues se escriben. Daba vueltas a la tabla entera, y la
+  segunda volvia a mirar lo que la primera habia puesto de una carpeta nuestra
+  con $( en su nombre (C19 del cierre de la 1.26). }
 procedure ResuelveAnidadas(AVars: TStrings; const ANombres: TArray<string>);
-begin
-  for var Vuelta := 1 to 8 do
+var
+  Hechos: TStringList;
+  EnCurso: TArray<string>;
+
+  function Resuelto(const ANombre: string): string;
+  var
+    LosDelIde, Usados, Pares: TArray<string>;
+    Parado: Boolean;
   begin
-    var Cambia := False;
-    for var N in ANombres do
-    begin
-      var V := AVars.Values[N];
-      if not V.Contains('$(') then
-        Continue;
-      var Nuevo := ExpandeMacros(V, AVars.ToStringArray, N);
-      if Nuevo <> V then
+    var K := Hechos.IndexOfName(ANombre);
+    if K >= 0 then
+      Exit(Hechos.ValueFromIndex[K]);
+    Result := AVars.Values[ANombre];
+    if not Result.Contains('$(') then
+      Exit;
+    // los otros nombres del IDE que usa, por EL recorrido
+    LosDelIde := ANombres;
+    Usados := [];
+    RecorreMacros(Result,
+      function(const AN: string; out AV: string): TAccionDeMacro
       begin
-        AVars.Values[N] := Nuevo;
-        Cambia := True;
-      end;
-    end;
-    if not Cambia then
-      Break;
+        if MatchText(AN, LosDelIde) and not MatchText(AN, Usados) then
+          Usados := Usados + [AN];
+        Result := amDeja;
+      end, Parado);
+    EnCurso := EnCurso + [ANombre];
+    Pares := [];
+    for var N in Usados do
+      if not SameText(N, ANombre) and not MatchText(N, EnCurso) then
+        Pares := Pares + [N + '=' + Resuelto(N)];
+    SetLength(EnCurso, Length(EnCurso) - 1);
+    Result := ExpandeMacros(Result, Pares + AVars.ToStringArray, ANombre);
+    Hechos.Values[ANombre] := Result;
+  end;
+
+var
+  Nuevos: TArray<string>;
+begin
+  Hechos := TStringList.Create;
+  try
+    EnCurso := [];
+    Nuevos := [];
+    for var N in ANombres do
+      Nuevos := Nuevos + [Resuelto(N)];
+    for var I := 0 to High(ANombres) do
+      AVars.Values[ANombres[I]] := Nuevos[I];
+  finally
+    Hechos.Free;
   end;
 end;
 

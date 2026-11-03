@@ -33,6 +33,8 @@ type
     procedure SoloCuentanLosEventosPedidos;
     [Test]
     procedure LoInsertadoNoSeVuelveAExpandir;
+    [Test]
+    procedure LaTablaDelIdeNoVuelveAMirarLoNuestro;
   end;
 
   { UN escritor del texto de un elemento (XmlElemento) y sus lectores, que
@@ -97,7 +99,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
-  Lsp.Dproj, Lsp.Patch;
+  Lsp.Dproj, Lsp.Patch, Lsp.Discovery;
 
 const
   RUTA = 'C:\Proyecto\App.dproj';
@@ -1342,6 +1344,30 @@ begin
   Assert.AreEqual('C:\b\x', ExpandeMacros('$(bds)\x', ['BDS=C:\b']), 'sin mirar mayusculas');
   Assert.AreEqual('$(A);x;$(PATH)', ExpandeMacros('$(A);$(X);$(PATH)', ['PATH=y', 'X=x'], 'PATH'),
     'ASalvo no se expande, y lo que la tabla no da se queda');
+end;
+
+procedure TDprojHazardTests.LaTablaDelIdeNoVuelveAMirarLoNuestro;
+var
+  T: TStringList;
+begin
+  // C19 del cierre de la 1.26: el anidado de la tabla del IDE daba vueltas a la
+  // tabla, y la segunda volvia a mirar lo que la primera habia puesto de una
+  // carpeta nuestra con $( en su nombre
+  T := TStringList.Create;
+  try
+    T.Add('SDKS=$(BDSUSERDIR)\SDKs'); // del IDE, con macros dentro
+    T.Add('B=b');                      // del IDE
+    T.Add('PATH=$(B);$(PATH)');        // del IDE, con su propio nombre
+    T.Add('A=$(C)');                   // del IDE, en ciclo con C
+    T.Add('C=$(A)');
+    T.Add('BDSUSERDIR=C:\U\$(B)');     // nuestro: una carpeta, tal cual
+    ResuelveAnidadas(T, ['SDKS', 'B', 'PATH', 'A', 'C']);
+    Assert.AreEqual('C:\U\$(B)\SDKs', T.Values['SDKS'], 'lo nuestro no se vuelve a mirar');
+    Assert.AreEqual('b;$(PATH)', T.Values['PATH'], 'su propio nombre se queda');
+    Assert.IsTrue(T.Values['A'].Contains('$('), 'un ciclo se para: ' + T.Values['A']);
+  finally
+    T.Free;
+  end;
 end;
 
 initialization

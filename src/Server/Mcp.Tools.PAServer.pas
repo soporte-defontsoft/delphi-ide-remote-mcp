@@ -191,7 +191,10 @@ begin
   ADirs.Add(TPath.Combine(SinBarraFinal(AInfo.RootDir), 'PAServer'));
   Vars := TStringList.Create;
   try
-    IdeEnvironmentVars(AInfo.Version, Vars);
+    // LA tabla de macros del IDE (IdeMacroVars): la clave sola no trae
+    // $(BDSCatalogRepository), el del usuario, y ese no se miraba (C19 del
+    // cierre de la 1.26)
+    IdeMacroVars(AInfo, Vars);
     for Cat in TArray<string>.Create(Vars.Values['BDSCatalogRepositoryAllUsers'],
       Vars.Values['BDSCatalogRepository']) do
       if (Cat <> '') and TDirectory.Exists(Cat) then
