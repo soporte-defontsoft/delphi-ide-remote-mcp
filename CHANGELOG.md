@@ -11,6 +11,7 @@ the MCP `initialize` response (`serverInfo.version`).
 ### Fixed
 
 - A drive path glued to a command-line option comes out with its virtual unit. The compiler line of a `delphi_build` with `verbosity=verbose` carried `-LEC:\...`, `-LNC:\...`, `-NBC:\...` and `-NHC:\...` with the real drive letter: a drive only started after something that was not a letter or a digit, and an option's name is letters. A network path glued to an option was already masked (`-U\\host\lib`); that rule now says where a path starts for drive letters and for the server's own folders too, which glued to an option would have come out with the Windows user in their path.
+- `delphi_config add-searchpath` names every folder a path with `$(Config)` or `$(Platform)` stands for when none of them exists (`CFG-147`): `lib\$(Config)` with no folder named only `lib\Debug`, while `lib\Release` would have done as well. A macro it does not resolve gets `CFG-148`, which says that it resolves the project's and the IDE's macros, not the environment of the server, and that `set-property` writes such a value as it is for the build to judge; `CFG-017` said "unknown macro" of `$(APPDATA)`, which the IDE accepts.
 
 ## [1.26.1] - 2026-11-03
 

@@ -920,7 +920,7 @@ begin
         Vars.Values['Config'] := C;
         Expanded := ExpandeMacros(ARaw.Trim, Vars.ToStringArray);
         if Expanded.Contains('$(') then
-          Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
+          Exit(MsgFmt(SR_CONFIG_PATH_MACRO_DESCONOCIDA_FMT, [ARaw.Trim]));
         // como msbuild, que expande y DESPUES desescapa (EL desescapador,
         // Lsp.Dproj): %2E%2E es .., y CFG-018 decia que no existia una carpeta que
         // el build si lee (Opus sobre la 1.22.2, w). La jaula, la existencia y los
@@ -947,7 +947,11 @@ begin
       Exit;
     end;
   AShow := Rutas[0];
-  Result := MsgFmt(SR_CONFIG_PATH_MISSING_FMT, [AShow]);
+  // una carpeta por cada build al que se aplica: se nombran todas, basta una
+  if Length(Rutas) > 1 then
+    Result := MsgFmt(SR_CONFIG_PATH_MISSING_VARIAS_FMT, [ARaw.Trim, String.Join(', ', Rutas)])
+  else
+    Result := MsgFmt(SR_CONFIG_PATH_MISSING_FMT, [AShow]);
 end;
 
 { Las carpetas de add/remove-searchpath: path (una) y paths (una LISTA, como

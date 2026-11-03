@@ -3560,6 +3560,29 @@ const
     '[CFG-018 NOT_FOUND] The folder "%s" does not exist on the server. ' +
     'Find the right one with delphi_list (library zone) before adding it.';
 
+  { Un search path con $(Config) o $(Platform) es una carpeta por cada build
+    al que se aplica, y basta con que exista una: CFG-018 nombraba solo la
+    primera (la de Debug) aunque valiera la de Release (A10 de la 1.27, del
+    dirigido de Hermes de la 1.26.1). }
+  SR_CONFIG_PATH_MISSING_VARIAS_FMT =
+    '[CFG-147 NOT_FOUND] "%s" is one folder for each build it applies to, ' +
+    'and none of them exists on the server: %s. One of them has to exist - ' +
+    'create it, or find the right one with delphi_list (library zone) ' +
+    'before adding it.';
+
+  { Una macro que add-searchpath no conoce: decia "unknown macro" tambien de
+    $(APPDATA), que el IDE si acepta. No resolver el entorno del servidor es
+    a proposito (es de su proceso, no del proyecto); el texto lo dice y manda
+    al canal que lo escribe tal cual (A10 de la 1.27). }
+  SR_CONFIG_PATH_MACRO_DESCONOCIDA_FMT =
+    '[CFG-148 INVALID_PARAM] "%s" has a macro add-searchpath does not ' +
+    'resolve: it knows those of the project and of the IDE - $(BDS), ' +
+    '$(BDSLIB), $(Platform), $(Config), the catalogs and the IDE''s ' +
+    'Environment Variables -, not the environment of this server. Use a ' +
+    'real path or one of those; a value with any other macro goes as it is ' +
+    'with delphi_config set-property name=DCC_UnitSearchPath, and ' +
+    'delphi_build judges what it reads.';
+
   SN_CONFIG_PATH_ADDED_FMT =
     '[CFG-019] ADDED "%s" to the search path of %s (resolves to %s). The ' +
     'PropertyGroups of the platform were created the way the IDE would ' +

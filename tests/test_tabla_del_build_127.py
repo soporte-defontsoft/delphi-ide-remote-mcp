@@ -17,8 +17,12 @@ ni $(Platform) sin platform=.
      (ROJA: BUILD-050; msbuild la leia vacia)
   T3 add-searchpath platform=Win64 lib\$(Config) con lib\Debug y lib\Release: aceptado (ROJA: CFG-017)
   T4 add-searchpath sin plataforma lib\$(Platform) con lib\Win32 y lib\Win64: aceptado (ROJA: CFG-017)
-  T5 add-searchpath platform=Win64 nada\$(Platform)\$(Config) sin ninguna de sus carpetas: CFG-018 y
-     el .dproj intacto (ROJA: CFG-017, la macro no se resolvia)
+  T5 add-searchpath platform=Win64 nada\$(Platform)\$(Config) sin ninguna de sus carpetas: CFG-147
+     nombrando las DOS (Win64\Debug y Win64\Release) y el .dproj intacto (ROJA: CFG-017, la macro no se
+     resolvia; y luego CFG-018 nombraba solo la de Debug: A10 de la 1.27, del dirigido de Hermes)
+  T6 add-searchpath $(APPDATA)\x: CFG-148, que dice que el entorno del servidor no se resuelve y manda
+     a set-property; el valor de APPDATA en ninguna parte y el .dproj intacto (ROJA: CFG-017 "unknown
+     macro", A10 de la 1.27)
 
 Uso:  python tests/test_tabla_del_build_127.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -93,8 +97,15 @@ try:
 
     antes = lee()
     r = config('add-searchpath', platform='Win64', path='nada\\$(Platform)\\$(Config)')
-    check('T5 nada\\$(Platform)\\$(Config) sin ninguna de sus carpetas: CFG-018 y el .dproj intacto',
-          mc.rechazado(r) and mc.es(r, 'SR_CONFIG_PATH_MISSING_FMT') and lee() == antes, r[:300])
+    check('T5 nada\\$(Platform)\\$(Config) sin ninguna de sus carpetas: CFG-147 con las dos y el .dproj intacto',
+          mc.rechazado(r) and mc.es(r, 'SR_CONFIG_PATH_MISSING_VARIAS_FMT') and
+          'nada\\Win64\\Debug' in r.replace('\\\\', '\\') and 'nada\\Win64\\Release' in r.replace('\\\\', '\\') and
+          lee() == antes, r[:300])
+
+    r = config('add-searchpath', platform='Win64', path='$(APPDATA)\\x')
+    check('T6 $(APPDATA)\\x: CFG-148, sin el valor de APPDATA, manda a set-property, el .dproj intacto',
+          mc.rechazado(r) and mc.es(r, 'SR_CONFIG_PATH_MACRO_DESCONOCIDA_FMT') and 'set-property' in r and
+          'roaming' not in r.lower() and lee() == antes, r[:300])
 finally:
     srv.cierra()
 
