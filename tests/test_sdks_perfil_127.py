@@ -34,22 +34,25 @@ check('fixture: la carpeta del perfil no existe antes', not os.path.lexists(HUEL
 # S3: una "del operador", plantada ANTES de apuntar el perfil, con el mismo mecanismo
 YA_ESTABA = 'mcp-a7-estaba-%d' % os.getpid()
 os.makedirs(os.path.join(SDKS, YA_ESTABA))
-_ad2, _ = mc.appdata_perfil(os.path.join(BASE, 'otro'), YA_ESTABA, host='192.0.2.1')
-_ad, _host = mc.appdata_perfil(BASE, PERFIL, host='192.0.2.1')
-env = mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': _ad, 'DELPHI_MCP_REMOTE_HOSTS': _host})
-srv = mc.Stdio(EXE, env, nombre='sdks-perfil-127', t=180)
-
+# desde aqui, la plantada es de esta bateria y se quita pase lo que pase (revisor del paisaje de la 1.27)
 try:
-    r = srv.call('delphi_paserver', {'command': 'test-connection', 'profile': PERFIL}, 120)
-    check('S1 test-connection con un perfil de bateria: paclient deja SDKs\\<perfil>',
-          os.path.isdir(HUELLA), r[:300])
-finally:
-    srv.cierra()
+    _ad2, _ = mc.appdata_perfil(os.path.join(BASE, 'otro'), YA_ESTABA, host='192.0.2.1')
+    _ad, _host = mc.appdata_perfil(BASE, PERFIL, host='192.0.2.1')
+    env = mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': _ad, 'DELPHI_MCP_REMOTE_HOSTS': _host})
+    srv = mc.Stdio(EXE, env, nombre='sdks-perfil-127', t=180)
+    try:
+        r = srv.call('delphi_paserver', {'command': 'test-connection', 'profile': PERFIL}, 120)
+        check('S1 test-connection con un perfil de bateria: paclient deja SDKs\\<perfil>',
+              os.path.isdir(HUELLA), r[:300])
+    finally:
+        srv.cierra()
 
-mc.recoge_huellas()
-check('S2 mc.recoge_huellas() se lleva la carpeta que dejo la bateria', not os.path.lexists(HUELLA), HUELLA)
-check('S3 la que ya estaba no se toca', os.path.isdir(os.path.join(SDKS, YA_ESTABA)), YA_ESTABA)
-# la plantada para S3 es de esta bateria: se quita aqui, a mano y solo ella
-os.rmdir(os.path.join(SDKS, YA_ESTABA))
+    mc.recoge_huellas()
+    check('S2 mc.recoge_huellas() se lleva la carpeta que dejo la bateria', not os.path.lexists(HUELLA), HUELLA)
+    check('S3 la que ya estaba no se toca', os.path.isdir(os.path.join(SDKS, YA_ESTABA)), YA_ESTABA)
+finally:
+    # la plantada para S3 es de esta bateria: se quita aqui, a mano y solo ella
+    if os.path.isdir(os.path.join(SDKS, YA_ESTABA)):
+        os.rmdir(os.path.join(SDKS, YA_ESTABA))
 mc.borra(BASE)
 mc.fin('una bateria no deja carpetas de sus perfiles en la de SDKs 1.27 (A7)')

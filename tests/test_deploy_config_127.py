@@ -16,10 +16,14 @@ va tambien con un Deploy que falla; el camino bueno se midio en vivo.
   D3 un Deploy de Debug no dice nada
   D4 con el fichero tambien en Release, nada
   D5 el manifiesto que se genera en Linux dice lo medido (BUILD-067), no BUILD-005
+  D6 (revisor del paisaje de la 1.27) un proyecto SIN configuraciones declaradas, desplegado en Debug y luego en
+     Prod: el manifiesto gana el binario de Prod (ROJA: EnsurePlatformOutputEntries salia con CUALQUIER
+     ProjectOutput de la plataforma, y el Deploy de Prod no enviaba el binario)
 
 Uso:  python tests/test_deploy_config_127.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
+import re
 import sys
 import mcp_cliente as mc
 from mcp_cliente import check
@@ -33,8 +37,9 @@ PERFIL = 'mcp-c127-%d' % os.getpid()
 APPD, HOST = mc.appdata_perfil(BASE, PERFIL, host='192.0.2.1', platform='Linux64')
 P1 = os.path.join(JAIL, 'Datos', 'Datos.dproj')
 P2 = os.path.join(JAIL, 'Solo', 'Solo.dproj')
+P3 = os.path.join(JAIL, 'SinCfg', 'SinCfg.dproj')
 env = mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': APPD, 'DELPHI_MCP_REMOTE_HOSTS': HOST,
-                  'DELPHI_MCP_ALLOW_REMOTE_RUN': '1', 'DELPHI_MCP_REMOTE_RUN_PROJECTS': P1 + ';' + P2})
+                  'DELPHI_MCP_ALLOW_REMOTE_RUN': '1', 'DELPHI_MCP_REMOTE_RUN_PROJECTS': ';'.join((P1, P2, P3))})
 srv = mc.Stdio(EXE, env, nombre='deploy-config-127', t=600)
 
 
@@ -45,7 +50,7 @@ def deploy(proyecto, config):
 
 
 try:
-    for p in (P1, P2):
+    for p in (P1, P2, P3):
         srv.call('delphi_create', {'kind': 'project-console', 'dir': os.path.dirname(p),
                                    'name': os.path.splitext(os.path.basename(p))[0]})
         srv.call('delphi_config', {'command': 'add-platform', 'platform': 'Linux64', 'project': p})
@@ -68,13 +73,30 @@ try:
     check('D2 el binario de Debug no cuenta: va al mismo sitio que el de Release', 'Datos (' not in nota, nota)
 
     t, r = deploy(P1, 'Debug')
+    # un `not in` sobre una negativa que no es JSON ({}) pasaria sin medir nada (revisor del paisaje de la 1.27)
+    check('D3 fixture: el Deploy de Debug llega a msbuild', r.get('success') is False and bool(r.get('errors')), t[:600])
     check('D3 un Deploy de Debug no dice nada', 'deployNotThisConfig' not in r, r.get('deployNotThisConfig'))
 
     t = srv.call('delphi_config', {'command': 'add-deployfile', 'platform': 'Linux64', 'path': 'datos.txt',
                                    'config': 'Release', 'project': P1})
     check('D4 fixture: anadido tambien a Release', 'configuration Release only' in t, t[:300])
     t, r = deploy(P1, 'Release')
+    check('D4 fixture: el Deploy de Release llega a msbuild', r.get('success') is False and bool(r.get('errors')), t[:600])
     check('D4 con el fichero en las dos, nada', 'deployNotThisConfig' not in r, r.get('deployNotThisConfig'))
+
+    # D6: sin configuraciones declaradas (como CF1 de test_contratos_1222): el build acepta cualquiera
+    with open(P3, encoding='utf-8-sig') as f:
+        t3 = f.read()
+    with open(P3, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(re.sub(r'(?s)\s*<BuildConfiguration Include=.*?</BuildConfiguration>', '', t3))
+    t, r = deploy(P3, 'Debug')
+    check('D6 fixture: el Deploy de Debug llega a msbuild', r.get('success') is False and bool(r.get('errors')), t[:600])
+    t, r = deploy(P3, 'Prod')
+    check('D6 fixture: el Deploy de Prod llega a msbuild', r.get('success') is False and bool(r.get('errors')), t[:600])
+    with open(os.path.splitext(P3)[0] + '.deployproj', encoding='utf-8-sig') as f:
+        man3 = f.read()
+    check('D6 el manifiesto gana el binario de Prod (una configuracion sin su entrada de salida)',
+          "'$(Config)'=='Prod'" in man3 and 'ProjectOutput' in man3, man3[-900:])
 
     t, r = deploy(P2, 'Debug')
     man = r.get('deployManifest', '')

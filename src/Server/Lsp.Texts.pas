@@ -1638,9 +1638,10 @@ const
     'delphi_config command=view section=deploy.';
 
   SN_BUILD_MANIFEST_FILLED_FMT =
-    '[BUILD-014] The project''s .deployproj had NO files for %s (the IDE ' +
-    'writes an empty group for a platform it never deployed): the ' +
-    'project output was added for Debug and Release, like the IDE''s ' +
+    '[BUILD-014] The project''s .deployproj did not deploy the project ' +
+    'output on %s in every configuration it builds (the IDE writes an ' +
+    'empty group for a platform it never deployed; a configuration added ' +
+    'later has none): it was added where it was missing, like the IDE''s ' +
     'Deployment Manager would. Extra files (a component''s .so) go in ' +
     'with delphi_config add-deployfile.';
 

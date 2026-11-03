@@ -956,27 +956,49 @@ begin
   Result := XmlDeployFile(Include, ACfg, AName + '\', Ext, 'ProjectOutput', 1, True);
 end;
 
-{ Adds the ProjectOutput entries for APlat to an existing manifest that has
-  none for it (empty or missing platform group). True when it changed. }
+{ Adds the ProjectOutput entries for APlat to an existing manifest, for each
+  configuration of the manifest that has none (an empty or missing platform
+  group, a configuration the project does not declare, one declared after the
+  manifest was written). True when it changed. }
 function EnsurePlatformOutputEntries(const ADeployProj, ADprojPath, APlat,
   AName, AConfig: string): Boolean;
 var
   Enc, Xml, DprojXml, Entries: string;
   Cfg: string;
+  Cubiertas: TArray<string>;
+
+  function Cubierta(const AConf: string): Boolean;
+  begin
+    for var C in Cubiertas do
+      if SameText(C, AConf) then
+        Exit(True);
+    Result := False;
+  end;
+
 begin
   Result := False;
   Xml := PatchLoadText(ADeployProj, Enc);
-  // any DeployFile with ProjectOutput inside a group of this platform? Por EL
-  // analisis del .deployproj: era una regex por grupos y un Contains del texto
-  for var G in GruposDe(Xml, 'ItemGroup') do
-    if SameText(PlataformaDeGrupoDeDespliegue(G.Condicion), APlat) then
-      for var C in TramosEnGrupo(Xml, 'DeployClass', G) do
-        if SameText(ValorDeTramo(Xml, C).Trim, 'ProjectOutput') then
-          Exit;
+  // las configuraciones que ya llevan su binario en esta plataforma, por EL
+  // lector (la de la entrada o la de su grupo; sin ninguna, todas). Se miraba
+  // si habia CUALQUIER ProjectOutput de la plataforma: el Deploy de una
+  // configuracion sin el suyo no enviaba nada y msbuild decia exito (revisor
+  // del paisaje de la 1.27, medido)
+  Cubiertas := [];
+  for var E in EntradasDelManifiesto(Xml) do
+    if SameText(E.Plataforma, APlat) and not E.ConfigIlegible and
+       SameText(ValorDentro(Xml, 'DeployClass', E.Tramo), 'ProjectOutput') then
+    begin
+      if E.Config = '' then
+        Exit;
+      Cubiertas := Cubiertas + [E.Config];
+    end;
   DprojXml := LeeTexto(ADprojPath, [ltJaula]);
   Entries := '';
   for Cfg in ConfigsDelManifiesto(DprojXml, AConfig) do
-    Entries := Entries + OutputDeployEntry(DprojXml, ExtractFileDir(ADprojPath), APlat, Cfg, AName);
+    if not Cubierta(Cfg) then
+      Entries := Entries + OutputDeployEntry(DprojXml, ExtractFileDir(ADprojPath), APlat, Cfg, AName);
+  if Entries = '' then
+    Exit;
   // en el grupo de la plataforma, como lo deja el IDE (Lsp.Dproj)
   Xml := ConEntradasEnSuGrupo(Xml, APlat, Entries);
   if Xml = '' then

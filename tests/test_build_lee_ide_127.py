@@ -16,7 +16,8 @@ Un %APPDATA% FALSO (mc.appdata_perfil) con un .profile SENUELO: nunca el real.
   F1 search path $(APPDATA)\Embarcadero\BDS\<ver> + {$I palabras.profile} suelto: BUILD-050 y la
      palabra del senuelo en ninguna parte (ROJA: compilaba y dcc la citaba)
   F2 search path $(BDSPLATFORMSDKSDIR): BUILD-050 (ROJA: aceptado)
-  F3 add-searchpath $(APPDATA)\Embarcadero\BDS\<ver>: negado (guarda)
+  F3 add-searchpath de la carpeta de datos del IDE (ruta entera): negado por la JAULA, GUARD-002 (guarda;
+     con $(APPDATA) lo negaba CFG-148, la macro que add-searchpath no resuelve, y no media la jaula)
   F4 {$I '<appdata falso>\...\palabras.profile'} con la ruta entera: BUILD-028 (guarda)
   F5 search path $(BDS)\source\rtl\common: compila (guarda: la instalacion la sigue leyendo)
   Con la zona de biblioteca APAGADA (DELPHI_MCP_LIBRARY_ZONE=0):
@@ -42,14 +43,18 @@ JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
 APPDATA, _ = mc.appdata_perfil(BASE, nombre='senuelo')
 PALABRA = 'senueloPalabraA9'
-VER = '37.0'
-BDS_FALSO = os.path.join(APPDATA, 'Embarcadero', 'BDS', VER)
-SENUELO = os.path.join(BDS_FALSO, 'palabras.profile')
-with open(SENUELO, 'w', encoding='utf-8') as f:
-    f.write('%s := secretoPalabraA9;\n' % PALABRA)
 ENV = {'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': APPDATA}
 srv = mc.Stdio(EXE, mc.entorno(ENV), nombre='lee-ide-127', t=600)
 srv2 = None
+# la version la dice el servidor, no la bateria: con otra activa, la carpeta de datos del IDE seria otra y F1
+# pasaria tambien sin el arreglo (revisor del paisaje de la 1.27)
+VER = mc.instalacion_activa(srv.call).get('version', '')
+check('fixture: la version activa del IDE, por delphi_installs', bool(VER), VER)
+BDS_FALSO = os.path.join(APPDATA, 'Embarcadero', 'BDS', VER)
+SENUELO = os.path.join(BDS_FALSO, 'palabras.profile')
+os.makedirs(BDS_FALSO, exist_ok=True)
+with open(SENUELO, 'w', encoding='utf-8') as f:
+    f.write('%s := secretoPalabraA9;\n' % PALABRA)
 
 
 def config(s, comando, **campos):
@@ -115,9 +120,10 @@ try:
 
     pon(DPROJ, ORIGINAL)
     antes = lee(DPROJ)
-    r = config(srv, 'add-searchpath', platform='Win64', path='$(APPDATA)\\Embarcadero\\BDS\\' + VER)
-    check('F3 add-searchpath al AppData del IDE: negado y el .dproj intacto',
-          mc.rechazado(r) and lee(DPROJ) == antes, r[:300])
+    # la ruta entera, sin macro: con $(APPDATA) contestaba CFG-148 antes de llegar a la jaula (revisor del paisaje)
+    r = config(srv, 'add-searchpath', platform='Win64', path=BDS_FALSO)
+    check('F3 add-searchpath de la carpeta de datos del IDE: negado por la jaula (GUARD-002) y el .dproj intacto',
+          mc.es(r, 'SR_JAIL_FMT') and lee(DPROJ) == antes, r[:300])
 
     pon(DPR, con_include("{$I '%s'}" % SENUELO))
     rb = build(srv)

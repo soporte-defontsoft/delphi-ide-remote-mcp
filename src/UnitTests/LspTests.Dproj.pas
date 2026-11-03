@@ -570,6 +570,24 @@ begin
   Assert.AreEqual('Debug', E[1].Config, 'sin Condition propia, la del grupo');
   Assert.AreEqual('', E[4].Config, 'ni ella ni su grupo la nombran: todas');
   Assert.AreEqual('libfoo.so', NombreEnElDestino(M, E[4]), 'sin RemoteName, el del Include');
+  // una Condition propia que no se sabe leer no es de ninguna (no "todas"), y
+  // fuera de Windows dos nombres que solo cambian en mayusculas son dos sitios
+  // (revisor del paisaje de la 1.27)
+  M := '<Project>' +
+    XmlGrupoDeDespliegue(DeployGroupCondition('Linux64'),
+      XmlDeployFile('Datos.txt', 'Debug', 'App\', 'Datos.txt', 'File', 0, False) +
+      XmlDeployFile('datos.txt', 'Release', 'App\', 'datos.txt', 'File', 0, False) +
+      '        <DeployFile Include="raro.dat" Condition="Exists(''x'')"><RemoteDir>App\</RemoteDir>' +
+      '<RemoteName>raro.dat</RemoteName></DeployFile>'#13#10) +
+    XmlGrupoDeDespliegue(DeployGroupCondition('Win64'),
+      XmlDeployFile('Datos.txt', 'Debug', 'App\', 'Datos.txt', 'File', 0, False) +
+      XmlDeployFile('datos.txt', 'Release', 'App\', 'datos.txt', 'File', 0, False)) +
+    '</Project>';
+  E := EntradasDelManifiesto(M);
+  Assert.IsTrue(E[2].ConfigIlegible and (E[2].Config = ''), 'Exists(...) no se sabe leer');
+  Assert.AreEqual('Datos.txt (Debug)', string.Join('|', SoloEnOtrasConfigs(M, 'Linux64', 'Release')),
+    'en Linux Datos.txt y datos.txt son dos; y raro.dat no sale');
+  Assert.AreEqual('', string.Join('|', SoloEnOtrasConfigs(M, 'Win64', 'Release')), 'en Windows, uno');
 end;
 
 procedure CompruebaImport(const AForma: string;

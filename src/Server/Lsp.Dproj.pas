@@ -554,11 +554,14 @@ type
   { Un <DeployFile> de un .deployproj: su tramo, el ItemGroup que lo contiene,
     la plataforma de ese grupo ('' si su Condition no es de una) y la
     configuracion que lo aplica: la de su Condition, si no la de su grupo
-    ('' = todas). }
+    ('' = todas). ConfigIlegible: lleva una Condition propia que no se sabe
+    leer, y entonces no es de ninguna (lo que no se sabe si se aplica no se da
+    por aplicado). }
   TEntradaDelManifiesto = record
     Tramo: TTramoXml;
     Grupo: TGrupoXml;
     Plataforma, Config: string;
+    ConfigIlegible: Boolean;
   end;
 
 { Los <DeployFile> de un .deployproj, cada uno con su grupo y la plataforma
@@ -3480,9 +3483,14 @@ begin
     begin
       E.Tramo := T;
       // la de su Condition, si no la de su grupo (estaba a mano en
-      // FindDeployEntries, y el aviso del Deploy la pedia otra vez)
-      if not CondicionDePlataformaYConfig(AtributoDeTramo(AXml, T, 'DeployFile', 'Condition'), Plat, Cfg) or
-         (Cfg = '') then
+      // FindDeployEntries, y el aviso del Deploy la pedia otra vez). Una
+      // Condition propia que no se sabe leer contaba como "todas" (revisor del
+      // paisaje de la 1.27): ahora no es de ninguna
+      var Propia := AtributoDeTramo(AXml, T, 'DeployFile', 'Condition');
+      E.ConfigIlegible := (Propia.Trim <> '') and not CondicionDePlataformaYConfig(Propia, Plat, Cfg);
+      if E.ConfigIlegible or (Propia.Trim = '') then
+        Cfg := '';
+      if (Cfg = '') and not E.ConfigIlegible then
         if not CondicionDePlataformaYConfig(G.Condicion, Plat, Cfg) then
           Cfg := '';
       E.Config := Cfg;
@@ -3502,7 +3510,24 @@ end;
 function SoloEnOtrasConfigs(const AXml, APlataforma, AConfig: string): TArray<string>;
 
   // su sitio en el destino: la carpeta con su barra y el nombre; el binario de
-  // Debug y el de Release son dos Include y un mismo sitio
+  // Debug y el de Release son dos Include y un mismo sitio. Fuera de Windows,
+  // Data/x y data/x son dos (revisor del paisaje de la 1.27)
+  function MismoSitio(const A, B: string): Boolean;
+  begin
+    if SistemaDePlataforma(APlataforma) = spWindows then
+      Result := SameText(A, B)
+    else
+      Result := A = B;
+  end;
+
+  function EnLista(const S: string; const ALista: TArray<string>): Integer;
+  begin
+    for var I := 0 to High(ALista) do
+      if MismoSitio(S, ALista[I]) then
+        Exit(I);
+    Result := -1;
+  end;
+
   function Sitio(const AEntrada: TEntradaDelManifiesto): string;
   begin
     Result := ConBarrasDeWindows(ValorDentro(AXml, 'RemoteDir', AEntrada.Tramo));
@@ -3519,19 +3544,21 @@ begin
   // lo que despliega ESTA configuracion (una entrada sin la suya, todas)...
   Aqui := [];
   for var E in Entradas do
-    if SameText(E.Plataforma, APlataforma) and ((E.Config = '') or SameText(E.Config, AConfig)) then
+    if SameText(E.Plataforma, APlataforma) and not E.ConfigIlegible and
+       ((E.Config = '') or SameText(E.Config, AConfig)) then
       Aqui := Aqui + [Sitio(E)];
   // ...y lo de las otras que no esta, con las configuraciones que lo llevan
   Sitios := [];
   Nombres := [];
   Configs := [];
   for var E in Entradas do
-    if SameText(E.Plataforma, APlataforma) and (E.Config <> '') and not SameText(E.Config, AConfig) then
+    if SameText(E.Plataforma, APlataforma) and not E.ConfigIlegible and (E.Config <> '') and
+       not SameText(E.Config, AConfig) then
     begin
       var S := Sitio(E);
-      if MatchText(S, Aqui) then
+      if EnLista(S, Aqui) >= 0 then
         Continue;
-      var I := IndexText(S, Sitios);
+      var I := EnLista(S, Sitios);
       if I < 0 then
       begin
         Sitios := Sitios + [S];

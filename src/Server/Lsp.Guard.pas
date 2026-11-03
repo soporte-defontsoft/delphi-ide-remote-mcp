@@ -940,6 +940,12 @@ procedure PurgeServerTemp;
   sits inside a workspace root - a listing that showed the notes would invite
   an agent to edit them behind the vault's back. }
 function InVault(const APath: string): Boolean;
+{ ...por su texto o por su ruta REAL (V192 de la 1.23.1): detras de un enlace
+  el texto no nombra el vault. ARutaReal, la ruta real con su barra si se
+  calculo (hay vaults y el texto no basto), si no ''. LA regla del vault para
+  la puerta (JaulaDecide) y para los recorredores (CopiaArbol, WalkFiles). }
+function EnUnVault(const APath: string; out ARutaReal: string): Boolean; overload;
+function EnUnVault(const APath: string): Boolean; overload;
 
 { THE Windows name rule, in one place: a path segment ending in a dot or a
   space, or carrying an Alternate Data Stream (":"), is refused - Windows
@@ -1436,6 +1442,24 @@ begin
   for Vault in TodosLosVaults do
     if EnLugar(APath, Vault) then // la forma larga: KNOWLE~1 es el vault
       Exit(True);
+end;
+
+function EnUnVault(const APath: string; out ARutaReal: string): Boolean;
+begin
+  ARutaReal := '';
+  if InVault(APath) then
+    Exit(True);
+  if Length(TodosLosVaults) = 0 then
+    Exit(False);
+  ARutaReal := IncludeTrailingPathDelimiter(RealPath(APath));
+  Result := InVault(ARutaReal);
+end;
+
+function EnUnVault(const APath: string): Boolean;
+var
+  Real: string;
+begin
+  Result := EnUnVault(APath, Real);
 end;
 
 function WriteDenied(const AWhat: string): string;
@@ -3982,6 +4006,12 @@ var
             Continue; // un ciclo de enlaces
           Vistos.Add(RealSub, True);
         end;
+        // Un vault alcanzado por un camino que no lo nombra (detras de un
+        // enlace que se sigue) no se recorre: delphi_list ensenaba sus notas
+        // (revisor del paisaje de la 1.27, medido). El que el texto nombra lo
+        // cuenta como oculto quien llama, por InVault
+        if not InVault(Sub) and EnUnVault(Sub) then
+          Continue;
         // La papelera se purga solo despues de admitir la lectura del enlace.
         if EsNombreDePapelera(TPath.GetFileName(Sub)) then
           PurgaAlPasar(Sub);
@@ -4122,8 +4152,11 @@ var
           Continue;
         // un VAULT (de cualquier workspace) es de las tools vault_*: no se
         // copia, y se dice con lo no seguido (el de OTRO workspace salia
-        // entero en la copia; octava revision)
-        if InVault(E) then
+        // entero en la copia; octava revision). Por su ruta REAL tambien: detras
+        // de un enlace que se sigue el texto no lo nombra, y delphi_move
+        // copy=true metia sus notas en la jaula (revisor del paisaje de la
+        // 1.27, medido)
+        if EnUnVault(E) then
         begin
           NoSeg.Add(E);
           Continue;
@@ -4879,20 +4912,15 @@ begin
   // If it happens to live inside a workspace root, the code tools must still
   // keep out - otherwise delphi_edit could rewrite a note behind the vault's
   // back, skipping its automatic backup and its protected governance files.
-  if InVault(APath) then
-    Exit(MsgText(SR_VAULT_NOT_CODE));
   // ...y por la ruta REAL, UNA vez y antes de toda rama: la de las raices lo
   // preguntaba y la de las referencias y la de la biblioteca contestaban
   // antes "se lee" - con el vault dentro de una ReadOnlyRoot, un enlace en la
   // raiz o en la referencia que apuntase dentro dejaba leerlo (V192 de la
-  // 1.23.1, medido; la sexta revision lo habia cerrado solo en las raices)
+  // 1.23.1, medido; la sexta revision lo habia cerrado solo en las raices).
+  // Por LA regla del vault, la de los recorredores
   var VerdadDelVault := '';
-  if Length(TodosLosVaults) > 0 then
-  begin
-    VerdadDelVault := IncludeTrailingPathDelimiter(RealPath(APath));
-    if InVault(VerdadDelVault) then
-      Exit(MsgText(SR_VAULT_NOT_CODE));
-  end;
+  if EnUnVault(APath, VerdadDelVault) then
+    Exit(MsgText(SR_VAULT_NOT_CODE));
   if not HayJaula then
     Exit; // no jail configured
   Roots := WorkspaceRoots;

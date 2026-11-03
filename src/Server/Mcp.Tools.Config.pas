@@ -1322,8 +1322,9 @@ begin
     if not SameText(E.Plataforma, APlatform) or
        not SameDeployFile(AtributoDeTramo(AXml, T, 'DeployFile', 'Include'), AProyecto, AFile) then
       Continue;
-    // la configuracion de la entrada, por EL lector (Lsp.Dproj)
-    if (AConfig <> '') and (E.Config <> '') and not SameText(E.Config, AConfig) then
+    // la configuracion de la entrada, por EL lector (Lsp.Dproj); una de
+    // Condition ilegible no es de la que se pide (revisor del paisaje de la 1.27)
+    if (AConfig <> '') and (E.ConfigIlegible or ((E.Config <> '') and not SameText(E.Config, AConfig))) then
       Continue;
     Result := Result + [TPair<Integer, Integer>.Create(T.Abre, T.Cierra - T.Abre)];
   end;

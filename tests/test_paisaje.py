@@ -1286,6 +1286,8 @@ REGLAS = [
       # (ArgPathOutsideDenied y BordeDeMudanza salieron el 25-oct-2026: preguntan HayJaula, V30 de la 1.23)
       # (NegativaDeUnc salio el 23-oct-2026: su lista de raices es la de RaicesDisponibles)
       ('Lsp.Guard.pas', 'InVault'), ('Lsp.Guard.pas', 'JaulaDecide'),
+      # (EnUnVault, la regla del vault por su ruta real, la de la puerta y los recorredores: 1.27)
+      ('Lsp.Guard.pas', 'EnUnVault'),
       # (PurgeServerTemp salio el 24-oct-2026 con la purga de las raices: V31 de la 1.23)
       ('Lsp.Guard.pas', 'LugaresProtegidos'),
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
@@ -1424,7 +1426,9 @@ REGLAS = [
       ('Lsp.Patch.pas', 'BackupFile'), ('Lsp.Patch.pas', 'GuardaContenidoActual'),
       # los recorredores y movimientos de la jaula (no cruzan enlaces; la puerta antes)
       ('Lsp.Guard.pas', 'CopiaNuestra'), ('Lsp.Guard.pas', 'CopiaArbol'),
-      ('Lsp.Guard.pas', 'MueveArbol'), ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
+      ('Lsp.Guard.pas', 'MueveArbol'),
+      # (ApplyOneConAvisos salio el 3-nov-2026: el move del changeset renombra por
+      # RenombraConReintentos tras MovidoDenegado; su TFile.Move cruzaba volumenes, 1.27)
       # la caja de paquetes del render: lo de la instalacion a NUESTRO temporal, lo
       # que ningun agente nombra y su jaula negaria (V65 de la 1.24)
       ('Lsp.FormRender.pas', 'CajaDePaquetes'),

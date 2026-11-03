@@ -365,6 +365,11 @@ begin
     AError := EscrituraDenegada(Op.Path);
   if (AError = '') and (Op.Kind = opMove) then
     AError := EntradaDenegada(Op.Dest);
+  // ...y LA regla del move, la de delphi_move (MovidoDenegado: los lugares
+  // protegidos y la misma unidad REAL): el changeset movia entre volumenes
+  // copiando y borrando (revisor del paisaje de la 1.27, medido)
+  if (AError = '') and (Op.Kind = opMove) then
+    AError := MovidoDenegado(Op.Path, Op.Dest);
   if AError <> '' then
     Exit;
   // ENSAYO (el preview): solo edit y create tienen un motor que ensayar
@@ -513,7 +518,13 @@ begin
           Exit;
         end;
         CrearCarpeta(TPath.GetDirectoryName(Op.Dest));
-        TFile.Move(Op.Path, Op.Dest);
+        // un renombre que nunca copia (TFile.Move copia entre volumenes)
+        var Codigo: Cardinal;
+        if not RenombraConReintentos(Op.Path, Op.Dest, 0, Codigo) then
+        begin
+          AError := MotivoDeRenombre(Op.Path, Codigo);
+          Exit;
+        end;
         Result := True;
       end;
   end;
@@ -859,6 +870,11 @@ begin
             if ADest.Trim = '' then
               Exit(MsgText(SR_CHANGESET_NEED_DEST));
             Denied := WriteTargetDenied(ADest);
+            if Denied <> '' then
+              Exit(Denied);
+            // LA regla del move ya al apilar (y otra vez al aplicar): la de
+            // delphi_move, con la misma unidad REAL (revisor del paisaje de la 1.27)
+            Denied := MovidoDenegado(Op.Path, ADest);
             if Denied <> '' then
               Exit(Denied);
             // el destino de un FICHERO no acaba en separador (GUARD-025)
