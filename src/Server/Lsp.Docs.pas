@@ -154,7 +154,8 @@ uses
   Lsp.Texts,     // SF_DOCS_ANCESTROS_FMT
   System.Character,
   Lsp.Pascal,
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Dproj;     // ExpandeMacros: EL expansor de $(X)
 
 { ---------------------------------------------------------------- bytes }
 
@@ -1316,9 +1317,10 @@ begin
     // GetIt...), la de Lsp.Discovery: una propia con solo $(BDS) perdia en
     // silencio la ayuda registrada con otra macro (revision de la 1.10.0)
     IdeMacroVars(Info, Vars);
+    var Tabla := Vars.ToStringArray;
     for var H in IdeHelpFiles(Info.Version) do
     begin
-      F := ExpandIdeMacros(H.Fichero, Vars);
+      F := ExpandeMacros(H.Fichero, Tabla);
       // el mismo fichero dos veces (con $(BDS) en una rama del registro y su
       // ruta en la otra) es una ayuda, no dos
       if not TFile.Exists(F) or Vista(F) then

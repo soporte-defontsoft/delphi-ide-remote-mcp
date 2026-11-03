@@ -199,7 +199,7 @@ function CarpetaDeSdk(const AVersion, ANombre: string): string;
   de profiles y reseat-sdk, y la puerta de leer iba a por la cuarta. }
 function SysrootDeSdk(const AVersion, AXml: string): string;
 { ATexto con las $(...) del IDE de AVersion expandidas por EL expansor
-  (ExpandIdeMacros) con LA tabla (IdeMacroVars: la del IDE, sus Environment
+  (Lsp.Dproj.ExpandeMacros) con LA tabla (IdeMacroVars: la del IDE, sus Environment
   Variables, $(BDSPLATFORMSDKSDIR)...); lo que no conoce queda como esta, y
   sin esa instalacion, todo. Lo hacian a mano el sysroot de un .sdk, los
   enlaces de un SDK (una macro) y los paquetes del renderizador (tres): forma
@@ -511,12 +511,6 @@ function UnidadesEnCarpetas(const ACarpetas: TArray<string>): TArray<string>;
   escritor, y una unidad no ASCII no se encontraba (V98 de la 1.23.1, de la
   pasada del paisaje del diff). }
 function EnLaBiblioteca(const AUnidades: TArray<string>; const ANombre: string): Boolean;
-
-{ Expands $(NAME) macros with the IDE's environment table (AVars as
-  NAME=VALUE, see Lsp.Discovery.IdeEnvironmentVars). Exposed for the search
-  path vetting of delphi_config: a path with macros must resolve before the
-  jail can judge it. }
-function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
 
 implementation
 
@@ -1544,25 +1538,29 @@ begin
     TPath.GetDocumentsPath, 'Embarcadero'), 'Studio'), 'SDKs');
 end;
 
-{ Expands $(MACRO) against the IDE's own macro table (plus the few values
-  that live outside it), repeatedly, since macros nest. Case-insensitive. }
-function ExpandIdeMacros(const AText: string; AVars: TStrings): string;
-var
-  Pass, I: Integer;
-  Name: string;
+{ Los valores de ANombres en AVars con sus $(X) expandidos con la tabla entera
+  (EL expansor, Lsp.Dproj.ExpandeMacros; el propio nombre no): vuelta tras
+  vuelta mientras alguno cambie, y a la octava se para, por si dos se nombran
+  entre si. }
+procedure ResuelveAnidadas(AVars: TStrings; const ANombres: TArray<string>);
 begin
-  Result := AText;
-  for Pass := 1 to 4 do
+  for var Vuelta := 1 to 8 do
   begin
-    if not Result.Contains('$(') then
-      Break;
-    for I := 0 to AVars.Count - 1 do
+    var Cambia := False;
+    for var N in ANombres do
     begin
-      Name := AVars.Names[I];
-      if Name <> '' then
-        Result := Result.Replace('$(' + Name + ')', AVars.ValueFromIndex[I],
-          [rfReplaceAll, rfIgnoreCase]);
+      var V := AVars.Values[N];
+      if not V.Contains('$(') then
+        Continue;
+      var Nuevo := ExpandeMacros(V, AVars.ToStringArray, N);
+      if Nuevo <> V then
+      begin
+        AVars.Values[N] := Nuevo;
+        Cambia := True;
+      end;
     end;
+    if not Cambia then
+      Break;
   end;
 end;
 
@@ -1576,18 +1574,24 @@ begin
   if ACfg <> '' then
     ADest.Values['Config'] := ACfg;
   for var M in MacrosReservadasDeMsbuild(ADprojDir, ANombre, ADprojDir) do
-    ADest.Add(M); // 'Nombre=valor': ExpandIdeMacros lo lee por Values[]
+    ADest.Add(M); // 'Nombre=valor', como lo lee ExpandeMacros
 end;
 
 procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
 var
   UserDocs, CommonDocs: string;
+  DelIde: TArray<string>;
 begin
   // The IDE's own macro table is authoritative: it carries
   // $(BDSCatalogRepositoryAllUsers), where the GetIt packages live
   // (FmxLinux, Android SDKs, PAServer installers). Without it those
   // paths were silently dropped - measured 2026-08-19.
   IdeEnvironmentVars(AInfo.Version, ADest);
+  // los nombres que da el IDE: sus valores los escribe el operador, con
+  // macros dentro si quiere (abajo, ResuelveAnidadas)
+  DelIde := [];
+  for var I := 0 to ADest.Count - 1 do
+    DelIde := DelIde + [ADest.Names[I]];
   // Values that are NOT in that key (authoritative from rsvars.bat /
   // the install itself), added without overwriting the IDE's own.
   if ADest.Values['BDS'] = '' then
@@ -1613,9 +1617,15 @@ begin
     ADest.Values['BDSCatalogRepositoryAllUsers'] :=
       IncludeTrailingPathDelimiter(CommonDocs) + 'CatalogRepository';
   // ...y donde guarda los sysroots de sus SDK, si el operador no la redefinio
-  // (una redefinida con macros dentro la expande ExpandIdeMacros, que anida)
+  // (una redefinida con macros dentro se resuelve abajo)
   if ADest.Values['BDSPLATFORMSDKSDIR'] = '' then
     ADest.Values['BDSPLATFORMSDKSDIR'] := IdeSdksDir(AInfo.Version);
+  // el anidado, en la tabla y no en el texto: lo que el operador redefinio en
+  // el IDE con macros dentro ($(BDSUSERDIR)\SDKs) se resuelve con la tabla
+  // entera, y lo que ponemos nosotros (carpetas) se queda tal cual, como lo
+  // deja msbuild. ExpandIdeMacros daba cuatro pasadas al TEXTO y volvia a
+  // mirar lo insertado (C17 del cierre de la 1.26)
+  ResuelveAnidadas(ADest, DelIde);
 end;
 
 function LibDelIde(const AInfo: TRadStudioInfo; const APlat: string): string;
@@ -1625,7 +1635,7 @@ begin
   Vars := TStringList.Create;
   try
     IdeMacroVars(AInfo, Vars);
-    Result := ExpandIdeMacros('$(BDSLIB)\' + APlat + '\release', Vars);
+    Result := ExpandeMacros('$(BDSLIB)\' + APlat + '\release', Vars.ToStringArray);
   finally
     Vars.Free;
   end;
@@ -1659,7 +1669,7 @@ begin
   Vars := TStringList.Create;
   try
     TablaDeMacrosDelIde(AVersion, Vars);
-    Result := ExpandIdeMacros(Result, Vars);
+    Result := ExpandeMacros(Result, Vars.ToStringArray);
   finally
     Vars.Free;
   end;
@@ -1715,7 +1725,7 @@ begin
     // variable del entorno con dos carpetas) era UN trozo con ';' dentro, y no se
     // veian las que nombraba (revisor C, 21-oct-2026). EL troceador, el de la
     // puerta del build (TrozosDeLista)
-    for var Item in TrozosDeLista(ExpandIdeMacros(ARaw, AVars)) do
+    for var Item in TrozosDeLista(ExpandeMacros(ARaw, AVars.ToStringArray)) do
     begin
       if (Item = '') or Item.Contains('$(') then
         Continue;

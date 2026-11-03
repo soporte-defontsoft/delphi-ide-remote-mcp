@@ -904,7 +904,7 @@ begin
       // la plataforma del comando y las reservadas de msbuild (V205)
       MacrosDelProyecto(Info, TPath.GetDirectoryName(ADproj),
         TPath.GetFileNameWithoutExtension(ADproj), APlat, '', Vars);
-      Expanded := ExpandIdeMacros(Expanded, Vars);
+      Expanded := ExpandeMacros(Expanded, Vars.ToStringArray);
     finally
       Vars.Free;
     end;

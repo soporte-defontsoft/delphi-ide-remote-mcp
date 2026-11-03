@@ -329,7 +329,7 @@ function EsEjecutable(const ABytes: TArray<Byte>): Boolean;
 function CarpetaDelFormDeVerdad(const APeticion: TPeticionRender): string;
 function FormDeVerdad(const APeticion: TPeticionRender): string;
 { Un paquete del IDE como lo escribe su registro (Known Packages), con sus
-  macros por EL expansor del IDE (ExpandIdeMacros con AVars, la tabla de
+  macros por EL expansor (Lsp.Dproj.ExpandeMacros con AVars, la tabla de
   IdeMacroVars); una que no conoce se queda, y el paquete sale como que falta.
   Sabia tres a mano ($(BDS), $(BDSBIN), $(BDSCOMMONDIR)): uno de GetIt o del
   usuario salia como que faltaba (forma 21 del revisor del paisaje de la 1.26). }
@@ -1404,7 +1404,7 @@ end;
 
 function RutaDePaqueteDelIde(const AValor: string; AVars: TStrings): string;
 begin
-  Result := ExpandIdeMacros(ConBarrasDeWindows(AValor), AVars);
+  Result := ExpandeMacros(ConBarrasDeWindows(AValor), AVars.ToStringArray);
 end;
 
 { Los paquetes del IDE de 32 bits del usuario, sin los desactivados (V124, por el

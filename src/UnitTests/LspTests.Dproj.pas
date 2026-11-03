@@ -31,6 +31,8 @@ type
     [Test] procedure UnaAperturaSinCierreNoEscondeLoQueSigue;
     [Test]
     procedure SoloCuentanLosEventosPedidos;
+    [Test]
+    procedure LoInsertadoNoSeVuelveAExpandir;
   end;
 
   { UN escritor del texto de un elemento (XmlElemento) y sus lectores, que
@@ -1324,6 +1326,22 @@ begin
     PaqueteDeAndroid(XML, 'C:\P', 'App', 'Android', 'Release'));
   // fuera de Android, nada
   Assert.AreEqual('', PaqueteDeAndroid(XML, 'C:\P', 'App', 'Win64', 'Release'));
+end;
+
+procedure TDprojHazardTests.LoInsertadoNoSeVuelveAExpandir;
+begin
+  // C17 del cierre de la 1.26, medido con msbuild el 3-nov-2026: en un proyecto
+  // en la carpeta Mide$(Config)x, $(MSBuildProjectDirectory) es esa carpeta tal
+  // cual. La salida se juzgaba en MideDebugx, otra que la que escribe msbuild
+  Assert.AreEqual('D:\p\Mide$(Config)x\Debug',
+    ExpandOutputMacros('$(MSBuildProjectDirectory)\$(Config)', 'D:\p\Mide$(Config)x', 'P', 'Win32', 'Debug'));
+  // y lo que la tabla no da se queda escrito, para que lo niegue quien juzga
+  Assert.AreEqual('$(ProjectDir)\Win32', ExpandOutputMacros('$(ProjectDir)\$(Platform)', 'D:\p', 'P', 'Win32', 'Debug'));
+  // EL expansor: una pasada, sin mirar mayusculas, y el nombre salvado se queda
+  Assert.AreEqual('$(B)', ExpandeMacros('$(A)', ['A=$(B)', 'B=b']), 'lo insertado no se vuelve a mirar');
+  Assert.AreEqual('C:\b\x', ExpandeMacros('$(bds)\x', ['BDS=C:\b']), 'sin mirar mayusculas');
+  Assert.AreEqual('$(A);x;$(PATH)', ExpandeMacros('$(A);$(X);$(PATH)', ['PATH=y', 'X=x'], 'PATH'),
+    'ASalvo no se expande, y lo que la tabla no da se queda');
 end;
 
 initialization

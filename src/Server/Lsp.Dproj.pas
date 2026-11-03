@@ -1069,6 +1069,18 @@ function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): strin
 function MacrosReservadasDeMsbuild(const ACarpetaProyecto, ANombreProyecto, ACarpetaDelFichero: string): TArray<string>;
 { Las dos reservadas que son el path real del propio .dproj (V160e). }
 function MacrosDelFicheroDelProyecto(const ADprojPath: string): TArray<string>;
+{ EL expansor de $(X), el de msbuild y el de la tabla del IDE: cada $(Nombre)
+  de ATexto que APares da ('Nombre=Valor'; el nombre sin mirar mayusculas, y
+  el primer par que lo da) por su valor, en UNA pasada de izquierda a derecha.
+  Lo insertado no se vuelve a mirar, como msbuild (medido el 3-nov-2026: en un
+  proyecto en la carpeta Mide$(Config)x, $(MSBuildProjectDirectory) es esa
+  carpeta tal cual), y lo que la tabla no da se queda escrito, para que lo
+  niegue quien juzga. ASalvo: un nombre que no se expande (el de la propia
+  entrada, al resolver una tabla). Eran dos y sustituian par a par:
+  ExpandeReservadas, una pasada, e ExpandIdeMacros, cuatro, y los dos volvian
+  a mirar lo insertado (C17 del cierre de la 1.26). }
+function ExpandeMacros(const ATexto: string; const APares: TArray<string>;
+  const ASalvo: string = ''): string;
 { EL expansor de los macros de un valor de SALIDA del .dproj: $(Platform) y
   $(Config), que elige quien compila, mas las reservadas por EL lector
   (MacrosReservadasDeMsbuild). $(ProjectDir) ya no (V118: no reservada, no
@@ -3510,22 +3522,48 @@ begin
   end;
 end;
 
-{ Sustituye en ATexto cada $(nombre) que la tabla APares conoce
-  ('Nombre=Valor'), sin mirar mayusculas; lo que no esta en la tabla se deja
-  escrito para que lo niegue quien juzga (no verificable). }
-function ExpandeReservadas(const ATexto: string; const APares: TArray<string>): string;
-var
-  Par: string;
-  Eq: Integer;
-begin
-  Result := ATexto;
-  for Par in APares do
+function ExpandeMacros(const ATexto: string; const APares: TArray<string>;
+  const ASalvo: string): string;
+
+  // el valor del primer par que da ANombre, sin mirar mayusculas (las ASCII,
+  // como msbuild); False si ninguno lo da
+  function ValorDe(const ANombre: string; out AValor: string): Boolean;
   begin
-    Eq := Pos('=', Par);
-    if Eq > 1 then
-      Result := Result.Replace('$(' + Copy(Par, 1, Eq - 1) + ')',
-        Copy(Par, Eq + 1, MaxInt), [rfReplaceAll, rfIgnoreCase]);
+    for var Par in APares do
+    begin
+      var Igual := Pos('=', Par);
+      if (Igual > 1) and SameText(Copy(Par, 1, Igual - 1), ANombre) then
+      begin
+        AValor := Copy(Par, Igual + 1, MaxInt);
+        Exit(True);
+      end;
+    end;
+    Result := False;
   end;
+
+var
+  P, Q, Desde: Integer;
+  Nombre, Valor: string;
+begin
+  Result := '';
+  Desde := 1;
+  P := Pos('$(', ATexto);
+  while P > 0 do
+  begin
+    Q := Pos(')', ATexto, P + 2);
+    if Q = 0 then
+      Break;
+    Nombre := Copy(ATexto, P + 2, Q - P - 2);
+    if not SameText(Nombre, ASalvo) and ValorDe(Nombre, Valor) then
+    begin
+      Result := Result + Copy(ATexto, Desde, P - Desde) + Valor;
+      Desde := Q + 1;
+      P := Pos('$(', ATexto, Desde);
+    end
+    else
+      P := Pos('$(', ATexto, P + 2);
+  end;
+  Result := Result + Copy(ATexto, Desde, MaxInt);
 end;
 
 function MacrosReservadasDeMsbuild(const ACarpetaProyecto, ANombreProyecto, ACarpetaDelFichero: string): TArray<string>;
@@ -3560,7 +3598,7 @@ var
   Dir: string;
 begin
   Dir := ExtractFileDir(AProjectFile);
-  Result := ExpandeReservadas(APath,
+  Result := ExpandeMacros(APath,
     MacrosReservadasDeMsbuild(ACarpetaDelBuild, ANombreRaiz, Dir));
   if Result.Contains('$(') then
     Exit(''); // still macro-based (e.g. $(ProjectDir)): not verifiable here
@@ -3587,7 +3625,7 @@ end;
 function ExpandOutputMacros(const AValue, ADir, ABase, APlatform,
   AConfig: string): string;
 begin
-  Result := ExpandeReservadas(AValue,
+  Result := ExpandeMacros(AValue,
     MacrosReservadasDeMsbuild(ADir, ABase, '') +
     ['Platform=' + APlatform, 'Config=' + AConfig]);
 end;
@@ -4106,8 +4144,8 @@ begin
   // ProjectExtensions no lo lee msbuild en la pasada (revisor E, 21-oct-2026)
   for var I := 0 to High(Elementos) do
     if (V[I] = vSi) and (Elementos[I].Nombre = Tag) and EsDeGrupoDeLaRaiz(Elementos[I]) then
-      Result := ValorDeTramo(AXml, Elementos[I].Tramo).Trim.Replace('$(' + ATag + ')', Result,
-        [rfReplaceAll, rfIgnoreCase]); // el ultimo gana, con lo de antes dentro
+      Result := ExpandeMacros(ValorDeTramo(AXml, Elementos[I].Tramo).Trim,
+        [ATag + '=' + Result]); // el ultimo gana, con lo de antes dentro
 end;
 
 function UsadasAntesDeDefinirse(const AXml, ATag, AValor, APlatform, AConfig: string): TArray<string>;

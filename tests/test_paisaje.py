@@ -1017,13 +1017,12 @@ REGLAS = [
      [('Lsp.Patch.pas', 'ApplyBlockEdit')],
      'ExtractoDeLinea / LineaCitada (Lsp.Listas): LA cita de una linea en una respuesta, cortada y diciendolo'),
     # ---- C11 del revisor del paisaje del cierre de la 1.26: formatos que ninguna regla miraba
-    # una macro $(X) sustituida a mano. Los expansores son DOS, deuda declarada: ExpandIdeMacros (la tabla del IDE,
-    # con macros dentro de macros) y ExpandeReservadas (las propiedades reservadas de msbuild, una pasada); y
-    # EffectiveProperty lee $(ATag) como msbuild, lo que valia hasta ahi
-    ('una macro sustituida a mano', r"\.Replace\(\s*'\$\(",
-     [('Lsp.Discovery.pas', 'ExpandIdeMacros'), ('Lsp.Dproj.pas', 'ExpandeReservadas'),
-      ('Lsp.Dproj.pas', 'EffectiveProperty')],
-     'ExpandIdeMacros (Lsp.Discovery) y ExpandeReservadas (Lsp.Dproj): quien sustituye una macro'),
+    # una macro $(X) sustituida a mano. Los expansores eran DOS, deuda declarada (ExpandIdeMacros, cuatro pasadas, y
+    # ExpandeReservadas, una), mas el $(ATag) de EffectiveProperty, y sustituian par a par volviendo a mirar lo
+    # insertado; msbuild no lo mira (medido el 3-nov-2026). Ahora es UNO, sin Replace: la deuda, en cero (C17)
+    ('una macro sustituida a mano', r"\.Replace\(\s*'\$\(|StringReplace\([^,]+,\s*'\$\(",
+     [],
+     'ExpandeMacros (Lsp.Dproj): EL expansor de $(X), una pasada, lo insertado no se vuelve a mirar'),
     # la autorizacion de X de una sesion Wayland: la mascara de su fichero vive en el nodo, con su texto
     ('la autorizacion de X de Wayland a mano', r"mutter-Xwaylandauth",
      [('Mld.Sesion.pas', '*'), ('Mld.Textos.pas', '*')],
