@@ -1659,7 +1659,12 @@ begin
   var InfoV := InfoDeDproj(Xml);
   var Antes := VersionDelProyecto(Xml, InfoV.PlataformaPorDefecto, InfoV.ConfigPorDefecto);
   AntesNum := Antes.Numeros;
-  AntesKey := (if Antes.Clave <> '' then Antes.Clave else MsgText(SF_NINGUNO));
+  AntesKey := ONinguno(Antes.Clave);
+  // sin numeros en ESE build (los lleva el grupo de otro), lo que tenia es lo
+  // que dice la clave, como abajo sin ninguno en el fichero: decia "was  in the
+  // numbers" (H3c; revisor de correccion del cierre de la 1.26)
+  if AntesNum = '' then
+    AntesNum := AntesKey;
 
   // Sin numeros (un proyecto que nadie subio de 1.0.0.0) lo que tenia es lo
   // que decia la clave, y los cuatro entran en cada grupo que la lleva,

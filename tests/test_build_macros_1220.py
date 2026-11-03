@@ -203,8 +203,8 @@ try:
         '</PropertyGroup>' % os.path.basename(FUERA))
     r = build(proyecto)
     check('X14 un grupo con Condition sobre $( Config ), que msbuild aplica: la puerta juzga su search path de '
-          'fuera (ROJA: lo daba por no aplicado y compilaba con la unidad de fuera)',
-          mc.rechazado(r) and '<DCC_UnitSearchPath>' in r and not compila(r), r[:300])
+          'fuera, BUILD-050 (ROJA: lo daba por no aplicado y compilaba con la unidad de fuera)',
+          lectura_fuera(r), r[:300])
     # desde la carpeta del proyecto: in\Release\..\..\..\<FUERA> es BASE\<FUERA> (dentro, no existe), y
     # in\\..\..\..\<FUERA> (lo que lee msbuild, con A vacia) es FUERA
     con(prop('A', '$( Config )') + grupo('in\\$(A)\\..\\..\\..\\' + os.path.basename(FUERA)))
@@ -214,6 +214,15 @@ try:
     check('X15 A=$( Config ) en el search path: msbuild la lee vacia y llega a FUERA; la puerta no la da por '
           'Release: se niega',
           mc.rechazado(r) and not compila(r), r[:300])
+
+    # X16 una carpeta con $( en su nombre, de punta a punta: msbuild la lee tal cual (medido el 3-nov-2026 con msbuild:
+    # DIR=[...\Mide$(Config)x]) y la salida se buscaba en MideReleasex (C17 del cierre de la 1.26; su roja, la de
+    # LoInsertadoNoSeVuelveAExpandir en DUnitX: este check no la midio contra el build anterior)
+    MIDE = os.path.join(BASE, 'Mide$(Config)x')
+    srv.call('delphi_create', {'kind': 'project-console', 'name': 'Mide', 'dir': MIDE})
+    r = build(os.path.join(MIDE, 'Mide.dproj'))
+    check('X16 un proyecto en la carpeta Mide$(Config)x compila y su exe esta en esa carpeta, tal cual',
+          compila(r) and 'Mide$(Config)x' in (mc.como_json(r).get('output') or ''), detalle(r))
 finally:
     srv.cierra()
     mc.borra(BASE)

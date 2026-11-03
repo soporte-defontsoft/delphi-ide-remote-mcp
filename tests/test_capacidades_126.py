@@ -57,7 +57,9 @@ s.call('delphi_config', {'command': 'add-platform', 'platform': 'Linux64', 'proj
 t = s.call('delphi_build', {'project': DPROJ, 'platform': 'Linux64', 'config': 'Debug', 'target': 'Deploy',
                             'profile': 'mcp-e2e-noprof', 'verbosity': 'normal'}, t=400)
 r = mc.como_json(t)
-check('D1 fixture: el Deploy falla', r.get('success') is False, t[:600])
+# y falla en msbuild (sus errores), no antes: un Deploy negado por una puerta no nombraria la carpeta y el check de abajo
+# pasaria sin medir nada (revisor de tests del cierre)
+check('D1 fixture: el Deploy falla, y en msbuild', r.get('success') is False and bool(r.get('errors')), t[:600])
 check('D1 un Deploy que falla en una carpeta que se llama como el vigia no manda matar a nadie',
       'deployLockedNote' not in r, r.get('deployLockedNote'))
 
@@ -398,7 +400,7 @@ check('H3 ...y con los numeros descuadrados, la version del binario (la clave) y
       j.get('version') == '2.1.0.0' and '3.1.0.0' in (j.get('versionMismatch') or ''), str(j)[:400])
 # H3b la version es la del build por defecto, como la evalua msbuild: era el primer valor del fichero, y 102 de 2739
 # .dproj reales ensenaban otra que la del binario (C16 del cierre de la 1.26). Debug, la config por defecto, lleva la
-# suya en su grupo, detras de la de Base_Win32; la de los otros builds se dice aparte
+# suya en su grupo, detras de la de Base_Win64 (la plataforma por defecto); la de los otros builds se dice aparte
 t = s.call('delphi_config', {'command': 'set-property', 'project': DV, 'name': 'VerInfo_Keys', 'config': 'Debug',
                              'value': 'FileVersion=7.0.0.0;ProductVersion=7.0.0.0'})
 check('H3b fixture: Debug con su FileVersion', not mc.fallo(t), t[:300])
@@ -406,6 +408,18 @@ j = mc.como_json(s.call('delphi_config', {'command': 'view', 'project': DV}))
 check('H3b view dice la version del build por defecto (Debug), y la de los otros builds aparte',
       j.get('defaultConfig') == 'Debug' and j.get('version') == '7.0.0.0' and
       '2.1.0.0' in (j.get('versionElsewhere') or ''), str(j)[:500])
+# H3c el "was" de set-version cuando los numeros solo los lleva el grupo de OTRO build: el build por defecto no lee
+# ninguno, y decia "was  in the numbers and 1.0.0.0 in the keys" (revisor de correccion del cierre); sin numeros, lo
+# que tenia es lo que dice la clave
+V3c = os.path.join(JAIL, 'Ver3c')
+s.call('delphi_create', {'kind': 'project-vcl', 'dir': V3c, 'name': 'Ver3c'})
+DV3c = os.path.join(V3c, 'Ver3c.dproj')
+t = s.call('delphi_config', {'command': 'set-property', 'project': DV3c, 'name': 'VerInfo_MajorVer', 'value': '2',
+                             'config': 'Release'})
+check('H3c fixture: los numeros solo en Release', not mc.fallo(t), t[:300])
+t = s.call('delphi_config', {'command': 'set-version', 'project': DV3c, 'version': '3.0'})
+check('H3c set-version dice lo que tenia el build por defecto, la clave, sin un hueco en los numeros',
+      mc.es(t, 'SN_CONFIG_VERSION_OK_FMT') and 'was 1.0.0.0' in t and 'was  ' not in t, t[:300])
 
 # ---- R: lo que el revisor del paisaje de la 1.26 dejo para David, y entra (David, 2-nov: "no dejemos mierdas")
 # RD un create de un changeset que no es Pascal nace como el de textedit: en CRLF y sin un salto final que nadie
@@ -548,7 +562,7 @@ finally:
 DEV = os.path.join(os.path.dirname(ADB), 'Dev')
 quedan = os.listdir(DEV) if os.path.isdir(DEV) else ['(sin Dev)']
 check('RF2 una captura que falla en el dispositivo no deja alli su fichero (el rm, pase lo que pase)',
-      mc.fallo(res.get('c', '')) and not quedan, (quedan, res.get('c', '')[:300]))
+      mc.fallo(res.get('c', '')) and 'capture failed' in res.get('c', '') and not quedan, (quedan, res.get('c', '')[:300]))
 
 # RA un search path con prefijo de dispositivo que no es una unidad ni un UNC (\\?\GLOBALROOT\Device\...): la puerta
 # del build le quitaba el prefijo y juzgaba lo que quedaba, una ruta RELATIVA que caia dentro del proyecto, mientras
@@ -803,8 +817,11 @@ try:
     tarda = time.time() - t0
 finally:
     otro.cierra()
-check('CI9 un insert FMX cuyo layout no contesta acaba al plazo de layout (45 s), no al de un preview (75 s)',
-      mc.como_json(r).get('inserted') == 'Button1' and tarda < 65, '%.0f s: %s' % (tarda, r[:300]))
+# entre 40 y 65: espero al renderizador (si no corre, el insert acaba en segundos y pasaria igual; medido 47 s); el
+# plazo de un insert FMX es el de layout de un form VCL, LAYOUT_PLAZO_MS
+check('CI9 un insert FMX cuyo layout no contesta acaba a los 45 s de LAYOUT_PLAZO_MS, no a los 75 de un preview',
+      mc.como_json(r).get('inserted') == 'Button1' and 40 <= tarda < 65,
+      '%.0f s: %s' % (tarda, r[:300]))
 
 s.cierra()
 mc.borra(BASE)
