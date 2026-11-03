@@ -592,7 +592,7 @@ begin
     Result := Doc.Guarda;
     if Result <> '' then
       Exit;
-    Result := MsgFmt(SN_STYLES_PROP_SET_FMT, [IfThen(WasThere, MsgText(SF_STYLE_CAMBIADA), MsgText(SF_STYLE_ANADIDA)), Line.Trim,
+    Result := MsgFmt(SN_STYLES_PROP_SET_FMT, [IfThen(WasThere, MsgText(SF_STYLE_CAMBIADA), MsgText(SF_STYLE_ANADIDA)), LineaCitada(Line),
       AStyle, IfThen(AChild <> '', '/' + AChild, ''), TPath.GetFileName(Doc.Path)]);
     if Nota <> '' then
       Result := Result + #10 + Nota;

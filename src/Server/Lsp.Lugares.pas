@@ -241,7 +241,7 @@ var
 procedure CargaLaBiblioteca;
 var
   Info: TRadStudioInfo;
-  List, Vars: TStringList;
+  List: TStringList;
   Plat, Item, Expanded: string;
 begin
   List := TStringList.Create;
@@ -254,62 +254,50 @@ begin
     if Info.Found then
     begin
       List.Add(IncludeTrailingPathDelimiter(TPath.GetFullPath(Info.RootDir)));
-      Vars := TStringList.Create;
-      try
-        IdeMacroVars(Info, Vars);
+      // The catalog repositories THEMSELVES, whole: every GetIt package
+      // lives there (FmxLinux, LockBox...), and the Library Search Path
+      // only points at its compiled Lib\ folder - what an agent actually
+      // wants to read is the sibling source\. Also covers the Android
+      // SDKs and the PAServer installers. Por EL lector de esa lista
+      // (CatalogosDelIde: la tabla del IDE y EL resolutor, solo completas)
+      for Item in CatalogosDelIde(Info) do
+      begin
+        Expanded := IncludeTrailingPathDelimiter(Item);
+        if List.IndexOf(Expanded) < 0 then
+          List.Add(Expanded);
+      end;
 
-        // The catalog repositories THEMSELVES, whole: every GetIt package
-        // lives there (FmxLinux, LockBox...), and the Library Search Path
-        // only points at its compiled Lib\ folder - what an agent actually
-        // wants to read is the sibling source\. Also covers the Android
-        // SDKs and the PAServer installers.
-        for Item in TArray<string>.Create(Vars.Values['BDSCatalogRepositoryAllUsers'],
-          Vars.Values['BDSCatalogRepository']) do
+      // ALL platforms registered for this install, never a fixed pair:
+      // Linux64, OSX64, Android64, iOSDevice64... each has its own path.
+      // Por EL lector de esa lista (IdePlatformLibraryPaths): aqui habia
+      // otra lectura del registro y otra expansion (regla del paisaje,
+      // 18-oct-2026; medido que daban lo mismo en las 13 plataformas)
+      for Plat in IdeLibraryPlatforms(Info.Version) do
+      begin
+        for Item in IdePlatformLibraryPaths(Info, Plat) do
         begin
-          // solo una completa (EL resolutor, sin carpeta): "\x" o "X:y" se
-          // resolvian contra el PROCESO del servidor
-          Expanded := RutaDesde('', Item);
-          if Expanded = '' then
-            Continue;
-          Expanded := IncludeTrailingPathDelimiter(Expanded);
-          if List.IndexOf(Expanded) < 0 then
-            List.Add(Expanded);
-        end;
-
-        // ALL platforms registered for this install, never a fixed pair:
-        // Linux64, OSX64, Android64, iOSDevice64... each has its own path.
-        // Por EL lector de esa lista (IdePlatformLibraryPaths): aqui habia
-        // otra lectura del registro y otra expansion (regla del paisaje,
-        // 18-oct-2026; medido que daban lo mismo en las 13 plataformas)
-        for Plat in IdeLibraryPlatforms(Info.Version) do
-        begin
-          for Item in IdePlatformLibraryPaths(Info, Plat) do
-          begin
-            try
-              Expanded := IncludeTrailingPathDelimiter(Item);
+          try
+            Expanded := IncludeTrailingPathDelimiter(Item);
+            if List.IndexOf(Expanded) < 0 then
+              List.Add(Expanded);
+            // A component's INSTALL ROOT is library territory too: the IDE
+            // registers its Source\ (or a per-platform Lib\), and next to
+            // it live Library\, Redist\, Examples\ - the native runtime
+            // libraries a deployment must ship (field 2026-08-22: OBR's
+            // libzbar.so in Library\Linux64, unreadable because only
+            // Source\ was registered). One level up, never a drive root,
+            // never above the IDE's own documents trees.
+            Expanded := ComponentRootOf(Expanded);
+            if Expanded <> '' then
+            begin
+              Expanded := IncludeTrailingPathDelimiter(Expanded);
               if List.IndexOf(Expanded) < 0 then
                 List.Add(Expanded);
-              // A component's INSTALL ROOT is library territory too: the IDE
-              // registers its Source\ (or a per-platform Lib\), and next to
-              // it live Library\, Redist\, Examples\ - the native runtime
-              // libraries a deployment must ship (field 2026-08-22: OBR's
-              // libzbar.so in Library\Linux64, unreadable because only
-              // Source\ was registered). One level up, never a drive root,
-              // never above the IDE's own documents trees.
-              Expanded := ComponentRootOf(Expanded);
-              if Expanded <> '' then
-              begin
-                Expanded := IncludeTrailingPathDelimiter(Expanded);
-                if List.IndexOf(Expanded) < 0 then
-                  List.Add(Expanded);
-              end;
-            except
-              // an unparseable entry never breaks the server
             end;
+          except
+            // an unparseable entry never breaks the server
           end;
         end;
-      finally
-        Vars.Free;
       end;
     end;
     GLibRoots := List.ToStringArray;

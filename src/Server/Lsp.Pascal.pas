@@ -145,9 +145,11 @@ function CondicionalDe(const ANombre: string): TCondicional;
 function DirectivaDeFicheroDe(const ANombre: string): TDirectivaDeFichero;
 
 // Si en ATexto[I] empieza una directiva, llave-dolar o parentesis-asterisco-
-// dolar: LA forma de abrir una, la de ClasesPascal. Un comentario que empieza
-// asi no es un comentario de nadie (Lsp.ProjectUnits lo miraba a mano, C12).
-function AbreDirectiva(const ATexto: string; I: Integer): Boolean;
+// dolar: LA forma de abrir una, la de ClasesPascal y DirectivasPascal. Un
+// comentario que empieza asi no es un comentario de nadie (Lsp.ProjectUnits lo
+// miraba a mano, C12). AMarca: la de DirectivasPascal ('%' para {%CLASSGROUP};
+// el lector de directivas la miraba a mano, revisor del paisaje del cierre).
+function AbreDirectiva(const ATexto: string; I: Integer; AMarca: Char = '$'): Boolean;
 
 // Los primeros AMaximo trozos de AArgumento, el argumento de una directiva de
 // fichero: {$R a.res a.rc} da dos, y {$R *.iPad.fmx IOS} el comodin y la
@@ -716,10 +718,8 @@ begin
     // una directiva; uno de // nunca lo es, y lo de dentro de un comentario
     // tampoco
     P := 0;
-    if (ATexto[I] = '{') and (I < Length(ATexto)) and (ATexto[I + 1] = AMarca) then
-      P := I + 2
-    else if (ATexto[I] = '(') and (I + 2 <= Length(ATexto)) and (ATexto[I + 2] = AMarca) then
-      P := I + 3;
+    if AbreDirectiva(ATexto, I, AMarca) then
+      P := I + (if ATexto[I] = '{' then 2 else 3);
     if P > 0 then
     begin
       Q := P;
@@ -776,9 +776,9 @@ begin
     Result := dfNinguna;
 end;
 
-function AbreDirectiva(const ATexto: string; I: Integer): Boolean;
+function AbreDirectiva(const ATexto: string; I: Integer; AMarca: Char): Boolean;
 begin
-  Result := (Copy(ATexto, I, 2) = '{$') or (Copy(ATexto, I, 3) = '(*$');
+  Result := (Copy(ATexto, I, 2) = '{' + AMarca) or (Copy(ATexto, I, 3) = '(*' + AMarca);
 end;
 
 function TrozosDeDirectiva(const AArgumento: string; AMaximo: Integer): TArray<TTrozoDeDirectiva>;

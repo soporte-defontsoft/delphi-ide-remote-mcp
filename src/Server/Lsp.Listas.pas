@@ -179,7 +179,7 @@ function PrincipioDeTexto(const ATexto: string; AMax: Integer): string;
   (V189). La de ExtractoDeLinea y la del eco numerado de delphi_edit
   (Lsp.Patch.EcoDeLinea), que cortaban cada uno a su manera, el extracto sin
   marca (C15 de la 1.26). }
-function LineaCitada(const ALinea: string; AMax: Integer): string;
+function LineaCitada(const ALinea: string; AMax: Integer = 120): string;
 { La linea ALinea (1-based) de ALineas como la nombra una respuesta: LineaCitada
   a 120. La de un error del parser, la de una forma que no es la del IDE, la
   de un uso que impide borrar, la que el lector de un form salto o la que su
@@ -522,7 +522,7 @@ end;
 
 function ExtractoDeLinea(const ALineas: TArray<string>; ALinea: Integer): string;
 begin
-  Result := LineaCitada(ALineas[ALinea - 1], 120);
+  Result := LineaCitada(ALineas[ALinea - 1]);
 end;
 
 function ColaDeSalida(const ATexto: string; AMaxLineas: Integer;

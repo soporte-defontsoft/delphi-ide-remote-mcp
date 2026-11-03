@@ -1243,10 +1243,8 @@ begin
           Resto := Resto + [Linea];
       if DijoOtraVersion(Dijo, SC_PROTOCOLO_VERSION, Result, ACodigo, SC_RC_USO, Vencido) then
       begin
-        if Dijo = '' then
-          Dijo := MsgText(SF_NINGUNO);
         ACodigo := SC_NO_CORRIO;
-        Exit(MsgFmt(SR_STYLES_CONVERSOR_OTRA_VERSION_FMT, [Dijo, SC_PROTOCOLO_VERSION]));
+        Exit(MsgFmt(SR_STYLES_CONVERSOR_OTRA_VERSION_FMT, [ONinguno(Dijo), SC_PROTOCOLO_VERSION]));
       end;
       Result := string.Join(#10, Resto);
       if ANombre <> '' then

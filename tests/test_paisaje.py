@@ -47,7 +47,16 @@ REGLAS = [
       # otra pregunta: anadir a una nota del vault, no nacer
       ('Mcp.Tools.Vault.pas', 'TVaultAppendTool.ExecuteWithParams')],
      'TextoQueNace (Lsp.Patch, V215): createunit, delphi_create y el create de un changeset'),
-    ('una lista vacia dicha a mano', r"'\(none\)'", [], 'ONinguno (Lsp.Texts)'),
+    # ...y el texto del catalogo puesto a mano tras un "si esta vacio" (cuatro sitios, dos de ellos nuevos en el cierre
+    # de la 1.26 con DijoOtraVersion: revisor del paisaje del cierre)
+    ('una lista vacia dicha a mano', r"'\(none\)'|MsgText\(\s*SF_NINGUNO\s*\)", [], 'ONinguno (Lsp.Texts)'),
+    # un contenedor creado y borrado a mano: el principio y el final de una corrida en un contenedor son AbreEtapa y
+    # CierraEtapa (C13 del cierre de la 1.26); ninguna regla miraba el par y el siguiente lo copiaria (revisor del
+    # paisaje del cierre)
+    # (DaSusClasesAlContenedor pregunta DENTRO de la caja de paquetes: sin carpeta de etapa que abrir ni recuperar)
+    ('un contenedor creado o borrado a mano', r"\b(?:CreaContenedor|BorraContenedor)\s*\(",
+     [('Lsp.Sandbox.pas', '*'), ('Lsp.FormRender.pas', 'DaSusClasesAlContenedor')],
+     'AbreEtapa / CierraEtapa (Lsp.Sandbox): el principio y el final de una corrida en un contenedor'),
     # revisor del paisaje de la 1.25: a mano en once sitios, y a dos se les olvido la columna
     ('una posicion escrita a mano', r"AddPair\(\s*'line0'\s*,\s*TJSONNumber", [('Lsp.Listas.pas', 'PonPosicion')],
      'PonPosicion (Lsp.Listas): line, line0 y character0 de una respuesta'),
@@ -382,8 +391,10 @@ REGLAS = [
      'DirectivaDeFicheroDe (Lsp.Pascal): que fichero nombra una directiva de fichero'),
     # ...y lo que ABRE una directiva, llave-dolar o parentesis-asterisco-dolar: lo de ClasesPascal, que la mudanza de
     # un uses volvia a mirar a mano tras un comentario (C12 del cierre de la 1.26)
+    # (AbreDirectiva compone la apertura con su marca desde el revisor del paisaje del cierre, que hallo el lector de
+    # directivas mirandola por indices: la casa ya no tiene el literal)
     ('lo que abre una directiva de Pascal a mano', r"'(?:\{|\(\*)\$'",
-     [('Lsp.Pascal.pas', 'AbreDirectiva')],
+     [],
      'AbreDirectiva (Lsp.Pascal): LA forma de abrir una directiva, la del clasificador ClasesPascal'),
     # el trozo unico de la casa (FragmentoUnico) es un INGREDIENTE: cada formato que lo lleva tiene su nombrador,
     # y esas son sus casas. La carpeta nueva de una operacion estaba escrita a mano en cuatro sitios (la etapa de
@@ -1903,6 +1914,7 @@ check('las fuentes del grupo se leen (83 unidades el 6-oct-2026: al menos 70)', 
 PLANTADO = {
     'un fichero que nace acabado en salto a mano': "  if not Body.EndsWith(CRLF) then X := 1;",
     'una lista vacia dicha a mano': "  L := IfThen(X = '', '(none)', X);",
+    'un contenedor creado o borrado a mano': "  CreaContenedor('x', AC);",
     'una posicion escrita a mano': "  O.AddPair('line0', TJSONNumber.Create(I));",
     'lo que ya estaba, comparado a mano': "  Estaban := Estaban + [L.Prop];",
     'los comandos de consulta de git, en otra lista': "  X := MatchText(C, ['status', 'diff', 'log']);",

@@ -5499,7 +5499,7 @@ begin
           if A.Visible then
             NotaVis := #10 + MsgText(SF_EDIT_VISIBLE_IGNORADO_PROGRAM);
           Exit(MsgFmt(SK_EDIT_INSERT_RUTINA_DPR_FMT,
-            [IAfter + 1, AnclaDpr.Trim, RDpr, NotaVis]));
+            [IAfter + 1, LineaCitada(AnclaDpr), RDpr, NotaVis]));
         end;
 
         // LA frontera: donde acaban las declaraciones del implementation, por
@@ -5657,7 +5657,7 @@ begin
             end;
           end;
           Exit(MsgFmt(SK_EDIT_INSERT_RUTINA_ANTES_FMT,
-            [FrontIdx + 1, FrontLine.Trim, R, Extra]));
+            [FrontIdx + 1, LineaCitada(FrontLine), R, Extra]));
         end;
 
         // insert = 'metodo'
@@ -5917,10 +5917,10 @@ begin
         end;
         if DeclNota <> '' then
           Exit(MsgFmt(SK_EDIT_INSERT_METODO_SOLO_IMPL_FMT,
-            [A.ClassName_, DeclNota, PrincipioDeTexto(FirmaCual, 70), R2]) + NotaCabecera);
+            [A.ClassName_, DeclNota, LineaCitada(FirmaCual, 70), R2]) + NotaCabecera);
         Exit(MsgFmt(SK_EDIT_INSERT_METODO_DOS_MITADES_FMT,
           [A.ClassName_, IfThen(NotaPublished <> '', #10'  ' + NotaPublished, ''),
-           DeclLinea.Trim, R1, PrincipioDeTexto(FirmaCual, 70), R2]));
+           LineaCitada(DeclLinea), R1, LineaCitada(FirmaCual, 70), R2]));
       end;
 
       // ---------- DELETE LINE ----------
@@ -6401,7 +6401,7 @@ begin
         if (HitIdx > 0) and (Lines[HitIdx - 1].Trim <> '') and
            not EsSoloEstructura(NewFirst) and
            (Lines[HitIdx - 1].Trim = NewFirst.Trim) then
-          Warnings.Add(MsgFmt(SN_EDIT_DUP_ABOVE_FMT, [HitIdx, NewFirst.Trim]));
+          Warnings.Add(MsgFmt(SN_EDIT_DUP_ABOVE_FMT, [HitIdx, LineaCitada(NewFirst)]));
         // Con un rango, la linea de debajo esta DENTRO de lo que se va: no
         // es una duplicacion, es material a punto de desaparecer.
         // El numero es el de la linea en el fichero RESULTANTE (el que la
@@ -6410,7 +6410,7 @@ begin
            not EsSoloEstructura(LastNew) and
            (Lines[HitIdx + 1].Trim = LastNew.Trim) then
           Warnings.Add(MsgFmt(SN_EDIT_DUP_BELOW_FMT,
-            [HitIdx + Length(Nuevas) + 1, LastNew.Trim]));
+            [HitIdx + Length(Nuevas) + 1, LineaCitada(LastNew)]));
       end;
     end;
 

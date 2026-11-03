@@ -1102,9 +1102,9 @@ var
           // un control sin tamano en el .dfm tiene el de su constructor: lo
           // que deja el insert de delphi_designer, como el IDE
           if not HasW and not HasH and SameText(Align, 'alNone') and EsControl(Kid) then
-            Unknown.Add(MsgFmt(SF_DSGN_TAMANO_DEL_CONSTRUCTOR_FMT, [Nm, Cls, Kid.StartLine]))
+            Unknown.Add(MsgFmt(SF_DSGN_TAMANO_DEL_CONSTRUCTOR_FMT, [Nm, Cls, DondeDeCaja(Kid.StartLine, '')]))
           else
-            Unknown.Add(MsgFmt(SF_DSGN_NO_LLEVA_EN_DFM_FMT, [Nm, Cls, Kid.StartLine,
+            Unknown.Add(MsgFmt(SF_DSGN_NO_LLEVA_EN_DFM_FMT, [Nm, Cls, DondeDeCaja(Kid.StartLine, ''),
               IfThen(NeedW and not HasW, 'Width', 'Height'), Align]));
       end;
       if W < 0 then W := 0;
@@ -1133,7 +1133,7 @@ var
         Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := RT + MgnT;
         Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RT + MgnT + H;
         if AKnown and (RT + MgnT + H + MgnB > RB) then
-          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ALTO_FUERA_FMT, [Nm, Kid.StartLine,
+          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ALTO_FUERA_FMT, [Nm, DondeDeCaja(Kid.StartLine, ''),
             AWhere, H, Max(0, RB - RT - MgnT)]));
         RT := Min(RB, RT + MgnT + H + MgnB);
       end
@@ -1142,7 +1142,7 @@ var
         Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := Max(RT, RB - MgnB - H);
         Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RB - MgnB;
         if AKnown and (RB - MgnB - H - MgnT < RT) then
-          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ALTO_FMT, [Nm, Kid.StartLine, AWhere, H, Max(0, RB - RT - MgnB)]));
+          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ALTO_FMT, [Nm, DondeDeCaja(Kid.StartLine, ''), AWhere, H, Max(0, RB - RT - MgnB)]));
         RB := Max(RT, RB - MgnB - H - MgnT);
       end
       else if SameText(Align, 'alLeft') then
@@ -1150,7 +1150,7 @@ var
         Kids[Cnt].X1 := RL + MgnL; Kids[Cnt].Y1 := RT + MgnT;
         Kids[Cnt].X2 := RL + MgnL + W; Kids[Cnt].Y2 := RB - MgnB;
         if AKnown and (RL + MgnL + W + MgnR > RR) then
-          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ANCHO_FMT, [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL - MgnL)]));
+          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ANCHO_FMT, [Nm, DondeDeCaja(Kid.StartLine, ''), AWhere, W, Max(0, RR - RL - MgnL)]));
         RL := Min(RR, RL + MgnL + W + MgnR);
       end
       else if SameText(Align, 'alRight') then
@@ -1158,7 +1158,7 @@ var
         Kids[Cnt].X1 := Max(RL, RR - MgnR - W); Kids[Cnt].Y1 := RT + MgnT;
         Kids[Cnt].X2 := RR - MgnR; Kids[Cnt].Y2 := RB - MgnB;
         if AKnown and (RR - MgnR - W - MgnL < RL) then
-          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ANCHO_FMT, [Nm, Kid.StartLine, AWhere, W, Max(0, RR - RL - MgnR)]));
+          NoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ANCHO_FMT, [Nm, DondeDeCaja(Kid.StartLine, ''), AWhere, W, Max(0, RR - RL - MgnR)]));
         RR := Max(RL, RR - MgnR - W - MgnL);
       end
       else if SameText(Align, 'alClient') then
@@ -1220,8 +1220,8 @@ var
                (Kids[K].Y1 < Kids[J].Y2) and (Kids[J].Y1 < Kids[K].Y2) then
             begin
               if Kids[K].Client and Kids[J].Client then
-                Overlap.Add(MsgFmt(SF_DSGN_AMBOS_ALCLIENT_FMT, [Kids[K].Nm, Kids[K].Line,
-                  Kids[J].Nm, Kids[J].Line, AWhere]))
+                Overlap.Add(MsgFmt(SF_DSGN_AMBOS_ALCLIENT_FMT, [Kids[K].Nm, DondeDeCaja(Kids[K].Line, ''),
+                  Kids[J].Nm, DondeDeCaja(Kids[J].Line, ''), AWhere]))
               else
                 Overlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT,
                   [Kids[K].Nm, DondeDeCaja(Kids[K].Line, ''), Kids[J].Nm, DondeDeCaja(Kids[J].Line, ''), AWhere,

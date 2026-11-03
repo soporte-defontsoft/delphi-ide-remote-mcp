@@ -2282,7 +2282,7 @@ begin
         ['section', Params.Section, CFG_SECTION_POR_DEFECTO], SuyosG, VaConG);
       if SobraG <> '' then
         Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [SobraG, 'view (.groupproj)',
-          'view (.groupproj)', MsgText(SF_NINGUNO)]) + VaConG);
+          'view (.groupproj)', ONinguno('')]) + VaConG); // no toma ninguno
       Exit(ViewGroup(Proj));
     end;
     // Las de un grupo (1.6.0): add-project y remove-project escriben lo que

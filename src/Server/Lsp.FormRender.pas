@@ -1704,7 +1704,13 @@ begin
       // repetido: el primero, como el cargador
       // la de lo compilado, la que el IDE dice para Win32 (la de los
       // ayudantes): era $(BDSCOMMONDIR)\Bpl compuesto aqui (C15 de la 1.26)
-      for var D in IdePlatformLibraryPaths(AInfo, 'Win32', 'Package DPL Output') do
+      var Bpls := IdePlatformLibraryPaths(AInfo, 'Win32', 'Package DPL Output');
+      // sin ese valor (o uno que no se resuelve), la que usa el IDE sin el:
+      // $(BDSCOMMONDIR)\Bpl, la que se miraba antes (revisor de correccion del
+      // cierre de la 1.26)
+      if (Length(Bpls) = 0) and (BdsCommonDir(AInfo) <> '') then
+        Bpls := [TPath.Combine(BdsCommonDir(AInfo), 'Bpl')];
+      for var D in Bpls do
         MiraCarpeta(D);
       for var P in APaquetes do
         MiraCarpeta(TPath.GetDirectoryName(P));
@@ -2034,9 +2040,7 @@ begin
     // codigo que no es de los suyos no es eso, y sigue por su rama
     if DijoOtraVersion(Result.Protocolo, FR_PROTOCOLO_VERSION, Salida, Codigo, FR_RC_TIMEOUT, Vencido) then
     begin
-      var Dijo := Result.Protocolo;
-      if Dijo = '' then
-        Dijo := MsgText(SF_NINGUNO);
+      var Dijo := ONinguno(Result.Protocolo);
       Result := Default(TRespuestaRender);
       Result.Fallo := MsgFmt(SR_DESIGNER_RENDER_OTRA_VERSION_FMT, [Nombre, Dijo, FR_PROTOCOLO_VERSION]);
       Exit;

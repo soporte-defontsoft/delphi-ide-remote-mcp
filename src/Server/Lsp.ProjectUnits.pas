@@ -3951,13 +3951,24 @@ var
   Propiedades, Items, Plataformas, Configs, Definidas: TArray<string>;
   Info: TDprojInfo;
 
-  // la propiedad por la que empieza un trozo ($(X)...), '' si no empieza asi
+  // la propiedad por la que empieza un trozo ($(X)...), '' si no empieza asi:
+  // el primer nombre de EL recorrido (Lsp.Dproj.RecorreMacros; aqui se buscaba
+  // el ')' a mano, revisor del paisaje del cierre de la 1.26)
   function PropiedadDelTrozo(const T: string): string;
+  var
+    Parado: Boolean;
   begin
     Result := '';
-    var Q := Pos(')', T);
-    if T.StartsWith('$(') and (Q > 3) then
-      Result := Copy(T, 3, Q - 3);
+    if not T.StartsWith('$(') then
+      Exit;
+    var Primero := '';
+    RecorreMacros(T,
+      function(const ANombre: string; out AV: string): TAccionDeMacro
+      begin
+        Primero := ANombre;
+        Result := amPara;
+      end, Parado);
+    Result := Primero;
   end;
 
   // un trozo ya expandido, resuelto desde ABase; '' si no se sabe a donde

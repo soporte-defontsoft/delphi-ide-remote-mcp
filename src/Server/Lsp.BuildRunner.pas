@@ -1328,12 +1328,12 @@ begin
     begin
       if EsRutaAMedias(D.Ruta) then
         Exit(MsgFmt(SR_BUILD_INCLUDE_NO_VERIFICABLE_FMT,
-          [D.Texto.Trim, TPath.GetFileName(AFichero)]));
+          [LineaCitada(D.Texto), TPath.GetFileName(AFichero)]));
       Continue; // no es una ruta: dcc tampoco la abre
     end;
     if ReadPathDenied(Cand) <> '' then
       Exit(MsgFmt(SR_BUILD_INCLUDE_OUTSIDE_FMT,
-        [D.Texto.Trim, TPath.GetFileName(AFichero)]));
+        [LineaCitada(D.Texto), TPath.GetFileName(AFichero)]));
   end;
 end;
 
@@ -2848,11 +2848,11 @@ begin
           // IfThen evalua los DOS brazos: con un linker sin --sysroot (Android)
           // Groups[1] lanzaba "Index out of bounds (1)" y tumbaba la respuesta
           // entera del build con verbosity=normal (medido 2026-09-23, G.23).
-          var Sysroot := MsgText(SF_NINGUNO);
+          var Sysroot := '';
           if MSys.Success then
             Sysroot := MSys.Groups[1].Value;
           ALinea := MsgFmt(SF_BUILD_LINKER_RESUMIDA_FMT,
-            [Sysroot,
+            [ONinguno(Sysroot),
              TRegEx.Matches(ALinea, '(?:^|\s)-L\s*\S+').Count]);
         end;
         Result := True;

@@ -185,24 +185,16 @@ end;
   and every CatalogRepository\PAServer_for_* (GetIt). }
 procedure CollectPackageDirs(const AInfo: TRadStudioInfo; ADirs: TStrings);
 var
-  Vars: TStringList;
   Cat, Sub: string;
 begin
   ADirs.Add(TPath.Combine(SinBarraFinal(AInfo.RootDir), 'PAServer'));
-  Vars := TStringList.Create;
-  try
-    // LA tabla de macros del IDE (IdeMacroVars): la clave sola no trae
-    // $(BDSCatalogRepository), el del usuario, y ese no se miraba (C19 del
-    // cierre de la 1.26)
-    IdeMacroVars(AInfo, Vars);
-    for Cat in TArray<string>.Create(Vars.Values['BDSCatalogRepositoryAllUsers'],
-      Vars.Values['BDSCatalogRepository']) do
-      if (Cat <> '') and TDirectory.Exists(Cat) then
-        for Sub in TDirectory.GetDirectories(Cat, 'PAServer_for_*') do
-          ADirs.Add(Sub);
-  finally
-    Vars.Free;
-  end;
+  // por EL lector de los catalogos (CatalogosDelIde: la tabla del IDE y EL
+  // resolutor): la clave sola no traia el del usuario, y el valor crudo se
+  // juzgaba contra la carpeta del proceso (C19; revisor del paisaje del cierre)
+  for Cat in CatalogosDelIde(AInfo) do
+    if TDirectory.Exists(Cat) then
+      for Sub in TDirectory.GetDirectories(Cat, 'PAServer_for_*') do
+        ADirs.Add(Sub);
 end;
 
 function ListPackages: string;

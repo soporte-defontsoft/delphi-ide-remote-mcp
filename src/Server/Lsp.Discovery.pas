@@ -437,6 +437,14 @@ function PlataformaDelIde(const ARootDir: string): string;
   the library zone is built from. ADest receives Name=Value pairs. }
 procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
 
+{ Las carpetas de los catalogos de GetIt de una instalacion, la de todos y la
+  del usuario, de LA tabla (IdeMacroVars) y por EL resolutor: solo una
+  completa (un "\x" o un "X:y" se resolvian contra el PROCESO del servidor),
+  sin repetir. La zona de lectura (Lsp.Lugares) y los instaladores de PAServer
+  componian cada uno la lista, y PAServer miraba el valor crudo (revisor del
+  paisaje del cierre de la 1.26). }
+function CatalogosDelIde(const AInfo: TRadStudioInfo): TArray<string>;
+
 { La tabla de macros con que se lee una ruta de UN proyecto: la del IDE, la
   plataforma y la configuracion del build cuando se saben ('' = sin ellas) y
   las reservadas de msbuild del .dproj (MacrosReservadasDeMsbuild). Los ajustes
@@ -1665,6 +1673,26 @@ begin
   // deja msbuild. ExpandIdeMacros daba cuatro pasadas al TEXTO y volvia a
   // mirar lo insertado (C17 del cierre de la 1.26)
   ResuelveAnidadas(ADest, DelIde);
+end;
+
+function CatalogosDelIde(const AInfo: TRadStudioInfo): TArray<string>;
+var
+  Vars: TStringList;
+begin
+  Result := [];
+  Vars := TStringList.Create;
+  try
+    IdeMacroVars(AInfo, Vars);
+    for var Item in TArray<string>.Create(Vars.Values['BDSCatalogRepositoryAllUsers'],
+      Vars.Values['BDSCatalogRepository']) do
+    begin
+      var Ruta := RutaDesde('', Item);
+      if (Ruta <> '') and (IndiceDeRuta(Ruta, Result) < 0) then
+        Result := Result + [Ruta];
+    end;
+  finally
+    Vars.Free;
+  end;
 end;
 
 function LibDelIde(const AInfo: TRadStudioInfo; const APlat: string): string;

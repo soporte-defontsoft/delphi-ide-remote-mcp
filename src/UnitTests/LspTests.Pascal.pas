@@ -583,6 +583,9 @@ begin
   Assert.IsFalse(AbreDirectiva('{ $R }', 1), 'un comentario con un dolar dentro');
   Assert.IsFalse(AbreDirectiva('(* $ *)', 1), 'otro');
   Assert.IsFalse(AbreDirectiva('{', 1), 'el final del texto');
+  // la marca de DirectivasPascal, que miraba la apertura a mano
+  Assert.IsTrue(AbreDirectiva('{%CLASSGROUP ''x''}', 1, '%'), 'llave-porcentaje');
+  Assert.IsFalse(AbreDirectiva('{$R a}', 1, '%'), 'otra marca no es esta');
 end;
 
 initialization

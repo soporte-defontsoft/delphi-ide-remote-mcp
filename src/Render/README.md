@@ -255,7 +255,7 @@ them. A component that waits - a design-time connection with nothing to open - e
 at the helper's budget with `RENDER-007` (measured 2026-10-14 with a `TFDConnection`
 set to `Connected = True` and no database to open: 60 s, nothing written, no process
 left). Loading the IDE's design packages has a budget of its own, `--packagestimeout`
-(50 s from the server for a preview, 30 s for `layout`, inside what an MCP client waits): a helper still loading them
+(50 s from the server for a preview, 30 s for a VCL form's `layout`, inside what an MCP client waits): a helper still loading them
 then answers `RENDER-027` with how many it loaded and the one it was on (a package that
 hangs while it loads is named twice in a row). That is how a first load ends:
 Microsoft Defender checks each design package it has not seen under its current

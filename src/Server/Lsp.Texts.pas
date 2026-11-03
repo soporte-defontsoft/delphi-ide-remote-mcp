@@ -11988,7 +11988,7 @@ const
   { view: la version es la del build por defecto; otros builds del proyecto
     (otra plataforma u otra configuracion) llevan otra (C16 de la 1.26) }
   SF_CFG_VERSION_EN_OTROS_FMT =
-    '%s in other platforms or configurations of this project (version is the ' +
+    '%s written for other platforms or configurations of this project (version is the ' +
     'default build''s; set-version writes the same one in all of them)';
 
   { set-version en un proyecto que no incluye la version en sus binarios: el
@@ -12194,24 +12194,24 @@ const
   // un control sin Width/Height en el .dfm: el tamano de su constructor (lo
   // deja asi el insert de delphi_designer; antes se saltaba como no visual)
   SF_DSGN_TAMANO_DEL_CONSTRUCTOR_FMT =
-    '%s: %s (line %d) carries no Width/Height: it takes the size its ' +
+    '%s: %s (%s) carries no Width/Height: it takes the size its ' +
     'constructor gives, which is not in the .dfm and is not measured here ' +
     '(command=preview shows it)';
 
   SF_DSGN_NO_LLEVA_EN_DFM_FMT =
-    '%s: %s (line %d) has no %s in the .dfm; with align %s it is needed ' +
+    '%s: %s (%s) has no %s in the .dfm; with align %s it is needed ' +
     'to know where it ends';
 
   SF_DSGN_NO_CABE_ALTO_FUERA_FMT =
-    '%s (line %d) does not fit entirely in "%s": of %d px of height only ' +
+    '%s (%s) does not fit entirely in "%s": of %d px of height only ' +
     '%d are visible, the rest is outside';
 
   SF_DSGN_NO_CABE_ALTO_FMT =
-    '%s (line %d) does not fit entirely in "%s": of %d px of height only ' +
+    '%s (%s) does not fit entirely in "%s": of %d px of height only ' +
     '%d are visible';
 
   SF_DSGN_NO_CABE_ANCHO_FMT =
-    '%s (line %d) does not fit entirely in "%s": of %d px of width only ' +
+    '%s (%s) does not fit entirely in "%s": of %d px of width only ' +
     '%d are visible';
 
   SF_DSGN_OCUPA_SE_SALE_FMT =
@@ -12219,16 +12219,17 @@ const
     'x %d: it sticks out and that part is not visible';
 
   SF_DSGN_AMBOS_ALCLIENT_FMT =
-    '%s (line %d) and %s (line %d) are both alClient in "%s": the VCL ' +
+    '%s (%s) and %s (%s) are both alClient in "%s": the VCL ' +
     'gives the WHOLE rectangle to both, so they cover each other 100%%';
 
   SF_DSGN_SE_SOLAPAN_FMT =
     '%s (%s) and %s (%s) overlap in "%s": they share from ' +
     '(%d,%d) to (%d,%d), one covers the other';
 
-  // donde esta escrito un control en SF_DSGN_LADO_A_CERO_FMT, SF_DSGN_OCUPA_SE_SALE_FMT
-  // y SF_DSGN_SE_SOLAPAN_FMT (DondeDeCaja): su linea en el form, o su linea y el
-  // fichero que lo escribe (un frame en linea, un ancestro)
+  // donde esta escrito un control en los avisos de layout (DondeDeCaja): su linea
+  // en el form, o su linea y el fichero que lo escribe (un frame en linea, un
+  // ancestro). Seis avisos VCL escribian aun '(line %d)' a mano (revisor del
+  // paisaje del cierre de la 1.26)
   SF_DSGN_EN_LINEA_FMT =
     'line %d';
   SF_DSGN_EN_LINEA_DE_FMT =

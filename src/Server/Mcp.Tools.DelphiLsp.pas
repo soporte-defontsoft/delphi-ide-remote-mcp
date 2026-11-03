@@ -789,8 +789,7 @@ begin
     // exactamente para lo que estan.
     if Decl.EndsWith(';') then
       Decl := Decl.Substring(0, Decl.Length - 1);
-    if Decl.Length > 110 then
-      Decl := PrincipioDeTexto(Decl, 110) + '...';
+    Decl := LineaCitada(Decl, 110); // EL corte con su marca (Lsp.Listas)
     Result := Format('%s @%d', [Decl, SymLine1(ANode)]);
   end
   else
