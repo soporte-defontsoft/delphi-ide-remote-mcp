@@ -263,5 +263,22 @@ for etiqueta, nombre, cambio in (
           mc.rechazado(r) and mc.abre(r, 'SR_CONFIG_VERSION_CLAVE_NO_REESCRIBIBLE_FMT') and '1.0.0.0' in r, r[:300])
     check(etiqueta + ': ...y no se escribe nada', open(P, 'rb').read() == b, '')
 
+# ---- V17 la clave que el escritor no reescribe en OTRO build que el de por defecto (revisor del paisaje del
+# parche 1.26.1): la consola lleva la clave en Base_Win32 y en Base_Win64; con la del build que NO es el de por
+# defecto en un CDATA, set-version releia solo el de por defecto, contestaba OK y ese otro build compilaba con la
+# version vieja. Ahora relee CADA build que compila el proyecto: CFG-146 y nada escrito.
+P = crea('project-console', 'Cd17')
+defecto = mc.como_json(S.call('delphi_config', {'project': P, 'command': 'view'})).get('defaultPlatform', '')
+otro = {'Win32': 'Win64', 'Win64': 'Win32'}.get(defecto, '')
+check('V17 premisa: el de por defecto es Win32 o Win64 y el otro lleva su clave', otro != ''
+      and grupos_con(mc.lee(P), 'FileVersion=1.0.0.0') == ['Base_Win32', 'Base_Win64'], defecto)
+b = reescribe(P, lambda x: re.sub(r"(<PropertyGroup Condition=\"'\$\(Base_%s\)'!=''\">.*?<VerInfo_Keys>)([^<]*)(</VerInfo_Keys>)"
+                                  % otro, r'\1<![CDATA[\2]]>\3', x, count=1, flags=re.S))
+check('V17 premisa: solo la clave de Base_%s va en un CDATA' % otro, b.count(b'<![CDATA[') == 1, '')
+r = set_version(P)
+check('V17 la clave en un CDATA en el build que no es el de por defecto: CFG-146 con lo que ese build toma (1.0.0.0)',
+      mc.rechazado(r) and mc.abre(r, 'SR_CONFIG_VERSION_CLAVE_NO_REESCRIBIBLE_FMT') and '1.0.0.0' in r, r[:300])
+check('V17 ...y no se escribe nada', open(P, 'rb').read() == b, '')
+
 S.cierra()
 mc.fin('set-version 1.20.1')

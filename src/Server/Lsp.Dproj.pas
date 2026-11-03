@@ -55,6 +55,12 @@ type
       desactivadas). La lista de Declara, del juez de plataforma, de lo que el
       build lee al mover y de add-searchpath: estaba a mano en dos sitios. }
     function Activas: TArray<string>;
+    { CADA build que compila: sus plataformas (Activas) por sus configuraciones
+      (Compilables), con la de por defecto donde una lista sale vacia. EL
+      recorrido de "todos sus builds": lo que el build lee al mover,
+      add-searchpath y la relectura de set-version, que solo miraba el de por
+      defecto (revisor del paisaje del parche 1.26.1). }
+    procedure SusBuilds(out APlataformas, AConfigs: TArray<string>);
     { True if this project's framework can target APlatform. VCL is Windows
       only; FMX and non-visual (console/None) cross platforms. }
     function CanTarget(const APlatform: string; out AReason: string): Boolean;
@@ -1959,6 +1965,16 @@ begin
   for var P in Platforms do
     if P.Enabled then
       Result := Result + [P.Name];
+end;
+
+procedure TDprojInfo.SusBuilds(out APlataformas, AConfigs: TArray<string>);
+begin
+  APlataformas := Activas;
+  if Length(APlataformas) = 0 then
+    APlataformas := TArray<string>.Create(PlataformaPorDefecto);
+  AConfigs := Compilables;
+  if Length(AConfigs) = 0 then
+    AConfigs := TArray<string>.Create(ConfigPorDefecto);
 end;
 
 function DprojDe(const AProject: string): string;

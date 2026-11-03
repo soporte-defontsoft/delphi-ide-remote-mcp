@@ -1796,8 +1796,9 @@ end;
   lee: el ultimo del documento (un $(A)\..\fuera con A=.. y luego A=x), el
   de la tabla con la propiedad redefinida por el proyecto, el definido
   despues del uso. Resuelto contra la carpeta del proyecto, y juzgado por la
-  puerta de leer con los lugares del motor (la jaula, el IDE y su
-  biblioteca: lo mismo que dcc y brcc32 van a abrir). Se juzga exista o no:
+  puerta de leer con los lugares del build (Lsp.Patch.LUGARES_DEL_BUILD: la
+  jaula y la biblioteca, sin los lugares del IDE desde A9 de la 1.27: lo
+  mismo que dcc y brcc32 van a abrir). Se juzga exista o no:
   negar solo lo que existe seria un oraculo de fuera. Lo que no es una ruta
   (un define, una clave de version) no lo abre nadie y se salta. Y el .rc de
   un RcCompile, por EL lector del .rc. Medido en la 1.20.1: un RcCompile y
@@ -1953,7 +1954,11 @@ var
     // texto y citaba sus bytes en la negativa (un proyecto real, 21-oct-2026)
     if SameText(AValor.Elemento, 'RcCompile') and TFile.Exists(Cand) then
     begin
-      var Rc := RcLecturasDenegadas(Cand);
+      // con el juez de lo que el build lee: con el de la jaula del agente, sin
+      // zona de biblioteca, un .rc que nombraba un fichero de la instalacion
+      // daba BUILD-052 y ese mismo fichero en un $R o un icono pasaba (F9 de
+      // test_build_lee_ide_127; revisor del paisaje del parche 1.26.1)
+      var Rc := RcLecturasDenegadas(Cand, '', '', LUGARES_DEL_BUILD);
       if Rc <> '' then
         Exit(MsgFmt(SR_BUILD_RC_FMT,
           [ATrozo, TPath.GetFileName(AFichero), Rc]));
@@ -2394,11 +2399,11 @@ begin
   // ...": heredaba el entorno ENTERO del servidor (su configuracion incluida)
   // y cmd buscaba 'msbuild' PRIMERO en su cwd, la carpeta del proyecto: un
   // msbuild.bat plantado alli lo ejecutaba el servidor (medido el 13-oct
-  // contra produccion). Ahora el entorno de rsvars.bat lo pone EL lector
-  // (VariablesDeRsVars) sin las DELPHI_MCP_* (EntornoSinConfiguracion, el de
-  // delphi_test y git), y msbuild.exe va por su RUTA, buscada solo en el PATH
-  // de ese entorno (ProgramaEnPath). Antes del cerrojo: si falta, no se lanza
-  // nada.
+  // contra produccion). Ahora el entorno es el del build (EntornoDelBuild: la
+  // tabla de VariablesDelBuild, rsvars.bat con la del IDE encima, sin las
+  // DELPHI_MCP_*), y msbuild.exe va por su RUTA, buscada solo en el PATH que
+  // pone rsvars.bat, el de la instalacion (ProgramaEnPath). Antes del cerrojo:
+  // si falta, no se lanza nada.
   var VarsRs := VariablesDeRsVars(Info);
   var PathRs := '';
   for var V in VarsRs do

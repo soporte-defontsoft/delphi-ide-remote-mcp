@@ -906,14 +906,9 @@ begin
       // los builds a los que se aplica: la plataforma del comando, o las que
       // compila el proyecto (el grupo base), por cada configuracion que compila
       Proyecto := ReadDproj(ADproj);
-      Plats := [APlat];
-      if APlat = '' then
-        Plats := Proyecto.Activas;
-      if Length(Plats) = 0 then
-        Plats := [Proyecto.PlataformaPorDefecto];
-      Cfgs := Proyecto.Compilables;
-      if Length(Cfgs) = 0 then
-        Cfgs := [Proyecto.ConfigPorDefecto];
+      Proyecto.SusBuilds(Plats, Cfgs);
+      if APlat <> '' then
+        Plats := [APlat];
       // EL lector de la tabla del proyecto, la del build (V205; A2 de la 1.27)
       MacrosDelProyecto(DiscoverRadStudio, TPath.GetDirectoryName(ADproj),
         TPath.GetFileNameWithoutExtension(ADproj), '', '', Vars);
@@ -1792,9 +1787,18 @@ begin
   // reescribir en su sitio (un CDATA, un comentario, una entidad en el nombre)
   // y el binario saldria con la vieja mientras la respuesta decia OK. Nada se
   // escribe (A3 de la 1.27)
-  var Despues := VersionDelProyecto(Xml, InfoV.PlataformaPorDefecto, InfoV.ConfigPorDefecto);
-  if (Despues.Clave <> '') and (Despues.Clave <> Cuatro) then
-    Exit(MsgFmt(SR_CONFIG_VERSION_CLAVE_NO_REESCRIBIBLE_FMT, [Despues.Clave]));
+  // ...en CADA build que compila el proyecto, no solo en el de por defecto: con
+  // la clave de otro grupo en un CDATA contestaba OK y ese build salia con la
+  // version vieja (V17; revisor del paisaje del parche 1.26.1)
+  var PlatsV, CfgsV: TArray<string>;
+  InfoV.SusBuilds(PlatsV, CfgsV);
+  for var P in PlatsV do
+    for var C in CfgsV do
+    begin
+      var Despues := VersionDelProyecto(Xml, P, C);
+      if (Despues.Clave <> '') and (Despues.Clave <> Cuatro) then
+        Exit(MsgFmt(SR_CONFIG_VERSION_CLAVE_NO_REESCRIBIBLE_FMT, [Despues.Clave]));
+    end;
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   Nota := '';
   if Sufijo <> '' then

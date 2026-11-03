@@ -23,6 +23,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.Generics.Collections,
+  Lsp.Patch, // TLugaresDeTexto: donde puede leer quien compila un .rc
   Lsp.DesignerBin; // EL lector de las lineas de un designer de texto (LineasDeForm)
 
 type
@@ -446,7 +447,8 @@ function LeeRc(const ATexto: string): TLecturaRc;
 
 { LA segunda barrera sobre un .rc: cada fichero que nombra (LeeRc: los
   recursos, los #include y RCINCLUDE, y lo que parece una ruta), resuelto
-  contra la carpeta del .rc, por la puerta de leer (ReadPathDenied),
+  contra la carpeta del .rc, por la puerta de leer con ALugares (la jaula; el
+  build, Lsp.Patch.LUGARES_DEL_BUILD: lo que lee porque lo dice el proyecto),
   siguiendo los #include hasta 8 niveles. ACarpetaDentro, si va: ademas,
   DENTRO de esa carpeta por las rutas reales (STYLE-052: delphi_styles build
   compila una COPIA de la carpeta de estilos y fuera de ella no hay nada).
@@ -459,7 +461,7 @@ function LeeRc(const ATexto: string): TLecturaRc;
   -lo que de verdad ve brcc32-, sin una tercera lectura del original que abriria
   una carrera (revisor V54, TOCTOU). }
 function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string = '';
-  const ATextoTope: string = ''): string;
+  const ATextoTope: string = ''; const ALugares: TLugaresDeTexto = [ltJaula]): string;
 
 { EL escritor del .rc que compila brcc32 en delphi_styles: la inversa de LeeRc,
   una linea de lista (NOMBRE TIPO [banderas] fichero-entre-comillas) por cada
@@ -473,7 +475,6 @@ uses
   System.StrUtils,
   System.Math,
   System.RegularExpressions,
-  Lsp.Patch,
   Lsp.BuildRunner,
   Lsp.Guard,
   Lsp.Pascal, // EL identificador: ValidStyleValue
@@ -2042,7 +2043,7 @@ begin
 end;
 
 function RcLecturasDenegadas(const ARc: string; const ACarpetaDentro: string;
-  const ATextoTope: string): string;
+  const ATextoTope: string; const ALugares: TLugaresDeTexto): string;
 var
   Seen: TStringList;
 
@@ -2063,7 +2064,7 @@ var
     if Seen.IndexOf(ClaveDeRuta(AFile)) >= 0 then
       Exit; // already checked (and it stops an include cycle dead)
     Seen.Add(ClaveDeRuta(AFile));
-    if ReadPathDenied(AFile) <> '' then
+    if LugarDeLecturaDenegado(AFile, ALugares) <> '' then
       Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT,
         [TPath.GetFileName(AFile), TPath.GetFileName(ARc)]));
     // el TOPE ya leido en memoria (ATextoTope) no se relee: asi se juzga el
@@ -2072,7 +2073,7 @@ var
       Txt := ATextoTope
     else
       try
-        Txt := PatchLoadText(AFile, Enc);
+        Txt := LeeTexto(AFile, ALugares, Enc);
       except
         Exit(MsgFmt(SR_STYLES_RC_UNREADABLE_FMT, [TPath.GetFileName(AFile)]));
       end;
@@ -2091,7 +2092,7 @@ var
       Cand := RutaDesde(Base, Cand);
       if Cand = '' then
         Exit(MsgFmt(SR_STYLES_RC_BADPATH_FMT, [Raw]));
-      if ReadPathDenied(Cand) <> '' then
+      if LugarDeLecturaDenegado(Cand, ALugares) <> '' then
         Exit(MsgFmt(SR_STYLES_RC_OUTSIDE_FMT, [Raw, TPath.GetFileName(AFile)]));
       // LA barrera de lo que un .rc NOMBRA (David, 18-oct-2026; nacio como
       // temporal hasta un token LPAC, y no lo es: la LPAC no cerraba esto,

@@ -4034,12 +4034,7 @@ begin
   XmlAhora := PatchLoadText(AFichero, Enc);
   BaseNueva := TPath.GetDirectoryName(AFichero);
   Info := InfoDeDproj(XmlAhora);
-  Plataformas := Info.Activas;
-  if Length(Plataformas) = 0 then
-    Plataformas := [Info.PlataformaPorDefecto];
-  Configs := Info.Compilables;
-  if Length(Configs) = 0 then
-    Configs := [Info.ConfigPorDefecto];
+  Info.SusBuilds(Plataformas, Configs);
   for var Plat in Plataformas do
     for var Cfg in Configs do
     begin

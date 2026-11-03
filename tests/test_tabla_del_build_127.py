@@ -66,7 +66,7 @@ try:
     r = config('add-searchpath', platform='Win64', path='$(BDSLIB)\\$(Platform)\\release')
     rb = build()
     check('T1 add-searchpath $(BDSLIB)\\$(Platform)\\release y delphi_build Win64 Release: compila',
-          not mc.rechazado(r) and compila(rb), (r[:200], rb[:300]))
+          not mc.rechazado(r) and '$(BDSLIB)\\$(Platform)\\release' in lee() and compila(rb), (r[:200], rb[:300]))
 
     with open(DPROJ, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(ORIGINAL)

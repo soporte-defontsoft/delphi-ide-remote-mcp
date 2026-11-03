@@ -51,6 +51,7 @@ que solo esta en FUERA (o en lib\); los grupos van ANTES del primer <Import>.
 Uso:  python tests/test_build_macros_1220.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
+import re
 from xml.sax.saxutils import escape
 import mcp_cliente as mc
 from mcp_cliente import check
@@ -237,13 +238,20 @@ try:
     # recibe lo que la puerta juzgo lo mide T2 de test_tabla_del_build_127
     con(grupo('$(BDSLIB)' + os.path.splitdrive(FUERA)[1]))
     r = build(proyecto)
+    # y no compila POR ESO: dcc no encuentra Ajena (F2613), no una negativa de la puerta ni otro error (revisor
+    # del paisaje del parche 1.26.1: not compila lo cumplia cualquier fallo)
     check('X18 $(BDSLIB)\\<FUERA sin unidad> en un search path del cuerpo: no compila con la unidad de FUERA',
-          not compila(r), r[:300])
+          not compila(r) and not mc.rechazado(r) and 'F2613' in r and 'Ajena' in r, r[:300])
 
     # X19 una variable que rsvars.bat deja VACIA (SET FrameworkSDKDir=): msbuild la recibe quitada y en el cuerpo
     # vale vacio. La tabla de la puerta la BORRABA al ponerla vacia y caia al entorno del servidor, que aqui la
     # define hacia BASE: juzgaba BASE\<FUERA sin unidad> (de dentro) y dcc leia \<FUERA sin unidad>, de fuera
     # (A6 del plan de la 1.27, medido por el revisor de las tablas de macros el 3-nov-2026)
+    # la premisa, del fichero del IDE: sin la linea vacia la puerta negaria el valor de rsvars.bat y X19 pasaria
+    # con o sin el arreglo (revisor del paisaje del parche 1.26.1)
+    with open(os.path.join(mc.raiz_ide(srv.call), 'bin', 'rsvars.bat'), encoding='mbcs', errors='replace') as f:
+        check('X19 premisa: rsvars.bat deja FrameworkSDKDir vacia (SET FrameworkSDKDir=)',
+              re.search(r'(?im)^\s*@?SET\s+FrameworkSDKDir=\s*$', f.read()) is not None, '')
     con(grupo('$(FrameworkSDKDir)' + os.path.splitdrive(FUERA)[1]))
     r = build(proyecto)
     check('X19 $(FrameworkSDKDir), vacia en rsvars.bat, vale vacio aunque el servidor la defina: \\<FUERA> es de '

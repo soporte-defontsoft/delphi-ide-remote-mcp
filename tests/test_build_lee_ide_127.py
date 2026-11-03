@@ -25,6 +25,8 @@ Un %APPDATA% FALSO (mc.appdata_perfil) con un .profile SENUELO: nunca el real.
   F7 {$I '<un .inc de la instalacion>'} bajo un {$IFDEF} que no se define: no es BUILD-028
      (ROJA: BUILD-028; el search path a esa carpeta si pasaba)
   F8 add-deployfile de ese .inc: negado y el .dproj intacto (guarda: lo nombra el agente)
+  F9 el .rc de un RcCompile que nombra un fichero de la instalacion: compila (ROJA: BUILD-052; el lector
+     del .rc juzgaba con la jaula del agente, y ese mismo fichero en un {$R} o un icono pasaba)
 
 Uso:  python tests/test_build_lee_ide_127.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -154,6 +156,15 @@ try:
     r = config(srv2, 'add-deployfile', platform='Win64', path=inc)
     check('F8 sin zona de biblioteca: add-deployfile de un fichero de la instalacion negado y el .dproj intacto',
           mc.rechazado(r) and lee(DPROJ) == antes, r[:300])
+
+    pon(DPR, DPR_ORIGINAL)
+    with open(os.path.join(D, 'Recursos.rc'), 'w', encoding='utf-8') as f:
+        f.write('DATOS RCDATA "%s"\r\n' % inc.replace('\\', '/'))
+    pon(DPROJ, ORIGINAL.replace('</Project>', '<ItemGroup><RcCompile Include="Recursos.rc"><Form>Recursos.res'
+                                              '</Form></RcCompile></ItemGroup></Project>'))
+    rb = build(srv2)
+    check('F9 sin zona de biblioteca: el .rc de un RcCompile que nombra un fichero de la instalacion compila',
+          not mc.es(rb, 'SR_BUILD_RC_FMT') and compila(rb), rb[:300])
 finally:
     srv.cierra()
     if srv2:
