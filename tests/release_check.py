@@ -12,7 +12,9 @@ Verifies, in order:
   4b. skills/SKILL.md carries the mark of this version: the docs that teach
      the contract were reread against its CHANGELOG;
   5. the full regression (tests/run_all.py) ends with 0 failures;
-  6. packages DelphiLspMcp-v<version>-win64.zip and prints its SHA-256.
+  6. packages DelphiLspMcp-v<version>-win64.zip and prints its SHA-256 -
+     with every binary built from the code it publishes, and no member
+     carrying the Windows user of the machine that built it.
 
 Writes release-check.json next to the zip with everything a publisher (or a
 verifying agent) needs: version, commit, checks, artifact, sha256.
@@ -245,6 +247,18 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
         for f in files:
             full = os.path.join(root, f)
             z.write(full, 'docs/' + os.path.relpath(full, os.path.join(REPO, 'docs')).replace(os.sep, '/'))
+
+# 6c) ningun miembro del zip lleva el usuario de Windows de quien lo arma
+# (3-nov-2026): el enlazador de Linux graba en el ELF la ruta de su temporal
+# (%TEMP%\dtfXXXX.tmp) y, con el %TEMP% del perfil, los dos ELF de node\
+# viajaban con el alias 8.3 del usuario. BuildGroup.bat compila con un TEMP
+# suyo; esto vigila que siga asi, y que nada mas lo traiga.
+from mcp_cliente import nombres_del_usuario  # noqa: E402
+USUARIO = nombres_del_usuario()
+with zipfile.ZipFile(zip_path) as z:
+    con_usuario = [i.filename for i in z.infolist() if any(n in z.read(i).lower() for n in USUARIO)]
+check('no artifact member carries the Windows user of the machine that built it',
+      USUARIO and not con_usuario, con_usuario)
 
 sha = hashlib.sha256(open(zip_path, 'rb').read()).hexdigest()
 

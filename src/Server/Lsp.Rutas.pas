@@ -31,7 +31,7 @@ uses
 
   This expands the longest existing prefix of a path back to its real names
   before any segment guard looks at it. It cannot blanket-reject "~": the
-  server's own scratch and home paths legitimately contain one (DFONTA~1).
+  server's own scratch and home paths legitimately contain one (ABCDEF~1).
   Siempre con barras de Windows: quien la usa no las vuelve a cambiar. }
 function LongCanonical(const APath: string): string;
 
@@ -49,7 +49,7 @@ function RealPath(const APath: string): string;
 function RealDeLugar(const ALugar: string): string;
 
 { La forma con la que se COMPARA un sitio con otro: la canonica LARGA, con
-  separador final. Una raiz declarada con nombres cortos (DFONTA~1) y una
+  separador final. Una raiz declarada con nombres cortos (ABCDEF~1) y una
   ruta que llega con OTROS nombres cortos (DELPHI~1\RESULT~1) son el mismo
   sitio, y por el texto no casaban: la jaula decia "fuera" de una carpeta
   suya (28-sep, medido). Todas las comparaciones de sitio la usan A LA VEZ -

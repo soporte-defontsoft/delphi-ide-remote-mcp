@@ -9,7 +9,7 @@ What sec9 found after the round-8 trash fixes, and what is pinned here:
       with an alias. Now every segment guard canonicalises the path first
       (GetLongPathName on the longest existing prefix). The jail itself is left
       on the non-expanded path: a root can legitimately BE a short name
-      (DFONTA~1), and expanding only for the segment guards keeps both honest.
+      (ABCDEF~1), and expanding only for the segment guards keeps both honest.
   R2  a file renamed to "<x>.by" had its CONTENT read as an owner name, so a
       planted marker made a folder unpurgeable by anyone and showed invented
       owners. A marker now only owns the copy sitting next to it; an orphan or

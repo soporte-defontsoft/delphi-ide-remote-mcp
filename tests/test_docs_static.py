@@ -19,7 +19,7 @@ Usage:  python tests/test_docs_static.py
 """
 import json, os, re, glob, warnings, py_compile, subprocess
 # 'mc' es aqui el match del CHANGELOG: el modulo entra por sus nombres
-from mcp_cliente import check, fin
+from mcp_cliente import check, fin, nombres_del_usuario
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
@@ -83,6 +83,11 @@ else:
 IP_PRIVADA = re.compile(rb'192\.168\.\d+\.\d+')
 las_ip = [f for f in VERSIONADOS if IP_PRIVADA.search(open(os.path.join(REPO, f), 'rb').read())]
 check('lo versionado no lleva direcciones de la red (192.168.x.x)', not las_ip, las_ip)
+# ...ni el usuario de Windows de quien la pasa (David, 3-nov-2026: "no me gusta"):
+# su nombre y su alias 8.3 los da Windows, no una lista (nombres_del_usuario)
+USUARIO = nombres_del_usuario()
+con_usuario = [f for f in VERSIONADOS if any(n in open(os.path.join(REPO, f), 'rb').read().lower() for n in USUARIO)]
+check('lo versionado no lleva el usuario de Windows de quien la pasa', USUARIO and not con_usuario, con_usuario)
 
 # ---- TOOLS.md ----------------------------------------------------------
 toolsmd = open(os.path.join(REPO, 'docs', 'TOOLS.md'), encoding='utf-8').read()

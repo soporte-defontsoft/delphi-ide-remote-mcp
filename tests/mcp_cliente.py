@@ -78,6 +78,19 @@ def larga(ruta):
     return buf.value if n else ruta
 
 
+def nombres_del_usuario():
+    """Como sale en disco el usuario de Windows que pasa la bateria: su nombre,
+    el de su carpeta de perfil y el alias 8.3 de esta (el de un %TEMP% corto),
+    en minusculas, como bytes UTF-8 y UTF-16. Lo dice Windows, no una lista
+    (David, 3-nov-2026: estaba en comentarios, en tests y en los ELF del zip).
+    Lo usan test_docs_static (lo versionado) y release_check (el zip)."""
+    perfil = os.environ.get('USERPROFILE', '')
+    n = {os.environ.get('USERNAME', ''), os.path.basename(perfil),
+         os.path.basename(corta(perfil)) if perfil else ''}
+    n = sorted(x.lower() for x in n if x)
+    return [x.encode('utf-8') for x in n] + [x.encode('utf-16-le') for x in n]
+
+
 def virtual(ruta):
     """Como ENSENA el servidor una ruta suya: 'D:\\x' -> 'srvd:\\x' (el
     enmascarador de salida). La compone esta funcion y la lee real(), su

@@ -468,8 +468,8 @@ end;
 function QueryFullProcessImageNameW(hProcess: THandle; dwFlags: DWORD;
   lpExeName: PWideChar; var lpdwSize: DWORD): BOOL; stdcall; external kernel32;
 
-{ La forma LARGA de una ruta: la carpeta puede llegar como C:\Users\DFONTA~1\...
-  (8.3) y el sistema da el binario del proceso como C:\Users\dfontanet\...;
+{ La forma LARGA de una ruta: la carpeta puede llegar como C:\Users\ABCDEF~1\...
+  (8.3) y el sistema da el binario del proceso como C:\Users\abcdefghij\...;
   comparadas tal cual no casaban y kill decia "otro programa" del suyo
   (medido 2026-09-23 en la bateria, que vive en %TEMP%). }
 function RutaLarga(const APath: string): string;

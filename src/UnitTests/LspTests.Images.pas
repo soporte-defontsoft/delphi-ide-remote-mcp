@@ -585,7 +585,7 @@ end;
 const
   // Salidas REALES del nodo Linux (el Zorin, 16-oct-2026), tal como las guardo
   // Hermes: un tap, y el arranque de un status con su uso de consola
-  CAPTURA_ZORIN = 'CAPTURE=/home/dfontanet/PAServer-132/scratch-dir/dfontanet-zorin/McpDesktopNode/captura.png';
+  CAPTURA_ZORIN = 'CAPTURE=/home/usuario/PAServer-132/scratch-dir/usuario-zorin/McpDesktopNode/captura.png';
   ARRANQUE_ZORIN =
     '[NODE-026] McpDesktop - Linux desktop control node'#10#10 +
     '[NODE-027] -- 1. system libraries (nothing to install) --'#10 +

@@ -259,7 +259,7 @@ begin
   Assert.AreEqual('', T, 'fuera, sin trozo');
   // la forma corta contra la larga no se corta: las alarga a las dos quien
   // compara en la larga (el corte desplazado de MOVE-021)
-  Assert.IsFalse(TrozoBajo('C:\Users\DFONTA~1\x', 'C:\Users\dfontanet\x\u.pas', T), 'otra forma, otro texto');
+  Assert.IsFalse(TrozoBajo('C:\Users\ABCDEF~1\x', 'C:\Users\abcdefghij\x\u.pas', T), 'otra forma, otro texto');
   Assert.AreEqual('D:\nuevo\sub\u.pas', RutaTrasladada('C:\raiz\sub\u.pas', 'C:\raiz', 'D:\nuevo'), 'trasladada');
   Assert.AreEqual('D:\nuevo', RutaTrasladada('C:\raiz', 'C:\raiz\', 'D:\nuevo'), 'la carpeta misma, a la nueva');
   Assert.AreEqual('', RutaTrasladada('C:\otra\u.pas', 'C:\raiz', 'D:\nuevo'), 'lo de fuera no se traslada');

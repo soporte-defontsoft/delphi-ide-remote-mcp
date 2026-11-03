@@ -61,6 +61,8 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - With `$(BDSPLATFORMSDKSDIR)` redefined in the IDE's Environment Variables through another macro (`$(BDSUSERDIR)\SDKs`), the folder of the SDKs (where `delphi_paserver get-sdk` puts a sysroot, and where a profile's SDK is looked for) is the one it names, expanded by the IDE's macro table as every other path is. It fell back to the folder of the SDKs already registered, or to the default one, while that table said the redefined one.
 
+- The two Linux binaries in `node\` no longer carry the Windows user name of the machine that built them: the Linux linker records the path of its temporary file, and with the profile's `%TEMP%` that path named the user. `BuildGroup.bat` builds with a temporary folder of its own, and the release gate refuses a package where any member carries that name; the versioned sources no longer name it either.
+
 ### Changed
 
 - `delphi_config`'s description says again that `add-platform` enables a platform in the `.dproj`. The second pass had dropped it, and with Qwen3.8 Flash Next the task "build Linux64 with the SDK zorin18" fell from 3 of 5 to 2 of 18; with it back, 9 of 18 (`docs/TOOL-DESCRIPTIONS.md`).

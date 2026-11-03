@@ -2177,8 +2177,8 @@ begin
         // Nunca DENTRO del propio repo: el arbol principal la veria como una
         // carpeta sin seguimiento, y un add -A se la llevaria.
         // Por la ruta REAL de los dos: git da nombres largos y el agente
-        // puede pasar la forma 8.3 (medido: C:\Users\DFONTA~1 frente a
-        // C:/Users/dfontanet - el texto no casaba y lo dejaba dentro).
+        // puede pasar la forma 8.3 (medido: C:\Users\ABCDEF~1 frente a
+        // C:/Users/abcdefghij - el texto no casaba y lo dejaba dentro).
         var RaizReal := SinBarraFinal(RealPath(Raiz));
         var DestinoReal := SinBarraFinal(RealPath(Destino));
         if (Raiz <> '') and

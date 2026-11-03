@@ -25,4 +25,7 @@ user's session. Rebuilding belongs to whoever edits the sources — `BuildGroup.
 quiet build Release` compiles the four (two projects, each for Linux and for Windows) and copies them here.
 None of the four is versioned (since 2026-09-24): they are build output, and
 `tests/release_check.py` refuses to package one that is missing or older than
-its sources, so a release always carries binaries of the code it publishes.
+its sources, so a release always carries binaries of the code it publishes. It
+also refuses one that carries the Windows user name of the machine that built
+it: the Linux linker records the path of its temporary file, so `BuildGroup.bat`
+builds with a temporary folder of its own (`tmp\` of the repository).

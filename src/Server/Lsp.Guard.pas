@@ -3036,7 +3036,7 @@ begin
   Result := '';
   try
     // Formas LARGAS canonicas en los dos lados: una raiz declarada con
-    // nombres cortos (DFONTA~1) y una ruta que llega resuelta (RealPath la
+    // nombres cortos (ABCDEF~1) y una ruta que llega resuelta (RealPath la
     // alarga) son el mismo sitio. Comparar texto contra texto no casaba.
     Full := FormaLarga(APath);
     // ...y por la ruta REAL: un junction dentro de una raiz que apunte a una
@@ -3678,8 +3678,8 @@ begin
   P := LugarProtegidoEn(Real);
   // ...y por la ruta real de la carpeta MISMA cuando no es un enlace: en el
   // AppContainer de delphi_test el padre no se deja abrir y RutaDelEnlace se
-  // queda con su texto (DFONTA~1) mientras el lugar protegido se resuelve
-  // entero (dfontanet): dos formas de la misma carpeta, y la lista negra
+  // queda con su texto (ABCDEF~1) mientras el lugar protegido se resuelve
+  // entero (abcdefghij): dos formas de la misma carpeta, y la lista negra
   // fallaba ABIERTA (medido el 14-oct con la suite de unidad en el
   // contenedor). Cualquiera de las dos formas niega
   if (P = '') and not EsEnlace(Full) then
@@ -4929,7 +4929,7 @@ begin
       // contra las raices reales. Mezclar las dos formas - raices resueltas
       // contra rutas textuales - fue el primer intento de esto y rompio algo
       // peor de lo que arreglaba: las carpetas temporales llegan en 8.3
-      // (DFONTA~1), RealPath las alarga, la comparacion dejaba de casar y se
+      // (ABCDEF~1), RealPath las alarga, la comparacion dejaba de casar y se
       // pudo BORRAR la propia raiz del workspace. Lo cazo test_guard en la
       // misma tanda.
       // (la de arriba si ya se calculo: una ruta real por pregunta)

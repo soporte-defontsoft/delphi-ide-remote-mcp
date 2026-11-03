@@ -104,7 +104,7 @@ def pares_del_fuente():
 
 # ---------------------------------------------------------------- terreno
 
-BASE = mc.larga(mc.carpeta('jaula_generica'))   # forma LARGA: con un %TEMP% en 8.3 (DFONTA~1) la "plana" era un alias (r12b)
+BASE = mc.larga(mc.carpeta('jaula_generica'))   # forma LARGA: con un %TEMP% en 8.3 (ABCDEF~1) la "plana" era un alias (r12b)
 EXEDIR = os.path.join(BASE, 'srv')
 JAIL = os.path.join(BASE, 'jaula')
 VICT = os.path.join(BASE, 'victima-jaula-generica')   # hermana de la jaula: FUERA

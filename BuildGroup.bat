@@ -70,6 +70,18 @@ if errorlevel 1 (
   exit /b 1
 )
 
+REM  El TEMP del build es SUYO, tmp\ del repo (ignorada por git). Medido el
+REM  3-nov-2026: el enlazador de Linux graba en el ELF (.embarcadero.linkinfo)
+REM  la ruta de su temporal, %TEMP%\dtfXXXX.tmp, y con el %TEMP% del perfil los
+REM  binarios Linux de node\ - los que viajan en el zip - llevaban dentro el
+REM  nombre del usuario que los compilo (C:\Users\<alias 8.3>). Con este TEMP
+REM  graban esta ruta. %SystemRoot%\Temp no vale: el compilador no relee alli
+REM  su temporal (E1026). release_check vigila que ningun binario del zip lleve
+REM  el usuario.
+if not exist "%~dp0tmp" mkdir "%~dp0tmp"
+set TEMP=%~dp0tmp
+set TMP=%~dp0tmp
+
 REM  El SDK de Linux NO se clava por nombre: desde 2026-09-20 cada maquina
 REM  destino tiene el suyo (zorin18.sdk, fedora44.sdk...) y "Linux64.sdk" puede
 REM  no existir. Se coge el primer .sdk del IDE cuya plataforma sea Linux64.
