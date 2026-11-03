@@ -294,7 +294,8 @@ begin
       Continue;
     Repetido := False;
     for Visto in Result do
-      if SameText(SinBarraFinal(Visto), SinBarraFinal(T)) then
+      // la igualdad de dos rutas, la de la casa (Lsp.Rutas): SameFileName
+      if SameFileName(SinBarraFinal(Visto), SinBarraFinal(T)) then
       begin
         Repetido := True;
         Break;

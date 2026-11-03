@@ -91,6 +91,11 @@ function PaClientPath: string;
   escribe (RUN-027, con su ruta), o ANoHay, el texto del llamador (revisor del
   paisaje de la 1.27: decia "no hay paclient" del que se nego). }
 function PaclientQueFalta(const ANoHay: string): string;
+{ Si un valor cabe en una linea del FICHERO DE TRABAJO (ni salto de linea ni
+  NUL): el binario y cada argumento. La regla del formato, junto a su escritor
+  (TrabajoDeEjecucion); publica para la puerta de delphi_paserver, que la
+  tenia a mano para exe= (revisor del paisaje de la 1.27). }
+function ArgumentoCabeEnElTrabajo(const AArg: string): Boolean;
 
 { LA llamada a paclient: "<APaclient>" <AOps> "<AProfile>", con su salida y
   su codigo. Todo lo que habla con un PAServer pasa por aqui (remote-run, el
@@ -779,6 +784,15 @@ begin
   else
     ExeLeaf := AExeName;
   ARemoteExe := DeployRel + '/' + ExeLeaf;
+  // el binario es la PRIMERA linea del fichero de trabajo: la misma regla que
+  // los argumentos, segunda barrera de la puerta de delphi_paserver (PAS-006;
+  // revisor del paisaje de la 1.27: RemoteRun es publica y no lo juzgaba)
+  if not ArgumentoCabeEnElTrabajo(ExeLeaf) then
+  begin
+    Result.AddPair('success', TJSONBool.Create(False));
+    Result.AddPair('error', MsgText(SR_PASERVER_RUN_EXENAME));
+    Exit;
+  end;
   // en cualquier destino, lo que el fichero de trabajo no lleva (RUN-026). Antes
   // de apuntar ni subir nada. Sin shell en ningun sitio (el .job va al argv del
   // lanzador), un ; | & $ no es nada: la lista negra de run se quito (A4 de la 1.27)

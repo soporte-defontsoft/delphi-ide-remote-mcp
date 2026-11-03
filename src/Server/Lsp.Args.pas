@@ -45,8 +45,10 @@ function GitCommandIsQuery(const ACmd, AAccion, ANombre, AMessage: string): Bool
 function EsOrdenDeRed(const ACmd: string): Boolean;
 
 { '' when AText carries none of the shell metacharacters that would break a
-  command line ( ; | & ` $ < > and newlines ), otherwise a refusal. For tool
-  arguments that end up on a paclient/msbuild command line. }
+  command line ( ; | & ` $ < > and newlines ), otherwise a refusal. Desde la
+  1.27 (A4: run de PAServer sin shell, con su juez de ParamStr) solo la usa la
+  URL de git clone, como segunda barrera tras EsUrlDeRed y la lista de hosts:
+  deuda de lista negra declarada en test_paisaje, que solo puede encoger. }
 function ShellArgDenied(const AText: string): string;
 
 { Whether a git argument names a remote the operator has NOT allowed.

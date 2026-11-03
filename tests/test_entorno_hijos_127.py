@@ -6,7 +6,10 @@ alli pueden ir el token (DELPHI_MCP_TOKEN, DELPHI_MCP_READONLY_TOKEN) y los ajus
 usaban msbuild, git y los contenedores; paclient, adb y su demonio, reg.exe y el motor DelphiLSP
 heredaban el entorno ENTERO (CreateProcessConHandles con entorno nil, medido en el fuente el
 3-nov-2026; el servicio no tiene DELPHI_MCP_* en su entorno, asi que en produccion no llegaba nada).
-Ahora un entorno sin dar es ese bloque, en el unico lanzador (Lsp.ProcessLaunch).
+Ahora un entorno sin dar es ese bloque: lo da EntornoDelHijo (Lsp.Sandbox), y lo preguntan los cuatro que
+lanzan (RunCore y RunDetached de Lsp.BuildRunner, el motor en Lsp.Transport.Process, el contenedor);
+Lsp.ProcessLaunch no puede llevarla (la enlaza McpRunJob). Esta bateria mide RunCore (paclient); la fila
+"un lanzamiento sin EntornoDelHijo" de test_paisaje vigila los demas.
 
   H1 paclient (un falso que vuelca lo que ve) no ve ninguna DELPHI_MCP_*, ni el token (ROJA contra
      la 1.26.1)

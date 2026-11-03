@@ -1879,6 +1879,9 @@ begin
     Result := LugarDeEscrituraDenegado(ADestino, ALugar);
 end;
 
+function EnLugarDeTexto(const APath: string; ALugar: TLugarDeTexto;
+  AParaEscribir: Boolean): Boolean; forward;
+
 { El nucleo de ColocaProducto y ColocaContenido: ALocal <> '' mueve ese
   fichero; si no, escribe ABytes. }
 procedure Coloca(const ADestino, ALocal: string; const ABytes: TBytes;
@@ -1901,7 +1904,10 @@ begin
   // servidor o de la carpeta del destino (la que aprueba la puerta). Una
   // carpeta de descarga DENTRO del destino ya no: delphi_desktop baja
   // siempre a la casa de capturas desde la 1.18.2 (2z/2af)
-  Nuestro := (ALocal = '') or EnTemporal(ALocal) or SameFileName(DirLocal, Dir);
+  // (nuestro temporal por SU lugar, ServerTempDir con la casa de capturas
+  // dentro: EnTemporal era cualquier carpeta llamada __delphi-temp, en
+  // cualquier sitio; revisor del paisaje de la 1.27)
+  Nuestro := (ALocal = '') or EnLugarDeTexto(ALocal, ltTemporal, False) or SameFileName(DirLocal, Dir);
   if not Nuestro then
     raise Exception.Create(MsgFmt(SR_COLOCA_PRODUCTO_AJENO_FMT, [ALocal, ADestino]));
   // Todo, bajo el cerrojo, de la puerta al rename: un delphi_move (que escribe

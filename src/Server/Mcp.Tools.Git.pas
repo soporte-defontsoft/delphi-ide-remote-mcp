@@ -2200,7 +2200,7 @@ begin
           if Linea.StartsWith('worktree ') then
           begin
             // por la ruta real, como arriba: git lista nombres largos
-            if not Primero and SameText(DestinoReal, SinBarraFinal(
+            if not Primero and SameFileName(DestinoReal, SinBarraFinal(
                  RealPath(ConBarrasDeWindows(Linea.Substring(9).Trim)))) then
               Listado := True;
             Primero := False;

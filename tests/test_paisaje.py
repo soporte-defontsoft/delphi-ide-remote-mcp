@@ -2568,6 +2568,61 @@ MATAN = matan_sin_limpiar(TEXTOS)
 check('lo que matamos, lo limpiamos: toda unidad con TerminateProcess/TerminateJobObject borra los atomos '
       'del RTL del muerto (Lsp.AtomosRtl; la maquina se cayo el 18-oct-2026)', not MATAN, MATAN)
 
+# ---- EL ENTORNO DE UN HIJO (1.27, revisor del paisaje P3): CreateProcessConHandles acepta un entorno nil, que
+# hereda el del servidor ENTERO (el token de la consola incluido). La regla vive en EntornoDelHijo (Lsp.Sandbox) y
+# la preguntan los cuatro que lanzan; test_entorno_hijos_127 mide uno (paclient). Aqui: toda rutina que lanza con
+# CreateProcess* da el bloque de EntornoDelHijo o EntornoSinConfiguracion. Fuera: la primitiva (Lsp.ProcessLaunch)
+# y el lanzador del destino (McpRunJob: hereda el de PAServer, alli).
+LANZA_HIJO = re.compile(r'\bCreateProcess(?:ConHandles|EnContenedor|W)?\s*\(')
+SIN_ENTORNO_CASAS = ('Lsp.ProcessLaunch.pas', 'McpRunJob.dpr')
+def lanzan_sin_entorno(ficheros_texto):
+    malos = []
+    for f, t in ficheros_texto:
+        if os.path.basename(f) in SIN_ENTORNO_CASAS:
+            continue
+        lineas = codigo(t)
+        for n, l in enumerate(lineas):
+            if LANZA_HIJO.search(l) and not CABECERA.match(l.strip()):
+                ini = n
+                while ini > 0 and not CABECERA.match(lineas[ini]):
+                    ini -= 1
+                fin = n + 1
+                while fin < len(lineas) and not CABECERA.match(lineas[fin]):
+                    fin += 1
+                if not re.search(r'\bEntorno(?:DelHijo|SinConfiguracion)\b', '\n'.join(lineas[ini:fin])):
+                    malos.append('%s:%d (%s)' % (os.path.basename(f), n + 1, funcion_de(lineas, n)))
+    return malos
+check('mutante del entorno de un hijo: una rutina que lanza sin EntornoDelHijo se caza',
+      lanzan_sin_entorno([('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure Lanza;\nbegin\n'
+                                           '  CreateProcessConHandles(Cmd, nil, 0, nil, SI, PI);\nend;\nend.\n')])
+      == ['Plantado.pas:5 (Lanza)'])
+SIN_ENTORNO = lanzan_sin_entorno(TEXTOS)
+check('el entorno de un hijo: toda rutina que lanza con CreateProcess* le da el bloque de EntornoDelHijo '
+      '(nada de la configuracion del servidor; colaterales de A1 de la 1.27)', not SIN_ENTORNO, SIN_ENTORNO)
+
+# ---- LO QUE EL BUILD LEE (A9 de la 1.27; revisor del paisaje P4): se juzga con LUGARES_DEL_BUILD (la jaula y la
+# biblioteca del IDE). Cuatro puertas del build juzgaban con el del MOTOR (que tiene los lugares del IDE: su AppData,
+# los .profile) o con el del agente, y dcc leia el AppData del IDE. Ni uno ni otro en Lsp.BuildRunner; FuentesBajo
+# pregunta por el agente a proposito (son sugerencias para el).
+JUEZ_AJENO = re.compile(r'\bLUGARES_DEL_MOTOR\b|\bReadPathDenied\s*\(')
+def juez_ajeno_en_el_build(ficheros_texto):
+    malos = []
+    for f, t in ficheros_texto:
+        if os.path.basename(f) != 'Lsp.BuildRunner.pas':
+            continue
+        lineas = codigo(t)
+        for n, l in enumerate(lineas):
+            if JUEZ_AJENO.search(l) and funcion_de(lineas, n) != 'FuentesBajo':
+                malos.append('Lsp.BuildRunner.pas:%d (%s) %s' % (n + 1, funcion_de(lineas, n), l.strip()[:80]))
+    return malos
+check('mutante de lo que el build lee: una puerta del build con el juez del motor se caza',
+      len(juez_ajeno_en_el_build([('Lsp.BuildRunner.pas', 'unit X;\nimplementation\nfunction Puerta: string;\n'
+                                                           'begin\n  Result := LugarDeLecturaDenegado(P, LUGARES_DEL_MOTOR);'
+                                                           '\nend;\nend.\n')])) == 1)
+JUEZ_EN_BUILD = juez_ajeno_en_el_build(TEXTOS)
+check('lo que el build lee se juzga con LUGARES_DEL_BUILD: ni el juez del motor ni el del agente en Lsp.BuildRunner '
+      '(A9 de la 1.27)', not JUEZ_EN_BUILD, JUEZ_EN_BUILD)
+
 # ---- LA TABLA DE ACCESOS, COMPLETA (quinta ronda de Fable, depuracion de la 1.23): una tool que no estaba en
 # ConstruyeAccesos era de LECTURA (AccesoDeTool fallaba abierto), y una nueva que escribiese y cuyo autor olvidase
 # su AnadeAcceso la llamaba una credencial de solo lectura. Ahora lo que falta es de escritura (cerrado), y el

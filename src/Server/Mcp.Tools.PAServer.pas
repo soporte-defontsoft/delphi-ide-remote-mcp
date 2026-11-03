@@ -848,6 +848,11 @@ begin
     Exit;
   Port := Params.Port.Trim;
   if Port = '' then Port := '64211';
+  // el NUMERO que juzgo la puerta (TryStrToInt), compuesto aqui: $1F o 0x1F
+  // pasaban la puerta y viajaban asi a paclient, mientras el registro del IDE
+  // guardaba el numero (revisor del paisaje de la 1.27: el agente elige, el
+  // servidor compone)
+  Port := IntToStr(StrToInt(Port));
   // the gate already refused anything outside PACLIENT_PLATFORMS; this loop
   // just restores paclient's exact casing (and applies the default).
   Plat := PLATAFORMA_DE_GETSDK;
@@ -1231,7 +1236,7 @@ begin
   // exe, when given, is a FILE NAME of the deploy folder - never a path, and
   // never a line break: it is the first line of the job file (A4 de la 1.27)
   if (ExeName <> '') and (ExeName.Contains('/') or ExeName.Contains(chr(92)) or
-     ExeName.Contains('..') or (ExeName.IndexOfAny([#0, #10, #13]) >= 0)) then
+     ExeName.Contains('..') or not ArgumentoCabeEnElTrabajo(ExeName)) then
     Exit(MsgText(SR_PASERVER_RUN_EXENAME));
   // ...ni una orden del lanzador: un fichero desplegado "@kill" iba en la
   // linea del binario del .job como la orden de matar (V196 de la 1.23.1)

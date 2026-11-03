@@ -2090,8 +2090,9 @@ const
   SP_PASERVER_ARGS =
     'remote-run: optional arguments for the program, as a command line (double ' +
     'quotes group one). No shell: they arrive as written; none may hold a line ' +
-    'break (RUN-026), and on a Windows target a double quote or an empty one ' +
-    'cannot arrive (RUN-025)';
+    'break (RUN-026), and on a Windows target - where the program reads them ' +
+    'as Delphi''s ParamStr does - a double quote or an empty one cannot arrive ' +
+    '(RUN-025)';
   SP_PASERVER_TIMEOUT =
     'remote-run: max milliseconds to wait for the program (default 30000, ' +
     'max 300000)';
@@ -3623,9 +3624,10 @@ const
     al canal que lo escribe tal cual (A10 de la 1.27). }
   SR_CONFIG_PATH_MACRO_DESCONOCIDA_FMT =
     '[CFG-148 INVALID_PARAM] "%s" has a macro add-searchpath does not ' +
-    'resolve: it knows those of the project and of the IDE - $(BDS), ' +
-    '$(BDSLIB), $(Platform), $(Config), the catalogs and the IDE''s ' +
-    'Environment Variables -, not the environment of this server. Use a ' +
+    'resolve: it knows the IDE''s and msbuild''s - $(BDS), $(BDSLIB), ' +
+    '$(Platform), $(Config), $(MSBuildProjectDirectory), the catalogs and ' +
+    'the IDE''s Environment Variables -, not a property the .dproj defines ' +
+    'itself nor the environment of this server. Use a ' +
     'real path or one of those; a value with any other macro goes as it is ' +
     'with delphi_config set-property name=DCC_UnitSearchPath, and ' +
     'delphi_build judges what it reads.';
@@ -5477,7 +5479,7 @@ const
     'property set, to remove one delete; then preview to see it. ' +
     'to-text/to-binary convert a .dfm. A ' +
     'read-only credential gets the reading commands, preview included ' +
-    '(without out=).';
+    '(without out= or state=).';
 
   SP_DESIGNER_COMMAND =
     'info (every property a class really publishes: kind and type, events ' +
@@ -5486,7 +5488,8 @@ const
     'TCursor...)) | tree (the component tree: name, class, line) | get (one ' +
     'component''s block, verbatim) | lint (first what the IDE''s own form ' +
     'parser says, then properties the class does not publish and values ' +
-    'their type does not take, as set judges them; objects it could not check ' +
+    'their type does not take, as set judges them (one a class of the project ' +
+    'publishes is left to set); objects it could not check ' +
     '- a class not in the table, or ambiguous - go apart as notes, as do ' +
     'unknown StyleLookups) | ' +
     'check-binding (does the .dfm agree with the class in the .pas: ' +
@@ -5502,7 +5505,7 @@ const
     'backup first; reading never needs it) | to-binary (the way back, the ' +
     'resource-wrapped form the IDE writes) | preview (a PNG of what the IDE ' +
     'designer shows for the .dfm/.fmx, in this answer: built in design mode ' +
-    'with the IDE''s installed packages, no code run and nothing on any ' +
+    'with the IDE''s installed packages, none of the project''s code run and nothing on any ' +
     'screen; nonVisual lists the non-visual components, fidelity says how ' +
     'it was painted) | insert (a NEW visual control: classname; component, ' +
     'its Name - the IDE''s Button1, Button2... by default; parent - the ' +
@@ -10613,11 +10616,11 @@ const
     'Manager. ' +
     'set-output: every binary under one folder, ' +
     'keeping the platform/config subfolders. add-searchpath / ' +
-    'remove-searchpath: a unit search path for ONE platform; a platform ' +
+    'remove-searchpath: a unit search path for one platform (or all); a platform ' +
     'added to a project inherits ' +
     'NO search paths from the others - the usual reason a unit is "not ' +
     'found" only there. add-deployfile / remove-deployfile: ship an extra ' +
-    'file with the build on ONE platform, as the IDE''s Deployment Manager ' +
+    'file with the build on ONE platform and configuration, as the IDE''s Deployment Manager ' +
     '(a native .so/.dylib/.dll a component loads, data files), into the ' +
     'project and its .deployproj (created if missing). add-unit / ' +
     'remove-unit: the IDE''s Add to / Remove from project (.dpr uses, ' +
