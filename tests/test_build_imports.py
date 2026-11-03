@@ -183,6 +183,39 @@ try:
     r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
     mc.check('a39: el <Exec> del fichero que msbuild importa via $(MSBuildProjectDirectory) se escanea y se niega (rojo sin el fix)',
              mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and 'a <exec> task' in r, r[:400])
+
+    # E1/E2 (revisor de la jaula del cierre de la 1.26): msbuild DESESCAPA la ruta de un <Import> (medido el
+    # 3-nov-2026 con msbuild: sub\%2E%2E\c.targets importa c.targets, tambien bajo su Exists) y la puerta juzgaba lo
+    # escrito. E1: con el Exists de si mismo, el fichero "no estaba" para la puerta y se saltaba sin leerlo, como el
+    # del manifiesto del IDE. E2: una ruta "del IDE" con %2E%2E no llevaba '..' y se fiaba sin leerla. ROJAS en vivo
+    # contra produccion p127y (E1 compilo importando el fichero sin escanear; E2 importo uno de C:\Windows)
+    carpeta = os.path.join(BASE, 'escape')
+    salida = srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fixture', 'dir': carpeta})
+    mc.check('escape: fixture creada', mc.abre(salida, 'SK_CREATE_CREADO_PROYECTO_FMT'), salida[:200])
+    proyecto = os.path.join(carpeta, 'Fixture.dproj')
+    os.makedirs(os.path.join(carpeta, 'sub'), exist_ok=True)
+    with open(os.path.join(carpeta, 'evil.targets'), 'w', encoding='utf-8') as f:
+        f.write(NS + '<Target Name="X" BeforeTargets="Build"><Exec Command=""/></Target></Project>')
+    with open(proyecto, encoding='utf-8-sig') as f:
+        xml_esc = f.read()
+
+    def con_import_esc(linea):
+        with open(proyecto, 'w', encoding='utf-8-sig', newline='') as f:
+            f.write(xml_esc.replace('</Project>', linea + '</Project>'))
+
+    con_import_esc('<Import Project="sub\\%2E%2E\\evil.targets" Condition="Exists(\'sub\\%2E%2E\\evil.targets\')"/>')
+    r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+    mc.check('E1 un <Import> con %2E%2E y el Exists de si mismo se resuelve como msbuild: se lee y su <Exec> se niega',
+             mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and 'a <exec> task' in r, r[:400])
+    # E2: hacia FUERA (hermana de BASE, en la unidad del IDE) por una ruta que empieza como las del IDE; los '..'
+    # de mas se quedan en la raiz de la unidad
+    with open(os.path.join(FUERA, 'escapado.targets'), 'w', encoding='utf-8') as f:
+        f.write(NS + '<Target Name="X" BeforeTargets="Build"><Exec Command=""/></Target></Project>')
+    hacia_fuera = os.path.splitdrive(os.path.join(FUERA, 'escapado.targets'))[1].lstrip(bs)
+    con_import_esc('<Import Project="$(BDS)\\Bin\\CodeGear.x%s\\%s"/>' % ('\\%2E%2E' * 16, escape(hacia_fuera)))
+    r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
+    mc.check('E2 un <Import> que empieza como los del IDE y lleva %2E%2E no se fia sin leerlo: se niega',
+             mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT'), r[:400])
 finally:
     srv.cierra()
     mc.borra(BASE)

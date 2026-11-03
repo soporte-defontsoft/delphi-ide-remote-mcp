@@ -3632,7 +3632,12 @@ begin
     MacrosReservadasDeMsbuild(ACarpetaDelBuild, ANombreRaiz, Dir));
   if Result.Contains('$(') then
     Exit(''); // still macro-based (e.g. $(ProjectDir)): not verifiable here
-  Result := RutaDesde(Dir, Result, ACarpetaDelBuild);
+  // msbuild DESESCAPA la ruta de un Import tras expandirla, como un valor que
+  // el build lee (H3): %2E%2E es .. (medido el 3-nov-2026: sub\%2E%2E\x.targets
+  // importa x.targets, tambien bajo su Exists). Se resolvia lo escrito, el
+  // fichero "no estaba" y un Exists de si mismo se saltaba sin leerlo (E1 de
+  // test_build_imports; revisor de la jaula del cierre de la 1.26)
+  Result := RutaDesde(Dir, DesescapaDeMsbuild(Result), ACarpetaDelBuild);
 end;
 
 { The IDE's OWN imports, trusted without reading them: they live in the RAD
@@ -3643,6 +3648,12 @@ begin
   // macro-based AND ends in .targets, and a looser rule trusted it (caught by
   // our own evasion test while fixing field round 8).
   if APathLow.Contains('..') then
+    Exit(False);
+  // ...y un escape: msbuild desescapa la ruta (%2E%2E es ..; medido el
+  // 3-nov-2026), y "$(BDS)\Bin\CodeGear.x\%2E%2E\..." se fiaba sin leerlo y
+  // llevaba a cualquier fichero de la unidad del IDE (E2 de test_build_imports;
+  // revisor de la jaula del cierre de la 1.26). Uno del IDE no lleva ninguno
+  if APathLow.Contains('%') then
     Exit(False);
   // Solo rutas del IDE: el nombre de un fichero del proyecto no da confianza.
   Result := (APathLow.StartsWith('$(bds)\bin\codegear.') and
@@ -4846,8 +4857,10 @@ begin
       Continue;
     V := Importado.Trim;
     // deny AMPLIO por los jueces (sin estrecharse): un UNC o un prefijo de
-    // dispositivo o NT en un <Import> se niegan igual (SF_CFG_HAZARD_IMPORT_UNC)
-    if EsUnc(V) or EsPrefijoDeDispositivo(V) then
+    // dispositivo o NT en un <Import> se niegan igual (SF_CFG_HAZARD_IMPORT_UNC),
+    // tambien escrito con escapes, que msbuild desescapa (%5C%5C es \\)
+    if EsUnc(V) or EsPrefijoDeDispositivo(V) or EsUnc(DesescapaDeMsbuild(V)) or
+       EsPrefijoDeDispositivo(DesescapaDeMsbuild(V)) then
       Exit(MsgFmt(SF_CFG_HAZARD_IMPORT_UNC_FMT, [V]));
     if IsStockImport(LowerCase(V)) then
       Continue;
