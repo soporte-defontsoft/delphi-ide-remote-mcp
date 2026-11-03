@@ -743,8 +743,18 @@ begin
         // inside single-line ones (errors[]). Measured, field round 8.
         PrevC := CaracterPrevio(AText, I);
         // A drive prefix only starts where the previous char is not a
-        // letter/digit (keeps git's "HEAD:" and words intact).
-        if not CharInSet(PrevC, ['A'..'Z', 'a'..'z', '0'..'9']) then
+        // letter/digit (keeps git's "HEAD:" and words intact)...
+        var EmpiezaAqui := not CharInSet(PrevC, ['A'..'Z', 'a'..'z', '0'..'9']);
+        // ...o donde va pegada a una opcion de una linea de ordenes, con su
+        // separador detras (la forma A): dcc64 escribe -LEC:\..., -NBC:\... sin
+        // comillas y salia la letra REAL (A8 de la 1.27). La opcion es la regla
+        // de las rutas de red (OpcionPegada); en un JSON una barra sola es un
+        // escape (-L<letra>:\n), y un separador alli son dos
+        if not EmpiezaAqui and OpcionPegada(AText, I) and (I + 2 <= L) and
+           (AText[I + 1] = ':') and ((AText[I + 2] = '/') or ((AText[I + 2] = '\') and
+           (not EnJson or ((I + 3 <= L) and (AText[I + 3] = '\'))))) then
+          EmpiezaAqui := True;
+        if EmpiezaAqui then
         begin
           // form A - plain path: <letter>:<separator> (D:\ or D:/)
           if (I + 2 <= L) and (AText[I + 1] = ':') and

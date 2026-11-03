@@ -9,9 +9,9 @@ unit Lsp.Lugares;
   sesion, sin abrir nada) y el host UNC que \\srvhost\ significa
   (HostUncDeclarado); la forma DECLARADA de una ruta o de un texto que llega
   resuelto (FormaDeclarada, FormaDeclaradaDe, FormaDeclaradaEnTexto); y las
-  dos preguntas sobre donde empieza una ruta de red en un texto
-  (CaracterPrevio, que se hace aqui y en el enmascarador, y DelimitadorDeRed,
-  que hace el enmascarador).
+  preguntas sobre donde empieza una ruta en un texto (CaracterPrevio, que se
+  hace aqui y en el enmascarador; DelimitadorDeRed, que hace el enmascarador;
+  y OpcionPegada, que hacen los dos).
 
   No decide ningun acceso: la jaula (JaulaDecide, UncFueraDeLugares,
   NegativaDeUnc, RootItselfDenied...) sigue en Lsp.Guard y LEE este mapa.
@@ -201,6 +201,11 @@ function CaracterPrevio(const ATexto: string; AI: Integer): Char;
 { Si en AI de un texto puede empezar una ruta de red, por lo que lleva
   delante: lo pregunta el barrido del enmascarador (MaskDriveText). }
 function DelimitadorDeRed(const ATexto: string; AI: Integer): Boolean;
+{ Si justo antes de AI va pegada una opcion de una linea de ordenes (-U, -NU,
+  /I...): UNA regla para todo lo que empieza una ruta en un texto. La
+  preguntan DelimitadorDeRed (la ruta de red), el barrido de las letras del
+  enmascarador (MaskDriveText) y la casa (CambiaPrefijosEnTexto). }
+function OpcionPegada(const ATexto: string; AI: Integer): Boolean;
 
 implementation
 
@@ -467,23 +472,16 @@ begin
   end;
 end;
 
-{ Lo que puede ir delante de una ruta de red: el principio, un blanco, una
-  comilla, un parentesis, una coma, un igual, un ';' (una lista de rutas),
-  <, >, |, [ o un salto de linea - o una opcion de una linea de ordenes
-  pegada a ella (-U\nas\lib, -NU, /I) detras de un blanco o una comilla.
-  Pegada a una carpeta NO: es el separador doblado del eco del enlazador
-  (Linux64\\Debug), y tomarlo por una ruta de red se comia la cola entera
-  (227 srvhost en una salida, 2026-08-26). }
-function DelimitadorDeRed(const ATexto: string; AI: Integer): Boolean;
-const
-  ANTES: TSysCharSet = [' ', #9, '"', '''', '(', ',', '=', ';', '<', '>', '|', '[', #10, #13];
+{ Una opcion de una linea de ordenes pegada a lo que empieza en AI: una o dos
+  letras detras de un '-' o un '/' que van detras de un blanco, una comilla o
+  un salto de linea (-U\nas\lib, -NU, /I). Era la cola de DelimitadorDeRed, y
+  la unidad de una letra no la preguntaba: dcc64 escribe -LEC:\..., -LNC:\...,
+  -NBC:\... y -NHC:\... sin comillas y salia la letra REAL (A8 de la 1.27,
+  medido en la linea verbose de un build). }
+function OpcionPegada(const ATexto: string; AI: Integer): Boolean;
 var
   K, Letras: Integer;
 begin
-  if AI <= 1 then
-    Exit(True);
-  if CharInSet(CaracterPrevio(ATexto, AI), ANTES) then
-    Exit(True);
   K := AI - 1;
   Letras := 0;
   while (K >= 1) and CharInSet(ATexto[K], ['A'..'Z', 'a'..'z']) do
@@ -494,6 +492,24 @@ begin
   Result := (Letras >= 1) and (Letras <= 2) and (K >= 1) and
     CharInSet(ATexto[K], ['-', '/']) and
     ((K = 1) or CharInSet(CaracterPrevio(ATexto, K), [' ', #9, '"', '''', #10, #13]));
+end;
+
+{ Lo que puede ir delante de una ruta de red: el principio, un blanco, una
+  comilla, un parentesis, una coma, un igual, un ';' (una lista de rutas),
+  <, >, |, [ o un salto de linea - o una opcion de una linea de ordenes
+  pegada a ella (OpcionPegada).
+  Pegada a una carpeta NO: es el separador doblado del eco del enlazador
+  (Linux64\\Debug), y tomarlo por una ruta de red se comia la cola entera
+  (227 srvhost en una salida, 2026-08-26). }
+function DelimitadorDeRed(const ATexto: string; AI: Integer): Boolean;
+const
+  ANTES: TSysCharSet = [' ', #9, '"', '''', '(', ',', '=', ';', '<', '>', '|', '[', #10, #13];
+begin
+  if AI <= 1 then
+    Exit(True);
+  if CharInSet(CaracterPrevio(ATexto, AI), ANTES) then
+    Exit(True);
+  Result := OpcionPegada(ATexto, AI);
 end;
 
 function FormaDeclaradaDe(const ARuta: string;
@@ -672,7 +688,9 @@ var
   I, J, K, L: Integer;
 
   // la aguja que casa en AI como ruta, o -1. Una ruta EMPIEZA ahi: no pegada
-  // a una palabra; la de red (empieza por barra) tampoco detras de otra barra
+  // a una palabra, salvo a una opcion de una linea de ordenes (OpcionPegada:
+  // la casa en -NU<casa>\x salia con su ruta y el usuario de Windows, A8 de la
+  // 1.27); la de red (empieza por barra) tampoco detras de otra barra
   // (la mitad de una doblada, o el %(prefix)///host que git propone al
   // operador) ni de dos puntos (https://host); la de una letra (la casa) pide
   // solo eso, como el barrido de las letras del enmascarador. Y ACABA ahi o
@@ -686,7 +704,7 @@ var
     if Pos(UpCase(ATexto[AI]), Primeras) = 0 then
       Exit;
     Previo := CaracterPrevio(ATexto, AI);
-    if CharInSet(Previo, ['A' .. 'Z', 'a' .. 'z', '0' .. '9']) then
+    if CharInSet(Previo, ['A' .. 'Z', 'a' .. 'z', '0' .. '9']) and not OpcionPegada(ATexto, AI) then
       Exit;
     for M := 0 to High(Agujas) do
     begin

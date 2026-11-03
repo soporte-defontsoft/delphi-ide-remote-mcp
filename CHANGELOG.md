@@ -8,6 +8,10 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- A drive path glued to a command-line option comes out with its virtual unit. The compiler line of a `delphi_build` with `verbosity=verbose` carried `-LEC:\...`, `-LNC:\...`, `-NBC:\...` and `-NHC:\...` with the real drive letter: a drive only started after something that was not a letter or a digit, and an option's name is letters. A network path glued to an option was already masked (`-U\\host\lib`); that rule now says where a path starts for drive letters and for the server's own folders too, which glued to an option would have come out with the Windows user in their path.
+
 ## [1.26.1] - 2026-11-03
 
 A patch for what measuring the build after 1.26.0 found. A project can no longer have the

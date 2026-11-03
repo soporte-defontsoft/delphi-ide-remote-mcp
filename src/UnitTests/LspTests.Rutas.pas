@@ -68,6 +68,7 @@ type
     [Test] procedure UnaCarpetaDeUnaLetraNoEsUnSaltoDeLinea;
     [Test] procedure ElUncDeUnaListaDeRutasSeEnmascara;
     [Test] procedure ElUncPegadoAUnaOpcionSeEnmascara;
+    [Test] procedure LaUnidadPegadaAUnaOpcionSeEnmascara;
     [Test] procedure ElUncDobladoDosVecesSeEnmascara;
     [Test] procedure ElUncExtendidoYElHostRaroSeEnmascaran;
     [Test] procedure LasClavesDeUnJsonTambienSeEnmascaran;
@@ -688,6 +689,31 @@ begin
   // (control) un separador doblado pegado a una carpeta no es un UNC
   Assert.AreEqual('{"t":".\\\\Linux64\\\\\\\\Debug"}',
     MaskDriveText('', '{"t":".\\\\Linux64\\\\\\\\Debug"}'));
+end;
+
+{ A8 de la 1.27: una UNIDAD pegada a una opcion de una linea de ordenes. dcc64
+  escribe -LEC:\..., -LNC:\..., -NBC:\... y -NHC:\... sin comillas (medido en
+  la linea verbose de un build el 3-nov-2026): la letra iba detras de otra
+  letra y salia la REAL. La casa pegada a una opcion sale por su nombre: solo
+  con la letra cambiada, la ruta de la cache llevaria el usuario de Windows. }
+procedure TBarridoDeUnidadesTests.LaUnidadPegadaAUnaOpcionSeEnmascara;
+var
+  Cache: string;
+begin
+  Assert.AreEqual('dcc64 -LE' + Virtual + '\Bpl\Win64 -NB' + Virtual + '/Dcp x.dpr',
+    MaskDriveText('', 'dcc64 -LE' + Letra + ':\Bpl\Win64 -NB' + Letra + ':/Dcp x.dpr'));
+  // en un JSON, abriendo linea
+  Assert.AreEqual('{"t":"x\n-NH' + Virtual + '\\hpp"}',
+    MaskDriveText('', '{"t":"x\n-NH' + Letra + ':\\hpp"}'));
+  Cache := ServerCacheDir;
+  ForceDirectories(Cache);
+  Cache := ExcludeTrailingPathDelimiter(FormaLarga(Cache));
+  Assert.AreEqual('dcc64 -NU<server-cache>\x', MaskDriveText('', 'dcc64 -NU' + Cache + '\x'));
+  // (control) pegada a una palabra no es una opcion, y pegada a una opcion
+  // sin separador no es una ruta; en un JSON, una barra sola es un escape
+  Assert.AreEqual('uno-LE' + Letra + ':\x', MaskDriveText('', 'uno-LE' + Letra + ':\x'));
+  Assert.AreEqual('dcc64 -LE' + Letra + ':x', MaskDriveText('', 'dcc64 -LE' + Letra + ':x'));
+  Assert.AreEqual('{"t":"-L' + Letra + ':\nx"}', MaskDriveText('', '{"t":"-L' + Letra + ':\nx"}'));
 end;
 
 procedure TBarridoDeUnidadesTests.ElUncDobladoDosVecesSeEnmascara;
