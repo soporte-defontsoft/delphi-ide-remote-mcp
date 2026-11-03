@@ -1738,6 +1738,36 @@ begin
     Result := Result + [S];
 end;
 
+{ LO QUE MSBUILD RECIBE como entorno ademas del del servidor (sin sus
+  DELPHI_MCP_*, EntornoSinConfiguracion): las variables de rsvars.bat y el
+  temporal de ESTE build (ATemporal; '' = el del servidor). UNO para los dos
+  que lo modelan, el lanzamiento (RunMsBuild) y la puerta
+  (LecturasDelBuildDenegadas): con dos, un $(TEMP) del .dproj se juzgaria con
+  un valor y se compilaria con otro. El temporal es de cada build porque el
+  enlazador de Linux graba su ruta en el ELF (.embarcadero.linkinfo): con el
+  del servicio, el binario de un agente llevaba el perfil de su usuario
+  (medido el 3-nov-2026: C:\Users\<8.3>\AppData\Local\Temp\dtfXXXX.tmp). }
+function EntornoDelBuild(const AInfo: TRadStudioInfo; const ATemporal: string): TArray<string>;
+begin
+  Result := VariablesDeRsVars(AInfo);
+  if ATemporal <> '' then
+    Result := Result + ['TEMP=' + ATemporal, 'TMP=' + ATemporal];
+end;
+
+{ Donde vive el temporal de un build: su carpeta de .dcu (declarada, o suplida
+  en ASuplidas), que SalidaDenegada ya aprobo, o la del proyecto si no la
+  hubiera. Lo que el enlazador graba es asi una ruta del proyecto del agente:
+  ni la casa del servidor (en un binario la mascara no llega) ni un TEMP
+  relativo (el compilador lo hace absoluto: medido el 3-nov-2026). }
+function CarpetaDelTemporalDelBuild(const ADprojPath, APlat, ACfg: string;
+  const ASuplidas: TArray<TBuildOutputDir>): string;
+begin
+  Result := TPath.GetDirectoryName(TPath.GetFullPath(ADprojPath));
+  for var S in BuildOutputDirs(ADprojPath, APlat, ACfg) + ASuplidas do
+    if SameText(S.Tag, 'DCC_DcuOutput') and (S.Dir <> '') then
+      Exit(S.Dir);
+end;
+
 { Lo que este build LEE por lo que el proyecto escribe - el icono, el
   manifiesto, un search path, un .rc, un DeployFile, un keystore... - tiene
   que estar donde esta sesion puede leer: cada valor de cada propiedad - de
@@ -1769,7 +1799,7 @@ end;
   20-oct-2026 sobre los 122 proyectos de las raices de produccion: 0 valores
   de fuera. Parte 3 del gate del build (1.21.2). }
 function LecturasDelBuildDenegadas(const ADprojPath, APlat, ACfg: string;
-  const AInfo: TRadStudioInfo): string;
+  const AInfo: TRadStudioInfo; const ATemporal: string): string;
 var
   Vars: TStringList;
   Xmls, Ficheros: TArray<string>;
@@ -2026,7 +2056,8 @@ begin
   Vars := TStringList.Create;
   try
     // LO QUE MSBUILD TIENE AL LEER EL CUERPO del .dproj: el entorno que recibe
-    // (rsvars.bat sobre el del servidor, sin las DELPHI_MCP_*; lo que no esta
+    // (EntornoDelBuild: rsvars.bat y el TEMP del build, sobre el del
+    // servidor, sin las DELPHI_MCP_*; lo que no esta
     // aqui lo da VariableQueVeElBuild en Expande), Platform/Config y las
     // reservadas. NO la tabla del IDE (IdeMacroVars): $(BDSLIB), $(BDSBIN),
     // $(BDSUSERDIR), los catalogos y $(BDSPLATFORMSDKSDIR) los definen los
@@ -2035,7 +2066,7 @@ begin
     // del IDE y dcc recibia \<lo de detras>, colgado de la unidad del proyecto
     // (X18 de test_build_macros_1220; revisor de la jaula del cierre de la 1.26;
     // censo: 0 de 3.486 .dproj las usan donde msbuild las evalua)
-    PonEnLaTabla(VariablesDeRsVars(AInfo));
+    PonEnLaTabla(EntornoDelBuild(AInfo, ATemporal));
     Vars.Values['Platform'] := APlat;
     Vars.Values['Config'] := ACfg;
     // las reservadas de msbuild sobre este proyecto, por EL lector: UNA casa
@@ -2105,12 +2136,14 @@ end;
 { El escaneo compile-only del .dproj en UN solo sitio (hazard + propiedad de IDE
   redefinida + directivas/imports/enlaces duros + lo que el build lee), para
   correrlo BAJO el cerrojo y sobre los MISMOS bytes que compilara msbuild.
-  APlat/ACfg/AInfo: el build que se va a lanzar (las macros de lo que lee).
+  APlat/ACfg/AInfo/ATemporal: el build que se va a lanzar (las macros de lo
+  que lee; ATemporal, su TEMP: EntornoDelBuild).
   Devuelve si hay que vaciar los eventos de build (y en AAvisaEventos, si
   alguno de los vaciados lo habria ejecutado el IDE); lanza con su motivo si
   el proyecto no pasa. }
 function EscaneoCompileOnly(const ADprojPath, APlat, ACfg: string;
-  const AInfo: TRadStudioInfo; AAllowScripts: Boolean; out AAvisaEventos: Boolean): Boolean;
+  const AInfo: TRadStudioInfo; const ATemporal: string; AAllowScripts: Boolean;
+  out AAvisaEventos: Boolean): Boolean;
 const
   PROGRAMA_QUE_CGRC_BUSCA_EN_SU_CARPETA = 'resinator.exe';
 begin
@@ -2197,7 +2230,7 @@ begin
   // Parte 3 del mismo gate (1.21.2): lo que el build LEE por lo que el
   // proyecto escribe (el icono, el manifiesto, los search paths, los .rc, los
   // DeployFile...), siempre: la jaula de leer no es un opt-in del operador.
-  var LecturaMala := LecturasDelBuildDenegadas(ADprojPath, APlat, ACfg, AInfo);
+  var LecturaMala := LecturasDelBuildDenegadas(ADprojPath, APlat, ACfg, AInfo, ATemporal);
   if LecturaMala <> '' then
   begin
     TLogger.Warning(MsgFmt(SL_BUILD_DELPHI_BUILD_REFUSED_FMT,
@@ -2363,7 +2396,6 @@ begin
   var MsBuildExe := ProgramaDelOperador('msbuild.exe', PathRs);
   if MsBuildExe = '' then
     raise Exception.Create(MsgFmt(SR_BUILD_MSBUILD_NO_ENCONTRADO_FMT, [Info.RsVarsBat]));
-  var EntornoMsBuild := EntornoSinConfiguracion(VarsRs);
 
   // La plataforma con SU nombre (un nombrador: CanonicalPlatform). La puerta
   // la valida sin mirar mayusculas y aqui llegaba tal cual: platform=win64
@@ -2414,6 +2446,11 @@ begin
       [TPath.GetFullPath(ADprojPath), SalidaMala]));
     raise Exception.Create(SalidaMala);
   end;
+  // El TEMP de ESTE build, en su carpeta de .dcu (CarpetaDelTemporalDelBuild),
+  // y el entorno de msbuild con el (EntornoDelBuild): lo que el enlazador graba
+  // en un ELF es una ruta del proyecto, no el perfil del usuario del servicio
+  var TemporalDelBuild := NuevaCarpetaDescarga(CarpetaDelTemporalDelBuild(ADprojPath, Plat, Cfg, Suplidas));
+  var EntornoMsBuild := EntornoSinConfiguracion(EntornoDelBuild(Info, TemporalDelBuild));
   // Deploy ALWAYS builds first: a bare /t:Deploy repackages and ships the
   // PREVIOUS binary with today's date and zero warnings - the measured
   // half-a-session trap (vault: delphi-android-deploy-sin-build). The IDE
@@ -2569,7 +2606,13 @@ begin
   if not Confiado then
     EnterFileEdit;
   try
-  EventosSaltados := EscaneoCompileOnly(ADprojPath, Plat, Cfg, Info, Confiado, EventosAvisados);
+  // el temporal, bajo el cerrojo y por la puerta de escribir sobre su ruta
+  // REAL: la carpeta de salida se aprobo antes de entrar
+  var TemporalDenegado := EscrituraDenegada(TemporalDelBuild);
+  if TemporalDenegado <> '' then
+    raise Exception.Create(MsgFmt(SR_BUILD_OUTPUT_DENIED_FMT, ['DCC_DcuOutput', TemporalDelBuild, TemporalDenegado]));
+  CrearCarpeta(TemporalDelBuild);
+  EventosSaltados := EscaneoCompileOnly(ADprojPath, Plat, Cfg, Info, TemporalDelBuild, Confiado, EventosAvisados);
   // Un Windows REMOTO (perfil PAServer de Windows) despliega como un Linux:
   // sin manifiesto, msbuild "desplegaba" cero ficheros y decia exito. La
   // plataforma local solo lo es cuando no hay perfil (medido 2026-09-22 con
@@ -2584,7 +2627,7 @@ begin
     // mano antes del primer Deploy no estaba en la cadena del escaneo (V217)
     if not Confiado then
     begin
-      var LecturaDelManifiesto := LecturasDelBuildDenegadas(ADprojPath, Plat, Cfg, Info);
+      var LecturaDelManifiesto := LecturasDelBuildDenegadas(ADprojPath, Plat, Cfg, Info, TemporalDelBuild);
       if LecturaDelManifiesto <> '' then
         raise Exception.Create(LecturaDelManifiesto);
     end;
@@ -2773,6 +2816,13 @@ begin
       Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode, EntornoMsBuild);
   end;
   finally
+    // el temporal de este build se va con el, bajo el mismo cerrojo (BorraArbol
+    // reconoce su nombre: EsCarpetaDescarga); limpiar no tumba la respuesta
+    try
+      if TDirectory.Exists(TemporalDelBuild) then
+        BorraArbol(TemporalDelBuild);
+    except
+    end;
     if not Confiado then
       LeaveFileEdit;
     GBuildLock.Leave;

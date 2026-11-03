@@ -10,7 +10,7 @@ platforms register and this one does not.
 Usage:  python tests/test_missing_units.py [path-to-DelphiLspMcp.exe]
 Needs a RAD Studio with the Linux64 compiler (dcclinux64); no PAServer.
 """
-import json, os, glob
+import json, os, glob, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -135,6 +135,22 @@ out = j.get('output') or ''
 check('Linux64 build declares output (ELF without extension, v0.46)',
       out.endswith(os.sep + 'MissU') and 'Linux64' in out, r[:300])
 check('no missingUnits on success', 'missingUnits' not in j, r[:300])
+# El temporal del enlazador (A1 de la 1.27): dcclinux64 graba en el ELF la ruta
+# de su fichero temporal (.embarcadero.linkinfo), y con el TEMP del servicio el
+# binario del agente llevaba el perfil de su usuario (medido el 3-nov-2026). El
+# build le da un TEMP suyo, una carpeta __tmp- dentro de la de sus .dcu, y lo
+# quita al acabar. (Aqui BASE cuelga del %TEMP% de la bateria: lo que se mira es
+# DONDE esta el temporal, no si la ruta nombra al usuario.)
+elf = mc.real(out)
+datos = open(elf, 'rb').read() if os.path.isfile(elf) else b''
+grabado = re.search(rb'[ -~]{0,240}dtf[0-9A-Fa-f]+\.tmp', datos)
+ruta = grabado.group().decode('latin-1') if grabado else ''
+carpeta = os.path.dirname(ruta)
+check('el ELF graba como temporal una carpeta __tmp- del proyecto, no el TEMP del servidor',
+      os.path.basename(carpeta).startswith(mc.DESCARGA_PREFIJO)
+      and any(carpeta.lower().startswith(b.lower()) for b in (mc.larga(BASE), mc.corta(BASE)) if b), ruta)
+quedan = glob.glob(os.path.join(BASE, '**', mc.DESCARGA_PREFIJO + '*'), recursive=True)
+check('...y esa carpeta no queda tras el build', not quedan, quedan)
 
 # --- BUILD-042: una unit del PROPIO workspace (3-oct-2026) ---------------------
 # solo se buscaba en la zona de biblioteca: una unit de una carpeta vendor del

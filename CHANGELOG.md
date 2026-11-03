@@ -8,6 +8,10 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- A Linux binary that `delphi_build` or `delphi_test` compiles no longer carries the server's temporary folder, with the Windows user of the service in its path: the Linux linker records the path of its temporary file in the ELF, and msbuild got the service's `%TEMP%`. Each build now gets a temporary folder of its own inside its `.dcu` folder, removed when it ends, and the build gate reads a `$(TEMP)` of the project as that same folder. The compiler makes even a relative `TEMP` absolute (measured), so what the ELF records is a path of the project.
+
 ## [1.26.0] - 2026-11-03
 
 A minor version about reading things as the tools the server stands in for
