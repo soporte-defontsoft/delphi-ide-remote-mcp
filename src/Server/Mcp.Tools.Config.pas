@@ -1648,16 +1648,24 @@ begin
   // de la 37.0 con la version incluida (Hermes, dirigido de la 1.20.1).
   SinNumeros := Length(TramosDeEtiqueta(Xml, ETIQUETAS_DE_VERSION[0])) = 0;
   var Claves0 := ClavesDeVersion(Xml);
+  // lo que habia, por EL lector de la version (la del build por defecto,
+  // como la ensena view): abajo se dice, y aqui decide la negativa
+  var InfoV := InfoDeDproj(Xml);
+  var Antes := VersionDelProyecto(Xml, InfoV.PlataformaPorDefecto, InfoV.ConfigPorDefecto);
   if SinNumeros and not ConFileVersion(Claves0, 1, MaxInt) then
+  begin
+    // ...pero si el build SI ve una, esta escrita de una forma que este
+    // escritor no reescribe (CDATA, comentario, una entidad en el nombre): se
+    // dice eso, no que no la hay (A3 de la 1.27)
+    if Antes.Clave <> '' then
+      Exit(MsgFmt(SR_CONFIG_VERSION_CLAVE_NO_REESCRIBIBLE_FMT, [Antes.Clave]));
     Exit(MsgText(SR_CONFIG_VERSION_SIN_VERINFO));
+  end;
   Eol := SaltoDominante(Xml); // el salto del fichero, la regla de todos
 
   // Lo que habia, para poder decirlo, por EL lector de la version (el de view):
   // los numeros por un lado y la clave por otro, que es donde se ve si estaban
   // descuadrados
-  // (la del build por defecto, como la ensena view)
-  var InfoV := InfoDeDproj(Xml);
-  var Antes := VersionDelProyecto(Xml, InfoV.PlataformaPorDefecto, InfoV.ConfigPorDefecto);
   AntesNum := Antes.Numeros;
   AntesKey := ONinguno(Antes.Clave);
   // sin numeros en ESE build (los lleva el grupo de otro), lo que tenia es lo
@@ -1753,6 +1761,14 @@ begin
         end;
   end;
 
+  // Lo que el build va a leer, por el juez (el lector de view, como msbuild):
+  // si su clave FileVersion no dice la version nueva, este escritor no la pudo
+  // reescribir en su sitio (un CDATA, un comentario, una entidad en el nombre)
+  // y el binario saldria con la vieja mientras la respuesta decia OK. Nada se
+  // escribe (A3 de la 1.27)
+  var Despues := VersionDelProyecto(Xml, InfoV.PlataformaPorDefecto, InfoV.ConfigPorDefecto);
+  if (Despues.Clave <> '') and (Despues.Clave <> Cuatro) then
+    Exit(MsgFmt(SR_CONFIG_VERSION_CLAVE_NO_REESCRIBIBLE_FMT, [Despues.Clave]));
   PatchSaveConSuSalto(ADproj, Xml, Enc);
   Nota := '';
   if Sufijo <> '' then

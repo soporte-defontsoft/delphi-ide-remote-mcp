@@ -230,5 +230,38 @@ check('V13 delphi_edit y delphi_textedit con un .dproj: EDIT-128 los dos, que no
       mc.abre(r1, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT') and mc.abre(r2, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT')
       and 'delphi_config' in r1 and open(P7, 'rb').read() == b10, [r1[:160], r2[:160]])
 
+# ---- V14..V16 una clave FileVersion que el build lee y el escritor no reescribe en su sitio (A3 de la 1.27):
+# dentro de un CDATA, o con una entidad en el nombre. El juez (el lector de view, como msbuild) la lee; el
+# escritor trabaja sobre el texto escrito. Decia CFG-003 ("no hay") o escribia los numeros, dejaba la clave y
+# contestaba OK, y el binario salia con la version vieja (la clave manda: V4). Ahora CFG-146 y nada escrito.
+def reescribe(p, cambio):
+    b = open(p, 'rb').read()
+    bom = b'\xef\xbb\xbf' if b.startswith(b'\xef\xbb\xbf') else b''
+    open(p, 'wb').write(bom + cambio(b[len(bom):].decode('utf-8')).encode('utf-8'))
+    return open(p, 'rb').read()
+
+
+def en_cdata(x):
+    return re.sub(r'<VerInfo_Keys>([^<]*)</VerInfo_Keys>', r'<VerInfo_Keys><![CDATA[\1]]></VerInfo_Keys>', x)
+
+
+def con_numeros(x):
+    return re.sub(r'([ \t]*)(<VerInfo_Keys>)',
+                  lambda m: m.group(1) + '<VerInfo_MajorVer>1</VerInfo_MajorVer>\r\n' + m.group(1) + m.group(2), x)
+
+
+for etiqueta, nombre, cambio in (
+        ('V14 la clave en un CDATA, sin numeros', 'Cd14', en_cdata),
+        ('V15 la clave en un CDATA, con los numeros', 'Cd15', lambda x: con_numeros(en_cdata(x))),
+        ('V16 una entidad en el nombre (File&#86;ersion), con los numeros', 'Ent16',
+         lambda x: con_numeros(x.replace('FileVersion=', 'File&#86;ersion='))),
+):
+    P = crea('project-console', nombre)
+    b = reescribe(P, cambio)
+    r = set_version(P)
+    check(etiqueta + ': CFG-146, con lo que el build toma de la clave (1.0.0.0)',
+          mc.rechazado(r) and mc.abre(r, 'SR_CONFIG_VERSION_CLAVE_NO_REESCRIBIBLE_FMT') and '1.0.0.0' in r, r[:300])
+    check(etiqueta + ': ...y no se escribe nada', open(P, 'rb').read() == b, '')
+
 S.cierra()
 mc.fin('set-version 1.20.1')

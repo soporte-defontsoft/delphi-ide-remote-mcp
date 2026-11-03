@@ -256,6 +256,19 @@ const
     'Project Options > Version Info; once they exist, this tool maintains ' +
     'the version.';
 
+  { ...y la que el build SI lee (EffectiveProperty, el lector de view) en una
+    forma que el escritor no reescribe en su sitio: dentro de un CDATA o un
+    comentario, o con una entidad XML en el nombre. Decia CFG-003 ("no hay"),
+    o escribia los numeros, dejaba la clave y contestaba OK mientras el
+    binario salia con la version vieja (A3 de la 1.27). %s = lo que el build
+    toma de esa clave. }
+  SR_CONFIG_VERSION_CLAVE_NO_REESCRIBIBLE_FMT =
+    '[CFG-146 DENIED] Nothing was written: the build takes the version of ' +
+    'the binary from its FileVersion key (%s now), and the .dproj writes that ' +
+    'key in a form this tool does not rewrite in place - inside a CDATA ' +
+    'section or a comment, or with an XML entity in its name. Write that ' +
+    'VerInfo_Keys as plain text, as the IDE does, and set the version again.';
+
   SN_CONFIG_VERSION_OK_FMT =
     '[CFG-004] Project version: %s (was %s). The Windows VERSIONINFO and ' +
     'the FileVersion/ProductVersion keys now say the same thing, which ' +

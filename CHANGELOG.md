@@ -12,6 +12,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - A Linux binary that `delphi_build` or `delphi_test` compiles no longer carries the server's temporary folder, with the Windows user of the service in its path: the Linux linker records the path of its temporary file in the ELF, and msbuild got the service's `%TEMP%`. Each build now gets a temporary folder of its own inside its `.dcu` folder, removed when it ends, and the build gate reads a `$(TEMP)` of the project as that same folder. The compiler makes even a relative `TEMP` absolute (measured), so what the ELF records is a path of the project.
 - `delphi_build` reads a variable that RAD Studio's `rsvars.bat` sets empty (`FrameworkSDKDir`, `PlatformSDK`) as empty, as msbuild does: the build gate's table dropped an empty one and took the value of the server's environment instead. With the service's environment defining it, a search path through it was judged inside the roots while the compiler read it from the root of the project's drive.
+- `delphi_config set-version` refuses, with nothing written, a project whose `FileVersion` key - the one the build takes the binary's version from - is written in a form it does not rewrite in place: inside a CDATA section or a comment, or with an XML entity in its name (`CFG-146`). It wrote the numbers, left that key as it was and answered that the keys said the new version, while the binary came out with the old one; with no numbers it said there was no version information at all (`CFG-003`).
 
 ## [1.26.0] - 2026-11-03
 
