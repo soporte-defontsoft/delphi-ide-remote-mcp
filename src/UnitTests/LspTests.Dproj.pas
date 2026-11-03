@@ -35,6 +35,8 @@ type
     procedure LoInsertadoNoSeVuelveAExpandir;
     [Test]
     procedure LaTablaDelIdeNoVuelveAMirarLoNuestro;
+    [Test]
+    procedure LaCarpetaDeLosSdkEsUnaRespuesta;
   end;
 
   { UN escritor del texto de un elemento (XmlElemento) y sus lectores, que
@@ -1365,6 +1367,34 @@ begin
     Assert.AreEqual('C:\U\$(B)\SDKs', T.Values['SDKS'], 'lo nuestro no se vuelve a mirar');
     Assert.AreEqual('b;$(PATH)', T.Values['PATH'], 'su propio nombre se queda');
     Assert.IsTrue(T.Values['A'].Contains('$('), 'un ciclo se para: ' + T.Values['A']);
+  finally
+    T.Free;
+  end;
+end;
+
+procedure TDprojHazardTests.LaCarpetaDeLosSdkEsUnaRespuesta;
+var
+  Info: TRadStudioInfo;
+  T: TStringList;
+begin
+  // A5 de la 1.27: una redefinicion de BDSPLATFORMSDKSDIR que la tabla no
+  // resuelve (una variable del sistema, no del IDE) se quedaba escrita en la
+  // tabla, e IdeSdksDir daba otra carpeta. Sin tocar el registro: una version
+  // que no existe, y la tabla se completa desde lo que se le da
+  Info := Default(TRadStudioInfo);
+  Info.Version := '99.9';
+  Info.RootDir := 'C:\NoExiste\Studio\99.9\';
+  T := TStringList.Create;
+  try
+    T.Add('BDSPLATFORMSDKSDIR=$(NOEXISTE_A5)\SDKs');
+    CompletaTablaDelIde(Info, T);
+    Assert.IsFalse(T.Values['BDSPLATFORMSDKSDIR'].Contains('$('), T.Values['BDSPLATFORMSDKSDIR']);
+    Assert.AreEqual(IdeSdksDir('99.9'), T.Values['BDSPLATFORMSDKSDIR'], 'una sola respuesta');
+    // (guarda) la que se resuelve con la tabla se queda resuelta
+    T.Clear;
+    T.Add('BDSPLATFORMSDKSDIR=$(BDS)\SDKsA5');
+    CompletaTablaDelIde(Info, T);
+    Assert.AreEqual('C:\NoExiste\Studio\99.9\SDKsA5', T.Values['BDSPLATFORMSDKSDIR']);
   finally
     T.Free;
   end;

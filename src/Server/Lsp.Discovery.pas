@@ -285,11 +285,14 @@ function ProfileDesktopDenied(const AProfName: string; AActua: Boolean): string;
   It is asked to the install, never composed by hand, because a machine can
   host two or three Delphi versions side by side and each one answers for
   itself: (1) the IDE's own Environment Variables of that version, where an
-  operator's override lives, its macros expanded by the IDE's table
-  (ConMacrosDelIde); (2) failing that, the SDK Manager entries of that
-  version - the parent of any sysroot already registered IS the folder; (3)
-  and only if neither exists, the documented default, whose literal lives HERE
-  and nowhere else. }
+  operator's override lives, its macros expanded by the IDE's table; (2)
+  failing that, the SDK Manager entries of that version - the parent of any
+  sysroot already registered IS the folder; (3) and only if neither exists,
+  the documented default, whose literal lives HERE and nowhere else.
+  It READS the IDE's table (IdeMacroVars), which asks (2) and (3) when the
+  operator did not redefine it, or redefined it with a macro the table does
+  not resolve: the table kept that text and this function fell to another
+  folder, two answers (A5 de la 1.27). }
 function IdeSdksDir(const AVersion: string): string;
 
 { LOS sysroots que ESA version tiene registrados en su SDK Manager
@@ -451,6 +454,12 @@ function PlataformaDelIde(const ARootDir: string): string;
   $(BDSUSERDIR), $(BDSCOMMONDIR), $(BDSCatalogRepository)...), the same one
   the library zone is built from. ADest receives Name=Value pairs. }
 procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
+
+{ ...lo mismo a partir de lo que el IDE tiene en sus Environment Variables, que
+  ADest ya trae (IdeMacroVars lo lee del registro): lo nuestro sin pisarlo y lo
+  anidado resuelto. Aparte para que una prueba le de una redefinicion sin tocar
+  el registro del IDE (A5 de la 1.27). }
+procedure CompletaTablaDelIde(const AInfo: TRadStudioInfo; ADest: TStrings);
 
 { Las carpetas de los catalogos de GetIt de una instalacion, la de todos y la
   del usuario, de LA tabla (IdeMacroVars) y por EL resolutor: solo una
@@ -1560,26 +1569,14 @@ begin
   end;
 end;
 
-function IdeSdksDir(const AVersion: string): string;
+{ Los pasos (2) y (3) de IdeSdksDir: los SDK que ESA version ya tiene
+  registrados, o el default documentado. Los pregunta la tabla del IDE
+  (CompletaTablaDelIde) cuando el operador no redefinio la carpeta, o la
+  redefinio con una macro que la tabla no resuelve; IdeSdksDir lee la tabla. }
+function SdksSinRedefinir(const AVersion: string): string;
 var
-  Vars: TStringList;
   Raiz: string;
 begin
-  Result := '';
-  // 1. lo que diga ESA version, si el operador lo redefinio; con macros, por EL
-  // expansor del IDE, como la lee la tabla (IdeMacroVars no llama aqui si esta
-  // redefinida): se saltaba y daba otra carpeta que la tabla (C6 del revisor del
-  // paisaje del cierre de la 1.26)
-  Vars := TStringList.Create;
-  try
-    IdeEnvironmentVars(AVersion, Vars);
-    Result := Vars.Values['BDSPLATFORMSDKSDIR'];
-  finally
-    Vars.Free;
-  end;
-  Result := ConMacrosDelIde(AVersion, Result);
-  if (Result <> '') and not Result.Contains('$(') then
-    Exit(SinBarraFinal(Result)); // (la raiz de una unidad, con su barra: se le unen nombres)
   // 2. donde estan los SDK que ESA version ya tiene registrados
   for Raiz in SysrootsRegistrados(AVersion) do
     // solo sirve el que apunte a una carpeta <algo>.sdk: los SDK de
@@ -1591,6 +1588,27 @@ begin
   // 3. el default documentado. UNICO literal, y aqui.
   Result := TPath.Combine(TPath.Combine(TPath.Combine(
     TPath.GetDocumentsPath, 'Embarcadero'), 'Studio'), 'SDKs');
+end;
+
+function IdeSdksDir(const AVersion: string): string;
+var
+  Vars: TStringList;
+begin
+  // 1. EL lector: la tabla del IDE de ESA version, que ya resolvio lo que el
+  // operador redefinio y, si no lo hizo o no se resuelve, pregunto los pasos 2
+  // y 3 (SdksSinRedefinir). Leia la redefinicion aparte y caia a otra carpeta
+  // que la tabla (C6 del cierre de la 1.26; A5 de la 1.27)
+  Vars := TStringList.Create;
+  try
+    TablaDeMacrosDelIde(AVersion, Vars);
+    Result := Vars.Values['BDSPLATFORMSDKSDIR'];
+  finally
+    Vars.Free;
+  end;
+  // sin esa instalacion la tabla queda vacia
+  if (Result = '') or Result.Contains('$(') then
+    Exit(SdksSinRedefinir(AVersion));
+  Result := SinBarraFinal(Result); // (la raiz de una unidad, con su barra: se le unen nombres)
 end;
 
 { Por NOMBRE y con memoria: un $(X) de uno de ANombres que es otro de ANombres
@@ -1669,15 +1687,20 @@ begin
 end;
 
 procedure IdeMacroVars(const AInfo: TRadStudioInfo; ADest: TStrings);
-var
-  UserDocs, CommonDocs: string;
-  DelIde: TArray<string>;
 begin
   // The IDE's own macro table is authoritative: it carries
   // $(BDSCatalogRepositoryAllUsers), where the GetIt packages live
   // (FmxLinux, Android SDKs, PAServer installers). Without it those
   // paths were silently dropped - measured 2026-08-19.
   IdeEnvironmentVars(AInfo.Version, ADest);
+  CompletaTablaDelIde(AInfo, ADest);
+end;
+
+procedure CompletaTablaDelIde(const AInfo: TRadStudioInfo; ADest: TStrings);
+var
+  UserDocs, CommonDocs: string;
+  DelIde: TArray<string>;
+begin
   // los nombres que da el IDE: sus valores los escribe el operador, con
   // macros dentro si quiere (abajo, ResuelveAnidadas)
   DelIde := [];
@@ -1710,13 +1733,19 @@ begin
   // ...y donde guarda los sysroots de sus SDK, si el operador no la redefinio
   // (una redefinida con macros dentro se resuelve abajo)
   if ADest.Values['BDSPLATFORMSDKSDIR'] = '' then
-    ADest.Values['BDSPLATFORMSDKSDIR'] := IdeSdksDir(AInfo.Version);
+    ADest.Values['BDSPLATFORMSDKSDIR'] := SdksSinRedefinir(AInfo.Version);
   // el anidado, en la tabla y no en el texto: lo que el operador redefinio en
   // el IDE con macros dentro ($(BDSUSERDIR)\SDKs) se resuelve con la tabla
   // entera, y lo que ponemos nosotros (carpetas) se queda tal cual, como lo
   // deja msbuild. ExpandIdeMacros daba cuatro pasadas al TEXTO y volvia a
   // mirar lo insertado (C17 del cierre de la 1.26)
   ResuelveAnidadas(ADest, DelIde);
+  // una redefinicion que la tabla no resuelve ($(USERPROFILE)\SDKs: una variable
+  // del sistema, no del IDE) se quedaba escrita, e IdeSdksDir caia a otra
+  // carpeta: dos respuestas (A5 de la 1.27). Lo que hace el IDE con ella esta SIN
+  // MEDIR; la tabla da la de los pasos 2 y 3, y IdeSdksDir la lee de aqui
+  if ADest.Values['BDSPLATFORMSDKSDIR'].Contains('$(') then
+    ADest.Values['BDSPLATFORMSDKSDIR'] := SdksSinRedefinir(AInfo.Version);
 end;
 
 function CatalogosDelIde(const AInfo: TRadStudioInfo): TArray<string>;

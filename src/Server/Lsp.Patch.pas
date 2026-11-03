@@ -2936,8 +2936,13 @@ begin
       begin
         R := Real;
         // los que nombra un .sdk, solo para LEER: un .sdk no decide donde
-        // escribe el servidor (medida M3: la libX.so iba a lo que listase)
-        Result := (R <> '') and (EnAlgunLugar(R, LugaresDelIde(AParaEscribir)) or
+        // escribe el servidor (medida M3: la libX.so iba a lo que listase).
+        // La instalacion, la primera y sin LugaresDelIde: saber la carpeta de
+        // los SDK pide la tabla del IDE, que lee rsvars.bat de la instalacion
+        // por esta puerta, y se preguntaba a si misma hasta reventar la pila
+        // (A5 de la 1.27; con una redefinicion con macros ya pasaba)
+        Result := (R <> '') and ((not AParaEscribir and EnAlgunLugar(R, [InstalacionDelIde])) or
+          EnAlgunLugar(R, LugaresDelIde(AParaEscribir)) or
           (not AParaEscribir and EnAlgunLugar(R, SysrootsDeLosSdk)));
       end;
     // los lugares del SERVIDOR (su casa y su temporal), por su forma larga y

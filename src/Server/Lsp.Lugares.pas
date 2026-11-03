@@ -47,12 +47,22 @@ function LibraryReadRoots: TArray<string>;
   biblioteca (LibraryRoots): es otro lugar de las puertas (ltBiblioteca),
   porque cargarla lee rsvars.bat por la puerta con el IDE como lugar, y
   dentro de aqui la puerta se preguntaba a si misma sin fin (medido el
-  9-oct-2026: el servidor se caia en la primera llamada al motor). En la
+  9-oct-2026: el servidor se caia en la primera llamada al motor). La carpeta
+  de los SDK SI pide leer: IdeSdksDir la lee de la tabla del IDE, y la tabla lee
+  rsvars.bat de la instalacion por la puerta; la puerta pregunta antes la
+  instalacion (InstalacionDelIde) y no vuelve aqui (A5 de la 1.27). En la
   forma con la que se compara (FormaLarga). Sin Delphi, vacio.
   AParaEscribir: los que se pueden ESCRIBIR, que son los mismos SIN la
   instalacion (David, 9-oct-2026: solo BDS AppData y los sysroots de los SDK
   que el IDE registra; la instalacion se lee, no se toca). }
 function LugaresDelIde(AParaEscribir: Boolean = False): TArray<string>;
+
+{ La instalacion del Delphi del servidor como lugar, SOLA: su RootDir en la
+  forma con la que se compara, sin leer nada. La puerta la pregunta ANTES que
+  LugaresDelIde: saber los demas pide la tabla del IDE, que lee rsvars.bat de
+  la instalacion por la puerta, y la puerta se preguntaba a si misma hasta
+  reventar la pila (A5 de la 1.27). '' sin Delphi. }
+function InstalacionDelIde: string;
 
 { LA ZONA DE BIBLIOTECA como lugar de las puertas (ltBiblioteca, Lsp.Patch):
   la de LibraryRoots, solo para LEER, este o no encendida LibraryZone - lo
@@ -849,7 +859,8 @@ var
   Lugares: TArray<string>;
   Instalacion: string;
 begin
-  // (no lee ningun fichero por las puertas: las puertas la preguntan a ELLA)
+  // (las puertas la preguntan a ELLA: lo que lee por ellas -rsvars.bat, por la
+  // tabla del IDE que da IdeSdksDir- lo admiten por la instalacion, antes)
   Info := DiscoverRadStudio;
   if not GIdeLoaded then
   begin
@@ -862,8 +873,7 @@ begin
     // un lugar del IDE
     if Info.Found then
     begin
-      if EsRutaAbsoluta(Info.RootDir.Trim) then
-        Instalacion := FormaLarga(Info.RootDir);
+      Instalacion := InstalacionDelIde;
       for var L in TArray<string>.Create(IdeProfilesDir(Info.Version),
         IdeSdksDir(Info.Version)) do
         if EsRutaAbsoluta(L.Trim) then
@@ -883,6 +893,16 @@ begin
     for var S in SysrootsRegistrados(Info.Version) do
       if EsRutaAbsoluta(S.Trim) and not S.Contains('$(') then
         Result := Result + [FormaLarga(S)];
+end;
+
+function InstalacionDelIde: string;
+var
+  Info: TRadStudioInfo;
+begin
+  Result := '';
+  Info := DiscoverRadStudio;
+  if Info.Found and EsRutaAbsoluta(Info.RootDir.Trim) then
+    Result := FormaLarga(Info.RootDir);
 end;
 
 function LugaresDeLaBiblioteca: TArray<string>;
