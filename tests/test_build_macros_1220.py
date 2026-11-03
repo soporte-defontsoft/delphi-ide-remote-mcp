@@ -195,6 +195,25 @@ try:
     check('X13 un $(...) que no es un nombre simple ($(No.Simple)) en DCC_UnitSearchPath: BUILD-051 no verificable '
           '(ROJA contra el anterior, que lo expandia a vacio y compilaba con lib\\)',
           mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_NO_VERIFICABLE_FMT') and '<DCC_UnitSearchPath>' in r, r[:300])
+
+    # un nombre con blancos dentro de $( ): msbuild NO lo recorta, es otra propiedad que nadie define y vale
+    # vacio (medido el 3-nov-2026 con msbuild: '$( Config )'=='' aplica el grupo con Config=Release, y
+    # [$( Config )] da []). La puerta lo recortaba y leia Config (C18 del cierre de la 1.26)
+    con('<PropertyGroup Condition="\'$( Config )\'==\'\'"><DCC_UnitSearchPath>..\\..\\%s</DCC_UnitSearchPath>'
+        '</PropertyGroup>' % os.path.basename(FUERA))
+    r = build(proyecto)
+    check('X14 un grupo con Condition sobre $( Config ), que msbuild aplica: la puerta juzga su search path de '
+          'fuera (ROJA: lo daba por no aplicado y compilaba con la unidad de fuera)',
+          mc.rechazado(r) and '<DCC_UnitSearchPath>' in r and not compila(r), r[:300])
+    # desde la carpeta del proyecto: in\Release\..\..\..\<FUERA> es BASE\<FUERA> (dentro, no existe), y
+    # in\\..\..\..\<FUERA> (lo que lee msbuild, con A vacia) es FUERA
+    con(prop('A', '$( Config )') + grupo('in\\$(A)\\..\\..\\..\\' + os.path.basename(FUERA)))
+    r = build(proyecto)
+    # GUARDA, no roja: ya se negaba (BUILD-051 sobre <A>, cuyo valor escrito no es un nombre simple); se queda por
+    # si el valor de A dejara de juzgarse escrito
+    check('X15 A=$( Config ) en el search path: msbuild la lee vacia y llega a FUERA; la puerta no la da por '
+          'Release: se niega',
+          mc.rechazado(r) and not compila(r), r[:300])
 finally:
     srv.cierra()
     mc.borra(BASE)

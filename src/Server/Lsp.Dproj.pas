@@ -1069,6 +1069,23 @@ function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): strin
 function MacrosReservadasDeMsbuild(const ACarpetaProyecto, ANombreProyecto, ACarpetaDelFichero: string): TArray<string>;
 { Las dos reservadas que son el path real del propio .dproj (V160e). }
 function MacrosDelFicheroDelProyecto(const ADprojPath: string): TArray<string>;
+type
+  { Lo que RecorreMacros hace con un $(Nombre): ponerle AValor, dejarlo escrito
+    tal cual y seguir, o parar ahi }
+  TAccionDeMacro = (amPon, amDeja, amPara);
+  TMacroDe = reference to function(const ANombre: string; out AValor: string): TAccionDeMacro;
+
+{ EL recorrido de los $(Nombre) de ATexto, LA gramatica de un macro: el nombre
+  es lo que hay entre "$(" y el primer ")", TAL CUAL, sin recortar (msbuild no
+  lo recorta: $( Config ) es otra propiedad, que nadie define y vale vacio;
+  medido el 3-nov-2026), de izquierda a derecha y una sola vez: lo puesto no se
+  vuelve a mirar. AMacroDe decide cada uno. Devuelve el texto con lo puesto, y
+  lo de detras de donde para tal cual; AParado, si AMacroDe paro o un $( no se
+  cierra. Eran seis recorridos y dos recortaban el nombre (el lector de las
+  Condition y la puerta del build), aunque la puerta ya sabia que no (H12 de
+  la 1.22): un grupo que msbuild aplica se daba por no aplicado y la puerta no
+  juzgaba lo que pone (C18 del cierre de la 1.26). }
+function RecorreMacros(const ATexto: string; const AMacroDe: TMacroDe; out AParado: Boolean): string;
 { EL expansor de $(X), el de msbuild y el de la tabla del IDE: cada $(Nombre)
   de ATexto que APares da ('Nombre=Valor'; el nombre sin mirar mayusculas, y
   el primer par que lo da) por su valor, en UNA pasada de izquierda a derecha.
@@ -2608,38 +2625,36 @@ end;
 function ExpandeMacrosDelBuild(var AValor: string; const APlatform, AConfig: string;
   ABusca: TBuscaBandera; var ADuda: string; AParaValor: Boolean = False): Boolean;
 var
-  A, B: Integer;
-  Nombre, V: string;
-  Bandera: TBanderaDelBuild;
+  Duda: string;
+  Parado: Boolean;
 begin
-  Result := False;
-  A := Pos('$(', AValor);
-  while A > 0 do
-  begin
-    B := Pos(')', AValor, A + 2);
-    if B = 0 then
-      Exit;
-    Nombre := Copy(AValor, A + 2, B - A - 2).Trim;
-    if not EsNombreDeMacro(Nombre) then
-      Exit;
-    if SameText(Nombre, 'Config') then
-      V := AConfig
-    else if SameText(Nombre, 'Platform') then
-      V := APlatform
-    else
+  Duda := ADuda;
+  // por EL recorrido, con el nombre tal cual: aqui se recortaba, y
+  // '$( Config )'=='' era 'Release'=='' para la puerta y ''=='' para msbuild,
+  // que aplicaba el grupo (C18 del cierre de la 1.26)
+  AValor := RecorreMacros(AValor,
+    function(const ANombre: string; out AV: string): TAccionDeMacro
     begin
-      Bandera := ABusca(Nombre);
-      V := Bandera.Valor;
-      if AParaValor and (Bandera.Estado = eDesconocida) then
-        V := Copy(AValor, A, B - A + 1) // se deja escrito tal cual
-      else if (Bandera.Estado <> eSabida) or (not AParaValor and (Pos('$(', V) > 0)) then
-        if ADuda = '' then
-          ADuda := Nombre;
-    end;
-    AValor := Copy(AValor, 1, A - 1) + V + Copy(AValor, B + 1, MaxInt);
-    A := Pos('$(', AValor, A + Length(V));
-  end;
-  Result := (Pos('@(', AValor) = 0) and (Pos('%(', AValor) = 0);
+      Result := amPon;
+      if not EsNombreDeMacro(ANombre) then
+        Exit(amPara);
+      if SameText(ANombre, 'Config') then
+        AV := AConfig
+      else if SameText(ANombre, 'Platform') then
+        AV := APlatform
+      else
+      begin
+        var Bandera := ABusca(ANombre);
+        AV := Bandera.Valor;
+        if AParaValor and (Bandera.Estado = eDesconocida) then
+          Exit(amDeja) // se deja escrito tal cual
+        else if (Bandera.Estado <> eSabida) or (not AParaValor and (Pos('$(', AV) > 0)) then
+          if Duda = '' then
+            Duda := ANombre;
+      end;
+    end, Parado);
+  ADuda := Duda;
+  Result := not Parado and (Pos('@(', AValor) = 0) and (Pos('%(', AValor) = 0);
 end;
 
 { Los %XX de una cadena de msbuild (dos hexadecimales) como el caracter que
@@ -3522,48 +3537,63 @@ begin
   end;
 end;
 
-function ExpandeMacros(const ATexto: string; const APares: TArray<string>;
-  const ASalvo: string): string;
-
-  // el valor del primer par que da ANombre, sin mirar mayusculas (las ASCII,
-  // como msbuild); False si ninguno lo da
-  function ValorDe(const ANombre: string; out AValor: string): Boolean;
-  begin
-    for var Par in APares do
-    begin
-      var Igual := Pos('=', Par);
-      if (Igual > 1) and SameText(Copy(Par, 1, Igual - 1), ANombre) then
-      begin
-        AValor := Copy(Par, Igual + 1, MaxInt);
-        Exit(True);
-      end;
-    end;
-    Result := False;
-  end;
-
+function RecorreMacros(const ATexto: string; const AMacroDe: TMacroDe; out AParado: Boolean): string;
 var
   P, Q, Desde: Integer;
-  Nombre, Valor: string;
+  Valor: string;
 begin
   Result := '';
+  AParado := False;
   Desde := 1;
   P := Pos('$(', ATexto);
   while P > 0 do
   begin
     Q := Pos(')', ATexto, P + 2);
     if Q = 0 then
-      Break;
-    Nombre := Copy(ATexto, P + 2, Q - P - 2);
-    if not SameText(Nombre, ASalvo) and ValorDe(Nombre, Valor) then
     begin
-      Result := Result + Copy(ATexto, Desde, P - Desde) + Valor;
-      Desde := Q + 1;
-      P := Pos('$(', ATexto, Desde);
-    end
-    else
-      P := Pos('$(', ATexto, P + 2);
+      AParado := True;
+      Break;
+    end;
+    case AMacroDe(Copy(ATexto, P + 2, Q - P - 2), Valor) of
+      amPon:
+        begin
+          Result := Result + Copy(ATexto, Desde, P - Desde) + Valor;
+          Desde := Q + 1;
+        end;
+      amPara:
+        begin
+          AParado := True;
+          Break;
+        end;
+    end;
+    P := Pos('$(', ATexto, Q + 1);
   end;
   Result := Result + Copy(ATexto, Desde, MaxInt);
+end;
+
+function ExpandeMacros(const ATexto: string; const APares: TArray<string>;
+  const ASalvo: string): string;
+var
+  Parado: Boolean;
+begin
+  // por EL recorrido: el primer par que da el nombre, salvo ASalvo, sin mirar
+  // mayusculas (las ASCII, como msbuild); lo que ninguno da se queda escrito
+  Result := RecorreMacros(ATexto,
+    function(const ANombre: string; out AValor: string): TAccionDeMacro
+    begin
+      Result := amDeja;
+      if SameText(ANombre, ASalvo) then
+        Exit;
+      for var Par in APares do
+      begin
+        var Igual := Pos('=', Par);
+        if (Igual > 1) and SameText(Copy(Par, 1, Igual - 1), ANombre) then
+        begin
+          AValor := Copy(Par, Igual + 1, MaxInt);
+          Exit(amPon);
+        end;
+      end;
+    end, Parado);
 end;
 
 function MacrosReservadasDeMsbuild(const ACarpetaProyecto, ANombreProyecto, ACarpetaDelFichero: string): TArray<string>;
@@ -4154,25 +4184,22 @@ var
   Elementos: TArray<TElementoXml>;
   V: TArray<TVeredicto>;
   Definidas, Nombres: TArray<string>;
-  P, Q: Integer;
+  Parado: Boolean;
 begin
   Result := [];
-  // los $(X) de AValor que el documento define, sin el propio (la herencia)
+  // los $(X) de AValor que el documento define, sin el propio (la herencia),
+  // por EL recorrido
   Nombres := [];
   Elementos := ElementosDe(AXml, Mal);
   Definidas := PropiedadesDefinidas(Elementos);
-  P := Pos('$(', AValor);
-  while P > 0 do
-  begin
-    Q := Pos(')', AValor, P + 2);
-    if Q = 0 then
-      Break;
-    var N := Copy(AValor, P + 2, Q - P - 2);
-    if EsNombreDeMacro(N) and not SameText(N, ATag) and MatchText(N, Definidas) and
-       not MatchText(N, Nombres) then
-      Nombres := Nombres + [N];
-    P := Pos('$(', AValor, Q + 1);
-  end;
+  RecorreMacros(AValor,
+    function(const ANombre: string; out AV: string): TAccionDeMacro
+    begin
+      if EsNombreDeMacro(ANombre) and not SameText(ANombre, ATag) and MatchText(ANombre, Definidas) and
+         not MatchText(ANombre, Nombres) then
+        Nombres := Nombres + [ANombre];
+      Result := amDeja;
+    end, Parado);
   if Length(Nombres) = 0 then
     Exit;
   V := VeredictosDeElementos(AXml, APlatform, AConfig, Elementos, [], []);

@@ -1023,6 +1023,13 @@ REGLAS = [
     ('una macro sustituida a mano', r"\.Replace\(\s*'\$\(|StringReplace\([^,]+,\s*'\$\(",
      [],
      'ExpandeMacros (Lsp.Dproj): EL expansor de $(X), una pasada, lo insertado no se vuelve a mirar'),
+    # un $(X) recorrido a mano: eran seis recorridos y dos recortaban el nombre, que msbuild no recorta, aunque la
+    # puerta ya lo sabia (H12 de la 1.22): un grupo con '$( Config )'=='' que msbuild aplica se daba por no aplicado
+    # y la puerta no juzgaba lo que pone (C18 del cierre de la 1.26, medido con msbuild). HazardScan busca funciones
+    # de propiedad con blancos delante del '[': mas estricto, a proposito
+    ('un $(X) recorrido a mano', r"\w+\s*:=\s*Pos\(\s*'\$\('",
+     [('Lsp.Dproj.pas', 'RecorreMacros'), ('Lsp.Dproj.pas', 'HazardScan')],
+     'RecorreMacros (Lsp.Dproj): LA gramatica de $(Nombre), el nombre tal cual, una pasada'),
     # la autorizacion de X de una sesion Wayland: la mascara de su fichero vive en el nodo, con su texto
     ('la autorizacion de X de Wayland a mano', r"mutter-Xwaylandauth",
      [('Mld.Sesion.pas', '*'), ('Mld.Textos.pas', '*')],
@@ -2072,6 +2079,7 @@ PLANTADO = {
     'el exe del conversor de estilos': "      Mira(ServerDir, 'DelphiStyleConvert.*');",
     'lo que recibe ParamStr juzgado a mano': "  if AArg.Contains('\"') then",
     'una linea citada sin su corte': "    Warns.Add(MsgFmt(SF_DSGN_LINEA_AVISO_FMT, [I + 1, ALines[I].Trim, AMsg]));",
+    'un $(X) recorrido a mano': "  P := Pos('$(', AValor);",
     'una macro sustituida a mano': "  T := T.Replace('$(BDS)', Raiz, [rfReplaceAll]);",
     'la autorizacion de X de Wayland a mano': "  M := Home + '/.mutter-Xwaylandauth.*';",
     'la cuenta leida del entorno': "  U := GetEnvironmentVariable('USERNAME');",

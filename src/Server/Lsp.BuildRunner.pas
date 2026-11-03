@@ -1786,37 +1786,26 @@ var
   // expandido no se vuelve a expandir, como en msbuild
   function Expande(const AValor: string; const ADeOtros: TArray<string>): string;
   var
-    P, Q: Integer;
-    Nombre, V: string;
+    Parado: Boolean;
   begin
-    Result := AValor;
-    P := Pos('$(', Result);
-    while P > 0 do
-    begin
-      Q := Pos(')', Result, P + 2);
-      if Q = 0 then
-        Exit; // sin cierre: se queda, y lo que queda con $( no se aprueba
-      Nombre := Copy(Result, P + 2, Q - P - 2).Trim;
-      // nunca se sustituye un contenido que no sea un nombre de propiedad
-      // simple: se deja escrito (la puerta ya lo nego, BUILD-051) y se sigue
-      // tras el, sin darle un valor que no es el que lee msbuild
-      if not EsNombreDeMacro(Nombre) then
+    // por EL recorrido (Lsp.Dproj.RecorreMacros), con el nombre tal cual: aqui
+    // se recortaba (C18 del cierre de la 1.26). Sin cierre, lo de detras se
+    // queda, y lo que queda con $( no se aprueba
+    var LaTabla := Vars;
+    Result := RecorreMacros(AValor,
+      function(const ANombre: string; out AV: string): TAccionDeMacro
       begin
-        P := Pos('$(', Result, Q + 1);
-        Continue;
-      end;
-      if MatchText(Nombre, ADeOtros) then
-      begin
-        P := Pos('$(', Result, Q + 1);
-        Continue;
-      end;
-      if Vars.IndexOfName(Nombre) >= 0 then
-        V := Vars.Values[Nombre]
-      else
-        V := VariableQueVeElBuild(Nombre);
-      Result := Copy(Result, 1, P - 1) + V + Copy(Result, Q + 1, MaxInt);
-      P := Pos('$(', Result, P + Length(V));
-    end;
+        // nunca se sustituye un contenido que no sea un nombre de propiedad
+        // simple: se deja escrito (la puerta ya lo nego, BUILD-051), sin darle
+        // un valor que no es el que lee msbuild; ni lo que define otro documento
+        if not EsNombreDeMacro(ANombre) or MatchText(ANombre, ADeOtros) then
+          Exit(amDeja);
+        if LaTabla.IndexOfName(ANombre) >= 0 then
+          AV := LaTabla.Values[ANombre]
+        else
+          AV := VariableQueVeElBuild(ANombre);
+        Result := amPon;
+      end, Parado);
   end;
 
   // Gramatica propia (no hay juez de "URL o ruta"): el esquema de una URL
@@ -1970,20 +1959,26 @@ var
     // verificable (msbuild lo evalua donde lo importa y la puerta no sabe a que
     // ruta lleva), BUILD-051 sobre lo ESCRITO, antes de expandir, exista o no
     // la ruta (David, 22-oct-2026; censo: 0 de 3.651 .dproj con algo asi)
-    var Pm := Pos('$(', AValor.Escrito);
-    while Pm > 0 do
-    begin
-      var Qm := Pos(')', AValor.Escrito, Pm + 2);
-      if Qm = 0 then
-        Break; // sin cerrar: no es un macro; lo juzga el trozo ya expandido
-      // SIN recortar: msbuild no recorta el nombre, $( A ) es la propiedad " A "
-      // (no "A"), que nadie define y vale vacio; la puerta lo niega como no
-      // verificable en vez de expandirlo con el valor de A (H12, 22-oct-2026)
-      if not EsNombreDeMacro(Copy(AValor.Escrito, Pm + 2, Qm - Pm - 2)) then
-        Exit(MsgFmt(SR_BUILD_LECTURA_NO_VERIFICABLE_FMT,
-          [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito]));
-      Pm := Pos('$(', AValor.Escrito, Qm + 1);
-    end;
+    // Por EL recorrido (Lsp.Dproj.RecorreMacros), que no recorta el nombre:
+    // msbuild no lo recorta, $( A ) es la propiedad " A " (no "A"), que nadie
+    // define y vale vacio; la puerta lo niega como no verificable en vez de
+    // expandirlo con el valor de A (H12, 22-oct-2026). Uno sin cerrar no es un
+    // macro: lo juzga el trozo ya expandido
+    var NoSimple := False;
+    var Parado: Boolean;
+    RecorreMacros(AValor.Escrito,
+      function(const ANombre: string; out AV: string): TAccionDeMacro
+      begin
+        Result := amDeja;
+        if not EsNombreDeMacro(ANombre) then
+        begin
+          NoSimple := True;
+          Result := amPara;
+        end;
+      end, Parado);
+    if NoSimple then
+      Exit(MsgFmt(SR_BUILD_LECTURA_NO_VERIFICABLE_FMT,
+        [AValor.Elemento, TPath.GetFileName(AFichero), AValor.Escrito]));
     // un macro cuyo valor no se sabe donde el build lo lee (puesto bajo una
     // Condition que no se sabe evaluar, o una global del build): el valor no
     // se sabe leer, BUILD-056, exista o no la ruta a la que llevaria
