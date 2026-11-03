@@ -2645,8 +2645,11 @@ REGLAS_PY = [
      'mc.ANSI, y en_la_1252 / check_1252 / bateria_de_la_1252 para lo que es de la 1252'),
     # (r5-L4: seis baterias buscaban la instalacion activa a mano, y seis
     # componian Program Files o Public Documents con su version)
-    ('la carpeta del IDE compuesta a mano', r"""Embarcadero(?:[\\/]+|['"]\s*,\s*['"])Studio""", [],
-     'mc.raiz_ide (delphi_installs) o mc.variable_de_rsvars (BDSCOMMONDIR...)'),
+    # (A7 de la 1.27: la carpeta de SDKs donde paclient deja la de cada perfil no la da ni el
+    # IDE ni rsvars.bat; su juez es paclient, y test_sdks_perfil_127 S1 la mide contra el)
+    ('la carpeta del IDE compuesta a mano', r"""Embarcadero(?:[\\/]+|['"]\s*,\s*['"])Studio""",
+     [('mcp_cliente.py', 'def carpeta_sdks')],
+     'mc.raiz_ide (delphi_installs) o mc.variable_de_rsvars (BDSCOMMONDIR...); la de SDKs, mc.carpeta_sdks'),
     ('la instalacion activa buscada a mano', r"""get\(\s*['"]active['"]\s*\)""",
      [('mcp_cliente.py', 'def instalacion_activa')],
      'mc.instalacion_activa'),

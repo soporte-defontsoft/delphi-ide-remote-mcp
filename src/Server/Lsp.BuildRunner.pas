@@ -174,10 +174,14 @@ begin
   UniqueString(Cmd); // CreateProcessW puede modificar el buffer
   // Sin job: ese es el punto. BREAKAWAY por si el propio servidor corriera
   // dentro de uno (el SCM no lo hace); si el job padre no lo permite, sin el.
+  // El entorno, el de un hijo (EntornoDelHijo): el demonio de adb vive mas que
+  // la peticion y heredaba el token (colaterales de A1 de la 1.27)
+  var Entorno := EntornoDelHijo;
   if not CreateProcess(nil, PChar(Cmd), nil, nil, False,
-    CREATE_NO_WINDOW or CREATE_SUSPENDED or CREATE_BREAKAWAY_FROM_JOB, nil, nil, SI, PI) then
+    CREATE_NO_WINDOW or CREATE_SUSPENDED or CREATE_BREAKAWAY_FROM_JOB or CREATE_UNICODE_ENVIRONMENT,
+    PChar(Entorno), nil, SI, PI) then
     if not CreateProcess(nil, PChar(Cmd), nil, nil, False,
-      CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, nil, SI, PI) then
+      CREATE_NO_WINDOW or CREATE_SUSPENDED or CREATE_UNICODE_ENVIRONMENT, PChar(Entorno), nil, SI, PI) then
       Exit;
   // Suspendido hasta decirle que no abra nunca un cuadro de error
   // (Lsp.ErrorMode): lo que se lanza aqui vive mas que la peticion - el
@@ -528,14 +532,11 @@ begin
       CREATE_NO_WINDOW or CREATE_SUSPENDED, SI, PI, AEntorno)
   else
   begin
-    var Env: PChar := nil;
-    var Flags: DWORD := CREATE_NO_WINDOW or CREATE_SUSPENDED;
-    if AEntorno <> '' then
-    begin
-      Env := PChar(AEntorno);
-      Flags := Flags or CREATE_UNICODE_ENVIRONMENT;
-    end;
-    Launched := CreateProcessConHandles(Cmd, WorkDirPtr, Flags, Env, SI, PI);
+    // sin entorno dado, el del servidor SIN su configuracion (EntornoDelHijo):
+    // paclient, adb y reg.exe heredaban el token (colaterales de A1 de la 1.27)
+    var Entorno := EntornoDelHijo(AEntorno);
+    Launched := CreateProcessConHandles(Cmd, WorkDirPtr,
+      CREATE_NO_WINDOW or CREATE_SUSPENDED or CREATE_UNICODE_ENVIRONMENT, PChar(Entorno), SI, PI);
   end;
   if not Launched then
   begin

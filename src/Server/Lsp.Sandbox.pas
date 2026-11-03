@@ -143,6 +143,14 @@ function CuentaDeEsteProceso: string;
   del hijo. No modifica el entorno del servidor ni carreras entre llamadas. }
 function EntornoSinConfiguracion(const AFijas: TArray<string> = nil): string;
 
+{ EL entorno de un hijo del servidor: el que se le da o, sin darlo, el de este
+  proceso sin la configuracion (EntornoSinConfiguracion). Sin darlo, paclient,
+  adb y su demonio, reg.exe y el motor heredaban el entorno ENTERO, el token
+  incluido (colaterales de A1 de la 1.27, medido con test_entorno_hijos_127). Lo
+  preguntan todos los que lanzan: RunCore, RunDetached, el motor y el
+  contenedor, que lo tenia escrito aparte. }
+function EntornoDelHijo(const AEntorno: string = ''): string;
+
 { Lo que msbuild ve de una variable del entorno del servidor: su valor, y las
   de la configuracion (DELPHI_MCP_*), que no le llegan, vacias. Lo preguntaban
   dos, y uno no las quitaba: EL prefijo, aqui (P5 del revisor). }
@@ -291,6 +299,13 @@ begin
   Result := string(PChar(@Nombre[0]));
   if Dominio[0] <> #0 then
     Result := string(PChar(@Dominio[0])) + '\' + Result;
+end;
+
+function EntornoDelHijo(const AEntorno: string): string;
+begin
+  Result := AEntorno;
+  if Result = '' then
+    Result := EntornoSinConfiguracion;
 end;
 
 function VariableQueVeElBuild(const ANombre: string): string;
@@ -642,9 +657,7 @@ begin
     SetLastError(Err);
     Exit;
   end;
-  Entorno := AEntorno;
-  if Entorno = '' then
-    Entorno := EntornoSinConfiguracion;
+  Entorno := EntornoDelHijo(AEntorno);
   Result := CreateProcessConHandles(ACmdLine, AWorkDir,
     ACreateFlags or CREATE_UNICODE_ENVIRONMENT, PChar(Entorno), ASI, API, AC.Sid);
 end;

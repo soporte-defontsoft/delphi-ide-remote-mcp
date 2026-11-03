@@ -1026,6 +1026,7 @@ def fin(titulo, sin_checks=None):
     Suelta, para el adb que ella arranco; dentro de run_all eso lo hace la
     suite, una vez al final, para no parar el que otra esta usando."""
     global F
+    recoge_huellas()
     if P == 0 and F == 0:
         if sin_checks:
             print('%s %s' % (SIN_CHECKS, sin_checks))
@@ -1190,7 +1191,39 @@ def appdata_perfil(base, nombre='x', host='127.0.0.1', platform='Win64', por_def
             assert grupo in t, 'EnvOptions.proj sin el grupo de ' + platform
             t = t.replace(grupo, grupo + '\n        <DefaultProfile>%s</DefaultProfile>' % nombre, 1)
             open(env_opts, 'w', encoding='utf-8').write(t)
+    _huella_de_perfil(nombre)
     return ad, host
+
+
+# paclient deja una carpeta VACIA con el nombre del perfil en la de SDKs del IDE al usarlo
+# (Mcp.Tools.PAServer, medido el 22-sep-2026) y no mira el APPDATA falso: las baterias la dejaban en
+# Documents\Embarcadero\Studio\SDKs de la maquina (A7 de la 1.27). La de un perfil de bateria que NO
+# estaba antes, y vacia, se recoge en fin(); la que ya estaba no se toca.
+_HUELLAS = []
+
+
+def carpeta_sdks():
+    """Documents\\Embarcadero\\Studio\\SDKs de este usuario, preguntado a Windows (CSIDL_PERSONAL)."""
+    buf = ctypes.create_unicode_buffer(260)
+    ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf)
+    return os.path.join(buf.value, 'Embarcadero', 'Studio', 'SDKs')
+
+
+def _huella_de_perfil(nombre):
+    p = os.path.join(carpeta_sdks(), nombre)
+    _HUELLAS.append((p, os.path.lexists(p)))
+
+
+def recoge_huellas():
+    """Quita las carpetas VACIAS que paclient dejo para los perfiles de esta bateria y que no estaban."""
+    for p, estaba in _HUELLAS:
+        if estaba or os.path.islink(p) or os.path.isjunction(p) or not os.path.isdir(p):
+            continue
+        try:
+            if not os.listdir(p):
+                os.rmdir(p)
+        except OSError:
+            pass
 
 
 # Las etiquetas de los mensajes del catalogo (Lsp.Texts.MSG_TAG_REGEX, decision

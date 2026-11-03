@@ -84,7 +84,7 @@ type
 implementation
 
 uses
-  Lsp.Sandbox, // EnterSpawn / LeaveSpawn: one handle-inheriting launch at a time
+  Lsp.Sandbox, // EnterSpawn / LeaveSpawn: one handle-inheriting launch at a time; EntornoDelHijo
   Lsp.ErrorMode, // NoErrorDialogs
   Lsp.Texts,
   Lsp.ProcessLaunch,
@@ -169,8 +169,11 @@ begin
   CmdLine := ComillasSinEscape(FExePath);
   UniqueString(CmdLine); // CreateProcessW may modify the buffer
 
+  // el entorno de un hijo (EntornoDelHijo): sin darlo, el motor heredaba la
+  // configuracion del servidor, el token incluido (colaterales de A1 de la 1.27)
+  var Entorno := EntornoDelHijo;
   if not CreateProcessConHandles(CmdLine, nil,
-    CREATE_NO_WINDOW or CREATE_SUSPENDED, nil, SI, FProcInfo) then
+    CREATE_NO_WINDOW or CREATE_SUSPENDED or CREATE_UNICODE_ENVIRONMENT, PChar(Entorno), SI, FProcInfo) then
   begin
     CloseHandle(ChildStdInRead);
     CloseHandle(ChildStdOutWrite);
