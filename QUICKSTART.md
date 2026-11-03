@@ -19,8 +19,10 @@ Inside: `DelphiLspMcp.exe` (the server), `DelphiStyleConvert.exe` (its style
 companion), `DelphiFormRenderVcl.exe` and `DelphiFormRenderFmx.exe` (the form
 renderers of `delphi_designer preview`; the VCL one also converts binary `.dfm`
 files, which are not read without it), `settings.example.ini`, `node\` (the
-desktop node and the launcher, used later for Linux targets) and `docs\`. Keep
-the helpers next to the exe.
+desktop node and the launcher, used later for Linux and Windows targets) and
+`docs\`. Keep the helpers next to the exe, all from the same zip: each one
+states its protocol, and one of another version is refused (`DSGN-184`,
+`STYLE-066`).
 
 ## 2. A five-line `settings.ini`
 

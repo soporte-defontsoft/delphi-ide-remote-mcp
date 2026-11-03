@@ -64,13 +64,16 @@ Status page as of 2026-11-02 (current release v1.25.1; 42 tools).
 
 - The MCP revision 2026-07-28 next to the sessions, and what agents kept asking for: `delphi_search` with `context` and `exclude`, six more `delphi_git` operations, several operations in one `delphi_changeset stage`, the compiler's `hints` in a build, warnings and hints of a unit below its project's folder, the rename of a local and `RENAME-023`; `delphi_desktop` a permission of its own, per host; what a build and a test say read from their judges (MSBuild's classification, DUnitX's summary) instead of the console text; form renderers that state their protocol (1.25.0)
 
+- The patch of 1.25: the designer never writing an edit after the client gave up (`DSGN-185`); a frame that contains itself told apart (`RENDER-026`) and never written by `insert` (`DSGN-186`); `RENDER-007` saying to repeat a first load of design packages under an antivirus (1.25.1)
+
+- What the judges say, read from them: the build gate reading a `.dproj` as msbuild does (a `$(...)` name as written, `<Import>` paths unescaped, the body's macros as msbuild has them there, device prefixes refused); names compared as NTFS compares them; arguments composed as a Delphi program's `ParamStr` reads them (`RUN-025`, `TEST-037`); the style converter in its own container, with a protocol (`STYLE-065`, `STYLE-066`); the IDE's design packages loaded under a budget of their own (`RENDER-027`, `DSGN-187`); the file and line of what lives in another file of a form (render protocol 4); `delphi_config view` showing the version the build puts in the binary; a second, measured pass over the tool descriptions (1.26.0)
+
 ## Next
 
 Stabilizing what is there, not adding to it:
 
 - Working from Linux: what exists, measured end to end on the Linux targets through PAServer (an FMX app deployed without the IDE's deploy files, desktops beyond GNOME)
 - The designer: what it already does, measured where it is not yet (preview at other DPIs and from the tray)
-- Lighter for small models: a second pass over the tool descriptions, measured against a small local model
 - The jail measured, not only declared: the protections that need a privilege measured in the suite, and fewer rules of our own where a real judge can answer
 - A more restricted token (LPAC) for the resource compiler of `delphi_styles build`: measured on 2026-10-24 that it would not lift the styles-folder rule of 1.21.0 (`STYLE-052`), since `C:\Windows` and `Program Files` grant read to restricted application packages as well - whether it is still worth it is open
 

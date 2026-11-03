@@ -13,7 +13,7 @@ and what each tool does, in the [README](../README.md) and [TOOLS.md](TOOLS.md).
 | The remote server, permanently | `DelphiLspMcp.exe -install` | **How you should actually deploy it**: a Windows Service. Needs an elevated prompt; `-uninstall` removes it. It must then be told to **log on as the user who installed and uses RAD Studio** — see right below, this one is not optional. |
 | An eye on it while you work | `DelphiLspMcp.exe -gui` | Tray app: starts iconized, double-click for the live log. The exe is a console program, so Windows flashes its console window for a moment when it starts (20-30 ms, measured 2026-09-30); a shortcut to `conhost.exe --headless DelphiLspMcp.exe -gui` starts it with no window at all. |
 
-Each switch is accepted as `/x`, `-x` or `--x`. The service reads the same `settings.ini` next to the executable as every other mode — including its port, so the service and the tray cannot both run: it is one or the other.
+Each switch is accepted as `/x`, `-x` or `--x`, except `install` and `uninstall`: the Windows service installer reads only `/install` or `-install` (and `/uninstall`, `-uninstall`), and `--install` says so and installs nothing. The service reads the same `settings.ini` next to the executable as every other mode — including its port, so the service and the tray cannot both run: it is one or the other.
 
 ### The service must log on as the user who owns the IDE
 
@@ -140,7 +140,7 @@ carry the Delphi version in their file names, every cache file is written whole,
 designer tables are generated under a lock shared by every process - so each server finds its
 own version's files. One tool shares its converter on purpose: `delphi_styles` converts styles
 with the one shipped with the server (`DelphiStyleConvert.exe`, built with RAD Studio 13's
-FireMonkey), whatever the server's Delphi. The renderers of `delphi_designer preview` are built
+FireMonkey), whatever the server's Delphi, inside a Windows container of its own on a copy of the style, as the renderers (`STYLE-065` when that container cannot be prepared). The renderers of `delphi_designer preview` are built
 with RAD Studio 13 too: they load its runtime packages (`rtl370.bpl`...) and the design
 packages of the server's Delphi, and they are only tested against BDS 37.0. A preview runs
 the constructors and property setters of the installed components, as the IDE does when it
@@ -149,7 +149,7 @@ without the container nothing is drawn (`DSGN-177`), so a form shows no live dat
 it. What the agent writes - the form - is judged first (a value with the shape of a path outside
 the roots is refused by its text before the renderer starts), and a component that waits (a
 design-time connection with nothing to open) ends at the renderer's budget (`RENDER-007`, 60 s,
-nothing left behind). Loading the IDE's design packages has a budget of its own, 50 s (30 s in a VCL form's `layout`, which waits 45 s in all), inside what
+nothing left behind). Loading the IDE's design packages has a budget of its own, 50 s in a preview (when the renderer only measures the boxes - `layout` on a VCL form, and the check after `insert` or `set parent=` on either framework - the call waits 45 s in all and the renderer gets 30 s, its packages included; an FMX form's `layout` keeps a preview's time, since its boxes come only from the renderer), inside what
 an MCP client waits: the first render after Microsoft Defender updates its signatures, about three
 times a day, on a machine with third-party design packages, can need more, because it checks each
 package it has not seen under those signatures, up to about 10 s each (measured 2026-11-01 on a
@@ -424,7 +424,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   boundary an agent cannot cross, use a workspace token instead (the name is self-declared,
   the secret is not).
 - **AllowTests**: lets `delphi_test` build and run a workspace test project here — the only
-  thing that ever executes on the server, and without it an agent can write code but never
+  thing an agent can run on this server (besides what a build runs with `AllowBuildScripts=1`), and without it an agent can write code but never
   learn whether it works. The test runs in a Windows container (an AppContainer) of its
   own, created for that run and deleted with its answer, on a COPY of its output folder in
   the server's own temp: it reads and writes that copy and, besides it, only what Windows
@@ -441,7 +441,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
 - **AllowRemoteRun**: lets `delphi_paserver remote-run` execute, on a PAServer target, the
   binary *that project deployed there* — never anything else on that machine: the server
   derives the remote path itself and its launcher verifies the file's signature
-  (ELF/Mach-O/PE), so only a native binary ever runs. The one execution path of the product (running on
+  (ELF/PE), so only a native binary ever runs. The one execution path of the product (running on
   the target is not running here). It takes TWO declarations: this switch and
   `RemoteRunProjects` — an empty project list allows nothing (fail closed, v0.98). Its
   entries are the full paths of the projects' `.dproj` (a `.dpr`, or no extension, is the
@@ -497,7 +497,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   or plants/deletes files* (a planted `<Exec>`), an element the gate does not know, free text
   for the compiler's command line (`DCC_AdditionalSwitches`, `BRCC_UserSuppliedOptions`,
   `BRCC_ResponseFilename`), and an `<Import>` of a file outside the workspace, other than
-  the IDE's own, even when harmless. An **inert** custom `<Target>` (a `<Message>`, a
+  the IDE's own, even when harmless. An import's path is read as msbuild reads it, unescaped (`%2E%2E` is `..`), and only the IDE's own imports written plainly (`$(BDS)\Bin\CodeGear.*.targets` and the user's `UserTools.proj`: no `..`, no escape, no other macro) are trusted without being read; a value of the project's body is judged with the macros msbuild has there, where `$(BDSLIB)`, `$(BDSBIN)`, `$(BDSUSERDIR)`, the catalog repositories and `$(BDSPLATFORMSDKSDIR)` are still empty (the targets imported at the end define them). An **inert** custom `<Target>` (a `<Message>`, a
   property) always builds. Independently of this switch, what the build **reads** through the
   project — the icon, the manifest, the search paths, a `.rc` and the files it names, a
   deployment file — has to lie where the session may read (the workspace, the IDE and its
@@ -509,7 +509,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   (`BUILD-028`). The fields of a deployment entry only take what a path takes, and in
   `RemoteDir` and `RemoteName` no macro but `$(PROJECTNAME)` (`BUILD-066`), and a project
   that goes to a PAServer target has a name of letters, digits, spaces and `_ - . ( ) +`
-  (`PAS-071`). A `resinator.exe` in the project's folder is refused too (`BUILD-065`): the
+  (`PAS-071`). Without `AllowBuildScripts`, a `resinator.exe` in the project's folder is refused too (`BUILD-065`): the
   IDE's resource compiler would run it instead of its own. The server takes the current
   folder out of the library search of everything it starts. The project's **pre/post build events**
   (signing, copies, EurekaLog) are not
@@ -556,8 +556,8 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   workspace's list are refused at **both** access levels, every device-addressing command
   must name its `device` explicitly (an implicit target could be an unlisted device that
   happens to be the only one attached) — and, like every list since v0.98, **absent means
-  NO devices**, never unrestricted. A screenshot writes `/sdcard/delphi_mcp_screen.png` on
-  the device and deletes it (a file of that name there would be overwritten).
+  NO devices**, never unrestricted. A screenshot writes a file with a name of its own under
+  `/sdcard/` and removes it whatever happens, so two captures of one device at once each get their own.
 - **`[Server] DelphiVersion`**: the ONE RAD Studio this server uses - the BDS version number
   (`37.0` = RAD Studio 13, `23.0` = 12 Athens, `22.0` = 11 Alexandria), and only from here.
   Absent = the newest with DelphiLSP, which the server then writes here at its first start. A
@@ -593,6 +593,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   rather than throwing an answer away - and the log says which one and why. Its project's
   next request starts it again (a few seconds). Default 0: no cap, only `EngineIdleMinutes`
   stops engines. Worth setting on a machine with little memory or many projects at once.
+- **`[CORS]` and `[SSL]`** — the HTTP transport. `[CORS] Enabled` (on by default) checks a browser's `Origin` against `AllowedOrigins`; `[SSL] Enabled` (off by default) serves HTTPS with `CertFile`, `KeyFile` and, when the chain needs it, `RootCertFile`. A value of either `Enabled` that is neither yes nor no is taken as on, the closed side. `[Server] Endpoint` (`/mcp`) is the path of the MCP endpoint, and `[Server] Host` (`localhost`) only the name in the URL the server shows: where it listens is `BindIP`.
 - **`[Log]`** — the server's log on disk, the **same in every mode** (service, terminal and
   tray), in `logs\` next to the exe. `logs\actual.log` is the live tail, appended every half
   second, so a process killed from outside loses half a second, not hours. Every
@@ -612,7 +613,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   them — including `..\` escapes and prefix cousins. Paths with spaces need no quoting (the
   separator is `;`); quotes around a root are tolerated and stripped. If Roots is configured
   but no root parses valid, the server **fails closed** (everything refused) rather than
-  silently running unrestricted. No roots = unrestricted (local trusted mode). For remote
+  silently running unrestricted. No roots happens only to a tokenless local process: it may read any path and write nothing (`delphi_workspace` says `jail: none`). For remote
   exposure configure BOTH, and expose over VPN/LAN only.
 - **`__delphi-temp`: the server's temporaries, and they are disposable.** One home, next to
   the executable, like `reports\`: a git message file, an SDK probe, the script sent to a
@@ -667,7 +668,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   a genuinely served `X:` drive masks to.)
 - **Library read zone** (off unless the workspace declares `LibraryZone=1`; re-read when the IDE's Library Path or its Environment Variables change - the server asks Windows to signal those registry keys - so a component registered while the server runs is readable from the next call, no restart (since 1.21.4); absent, reads are confined to the roots exactly
   like writes): READING tools (read/search/list/fetch/LSP navigation) additionally
-  accept, for **every installed Delphi**, its installation directory, the Library Search Path
+  accept, for **this server's Delphi**, its installation directory, the Library Search Path
   of **every registered platform** (Win, Linux64, macOS, Android, iOS…) and the **GetIt
   catalog repositories** — so an agent can follow a definition into `System.SysUtils.pas`,
   read the source of an installed component (FMXLinux, LockBox…) or inspect the Android SDK.

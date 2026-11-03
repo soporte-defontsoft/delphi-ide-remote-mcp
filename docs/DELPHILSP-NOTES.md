@@ -127,7 +127,7 @@ Everything below was verified against **DelphiLSP 37.0.59082.6021** (RAD Studio 
   and Windows then writes NO Application Error event for it (measured 2026-09-30 with a program
   that raises the engine's exception code: event 1000 without the bit, nothing with it), so
   whoever sets the bit has to record the exit code itself.
-- Positions are 0-based, UTF-16 code units. Content in `didOpen` is UTF-8 JSON — decode legacy CP1252 sources correctly before sending.
+- Positions are 0-based, UTF-16 code units. Content in `didOpen` is UTF-8 JSON — decode a source without BOM that is not valid UTF-8 in the machine's ANSI code page (as the IDE and the compiler read it; CP1252 on a Western Windows) before sending.
 - An external DelphiLSP instance coexists fine with the IDE's own instances; each agent holds hundreds of MB on a mid-size project.
 - The LSP reads **disk state**; unsaved IDE editor buffers are invisible to it (for a document the engine itself has open, see the next point).
 - **An OPEN document is never re-read from disk** (measured 2026-09-30): after `didOpen`, the

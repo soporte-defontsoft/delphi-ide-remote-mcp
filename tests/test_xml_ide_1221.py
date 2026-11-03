@@ -6,10 +6,13 @@ todo escritor de un fichero de proyecto", pero el juez vivia en PatchSaveConSuSa
 .groupproj, la mudanza que re-apunta un .dproj o un .groupproj, el .dproj de delphi_create y el create de un
 changeset. Ahora lo pregunta PatchSaveText, el escritor de abajo, por la clase de fichero (Lsp.Patch.EsXmlDelIde).
 
-  X0 control: un changeset crea un .dproj bien formado (commit, y el fichero esta)
-  X1 el preview de un changeset que crea un .dproj que MSXML no carga (R&D sin escapar): CFG-142, con la linea
+  X0 control: un changeset crea un .deployproj bien formado (commit, y el fichero esta)
+  X1 el preview de un changeset que crea un .deployproj que MSXML no carga (R&D sin escapar): CFG-142, con la linea
      (ROJA contra la 1.22.0: preview limpio)
   X2 ...y el commit lo niega: el fichero no existe (ROJA: lo escribia)
+  X0-X2 creaban un .dproj hasta que la 1.26 dejo de crearlo por un changeset (EDIT-128 al apilarlo, CI4 de
+  test_capacidades_126): X2 pasaba entonces por la negativa del stage, no por MSXML. El manifiesto sigue por el
+  mismo juez (EsXmlDelIde).
   X3 add-project sobre un .groupproj con R&D sin escapar: CFG-142 y el grupo byte a byte (ROJA: lo guardaba)
 
 Uso:  python tests/test_xml_ide_1221.py [ruta-a-DelphiLspMcp.exe]
@@ -56,19 +59,21 @@ def begin():
 
 
 try:
-    bueno = os.path.join(BASE, 'Bueno.dproj')
+    bueno = os.path.join(BASE, 'Bueno.deployproj')
     cid = begin()
     cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': bueno, 'content': DPROJ_BUENO})
     cs({'command': 'preview', 'id': cid})  # el commit pide un preview limpio antes (CHSET-016)
     r = cs({'command': 'commit', 'id': cid})
-    check('X0 control: un changeset crea un .dproj bien formado',
+    check('X0 control: un changeset crea un .deployproj bien formado',
           mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and os.path.exists(bueno), r[:300])
 
-    malo = os.path.join(BASE, 'Malo.dproj')
+    malo = os.path.join(BASE, 'Malo.deployproj')
     cid = begin()
     r = cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': malo, 'content': DPROJ_MALO})
+    check('fixture: el create del manifiesto se apila (no es la negativa de un proyecto)',
+          not mc.rechazado(r), r[:300])
     r = cs({'command': 'preview', 'id': cid})
-    check('X1 el preview de crear un .dproj que MSXML no carga dice CFG-142, con la linea',
+    check('X1 el preview de crear un .deployproj que MSXML no carga dice CFG-142, con la linea',
           mc.es(r, 'SR_PATCH_XML_MAL_FORMADO_FMT') and 'line 4' in r, r[:400])
     r = cs({'command': 'commit', 'id': cid})
     check('X2 ...y el commit lo niega: el fichero no existe', not os.path.exists(malo), r[:400])

@@ -21,8 +21,9 @@ VaultReadOnly=1
 ```
 
 Restart the server. Connect an agent and it will be told, at connect time, that
-a vault exists and to start with `vault_read` (no path). Try `/vault` in Claude
-Code to see the bootstrap yourself.
+a vault exists and to start with `vault_read` (no path). Try the server's
+`vault` prompt to see the bootstrap yourself (in Claude Code it is
+`/mcp__<server>__vault`, e.g. `/mcp__delphi__vault`).
 
 ## What is in here
 

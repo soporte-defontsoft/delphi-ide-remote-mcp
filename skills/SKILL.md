@@ -122,7 +122,7 @@ it. With no name, each request of that protocol is a stranger to the one before.
   loop: edit -> diagnostics -> build -> **test** -> commit. `filter` takes
   what DUnitX matches - a fixture by its full name or the start of it
   (`Unit.TFixture`), a test by its full name (`Unit.TFixture.Method`) - and
-  no wildcards; one that ran nothing says so (`filterNote`).
+  no wildcards, several separated by commas (one with a double quote is refused: `TEST-037`); one that ran nothing says so (`filterNote`).
 - `delphi_diagnostics` is the quick check and `delphi_build` the real one.
   The answer names the project it linted with (`project`).
 - It needs `AllowTests=1` declared in YOUR workspace on the server. Without
@@ -207,7 +207,7 @@ it. With no name, each request of that protocol is a stranger to the one before.
   antivirus checking packages it has not seen takes that long once, and the
   repeat goes on from there. A `RENDER-027` that stops twice on the same
   package names a package that hangs while it loads: tell the operator which
-  one. `RENDER-007` is the form itself: something in it waits when it loads.
+  one. `RENDER-007` is the form itself: something in it waits when it loads. When the server stops a renderer itself it says which phase: `DSGN-187` while it loaded packages (repeat the call), `DSGN-062` after (the form).
 - SEE the form instead of imagining it: `delphi_designer command=preview
   path=<form>` returns a PNG of what the IDE designer shows. The loop is
   insert/set -> `lint` -> `preview` -> fix. To place something, measure on
@@ -269,7 +269,9 @@ it. With no name, each request of that protocol is a stranger to the one before.
   `delphi_paserver command=remote-run profile=<profile> project=<the .dproj>
   args=... timeoutms=...`. It returns `exitCode` and the program's output (a
   long one as its last 400 lines, at most 64K characters, with
-  `outputTruncated` and `RUN-023`).
+  `outputTruncated` and `RUN-023`). On a Windows target an argument reaches
+  the program as Delphi's `ParamStr` reads it: one with a double quote or a
+  NUL, or an empty one, is refused before anything runs (`RUN-025`).
   You never give a remote path: the server runs what THAT project deployed
   and nothing else on that machine (a script in the same folder is refused
   too - only native binaries).
@@ -343,7 +345,7 @@ in frame. Do the gesture you came for and nothing else.
   version information the IDE writes: `delphi_config command=set-version
   version=1.2.3` keeps the numbers and the keys together, and
   `include=true` makes the binaries carry it (a console is born, as in the
-  IDE, without it - the answer says so).
+  IDE, without it - the answer says so); `view` reads it back (`version`, `versionIncluded`, and `versionMismatch` / `versionElsewhere` when the file says more than one).
 - **The folder layout is yours**: inside a project, `dir=` is a SUBFOLDER
   of the project (relative, as deep as you like - no drive, no `..`); the
   unit is born there and registered with its relative path.
@@ -360,7 +362,7 @@ in frame. Do the gesture you came for and nothing else.
   `view` lists the project's `units`.
 - `delphi_build` runs MSBuild. The result declares the real `output`
   path - trust it, do not guess - and `errors`, `warnings` and `hints` as
-  MSBuild classifies them. `target=Deploy` on Android builds the
+  MSBuild classifies them (warnings and hints only with `verbosity=normal` or `verbose`: the default `quiet` does not ask for them). `target=Deploy` on Android builds the
   full `.apk`, or the `.aab` for a store build of Android64
   (`BT_BuildType=AppStore`; `BUILD-064`: it does not install on a device). The
   server generates the deployment manifest if missing.
@@ -522,9 +524,10 @@ one whole - before filing, look whether it was already reported.
 ## Access levels
 
 A read-only credential can read, search, navigate, diagnose, list
-components, fetch files and file reports (a capture writes a file, so
-`delphi_adb screenshot`, `delphi_desktop` and `delphi_designer preview`
-are refused too) - `tools/list` announces what each tool allows in this
+components, fetch files, file reports and look: `delphi_adb screenshot` /
+`logcat`, `delphi_desktop screenshot` / `status` and `delphi_designer
+preview` answer it as long as they keep nothing (no `out=`, `state=` or
+`project=`) - `tools/list` announces what each tool allows in this
 mode (`annotations.readOnlyHint`, `_meta.access`, `readOnlyCommands`) - but
 every mutating tool (edit/create/build/run/install/tap...) is refused at
 the gate. If you are read-only and need a change, report it; do not fish
@@ -542,6 +545,6 @@ projects, devices, vault). A refusal naming `RemoteHosts`,
 `RemoteRunProjects`, `DesktopAllowedHosts` or `AdbAllowedDevices` is your workspace's declared
 reach, not a server bug: `delphi_report` it if you need more. A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
-closed (declared with no roots): the operator's side, not yours.
+closed (one of its settings - its roots, a protection - did not load): the operator's side, not yours.
 
 <!-- contract reviewed: v1.25.1 -->

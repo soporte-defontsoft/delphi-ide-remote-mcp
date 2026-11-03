@@ -10746,9 +10746,10 @@ const
     'parameter list, from the official DelphiLSP engine - the IDE''s ' +
     'Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right ' +
     'after "(" or a ","). Requires project settings for full answers. ' +
-    'An engine limit, measured: a call to a METHOD (Obj.Method( ...) ' +
-    'often answers null where a free routine answers; delphi_hover on ' +
-    'the method name gives its signature then.';
+    'Engine limits, measured: with overloads activeSignature stays 0 ' +
+    'whatever the call, not the one it resolves to; a call to a METHOD ' +
+    '(Obj.Method( ...) often answers null where a free routine answers. ' +
+    'delphi_hover on the routine''s name gives the one the compiler picks.';
 
   SD_LSP_HOVER =
     'Type/signature information for the identifier at a 0-based ' +
@@ -11457,9 +11458,10 @@ const
     'The way to answer "open project X" without knowing the disk layout. ' +
     'Answers in PAGES (maxresults, default 50; offset + nextOffset to walk ' +
     'them). Grouped by folder: ' +
-    'projects = [{dir, files = [{name, kind}]}], and each git repository ' +
-    'once in repos = [{dir, branch}]: a project''s is the LONGEST dir its ' +
-    'folder is inside (none rooted above your roots).';
+    'projects = [{dir, files = [{name, kind}]}], and the git repository of ' +
+    'the projects of the page, each once, in repos = [{dir, branch}] (one ' +
+    'holding none of them is not listed): a project''s is the LONGEST dir ' +
+    'its folder is inside (none rooted above your roots).';
 
   SD_WS_UPLOAD =
     'Upload a file TO the server in base64 chunks - the mirror of ' +

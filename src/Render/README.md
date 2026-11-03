@@ -64,9 +64,11 @@ What it needs travels to it:
   path does not reach it, even inside the roots: it fails as with a missing
   file.
 - **The package box**, also in the server's home, shared by every call and
-  readable, not writable, by every container: the renderers and the `.bpl` and
-  `.dll` of the folders that hold a Known Package, of `$(BDSCOMMONDIR)\Bpl` and of
-  the PATH folders with packages, except the ones the container reads where they
+  readable, not writable, by every container: the helpers (the two renderers and
+  the style converter) and the `.bpl` and `.dll` of the folders that hold a Known
+  Package, of the folder where the IDE leaves compiled Win32 packages (its
+  `Package DPL Output`; `$(BDSCOMMONDIR)\Bpl` when the IDE gives none) and of the
+  PATH folders with packages, except the ones the container reads where they
   are. It is named after what it holds, so a package added or rebuilt makes a
   new box.
 - **The COM classes it cannot look up.** Windows keeps a few classes under a
@@ -124,7 +126,7 @@ DelphiFormRender*   --path <form> --boxes [--packages ...] [--bds] [--bdsroot] [
   into `--out`, with the IDE's own conversion. `delphi_designer to-text`/`to-binary`
   and every reading of a binary `.dfm` use it.
 - `--component`: the renderer answers `RECT=<name>=l,t,w,h` in PNG pixels;
-  the server crops with its own cropper (`Lsp.Imagen.RecortaPng`).
+  the server crops with its own cropper (`Lsp.Imagen.RecortaPngBytes`).
 - `--nonvisual on` (like the designer's "Show non-visual components"):
   each non-visual component is drawn at the Left/Top the file stores (0,0
   without one), with the icon its package ships (`<CLASS>128_PNG`
@@ -172,13 +174,24 @@ IGNORED=<who>|<file>|<error>  repeatable; also before a failure: what the
                               lost, and the failure says only "Stream read error").
                               <file> is the one it was reading: an inline frame's
                               or an ancestor's when it was there, so the server
-                              gives the line in that file
+                              gives the line in that file. <error> travels in
+                              parts: <Component>|<Property>|<Reason>|<text>
 WARNING=<text>                repeatable
 PARTIAL=<ancestor or file>    repeatable: the form was read WITHOUT it (an
                               ancestor with no .pas saying which, or with no
                               form file in the folder)
+READ=<sha256>|<path>          repeatable: a file read to load the form (an
+                              ancestor, a frame, a .pas of the chain); the
+                              server checks it again before writing what was
+                              judged
 WRITTEN=<line>                repeatable, --writeback on: the form as the
                               IDE's own writer saves it (no CAPTURE)
+ORDER=<Name>=<prop>,...       with --writeback and --component: the published
+                              properties of its class in TWriter's order
+UNSTORED=<Name>=<prop>,...    with --writeback and --component: the published
+                              ones its class declares stored False
+UNAPPLIED=<value>             repeatable: read and not applied (an event's
+                              method, a reference to another module)
 NONVISUAL=<n>                 icons drawn (only with --nonvisual on)
 NONVISUALS=<Name:Class,...>   the root's non-visual components, drawn or not
 RECT=<name>=<l>,<t>,<w>,<h>   with --component
@@ -186,6 +199,8 @@ BOX=<path>|<class>|<parent>|<l>,<t>,<w>,<h>|<visible>|<content>|<file>|<path in 
                               repeatable, --boxes (layout): where each control
                               ends up, and the file that writes it (an inline
                               frame's, an ancestor's) with its path there
+UNREADABLECLASS=<clsid>       repeatable, --unreadableclasses: a COM class whose
+                              InprocServer32 key the container cannot read
 FIDELITY=window|print|canvas  VCL: real painting (needs DWM, an interactive
                               session) or WM_PRINT per control (works from a
                               service; controls that paint their own way come
@@ -193,10 +208,13 @@ FIDELITY=window|print|canvas  VCL: real painting (needs DWM, an interactive
 SIZE=<w>x<h>
 CAPTURE=<png>
 MS=<load>,<paint>
+LINE=<n>                      with --convert, before NOTLOADED=: the line the
+                              parser's error names (0 if it names none)
 NOTLOADED=<class>|<file>|<error> before ERROR=: what failed was the form READER
                               while loading (EFilerError or EParserError) - the
                               file, not the renderer; the server answers DSGN-153
                               with the reader's words and the line, not DSGN-061
+                              (<error> in parts, as in IGNORED=)
 ERROR=<text>                  with exit code 1 (3 = timeout, 2 = usage)
 ```
 

@@ -21,8 +21,12 @@ the rest and returns at once, so PAServer and `paclient` are free again.
 Until 1.0.15 Linux went through a `/bin/sh` script composed by the server —
 where the 1.0.15 command injection lived — and Windows through this program:
 two writers, two readers, two branches. Since 1.0.16 both systems use the
-launcher and **there is no shell anywhere in the path**: arguments go from the
-job file to the program's argv untouched.
+launcher and **there is no shell anywhere in the path**. On Linux the
+arguments go from the job file to the program's argv untouched; on Windows,
+where a program gets one command line, the launcher quotes each one as
+Delphi's `ParamStr` reads it (no escapes), so the server refuses before
+anything runs an argument `ParamStr` cannot receive - one with a double quote,
+or an empty one (`RUN-025`).
 
 ## What it does, in order
 

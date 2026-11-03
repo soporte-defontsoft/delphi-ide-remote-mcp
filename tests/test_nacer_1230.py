@@ -1,8 +1,10 @@
 # -*- coding: utf-8 -*-
 """Como NACE un fichero, una regla (A21 y A38 de la 1.23).
 
-  N1 (A21) un .dproj creado por un changeset nace en UTF-8 con BOM, como lo
-     escribe el IDE y como lo crea delphi_create (ROJO hasta la 1.23: sin BOM)
+  N1 (A21) un .deployproj creado por un changeset nace en UTF-8 con BOM, como lo
+     escribe el IDE (ROJO hasta la 1.23: sin BOM). Era un .dproj hasta que la 1.26
+     dejo de crearlo por un changeset (EDIT-128, lo mide CI4 de test_capacidades_126);
+     el manifiesto sigue por el mismo camino (EsXmlDelIde -> EncDeFicheroNuevo)
   N2 (A21, guarda) un .txt creado por un changeset y por delphi_textedit nace en
      UTF-8 sin BOM
   N3 (A38, guarda) eol=lf en el create de delphi_edit y de delphi_textedit: los
@@ -27,13 +29,13 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='test-nacer',
 try:
     r = srv.call('delphi_changeset', {'command': 'begin'})
     cid = mc.id_changeset(r)
-    pd = os.path.join(JAIL, 'Nuevo.dproj')
+    pd = os.path.join(JAIL, 'Nuevo.deployproj')
     pt = os.path.join(JAIL, 'notas.txt')
     srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create', 'path': pd, 'content': DPROJ})
     srv.call('delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'create', 'path': pt, 'content': 'hola\n'})
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid}, t=120)
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=120)
-    check('N1 un .dproj creado por un changeset nace con BOM, como lo escribe el IDE',
+    check('N1 un .deployproj creado por un changeset nace con BOM, como lo escribe el IDE',
           os.path.exists(pd) and open(pd, 'rb').read().startswith(BOM),
           (r[:300], open(pd, 'rb').read()[:8] if os.path.exists(pd) else None))
     pt2 = os.path.join(JAIL, 'notas2.txt')

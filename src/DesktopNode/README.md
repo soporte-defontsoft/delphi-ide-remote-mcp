@@ -40,6 +40,9 @@ is identical: coordinates are pixels OF THE CAPTURE and the node answers with
 | `Mld.Teclado.pas` | The keymap the desktop really has: which key gives each character directly, and which dead key plus base letter composes the rest (`í` = dead_acute + `i`), from Unicode's canonical decomposition |
 | `Mld.X11.pas` | The eyes, part one: enumerate windows via libX11 at runtime (replaces xdotool — one dependency fewer) |
 | `Mld.Win.pas` | Windows: eyes (GDI capture of the virtual desktop), hands (`SendInput`: click, Unicode typing, key combos) and the window list, with DPI awareness asked for at runtime |
+| `Mld.Sesion.pas` | The ONE detector of this user's graphical session (logind, then the user's own sockets), shared with the launcher (`src/RunJob`) |
+| `Mld.Textos.pas` | The node's message catalog (`NODE-NNN`) |
+| `NodeProtocolo.inc` | The words of its output, the orders the server gives it, and the launcher's `___ENV=` / `___RC=` lines: one file, included by the node, the launcher and the server |
 
 **It only answers the server.** Both builds require a key that the MCP server
 passes as the first argument (`NodeKey.inc`, included by the node and by the

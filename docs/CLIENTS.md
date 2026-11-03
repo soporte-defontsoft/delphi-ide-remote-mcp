@@ -4,6 +4,8 @@ MCP is a standard: **no client-side code is needed**, only configuration. Any
 MCP-capable agent can use this server. Two transports:
 
 - **stdio** — the client spawns `DelphiLspMcp.exe` on the same Windows machine.
+  Without a credential such a process may only read; to work in a workspace, give
+  it that workspace's token in its environment (`DELPHI_MCP_TOKEN`).
 - **Streamable HTTP** — the server runs resident on the Windows machine
   (as a Windows Service, `DelphiLspMcp --http 3000`, or `DelphiLspMcp -gui`) and clients
   connect from anywhere (Linux included) with the Bearer token.
@@ -23,7 +25,7 @@ different Bearer value. See [CONFIGURATION.md](CONFIGURATION.md).
 
 ```bash
 # local (stdio), on the Windows machine:
-claude mcp add delphi -- C:/path/to/DelphiLspMcp.exe
+claude mcp add delphi -e DELPHI_MCP_TOKEN=YOUR_TOKEN -- C:/path/to/DelphiLspMcp.exe
 
 # remote (HTTP), from any machine:
 claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp \
@@ -38,7 +40,8 @@ claude mcp add --transport http delphi http://WINDOWS-HOST:3000/mcp \
 {
   "mcpServers": {
     "delphi": {
-      "command": "C:\\path\\to\\DelphiLspMcp.exe"
+      "command": "C:\\path\\to\\DelphiLspMcp.exe",
+      "env": { "DELPHI_MCP_TOKEN": "YOUR_TOKEN" }
     }
   }
 }
