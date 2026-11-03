@@ -551,12 +551,14 @@ function CondicionDePlataformaYConfig(const ACondicion: string; out APlataforma,
 function PlataformaDeGrupoDeDespliegue(const ACondicion: string): string;
 
 type
-  { Un <DeployFile> de un .deployproj: su tramo, el ItemGroup que lo contiene
-    y la plataforma de ese grupo ('' si su Condition no es de una). }
+  { Un <DeployFile> de un .deployproj: su tramo, el ItemGroup que lo contiene,
+    la plataforma de ese grupo ('' si su Condition no es de una) y la
+    configuracion que lo aplica: la de su Condition, si no la de su grupo
+    ('' = todas). }
   TEntradaDelManifiesto = record
     Tramo: TTramoXml;
     Grupo: TGrupoXml;
-    Plataforma: string;
+    Plataforma, Config: string;
   end;
 
 { Los <DeployFile> de un .deployproj, cada uno con su grupo y la plataforma
@@ -564,6 +566,14 @@ type
   FindDeployEntries y en la vista de delphi_config, y lo pide el exe= de
   remote-run (lo que el proyecto despliega en esa plataforma). }
 function EntradasDelManifiesto(const AXml: string): TArray<TEntradaDelManifiesto>;
+{ El nombre con que una entrada llega al destino: su RemoteName, o el del
+  fichero de su Include si no lo lleva (lo que nombra el exe= de remote-run). }
+function NombreEnElDestino(const AXml: string; const AEntrada: TEntradaDelManifiesto): string;
+{ Lo que el manifiesto despliega en APlataforma con OTRA configuracion y no
+  con AConfig, por su sitio en el destino (RemoteDir y nombre): "nombre
+  (Debug, ...)". Cada configuracion despliega su lista, como en el
+  Deployment Manager, y add-deployfile anade a una (C de la 1.27). }
+function SoloEnOtrasConfigs(const AXml, APlataforma, AConfig: string): TArray<string>;
 
 { ---- la seccion Deployment del .dproj: el Deployment Manager del IDE ----
   Lo que escribe el IDE al anadir un fichero en Project > Deployment y lo que
@@ -3459,6 +3469,7 @@ end;
 function EntradasDelManifiesto(const AXml: string): TArray<TEntradaDelManifiesto>;
 var
   E: TEntradaDelManifiesto;
+  Plat, Cfg: string;
 begin
   Result := [];
   for var G in GruposDe(AXml, 'ItemGroup') do
@@ -3468,9 +3479,70 @@ begin
     for var T in TramosEnGrupo(AXml, 'DeployFile', G, True) do
     begin
       E.Tramo := T;
+      // la de su Condition, si no la de su grupo (estaba a mano en
+      // FindDeployEntries, y el aviso del Deploy la pedia otra vez)
+      if not CondicionDePlataformaYConfig(AtributoDeTramo(AXml, T, 'DeployFile', 'Condition'), Plat, Cfg) or
+         (Cfg = '') then
+        if not CondicionDePlataformaYConfig(G.Condicion, Plat, Cfg) then
+          Cfg := '';
+      E.Config := Cfg;
       Result := Result + [E];
     end;
   end;
+end;
+
+function NombreEnElDestino(const AXml: string; const AEntrada: TEntradaDelManifiesto): string;
+begin
+  // estaba a mano en el exe= de remote-run
+  Result := ValorDentro(AXml, 'RemoteName', AEntrada.Tramo);
+  if Result = '' then
+    Result := TPath.GetFileName(AtributoDeTramo(AXml, AEntrada.Tramo, 'DeployFile', 'Include').Trim);
+end;
+
+function SoloEnOtrasConfigs(const AXml, APlataforma, AConfig: string): TArray<string>;
+
+  // su sitio en el destino: la carpeta con su barra y el nombre; el binario de
+  // Debug y el de Release son dos Include y un mismo sitio
+  function Sitio(const AEntrada: TEntradaDelManifiesto): string;
+  begin
+    Result := ConBarrasDeWindows(ValorDentro(AXml, 'RemoteDir', AEntrada.Tramo));
+    if (Result <> '') and not Result.EndsWith('\') then
+      Result := Result + '\';
+    Result := Result + NombreEnElDestino(AXml, AEntrada);
+  end;
+
+var
+  Aqui, Sitios, Nombres, Configs: TArray<string>;
+begin
+  Result := [];
+  var Entradas := EntradasDelManifiesto(AXml);
+  // lo que despliega ESTA configuracion (una entrada sin la suya, todas)...
+  Aqui := [];
+  for var E in Entradas do
+    if SameText(E.Plataforma, APlataforma) and ((E.Config = '') or SameText(E.Config, AConfig)) then
+      Aqui := Aqui + [Sitio(E)];
+  // ...y lo de las otras que no esta, con las configuraciones que lo llevan
+  Sitios := [];
+  Nombres := [];
+  Configs := [];
+  for var E in Entradas do
+    if SameText(E.Plataforma, APlataforma) and (E.Config <> '') and not SameText(E.Config, AConfig) then
+    begin
+      var S := Sitio(E);
+      if MatchText(S, Aqui) then
+        Continue;
+      var I := IndexText(S, Sitios);
+      if I < 0 then
+      begin
+        Sitios := Sitios + [S];
+        Nombres := Nombres + [NombreEnElDestino(AXml, E)];
+        Configs := Configs + [E.Config];
+      end
+      else if not MatchText(E.Config, Configs[I].Split([', '])) then
+        Configs[I] := Configs[I] + ', ' + E.Config;
+    end;
+  for var I := 0 to High(Sitios) do
+    Result := Result + [Nombres[I] + ' (' + Configs[I] + ')'];
 end;
 
 function TagValue(const AXml, ATag: string): string;

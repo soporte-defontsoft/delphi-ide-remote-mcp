@@ -1552,6 +1552,26 @@ const
     'Deployment Manager writes (shared libraries, assets); this one ' +
     'covers console/simple binaries.';
 
+  { ...en Linux, lo medido (C de la 1.27): el IDE escribe para Linux64 lo
+    mismo, el binario (el .deployproj de un FMX suyo), y una app FMX corre
+    con el en el destino. }
+  SN_BUILD_MANIFEST_NEW_LINUX =
+    '[BUILD-067] No .deployproj existed, so a deployment manifest was ' +
+    'generated next to the project with the project output, exec bit on - ' +
+    'what the IDE''s Deployment Manager writes for a Linux app too (an FMX ' +
+    'one runs with it). What else it needs on the target (a component''s ' +
+    '.so, a data file) goes in with delphi_config add-deployfile.';
+
+  { Lo que el proyecto despliega en la plataforma con OTRA configuracion y
+    esta no: add-deployfile anade a una sola, como el IDE (C de la 1.27,
+    medido contra el Zorin: un Deploy de Release sin el fichero de Debug, y
+    ni una palabra). }
+  SN_BUILD_DEPLOY_OTRAS_CONFIGS_FMT =
+    '[BUILD-068] What the project deploys on %s with another configuration, ' +
+    '%s does not: %s. Each configuration deploys its own list, as in the ' +
+    'IDE''s Deployment Manager: delphi_config add-deployfile config=%s adds ' +
+    'a file to this one.';
+
   SN_BUILD_DEPLOYED_FMT =
     '[BUILD-006] Deployed through profile "%s". On the target machine ' +
     'the files are under the PAServer scratch directory (default ' +
@@ -3687,7 +3707,8 @@ const
     'MyApp\lib\.';
 
   SN_CONFIG_DEPLOY_ADDED_FMT =
-    '[CFG-028] ADDED to the deployment of %s (%s): "%s" -> %s%s, in the ' +
+    '[CFG-028] ADDED to the deployment of %s, configuration %s only (each ' +
+    'one deploys its own list: config= adds it to another): "%s" -> %s%s, in the ' +
     'project (its Deployment section, what the IDE''s Deployment Manager ' +
     'writes) and in its .deployproj (what msbuild deploys). %sBackups in ' +
     '__delphi-patch. To ' +

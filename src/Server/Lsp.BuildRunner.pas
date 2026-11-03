@@ -3284,8 +3284,29 @@ begin
         Result.AddPair('deployManifest', MsgText(SN_BUILD_ANDROID_NEW))
       else if ManifestFilled then
         Result.AddPair('deployManifest', MsgFmt(SN_BUILD_MANIFEST_FILLED_FMT, [Plat]))
+      else if SistemaDePlataforma(Plat) = spLinux then
+        Result.AddPair('deployManifest', MsgText(SN_BUILD_MANIFEST_NEW_LINUX))
       else
         Result.AddPair('deployManifest', MsgText(SN_BUILD_MANIFEST_NEW));
+    // Lo que el proyecto despliega en esta plataforma con OTRA configuracion y
+    // esta no lleva: add-deployfile anade a una, como el Deployment Manager, y
+    // un Deploy de otra no lo decia (C de la 1.27, medido contra el Zorin). Es
+    // de lo que despliega esta configuracion, no de como acabo: va tambien con
+    // un Deploy que falla
+    if Target.Contains('Deploy') and (Perfil <> '') then
+    begin
+      var Manifiesto := ManifiestoDe(TPath.GetFullPath(ADprojPath));
+      var EnOtras: TArray<string> := [];
+      try
+        if TFile.Exists(Manifiesto) then
+          EnOtras := SoloEnOtrasConfigs(LeeTexto(Manifiesto, [ltJaula]), Plat, Cfg);
+      except
+        EnOtras := []; // un aviso es una cortesia: sin leerlo, la respuesta es la de siempre
+      end;
+      if Length(EnOtras) > 0 then
+        Result.AddPair('deployNotThisConfig', MsgFmt(SN_BUILD_DEPLOY_OTRAS_CONFIGS_FMT,
+          [Plat, Cfg, string.Join(', ', EnOtras), Cfg]));
+    end;
     except
       // una excepcion a medio camino dejaba sin liberar lo que se devuelve
       // (el patron del Result de Rename, menor de la ronda 16)

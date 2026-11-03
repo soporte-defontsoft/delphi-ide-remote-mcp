@@ -1209,9 +1209,7 @@ begin
     for var E in EntradasDelManifiesto(M) do
       if SameText(E.Plataforma, Plat) then
       begin
-        var N := ValorDentro(M, 'RemoteName', E.Tramo).Trim;
-        if N = '' then
-          N := TPath.GetFileName(AtributoDeTramo(M, E.Tramo, 'DeployFile', 'Include').Trim);
+        var N := NombreEnElDestino(M, E);
         if (N <> '') and not MatchText(N, Nombres) then
           Nombres := Nombres + [N];
       end;

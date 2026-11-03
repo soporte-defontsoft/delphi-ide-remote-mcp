@@ -63,6 +63,7 @@ type
     [Test] procedure ElIncludeEnCualquierOrden;
     [Test] procedure LasCuatroFormasDeLaCondicion;
     [Test] procedure LaCondicionDelElementoYElVacioCuentan;
+    [Test] procedure LoQueDespliegaOtraConfiguracion;
     [Test] procedure LaCondicionDeUnGrupoComoMsbuild;
     [Test] procedure ElGrupoDelBuildDondeLoEscribeElIde;
     [Test] procedure PonPropiedadDelBuildEnLasCuatroFormas;
@@ -531,6 +532,44 @@ begin
   Assert.AreEqual('', EffectiveProperty(XML, 'Profile', 'OSX64', ''), 'en OSX64 no: la condicion es del elemento');
   Assert.AreEqual('de-base', EffectiveProperty(XML, 'PlatformSDK', 'OSX64', ''), 'OSX64 hereda la base');
   Assert.AreEqual('', EffectiveProperty(XML, 'PlatformSDK', 'Linux64', ''), 'un <PlatformSDK/> la deja vacia, como msbuild');
+end;
+
+{ Lo que la plataforma despliega con otra configuracion y esta no (C de la
+  1.27): como lo dejan el build (el binario en el grupo de plataforma y config)
+  y add-deployfile (en el de la plataforma, con su Condition). }
+procedure TXmlTextoTests.LoQueDespliegaOtraConfiguracion;
+var
+  M: string;
+begin
+  M := '<Project>' +
+    XmlGrupoDeDespliegue(DeployGroupCondition('Linux64', 'Debug'),
+      XmlDeployFile('Linux64\Debug\App', 'Debug', 'App\', 'App', 'ProjectOutput', 1, True) +
+      XmlDeployFile('grupo.dat', '', 'App\', 'grupo.dat', 'File', 0, False)) +
+    XmlGrupoDeDespliegue(DeployGroupCondition('Linux64', 'Release'),
+      XmlDeployFile('Linux64\Release\App', 'Release', 'App\', 'App', 'ProjectOutput', 1, True)) +
+    XmlGrupoDeDespliegue(DeployGroupCondition('Linux64'),
+      XmlDeployFile('datos.txt', 'Debug', 'App\', 'datos.txt', 'File', 0, False) +
+      XmlDeployFile('lib\libfoo.so', '', 'App\', '', 'File', 0, False) +
+      XmlDeployFile('extra.dat', 'Debug', 'App\', 'extra.dat', 'File', 0, False) +
+      XmlDeployFile('extra.dat', 'Custom', 'App\', 'extra.dat', 'File', 0, False)) +
+    XmlGrupoDeDespliegue(DeployGroupCondition('Win64'),
+      XmlDeployFile('solo.dll', 'Debug', 'App\', 'solo.dll', 'File', 0, False)) +
+    '</Project>';
+  Assert.AreEqual('grupo.dat (Debug)|datos.txt (Debug)|extra.dat (Debug, Custom)',
+    string.Join('|', SoloEnOtrasConfigs(M, 'Linux64', 'Release')),
+    'lo de las otras una vez, con las suyas; ni el binario (mismo sitio) ni lo de todas');
+  Assert.AreEqual('', string.Join('|', SoloEnOtrasConfigs(M, 'Linux64', 'Debug')),
+    'el extra.dat de Custom va al mismo sitio que el de Debug');
+  Assert.AreEqual('App (Debug, Release)|grupo.dat (Debug)|datos.txt (Debug)',
+    string.Join('|', SoloEnOtrasConfigs(M, 'Linux64', 'Custom')));
+  Assert.AreEqual('solo.dll (Debug)', string.Join('|', SoloEnOtrasConfigs(M, 'Win64', 'Release')),
+    'cada plataforma la suya');
+  // la configuracion de cada entrada: la de su Condition, si no la de su grupo
+  var E := EntradasDelManifiesto(M);
+  Assert.IsTrue(Length(E) = 8);
+  Assert.AreEqual('Debug', E[1].Config, 'sin Condition propia, la del grupo');
+  Assert.AreEqual('', E[4].Config, 'ni ella ni su grupo la nombran: todas');
+  Assert.AreEqual('libfoo.so', NombreEnElDestino(M, E[4]), 'sin RemoteName, el del Include');
 end;
 
 procedure CompruebaImport(const AForma: string;

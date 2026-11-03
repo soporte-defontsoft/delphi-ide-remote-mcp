@@ -1322,12 +1322,8 @@ begin
     if not SameText(E.Plataforma, APlatform) or
        not SameDeployFile(AtributoDeTramo(AXml, T, 'DeployFile', 'Include'), AProyecto, AFile) then
       Continue;
-    var Plat, Cfg: string;
-    if not CondicionDePlataformaYConfig(AtributoDeTramo(AXml, T, 'DeployFile', 'Condition'), Plat, Cfg) or
-       (Cfg = '') then
-      if not CondicionDePlataformaYConfig(E.Grupo.Condicion, Plat, Cfg) then
-        Cfg := '';
-    if (AConfig <> '') and (Cfg <> '') and not SameText(Cfg, AConfig) then
+    // la configuracion de la entrada, por EL lector (Lsp.Dproj)
+    if (AConfig <> '') and (E.Config <> '') and not SameText(E.Config, AConfig) then
       Continue;
     Result := Result + [TPair<Integer, Integer>.Create(T.Abre, T.Cierra - T.Abre)];
   end;
