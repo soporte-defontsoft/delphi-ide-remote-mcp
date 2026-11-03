@@ -71,7 +71,7 @@ Resolve the identifier at a 0-based line:character position in a Delphi source f
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Signature help (parameter completion) for the call under a 0-based line:character position: the routine signatures with their parameter list, from the official DelphiLSP engine - the IDE's Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right after "(" or a ","). Requires project settings for full answers. An engine limit, measured: a call to a METHOD (Obj.Method( ...) often answers null where a free routine answers; delphi_hover on the method name gives its signature then.
+Signature help (parameter completion) for the call under a 0-based line:character position: the routine signatures with their parameter list, from the official DelphiLSP engine - the IDE's Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right after "(" or a ","). Requires project settings for full answers. Engine limits, measured: with overloads activeSignature stays 0 whatever the call, not the one it resolves to; a call to a METHOD (Obj.Method( ...) often answers null where a free routine answers. delphi_hover on the routine's name gives the one the compiler picks.
 
 *Access: read-only OK.*
 
@@ -223,7 +223,7 @@ What it does not show is counted BY REASON (1.5.0, one counter shared with `delp
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots when root is empty; optional name filter. The way to answer "open project X" without knowing the disk layout. Answers in PAGES (maxresults, default 50; offset + nextOffset to walk them). Grouped by folder: projects = [{dir, files = [{name, kind}]}], and each git repository once in repos = [{dir, branch}]: a project's is the LONGEST dir its folder is inside (none rooted above your roots).
+Locate Delphi projects (.dproj/.groupproj) under a directory - or under the workspace roots when root is empty; optional name filter. The way to answer "open project X" without knowing the disk layout. Answers in PAGES (maxresults, default 50; offset + nextOffset to walk them). Grouped by folder: projects = [{dir, files = [{name, kind}]}], and the git repository of the projects of the page, each once, in repos = [{dir, branch}] (one holding none of them is not listed): a project's is the LONGEST dir its folder is inside (none rooted above your roots).
 
 *Access: read-only OK.*
 
