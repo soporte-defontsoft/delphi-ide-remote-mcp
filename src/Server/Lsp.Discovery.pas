@@ -407,6 +407,21 @@ function IdeHelpFiles(const AVersion: string): TArray<TIdeAyuda>;
   aqui se lee solo eso (una linea que no es SET se salta). nil si no se lee. }
 function VariablesDeRsVars(const AInfo: TRadStudioInfo): TArray<string>;
 
+{ LO QUE EL BUILD VE DE FUERA del .dproj, como en el IDE: las variables de
+  rsvars.bat y, encima, las del IDE (IdeMacroVars: $(BDSLIB), $(BDSBIN),
+  $(BDSUSERDIR), los catalogos, $(BDSPLATFORMSDKSDIR) y lo que el operador
+  redefine en Tools > Options > Environment Variables). El IDE las pone en el
+  entorno de su build y el cuerpo del .dproj las ve con los valores de esa
+  tabla (medido el 3-nov-2026 con una sonda compilada en el IDE); nuestro
+  msbuild solo tenia rsvars.bat y en su cuerpo valian vacio: add-searchpath
+  aceptaba $(BDSLIB)\$(Platform)\release y el build lo negaba (A2 de la
+  1.27). Una que se queda con una macro sin resolver no va (la redefinicion
+  de PATH del IDE lleva $(PATH)): msbuild la leeria como texto, y queda la de
+  rsvars.bat o la del entorno. Nombre=valor; las vacias de rsvars.bat
+  (FrameworkSDKDir=) se quedan: msbuild la recibe quitada. EL lector de la
+  tabla del build: el entorno de msbuild, la puerta y add-searchpath. }
+function VariablesDelBuild(const AInfo: TRadStudioInfo): TArray<string>;
+
 { $(BDSCOMMONDIR) as written by the installer in rsvars.bat - the
   AUTHORITATIVE value (no branding names composed by hand: Embarcadero
   renames its Documents folder between eras, e.g. "RAD Studio" ->
@@ -904,6 +919,33 @@ begin
     Result := Puestas.ToStringArray;
   finally
     Puestas.Free;
+  end;
+end;
+
+function VariablesDelBuild(const AInfo: TRadStudioInfo): TArray<string>;
+var
+  Tabla: TStringList;
+begin
+  Result := VariablesDeRsVars(AInfo);
+  if not AInfo.Found then
+    Exit;
+  Tabla := TStringList.Create;
+  try
+    IdeMacroVars(AInfo, Tabla);
+    for var I := 0 to Tabla.Count - 1 do
+    begin
+      var Nombre := Tabla.Names[I];
+      var Valor := Tabla.ValueFromIndex[I];
+      if (Nombre = '') or (Valor = '') or Valor.Contains('$(') then
+        Continue;
+      // la del IDE manda sobre la de rsvars.bat, como en el IDE
+      for var J := High(Result) downto 0 do
+        if StartsText(Nombre + '=', Result[J]) then
+          Delete(Result, J, 1);
+      Result := Result + [Nombre + '=' + Valor];
+    end;
+  finally
+    Tabla.Free;
   end;
 end;
 
@@ -1614,12 +1656,14 @@ end;
 procedure MacrosDelProyecto(const AInfo: TRadStudioInfo; const ADprojDir, ANombre,
   APlat, ACfg: string; ADest: TStrings);
 begin
-  if AInfo.Found then
-    IdeMacroVars(AInfo, ADest);
-  if APlat <> '' then
-    ADest.Values['Platform'] := APlat;
-  if ACfg <> '' then
-    ADest.Values['Config'] := ACfg;
+  // LA tabla del build (VariablesDelBuild), la que recibe msbuild: con solo
+  // la del IDE, add-searchpath aceptaba lo que el build leia de otra forma
+  for var V in VariablesDelBuild(AInfo) do
+    ADest.Add(V); // 'Nombre=valor', como lo lee ExpandeMacros
+  // la plataforma y la configuracion, las del build; '' = no se saben: la
+  // entrada se quita (rsvars.bat deja PLATFORM vacia) y la macro queda escrita
+  ADest.Values['Platform'] := APlat;
+  ADest.Values['Config'] := ACfg;
   for var M in MacrosReservadasDeMsbuild(ADprojDir, ANombre, ADprojDir) do
     ADest.Add(M); // 'Nombre=valor', como lo lee ExpandeMacros
 end;

@@ -50,6 +50,11 @@ type
       compila sin tocar nada. Sin bloque <Platforms> (un proyecto anterior a
       las plataformas), solo la suya por defecto. }
     function Declara(const APlatform: string): Boolean;
+    { Las plataformas que COMPILA: las que declara activas, en su orden; sin
+      bloque <Platforms>, la suya por defecto. Puede salir vacia (todas
+      desactivadas). La lista de Declara, del juez de plataforma, de lo que el
+      build lee al mover y de add-searchpath: estaba a mano en dos sitios. }
+    function Activas: TArray<string>;
     { True if this project's framework can target APlatform. VCL is Windows
       only; FMX and non-visual (console/None) cross platforms. }
     function CanTarget(const APlatform: string; out AReason: string): Boolean;
@@ -1939,15 +1944,21 @@ begin
 end;
 
 function TDprojInfo.Declara(const APlatform: string): Boolean;
-var
-  P: TDprojPlatform;
 begin
-  if Length(Platforms) = 0 then
-    Exit(SameText(APlatform, PlataformaPorDefecto));
-  for P in Platforms do
-    if SameText(P.Name, APlatform) then
-      Exit(P.Enabled);
+  for var P in Activas do
+    if SameText(P, APlatform) then
+      Exit(True);
   Result := False;
+end;
+
+function TDprojInfo.Activas: TArray<string>;
+begin
+  Result := nil;
+  if Length(Platforms) = 0 then
+    Exit(TArray<string>.Create(PlataformaPorDefecto));
+  for var P in Platforms do
+    if P.Enabled then
+      Result := Result + [P.Name];
 end;
 
 function DprojDe(const AProject: string): string;
@@ -1983,7 +1994,6 @@ function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string;
   ADesactivadaVale: Boolean): string;
 var
   P: TDprojPlatform;
-  Activas: TArray<string>;
 begin
   Result := '';
   if AInfo.Declara(APlatform) then
@@ -1992,15 +2002,8 @@ begin
     for P in AInfo.Platforms do
       if SameText(P.Name, APlatform) then
         Exit;
-  Activas := nil;
-  if Length(AInfo.Platforms) = 0 then
-    Activas := [AInfo.PlataformaPorDefecto]
-  else
-    for P in AInfo.Platforms do
-      if P.Enabled then
-        Activas := Activas + [P.Name];
   Result := MsgFmt(SR_BUILD_PLATAFORMA_NO_DECLARADA_FMT,
-    [APlatform, ONinguno(string.Join(', ', Activas)), APlatform]);
+    [APlatform, ONinguno(string.Join(', ', AInfo.Activas)), APlatform]);
 end;
 
 function TDprojInfo.CanTarget(const APlatform: string; out AReason: string): Boolean;

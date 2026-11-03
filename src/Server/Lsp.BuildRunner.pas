@@ -1739,8 +1739,9 @@ begin
 end;
 
 { LO QUE MSBUILD RECIBE como entorno ademas del del servidor (sin sus
-  DELPHI_MCP_*, EntornoSinConfiguracion): las variables de rsvars.bat y el
-  temporal de ESTE build (ATemporal; '' = el del servidor). UNO para los dos
+  DELPHI_MCP_*, EntornoSinConfiguracion): la tabla del build, la de rsvars.bat
+  con la del IDE encima (Lsp.Discovery.VariablesDelBuild: lo que el IDE da a
+  su build), y el temporal de ESTE build (ATemporal; '' = el del servidor). UNO para los dos
   que lo modelan, el lanzamiento (RunMsBuild) y la puerta
   (LecturasDelBuildDenegadas): con dos, un $(TEMP) del .dproj se juzgaria con
   un valor y se compilaria con otro. El temporal es de cada build porque el
@@ -1749,7 +1750,7 @@ end;
   (medido el 3-nov-2026: C:\Users\<8.3>\AppData\Local\Temp\dtfXXXX.tmp). }
 function EntornoDelBuild(const AInfo: TRadStudioInfo; const ATemporal: string): TArray<string>;
 begin
-  Result := VariablesDeRsVars(AInfo);
+  Result := VariablesDelBuild(AInfo);
   if ATemporal <> '' then
     Result := Result + ['TEMP=' + ATemporal, 'TMP=' + ATemporal];
 end;
@@ -2064,16 +2065,14 @@ begin
   Vars := TStringList.Create;
   try
     // LO QUE MSBUILD TIENE AL LEER EL CUERPO del .dproj: el entorno que recibe
-    // (EntornoDelBuild: rsvars.bat y el TEMP del build, sobre el del
-    // servidor, sin las DELPHI_MCP_*; lo que no esta
-    // aqui lo da VariableQueVeElBuild en Expande), Platform/Config y las
-    // reservadas. NO la tabla del IDE (IdeMacroVars): $(BDSLIB), $(BDSBIN),
-    // $(BDSUSERDIR), los catalogos y $(BDSPLATFORMSDKSDIR) los definen los
-    // targets importados al final, y en el cuerpo valen vacio (medido el
-    // 3-nov-2026 con msbuild y rsvars). La puerta juzgaba una carpeta de la zona
-    // del IDE y dcc recibia \<lo de detras>, colgado de la unidad del proyecto
-    // (X18 de test_build_macros_1220; revisor de la jaula del cierre de la 1.26;
-    // censo: 0 de 3.486 .dproj las usan donde msbuild las evalua)
+    // (EntornoDelBuild: la tabla del build -rsvars.bat con la del IDE encima,
+    // $(BDSLIB) y las suyas incluidas, como en el IDE- y el TEMP del build,
+    // sobre el del servidor, sin las DELPHI_MCP_*; lo que no esta aqui lo da
+    // VariableQueVeElBuild en Expande), Platform/Config y las reservadas. La
+    // puerta juzga con el mismo valor que msbuild recibe: con la tabla del IDE
+    // aqui y sin ella en msbuild, juzgaba una carpeta de la zona del IDE y dcc
+    // recibia \<lo de detras> (X18 de test_build_macros_1220); sin ella en los
+    // dos, negaba lo que el IDE compila (A2 de la 1.27, test_tabla_del_build_127)
     PonEnLaTabla(EntornoDelBuild(AInfo, ATemporal));
     Vars.Values['Platform'] := APlat;
     Vars.Values['Config'] := ACfg;

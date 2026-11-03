@@ -873,15 +873,21 @@ begin
     Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [AEco.Trim]));
 end;
 
-{ Vets a search path the way every read is vetted: expand the IDE's macros,
-  resolve relative to the project, then the read jail (roots + library zone)
-  and existence. Returns '' when fine, else the refusal. AShow is the
-  resolved path for messages. }
+{ Vets a search path the way every read is vetted: expand the macros with
+  THE build's table (MacrosDelProyecto), resolve relative to the project,
+  then the read jail (roots + library zone) and existence. $(Platform) and
+  $(Config) are those of EVERY build the path applies to - APlat, or every
+  platform the project compiles, by every configuration it compiles: the
+  jail holds for all of them and one of them has to exist (lib\$(Config) was
+  CFG-017 even with lib\Debug there, and lib\$(Platform) without platform=;
+  A2 de la 1.27). Returns '' when fine, else the refusal. AShow is the
+  resolved path for messages (the first one that exists). }
 function SearchPathDenied(const ADproj, APlat, ARaw: string; out AShow: string): string;
 var
-  Info: TRadStudioInfo;
+  Proyecto: TDprojInfo;
   Vars: TStringList;
-  Expanded: string;
+  Plats, Cfgs, Rutas: TArray<string>;
+  Expanded, Full: string;
 begin
   AShow := '';
   if ARaw.Trim = '' then
@@ -890,43 +896,63 @@ begin
     Exit(MsgText(SR_CONFIG_PATH_CHARS));
   if CaracterVetado(ARaw, True) then
     Exit(MsgText(SR_CONFIG_PATH_CHARS));
-  Expanded := ARaw.Trim;
-  if Expanded.Contains('$(') then
-  begin
-    Info := DiscoverRadStudio;
-    Vars := TStringList.Create;
-    try
-      // IdeMacroVars, NOT IdeEnvironmentVars: the registry key alone does not
-      // carry $(BDS), $(BDSLIB) or $(BDSUSERDIR) - the ones the schema
-      // promises and an agent reaches for first. Every $(BDS...) path was
-      // refused with a message that recommended $(BDS) (field round 8).
-      // EL lector de la tabla del proyecto, la de los ajustes del motor: con
-      // la plataforma del comando y las reservadas de msbuild (V205)
-      MacrosDelProyecto(Info, TPath.GetDirectoryName(ADproj),
-        TPath.GetFileNameWithoutExtension(ADproj), APlat, '', Vars);
-      Expanded := ExpandeMacros(Expanded, Vars.ToStringArray);
-    finally
-      Vars.Free;
+  Plats := [''];
+  Cfgs := [''];
+  Rutas := nil;
+  Vars := TStringList.Create;
+  try
+    if ARaw.Contains('$(') then
+    begin
+      // los builds a los que se aplica: la plataforma del comando, o las que
+      // compila el proyecto (el grupo base), por cada configuracion que compila
+      Proyecto := ReadDproj(ADproj);
+      Plats := [APlat];
+      if APlat = '' then
+        Plats := Proyecto.Activas;
+      if Length(Plats) = 0 then
+        Plats := [Proyecto.PlataformaPorDefecto];
+      Cfgs := Proyecto.Compilables;
+      if Length(Cfgs) = 0 then
+        Cfgs := [Proyecto.ConfigPorDefecto];
+      // EL lector de la tabla del proyecto, la del build (V205; A2 de la 1.27)
+      MacrosDelProyecto(DiscoverRadStudio, TPath.GetDirectoryName(ADproj),
+        TPath.GetFileNameWithoutExtension(ADproj), '', '', Vars);
     end;
-    if Expanded.Contains('$(') then
-      Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
+    for var P in Plats do
+      for var C in Cfgs do
+      begin
+        Vars.Values['Platform'] := P;
+        Vars.Values['Config'] := C;
+        Expanded := ExpandeMacros(ARaw.Trim, Vars.ToStringArray);
+        if Expanded.Contains('$(') then
+          Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [ARaw.Trim]));
+        // como msbuild, que expande y DESPUES desescapa (EL desescapador,
+        // Lsp.Dproj): %2E%2E es .., y CFG-018 decia que no existia una carpeta que
+        // el build si lee (Opus sobre la 1.22.2, w). La jaula, la existencia y los
+        // caracteres, sobre lo que leera el build: un %3B es un ';' que parte la lista
+        Expanded := DesescapaDeMsbuild(Expanded);
+        if CaracterVetado(Expanded, True) then
+          Exit(MsgText(SR_CONFIG_PATH_CHARS));
+        Result := RutaEnLaCarpeta(TPath.GetDirectoryName(ADproj), Expanded, ARaw, Full);
+        if Result <> '' then
+          Exit;
+        Result := ReadPathDenied(Full);
+        if Result <> '' then
+          Exit;
+        if not RutaEnLista(Full, Rutas) then
+          Rutas := Rutas + [Full];
+      end;
+  finally
+    Vars.Free;
   end;
-  // como msbuild, que expande y DESPUES desescapa (EL desescapador,
-  // Lsp.Dproj): %2E%2E es .., y CFG-018 decia que no existia una carpeta que
-  // el build si lee (Opus sobre la 1.22.2, w). La jaula, la existencia y los
-  // caracteres, sobre lo que leera el build: un %3B es un ';' que parte la lista
-  Expanded := DesescapaDeMsbuild(Expanded);
-  if CaracterVetado(Expanded, True) then
-    Exit(MsgText(SR_CONFIG_PATH_CHARS));
-  Result := RutaEnLaCarpeta(TPath.GetDirectoryName(ADproj), Expanded, ARaw, AShow);
-  if Result <> '' then
-    Exit;
-  Expanded := AShow;
-  Result := ReadPathDenied(Expanded);
-  if Result <> '' then
-    Exit;
-  if not TDirectory.Exists(Expanded) then
-    Exit(MsgFmt(SR_CONFIG_PATH_MISSING_FMT, [Expanded]));
+  for var R in Rutas do
+    if TDirectory.Exists(R) then
+    begin
+      AShow := R;
+      Exit;
+    end;
+  AShow := Rutas[0];
+  Result := MsgFmt(SR_CONFIG_PATH_MISSING_FMT, [AShow]);
 end;
 
 { Las carpetas de add/remove-searchpath: path (una) y paths (una LISTA, como

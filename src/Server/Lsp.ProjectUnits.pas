@@ -4034,10 +4034,7 @@ begin
   XmlAhora := PatchLoadText(AFichero, Enc);
   BaseNueva := TPath.GetDirectoryName(AFichero);
   Info := InfoDeDproj(XmlAhora);
-  Plataformas := [];
-  for var P in Info.Platforms do
-    if P.Enabled then
-      Plataformas := Plataformas + [P.Name];
+  Plataformas := Info.Activas;
   if Length(Plataformas) = 0 then
     Plataformas := [Info.PlataformaPorDefecto];
   Configs := Info.Compilables;

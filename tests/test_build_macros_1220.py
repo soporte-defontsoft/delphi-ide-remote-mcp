@@ -229,15 +229,16 @@ try:
     check('X17 un grupo con Condition sobre una variable del entorno del build, que msbuild aplica: la puerta juzga '
           'su search path de fuera, BUILD-050', lectura_fuera(r), r[:300])
 
-    # X18 una macro que msbuild NO tiene al leer el cuerpo del .dproj: BDSLIB (y BDSBIN, BDSUSERDIR, los catalogos,
-    # BDSPLATFORMSDKSDIR) la definen los targets importados al final; en el cuerpo vale vacio (medido el 3-nov-2026 con
-    # msbuild y rsvars). La puerta la llenaba con la tabla del IDE y juzgaba una carpeta de la zona del IDE mientras dcc
-    # recibia \<lo de detras>, colgado de la unidad del proyecto (revisor de la jaula del cierre de la 1.26). Censo: 0
-    # de 3.486 .dproj las usan fuera de ProjectExtensions y de un Import
+    # X18 GUARDA: $(BDSLIB) (y BDSBIN, BDSUSERDIR, los catalogos, BDSPLATFORMSDKSDIR) en el cuerpo del .dproj. La
+    # puerta la llenaba con la tabla del IDE mientras msbuild la leia vacia y dcc recibia \<lo de detras>, colgado de
+    # la unidad del proyecto: compilaba con la unidad de FUERA (revisor de la jaula del cierre de la 1.26). Desde A2
+    # de la 1.27 msbuild recibe esa tabla, como en el IDE (medido en el IDE el 3-nov-2026), y la puerta y dcc leen la
+    # MISMA carpeta, <lib del IDE>\<FUERA sin unidad>, que no existe: la unidad de FUERA no se compila. Que dcc
+    # recibe lo que la puerta juzgo lo mide T2 de test_tabla_del_build_127
     con(grupo('$(BDSLIB)' + os.path.splitdrive(FUERA)[1]))
     r = build(proyecto)
-    check('X18 $(BDSLIB) en un search path del cuerpo vale vacio, como en msbuild: \\<FUERA> es de fuera, BUILD-050 '
-          '(ROJA: la puerta juzgaba la zona del IDE y compilaba con la unidad de fuera)', lectura_fuera(r), r[:300])
+    check('X18 $(BDSLIB)\\<FUERA sin unidad> en un search path del cuerpo: no compila con la unidad de FUERA',
+          not compila(r), r[:300])
 
     # X19 una variable que rsvars.bat deja VACIA (SET FrameworkSDKDir=): msbuild la recibe quitada y en el cuerpo
     # vale vacio. La tabla de la puerta la BORRABA al ponerla vacia y caia al entorno del servidor, que aqui la
