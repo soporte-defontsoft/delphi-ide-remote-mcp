@@ -2285,6 +2285,12 @@ const
     'which no argument can carry to the target: each one travels there on a ' +
     'line of its own. Pass that value another way (a file the program reads) or ' +
     'without it. Nothing was run.';
+  { El paclient que tocaria esta donde la sesion escribe (revisor del paisaje
+    de la 1.27: se decia "no hay paclient"). }
+  SR_PACLIENT_DONDE_ESCRIBE_FMT =
+    '[RUN-027 DENIED] The paclient this server would use (%s) is in a folder ' +
+    'this session can write, so it is not run: it would run as this server. ' +
+    'The operator points it outside the workspace roots.';
   { exe= que el proyecto no despliega en esa plataforma (1.22.2: valia
     cualquier fichero de la carpeta del destino) }
   SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT =
@@ -3214,6 +3220,14 @@ const
     '[ADB-015 INTERNAL] This server has no Android SDK configured ' +
     '(there is no .sdk with SDKAdbPath). It is installed once with the ' +
     'IDE SDK Manager; after that this tool uses its adb.';
+
+  { ...y el adb que nombra esta en una carpeta donde la sesion escribe
+    (revisor del paisaje de la 1.27). }
+  SR_ADB_DONDE_ESCRIBE_FMT =
+    '[ADB-035 DENIED] The adb the Android SDK names (%s) is in a folder this ' +
+    'session can write, so it is not run: it would run as this server. The ' +
+    'operator points the SDK at an adb outside the workspace roots (IDE SDK ' +
+    'Manager).';
 
   SR_ADB_NEED_ADDRESS =
     '[ADB-016 INVALID_PARAM] connect/disconnect need "address" (ip:port of the ' +

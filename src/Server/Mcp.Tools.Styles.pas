@@ -1301,7 +1301,11 @@ begin
     // el original tras el juicio de DerivadosDenegados: la puerta vale para lo
     // que se COMPILA, no para lo que se miro (revisor V54, TOCTOU).
     var EncRc: string;
-    var RcEtapa := TPath.Combine(Etapa, TPath.GetFileName(ARc));
+    // con un nombre FIJO, como el r.res: el del agente (el primer .rc de su
+    // carpeta) viajaba a la linea de brcc32, donde un "-x.rc" seria una opcion
+    // (revisor del paisaje de la 1.27; la regla del 13-oct: el agente elige,
+    // su texto no va a la linea de un programa)
+    var RcEtapa := TPath.Combine(Etapa, 'r.rc');
     var Compuesto := RcCompuesto(LeeRc(PatchLoadText(ARc, EncRc)));
     var NegRc := RcLecturasDenegadas(ARc, ADir, Compuesto);
     if NegRc <> '' then
@@ -1326,7 +1330,7 @@ begin
       // un #include <x> y un fichero; un #include <x> de la carpeta sigue
       // valiendo: medido el 18-oct-2026)
       Out := RunCapturedEnContenedor(ComillasSinEscape(ABrcc) + ' -x -fo"r.res" ' +
-        ComillasSinEscape(TPath.GetFileName(ARc)), Etapa, AC, 120000, Code, TimedOut);
+        ComillasSinEscape(TPath.GetFileName(RcEtapa)), Etapa, AC, 120000, Code, TimedOut);
     except
       on E: EOSError do
         Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, [IntToHex(E.ErrorCode, 8), E.Message]));

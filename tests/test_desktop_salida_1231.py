@@ -43,8 +43,7 @@ PRJDIR = os.path.join(BASE, 'proj')
 DPROJ = os.path.join(PRJDIR, NOMBRE + '.dproj')
 VENTANAS = 450
 
-STUB = os.path.join(BASE, 'paclient.cmd')
-open(STUB, 'w').write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
+STUB = mc.paclient_falso('desktop_salida_1231')  # fuera de la jaula (1.27)
 env = mc.entorno()
 env['DELPHI_MCP_ROOTS'] = BASE
 env['DELPHI_MCP_PACLIENT'] = STUB

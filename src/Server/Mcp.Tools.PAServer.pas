@@ -819,7 +819,7 @@ begin
   ANombre := '';
   APaClient := FindPaClient(AInfo);
   if APaClient = '' then
-    Exit(MsgText(SR_PASERVER_NO_PACLIENT));
+    Exit(PaclientQueFalta(MsgText(SR_PASERVER_NO_PACLIENT)));
   Result := PerfilElegido(AInfo.Version, APedido, ANombre);
   if Result = '' then
     Result := ProfileHostDenied(ANombre);
@@ -854,7 +854,7 @@ begin
   for P in PACLIENT_PLATFORMS do
     if SameText(P, Params.Platform.Trim) then Plat := P;
   PaClient := FindPaClient(Info);
-  if PaClient = '' then Exit(MsgText(SR_PASERVER_NO_PACLIENT));
+  if PaClient = '' then Exit(PaclientQueFalta(MsgText(SR_PASERVER_NO_PACLIENT)));
   // Un nombre existente NUNCA se pisa (lo pudo crear el IDE u otro agente
   // con una contrasena que este no conoce); y si otro perfil ya apunta al
   // mismo host:puerto, se crea pero avisando - contra los perfiles a lo

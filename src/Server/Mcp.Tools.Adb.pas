@@ -341,6 +341,11 @@ begin
   Adb := FindAdb;
   if Adb = '' then
     Exit(MsgText(SR_ADB_NO_SDK));
+  // el adb que nombra el SDK, en una carpeta donde esta sesion escribe, seria
+  // el del agente, lanzado como el servicio: no se lanza (revisor del paisaje
+  // de la 1.27; la regla del programa por su ruta, ProgramaDelOperador)
+  if ProgramaFueraDelAgente(Adb) = '' then
+    Exit(MsgFmt(SR_ADB_DONDE_ESCRIBE_FMT, [Adb]));
   // a serial goes BEFORE the subcommand (adb -s <serial> <cmd>). The gate
   // already vetted the device token. Entre comillas: un nombre mDNS numerado
   // lleva un blanco ("adb-X (2)._adb-tls-connect._tcp").

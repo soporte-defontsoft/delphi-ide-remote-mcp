@@ -366,6 +366,7 @@ begin
   Conecta('K8', %(puerto)d);
   Entorno('K14');
   Existe('K21', '__delphi'#$FE63'temp\dato.txt');
+  Existe('K22', '.git\config');
   TFile.WriteAllText(TPath.Combine(TPath.GetTempPath, 'temporal.txt'), 't');
   TFile.WriteAllText('grande.log', StringOfChar('g', 20000));
   TFile.WriteAllText('resultado.log', 'linea de log');
@@ -494,6 +495,10 @@ check('A1 DUnitX: la cola sin el recuadro de copyright, con el resumen',
 GUION_PEQUENO = os.path.join(JAIL, 'CajaTest', 'Win64', 'Debug', '__delphi' + chr(0xFE63) + 'temp')
 os.makedirs(GUION_PEQUENO)
 open(os.path.join(GUION_PEQUENO, 'dato.txt'), 'w').write('d')
+# K22 (revisor del paisaje de la 1.27): unos metadatos de git junto al exe (el de un exe que sale en la raiz de un
+# repo) no llegan a la etapa: la puerta de leer los niega a toda tool, y el codigo del agente los leeria alli
+os.makedirs(os.path.join(JAIL, 'CajaTest', 'Win64', 'Debug', '.git'))
+open(os.path.join(JAIL, 'CajaTest', 'Win64', 'Debug', '.git', 'config'), 'w').write('[remote "x"]\n')
 out = srv.call('delphi_test', {'command': 'run', 'project': os.path.join(JAIL, 'CajaTest', 'CajaTest.dproj')}, 600)
 j = J(out)
 sonda = {}
@@ -582,6 +587,8 @@ check('K20 la lista para en 500 entradas y dice cuantos quedan fuera (TEST-033);
 _control = [k for k in ENTORNO if k.upper().startswith('DELPHI_MCP_')]
 check('K21 una carpeta que NTFS separa de __delphi-temp (un guion pequeno) se copia con las demas',
       sonda.get('K21') == 'VE', str(sonda))
+check('K22 unos metadatos de git junto al exe no llegan a la etapa (lo que la sesion no lee)',
+      sonda.get('K22') == 'NO' and sonda.get('K21') == 'VE', str(sonda))
 check('K14 no ve la configuracion del servidor: NI UNA DELPHI_MCP_* en su entorno',
       sonda.get('K14') == '0' and len(_control) >= 2, '%s, el servidor tenia %s' % (sonda, _control))
 

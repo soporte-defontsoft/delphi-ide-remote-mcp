@@ -766,6 +766,12 @@ function EscrituraDenegada(const APath: string): string;
   programa por su ruta, encontrada donde el agente no escribe; B1 del cierre
   de la 1.19.0). Lo llaman delphi_git (RutaDeGit) y el build (msbuild). }
 function ProgramaDelOperador(const APrograma, APath: string): string;
+{ ...y la mitad de esa pregunta para un programa tomado de una RUTA escrita (el
+  SDKAdbPath de un .sdk, el paclient de la instalacion o de
+  DELPHI_MCP_PACLIENT): ARuta, o '' si esta en una carpeta donde esta sesion
+  escribe - un adb.exe que el agente deje ahi correria como el servicio
+  (revisor del paisaje de la 1.27). }
+function ProgramaFueraDelAgente(const ARuta: string): string;
 
 { Una CARPETA donde la tool pide un FICHERO: '' si no lo es; si lo es, "es
   una CARPETA, no un fichero" (INVALID_PARAM), el mismo texto que ya daba
@@ -1476,7 +1482,12 @@ end;
 
 function ProgramaDelOperador(const APrograma, APath: string): string;
 begin
-  Result := ProgramaEnPath(APrograma, APath);
+  Result := ProgramaFueraDelAgente(ProgramaEnPath(APrograma, APath));
+end;
+
+function ProgramaFueraDelAgente(const ARuta: string): string;
+begin
+  Result := ARuta;
   // Donde el agente escribe no esta el programa del operador. La pregunta es
   // la jaula de ESCRITURA (PathDenied) sin el juez de los metadatos de git
   // (APermiteGit): ese juez lanza git para contestar, y git se resuelve

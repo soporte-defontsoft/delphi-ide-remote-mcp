@@ -70,9 +70,7 @@ planta('etc/os-release', b'NAME="Mcp V10"\nID=mcpvdiez\nVERSION_ID="1"\n')
 planta('usr/lib/gcc/x86_64-linux-gnu/13/crtbegin.o', b'crtbegin de mentira')
 planta('usr/lib/x86_64-linux-gnu/libc.so.6', b'GNU C Library release version 2.39 de mentira')
 LOG = os.path.join(BASE, 'paclient.log')
-STUB = os.path.join(BASE, 'paclient.cmd')
-with open(STUB, 'w') as _f:
-    _f.write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
+STUB = mc.paclient_falso('get_sdk_1230')
 
 srv = mc.Stdio(EXE, mc.entorno({
     'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': AD, 'DELPHI_MCP_REMOTE_HOSTS': HOST,

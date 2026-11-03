@@ -47,8 +47,7 @@ shutil.copy(sys.executable, os.path.join(DEPLOY, PROJNAME + '.exe'))
 PRJDIR = os.path.join(BASE, 'proj'); os.makedirs(PRJDIR)
 DPROJ = os.path.join(PRJDIR, PROJNAME + '.dproj')
 open(DPROJ, 'w', encoding='utf-8').write('<Project/>')
-STUB = os.path.join(BASE, 'paclient.cmd')
-open(STUB, 'w').write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
+STUB = mc.paclient_falso('cola_salida_1231')  # fuera de la jaula (1.27)
 
 GUIONES = {
     'muchas.py': 'for i in range(1, 5001):\n    print("linea %05d" % i)\n',

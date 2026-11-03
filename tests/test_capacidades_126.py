@@ -499,6 +499,12 @@ ADB = de_mentira('AdbFalso',
                  "    Writeln('Physical size: 1x1')\n"
                  "  else if (Length(A) >= 3) and (A[0] = 'shell') and (A[1] = 'wm') then\n"
                  "    Writeln('Physical density: 160');\n")
+# se compila en la jaula; el que nombra el SDK va FUERA: uno en una carpeta que la sesion escribe no se lanza
+# (ADB-035, revisor del paisaje de la 1.27), y RF0 lo mide con el de dentro
+ADB_DENTRO = ADB
+ADB = os.path.join(BASE, 'adb-fuera', os.path.basename(ADB_DENTRO))
+os.makedirs(os.path.dirname(ADB))
+shutil.copy(ADB_DENTRO, ADB)
 import struct, zlib
 
 
@@ -509,22 +515,40 @@ def trozo(tipo, datos):
 with open(os.path.join(os.path.dirname(ADB), 'base.png'), 'wb') as f:
     f.write(b'\x89PNG\r\n\x1a\n' + trozo(b'IHDR', struct.pack('>IIBBBBB', 1, 1, 8, 2, 0, 0, 0)) +
             trozo(b'IDAT', zlib.compress(b'\x00\xff\x00\x00')) + trozo(b'IEND', b''))
-# un APPDATA de prueba cuyo SDK de Android dice que su adb es el de mentira (FindAdb lee SDKAdbPath de los .sdk)
+def apunta_adb(appd, adb):
+    """El SDK de Android de un APPDATA de prueba dice que su adb es ese (FindAdb lee SDKAdbPath de los .sdk)."""
+    con = 0
+    for raiz, _, ficheros in os.walk(appd):
+        for f in ficheros:
+            if f.lower().endswith('.sdk'):
+                p = os.path.join(raiz, f)
+                t = open(p, encoding='utf-8-sig').read()
+                if '<SDKAdbPath>' in t:
+                    con += 1
+                    open(p, 'w', encoding='utf-8').write(
+                        re.sub(r'<SDKAdbPath>[^<]*</SDKAdbPath>', lambda m: '<SDKAdbPath>%s</SDKAdbPath>' % adb, t))
+    if con == 0:
+        for v in os.listdir(os.path.join(appd, 'Embarcadero', 'BDS')):
+            open(os.path.join(appd, 'Embarcadero', 'BDS', v, 'AdbFalso.sdk'), 'w', encoding='utf-8').write(
+                '<Project><PropertyGroup><SDKAdbPath>%s</SDKAdbPath></PropertyGroup></Project>\n' % adb)
+
+
 APPD_RF, _ = mc.appdata_perfil(os.path.join(BASE, 'rf-ad'), 'mcp-e2e-rf', '127.0.0.1')
-CON_ADB = 0
-for raiz, _, ficheros in os.walk(APPD_RF):
-    for f in ficheros:
-        if f.lower().endswith('.sdk'):
-            p = os.path.join(raiz, f)
-            t = open(p, encoding='utf-8-sig').read()
-            if '<SDKAdbPath>' in t:
-                CON_ADB += 1
-                open(p, 'w', encoding='utf-8').write(
-                    re.sub(r'<SDKAdbPath>[^<]*</SDKAdbPath>', lambda m: '<SDKAdbPath>%s</SDKAdbPath>' % ADB, t))
-if CON_ADB == 0:
-    for v in os.listdir(os.path.join(APPD_RF, 'Embarcadero', 'BDS')):
-        open(os.path.join(APPD_RF, 'Embarcadero', 'BDS', v, 'AdbFalso.sdk'), 'w', encoding='utf-8').write(
-            '<Project><PropertyGroup><SDKAdbPath>%s</SDKAdbPath></PropertyGroup></Project>\n' % ADB)
+apunta_adb(APPD_RF, ADB)
+
+# RF0 (revisor del paisaje de la 1.27) el adb que nombra el SDK, en una carpeta de la jaula: ni se lanza (el adb de
+# mentira crea su Dev al arrancar) ni se dice "sin SDK" (ROJA: corria como el servidor)
+APPD_RF0, _ = mc.appdata_perfil(os.path.join(BASE, 'rf0-ad'), 'mcp-e2e-rf0', '127.0.0.1')
+apunta_adb(APPD_RF0, ADB_DENTRO)
+otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': APPD_RF0, 'DELPHI_MCP_ADB_DEVICES': 'FALSO1'}),
+                nombre='rf0', t=120)
+try:
+    r = otro.call('delphi_adb', {'command': 'devices'}, t=60)
+finally:
+    otro.cierra()
+check('RF0 el adb que nombra el SDK en una carpeta de la jaula no se lanza: ADB-035',
+      mc.es(r, 'SR_ADB_DONDE_ESCRIBE_FMT') and not os.path.isdir(os.path.join(os.path.dirname(ADB_DENTRO), 'Dev')),
+      r[:300])
 
 
 def captura(nombre, res):

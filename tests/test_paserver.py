@@ -37,7 +37,7 @@ DEAD_PORT = str(mc.puerto_libre())
 # 1 (sin perfil, sin red). Si un argumento malo pasara la puerta, se veria
 # aqui en vez de nacer un perfil de verdad
 CENTINELA = os.path.join(BASE, 'paclient-llamado.txt')
-PACLIENT_FALSO = os.path.join(BASE, 'paclient-falso.cmd')
+PACLIENT_FALSO = os.path.join(mc.fuera_de_la_jaula('paserver'), 'paclient-falso.cmd')  # fuera de la jaula (1.27)
 with open(PACLIENT_FALSO, 'w', newline='') as _f:
     _f.write('@echo off\r\necho llamado>> "%s"\r\nexit /b 1\r\n' % CENTINELA)
 

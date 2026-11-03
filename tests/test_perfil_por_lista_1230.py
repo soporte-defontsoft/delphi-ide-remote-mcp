@@ -42,9 +42,7 @@ PERFIL = 'PerfilV8'
 AD, HOST = mc.appdata_perfil(BASE, PERFIL, '192.0.2.1', 'Linux64')
 open(os.path.join(FUERA, 'sonda.profile'), 'w', encoding='utf-8').write('sonda de V8, inerte\n')
 LOG = os.path.join(BASE, 'paclient.log')
-STUB = os.path.join(BASE, 'paclient.cmd')
-with open(STUB, 'w') as _f:
-    _f.write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
+STUB = mc.paclient_falso('perfil_por_lista_1230')
 
 srv = mc.Stdio(EXE, mc.entorno({
     'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': AD, 'DELPHI_MCP_REMOTE_HOSTS': HOST,

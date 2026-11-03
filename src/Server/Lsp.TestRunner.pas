@@ -583,9 +583,13 @@ begin
           // el locale, una que NTFS separa tampoco se copiaba), ni los .dcu
           // (son de compilar), ni los .rsm (los simbolos del depurador
           // remoto: 18 MB en un test vacio, medido)
+          // ...ni lo que la sesion no lee (la puerta de leer: unos metadatos de
+          // git junto al exe de uno que sale en la raiz de un repo llegaban a la
+          // etapa, y el codigo del agente los leia alli; revisor del paisaje de
+          // la 1.27, medido)
           if TDirectory.Exists(APath) then
-            Exit(EsCarpetaDesechable(TPath.GetFileName(APath)));
-          Result := TieneExtension(APath, ['.dcu', '.rsm']);
+            Exit(EsCarpetaDesechable(TPath.GetFileName(APath)) or (ReadPathDenied(APath) <> ''));
+          Result := TieneExtension(APath, ['.dcu', '.rsm']) or (ReadPathDenied(APath) <> '');
           // lo que SI se copia, se cuenta: el copiador pregunta esto lo
           // ultimo, por lo que va a copiar de verdad
           // (un enlace que se sigue copia lo de DETRAS: se cuenta eso, no

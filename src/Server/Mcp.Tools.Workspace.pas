@@ -1967,7 +1967,11 @@ begin
   if Params.Dir.Trim = '' then
     Exit(MsgText(SR_PACKAGE_NEED_DIR));
   Dir := TPath.GetFullPath(Params.Dir);
-  Result := PathDenied(Dir);
+  // la carpeta solo se LEE (lo que se escribe es el zip, que juzga la puerta
+  // de destino abajo): por la puerta de leer, como el origen de delphi_move
+  // copy=true. La de escribir negaba empaquetar una referencia (revisor del
+  // paisaje de la 1.27, medido)
+  Result := ReadPathDenied(Dir);
   if Result <> '' then
     Exit;
   Result := CarpetaQueNoEs(Dir, FName, MsgFmt(SR_WS_DIR_NOT_FOUND_FMT, [Dir]));

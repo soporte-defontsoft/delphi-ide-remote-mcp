@@ -778,6 +778,26 @@ def carpeta(nombre):
     return base
 
 
+def fuera_de_la_jaula(nombre):
+    """<raiz temporal>\\<nombre>-fuera, vacia: una carpeta para lo que el servidor LANZA por su ruta (un paclient
+    o un adb de mentira) que no esta en ninguna jaula, aunque la bateria tenga la raiz en su carpeta entera.
+    Desde la 1.27 un programa en una carpeta donde la sesion escribe no se lanza (ProgramaFueraDelAgente:
+    ADB-035, RUN-027). Se quita al salir la bateria."""
+    import atexit
+    d = carpeta(nombre + '-fuera')
+    atexit.register(borra, d)
+    return d
+
+
+def paclient_falso(nombre):
+    """El paclient de mentira (tests/paclient_stub.py, por un .cmd) fuera de la jaula (fuera_de_la_jaula):
+    estaba escrito a mano en cinco baterias, y tres lo dejaban dentro de su raiz."""
+    stub = os.path.join(fuera_de_la_jaula(nombre), 'paclient.cmd')
+    with open(stub, 'w', newline='') as f:
+        f.write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(REPO, 'tests', 'paclient_stub.py'))
+    return stub
+
+
 CONVERSOR = 'DelphiStyleConvert.exe'
 # Win32, como el IDE: su escritor de texto es el del IDE (los flotantes con 18 decimales; V141 de la 1.23.1)
 CONVERSOR_COMPILADO = os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win32', 'Release', CONVERSOR)

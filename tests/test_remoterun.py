@@ -66,8 +66,7 @@ open(os.path.join(PRJDIR, PROJNAME + '.deployproj'), 'w', encoding='utf-8').writ
     '    </ItemGroup>\n</Project>\n')
 
 # paclient stub: a .cmd that calls python on the stub script
-STUB = os.path.join(BASE, 'paclient.cmd')
-open(STUB, 'w').write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
+STUB = mc.paclient_falso('remoterun')  # fuera de la jaula: desde la 1.27 no se lanza de donde la sesion escribe
 
 
 env = mc.entorno()
@@ -103,6 +102,20 @@ check('sin name/exe rechazado', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_RUN_NE
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'args': '"uno\ndos" tres'})
 check('A4 un salto de linea dentro de un argumento: RUN-026, sin lanzar nada',
       mc.rechazado(r) and mc.es(r, 'SR_RUN_ARG_SALTO_FMT'), r[:250])
+
+# 2b) revisor del paisaje de la 1.27: el paclient que tocaria esta en una carpeta donde la sesion escribe (aqui
+# su raiz): no se lanza, y lo dice (RUN-027) - antes decia que la instalacion no trae paclient
+_dentro = os.path.join(BASE, 'paclient-dentro.cmd')
+shutil.copy(STUB, _dentro)
+env_dentro = dict(env); env_dentro['DELPHI_MCP_PACLIENT'] = _dentro
+srv_dentro = mc.Stdio(EXE, env_dentro, nombre='pac-dentro')
+try:
+    r = srv_dentro.call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                                            'exe': PROJNAME + '.exe', 'timeoutms': 20000})
+finally:
+    srv_dentro.cierra()
+check('RUN-027 un paclient en una carpeta de la jaula no se lanza, y se dice', mc.es(r, 'SR_PACLIENT_DONDE_ESCRIBE_FMT'),
+      r[:300])
 
 # 3) happy path
 # exe=<nombre simple> de la MISMA carpeta de despliegue (en Linux el binario

@@ -84,8 +84,13 @@ function BinarioDelDestino(const ABase, APlataforma: string): string;
   Delphi del servidor (DiscoverRadStudio) - nunca el de otra instalacion.
   '' si no hay. Lo usan remote-run y la gestion de perfiles de
   delphi_paserver: hasta el 5-oct-2026 esa tenia su gemelo (FindPaClient),
-  que no respetaba DELPHI_MCP_PACLIENT. }
+  que no respetaba DELPHI_MCP_PACLIENT. Nunca uno de donde esta sesion
+  escribe (ProgramaFueraDelAgente: correria como el servicio). }
 function PaClientPath: string;
+{ ...y cuando no da ninguno, POR QUE: el que habia esta donde esta sesion
+  escribe (RUN-027, con su ruta), o ANoHay, el texto del llamador (revisor del
+  paisaje de la 1.27: decia "no hay paclient" del que se nego). }
+function PaclientQueFalta(const ANoHay: string): string;
 
 { LA llamada a paclient: "<APaclient>" <AOps> "<AProfile>", con su salida y
   su codigo. Todo lo que habla con un PAServer pasa por aqui (remote-run, el
@@ -246,7 +251,9 @@ const
   // estaba a mano en tres sitios (H9 de la revision del paisaje de Fable)
   REMOTERUN_SUB = 'remoterun';
 
-function PaClientPath: string;
+{ El paclient que tocaria, sin mirar donde esta: el de DELPHI_MCP_PACLIENT si
+  existe, si no el bin\paclient.exe de la instalacion. }
+function PaclientCandidato: string;
 var
   Info: TRadStudioInfo;
   P: string;
@@ -261,6 +268,22 @@ begin
   P := TPath.Combine(BinDelIde(Info.RootDir), 'paclient.exe');
   if TFile.Exists(P) then
     Result := P;
+end;
+
+function PaClientPath: string;
+begin
+  // por su ruta, y nunca donde el agente escribe: su paclient.exe correria
+  // como el servicio (ProgramaFueraDelAgente; revisor del paisaje de la 1.27)
+  Result := ProgramaFueraDelAgente(PaclientCandidato);
+end;
+
+function PaclientQueFalta(const ANoHay: string): string;
+begin
+  var C := PaclientCandidato;
+  if (C <> '') and (ProgramaFueraDelAgente(C) = '') then
+    Result := MsgFmt(SR_PACLIENT_DONDE_ESCRIBE_FMT, [C])
+  else
+    Result := ANoHay;
 end;
 
 function Paclient(const APaclient, AOps, AProfile: string;
@@ -320,7 +343,7 @@ begin
   ALocalFile := '';
   Pc := PaClientPath;
   if Pc = '' then
-    Exit(MsgText(SR_REMOTERUN_NO_PACLIENT));
+    Exit(PaclientQueFalta(MsgText(SR_REMOTERUN_NO_PACLIENT)));
   // El nombre, relativo a lo desplegado, y lo que viaja a un campo de paclient
   // (--get=<proyecto>/<nombre>,<destino>):
   // el nombre sale de la linea CAPTURA= del programa, y paclient parte por la
@@ -725,7 +748,7 @@ begin
   if Pc = '' then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', MsgText(SR_REMOTERUN_NO_PACLIENT));
+    Result.AddPair('error', PaclientQueFalta(MsgText(SR_REMOTERUN_NO_PACLIENT)));
     Exit;
   end;
   if ATimeoutMs <= 0 then
@@ -970,7 +993,7 @@ begin
   if Pc = '' then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', MsgText(SR_REMOTERUN_NO_PACLIENT));
+    Result.AddPair('error', PaclientQueFalta(MsgText(SR_REMOTERUN_NO_PACLIENT)));
     Exit;
   end;
   // la misma carpeta que deriva remote-run: la del proyecto, nunca otra
@@ -1114,7 +1137,7 @@ begin
     Exit(MsgText(SR_ADBLINUX_NONODE));
   Pc := PaClientPath;
   if Pc = '' then
-    Exit(MsgText(SR_REMOTERUN_NO_PACLIENT));
+    Exit(PaclientQueFalta(MsgText(SR_REMOTERUN_NO_PACLIENT)));
   // el SHA-256 de fichero de la casa (Lsp.ShaCache): tenia su propio THashSHA2
   // y leia el binario a mano (V84 de la 1.23.1)
   LocalSha := SinMayusculas(CachedFileSha256(Bin));
