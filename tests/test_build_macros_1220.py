@@ -62,7 +62,9 @@ LIB = os.path.join(CARPETA, 'lib')
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 # el nombre del entorno que X7 y X8 usan: lo pone el servidor de esta bateria, no la maquina
 NOMBRE_ENTORNO = 'PUNTO_MACROS_1220_LIB'
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE, NOMBRE_ENTORNO: LIB}), nombre='bm', t=600)
+# FrameworkSDKDir: X19 (rsvars.bat la deja vacia; el servidor, aqui, no)
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE, NOMBRE_ENTORNO: LIB, 'FrameworkSDKDir': BASE}),
+               nombre='bm', t=600)
 
 AJENA = 'unit Ajena;\r\ninterface\r\nimplementation\r\nend.\r\n'
 
@@ -236,6 +238,16 @@ try:
     r = build(proyecto)
     check('X18 $(BDSLIB) en un search path del cuerpo vale vacio, como en msbuild: \\<FUERA> es de fuera, BUILD-050 '
           '(ROJA: la puerta juzgaba la zona del IDE y compilaba con la unidad de fuera)', lectura_fuera(r), r[:300])
+
+    # X19 una variable que rsvars.bat deja VACIA (SET FrameworkSDKDir=): msbuild la recibe quitada y en el cuerpo
+    # vale vacio. La tabla de la puerta la BORRABA al ponerla vacia y caia al entorno del servidor, que aqui la
+    # define hacia BASE: juzgaba BASE\<FUERA sin unidad> (de dentro) y dcc leia \<FUERA sin unidad>, de fuera
+    # (A6 del plan de la 1.27, medido por el revisor de las tablas de macros el 3-nov-2026)
+    con(grupo('$(FrameworkSDKDir)' + os.path.splitdrive(FUERA)[1]))
+    r = build(proyecto)
+    check('X19 $(FrameworkSDKDir), vacia en rsvars.bat, vale vacio aunque el servidor la defina: \\<FUERA> es de '
+          'fuera, BUILD-050 (ROJA: la puerta tomaba la del servidor y compilaba con la unidad de fuera)',
+          lectura_fuera(r), r[:300])
 
     MIDE = os.path.join(BASE, 'Mide$(Config)x')
     srv.call('delphi_create', {'kind': 'project-console', 'name': 'Mide', 'dir': MIDE})

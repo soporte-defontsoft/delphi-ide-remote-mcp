@@ -2035,14 +2035,22 @@ var
     end;
   end;
 
-  // 'Nombre=Valor', a la tabla: el reparto estaba escrito tres veces (V160e)
+  // 'Nombre=Valor', a la tabla: el reparto estaba escrito tres veces (V160e).
+  // Un valor VACIO se queda en ella: Values[X] := '' BORRA la entrada, Expande
+  // caia al entorno del servidor, y msbuild recibe esa variable quitada (SET
+  // FrameworkSDKDir= de rsvars.bat; X19 de test_build_macros_1220, A6 de la 1.27)
   procedure PonEnLaTabla(const APares: TArray<string>);
   begin
     for var Par in APares do
     begin
       var P := Pos('=', Par);
       if P > 1 then
-        Vars.Values[Copy(Par, 1, P - 1)] := Copy(Par, P + 1, MaxInt);
+      begin
+        var Ya := Vars.IndexOfName(Copy(Par, 1, P - 1));
+        if Ya >= 0 then
+          Vars.Delete(Ya);
+        Vars.Add(Par);
+      end;
     end;
   end;
 
