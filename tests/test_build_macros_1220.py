@@ -218,6 +218,25 @@ try:
     # X16 una carpeta con $( en su nombre, de punta a punta: msbuild la lee tal cual (medido el 3-nov-2026 con msbuild:
     # DIR=[...\Mide$(Config)x]) y la salida se buscaba en MideReleasex (C17 del cierre de la 1.26; su roja, la de
     # LoInsertadoNoSeVuelveAExpandir en DUnitX: este check no la midio contra el build anterior)
+    # X17 GUARDA (sospecha del cierre de la 1.26, medida: ya pasaba): una variable del entorno del build en una
+    # Condition; msbuild la ve (el entorno son propiedades) y aplica el grupo, y la puerta la toma por de fuera
+    # (VariableQueVeElBuild en el evaluador) y juzga su search path, de FUERA
+    con('<PropertyGroup Condition="\'$(%s)\'==\'%s\'"><DCC_UnitSearchPath>..\\..\\%s</DCC_UnitSearchPath>'
+        '</PropertyGroup>' % (NOMBRE_ENTORNO, escape(LIB), os.path.basename(FUERA)))
+    r = build(proyecto)
+    check('X17 un grupo con Condition sobre una variable del entorno del build, que msbuild aplica: la puerta juzga '
+          'su search path de fuera, BUILD-050', lectura_fuera(r), r[:300])
+
+    # X18 una macro que msbuild NO tiene al leer el cuerpo del .dproj: BDSLIB (y BDSBIN, BDSUSERDIR, los catalogos,
+    # BDSPLATFORMSDKSDIR) la definen los targets importados al final; en el cuerpo vale vacio (medido el 3-nov-2026 con
+    # msbuild y rsvars). La puerta la llenaba con la tabla del IDE y juzgaba una carpeta de la zona del IDE mientras dcc
+    # recibia \<lo de detras>, colgado de la unidad del proyecto (revisor de la jaula del cierre de la 1.26). Censo: 0
+    # de 3.486 .dproj las usan fuera de ProjectExtensions y de un Import
+    con(grupo('$(BDSLIB)' + os.path.splitdrive(FUERA)[1]))
+    r = build(proyecto)
+    check('X18 $(BDSLIB) en un search path del cuerpo vale vacio, como en msbuild: \\<FUERA> es de fuera, BUILD-050 '
+          '(ROJA: la puerta juzgaba la zona del IDE y compilaba con la unidad de fuera)', lectura_fuera(r), r[:300])
+
     MIDE = os.path.join(BASE, 'Mide$(Config)x')
     srv.call('delphi_create', {'kind': 'project-console', 'name': 'Mide', 'dir': MIDE})
     r = build(os.path.join(MIDE, 'Mide.dproj'))

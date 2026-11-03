@@ -2025,8 +2025,16 @@ begin
   Base := TPath.GetFileNameWithoutExtension(ADprojPath);
   Vars := TStringList.Create;
   try
-    IdeMacroVars(AInfo, Vars);
-    // rsvars.bat manda sobre la tabla: es el entorno que recibe msbuild
+    // LO QUE MSBUILD TIENE AL LEER EL CUERPO del .dproj: el entorno que recibe
+    // (rsvars.bat sobre el del servidor, sin las DELPHI_MCP_*; lo que no esta
+    // aqui lo da VariableQueVeElBuild en Expande), Platform/Config y las
+    // reservadas. NO la tabla del IDE (IdeMacroVars): $(BDSLIB), $(BDSBIN),
+    // $(BDSUSERDIR), los catalogos y $(BDSPLATFORMSDKSDIR) los definen los
+    // targets importados al final, y en el cuerpo valen vacio (medido el
+    // 3-nov-2026 con msbuild y rsvars). La puerta juzgaba una carpeta de la zona
+    // del IDE y dcc recibia \<lo de detras>, colgado de la unidad del proyecto
+    // (X18 de test_build_macros_1220; revisor de la jaula del cierre de la 1.26;
+    // censo: 0 de 3.486 .dproj las usan donde msbuild las evalua)
     PonEnLaTabla(VariablesDeRsVars(AInfo));
     Vars.Values['Platform'] := APlat;
     Vars.Values['Config'] := ACfg;
