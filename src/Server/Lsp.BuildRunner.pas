@@ -1288,7 +1288,8 @@ end;
 // back as "Undeclared identifier: 'esto'", "'secreto'"...
 //
 // Same hole as the .rc of delphi_styles, different door, same answer: every
-// path they name is resolved and checked against the read jail BEFORE msbuild
+// path they name is resolved and checked against what the build may read (the
+// roots and the IDE's library, Lsp.Patch.LUGARES_DEL_BUILD) BEFORE msbuild
 // starts. Wildcards ({$R *.res}, {$R *.dfm}) and relative names that stay
 // inside are untouched - that is what an ordinary project uses.
 //
@@ -1299,9 +1300,10 @@ end;
 
 // Las directivas de AFichero que meten un fichero en el build ($I, $R), cada
 // una donde la abre dcc (lo relativo desde la carpeta del fuente; "\x" y "X:y"
-// desde ACarpetaDelBuild, la de dcc) y por la puerta de leer: '' o la negativa
-// (BUILD-028, o BUILD-057 si no se sabe que fichero es). Lo que no se deja leer
-// no se juzga: tampoco lo abre dcc. La pregunta de cada fuente que el build
+// desde ACarpetaDelBuild, la de dcc) y por el juez de lo que el build lee: ''
+// o la negativa (BUILD-028, o BUILD-057 si no se sabe que fichero es). Lo que
+// no se deja leer no se juzga: tampoco lo abre dcc. La pregunta de cada
+// fuente que el build
 // lee: los de la carpeta del proyecto, los que alcanza su in y los de las
 // carpetas de la jaula de sus search paths (V14 de la 1.23).
 function DirectivasDenegadas(const AFichero, ACarpetaDelBuild: string): string;
@@ -1331,7 +1333,10 @@ begin
           [LineaCitada(D.Texto), TPath.GetFileName(AFichero)]));
       Continue; // no es una ruta: dcc tampoco la abre
     end;
-    if ReadPathDenied(Cand) <> '' then
+    // por EL juez de lo que el build lee (Lsp.Patch.LUGARES_DEL_BUILD): el
+    // de la jaula del agente negaba aqui la biblioteca que el search path
+    // dejaba leer con un $I suelto (A9 de la 1.27)
+    if LugarDeLecturaDenegado(Cand, LUGARES_DEL_BUILD) <> '' then
       Exit(MsgFmt(SR_BUILD_INCLUDE_OUTSIDE_FMT,
         [LineaCitada(D.Texto), TPath.GetFileName(AFichero)]));
   end;
@@ -1373,7 +1378,7 @@ begin
       begin
         if Rutas[I] = '' then
           Exit(MsgFmt(SR_BUILD_IN_NO_VERIFICABLE_FMT, [Unidades[I], Escritas[I], TPath.GetFileName(Dpr)]));
-        if ReadPathDenied(Rutas[I]) <> '' then
+        if LugarDeLecturaDenegado(Rutas[I], LUGARES_DEL_BUILD) <> '' then
           Exit(MsgFmt(SR_BUILD_IN_FUERA_FMT, [Unidades[I], Escritas[I], TPath.GetFileName(Dpr)]));
         if not Files.Contains(Rutas[I]) then
           Files.Add(Rutas[I]);
@@ -1396,14 +1401,14 @@ begin
         // ...y un fichero del arbol que es un ENLACE cuyo destino REAL sale de
         // las raices (un symlink o una junction): dcc lo sigue y leeria el de
         // fuera. El gate de la ruta del proyecto no veia estos; los de IN ya
-        // van por ReadPathDenied (V14), y uno a DENTRO (real en la jaula) no
+        // van por el juez del build (V14), y uno a DENTRO (real en la jaula) no
         // cae aqui (V3 de la 1.23)
-        // ReadPathDenied resuelve la ruta REAL (coste): solo hace falta para un
+        // El juez resuelve la ruta REAL (coste): solo hace falta para un
         // ENLACE, lo unico del arbol que puede salir -WalkFiles ya garantiza que
         // un fichero normal esta dentro de las raices, y el enlace duro lo vio la
         // linea de arriba-. Asi el gate no paga RealPath por cada .pas de un
         // arbol grande (revisor V3)
-        if EsEnlace(SF) and (ReadPathDenied(SF) <> '') then
+        if EsEnlace(SF) and (LugarDeLecturaDenegado(SF, LUGARES_DEL_BUILD) <> '') then
           Exit(MsgFmt(SR_BUILD_FUENTE_ENLACE_FUERA_FMT, [TPath.GetFileName(SF)]));
         if EsRutaDeFuente(SF) and not Files.Contains(SF) then
           Files.Add(SF);
@@ -1923,7 +1928,7 @@ var
     // el trozo como lo lee el build y, si es otro, como esta ESCRITO: la
     // entrada que toma remove-searchpath (un %2E%2E citado como .. no se
     // encontraba en el .dproj)
-    if LugarDeLecturaDenegado(Cand, LUGARES_DEL_MOTOR) <> '' then
+    if LugarDeLecturaDenegado(Cand, LUGARES_DEL_BUILD) <> '' then
       Exit(MsgFmt(SR_BUILD_LECTURA_FUERA_FMT,
         [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo,
          IfThen(SameText(ATrozo.Trim, AValor.Escrito.Trim), '',

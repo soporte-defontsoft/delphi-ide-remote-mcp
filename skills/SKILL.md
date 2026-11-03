@@ -370,7 +370,7 @@ in frame. Do the gesture you came for and nothing else.
   not understand, a task, free compiler options or a foreign `<Import>`
   is refused by name (`BUILD-017`), and what the build reads through the
   project - the icon, the manifest, the search paths, a `.rc` - has to
-  lie inside what you can read (`BUILD-050`); the refusal names the
+  lie inside your roots or the IDE's library (`BUILD-050`); the refusal names the
   element and the value, so fix the `.dproj`, do not retry. An output
   folder the project does not declare (the `.dcu`, `.bpl` or `.dcp` one)
   is supplied inside the project for that build (`outputSupplied` says

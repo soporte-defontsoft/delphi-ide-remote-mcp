@@ -500,8 +500,11 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   the IDE's own, even when harmless. An import's path is read as msbuild reads it, unescaped (`%2E%2E` is `..`), and only the IDE's own imports written plainly (`$(BDS)\Bin\CodeGear.*.targets` and the user's `UserTools.proj`: no `..`, no escape, no other macro) are trusted without being read; a value of the project's body is judged with the macros msbuild has there. The build gets the same table the IDE gives its own build: `rsvars.bat`, and over it the IDE's variables - `$(BDSLIB)`, `$(BDSBIN)`, `$(BDSUSERDIR)`, the catalog repositories, `$(BDSPLATFORMSDKSDIR)` and what the operator overrides under Tools > Options > Environment Variables (one that still holds a macro, such as a `PATH` override with `$(PATH)` inside, is not passed). So a search path written with them compiles here as it does in the IDE, and the gate judges the folder dcc will read. An **inert** custom `<Target>` (a `<Message>`, a
   property) always builds. Independently of this switch, what the build **reads** through the
   project — the icon, the manifest, the search paths, a `.rc` and the files it names, a
-  deployment file — has to lie where the session may read (the workspace, the IDE and its
-  library zone), whether it exists or not (`BUILD-050` to `BUILD-053`; a hard link in the
+  deployment file — has to lie where a build here may read: the workspace and the IDE's
+  library (its installation, its catalogs and its Library Path), whether the library zone is
+  on or off for agents. Not the IDE's other places: its per-user data folder keeps the PAServer
+  profiles, and the compiler quotes what it reads in its errors. It is judged whether the path
+  exists or not (`BUILD-050` to `BUILD-053`; a hard link in the
   project's tree to a file outside is refused too). So has every unit the main source names
   with `in` (`uses X in '...'`, `contains` in a package: `BUILD-061`), and the `{$I}`/`{$R}`
   directives of every source the build reads from the workspace - the project's folder, a

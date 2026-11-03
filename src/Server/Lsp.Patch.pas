@@ -518,6 +518,20 @@ const
     (Lsp.ConfigFabricator.MotorPuedeEnsenar) y lo que se le da a leer
     (Lsp.Client.LoadSourceText). }
   LUGARES_DEL_MOTOR: TLugaresDeTexto = [ltJaula, ltIde, ltBiblioteca];
+  { Lo que el BUILD (msbuild y lo que lanza) puede leer de lo que nombra un
+    proyecto: lo que esta sesion puede leer y la biblioteca del IDE, este o no
+    encendida para los agentes (un proyecto compila contra ella). NO los
+    lugares del IDE: su carpeta de datos del usuario guarda los .profile (la
+    contrasena del PAServer) y dcc cita en sus errores lo que lee (A9 de la
+    1.27, medido con un search path a $(APPDATA)\Embarcadero\BDS y un $I con
+    nombre suelto).
+    UNA definicion para lo que el build lee porque lo DICE el proyecto: sus
+    valores, sus directivas, el in de un .dpr, los enlaces de su arbol. Lo
+    que el AGENTE nombra en una llamada (add-searchpath, add-deployfile) lo
+    juzga la jaula, tambien en el suelo (Lsp.Guard.ArgPathOutsideDenied): con
+    la zona de biblioteca apagada, una carpeta de la biblioteca no la nombra
+    el agente, aunque un proyecto que la lista compile. }
+  LUGARES_DEL_BUILD: TLugaresDeTexto = [ltJaula, ltBiblioteca];
   { Donde se lee una CAPTURA: el out= que eligio el agente (la jaula) o la
     casa de los entregables, donde la deja el servidor sin out=. UNA lista
     para toda tool que capture (delphi_designer, delphi_desktop, delphi_adb)

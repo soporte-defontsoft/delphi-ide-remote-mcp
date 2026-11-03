@@ -6670,12 +6670,13 @@ const
 
   SR_BUILD_INCLUDE_OUTSIDE_FMT =
     '[BUILD-028 DENIED] I will not build this. The %s directive of %s ' +
-    'brings into the build a file that is OUTSIDE what this server lets ' +
-    'you read. The compiler opens it with the server''s permissions, and ' +
+    'brings into the build a file that is OUTSIDE what a build here may ' +
+    'read (the workspace and the IDE''s library). The compiler opens it ' +
+    'with the server''s permissions, and ' +
     'what goes in comes back out in two places: inside the binary (which ' +
     'is then downloaded) and quoted word for word in the errors when the ' +
     'file is not Pascal. The paths of {$I} and {$R} have to stay inside ' +
-    'the workspace.';
+    'the workspace (or the IDE''s library).';
 
   // Un $I o un $R relativo a la carpeta ACTUAL de otra unidad ("E:x"): dcc lo
   // abre desde una carpeta que no nombra nadie, y la puerta no sabe que
@@ -6693,8 +6694,8 @@ const
   // %s = la unidad, %s = la ruta como va escrita, %s = el .dpr o el .dpk
   SR_BUILD_IN_FUERA_FMT =
     '[BUILD-061 DENIED] I will not build this. %s in ''%s'', in %s, is a ' +
-    'unit the build READS from OUTSIDE what this server lets you read (the ' +
-    'workspace, the IDE and its library zone). The compiler opens it with ' +
+    'unit the build READS from OUTSIDE what a build here may read (the ' +
+    'workspace and the IDE''s library). The compiler opens it with ' +
     'the server''s permissions, and what goes in comes back out (inside the ' +
     'binary, quoted in the errors). Point it at a file inside the ' +
     'workspace, or take it out of the project: delphi_config remove-unit ' +
@@ -6738,8 +6739,10 @@ const
   { Lo que el build LEE por lo que el proyecto escribe (el icono, el
     manifiesto, un search path, un .rc, un DeployFile, un keystore...): cada
     valor de cada propiedad y cada Include de cada item, por la puerta de
-    leer con los lugares del motor (Lsp.BuildRunner.LecturasDelBuildDenegadas,
-    1.21.2). Se juzga la ruta, exista o no: decir "existe" de una de fuera
+    leer con los lugares del build (Lsp.Patch.LUGARES_DEL_BUILD: la jaula y la
+    biblioteca, sin los lugares del IDE desde A9 de la 1.27;
+    Lsp.BuildRunner.LecturasDelBuildDenegadas, 1.21.2). Se juzga la ruta,
+    exista o no: decir "existe" de una de fuera
     seria un oraculo. Medido en la 1.20.1: un RcCompile y un Manifest_File
     de fuera acababan dentro del .res y del exe. %s = el elemento, %s = el
     fichero de proyecto que lo lleva, %s = el trozo como lo lee el build
@@ -6748,8 +6751,8 @@ const
     (Qwen y Opus en Hermes, 1.22.1: un %2E%2E citado como .. no se encontraba). }
   SR_BUILD_LECTURA_FUERA_FMT =
     '[BUILD-050 DENIED] I will not build this. <%s> in %s names %s%s, a ' +
-    'path the build READS that is OUTSIDE what this server lets you read ' +
-    '(the workspace, the IDE and its library zone). The compiler and the ' +
+    'path the build READS, OUTSIDE what a build here may read (the ' +
+    'workspace and the IDE''s library). The compiler and the ' +
     'resource compiler open it with the server''s permissions, and what ' +
     'goes in comes back out (inside the binary, quoted in the errors). ' +
     'Point it at something inside the workspace, or remove it: ' +
@@ -6812,7 +6815,8 @@ const
   SR_BUILD_FUENTE_ENLACE_FUERA_FMT =
     '[BUILD-063 DENIED] I will not build this. %s, in the project''s folder, ' +
     'is a LINK (a symlink or a junction) whose real target is OUTSIDE what ' +
-    'this server lets you read: the compiler follows the link and would read ' +
+    'a build here may read (the workspace and the IDE''s library): the ' +
+    'compiler follows the link and would read ' +
     'that file. Replace it with a copy of something you can read.';
 
   SR_BUILD_PROGRAMA_EN_SU_CARPETA_FMT =
@@ -10522,7 +10526,7 @@ const
   SP_CFG_VALUE =
     'set-property: the text the property takes, one line, as the IDE would ' +
     'write it. Judged when that build reads it, like the rest of the .dproj ' +
-    '(outside your roots: BUILD-050).';
+    '(outside your roots and the IDE''s library: BUILD-050).';
 
   SD_CFG_CONFIG =
     'See and manage a project''s build configurations and target PLATFORMS. ' +
@@ -10693,8 +10697,8 @@ const
     'when it carries what a compile-only build does not understand (a ' +
     'task, an unknown element, free compiler options, a foreign <Import>: ' +
     'AllowBuildScripts=1 in the workspace admits them) or when what the ' +
-    'build READS (icon, manifest, search paths, .rc) lies outside what you ' +
-    'can read; its pre/post build EVENTS (signing, copies) are skipped ' +
+    'build READS (icon, manifest, search paths, .rc) lies outside your ' +
+    'roots and the IDE''s library; its pre/post build EVENTS (signing, copies) are skipped ' +
     'instead (buildEventsSkipped says so), and an output folder the ' +
     'project leaves undeclared (.dcu, .bpl, .dcp) is supplied inside the ' +
     'project for that build (outputSupplied says where), never written ' +
