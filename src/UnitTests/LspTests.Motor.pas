@@ -79,6 +79,13 @@ type
     procedure LosAliasDelProyectoComoMsbuild;
   end;
 
+  { El bloque de entorno de un hijo (Lsp.Sandbox.EntornoSinConfiguracion). }
+  [TestFixture]
+  TEntornoDelHijoTests = class
+  public
+    [Test] procedure LaUltimaFijaDeUnNombreGana;
+  end;
+
 implementation
 
 uses
@@ -94,7 +101,8 @@ uses
   Lsp.ConfigFabricator,
   Lsp.Transport.Process,
   Lsp.Client,
-  Lsp.Session;
+  Lsp.Session,
+  Lsp.Sandbox;
 
 const
   TOPE_MS = 5000;   // una parada sana tarda decimas; el plazo de la peticion es de 30 s
@@ -1440,8 +1448,25 @@ begin
   Assert.AreEqual('', AliasDelProyecto('<Project></Project>', 'Win32', 'Debug', ''));
 end;
 
+{ De dos fijas con el mismo nombre gana la ULTIMA, como en la tabla de la
+  puerta, y una vacia al final la quita: con un TEMP que el operador redefine
+  en el IDE y el de este build, el bloque llevaba los dos y la tabla de la
+  puerta solo el ultimo (B2 del revisor del paisaje de la 1.27). }
+procedure TEntornoDelHijoTests.LaUltimaFijaDeUnNombreGana;
+var
+  B: string;
+begin
+  B := #0 + EntornoSinConfiguracion(['MCP_PRUEBA_B2=uno', 'OTRA_B2=x', 'MCP_PRUEBA_B2=dos',
+    'QUITA_B2=algo', 'QUITA_B2=']);
+  Assert.IsTrue(Pos(#0'MCP_PRUEBA_B2=dos'#0, B) > 0, 'la ultima');
+  Assert.IsTrue(Pos('MCP_PRUEBA_B2=uno', B) = 0, 'la primera no');
+  Assert.IsTrue(Pos(#0'OTRA_B2=x'#0, B) > 0, 'las demas');
+  Assert.IsTrue(Pos('QUITA_B2=', B) = 0, 'una vacia al final la quita');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TMotorParadoTests);
   TDUnitX.RegisterTestFixture(TFabricaTests);
+  TDUnitX.RegisterTestFixture(TEntornoDelHijoTests);
 
 end.

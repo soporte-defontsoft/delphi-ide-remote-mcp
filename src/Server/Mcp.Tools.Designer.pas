@@ -1063,7 +1063,11 @@ var
       Kid := AParent.Children[K];
       if not IsVisual(Kid) then Continue;
       if not Vis(Kid) then Continue;      // the VCL does not lay out the hidden
-      Nm := Kid.ObjName; if Nm = '' then Nm := Kid.ClassName_;
+      // por SU ruta (Frame1.Edit1 dentro de un frame en linea), la que da el
+      // renderizador y con la que se cruzan las cajas: por el nombre a secas,
+      // lo sobrescrito en un frame tomaba el rectangulo de un homonimo del
+      // form (revisor del paisaje de la 1.27, medido)
+      Nm := Kid.Ruta; if Kid.ObjName = '' then Nm := Kid.ClassName_;
       Cls := Kid.ClassName_;
       Align := PropRaw(Doc, Kid, 'Align', Found);
       if not Found then Align := DefaultAlign(TablaVcl, Cls);

@@ -353,10 +353,23 @@ begin
     end;
     // una fija vacia ('NOMBRE=') QUITA la variable, como SET NOMBRE= en cmd:
     // rsvars.bat vacia asi PLATFORM y PlatformSDK, y el build ya no lo lee
-    // cmd sino EL lector (Lsp.Discovery.VariablesDeRsVars; 2an de la 1.18.2)
-    for var Fija in AFijas do
-      if Pos('=', Fija) < Length(Fija) then
-        Lineas.Add(Fija);
+    // cmd sino EL lector (Lsp.Discovery.VariablesDeRsVars; 2an de la 1.18.2).
+    // De dos fijas con el mismo nombre, la ULTIMA, como la tabla de la puerta
+    // (PonEnLaTabla): un TEMP que el operador redefine en el IDE y el de este
+    // build iban los dos al bloque, y la tabla se quedaba con el ultimo
+    // (revisor del paisaje de la 1.27, B2)
+    for var I := 0 to High(AFijas) do
+    begin
+      var Nombre := Copy(AFijas[I], 1, Pos('=', AFijas[I]));
+      if Nombre = '' then
+        Continue;
+      var Ultima := True;
+      for var K := I + 1 to High(AFijas) do
+        if StartsText(Nombre, AFijas[K]) then
+          Ultima := False;
+      if Ultima and (Pos('=', AFijas[I]) < Length(AFijas[I])) then
+        Lineas.Add(AFijas[I]);
+    end;
     for Linea in Lineas do
       Result := Result + Linea + #0;
     if Result = '' then

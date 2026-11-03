@@ -29,6 +29,8 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_package` judges the folder it packs with the read gate - it only reads it; the zip is judged where it is written. A reference folder could not be packed into the workspace (measured).
 - `delphi_paserver add-profile` hands `paclient` the port as the number its gate judged: `$FBB3` or `0xFBB3` passed the gate and travelled as typed.
 - Descriptions that promised more than the code does: `delphi_config` says that `add-deployfile` is for one platform and configuration and that `add-searchpath` takes one platform or all; `CFG-148` says that `add-searchpath` does not resolve a property the `.dproj` defines itself; `delphi_designer lint` leaves to `set` a property a class of the project publishes; `preview` runs none of the project's code (the IDE's design packages do run), and a read-only credential has it without `out=` or `state=`; `remote-run`'s arguments arrive as Delphi's `ParamStr` reads them on a Windows target.
+- `delphi_designer layout` of a VCL form with a frame inline names each box by its path (`Frame11.Edit1`), as `set` and `get` take it. Boxes were matched by the bare name, so a control of the frame and one of the form with the same name took each other's coordinates (measured).
+- When the operator redefines in the IDE a variable the server also sets for a build (`TEMP`, `TMP`), the build gets one value: two different values of a name both reached `msbuild`'s environment, while the server's own reader of it kept the last one.
 
 ## [1.26.1] - 2026-11-03
 
