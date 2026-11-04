@@ -208,7 +208,9 @@ def p1(uno, colgados):
           '(peor: %.1f s)' % (RONDAS, peor), not colgados and peor < TOPE, colgados)
     check('P1 ...y en todas habia un motor que RETENIA la carpeta que se borro (si no, no mide)',
           frios == 0, 'rondas sin motor en A: %d' % frios)
-    check('P1 ...y ninguna de las %d peticiones en paralelo choco al fabricar la configuracion '
+    # GUARDA (la cabecera): sin el arreglo de la fabricacion tambien salia verde; la medida es
+    # LspTests.Motor.TFabricaTests.FabricarALaVezNoChoca
+    check('P1 (guarda) ...y ninguna de las %d peticiones en paralelo choco al fabricar la configuracion '
           '(SYS-027)' % (4 * RONDAS), not negadas, negadas[:4])
 
 
@@ -233,7 +235,9 @@ def p5(uno, colgados):
             h.join()
         chocan += ['F%d %s: %s' % (i, k, ' '.join(v.split())[:110])
                    for k, v in sorted(res.items()) if choca(v)]
-    check('P5 seis PRIMERAS peticiones a la vez sobre el mismo proyecto frio, cuatro veces: ninguna '
+    # GUARDA (la cabecera): con la fabricacion de la 1.7.6 tambien salia verde; la medida es
+    # LspTests.Motor.TFabricaTests.FabricarALaVezNoChoca
+    check('P5 (guarda) seis PRIMERAS peticiones a la vez sobre el mismo proyecto frio, cuatro veces: ninguna '
           'choca', not chocan, chocan[:4])
 
 
@@ -254,10 +258,16 @@ def p4(uno, colgados):
         except Exception as e:
             r = 'EXCEPCION %s: %s' % (type(e).__name__, e)
         h.join()
-        time.sleep(0.5)
         # los motores NUEVOS de la ronda (por su pid: que otro se vaya entre
-        # las dos cuentas no tapa uno que se quede)
-        nuevos = sorted(set(mc.hijos_lsp(proc.pid)) - set(n0))
+        # las dos cuentas no tapa uno que se quede). Uno parado tarda un momento
+        # en SALIR: se le espera, con tope (era medio segundo fijo); uno que se
+        # queda sigue ahi al acabarse el tope
+        tope_ronda = time.time() + TOPE
+        while True:
+            nuevos = sorted(set(mc.hijos_lsp(proc.pid)) - set(n0))
+            if not nuevos or time.time() >= tope_ronda:
+                break
+            time.sleep(0.25)
         dicho = res.get('h', '')
         a_medias = mc.es(dicho, 'SR_LSP_FOLDER_LEAVING_FMT') or mc.es(dicho, 'SR_LSP_ENGINE_STOPPED')
         sabe = a_medias or caliente(dicho) or mc.es(dicho, 'SR_LSP_NO_FILE_FMT')
@@ -317,9 +327,12 @@ def p6(uno, colgados):
             dt = time.time() - t0
             break
     if cazado:
+        # el limite, del fuente (era 20 s a mano): lo que delphi_diagnostics espera antes de contestar
+        # "in progress" (DIAG_WAIT_MS), que es lo que contestaba el repetido con el bug
+        espera_diag = mc.entero_del_fuente('Server/Mcp.Tools.DelphiExtra.pas', 'DIAG_WAIT_MS') / 1000
         check('P6 un diagnostics en vuelo cuando git para su motor recibe LSP-033, y REPETIDO contesta '
-              '(%.1f s; se quedaba en "in progress" a los 40)' % dt,
-              '"errors"' in d1 and '"errors"' in repetido and dt < 20, ' '.join(repetido.split())[:160])
+              '(%.1f s; se quedaba en "in progress" a los %g)' % (dt, espera_diag),
+              '"errors"' in d1 and '"errors"' in repetido and dt < espera_diag, ' '.join(repetido.split())[:160])
     else:
         print('NOTA: P6 no se mide: en seis intentos ningun diagnostics estaba en vuelo cuando git paro su motor')
 
@@ -340,8 +353,10 @@ def p7(uno, colgados):
                           for i in range(4000)) + chr(10) + 'end.' + chr(10))
     dprs, dpro = os.path.join(s, 'Sordo.dpr'), os.path.join(o, 'Oye.dpr')
     hs = ho = ''
+    vivo_sordo = time.time()
     for _ in range(6):
         hs = uno.call('delphi_hover', {'path': dprs, 'line': 9, 'character': 4})
+        vivo_sordo = time.time()     # lo ultimo que se le oyo al motor que va a dejar de leer
         ho = uno.call('delphi_hover', {'path': dpro, 'line': 9, 'character': 4})
         if caliente(hs) and caliente(ho):
             break
@@ -357,12 +372,12 @@ def p7(uno, colgados):
         time.sleep(1)
     time.sleep(2)
     esperan = [k for k in ('symbols', 'hover') if k not in res]
-    t0 = time.time()
+    t_otro = time.time()
     try:
         otro = cliente(t=TOPE).call('delphi_hover', {'path': dpro, 'line': 9, 'character': 4})
     except Exception as e:
         otro = 'EXCEPCION %s: %s' % (type(e).__name__, e)
-    dt_otro = time.time() - t0
+    dt_otro = time.time() - t_otro
     t0 = time.time()
     try:
         r = cliente(t=TOPE).call('delphi_delete', {'path': s})
@@ -385,8 +400,13 @@ def p7(uno, colgados):
           'proyecto se quedan esperandole',
           caliente(hs) and caliente(ho) and len(sordos) == 1 and parados == sordos and len(esperan) == 2,
           'motores %s, parados %s, esperando %s | %s' % (sordos, parados, esperan, dicho))
-    check('P7 con un motor que no lee, el OTRO proyecto contesta como siempre (%.1f s)' % dt_otro,
-          caliente(otro) and dt_otro < 5, ' '.join(otro.split())[:160])
+    # el limite, del fuente (era 5 s a mano): retenido por el motor sordo, el otro proyecto esperaria a
+    # que el barrendero lo diera por colgado - LspHungMs sin oirle, contados desde lo ultimo que se le
+    # oyo (vivo_sordo) - o al plazo de su peticion: nunca antes de esto
+    rescate_s = mc.entero_del_fuente('Server/Lsp.Session.pas', 'LspHungMs') / 1000 - (t_otro - vivo_sordo)
+    check('P7 con un motor que no lee, el OTRO proyecto contesta como siempre (%.1f s, antes de los %.1f en que '
+          'el barrendero rescataria a uno retenido)' % (dt_otro, rescate_s),
+          caliente(otro) and dt_otro < rescate_s, ' '.join(otro.split())[:160])
     check('P7 ...y la carpeta del proyecto de ese motor se borra (%.1f s), y las que esperaban se enteran '
           '(LSP-033)' % dt,
           mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') and not os.path.exists(s) and dt < TOPE

@@ -490,6 +490,7 @@ uses
   Lsp.ProcessLaunch,
   Lsp.Sandbox,      // el contenedor del conversor de estilos
   Lsp.FormRender,   // CajaDeLosAyudantes: la caja desde la que corre
+  Lsp.TodoONada,    // HuellaDeFichero: la del conversor, en el nombre de su cache
   MCPServer.Logger,
   Lsp.Listas;
 
@@ -1262,12 +1263,16 @@ begin
   finally
     // lo que no contesto, con su por que, al log: la respuesta solo dice "no se pudo
     // preguntar" (STYLE-060), y un estilo que FMX no carga (SC_RC_ERROR) no es de aqui
-    if (ACodigo <> SC_RC_OK) and (ACodigo <> SC_RC_ERROR) then
-      TLogger.Warning(MsgFmt(SL_STYLES_CONVERSOR_SIN_RESPUESTA_FMT,
-        [AOrden, UIntToStr(ACodigo), PrincipioDeTexto(Result.Trim, 400)]));
-    if Caja <> '' then
-      SueltaCaja(Caja);
-    CierraEtapa(AC, Etapa); // SIEMPRE; limpiar no tumba la respuesta
+    try
+      if (ACodigo <> SC_RC_OK) and (ACodigo <> SC_RC_ERROR) then
+        TLogger.Warning(MsgFmt(SL_STYLES_CONVERSOR_SIN_RESPUESTA_FMT,
+          [AOrden, UIntToStr(ACodigo), PrincipioDeTexto(Result.Trim, 400)]));
+      if Caja <> '' then
+        SueltaCaja(Caja);
+    finally
+      // SIEMPRE, aunque lo de arriba lance: con ella va el puesto del contenedor
+      CierraEtapa(AC, Etapa); // limpiar no tumba la respuesta
+    end;
   end;
 end;
 
@@ -1537,6 +1542,81 @@ begin
     Result := '';
 end;
 
+{ EL nombre de la cache del estilo por defecto: lo produce el CONVERSOR (el FMX
+  que lleva enlazado), asi que su huella va en el nombre y un conversor nuevo
+  -otro Delphi, otra version- es otra cache. Era 'win10-default.style', sin
+  clave, para la vida de la maquina (R15 del revisor del paisaje de la 1.27).
+  '' sin conversor. }
+const
+  CACHE_ESTILOS_SUB = 'estilos';
+  // la forma del nombre: prefijo, huella y extension (NombreDeCacheDelEstilo y
+  // su inversa; la bateria los lee de aqui)
+  PREFIJO_CACHE_ESTILO = 'defecto-';
+  EXT_CACHE_ESTILO = '.style';
+  // la de antes de R15, sin clave y en la raiz de la cache: ya solo se purga
+  CACHE_ESTILO_SIN_CLAVE = 'win10-default.style';
+
+{ EL nombre de una cache del estilo por defecto con esa huella del conversor, y
+  su inversa: si un nombre (o una ruta) es el de una cache, y su huella. }
+function NombreDeCacheDelEstilo(const AHuella: string): string;
+begin
+  Result := PREFIJO_CACHE_ESTILO + AHuella + EXT_CACHE_ESTILO;
+end;
+
+function LeeNombreDeCacheDelEstilo(const ANombre: string; out AHuella: string): Boolean;
+var
+  N: string;
+begin
+  AHuella := '';
+  N := ExtractFileName(ANombre);
+  Result := N.StartsWith(PREFIJO_CACHE_ESTILO, True) and N.EndsWith(EXT_CACHE_ESTILO, True) and
+    (Length(N) > Length(PREFIJO_CACHE_ESTILO) + Length(EXT_CACHE_ESTILO));
+  if Result then
+    AHuella := Copy(N, Length(PREFIJO_CACHE_ESTILO) + 1,
+      Length(N) - Length(PREFIJO_CACHE_ESTILO) - Length(EXT_CACHE_ESTILO));
+end;
+
+function CacheDelEstiloPorDefecto: string;
+var
+  Tam: Int64;
+  Fecha: TDateTime;
+begin
+  Result := '';
+  if (StyleConverterExe = '') or not HuellaDeFichero(StyleConverterExe, Tam, Fecha) then
+    Exit;
+  Result := ServerCacheDir(TPath.Combine(CACHE_ESTILOS_SUB, NombreDeCacheDelEstilo(
+    Format('%x-%s', [Tam, FormatDateTime('yyyymmddhhnnss', Fecha)]))));
+end;
+
+{ Las caches de conversores anteriores (y la vieja sin clave): ya no las lee
+  nadie. Por el recorredor INTERNO (EntradasDeCarpeta, como la caja de
+  paquetes) y no por WalkFiles: la cache es de la casa, no algo que nombre un
+  agente, y la jaula de la sesion la niega - con raices que no la contienen no
+  se purgaba nada (medido). Solo lo que EL lector del nombre da por nuestro, y
+  por EL borrador de la casa; limpiar nunca tumba nada, y lo que no se deja
+  borrar no para a las demas. }
+procedure PurgaOtrasCachesDelEstilo(const ALaBuena: string);
+var
+  Viejas: TArray<string>;
+  Huella: string;
+begin
+  try
+    Viejas := [ServerCacheDir(CACHE_ESTILO_SIN_CLAVE)];
+    for var V in EntradasDeCarpeta(TPath.GetDirectoryName(ALaBuena)) do
+      if LeeNombreDeCacheDelEstilo(V, Huella) and not SameFileName(V, ALaBuena) then
+        Viejas := Viejas + [V];
+  except
+    // la carpeta no se deja listar: queda la vieja sin clave
+  end;
+  for var V in Viejas do
+    if TFile.Exists(V) then
+      try
+        BorraFichero(V, ltCasa);
+      except
+        // la cache buena ya esta escrita
+      end;
+end;
+
 function PlatformDefaultStyleNames: TArray<string>;
 var
   Cache: string;
@@ -1545,7 +1625,9 @@ var
   L: TList<string>;
 begin
   Result := [];
-  Cache := ServerCacheDir('win10-default.style');
+  Cache := CacheDelEstiloPorDefecto;
+  if Cache = '' then
+    Exit; // sin conversor no hay juez
   if not TFile.Exists(Cache) then
   begin
     CorreStyleConvert(SC_DEFAULTS, nil, '', CONVERSOR_TIEMPO_MS, Producido, Code);
@@ -1554,6 +1636,7 @@ begin
     // lo escribio en su etapa: a la cache, por la puerta de la casa
     CrearCarpeta(TPath.GetDirectoryName(Cache));
     EscribeBytes(Cache, Producido, ltCasa);
+    PurgaOtrasCachesDelEstilo(Cache);
   end;
   L := TList<string>.Create;
   try

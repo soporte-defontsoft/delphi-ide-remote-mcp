@@ -183,17 +183,22 @@ try:
           b'<DesignClass>TDataModule</DesignClass>' in open(DPROJV, 'rb').read())
     proc, cli = servidor()
     try:
-        (ra, a_t), (rb, b_t), _ = mc.a_la_vez(
+        # los motores del servidor ANTES de A, por su padre (mc.hijos_lsp): 'sin arrancar el motor' se mide
+        # por los procesos, no por lo que tarda A (era A y B por debajo de 1 s)
+        motores_antes = mc.hijos_lsp(proc.pid)
+        (ra, a_t), (rb, b_t), seguia = mc.a_la_vez(
             cli.call, ('delphi_config', {'project': DPROJV, 'command': 'fix-references'}, 300),
             ('delphi_textedit', {'path': TXT, 'old': 'seis', 'new': 'siete'}, 300), B_DELAY)
+        motores_nuevos = sorted(set(mc.hijos_lsp(proc.pid)) - set(motores_antes))
     finally:
         proc.kill()
     print('  (Q6: A tardo %.2f s; B %.2f s)' % (a_t, b_t))
     check('Q6 fix-references de una unidad registrada: re-apuntada como data module, y B escribio',
           not mc.fallo(ra) and b"UDatos in 'Sub\\UDatos.pas' {Datos: TDataModule}" in open(DPRV, 'rb').read()
           and not mc.fallo(rb), (ra[:300], rb[:200]))
-    check('Q6 ...sin arrancar el motor (A tarda menos de %.1f s) y sin que B espere' % MIN_A,
-          a_t < MIN_A and b_t < MIN_A, (a_t, b_t))
+    # B no espero a A: o volvio con A aun en curso, o A ya habia acabado cuando B entro (B_DELAY despues)
+    check('Q6 ...sin arrancar el motor (ningun DelphiLSP nuevo del servidor) y sin que B espere a A',
+          not motores_nuevos and (seguia or a_t <= B_DELAY), (motores_nuevos, a_t, b_t, seguia))
 
     # Q7 (V177): el mismo, con la unidad SIN registro de designer en el .dproj
     dproj = open(DPROJV, 'rb').read()

@@ -347,7 +347,7 @@ try:
     for tool in ('delphi_definition', 'delphi_references', 'delphi_hover'):
         for _ in range(10):
             r = call(tool, {'path': UPRB, 'line': 14, 'character': 3})
-            if 'LSP-002' in r[:40] or 'warming' in r[:200].lower():
+            if mc.abre(r, 'SR_REFS_WARMING_FMT') or mc.abre(r, 'SR_LSP_WARMING'):  # el motor aun calienta
                 time.sleep(4)
                 continue
             break
@@ -355,7 +355,7 @@ try:
     d, rf, h = respuestas
     check('R1k un proyecto bajo una carpeta con enye: definition, references y hover contestan (daban SYS-006)',
           mc.como_json(d).get('line0') == 8 and len(mc.aciertos(mc.como_json(rf), 'confirmed')) == 3
-          and 'Uno' in h and not mc.fallo(h) and not any('SYS-006' in x for x in respuestas),
+          and 'Uno' in h and not mc.fallo(h) and not any(mc.es(x, 'SR_SYS_TOOL_FAILED_FMT') for x in respuestas),
           'definition line0=%s | references confirmed=%s rejected=%s unverified=%s | hover=%s' % (
               mc.como_json(d).get('line0'), [c.get('line0') for c in mc.aciertos(mc.como_json(rf), 'confirmed')],
               mc.como_json(rf).get('rejectedHomonyms'), len(mc.aciertos(mc.como_json(rf), 'unverified')), h[:200]))

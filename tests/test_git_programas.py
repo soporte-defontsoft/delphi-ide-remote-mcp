@@ -112,7 +112,7 @@ try:
     wtconfig=os.path.join(REPO,'.git','config.worktree')
     with open(wtconfig,'w',encoding='utf-8') as f:f.write('[fixture]\nboolean\n')
     r=git('status')
-    mc.check('worktree: clave desconocida sin valor se niega','[GIT-051 DENIED]' in r and 'fixture.boolean' in r,r)
+    mc.check('worktree: clave desconocida sin valor se niega',mc.es(r, 'SR_GIT_CONFIG_PROGRAMA_FMT') and 'fixture.boolean' in r,r)
     marker=os.path.join(FUERA,'filter-worktree.txt')
     program=os.path.join(REPO,'.git','hooks','fixture-worktree')
     script(program,marker,'cat\n')
@@ -120,7 +120,7 @@ try:
     with open(os.path.join(REPO,'.gitattributes'),'w') as f:f.write('*.txt filter=fixture\n')
     with open(archivo,'a') as f:f.write('worktree\n')
     r=git('add',paths=['a.txt'])
-    mc.check('worktree: el filtro local no se activa',not os.path.exists(marker) and '[GIT-051 DENIED]' in r,r[:400])
+    mc.check('worktree: el filtro local no se activa',not os.path.exists(marker) and mc.es(r, 'SR_GIT_CONFIG_PROGRAMA_FMT'),r[:400])
 finally:
     http.shutdown();http.server_close();srv.cierra();mc.borra(BASE)
 mc.fin('git programas del repositorio')

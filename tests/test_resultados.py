@@ -441,7 +441,7 @@ try:
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
     res, sc, t = llama('delphi_git', {'repo': GREPO, 'command': 'diff', 'args': '--quiet'})
     check('E25b la forma vieja (args=--quiet) es GIT-068 y no llega a git',
-          res.get('isError') is True and 'GIT-068' in t and not mc.llego_a_git(t),
+          res.get('isError') is True and mc.es(t, 'SR_GIT_ARGS_RETIRADO') and not mc.llego_a_git(t),
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
     rechazo('E26 crear DENTRO de un fichero es INVALID_PARAM (salia INTERNAL)', 'delphi_textedit',
@@ -1085,14 +1085,19 @@ try:
             'INVALID_PARAM', 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT')
 
     # E84 un UNC ajeno se niega por TEXTO: resolverlo (RealPath, el alargado de
-    # un ~) abria SMB hacia el host que dijera el agente. 192.0.2.1 es de
-    # documentacion y no contesta: con SMB de por medio serian ~20 s
-    for unc in (r'\\192.0.2.1\share\f.txt', r'\\192.0.2.1\share\PROGRA~1\f.txt'):
+    # un ~) abria SMB hacia el host que dijera el agente. Un host de documentacion
+    # que no contesta y que nadie ha usado hoy (mc.host_testnet_nuevo: Windows
+    # recuerda uno que fallo y no volveria a la red), y "sin tocar la red" se mide
+    # en la tabla TCP mientras corre (mc.red_durante): el SMB deja su SYN_SENT a
+    # :445 los ~21 s que espera. Era 192.0.2.1 siempre y menos de 3 s
+    for plantilla in (r'\\%s\share\f.txt', r'\\%s\share\PROGRA~1\f.txt'):
+        host = mc.host_testnet_nuevo()
+        unc = plantilla % host
         t0 = time.time()
-        res, sc, t = llama('delphi_read', {'path': unc})
+        (res, sc, t), red = mc.red_durante(host, lambda: llama('delphi_read', {'path': unc}))
         dt = time.time() - t0
         check('E84 %s: GUARD-002 en %.1f s, sin tocar la red' % (unc, dt),
-              res.get('isError') is True and mc.abre(t, 'SR_JAIL_FMT') and dt < 3, t[:160])
+              res.get('isError') is True and mc.abre(t, 'SR_JAIL_FMT') and not red, (t[:160], red))
 
     # E85 delete-line lleva old (lo compara con su linea): CHSET-030 lo rechazaba
     DL = os.path.join(JAIL, 'dl.txt')
@@ -1191,7 +1196,7 @@ try:
         # el PREVIEW ya lo dice (octava revision: salia limpio y caia el commit)
         res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c92})
         check('E92 changeset delete de un fichero +R: el preview dice SYS-029',
-              mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])
+              mc.como_json(t).get('unresolved') == 1 and mc.es(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT'), t[:300])
         res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c92})
         check('E92 ...el commit no se hace: sigue ahi y SIN copia en deleted',
               res.get('isError') is True and
@@ -1216,14 +1221,14 @@ try:
     code, h, b = cli.post({'jsonrpc': '2.0', 'id': 1.5, 'method': 'tools/list', 'params': {}},
                           accept='application/json')
     check('E94 id 1.5: -32600 con SYS-031 en JSON (era un 500 sin etiqueta)',
-          code == 200 and '-32600' in b and 'SYS-031' in b, '%s %s' % (code, b[:200]))
+          code == 200 and '-32600' in b and mc.es(b, 'SR_SYS_ID_NO_VALIDO'), '%s %s' % (code, b[:200]))
     code, h, b = cli.post({'jsonrpc': '2.0', 'id': None, 'method': 'tools/list'},
                           accept='application/json')
     check('E94 id null: SYS-031 (se tomaba por notificacion y no se contestaba)',
-          code == 200 and 'SYS-031' in b, '%s %s' % (code, b[:200]))
+          code == 200 and mc.es(b, 'SR_SYS_ID_NO_VALIDO'), '%s %s' % (code, b[:200]))
     code, h, b = cli.post({'jsonrpc': '2.0', 'id': 7, 'method': None}, accept='application/json')
     check('E94 method null: SYS-032 con el id 7 (buscaba el metodo "null")',
-          'SYS-032' in b and '"id":7' in b.replace(' ', ''), '%s %s' % (code, b[:200]))
+          mc.es(b, 'SR_SYS_METODO_NO_TEXTO') and '"id":7' in b.replace(' ', ''), '%s %s' % (code, b[:200]))
     code, h, b = cli.post({'jsonrpc': '2.0', 'id': 8, 'method': 'tools/call', 'params': {'name': None}},
                           accept='application/json')
     check('E94 tools/call con name null: no busca la tool "null"',
@@ -1294,39 +1299,50 @@ try:
     # puede pasarse de ese margen (2-nov-2026, dentro de un run_all: 3,93 s antes
     # de que la llamada empezara, sin que el servidor hubiera hecho nada): eso no
     # ejercita nada ni acusa a nadie, asi que se planta otra vez con mas margen.
-    D95 = os.path.join(JAIL, 'e95b')
-    os.makedirs(D95)
-    F95 = os.path.join(D95, 'dos95.txt')
-    open(F95, 'w').write('v0\n')
+    # Y lo mismo si la copia se sella TARDE (4-nov-2026): con la maquina cargada el
+    # servidor que espero bien puede sellar pasados los 0,3 s de holgura, y eso
+    # tampoco acusa a nadie: otra vez, con su fichero y su papelera. Lo que SI
+    # acusa no se repite: un choque (FILE-020) o un sello DENTRO de la ventana
+    VENTANA95 = 0.400                    # los sellos plantados: los proximos 400 ms
+    TARDE95 = VENTANA95 + 0.3            # sellada despues, el intento no dice nada
     PAP = mc._papelera()
-    for ABRE95 in (0.5, 4, 16):  # segundos: la ventana se abre aqui, despues de plantar
+    res, t, buenas, sello95, plantado_en = {}, '', [], -1.0, -1.0
+    for intento, ABRE95 in enumerate((0.5, 4, 16)):  # segundos: la ventana se abre aqui, despues de plantar
+        D95 = os.path.join(JAIL, 'e95b', str(intento))
+        os.makedirs(D95)
+        F95 = os.path.join(D95, 'dos95.txt')
+        open(F95, 'w').write('v0\n')
         ahora = datetime.datetime.now()
         CAJ95 = os.path.join(D95, PAP['BACKUP_SUB'], mc.dia_de_papelera(ahora.timetuple()), PAP['CAJON_BORRADOS'])
         os.makedirs(CAJ95, exist_ok=True)
         inicio95 = ahora + datetime.timedelta(seconds=ABRE95)
-        for ms in range(0, 400):
+        for ms in range(0, int(VENTANA95 * 1000)):
             sello = (inicio95 + datetime.timedelta(milliseconds=ms)).strftime('%H%M%S%f')[:9]
             open(os.path.join(CAJ95, 'dos95.txt-' + sello), 'w').write('plantado\n')
         espera95 = (inicio95 - datetime.datetime.now()).total_seconds()
         if espera95 > 0:
             time.sleep(espera95 + 0.01)  # nunca un milisegundo antes de abrirse
         plantado_en = (datetime.datetime.now() - inicio95).total_seconds() # tras abrirse la ventana
-        if plantado_en < 0.35:
+        if plantado_en >= 0.35:
+            print('NOTA: E95b: plantar tardo mas que los %s s de margen (%.2f s tarde): otra vez' % (ABRE95, plantado_en))
+            continue
+        res, sc, t = llama('delphi_delete', {'path': F95})
+        buenas = [c for c in mc.copias(D95, 'dos95.txt', 'CAJON_BORRADOS') if open(c).read() == 'v0\n']
+        # la llamada EMPEZO dentro de la ventana y su copia se sello al final de
+        # ella: solo pudo esperar (una llamada tardia pasaba sin ejercitar nada)
+        sello95 = -1.0
+        if len(buenas) == 1:
+            s95 = buenas[0][-9:]
+            sello95 = (inicio95.replace(hour=int(s95[0:2]), minute=int(s95[2:4]), second=int(s95[4:6]),
+                                        microsecond=int(s95[6:9]) * 1000) - inicio95).total_seconds()
+        if sello95 <= TARDE95:
             break
-        print('NOTA: E95b: plantar tardo mas que los %s s de margen (%.2f s tarde): otra vez' % (ABRE95, plantado_en))
-    res, sc, t = llama('delphi_delete', {'path': F95})
-    buenas = [c for c in mc.copias(D95, 'dos95.txt', 'CAJON_BORRADOS') if open(c).read() == 'v0\n']
-    # la llamada EMPEZO dentro de la ventana y su copia se sello al final de
-    # ella: solo pudo esperar (una llamada tardia pasaba sin ejercitar nada)
-    sello95 = -1.0
-    if len(buenas) == 1:
-        s95 = buenas[0][-9:]
-        sello95 = (inicio95.replace(hour=int(s95[0:2]), minute=int(s95[2:4]), second=int(s95[4:6]),
-                                    microsecond=int(s95[6:9]) * 1000) - inicio95).total_seconds()
-    check('E95b fixture: la llamada empieza dentro de la ventana (%.2f s de 0.40)' % plantado_en,
+        print('NOTA: E95b: la copia se sello %.3f s despues de abrirse la ventana (holgura %.1f): otra vez'
+              % (sello95, TARDE95))
+    check('E95b fixture: la llamada empieza dentro de la ventana (%.2f s de %.2f)' % (plantado_en, VENTANA95),
           0 <= plantado_en < 0.35, plantado_en)
     check('E95b ...y su copia se sella al acabar la ventana (%.3f s): espero' % sello95,
-          0.399 <= sello95 <= 0.7, sello95)
+          VENTANA95 - 0.001 <= sello95 <= TARDE95, sello95)
     check('E95b con los sellos de los proximos 400 ms ocupados, el borrado espera al siguiente libre',
           not res.get('isError') and not os.path.exists(F95) and len(buenas) == 1,
           '%s | %s' % (t[:200], buenas))
@@ -1465,7 +1481,7 @@ try:
     t = rechazo('E109 una carpeta "...": GUARD-010', 'delphi_read',
                 {'path': os.path.join(JAIL, '...', 'x.txt')}, 'INVALID_PARAM',
                 'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT')
-    check('E109 ...sin sugerir un nombre vacio', 'Did you mean ""' not in t, t[:200])
+    check('E109 ...sin sugerir un nombre vacio', (mc.catalogo()['SF_GUARD_QUIZAS_FMT'] % '') not in t, t[:200])
 
     # E110 un kind que no existe lo dice antes que la regla de parametros
     rechazo('E110 kind=project-foo con content: CREATE-011 (CREATE-035 decia lo que toma)',
@@ -1527,7 +1543,7 @@ try:
           code == 200 and "filename*=UTF-8''canci%C3%B3n.txt" in cd, '%s %s' % (code, cd))
     code, h, b = files_get(NOTES + ' ')
     check('E113 /files con un espacio al final: 400 GUARD-010 (servia el fichero sin el espacio)',
-          code == 400 and b'GUARD-010' in b, '%s %r' % (code, b[:160]))
+          code == 400 and mc.es(b.decode('utf-8', 'replace'), 'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT'), '%s %r' % (code, b[:160]))
 
     # E114 protocolo: UNA regla para lo que no se contesta, y lo mal formado es -32600
     code, h, b = cli.post({}, accept='application/json')
@@ -1546,7 +1562,7 @@ try:
     # id no es una notificacion (JSON-RPC pide -32600 con id null); se callaba
     code, h, b = cli.post({'jsonrpc': '2.0', 'method': 5}, accept='application/json')
     check('E172 {"method":5} sin id: -32600 con id null y SYS-032 (era un 202 mudo)',
-          code == 200 and '-32600' in b and 'SYS-032' in b and '"id":null' in b.replace(' ', ''),
+          code == 200 and '-32600' in b and mc.es(b, 'SR_SYS_METODO_NO_TEXTO') and '"id":null' in b.replace(' ', ''),
           '%s %r' % (code, b[:200]))
     code, h, b = cli.post({'jsonrpc': '2.0', 'id': 7, 'method': 'notifications/initialized'},
                           accept='application/json')
@@ -1782,7 +1798,10 @@ try:
           mc.es(t, 'SN_REFERENCIAS_ILEGIBLES_FMT') and 'Lk131.dproj (' in t, t[-600:])
 
     # E132 un \\?\UNC\ leido de un .dpr no se resuelve en el disco (21 s de SMB). El host, de mentira:
-    # TEST-NET-1 (era 10.255.255.1, una red privada que puede existir; revisor de baterias de la 1.27)
+    # TEST-NET (era 10.255.255.1, una red privada que puede existir; revisor de baterias de la 1.27), uno
+    # que nadie ha usado hoy (mc.host_testnet_nuevo: uno recordado falla sin red), y "sin SMB" se mide en
+    # la tabla TCP mientras corre (mc.red_durante): era 192.0.2.1 siempre y menos de 5 s
+    H132 = mc.host_testnet_nuevo()
     D132 = os.path.join(JAIL, 'e132')
     res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'Unc132', 'dir': D132})
     DPR132 = os.path.join(D132, 'Unc132.dpr')
@@ -1790,14 +1809,14 @@ try:
     llama('delphi_create', {'kind': 'unit', 'name': 'ULocal', 'project': DPROJ132})
     txt132 = open(DPR132, encoding='utf-8-sig').read()
     open(DPR132, 'w').write(txt132.replace(
-        'uses', "uses\n  ULejos in '\\\\?\\UNC\\192.0.2.1\\share\\a~1\\ULejos.pas',", 1))
+        'uses', "uses\n  ULejos in '\\\\?\\UNC\\%s\\share\\a~1\\ULejos.pas'," % H132, 1))
     t0 = time.time()
-    res, sc, t = llama('delphi_move', {'path': os.path.join(D132, 'ULocal.pas'),
-                                       'dest': os.path.join(D132, 'ULocal2.pas')})
+    (res, sc, t), red = mc.red_durante(H132, lambda: llama('delphi_move', {
+        'path': os.path.join(D132, 'ULocal.pas'), 'dest': os.path.join(D132, 'ULocal2.pas')}))
     dt = time.time() - t0
     check('E132 mover una unit con un \\\\?\\UNC\\ en el .dpr: en %.1f s, sin SMB' % dt,
-          not mc.fallo(t) and not res.get('isError') and dt < 5 and os.path.isfile(os.path.join(D132, 'ULocal2.pas')),
-          t[:200])
+          not mc.fallo(t) and not res.get('isError') and not red and os.path.isfile(os.path.join(D132, 'ULocal2.pas')),
+          (t[:200], red))
 
     # E133 borrar una unit con .dfm Y .fmx por un comodin, con el .fmx que no se deja: todo
     # o nada, ninguno a la papelera (nacio con el par automatico del move: el .dfm se
@@ -1929,7 +1948,7 @@ try:
                                    'old': 'a', 'new': 'z'})
         res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c141})
         check('E141 preview de un edit sobre un fichero +R: no sale limpio (SYS-029)',
-              mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])
+              mc.como_json(t).get('unresolved') == 1 and mc.es(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT'), t[:300])
         llama('delphi_changeset', {'command': 'rollback', 'id': c141})
 
     # E142 GROUP-005 dice lo que FALTA: un grupo sin </Project> (decia que le
@@ -1958,7 +1977,7 @@ try:
     with mc.solo_lectura(R92):
         res, sc, t = llama('delphi_changeset', {'command': 'commit', 'id': c92b})
         check('E92b +R tras un preview limpio: el commit lo para con SYS-029, sin copia',
-              limpio and res.get('isError') is True and 'SYS-029' in t and os.path.exists(R92) and
+              limpio and res.get('isError') is True and mc.es(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT') and os.path.exists(R92) and
               not mc.copias(D139, 'ro92b.txt'), t[:300])
 
     # ------------------------------------------------------------ decima revision
@@ -2015,7 +2034,7 @@ try:
                                    'atline': 2})
         res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c145})
         check('E145 preview de un delete-line sobre un +R: no sale limpio (SYS-029)',
-              mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])
+              mc.como_json(t).get('unresolved') == 1 and mc.es(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT'), t[:300])
         llama('delphi_changeset', {'command': 'rollback', 'id': c145})
 
     # E146 renombrar una unit con su .dpr bloqueado: nacio cuando el rename lo re-apuntaba
@@ -2279,7 +2298,7 @@ try:
         rechazo('E157 delphi_edit sobre un +R: SYS-029', 'delphi_edit', {'path': P157, 'old': '// x', 'new': '// y'},
                 'DENIED', 'SR_SOLO_LECTURA_ATRIBUTO_FMT')
         res, sc, t = llama('delphi_edit', {'path': P157, 'edits': json.dumps([{'old': '// x', 'new': '// y'}])})
-        check('E157 ...edits= igual: rechazado y sin copia diaria', res.get('isError') is True and 'SYS-029' in t and
+        check('E157 ...edits= igual: rechazado y sin copia diaria', res.get('isError') is True and mc.es(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT') and
               not copias_diarias(D155, 'URo.pas'), '%s | %s' % (t[:120], copias_diarias(D155, 'URo.pas')))
 
     # E158 una unit con .dfm Y .fmx que se mueve sola: el aviso del par nombra a los DOS (la
@@ -2457,7 +2476,7 @@ try:
                                    'old': 'canción', 'new': '日本'})
         res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c169})
         check('E169 preview de un new que NO CABE en cp1252: no sale limpio (EDIT-078)',
-              mc.como_json(t).get('unresolved') == 1 and 'EDIT-078' in t, t[:300])
+              mc.como_json(t).get('unresolved') == 1 and mc.es(t, 'SR_EDIT_CARACTERES_NO_CABEN_FMT'), t[:300])
         llama('delphi_changeset', {'command': 'rollback', 'id': c169})
     R169 = os.path.join(D169, 'ro.txt')
     open(R169, 'w', newline='\n').write('uno\ndos\n')
@@ -2470,7 +2489,7 @@ try:
                                    'path': os.path.join(D169, 'ro2.txt'), 'old': 'uno', 'new': 'UNO'})
         res, sc, t = llama('delphi_changeset', {'command': 'preview', 'id': c169})
         check('E169 ...move de un +R y edit del destino: el preview ve el +R por el ORIGEN del move (decia pending)',
-              mc.como_json(t).get('unresolved') == 1 and 'SYS-029' in t, t[:300])
+              mc.como_json(t).get('unresolved') == 1 and mc.es(t, 'SR_SOLO_LECTURA_ATRIBUTO_FMT'), t[:300])
         llama('delphi_changeset', {'command': 'rollback', 'id': c169})
     M169 = os.path.join(D169, 'mv.txt')
     open(M169, 'w', newline='\n').write('uno\ndos\n')
@@ -2539,7 +2558,7 @@ try:
           not mc.fallo(t) and not res.get('isError') and not mc.es(t, 'SR_SYS_PARAM_VALUE_FMT')
           and 'First line.' in t, t[:200])
     res, sc, t = llama('delphi_read', {'path': NOTES, 'fromline': 1.5})
-    check('E173 ...y 1.5 sigue siendo SYS-016', res.get('isError') is True and 'SYS-016' in t, t[:200])
+    check('E173 ...y 1.5 sigue siendo SYS-016', res.get('isError') is True and mc.es(t, 'SR_SYS_PARAM_VALUE_FMT'), t[:200])
     res, sc, t = llama('delphi_changeset', {'command': 'begin'})
     c173 = mc.id_changeset(t)
     res, sc, t = llama('delphi_changeset', {'command': 'status', 'id': c173})
@@ -2600,7 +2619,7 @@ try:
     res, sc, t = llama('delphi_list', {'root': os.path.dirname(P174b), 'pattern': '*.txt'})
     check('E174b ...ni se lista', res.get('isError') is True and mc.abre(t, 'SR_JAIL_FMT'), t[:200])
     code, h, b = files_get(P174b)
-    check('E174b .../files tampoco la sirve (403 GUARD-002)', code == 403 and b'GUARD-002' in b and b'SECRETO' not in b,
+    check('E174b .../files tampoco la sirve (403 GUARD-002)', code == 403 and mc.es(b.decode('utf-8', 'replace'), 'SR_JAIL_FMT') and b'SECRETO' not in b,
           '%s %r' % (code, b[:160]))
     # E174c ...y las rutas que el servidor COMPONE (la copia de la papelera, la
     # carpeta del dia) no se miden con el tope del escritor: un delete a 200 y
@@ -2686,7 +2705,7 @@ try:
     code, h, b = mc.post(cli.url, {'jsonrpc': '2.0', 'id': 51, 'method': 'tools/list'}, TOK, PRIMERA,
                          'application/json')
     check('E127 una sesion cerrada para hacer sitio (%d): 404 SYS-033' % TOPE,
-          bool(PRIMERA) and code == 404 and 'SYS-033' in b, '%s %r' % (code, b[:200]))
+          bool(PRIMERA) and code == 404 and mc.es(b, 'SR_SESSION_EXPULSADA_FMT'), '%s %r' % (code, b[:200]))
 
     # un segundo servidor al MISMO puerto que el que ya escucha
     b = subprocess.run([EXE, '--http', str(PORT)], cwd=EXEDIR, capture_output=True, timeout=60,

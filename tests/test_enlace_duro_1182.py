@@ -108,7 +108,7 @@ try:
     os.link(v2, e2)
     r = call('delphi_delete', {'path': e2})
     check('H2 control: un enlace duro +R suelto se niega (SYS-029) y nada cambia',
-          'SYS-029' in r, corto(r))
+          mc.es(r, 'SR_SOLO_LECTURA_ATRIBUTO_FMT'), corto(r))
     check('H2b ...y la victima sigue intacta', intacta(v2, RO) and os.path.exists(e2), atributos(v2))
 
     # H3: un enlace duro oculto suelto, a la papelera y purgado

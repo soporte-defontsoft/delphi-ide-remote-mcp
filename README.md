@@ -273,8 +273,10 @@ or the antivirus suite's - and then `add-profile platform=Win64`.
 `delphi_desktop` works through a tiny Delphi program, the **node**, which the server pushes to each
 target on first use and keeps current by itself: its compiled binaries ship in `node/`, and its
 sources - exactly what runs on your machine, and how - are in [`src/DesktopNode/`](src/DesktopNode/README.md).
-**On Linux it speaks GNOME only today** (measured live on Zorin 18 and Fedora; KDE and other
-desktops are not supported yet), and it needs nothing installed there.
+**On Linux it speaks GNOME only today** (measured live on Zorin 18 and Fedora), and it needs
+nothing installed there. On KDE Plasma (measured on Fedora in 1.27) the capture works, through the
+same desktop portal and with the capture permission that machine already kept, but the window list,
+the screen scale and the hands do not: they go through GNOME's own interfaces.
 
 **What a desktop profile gives.** `delphi_desktop` drives the target's desktop as the user PAServer
 runs as: everything a person sitting at that keyboard can do, opening a terminal and typing in it

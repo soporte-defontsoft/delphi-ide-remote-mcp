@@ -103,9 +103,14 @@ if ok:
     no_lee = [l for l in out.splitlines() if l.startswith('NO LEE')]
     discrepa = [l for l in out.splitlines() if l.startswith('DISCREPA')]
     print('corpus: %s -> %s' % ('; '.join(carpetas), r))
-    # 296 .dproj trae solo la carpeta Samples de la 37.0
-    check('X4 el corpus se lee entero por el juez (al menos 300 ficheros, ninguno sin leer)',
-          r is not None and r[0] >= 300 and r[0] == r[1] and not no_lee, (r, no_lee[:5]))
+    # el suelo del corpus, contado en el disco: los .dproj de los Samples de ESTA instalacion (eran
+    # 300 a mano: 296 trae la carpeta Samples de la 37.0). El oraculo lee esos y mas (sus mascaras
+    # y las otras carpetas): menos que ellos es que se salto el corpus. Sin Samples no hay suelo
+    suelo = sum(1 for _d, _s, fs in os.walk(SAMPLES) for f in fs if f.lower().endswith('.dproj'))
+    if not suelo:
+        print('NOTA: X4 sin suelo: no estan los Samples de esta instalacion (%s)' % SAMPLES)
+    check('X4 el corpus se lee entero por el juez (al menos los %d .dproj de los Samples, ninguno sin leer)' % suelo,
+          r is not None and r[0] > 0 and r[0] >= suelo and r[0] == r[1] and not no_lee, (r, suelo, no_lee[:5]))
     check('X5 0 discrepancias entre el lector y MSXML en el corpus', r is not None and r[2] == 0,
           discrepa[:10])
 mc.borra(BASE)

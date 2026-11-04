@@ -88,7 +88,7 @@ s = lanza(os.path.join(D3, mc.PAPELERA))
 try:
     j = sube(s, F3, b'MALO')
     check('Q3 la papelera de solo lectura: la cuarentena no escribe alli, el malo se queda con su nombre (UPLOAD-012)',
-          'UPLOAD-012' in j.get('error', '') and 'quarantined' not in j and open(F3, 'rb').read() == b'MALO'
+          mc.es(j.get('error', ''), 'SR_UPLOAD_SHA_MISMATCH_SIN_CUARENTENA_FMT') and 'quarantined' not in j and open(F3, 'rb').read() == b'MALO'
           and mc.copias(D3, 'q3.bin', 'CAJON_CORRUPTOS') == [], str(j)[:300])
 finally:
     s.cierra()

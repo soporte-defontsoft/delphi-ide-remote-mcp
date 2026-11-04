@@ -175,7 +175,7 @@ try:
     check('L4 una propiedad que sale de la raiz no sale en la nota, exista lo de fuera (p4a) o no (p4b)',
           ids4['p4a'] == [] and ids4['p4b'] == [], '%s | %s' % (ids4, R4['p4a'][-500:]))
     check('L4 ...y el control DENTRO si (MOVE-021, con la propiedad), y dice que su sitio no se movio',
-          ids4['p4c'] == [NOTA21] and mc.catalogo()['SF_REUBICA_NO_LLEGA_QUIETO_FMT'].split('%s')[-1] in R4['p4c'] and
+          ids4['p4c'] == [NOTA21] and mc.trozo_de_formato('SF_REUBICA_NO_LLEGA_QUIETO_FMT', -1) in R4['p4c'] and
           '$(Comun)' in R4['p4c'], R4['p4c'][-500:])
 
     check('victima intacta: sus ficheros y sus bytes',

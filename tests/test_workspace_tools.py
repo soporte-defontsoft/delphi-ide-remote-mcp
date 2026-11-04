@@ -113,15 +113,15 @@ check('search regex + wholeword: un prefijo (pinta de Pinta1) no es la palabra e
       _d.get('total') == 0, str(_d)[:300])
 _r = call('delphi_search', {"root": _rx, "query": "procedure Pinta1;\nprocedure PintaDos;"})
 check('search con una consulta de dos lineas: rechazada, no un total 0 en silencio (SEARCH-008)',
-      mc.rechazado(_r) and mc.tiene(_r, 'SEARCH-008'), _r[:200])
+      mc.rechazado(_r) and mc.es(_r, 'SR_SEARCH_VARIAS_LINEAS'), _r[:200])
 _r = call('delphi_search', {"root": _rx, "query": "(sin cerrar", "regex": True})
 check('search regex mal escrita: rechazada antes de buscar (SEARCH-004)',
-      mc.rechazado(_r) and mc.tiene(_r, 'SEARCH-004'), _r[:200])
+      mc.rechazado(_r) and mc.es(_r, 'SR_SEARCH_REGEX_INVALID_FMT'), _r[:200])
 with open(os.path.join(_rx, 'larga.txt'), 'w', encoding='utf-8') as _f:
     _f.write('a' * 40 + 'b\n')
 _r = call('delphi_search', {"root": _rx, "query": "(a+)+$", "regex": True, "pattern": "*.txt"})
 check('search regex que se dispara: se dice donde y no cuelga el servidor (SEARCH-005)',
-      mc.rechazado(_r) and mc.tiene(_r, 'SEARCH-005') and 'larga.txt' in _r, _r[:300])
+      mc.rechazado(_r) and mc.es(_r, 'SR_SEARCH_REGEX_CARA_FMT') and 'larga.txt' in _r, _r[:300])
 _grande = os.path.join(_rx, 'grande.txt')
 with open(_grande, 'w', encoding='ascii') as _f:
     _f.write(('x' * 1023 + '\n') * (9 * 1024))  # 9 MB
@@ -131,7 +131,7 @@ check('search: un fichero de mas de 8 MB en la carpeta se salta y se nombra (SEA
       str(_d)[:300])
 _r = call('delphi_search', {"root": _grande, "query": "x"})
 check('search: ...y nombrado a solas, se dice por que no (SEARCH-007)',
-      mc.rechazado(_r) and mc.tiene(_r, 'SEARCH-007'), _r[:200])
+      mc.rechazado(_r) and mc.es(_r, 'SR_SEARCH_FICHERO_GRANDE_FMT'), _r[:200])
 
 # --- projects: por paginas -----------------------------------------------
 # Sin paginar, una maquina de trabajo (7025 .dproj) contestaba 82 KB y
@@ -328,7 +328,7 @@ check('git: comando fuera de whitelist rechaza', mc.resultado(out) in ('INVALID_
 # paths) lo juzgan los jueces de cualquier ruta (el comodin)
 out = call('delphi_git', {"repo": GIT_REPO, "command": "log", "paths": ["; del *"]})
 check('git: una ruta de paths con metacaracteres la para el juez de rutas (GUARD-024, el comodin)',
-      mc.rechazado(out) and mc.tiene(out, 'GUARD-024') and 'exit=' not in out, out[:120])
+      mc.rechazado(out) and mc.es(out, 'SR_GUARD_COMODIN_FMT') and 'exit=' not in out, out[:120])
 
 # --- delphi_signature + definition kind variants (real LSP semantics) ---
 GUARD = os.path.join(SRC, 'Lsp.Guard.pas')
@@ -472,14 +472,14 @@ try:
     import re as _re
     _m = _re.search(r'offset=(\d+)', out)
     check('git diff largo: una pagina, y la nota dice que lineas son y como seguir (GIT-053)',
-          mc.tiene(out, 'GIT-053') and _m is not None and '+linea 0000' in out and '+linea 1199' not in out,
+          mc.es(out, 'SN_GIT_PAGINA_FMT') and _m is not None and '+linea 0000' in out and '+linea 1199' not in out,
           out[-300:])
     # pagina a pagina hasta la ultima: juntas, las 1200 lineas en orden, sin
     # huecos ni repetidas
     _vistas, _pag, _n = [], out, 0
     while True:
         _vistas += _re.findall(r'\+linea (\d{4})', _pag)
-        _m2 = _re.search(r'offset=(\d+)', _pag) if mc.tiene(_pag, 'GIT-053') else None
+        _m2 = _re.search(r'offset=(\d+)', _pag) if mc.es(_pag, 'SN_GIT_PAGINA_FMT') else None
         _n += 1
         if not _m2 or _n > 10:
             break
@@ -488,7 +488,7 @@ try:
           _vistas == ['%04d' % i for i in range(1200)] and _n > 1, '%d paginas, %d lineas' % (_n, len(_vistas)))
     out3 = call('delphi_git', {"repo": tmpgit, "command": "diff", "offset": 99999})
     check('git diff offset pasado del final: se dice cuantas lineas tiene (GIT-054)',
-          mc.tiene(out3, 'GIT-054'), out3[:200])
+          mc.es(out3, 'SN_GIT_OFFSET_FUERA_FMT'), out3[:200])
     out4 = call('delphi_git', {"repo": tmpgit, "command": "add", "paths": ["."], "offset": 5})
     check('git offset con una orden que escribe: no va con ella (repetirla la volveria a ejecutar)',
           mc.rechazado(out4) and mc.es(out4, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), out4[:200])
@@ -498,22 +498,22 @@ try:
         f.write('corta\n' + 'L' * 40000 + 'FINAL\n' + 'otra\n')
     # (no cabe con las de antes: va sola en la pagina siguiente)
     out5 = call('delphi_git', {"repo": tmpgit, "command": "diff"})
-    _m5 = _re.search(r'offset=(\d+)', out5) if mc.tiene(out5, 'GIT-053') else None
+    _m5 = _re.search(r'offset=(\d+)', out5) if mc.es(out5, 'SN_GIT_PAGINA_FMT') else None
     out5b = call('delphi_git', {"repo": tmpgit, "command": "diff",
                                 "offset": int(_m5.group(1))}) if _m5 else ''
     check('git diff con una linea mas larga que la pagina: cortada y dicho (GIT-055)',
-          mc.tiene(out5b, 'GIT-055') and 'LLLL' in out5b and 'LFINAL' not in out5b,
+          mc.es(out5b, 'SN_GIT_LINEA_CORTADA_FMT') and 'LLLL' in out5b and 'LFINAL' not in out5b,
           out5[-200:] + ' | ' + out5b[-400:])
     # branch y tag sin argumentos son consultas: su nota GIT-053 ofrece offset
     # y el parametro se rechazaba; con argumentos escriben, y ahi no va
     out6 = call('delphi_git', {"repo": tmpgit, "command": "branch", "offset": 5})
     check('git branch (consulta) admite offset: pasado del final, GIT-054',
-          mc.tiene(out6, 'GIT-054') and not mc.es(out6, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), out6[:200])
+          mc.es(out6, 'SN_GIT_OFFSET_FUERA_FMT') and not mc.es(out6, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), out6[:200])
     out7 = call('delphi_git', {"repo": tmpgit, "command": "tag", "name": "v9.9",
                                "message": "x", "offset": 5})
     out8 = call('delphi_git', {"repo": tmpgit, "command": "tag"})
     check('git tag que escribe con offset: GIT-056 y la etiqueta NO se crea',
-          mc.rechazado(out7) and mc.tiene(out7, 'GIT-056') and 'v9.9' not in out8, out7[:200] + ' | ' + out8[:200])
+          mc.rechazado(out7) and mc.es(out7, 'SR_GIT_OFFSET_SOLO_CONSULTA_FMT') and 'v9.9' not in out8, out7[:200] + ' | ' + out8[:200])
 finally:
     mc.borra(tmpgit)
 

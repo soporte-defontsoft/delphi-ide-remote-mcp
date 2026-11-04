@@ -9,7 +9,7 @@ settings/dproj resolution is cached by the stamp of the file that decided it,
 and each client's notification queue is bounded (200, oldest first).
 
   L1  warming two DIFFERENT projects concurrently is parallel, not serial
-      (wall for both together well under two sequential warms)
+      (their two engines alive at once while both requests are in flight)
   L2  touching the .dproj (add a search path) leaves the LSP answering on the
       next call (que la cache se invalida lo miden J1/J2 de
       test_json_nuestro_1202: symbols contesta sin ajustes)
@@ -67,7 +67,13 @@ try:
     cli.call('delphi_symbols', {'path': dpr['WarmD']})
     t_single = time.time() - t0
 
-    # L1b: two DIFFERENT projects (both cold) warmed concurrently
+    # L1b: two DIFFERENT projects (both cold) warmed concurrently. Lo que se mide
+    # son los MOTORES, por los hijos del servidor (mc.hijos_lsp): eran dos razones
+    # de tiempos frente al suelto (>= 0,5 y < 1,6 veces), que la carga de la
+    # maquina movia. Serializado, el segundo motor no nace hasta que el primero
+    # ha calentado y su peticion vuelve; en paralelo, los dos viven a la vez con
+    # las dos peticiones aun en vuelo
+    antes = set(mc.hijos_lsp(proc.pid))
     walls = {}
 
     def warm(agent, path):
@@ -80,23 +86,28 @@ try:
     th2 = threading.Thread(target=warm, args=('bob', dpr['WarmC']))
     th1.start()
     th2.start()
+    nuevos_vistos, juntos = set(), []
+    while (th1.is_alive() or th2.is_alive()) and time.time() - t0 < 120:
+        en_vuelo = th1.is_alive() and th2.is_alive()
+        nuevos = set(mc.hijos_lsp(proc.pid)) - antes
+        nuevos_vistos |= nuevos
+        # la muestra cuenta si las dos peticiones seguian en vuelo antes Y despues de tomarla
+        if en_vuelo and th1.is_alive() and th2.is_alive() and len(nuevos) >= 2:
+            juntos.append(sorted(nuevos))
     th1.join(120)
     th2.join(120)
     t_both = time.time() - t0
     check('L1b ambos warms responden',
-          all(w[0].lstrip().startswith('[') and '"range"' in w[0]
-              for w in walls.values()),
-          (walls['alice'][0][:80], walls['bob'][0][:80]))
-    # what makes L1c a measure: the two concurrent warms were COLD (each as
-    # long as the yardstick, give or take), not answered by a warm client
-    frios = [w[1] for w in walls.values()]
-    check('L1d los dos warms a la vez son FRIOS (cada uno >= 0.5 x el suelto)',
-          len(frios) == 2 and min(frios) >= 0.5 * t_single,
-          (frios, t_single))
-    # serial would be ~2x a single warm; parallel stays well under that
-    check('L1c calentar dos proyectos a la vez NO se serializa '
-          '(wall %.1fs < 1.6 x %.1fs)' % (t_both, t_single),
-          t_both < 1.6 * t_single, (t_both, t_single))
+          len(walls) == 2 and all(w[0].lstrip().startswith('[') and '"range"' in w[0]
+                                  for w in walls.values()),
+          [w[0][:80] for w in walls.values()])
+    # what makes L1c a measure: the two concurrent warms were COLD - each one
+    # started an engine of its own -, not answered by a warm client
+    check('L1d los dos warms a la vez son FRIOS (cada proyecto arranca SU motor: dos nuevos)',
+          len(nuevos_vistos) == 2, (sorted(nuevos_vistos), sorted(antes)))
+    check('L1c calentar dos proyectos a la vez NO se serializa: sus dos motores viven A LA VEZ con las dos '
+          'peticiones en vuelo (%d muestras; %.1f s juntos, %.1f s el suelto)' % (len(juntos), t_both, t_single),
+          bool(juntos), (sorted(nuevos_vistos), t_both, t_single))
 
     # L2: touch the .dproj (delphi_config add-searchpath) -> stamp changes ->
     # settings re-fabricated; the next LSP call must keep answering

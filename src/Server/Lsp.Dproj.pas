@@ -577,6 +577,15 @@ function NombreEnElDestino(const AXml: string; const AEntrada: TEntradaDelManifi
   (Debug, ...)". Cada configuracion despliega su lista, como en el
   Deployment Manager, y add-deployfile anade a una (C de la 1.27). }
 function SoloEnOtrasConfigs(const AXml, APlataforma, AConfig: string): TArray<string>;
+{ Si A y B nombran el mismo fichero (o sitio) en un destino de APlataforma: en
+  Windows como compara rutas la casa (SameFileName); fuera, tal cual, que
+  Tool y tool son dos. EL juez del nombre en el destino: el sitio del
+  manifiesto (SoloEnOtrasConfigs) y el exe= de remote-run, que comparaba sin
+  mayusculas siempre y en Linux dejaba correr un fichero que el proyecto no
+  despliega (revisor del paisaje de la 1.27, A4). }
+function MismoNombreEnElDestino(const APlataforma, A, B: string): Boolean;
+{ ...y la posicion de ANombre en ALista por ese juez; -1 si no esta. }
+function PosicionEnElDestino(const APlataforma, ANombre: string; const ALista: TArray<string>): Integer;
 
 { ---- la seccion Deployment del .dproj: el Deployment Manager del IDE ----
   Lo que escribe el IDE al anadir un fichero en Project > Deployment y lo que
@@ -3507,27 +3516,28 @@ begin
     Result := TPath.GetFileName(AtributoDeTramo(AXml, AEntrada.Tramo, 'DeployFile', 'Include').Trim);
 end;
 
+function MismoNombreEnElDestino(const APlataforma, A, B: string): Boolean;
+begin
+  if SistemaDePlataforma(APlataforma) = spWindows then
+    Result := SameFileName(A, B)
+  else
+    Result := A = B;
+end;
+
+function PosicionEnElDestino(const APlataforma, ANombre: string; const ALista: TArray<string>): Integer;
+begin
+  for var I := 0 to High(ALista) do
+    if MismoNombreEnElDestino(APlataforma, ANombre, ALista[I]) then
+      Exit(I);
+  Result := -1;
+end;
+
 function SoloEnOtrasConfigs(const AXml, APlataforma, AConfig: string): TArray<string>;
 
   // su sitio en el destino: la carpeta con su barra y el nombre; el binario de
-  // Debug y el de Release son dos Include y un mismo sitio. Fuera de Windows,
-  // Data/x y data/x son dos (revisor del paisaje de la 1.27)
-  function MismoSitio(const A, B: string): Boolean;
-  begin
-    if SistemaDePlataforma(APlataforma) = spWindows then
-      Result := SameText(A, B)
-    else
-      Result := A = B;
-  end;
-
-  function EnLista(const S: string; const ALista: TArray<string>): Integer;
-  begin
-    for var I := 0 to High(ALista) do
-      if MismoSitio(S, ALista[I]) then
-        Exit(I);
-    Result := -1;
-  end;
-
+  // Debug y el de Release son dos Include y un mismo sitio. Se comparan por EL
+  // juez del destino (MismoNombreEnElDestino): fuera de Windows, Data/x y
+  // data/x son dos (revisor del paisaje de la 1.27)
   function Sitio(const AEntrada: TEntradaDelManifiesto): string;
   begin
     Result := ConBarrasDeWindows(ValorDentro(AXml, 'RemoteDir', AEntrada.Tramo));
@@ -3556,9 +3566,9 @@ begin
        not SameText(E.Config, AConfig) then
     begin
       var S := Sitio(E);
-      if EnLista(S, Aqui) >= 0 then
+      if PosicionEnElDestino(APlataforma, S, Aqui) >= 0 then
         Continue;
-      var I := EnLista(S, Sitios);
+      var I := PosicionEnElDestino(APlataforma, S, Sitios);
       if I < 0 then
       begin
         Sitios := Sitios + [S];

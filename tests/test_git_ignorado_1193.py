@@ -57,7 +57,7 @@ def escribe(nombre, datos):
 
 def nota(texto):
     """La linea de GIT-078, o '' si no esta."""
-    return next((l for l in texto.splitlines() if '[GIT-078]' in l), '')
+    return next((l for l in texto.splitlines() if mc.es(l, 'SN_GIT_ADD_IGNORADO_FMT')), '')
 
 
 try:

@@ -842,6 +842,141 @@ begin
     Result := MsgFmt(SF_DSGN_EN_LINEA_DE_FMT, [ALinea, AFichero]);
 end;
 
+{ Las cajas medidas por la clave de su ruta (ClaveDeIdentificador, como compara
+  nombres el compilador): EL emparejador de un nombre con su caja medida - el del
+  padre de una caja y el de la caja del texto VCL. Eran tres cruces con dos reglas
+  (SameText y la clave; A2 del revisor del paisaje de la 1.27) }
+function CajasPorClave(const ACajas: TArray<TCajaDeRender>): TDictionary<string, TCajaDeRender>;
+begin
+  Result := TDictionary<string, TCajaDeRender>.Create;
+  for var C in ACajas do
+    Result.AddOrSetValue(ClaveDeIdentificador(C.Ruta), C);
+end;
+
+{ El padre medido de ACaja (en ACajaDe, CajasPorClave) y el rectangulo donde esta
+  de verdad, en coordenadas del form: el contenido si no es el padre (el de un
+  TTabItem o un TTabSheet, EnContenido). Sin padre medido, el area cliente del
+  form, con el nombre ARaiz }
+procedure PadreMedido(ACajaDe: TDictionary<string, TCajaDeRender>; const AMedido: TRespuestaRender;
+  const ARaiz: string; const ACaja: TCajaDeRender; out APadre: TCajaDeRender; out PX, PY, PW, PH: Integer);
+begin
+  if (ACaja.Padre = '') or not ACajaDe.TryGetValue(ClaveDeIdentificador(ACaja.Padre), APadre) then
+  begin
+    APadre := Default(TCajaDeRender);
+    APadre.Ruta := ARaiz;
+    APadre.W := AMedido.Ancho;
+    APadre.H := AMedido.Alto;
+    APadre.Visible := True;
+  end;
+  PX := (if ACaja.EnContenido then ACaja.CX else APadre.X);
+  PY := (if ACaja.EnContenido then ACaja.CY else APadre.Y);
+  PW := (if ACaja.EnContenido then ACaja.CW else APadre.W);
+  PH := (if ACaja.EnContenido then ACaja.CH else APadre.H);
+end;
+
+{ EL juez de un layout sobre las cajas que midio el renderizador, el de los dos
+  marcos: LayoutFmx y el de LayoutOf eran dos copias que ya divergian - la VCL
+  daba las coordenadas de un aviso relativas al padre y FMX absolutas, con el
+  mismo texto, y FMX no eximia de "fuera del padre" al que coloca a sus hijos (A2
+  del revisor del paisaje de la 1.27). Un control o un padre oculto no se juzga.
+  Se dice un lado a cero; lo que se sale de su padre, salvo si el padre coloca a
+  sus hijos (ColocaASusHijos) o se desplaza (fcScroll); y dos hermanos que
+  comparten area, salvo lo que coloca su padre, el adorno y alCustom. Las
+  coordenadas de un aviso, relativas al padre que nombra (el texto dice "y P mide
+  W x H"); boxes sigue en las del form. ATexto, la VCL: sus cajas del texto por
+  la clave (CajasPorClave), con el Align ESCRITO - o el de su clase, DefaultAlign -,
+  que solo nombra el aviso (una banda sin sitio va a ANoRoom, dos alClient lo
+  dicen); FMX, nil: su Align no nombra avisos y ANoRoom puede ser nil. AFicheros,
+  donde se escribe cada caja. ACajaDe, el indice de AMedido (CajasPorClave): lo hace
+  quien llama, que con el mismo nombra el padre de cada caja que lista. }
+procedure JuzgaCajas(const AMedido: TRespuestaRender; ACajaDe: TDictionary<string, TCajaDeRender>;
+  ATabla: TMetaTable; AFmx: Boolean; const ARaiz: string; AFicheros: TFicherosDelForm;
+  ATexto: TDictionary<string, TJSONObject>; AZero, AOutside, AOverlap, ANoRoom: TJSONArray;
+  var AFuera: TArray<string>);
+
+  function AlignDe(const ACaja: TCajaDeRender): string;
+  var
+    Bx: TJSONObject;
+    Al: string;
+  begin
+    if ATexto = nil then
+      Exit('');
+    if ATexto.TryGetValue(ClaveDeIdentificador(ACaja.Ruta), Bx) and Bx.TryGetValue<string>('align', Al) and
+       (Al <> '') then
+      Exit(Al);
+    Result := DefaultAlign(ATabla, ACaja.Clase);
+  end;
+
+  function Donde(const ACaja: TCajaDeRender): string;
+  var
+    Fichero: string;
+  begin
+    var Linea := LineaDeCaja(AFicheros, ACaja, Fichero);
+    Result := DondeDeCaja(Linea, Fichero);
+  end;
+
+begin
+  for var I := 0 to High(AMedido.Cajas) do
+  begin
+    var C := AMedido.Cajas[I];
+    if not C.Visible then
+      Continue;
+    var Padre: TCajaDeRender;
+    var PX, PY, PW, PH: Integer;
+    PadreMedido(ACajaDe, AMedido, ARaiz, C, Padre, PX, PY, PW, PH);
+    if not Padre.Visible then
+      Continue;
+    var Al := AlignDe(C);
+    if (C.W = 0) or (C.H = 0) then
+      AZero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [C.Ruta, C.Clase, Donde(C), IntToStr(C.W), IntToStr(C.H)]));
+    // que coloca a sus hijos (paginas, celdas, flujo) o se desplaza: no se juzga
+    var Coloca := (Padre.Clase <> '') and ColocaASusHijos(ATabla, Padre.Clase, AFmx);
+    var Desplaza := (Padre.Clase <> '') and EsDeFamilia(ATabla, Padre.Clase, fcScroll, AFmx);
+    if not Coloca and not Desplaza and (C.W > 0) and (C.H > 0) and
+       ((C.X < PX) or (C.Y < PY) or (C.X + C.W > PX + PW) or (C.Y + C.H > PY + PH)) then
+    begin
+      if SameText(Al, 'alTop') then
+        ANoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ALTO_FUERA_FMT, [C.Ruta, Donde(C), Padre.Ruta, C.H,
+          Max(0, PY + PH - C.Y)]))
+      else if SameText(Al, 'alBottom') then
+        ANoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ALTO_FMT, [C.Ruta, Donde(C), Padre.Ruta, C.H,
+          Max(0, C.Y + C.H - PY)]))
+      else if SameText(Al, 'alLeft') then
+        ANoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ANCHO_FMT, [C.Ruta, Donde(C), Padre.Ruta, C.W,
+          Max(0, PX + PW - C.X)]))
+      else if SameText(Al, 'alRight') then
+        ANoRoom.Add(MsgFmt(SF_DSGN_NO_CABE_ANCHO_FMT, [C.Ruta, Donde(C), Padre.Ruta, C.W,
+          Max(0, C.X + C.W - PX)]))
+      else if not SameText(Al, 'alCustom') then
+      begin
+        AOutside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [C.Ruta, C.Clase, Donde(C), C.X - PX, C.Y - PY,
+          C.X - PX + C.W, C.Y - PY + C.H, Padre.Ruta, PW, PH]));
+        AFuera := AFuera + [C.Ruta];
+      end;
+    end;
+    // dos hermanos que comparten area, salvo adorno, alCustom y lo que coloca su padre
+    if Coloca or (C.W = 0) or (C.H = 0) or SameText(Al, 'alCustom') or
+       EsDeFamilia(ATabla, C.Clase, fcAdorno, AFmx) then
+      Continue;
+    for var J := I + 1 to High(AMedido.Cajas) do
+    begin
+      var O := AMedido.Cajas[J];
+      var AlO := AlignDe(O);
+      if O.Visible and MismoIdentificador(O.Padre, C.Padre) and (O.W > 0) and (O.H > 0) and
+         not SameText(AlO, 'alCustom') and not EsDeFamilia(ATabla, O.Clase, fcAdorno, AFmx) and
+         (C.X < O.X + O.W) and (O.X < C.X + C.W) and (C.Y < O.Y + O.H) and (O.Y < C.Y + C.H) then
+      begin
+        if SameText(Al, 'alClient') and SameText(AlO, 'alClient') then
+          AOverlap.Add(MsgFmt(SF_DSGN_AMBOS_ALCLIENT_FMT, [C.Ruta, Donde(C), O.Ruta, Donde(O), Padre.Ruta]))
+        else
+          AOverlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT, [C.Ruta, Donde(C), O.Ruta, Donde(O), Padre.Ruta,
+            Max(C.X, O.X) - PX, Max(C.Y, O.Y) - PY, Min(C.X + C.W, O.X + O.W) - PX,
+            Min(C.Y + C.H, O.Y + O.H) - PY]));
+      end;
+    end;
+  end;
+end;
+
 { layout de un form FMX: lo que FMX resuelve, medido; no hay un modelo que imitar
   (Size, Position, Align, Margins, Padding, los estilos). Un control oculto no se
   juzga. Lo que se solapa se dice, y no quita clean: en FMX un control sobre otro es
@@ -884,63 +1019,23 @@ begin
       Ret.AddPair('overlapping', Overlap);
       var Boxes := TJSONArray.Create;
       Ret.AddPair('boxes', Boxes);
-      // el padre de una caja, para su rectangulo y su nombre: la raiz, el form
-      var Padres := TDictionary<string, TCajaDeRender>.Create;
+      // cada caja con el nombre de su padre (PadreMedido, el del juez; sin padre medido, el form)
+      var CajaDe := CajasPorClave(R.Cajas);
       try
         for var C in R.Cajas do
-          Padres.AddOrSetValue(ClaveDeIdentificador(C.Ruta), C);
-        for var I := 0 to High(R.Cajas) do
         begin
-          var C := R.Cajas[I];
           var FicheroCaja: string;
           var LineaCaja := LineaDeCaja(Ficheros, C, FicheroCaja);
-          var Donde := DondeDeCaja(LineaCaja, FicheroCaja);
           var Padre: TCajaDeRender;
-          if Padres.ContainsKey(ClaveDeIdentificador(C.Padre)) then
-            Padre := Padres[ClaveDeIdentificador(C.Padre)]
-          else
-          begin
-            Padre := Default(TCajaDeRender);
-            Padre.Ruta := Doc.Root.ObjName;
-            Padre.W := R.Ancho;
-            Padre.H := R.Alto;
-            Padre.Visible := True;
-          end;
+          var PX, PY, PW, PH: Integer;
+          PadreMedido(CajaDe, R, Doc.Root.ObjName, C, Padre, PX, PY, PW, PH);
           Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False, Padre.Ruta, C.X, C.Y, C.W, C.H, LineaCaja,
             Ord(C.Visible), FicheroCaja));
-          if not C.Visible or not Padre.Visible then
-            Continue;
-          if (C.W = 0) or (C.H = 0) then
-            Zero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [C.Ruta, C.Clase, Donde, IntToStr(C.W), IntToStr(C.H)]));
-          // donde esta de verdad: el padre con nombre de un hijo de un TTabItem es su pestana
-          var DX := (if C.EnContenido then C.CX else Padre.X);
-          var DY := (if C.EnContenido then C.CY else Padre.Y);
-          var DW := (if C.EnContenido then C.CW else Padre.W);
-          var DH := (if C.EnContenido then C.CH else Padre.H);
-          if not EsDeFamilia(TablaFmx, Padre.Clase, fcScroll, True) and ((C.X < DX) or (C.Y < DY) or
-             (C.X + C.W > DX + DW) or (C.Y + C.H > DY + DH)) then
-          begin
-            Outside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [C.Ruta, C.Clase, Donde, C.X, C.Y, C.X + C.W, C.Y + C.H,
-              Padre.Ruta, DW, DH]));
-            AFuera := AFuera + [C.Ruta];
-          end;
-          if ColocaASusHijos(TablaFmx, Padre.Clase, True) then
-            Continue;
-          for var J := I + 1 to High(R.Cajas) do
-          begin
-            var O := R.Cajas[J];
-            if O.Visible and SameText(O.Padre, C.Padre) and (C.W > 0) and (C.H > 0) and (O.W > 0) and (O.H > 0) and
-               (C.X < O.X + O.W) and (O.X < C.X + C.W) and (C.Y < O.Y + O.H) and (O.Y < C.Y + C.H) then
-            begin
-              var FicheroO: string;
-              var LineaO := LineaDeCaja(Ficheros, O, FicheroO);
-              Overlap.Add(MsgFmt(SF_DSGN_SE_SOLAPAN_FMT, [C.Ruta, Donde, O.Ruta, DondeDeCaja(LineaO, FicheroO), Padre.Ruta,
-                Max(C.X, O.X), Max(C.Y, O.Y), Min(C.X + C.W, O.X + O.W), Min(C.Y + C.H, O.Y + O.H)]));
-            end;
-          end;
         end;
+        // y lo que se juzga, por EL juez de las cajas medidas, el mismo de la VCL (A2 de la 1.27)
+        JuzgaCajas(R, CajaDe, TablaFmx, True, Doc.Root.ObjName, Ficheros, nil, Zero, Outside, Overlap, nil, AFuera);
       finally
-        Padres.Free;
+        CajaDe.Free;
       end;
       if Length(R.Sustituidas) + Length(R.SinLeer) > 0 then
         Ret.AddPair('partialNote', MsgFmt(SN_DESIGNER_LAYOUT_A_MEDIAS_FMT, [string.Join(', ', R.Sustituidas + R.SinLeer)]));
@@ -980,9 +1075,10 @@ end;
   Approximate, and it says how: a container's client area is its Width/Height
   (bevels and borders shave a few pixels), a form given only Width/Height (no
   ClientWidth) has its window frame estimated at 96 dpi, and Anchors - which
-  govern RESIZE - are not what this measures. Lo que se juzga sale de este texto; las
-  cajas, si hay renderizador, de lo que resuelve la VCL (V24 de la 1.24: la banda de
-  pestanas de un TPageControl no la descontaba). FMX, LayoutFmx. AConOtraRespuesta: la
+  govern RESIZE - are not what this measures. Con renderizador, las cajas Y lo que se
+  juzga salen de lo que resuelve la VCL (V24 de la 1.24: la banda de pestanas de un
+  TPageControl no la descontaba; R8 de la 1.27: lo juzgado seguia saliendo de este
+  texto; JuzgaCajas, el juez de los dos marcos); este texto, cuando no lo hay. FMX, LayoutFmx. AConOtraRespuesta: la
   llamada ya tiene su respuesta (insert, set parent=), y el renderizador FMX espera lo
   que el de la VCL, LAYOUT_PLAZO_MS (C9 del revisor del paisaje del cierre de la 1.26). }
 function LayoutOf(const APath: string; out AFuera: TArray<string>; AConOtraRespuesta: Boolean = False): string;
@@ -1257,6 +1353,14 @@ var
     end;
   end;
 
+  // lo que dijo la aritmetica del texto, fuera: con las cajas medidas lo juzgado sale
+  // de ellas (R8 de la 1.27), por EL juez de los dos marcos (JuzgaCajas, A2)
+  procedure Vacia(AArr: TJSONArray);
+  begin
+    while AArr.Count > 0 do
+      AArr.Remove(0).Free;
+  end;
+
 begin
   AFuera := nil;
   Doc := nil;
@@ -1330,11 +1434,26 @@ begin
       var Medido := CajasDelRender(APath, LAYOUT_PLAZO_MS);
       if Medido.Fallo = '' then
       begin
-        for var B := 0 to Boxes.Count - 1 do
+        // cada caja medida con la del texto por la clave de su nombre, la de CajasPorClave
+        // (EL emparejador: eran tres cruces con dos reglas, A2 de la 1.27). La del texto toma
+        // el rectangulo medido; lo que el texto no lista -un frame inline y lo que lleva
+        // dentro- entra con lo que el renderizador midio, con la linea de su bloque, en el
+        // form o en el fichero del frame (LineaDeCaja), y el nombre de su padre, el del
+        // juez (PadreMedido) (dirigido de Hermes de la 1.24, punto 4; el fichero, el de la 1.26)
+        var DelTexto := TDictionary<string, TJSONObject>.Create;
+        var CajaDe := CajasPorClave(Medido.Cajas);
+        var Ficheros := TFicherosDelForm.Create(Doc, APath);
+        try
+          for var B := 0 to Boxes.Count - 1 do
+          begin
+            var Bx := Boxes.Items[B] as TJSONObject;
+            DelTexto.AddOrSetValue(ClaveDeIdentificador(Bx.GetValue<string>('name')), Bx);
+          end;
           for var C in Medido.Cajas do
-            if SameText(C.Ruta, (Boxes.Items[B] as TJSONObject).GetValue<string>('name')) then
+          begin
+            var Bx: TJSONObject;
+            if DelTexto.TryGetValue(ClaveDeIdentificador(C.Ruta), Bx) then
             begin
-              var Bx := Boxes.Items[B] as TJSONObject;
               Bx.RemovePair('x').Free;
               Bx.RemovePair('y').Free;
               Bx.RemovePair('w').Free;
@@ -1343,36 +1462,41 @@ begin
               Bx.AddPair('y', TJSONNumber.Create(C.Y));
               Bx.AddPair('w', TJSONNumber.Create(C.W));
               Bx.AddPair('h', TJSONNumber.Create(C.H));
-              Break;
-            end;
-        // lo que el texto no lista -un frame inline y lo que lleva dentro- entra con lo
-        // que el renderizador midio, con la linea de su bloque, en el form o en el
-        // fichero del frame (LineaDeCaja): se lista y no se juzga (dirigido de Hermes
-        // de la 1.24, punto 4; el fichero, el de la 1.26)
-        var Ficheros := TFicherosDelForm.Create(Doc, APath);
-        try
-        for var C in Medido.Cajas do
-        begin
-          if not C.Visible then
-            Continue;
-          var Esta := False;
-          for var B := 0 to Boxes.Count - 1 do
-            if SameText(C.Ruta, (Boxes.Items[B] as TJSONObject).GetValue<string>('name')) then
+            end
+            else if C.Visible then
             begin
-              Esta := True;
-              Break;
+              var FicheroCaja: string;
+              var LineaCaja := LineaDeCaja(Ficheros, C, FicheroCaja);
+              var Padre: TCajaDeRender;
+              var PX, PY, PW, PH: Integer;
+              PadreMedido(CajaDe, Medido, Doc.Root.ObjName, C, Padre, PX, PY, PW, PH);
+              Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False, Padre.Ruta, C.X, C.Y, C.W, C.H,
+                LineaCaja, -1, FicheroCaja));
             end;
-          if not Esta then
-          begin
-            var FicheroCaja: string;
-            var LineaCaja := LineaDeCaja(Ficheros, C, FicheroCaja);
-            Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False,
-              (if C.Padre = '' then Doc.Root.ObjName else C.Padre), C.X, C.Y, C.W, C.H,
-              LineaCaja, -1, FicheroCaja));
           end;
-        end;
+          // y lo que se juzga, sobre lo medido (R8), por EL juez de los dos marcos (A2); el
+          // area cliente, la que pinto
+          Vacia(Zero);
+          Vacia(Outside);
+          Vacia(Overlap);
+          Vacia(NoRoom);
+          Vacia(Unknown);
+          AFuera := nil;
+          JuzgaCajas(Medido, CajaDe, TablaVcl, False, Doc.Root.ObjName, Ficheros, DelTexto, Zero, Outside, Overlap,
+            NoRoom, AFuera);
         finally
           Ficheros.Free;
+          CajaDe.Free;
+          DelTexto.Free;
+        end;
+        if (Medido.Ancho > 0) and (Medido.Alto > 0) then
+        begin
+          Ret.RemovePair('clientWidth').Free;
+          Ret.RemovePair('clientHeight').Free;
+          Ret.RemovePair('clientEstimated').Free;
+          Ret.AddPair('clientWidth', TJSONNumber.Create(Medido.Ancho));
+          Ret.AddPair('clientHeight', TJSONNumber.Create(Medido.Alto));
+          Estimated := False;
         end;
         Ret.AddPair('boxesFrom', 'renderer');
       end
@@ -1400,7 +1524,10 @@ begin
   end;
 end;
 
-function LintForm(const APath: string): string;
+{ ADesde: el instante en que empezo la llamada (EmpiezaLaEspera): el lector del IDE
+  tiene lo que le queda a su cliente, como tras una edicion (A3 de la 1.27); tenia el
+  plazo de un preview }
+function LintForm(const APath: string; ADesde: UInt64): string;
 var
   Denied, EncName, Text: string;
   Warns: TArray<string>;
@@ -1419,7 +1546,7 @@ begin
   // binario ya paso su conversion. lint = todo lo que el compilador no mira
   // ...y lo que la tabla no sabe juzgar (lo que la clase guarda por codigo),
   // el lector del IDE: CLEAN solo si carga (DSGN-061 de la 1.20)
-  var L := LintDeForm(APath, Text, EncName, not IsBinaryDesigner(APath), ESPERA_TABLA_MS, True);
+  var L := LintDeForm(APath, Text, EncName, not IsBinaryDesigner(APath), ESPERA_TABLA_MS, True, '', ADesde);
   var Falta := L.Falta;
   var Notas := L.Notas;
   Warns := L.Propiedades + L.Lector + L.Enlace;
@@ -1482,7 +1609,7 @@ begin
     begin
       if Result <> '' then
         Result := Result + #13#10;
-      Result := Result + MsgFmt(SN_DESIGNER_LINT_SIN_LECTOR_FMT, [L.SinJuez, L.SinLector]);
+      Result := Result + MsgFmt(SN_DESIGNER_LINT_SIN_LECTOR_FMT, [PorQueAlLector(L), L.SinLector]);
     end;
   end;
   // lo que dice CLEAN no habla de ellos, y un agente lo leia como "lookups bien" (V156)
@@ -2013,7 +2140,7 @@ begin
       Suyas := nil;
       if Lay.TryGetValue<TJSONArray>('outsideParent', Fuera) then
         for var I := 0 to Min(Fuera.Count, Length(Nombres)) - 1 do
-          if SameText(Nombres[I], Nombre) then
+          if MismoIdentificador(Nombres[I], Nombre) then // como se comparan dos nombres (A2 de la 1.27)
           begin
             if Suyas = nil then
             begin
@@ -2031,8 +2158,9 @@ begin
   end;
 end;
 
-{ El gesto; ExecuteWithParams lo envuelve en el cerrojo de escritura. }
-function GestoDeDisenador(const Params: TDelphiDesignerParams): string;
+{ El gesto; ExecuteWithParams lo envuelve en el cerrojo de escritura. ADesde: el
+  instante en que empezo la llamada (EmpiezaLaEspera), el plazo de su cliente. }
+function GestoDeDisenador(const Params: TDelphiDesignerParams; ADesde: UInt64): string;
 var
   Cmd, Fw: string;
 begin
@@ -2112,7 +2240,7 @@ begin
       if ReadPathDenied(TPath.GetFullPath(Params.Path)) = '' then
         Result := FormAnchoQueNoCarga(TPath.GetFullPath(Params.Path));
       if Result = '' then
-        Result := ConNotaDeFormAncho(LintForm(Params.Path), Params.Path);
+        Result := ConNotaDeFormAncho(LintForm(Params.Path, ADesde), Params.Path);
     end
     else if Params.Component.Trim = '' then
       Result := MsgText(SR_DESIGNER_NEED_COMPONENT)
@@ -2167,6 +2295,9 @@ var
   Cmd: string;
   Falta: TFaltaTabla;
 begin
+  // la llamada empieza: lo que espera su cliente cuenta desde aqui, y viaja hasta el
+  // lector del IDE del lint (A3 de la 1.27)
+  var Desde := EmpiezaLaEspera;
   // to-text y to-binary reescriben el .dfm entero, e insert/set/delete el form
   // y su unidad: son ediciones como cualquier otra y van bajo el mismo
   // cerrojo. Los de LECTURA no: info, prop y lint pueden esperar a la tabla
@@ -2176,7 +2307,7 @@ begin
   // entero o nada).
   Cmd := SinMayusculas(Params.Command.Trim);
   if not MatchText(Cmd, ['to-text', 'to-binary', 'totext', 'tobinary', 'insert', 'set', 'delete']) then
-    Exit(GestoDeDisenador(Params));
+    Exit(GestoDeDisenador(Params, Desde));
   // el orden entre hermanos pregunta al renderizador (segundos con paquetes):
   // FUERA del cerrojo, que coge el mismo solo para releer y escribir; dentro
   // paraba todas las ediciones del servidor (revisor 5 de la noche, A3). Y
@@ -2189,7 +2320,7 @@ begin
   // con paquetes paro 87 s todas las ediciones del servidor; ahora cogen el
   // cerrojo ellos, solo para leer y para escribir (AbreFormParaJuzgar)
   if MatchText(Cmd, ['set', 'insert']) then
-    Exit(GestoDeDisenador(Params));
+    Exit(GestoDeDisenador(Params, Desde));
   // la tabla que piden insert, set (parent= y Name tambien) y delete se
   // espera FUERA del cerrojo, por lo mismo: set parent= la esperaba dentro y
   // paraba todas las ediciones mientras se generaba (revision de la 1.17.0)
@@ -2199,7 +2330,7 @@ begin
     Exit(Falta.Negativa);
   EnterFileEdit;
   try
-    Result := GestoDeDisenador(Params);
+    Result := GestoDeDisenador(Params, Desde);
   finally
     LeaveFileEdit;
   end;

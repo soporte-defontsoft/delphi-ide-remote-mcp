@@ -39,7 +39,8 @@ try:
     pegadas = re.findall(r' -(LE|LN|NB|NH)(\S{2,4})', cola)
     check('M2 la linea de dcc64 trae -LE, -LN, -NB y -NH con una ruta pegada',
           {p[0] for p in pegadas} == {'LE', 'LN', 'NB', 'NH'}, str(pegadas)[:300])
-    reales = re.findall(r' -(?:LE|LN|NB|NH)[A-Za-z]:[\\/]', cola)
+    # con comillas o sin ellas: -LE"C:\..." tambien es una unidad real pegada a la opcion
+    reales = re.findall(r' -(?:LE|LN|NB|NH)"?[A-Za-z]:[\\/]', cola)
     check('M3 ninguna lleva pegada una unidad REAL: todas srvX:',
           pegadas and not reales and all(p[1].startswith('srv') for p in pegadas),
           str(reales or pegadas)[:300])

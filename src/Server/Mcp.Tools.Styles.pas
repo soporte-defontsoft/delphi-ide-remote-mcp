@@ -1265,6 +1265,11 @@ begin
     Exit;
   if not TFile.Exists(ABrcc) then
     Exit(MsgFmt(SR_STYLE_BRCC_NO_ENCONTRADO_FMT, [ABrcc]));
+  // ...y no donde el agente escribe: se ejecutaria su brcc32. Corre en el
+  // contenedor, y esto es la segunda barrera: EL juez del paclient y del motor
+  // de la misma bin (ProgramaFueraDelAgente; revisor del paisaje de la 1.27)
+  if ProgramaFueraDelAgente(ABrcc) = '' then
+    Exit(MsgFmt(SR_STYLE_BRCC_DONDE_ESCRIBE_FMT, [ABrcc]));
   // V54: el .rc del agente debe ser una lista blanca; asi el servidor compone
   // el que compila brcc32 (CompilaRcEnContenedor) y su preprocesador no corre
   // sobre texto del agente. La segunda barrera (RcPathsDenied) se queda detras.
@@ -1275,6 +1280,12 @@ begin
   if Result = '' then
     Result := ColocacionDenegada(ARes);
 end;
+
+const
+  // el prefijo de la etapa de cada .rc en la casa (CarpetaUnica): con nombre,
+  // como los de delphi_test (TEST_ETAPA_PREFIJO) y del nodo
+  // (REMOTERUN_VER_PREFIJO) (revisor del paisaje de la 1.27, B9)
+  RC_ETAPA_PREFIJO = 'styles-rc-';
 
 { El .rc -> .res con brcc32, pero DENTRO de un AppContainer sin capacidades
   (Lsp.Sandbox, como delphi_test) sobre una COPIA de la carpeta de estilos en
@@ -1308,7 +1319,7 @@ var
   Err, Code: Cardinal;
   TimedOut: Boolean;
 begin
-  Etapa := CarpetaUnica(ServerTempDir, 'styles-rc-');
+  Etapa := CarpetaUnica(ServerTempDir, RC_ETAPA_PREFIJO);
   Err := AbreEtapa(Etapa, False, AC);
   if Err <> 0 then
     Exit(MsgFmt(SR_STYLES_RC_CONTENEDOR_FMT, [IntToHex(Err, 8), SysErrorMessage(Err)]));

@@ -255,8 +255,13 @@ check('S5 mode invalido se rechaza explicando los validos',
 # S6 el motor revienta con la unidad minima SIN proyecto: el error lo dice
 # (LSP-022) y la pista dice por donde seguir (LSP-036, 1.18.0)
 r = call('delphi_symbols', {'path': os.path.join(SUELTA, 'UMini.pas')})
-check('S6 sin proyecto el motor revienta (-32603) y la respuesta lo explica: LSP-022 + LSP-036',
-      mc.es(r, 'SR_LSP_ERROR_FMT') and mc.es(r, 'SN_LSP_HINT_SIN_PROYECTO') and '-32603' in r, r[:300])
+# que el motor reviente con esta unidad sin proyecto es cosa SUYA (el DelphiLSP de la 37.0, medido el
+# 8-oct-2026), no del servidor: si el de esta instalacion la lee, no hay error que explicar y S6 lo dice
+if 'WalkFiles' in r and not mc.fallo(r):
+    print('NOTA: S6 no se mide: el motor de esta instalacion lee la unidad minima sin proyecto (no revienta)')
+else:
+    check('S6 sin proyecto el motor revienta (-32603) y la respuesta lo explica: LSP-022 + LSP-036',
+          mc.es(r, 'SR_LSP_ERROR_FMT') and mc.es(r, 'SN_LSP_HINT_SIN_PROYECTO') and '-32603' in r, r[:300])
 # ...y junto a un .dproj (el SecCfg de C1) la misma unidad se lee, sin la pista
 open(os.path.join(BASE, 'UMini.pas'), 'w').write(UMINI)
 r = call('delphi_symbols', {'path': os.path.join(BASE, 'UMini.pas')})

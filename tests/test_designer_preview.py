@@ -848,8 +848,10 @@ end
     ig = sorted((x.get('component'), x.get('property'), x.get('line'), x.get('reason'))
                 for x in j.get('ignored') or [])
     check('P13 VCL: Color = Rojo y Width = abc salen en ignored con su componente, propiedad, motivo y linea',
-          ig == [('Button1', 'Width', linea_de(MALA, 'Width = abc'), 'Invalid property value'),
-                 ('Panel1', 'Color', linea_de(MALA, 'Color = Rojo'), 'Invalid property value')], (ig, r[:500]))
+          [x[:3] for x in ig] == [('Button1', 'Width', linea_de(MALA, 'Width = abc')),
+                                  ('Panel1', 'Color', linea_de(MALA, 'Color = Rojo'))]
+          # el motivo es el texto del RTL en el idioma de sus recursos: que lo lleve, no cual
+          and all(x[3] for x in ig), (ig, r[:500]))
     check('P13 ...con la nota DSGN-114 (no abrira hasta arreglarlas: set), y el resto dibujado',
           mc.es(j.get('ignoredNote', ''), 'SN_DESIGNER_PREVIEW_IGNORADAS') and j.get('components') == 2, r[:500])
     r = preview(path=MALAF)
@@ -910,6 +912,8 @@ end
     check('P10 una comilla en un valor (colaba otro --out): DSGN-065 y nada se lanza',
           mc.abre(r, 'SR_DESIGNER_VALOR_CON_COMILLAS_FMT') and not os.path.exists(victima),
           (r[:300], os.path.exists(victima)))
+    # B7 del revisor del paisaje de la 1.27: y dice CUAL no llega, como TEST-037 (ROJA contra c582da0)
+    check('P10 DSGN-065 nombra el caracter que no llega (U+0022)', 'U+0022' in r, r[:300])
     r = preview(path=PRUEBA, style='android')
     check('P10 un estilo de plataforma en una form VCL: DSGN-072',
           mc.abre(r, 'SR_DESIGNER_STYLE_VCL_FMT'), r[:300])

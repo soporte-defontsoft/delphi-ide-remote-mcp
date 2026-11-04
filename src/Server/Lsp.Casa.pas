@@ -152,8 +152,9 @@ function FicheroDeClaveDelIde(const AVersion, ASubclave: string): string;
 function ClaveDeCarpeta(const ADir: string): string;
 { EL nombre del mutex de una clave del servidor ('Global\DelphiLspMcp-' +
   AClave), el que ven todas sus instancias, el servicio y las de stdio: lo
-  usan quien reclama algo mientras vive (ReclamaNombre) y quien hace algo de
-  uno en uno entre procesos (la generacion de las tablas del disenador). }
+  usan quien reclama algo mientras vive (ReclamaNombre), quien hace algo de
+  uno en uno entre procesos (la generacion de las tablas del disenador) y el
+  semaforo de cada puesto de contenedor (Lsp.Sandbox). }
 function NombreDeMutex(const AClave: string): string;
 { EL trozo unico de un nombre que el servidor crea para UNA operacion (una
   carpeta de su temporal, el intermedio de una escritura, un zip a medias):

@@ -78,7 +78,7 @@ try:
         p = form(nombre, contenido)
         rl = srv.call('delphi_designer', {'path': p, 'command': 'lint'})
         rb = srv.call('delphi_designer', {'path': p, 'command': 'to-binary'})
-        casos.append((nombre, not mc.rechazado(rl) and 'DSGN-020' in rl, not mc.rechazado(rb)))
+        casos.append((nombre, not mc.rechazado(rl) and mc.es(rl, 'SN_DESIGNER_LINT_OK_FMT'), not mc.rechazado(rb)))
         return p, rl, rb
 
     # B1 UTF-8 con BOM, fuera de la ANSI
@@ -86,7 +86,7 @@ try:
     p, rl, rb = prueba('B1.dfm', b'\xef\xbb\xbf' + txt.encode('utf-8'))
     t, c = caption_del_binario(p)
     check('B1 UTF-8 con BOM fuera de la ANSI: lint limpio y to-binary convierte, Caption = el de dcc',
-          'DSGN-020' in rl and not mc.rechazado(rb) and t == 0x14 and c == 'ok ✔ Ж'.encode('utf-8'),
+          mc.es(rl, 'SN_DESIGNER_LINT_OK_FMT') and not mc.rechazado(rb) and t == 0x14 and c == 'ok ✔ Ж'.encode('utf-8'),
           (rl[:120], rb[:200], t, c))
 
     # B2 UTF-8 SIN BOM: como dcc, en la ANSI de la maquina

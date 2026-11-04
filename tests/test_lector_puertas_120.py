@@ -88,7 +88,29 @@ def linea_de(p, trozo):
 
 
 MALO = '    FontColor = -65536'
-LECTOR = 'Error reading Edit1.FontColor: Invalid property value'
+# lo que dice el lector sale en el idioma de SU RTL, el de Windows (en uno aleman, "Fehler beim Lesen
+# von Edit1.FontColor: ..."): no se copia su ingles, se le pregunta al juez - el ayudante que lanza
+# ESTE servidor (copia_exe lo puso a su lado), a mano y sin elegirle idioma (mc.juez_en_idioma)
+RENDER = os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe')
+# lo que dice el parser del IDE de un form que no lee (DSGN-123), por su formato: el fichero, la linea
+# y lo que dijo el parser, tambien en el idioma de su RTL
+PARSER = re.compile(mc.patron_de_formato('SN_DSGN_PARSER_FMT'), re.S)
+
+
+def dijo_el_lector(p, propiedad, componente='Edit1'):
+    """El mensaje entero del lector sobre componente.propiedad al cargar p, segun el juez."""
+    return mc.lo_que_dijo_el_lector(mc.juez_en_idioma(RENDER, p), componente, propiedad)[1]
+
+
+def en_la_linea(n):
+    """'  line N: ', como el servidor pone su linea a lo que dijo el lector (SF_DSGN_LINEA_AVISO_FMT)."""
+    return mc.trozo_de_formato('SF_DSGN_LINEA_AVISO_FMT', 0, n)
+
+
+def lo_lleva(r, dicho):
+    """r trae lo que dijo el lector; sin nada dicho (el juez no contesto) no pasa en verde."""
+    return bool(dicho) and dicho in r
+
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='lector-puertas', t=240)
 try:
@@ -99,26 +121,29 @@ try:
     p = form('UL1')
     r = srv.call('delphi_edit', {'path': p, 'old': '    TabOrder = 0', 'new': '    TabOrder = 0\r\n' + MALO}, t=240)
     n = linea_de(p, 'FontColor = -65536')
+    LECTOR = dijo_el_lector(p, 'FontColor')
     check('L1 delphi_edit escribe FontColor = -65536: EDIT-127 con su linea (%d) y lo que dijo el lector' % n,
-          not mc.rechazado(r) and mc.es(r, 'SN_EDIT_AVISO_LECTOR_FMT') and ('line %d:' % n) in r and LECTOR in r,
-          r[-700:])
+          not mc.rechazado(r) and mc.es(r, 'SN_EDIT_AVISO_LECTOR_FMT') and en_la_linea(n) in r and lo_lleva(r, LECTOR),
+          (LECTOR, r[-700:]))
 
     r = srv.call('delphi_designer', {'path': p, 'command': 'lint'}, t=240)
     check('L2 lint de ese form: no CLEAN, el lector con su linea',
-          not mc.es(r, 'SN_DESIGNER_LINT_OK_FMT') and mc.tiene(r, 'DSGN-038') and ('line %d:' % n) in r and LECTOR in r,
+          not mc.es(r, 'SN_DESIGNER_LINT_OK_FMT') and mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT') and en_la_linea(n) in r
+          and lo_lleva(r, LECTOR),
           r[:600])
 
     r = srv.call('delphi_designer', {'path': p, 'command': 'preview', 'maxwidth': 200}, t=240)
     check('L3 preview: DSGN-153 (el fichero), no DSGN-061 INTERNAL, con lo que dijo el lector y su linea',
-          mc.abre(r, 'SR_DESIGNER_NO_CARGA_FMT') and not mc.es(r, 'SR_DESIGNER_RENDER_FALLO_FMT') and LECTOR in r
-          and ('line %d:' % n) in r, r[:600])
+          mc.abre(r, 'SR_DESIGNER_NO_CARGA_FMT') and not mc.es(r, 'SR_DESIGNER_RENDER_FALLO_FMT') and lo_lleva(r, LECTOR)
+          and en_la_linea(n) in r, r[:600])
 
     p = form('UL4', dentro='    TextSettings.FontColor = $FF00A152\r\n')
     n = linea_de(p, 'TextSettings.FontColor')
+    causa = dijo_el_lector(p, 'TextSettings.FontColor')
     r = srv.call('delphi_designer', {'path': p, 'command': 'preview', 'maxwidth': 200}, t=240)
     check('L4 un entero que no cabe: preview DSGN-153 con la CAUSA y su linea (%d), no solo Stream read error' % n,
-          mc.abre(r, 'SR_DESIGNER_NO_CARGA_FMT') and 'Error reading Edit1.TextSettings.FontColor' in r
-          and ('line %d:' % n) in r, r[:600])
+          mc.abre(r, 'SR_DESIGNER_NO_CARGA_FMT') and lo_lleva(r, causa)
+          and en_la_linea(n) in r, (causa, r[:600]))
 
     p = form('UL5')
     r = srv.call('delphi_changeset', {'command': 'begin'})
@@ -129,7 +154,7 @@ try:
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid}, t=240)
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
     check('L5 un changeset que escribe FontColor = -65536: EDIT-127 en sus avisos',
-          bool(cid) and not mc.rechazado(r) and mc.es(r, 'SN_EDIT_AVISO_LECTOR_FMT') and LECTOR in r, r[-700:])
+          bool(cid) and not mc.rechazado(r) and mc.es(r, 'SN_EDIT_AVISO_LECTOR_FMT') and lo_lleva(r, LECTOR), r[-700:])
 
     malo = b'\xef\xbb\xbf' + texto(MALO + '\r\n').encode('utf-8')
     open(os.path.join(JAIL, 'UL6.pas'), 'wb').write(PAS.replace('{u}', 'UL6').encode('utf-8'))
@@ -150,7 +175,7 @@ try:
                                     'sha256': hashlib.sha256(malo).hexdigest()}, t=240)
     j1, j2 = mc.como_json(r1), mc.como_json(r2)
     check('L7 a trozos: el primero (a medias, sin sha256) no se juzga pero lo dice; el ultimo, con sha256, si',
-          not mc.fallo(r1) and 'designer' not in j1 and mc.tiene(j1.get('designerNote') or '', 'UPLOAD-013')
+          not mc.fallo(r1) and 'designer' not in j1 and mc.es(j1.get('designerNote') or '', 'SN_UPLOAD_FORM_SIN_JUZGAR')
           and j2.get('verified') is True and 'designerNote' not in j2
           and mc.es(' '.join(j2.get('designer') or []), 'SN_EDIT_AVISO_LECTOR_FMT'), (r1[:300], r2[:500]))
 
@@ -160,9 +185,10 @@ try:
     r = srv.call('delphi_upload', {'path': p, 'offset': 0, 'chunkbase64': base64.b64encode(roto).decode()}, t=240)
     j = mc.como_json(r)
     nota = j.get('designerNote') or ''
+    m = PARSER.search(nota)
     check('L10 upload entero sin sha256 con el BOM mal transcrito: designerNote con UPLOAD-013 y el parser',
-          not mc.fallo(r) and mc.tiene(nota, 'UPLOAD-013') and mc.tiene(nota, 'DSGN-123')
-          and 'OBJECT expected' in nota, r[:700])
+          not mc.fallo(r) and mc.es(nota, 'SN_UPLOAD_FORM_SIN_JUZGAR') and m is not None
+          and m.group(2) == '1' and m.group(1).strip() != '' and m.group(3).strip() != '', r[:700])
 
     p = form('UL8')
     r = srv.call('delphi_designer', {'path': p, 'command': 'lint'}, t=240)
@@ -184,15 +210,22 @@ try:
     p = form('UL9b', otro=TERCEROS)
     e = srv.call('delphi_edit', {'path': p, 'old': '    TabOrder = 0', 'new': '    TabOrder = 0\r\n' + MALO}, t=240)
     check('L9b control: en ese form, lo que el lector no carga de verdad SI es su aviso (EDIT-127), y lo de X1 no',
-          not mc.fallo(e) and mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT') and LECTOR in e and 'X1.Foo' not in e, e[-600:])
+          not mc.fallo(e) and mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT') and lo_lleva(e, LECTOR) and 'X1.Foo' not in e, e[-600:])
 
     # el ayudante que lanza ESTE servidor (copia_exe lo puso a su lado), a mano:
     # el idioma de un exe no se elige dentro del contenedor (V65 de la 1.24). Que
     # el servidor lee sus partes en cualquier idioma lo mide una unitaria
     p = form('UL11', dentro=MALO + '\r\n')
-    d = mc.juez_en_idioma(os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe'), p, 'DE')
-    check('L11 con el lector en aleman: dice lo que no cargo en aleman y partido, para que el lint le ponga su linea',
-          '|Edit1|FontColor|' in d and 'Fehler beim Lesen von Edit1.FontColor' in d, d[:600])
+    # en aleman = su motivo NO es el de la base (el RTL sin recursos de idioma: 'EN' no tiene
+    # rtlNNN.en); sin el rtlNNN.de del IDE junto a su rtlNNN.bpl no hay aleman que medir
+    if mc.rtl_tiene_idioma('DE'):
+        d = mc.juez_en_idioma(RENDER, p, 'DE')
+        base = mc.juez_en_idioma(RENDER, p, 'EN')
+        motivo = lambda t: mc.lo_que_dijo_el_lector(t, 'Edit1', 'FontColor')[0]
+        check('L11 con el lector en aleman: dice lo que no cargo en aleman y partido, para que el lint le ponga su linea',
+              motivo(d) != '' and motivo(base) != '' and motivo(d) != motivo(base), (motivo(base), d[:600]))
+    else:
+        mc.imprime('SKIP L11: el RTL del IDE no trae el aleman (rtlNNN.de junto a rtlNNN.bpl)')
 finally:
     srv.cierra()
 

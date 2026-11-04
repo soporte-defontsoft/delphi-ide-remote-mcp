@@ -65,6 +65,7 @@
         <DCCReference Include="..\Server\Lsp.ShaCache.pas"/>
         <DCCReference Include="..\Server\Lsp.AtomosRtl.pas"/>
         <DCCReference Include="..\Server\Lsp.Reparse.pas"/>
+        <DCCReference Include="..\Server\Lsp.PascalDecl.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -19,12 +19,18 @@ What is pinned here:
   L6  a second alClient gets nothing
   L7  non-visual components (TTimer, TPopupMenu: Left/Top only, no size) are
       not geometry and are not judged
-  L8  a size the .dfm does not write is declared unknown, never guessed at
+  L8  a size the .dfm does not write is declared unknown, never guessed at -
+      by the text arithmetic; with the renderer it is MEASURED (R8 of 1.27)
+  R8  with the renderer every judgment comes from the boxes the VCL measured,
+      not from the text: a TLabel with AutoSize wider than the Width it wrote
   L9  the doctrine holds: read jail, text designers only, binary refused
+  A2  FMX and VCL are judged by ONE judge of the measured boxes (1.27): a warning's
+      coordinates are relative to the parent it names, and the children of a
+      container that places them itself are not judged outside it, in both
 
 Usage:  python tests/test_layout.py [path-to-DelphiLspMcp.exe]
 """
-import json, os
+import json, os, re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -32,6 +38,11 @@ BASE = mc.carpeta('layout')
 EXE = mc.copia_exe(BASE, con_render=True)  # un binario lo convierte el ayudante de 32 bits (V71)
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='layout-battery', t=60)
+# el modo TEXTO, el que queda cuando el renderizador no contesta (la aritmetica de Walk): un
+# servidor SIN renderizadores al lado. Su doctrina se media en la misma carpeta que el otro y solo
+# porque alli un form truncado (Trunc) hacia fallar al renderizador: pasaba por casualidad
+BASE_T = mc.carpeta('layout-texto')
+srv_t = mc.Stdio(mc.copia_exe(BASE_T), mc.entorno({'DELPHI_MCP_ROOTS': BASE_T}), nombre='layout-texto', t=60)
 
 
 def call(args):
@@ -39,10 +50,11 @@ def call(args):
     return srv.call('delphi_designer', args)
 
 
-def layout(name, body):
-    p = os.path.join(BASE, name + '.dfm')
+def layout(name, body, texto=False):
+    p = os.path.join(BASE_T if texto else BASE, name + '.dfm')
     open(p, 'w', encoding='utf-8', newline='').write(body)
-    r = call({'command': 'layout', 'path': p})
+    r = (srv_t.call('delphi_designer', {'command': 'layout', 'path': p}) if texto
+         else call({'command': 'layout', 'path': p}))
     try:
         return json.loads(r)
     except Exception:
@@ -249,9 +261,15 @@ NOSIZE = """object F: TF
   end
 end
 """
-o = layout('NoSize', NOSIZE)
-check('L8 un tamano no escrito se declara desconocido, no se inventa',
+o = layout('NoSize', NOSIZE, texto=True)
+check('L8 fixture: sin renderizador al lado, las cajas son las del texto', o.get('boxesFrom') == 'text', o)
+check('L8 sin renderizador, un tamano no escrito se declara desconocido, no se inventa',
       len(o.get('sizeNotWritten', [])) == 1 and o.get('zeroSize') == [], o)
+o = layout('NoSize', NOSIZE)
+bx = {b['name']: b for b in o.get('boxes', [])}
+check('L8 con el renderizador, ese tamano se MIDE: la caja con su alto y nada desconocido (R8)',
+      o.get('boxesFrom') == 'renderer' and bx.get('Lbl', {}).get('h', 0) > 0
+      and o.get('sizeNotWritten') == [] and o.get('zeroSize') == [], o)
 
 # L10 - el Width de un ITEM de coleccion no es el del objeto (2.2 de la 1.18.0:
 # el lector propio de layout, PropRaw, lo tomaba por suyo; ahora lee
@@ -270,10 +288,16 @@ ITEMW = """object F: TF
   end
 end
 """
-o = layout('ItemW', ITEMW)
+o = layout('ItemW', ITEMW, texto=True)
 check('L10 el Width de una columna no es el del control: su anchura sigue sin escribir, '
       'no se sale del form',
       'LV' in all_text(o, 'sizeNotWritten') and 'LV' not in all_text(o, 'outsideParent', 'clipped'), o)
+o = layout('ItemW', ITEMW)
+bx = {b['name']: b for b in o.get('boxes', [])}
+check('L10 con el renderizador, la anchura es la que mide la VCL y no la de la columna (999): '
+      'no se sale del form ni queda desconocida (R8)',
+      o.get('boxesFrom') == 'renderer' and 0 < bx.get('LV', {}).get('w', 0) < 400
+      and 'LV' not in all_text(o, 'outsideParent', 'clipped', 'sizeNotWritten'), o)
 
 # a form that does not say how big it is
 NOFORM = """object F: TF
@@ -286,9 +310,14 @@ NOFORM = """object F: TF
   end
 end
 """
-o = layout('NoForm', NOFORM)
+o = layout('NoForm', NOFORM, texto=True)
 check('un form sin tamano se dice, no se adivina',
       o.get('clean') is False and len(o.get('clipped', [])) == 1, o)
+o = layout('NoForm', NOFORM)
+check('un form sin tamano, con el renderizador: su area cliente es la que la VCL le da, medida y no '
+      'estimada (R8)',
+      o.get('boxesFrom') == 'renderer' and o.get('clientWidth', 0) > 0 and o.get('clientHeight', 0) > 0
+      and 'clientEstimated' not in o and o.get('clean') is True, o)
 
 # L9 - doctrine
 r = call({'command': 'layout', 'path': 'C:\\Windows\\win.ini'})
@@ -413,6 +442,50 @@ check('V74d lo de lado cero y lo que se sale de su pagina, dichos, con la pagina
 check('V74e lo que cabe en su pagina y lo que se alcanza con el scroll no se dicen',
       not any(n in json.dumps(j.get('outsideParent')) for n in ('EBien', 'EOtra', 'ELejos')), r[:900])
 
+# A2 (revisor del paisaje de la 1.27): el juez de FMX y el de la VCL eran dos copias que ya divergian.
+# FMX daba las coordenadas de un aviso ABSOLUTAS, del form, con el mismo texto que en la VCL las da
+# relativas al padre que nombra ('and "Caja" is only 100 x 100'), y no eximia de 'fuera del padre' a un
+# contenedor que coloca a sus hijos (un TFlowLayout), como la VCL (un TFlowPanel). Ahora es UN juez.
+# Rojo contra c582da0: Sale "from (130,70) to (180,90)", el solape "(70,120) to (90,150)" y Ancho fuera
+def rect_fmx(nombre, x, y, w, h):
+    return ("    object %s: TRectangle\n      Position.X = %d.000000000000000000\n      Position.Y = %d.000000000000000000\n"
+            "      Size.Width = %d.000000000000000000\n      Size.Height = %d.000000000000000000\n"
+            "      Size.PlatformDefault = False\n    end\n" % (nombre, x, y, w, h))
+os.makedirs(os.path.join(BASE, 'relativo'))
+p_rel = os.path.join(BASE, 'relativo', 'R.fmx')
+open(p_rel, 'w', newline='').write(
+    'object F: TF\n  ClientHeight = 300\n  ClientWidth = 400\n'
+    '  object Caja: TLayout\n    Position.X = 50.000000000000000000\n    Position.Y = 60.000000000000000000\n'
+    '    Size.Width = 100.000000000000000000\n    Size.Height = 100.000000000000000000\n    Size.PlatformDefault = False\n'
+    + rect_fmx('Sale', 80, 10, 50, 20) + rect_fmx('Uno', 0, 50, 40, 40) + rect_fmx('Otro', 20, 60, 40, 40) + '  end\n'
+    '  object Flujo: TFlowLayout\n    Position.X = 200.000000000000000000\n    Position.Y = 60.000000000000000000\n'
+    '    Size.Width = 100.000000000000000000\n    Size.Height = 100.000000000000000000\n    Size.PlatformDefault = False\n'
+    + rect_fmx('Ancho', 0, 0, 150, 20) + '  end\nend\n')
+r = call({'command': 'layout', 'path': p_rel})
+j = json.loads(r) if r.startswith('{') else {}
+bx = {b['name']: b for b in j.get('boxes', [])}
+
+
+def tramo(avisos, empieza):
+    # el (x1,y1)-(x2,y2) del aviso que empieza por 'empieza'; None si no esta
+    for t in avisos or []:
+        if t.startswith(empieza):
+            m = re.search(r'from \((-?\d+),(-?\d+)\) to \((-?\d+),(-?\d+)\)', t)
+            return tuple(int(v) for v in m.groups()) if m else None
+    return None
+
+
+# (las cajas, en coordenadas del form: Sale en x=50+80; el aviso, en las de Caja)
+check('V74f FMX: lo que se sale de su padre, con coordenadas RELATIVAS al padre que nombra, como en la VCL',
+      bx.get('Sale', {}).get('x') == 130 and tramo(j.get('outsideParent'), 'Sale:') == (80, 10, 130, 30)
+      and '"Caja" is only 100 x 100' in ' '.join(j.get('outsideParent') or []),
+      (bx.get('Sale'), j.get('outsideParent') if j else r[:300]))
+check('V74g FMX: dos que se solapan, con el tramo compartido relativo a su padre',
+      tramo(j.get('overlapping'), 'Uno ') == (20, 60, 40, 90), j.get('overlapping') if j else r[:300])
+check('V74h FMX: lo de un contenedor que coloca a sus hijos (TFlowLayout) no se juzga fuera del padre, como en la VCL',
+      bx.get('Ancho', {}).get('parent') == 'Flujo' and 'Ancho' not in json.dumps(j.get('outsideParent')),
+      (bx.get('Ancho'), j.get('outsideParent') if j else r[:300]))
+
 # (en su carpeta: el renderizador juzga los hermanos del form, y aqui los hay truncados a proposito)
 os.makedirs(os.path.join(BASE, 'paginas'))
 o = layout('paginas\\Paginas', "object FPag: TFPag\n  ClientWidth = 400\n  ClientHeight = 300\n  object PageControl1: TPageControl\n    Align = alClient\n    Width = 400\n    Height = 300\n    object TabSheet1: TTabSheet\n      Caption = 'A'\n      object B: TButton\n        Left = 8\n        Top = 8\n        Width = 75\n        Height = 25\n        TabOrder = 0\n      end\n    end\n  end\nend\n")
@@ -420,9 +493,33 @@ bx = {b['name']: b for b in o.get('boxes', [])}
 check('V24 con el renderizador, la caja de una pagina es la de verdad: sin la banda de pestanas',
       o.get('boxesFrom') == 'renderer' and 0 < bx['TabSheet1']['h'] < 300 and bx['TabSheet1']['y'] > 0, o)
 
-o = layout('OldForm', DFMS['OldForm'])
+o = layout('OldForm', DFMS['OldForm'], texto=True)
 check('FN3 un form sin ClientWidth se estima y lo declara',
       o.get('clientEstimated') is True and 'estimatedNote' in o, o)
+# (con el renderizador, en su carpeta: en esta lo tumba Trunc)
+os.makedirs(os.path.join(BASE, 'viejo'))
+o = layout('viejo\\OldForm', DFMS['OldForm'])
+check('FN3 con el renderizador, el area cliente de un form que solo escribe Width/Height se mide: '
+      'menor que la ventana y sin estimar (R8)',
+      o.get('boxesFrom') == 'renderer' and 0 < o.get('clientWidth', 0) < 544 and 0 < o.get('clientHeight', 0) < 375
+      and 'clientEstimated' not in o and 'estimatedNote' not in o, o)
+
+# R8 (revisor del paisaje de la 1.27): con las cajas medidas, lo juzgado seguia saliendo del texto.
+# Un TLabel (AutoSize, el de su clase) con un Width viejo: el texto lo da por 30 de ancho y no toca
+# al TEdit; la VCL lo ensancha hasta su Caption y lo pisa. Medido contra el build anterior: la
+# caja medida de 155 y clean=True
+ETIQUETA = ("object FL: TFL\n  ClientWidth = 400\n  ClientHeight = 200\n"
+            "  object Label1: TLabel\n    Left = 8\n    Top = 12\n    Width = 30\n    Height = 15\n"
+            "    Caption = 'Nombre completo del cliente'\n  end\n"
+            "  object Edit1: TEdit\n    Left = 60\n    Top = 8\n    Width = 121\n    Height = 23\n    TabOrder = 0\n  end\nend\n")
+os.makedirs(os.path.join(BASE, 'etiqueta'))
+o = layout('etiqueta\\Etiqueta', ETIQUETA)
+check('R8 con el renderizador se juzga lo que mide la VCL: la etiqueta que su Caption ensancha pisa al TEdit',
+      o.get('boxesFrom') == 'renderer' and o.get('clean') is False
+      and 'Label1' in all_text(o, 'overlapping') and 'Edit1' in all_text(o, 'overlapping'), o)
+o = layout('Etiqueta', ETIQUETA, texto=True)
+check('R8 ...y el texto, que no la mide, no lo ve: lo que anade medir',
+      o.get('boxesFrom') == 'text' and o.get('clean') is True, o)
 
 
 o = layout('PC', "object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object PageControl1: TPageControl\n    Align = alClient\n    Width = 400\n    Height = 300\n    object TabSheet1: TTabSheet\n    end\n    object TabSheet2: TTabSheet\n    end\n    object TabSheet3: TTabSheet\n    end\n  end\nend\n")
@@ -464,5 +561,7 @@ check('V24b con el renderizador, un frame inline y lo de dentro salen en boxes (
       and 'file' not in bx.get('Marco1', {'file': 1}) and bx.get('B', {}).get('align') == 'alNone', o)
 
 srv.mata()
+srv_t.mata()
 mc.borra(BASE)  # con el servidor va su caja de paquetes: cien megas (V65 de la 1.24)
+mc.borra(BASE_T)
 mc.fin('layout battery')

@@ -29,7 +29,7 @@ try:
         f.write('x\n')
     r = srv.call('delphi_delete', {'path': carpeta})
     m = re.search(r'copy: (\S+)', r)
-    check('Q1 delete de la carpeta: a la papelera, con su copia nombrada', 'FILE-021' in r and bool(m), r[:300])
+    check('Q1 delete de la carpeta: a la papelera, con su copia nombrada', mc.es(r, 'SK_FILE_BORRADO_PAPELERA_FMT') and bool(m), r[:300])
     copia = mc.real(m.group(1)) if m else ''
     abierto = open(os.path.join(copia, 'f.txt'), 'r')
     try:

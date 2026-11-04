@@ -266,7 +266,8 @@ uses
   Lsp.Mascara,
   Lsp.DesignerForma,
   Lsp.Sandbox,
-  Lsp.Json;
+  Lsp.Json,
+  Lsp.FormRender; // EmpiezaLaEspera: el reloj de lo que espera el cliente
 
 const
   // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo
@@ -1631,8 +1632,9 @@ function SubirNucleo(const Params: TDelphiUploadParams): string; forward;
   cuando ya esta ENTERO: lo lee el parser del IDE, o el trozo trae sha256 (el
   ultimo); uno a medias no es un form. FUERA del cerrojo: el lector es un
   proceso de segundos y dentro paraba las escrituras de todos. Una negativa o
-  un fallo salen tal cual. }
-function ConJuicioDeFormSubido(const Params: TDelphiUploadParams; const ARespuesta: string): string;
+  un fallo salen tal cual. ADesde: el de la llamada (AvisosDelLector). }
+function ConJuicioDeFormSubido(const Params: TDelphiUploadParams; const ARespuesta: string;
+  ADesde: UInt64): string;
 var
   J: TJSONObject;
 begin
@@ -1662,7 +1664,7 @@ begin
           AvisoDelParserDeForm(Texto, Enc));
         Exit(J.ToJSON);
       end;
-      var Juicio := JuicioDeForm(Ruta, Texto, Enc) + AvisosDelLector(Ruta);
+      var Juicio := JuicioDeForm(Ruta, Texto, Enc) + AvisosDelLector(Ruta, '', ADesde);
       if Length(Juicio) = 0 then
         Exit;
       var Avisos := TJSONArray.Create;
@@ -1681,6 +1683,9 @@ end;
 
 function TDelphiUploadTool.ExecuteWithParams(const Params: TDelphiUploadParams): string;
 begin
+  // la llamada empieza: lo que espera su cliente cuenta desde aqui, y viaja hasta
+  // los jueces del IDE del form subido (A3 de la 1.27)
+  var Desde := EmpiezaLaEspera;
   // El cerrojo de escritura, como toda tool que escribe: un commit de
   // changeset que fallaba a mitad deshacia lo que esta tool escribia
   // entre medias, contestando OK a los dos (verificacion de la tercera
@@ -1693,7 +1698,7 @@ begin
     LeaveFileEdit;
   end;
   // el form subido se juzga ya FUERA del cerrojo (DSGN-061 de la 1.20)
-  Result := ConJuicioDeFormSubido(Params, Result);
+  Result := ConJuicioDeFormSubido(Params, Result, Desde);
 end;
 
 function SubirNucleo(const Params: TDelphiUploadParams): string;

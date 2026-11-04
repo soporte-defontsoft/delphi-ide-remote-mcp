@@ -8,18 +8,20 @@
     FormRenderExe          donde esta el renderizador de un framework: el
                            nombre del exe solo se compone aqui
     ComponeOrdenDeRender   LA orden, un interruptor por parametro de preview
-                           (test_paisaje vigila que nadie mas la componga);
+                           (test_paisaje vigila que nadie mas la componga),
+                           con los nombres FR_ARG_* de FormRenderProtocolo.inc;
                            su inversa es ParseaArgumentos del ayudante
     LeeRespuestaDeRender   la inversa de FormRenderProtocolo.inc, que incluyen
                            el ayudante (el escritor, FormRender.Comun.Responde)
                            y este lector
-    CorreRender            lo lanza con RunCapturedIn y su tiempo limite,
-                           FUERA del AppContainer de delphi_test: el contenedor
-                           no deja crear ventanas, y el VCL y el FMX mueren al
-                           crear la form (medido 6 y 7-oct-2026, vault
-                           renderform-ayudantes-2026-10-07). El ayudante lleva
-                           ademas su propio vigia, un poco antes, para contestar
-                           el por que.
+    CorreRender            lo lanza por CorreAyudante, en SU contenedor (un
+                           AppContainer sin capacidades ni red desde la 1.24;
+                           el de la 1.17 corria fuera, y el de delphi_test no
+                           dejaba crear ventanas) y con el tiempo limite de la
+                           llamada; trae la cadena de ancestros de otras
+                           carpetas (FormsLejanos). El ayudante lleva ademas su
+                           propio vigia, un poco antes, para contestar el por
+                           que.
 
   Por que procesos aparte y no una unidad del servidor: los paquetes de
   diseno del IDE se cargan EN el renderizador; si uno revienta muere el
@@ -39,6 +41,21 @@ const
     el juicio de una edicion (DSGN-185) y la fase de los paquetes del renderizador
     (RENDER-027, 1.26) }
   ESPERA_DEL_CLIENTE_MS = 50000;
+
+{ EL plazo de lo que espera un cliente (R4 y A3 del revisor del paisaje de la
+  1.27): ADesde, el instante en que empezo la llamada que espera
+  (EmpiezaLaEspera); 0 = ninguna, sin plazo ('' y AQuedaMs 0). Con tiempo, '' y
+  en AQuedaMs lo que le queda; sin el, AFmt con AQue (lo que se juzgaba) y los
+  segundos pasados: DSGN-185 si es una edicion que ya no se escribe, y
+  SR_DSGN_JUEZ_SIN_TIEMPO_FMT (DSGN-188) si lo juzgado ya esta escrito o es un lint. Lo
+  preguntan el juez del IDE antes de lanzarse (JuezDelIde: el de una edicion del
+  disenador, el de lo que delphi_edit, el changeset o una subida acaban de
+  escribir y el de un lint) y el disenador antes de escribir
+  (Lsp.DesignerEdit.JuezQueTardo). }
+function PlazoDelCliente(ADesde: UInt64; const AFmt, AQue: string; out AQuedaMs: Integer): string;
+{ ...y su reloj: el ADesde de una llamada que empieza ahora. Lo toma la tool al
+  empezar y viaja hasta el juez }
+function EmpiezaLaEspera: UInt64;
 
 type
   TPeticionRender = record
@@ -397,12 +414,12 @@ function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: 
   Fill.Color = xFF7DFC6 y el lint decia CLEAN (V154 de la 1.23.1, medido).
   False si no se pudo preguntar, o si el ayudante sustituyo una clase o leyo
   sin un ancestro (lo que escribe no seria lo que guarda el IDE). Nunca
-  lanza. }
+  lanza. ADesde: el de la llamada que espera (PlazoDelCliente); 0, sin plazo. }
 function ColoresSinAlfaDeForm(const APath, ATexto, AEnc, AAntes: string;
-  out AColores: TArray<TColorSinAlfa>): Boolean;
+  out AColores: TArray<TColorSinAlfa>; ADesde: UInt64): Boolean;
 { ...y su nota (DSGN-176 y una linea por color), o []: la del lint y la de
   tras una edicion (Lsp.Patch.LintDeForm, con el lector) }
-function NotaDeColoresSinAlfa(const APath, ATexto, AEnc, AAntes: string): TArray<string>;
+function NotaDeColoresSinAlfa(const APath, ATexto, AEnc, AAntes: string; ADesde: UInt64): TArray<string>;
 
 { CON el cerrojo, justo antes de escribir lo que juzgo el ayudante: '' si
   cada fichero que leyo para cargar el form (ALeidos) sigue con los bytes de
@@ -420,8 +437,12 @@ function CambioEnLoLeido(const ALeidos: TArray<TLeidoPorElJuez>): string;
   TEdit FMX: delphi_edit lo escribia sin avisar y el lint decia CLEAN de un
   form que no abria). ANoPregunto: por que no se le pudo preguntar (sin
   renderizador, el tiempo, un paquete que revento al cargar): entonces no hay
-  lineas y no se sabe. Nunca lanza. }
-function LoQueNoCargaElIde(const APath, ATexto, AEnc: string; out ANoPregunto: string): TArray<string>;
+  lineas y no se sabe. Nunca lanza. ADesde: el de la llamada que espera
+  (PlazoDelCliente); 0, sin plazo. Tras una escritura el juez llegaba con su
+  propio plazo, el de un preview: dos jueces de 75 s con lo escrito ya en disco
+  y el cliente rendido al minuto (A3 del revisor del paisaje de la 1.27). }
+function LoQueNoCargaElIde(const APath, ATexto, AEnc: string; out ANoPregunto: string;
+  ADesde: UInt64): TArray<string>;
 
 { La nota DSGN-183 de un form: los literales de ALineas que preview negaria,
   por EL juez de preview y desde la carpeta del form, sin ensenar su valor, o
@@ -582,7 +603,7 @@ begin
     APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.RaizBds,
     APeticion.FicheroPaquetes, APeticion.Soltado) + APeticion.Estados do
     if not ValorDeLaCasaLlega(V) then
-      Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V]));
+      Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V, CaracterQueNoLlega(V)])); // y CUAL, como TEST-037 (B7)
   AOrden := ComillasSinEscape(AExe) + Arg(FR_ARG_PATH, APeticion.Path);
   // el conversor (V71) ni carga ni pinta: los bytes de --path, en --out
   if APeticion.Convierte <> '' then
@@ -1293,9 +1314,13 @@ var
     begin
       var Tam: Int64;
       var Fecha: TDateTime;
-      // un programa no es lo que un form lee: el ayudante no carga nada que no sea del IDE
+      // un programa no es lo que un form lee: el ayudante no carga nada que no sea del IDE.
+      // Su cabecera son 2 bytes: se leia el fichero entero, hasta el tope (revisor del
+      // paisaje de la 1.27, menores)
+      var Entero: Int64;
       if not RutaEnLista(Trozo, AJunto) and HuellaDeFichero(Ruta, Tam, Fecha) and
-         (BytesJunto + Tam <= TOPE_JUNTO_BYTES) and not EsEjecutable(LeeBytes(Ruta, LUGARES_DEL_MOTOR)) then
+         (BytesJunto + Tam <= TOPE_JUNTO_BYTES) and
+         not EsEjecutable(LeeTrozoDeBytes(Ruta, LUGARES_DEL_MOTOR, 0, 2, Entero)) then
       begin
         Inc(BytesJunto, Tam);
         AJunto := AJunto + [Trozo];
@@ -1439,7 +1464,8 @@ begin
   if H = 0 then
     Exit;
   try
-    var R := FindResource(H, MakeIntResource(1), RT_MANIFEST);
+    // el ID con el nombre que le da Windows, el mismo que escribe PonManifiesto (B9)
+    var R := FindResource(H, CREATEPROCESS_MANIFEST_RESOURCE_ID, RT_MANIFEST);
     if R = 0 then
       Exit;
     var D := LoadResource(H, R);
@@ -1578,7 +1604,7 @@ const
   begin
     var H := BeginUpdateResource(PChar(AExe), False);
     Win32Check(H <> 0);
-    if not UpdateResource(H, RT_MANIFEST, MakeIntResource(1), 0, @ABytes[0], Length(ABytes)) then
+    if not UpdateResource(H, RT_MANIFEST, CREATEPROCESS_MANIFEST_RESOURCE_ID, 0, @ABytes[0], Length(ABytes)) then
     begin
       var Err := GetLastError;
       EndUpdateResource(H, True);
@@ -2000,11 +2026,15 @@ begin
         Result := MsgFmt(SR_DESIGNER_RENDER_NO_ARRANCA_FMT, [TPath.GetFileName(AExe), SinNuestraCasa(E.Message)]);
     end;
   finally
-    if Caja <> '' then
-      SueltaCaja(Caja);
-    // la etapa, recuperada (una carpeta que dejo cerrada el codigo de un paquete) y
-    // borrada; limpiar no tumba la respuesta: la purga del arranque se la lleva
-    CierraEtapa(AC, Etapa);
+    try
+      if Caja <> '' then
+        SueltaCaja(Caja);
+    finally
+      // la etapa, recuperada (una carpeta que dejo cerrada el codigo de un paquete) y
+      // borrada, aunque soltar la caja lance: con ella va el puesto del contenedor;
+      // limpiar no tumba la respuesta: la purga del arranque se la lleva
+      CierraEtapa(AC, Etapa);
+    end;
   end;
 end;
 
@@ -2299,36 +2329,56 @@ begin
   end;
 end;
 
+function EmpiezaLaEspera: UInt64;
+begin
+  Result := GetTickCount64;
+end;
+
+function PlazoDelCliente(ADesde: UInt64; const AFmt, AQue: string; out AQuedaMs: Integer): string;
+begin
+  Result := '';
+  AQuedaMs := 0;
+  if ADesde = 0 then
+    Exit;
+  var Pasado := GetTickCount64 - ADesde;
+  if Pasado >= ESPERA_DEL_CLIENTE_MS then
+    Exit(MsgFmt(AFmt, [AQue, Pasado div 1000]));
+  AQuedaMs := Integer(ESPERA_DEL_CLIENTE_MS - Pasado);
+end;
+
 { La propuesta ATexto para APath, escrita en una carpeta de descarga de ESTA
   llamada y cargada por el ayudante de su framework en modo juez (--writeback:
   el form como lo carga el designer, sin pintar): lo que contesto, con Fallo
   si ni se pudo escribir. La carpeta se borra siempre. EL juez de
-  ComoLoEscribeElIde y de LoQueNoCargaElIde. Con ADesde, el de una edicion:
-  tiene lo que espera un cliente desde que empezo a juzgarse, y su vigia salta
+  ComoLoEscribeElIde y de LoQueNoCargaElIde. Con ADesde, el de la llamada que
+  espera: tiene lo que le queda al cliente (PlazoDelCliente), y su vigia salta
   al acabarse (el servidor lo para MARGEN_DEL_VIGIA_MS despues, si ni el
-  contesta); sin tiempo, ni se lanza. Tenia el plazo de un preview: uno colgado
-  contestaba a los 75 s, con el cliente rendido al minuto, y el segundo juez de
-  la misma edicion otros 75 (R4 del revisor del paisaje de la 1.27, medido). }
+  contesta); sin tiempo, ni se lanza y Fallo lo dice (PlazoDelCliente): DSGN-188
+  con AYaEscrito (lo juzgado ya esta escrito, o es un lint), DSGN-185 sin el (una
+  edicion que no se escribe). Tenia el plazo de un preview: uno colgado contestaba a los
+  75 s, con el cliente rendido al minuto, y el segundo juez de la misma edicion
+  otros 75 (R4 del revisor del paisaje de la 1.27, medido). }
 function JuezDelIde(const APath, ATexto, AEnc: string; const AComponente: string = '';
-  const ASoltado: string = ''; const AUnidad: string = ''; ADesde: UInt64 = 0): TRespuestaRender;
+  const ASoltado: string = ''; const AUnidad: string = ''; ADesde: UInt64 = 0;
+  AYaEscrito: Boolean = False): TRespuestaRender;
 var
   Pet: TPeticionRender;
   Dir, Cand: string;
   Plazo: Integer;
 begin
   Result := Default(TRespuestaRender);
-  Plazo := 0;
-  if ADesde <> 0 then
+  if AYaEscrito then
+    Result.Fallo := PlazoDelCliente(ADesde, SR_DSGN_JUEZ_SIN_TIEMPO_FMT, TPath.GetFileName(APath), Plazo)
+  else
+    Result.Fallo := PlazoDelCliente(ADesde, SR_DESIGNER_JUEZ_TARDO_FMT, TPath.GetFileName(APath), Plazo);
+  if Result.Fallo <> '' then
   begin
-    var Pasado := GetTickCount64 - ADesde;
-    if Pasado >= ESPERA_DEL_CLIENTE_MS then
-    begin
-      Result.Codigo := FR_RC_TIMEOUT;
-      Result.Fallo := MsgFmt(SR_DESIGNER_JUEZ_TARDO_FMT, [TPath.GetFileName(APath), Pasado div 1000]);
-      Exit;
-    end;
-    Plazo := Integer(ESPERA_DEL_CLIENTE_MS - Pasado) + MARGEN_DEL_VIGIA_MS;
+    Result.Codigo := FR_RC_TIMEOUT;
+    Exit;
   end;
+  // sin llamada que espere, 0: el plazo de un preview
+  if Plazo > 0 then
+    Plazo := Plazo + MARGEN_DEL_VIGIA_MS;
   // una carpeta de descarga de ESTA llamada en el temporal del SERVIDOR (EL
   // nombrador: el guard del borrado la reconoce), con la propuesta bajo el
   // nombre del form de verdad: su .pas y sus hermanos los lee el ayudante de
@@ -2427,7 +2477,7 @@ begin
 end;
 
 function ColoresSinAlfaDeForm(const APath, ATexto, AEnc, AAntes: string;
-  out AColores: TArray<TColorSinAlfa>): Boolean;
+  out AColores: TArray<TColorSinAlfa>; ADesde: UInt64): Boolean;
 var
   Doc, DocAntes, DocE: TStyleDoc;
 begin
@@ -2458,7 +2508,7 @@ begin
       var Leidos: TArray<TLeidoPorElJuez>;
       var Parada: TIgnorada;
       if (ComoLoEscribeElIde(APath, ATexto, AEnc, Escrito, Sustituidas, Avisos, SinLeer, Leidos,
-            Error, Parada) <> '') or (Length(Sustituidas) > 0) or (Length(SinLeer) > 0) then
+            Error, Parada, '', '', ADesde) <> '') or (Length(Sustituidas) > 0) or (Length(SinLeer) > 0) then
         Exit;
       DocE := TStyleDoc.DeTexto(Escrito);
       Result := ColoresSinAlfaEntre(Doc, DocE, Candidatos, AColores);
@@ -2473,12 +2523,12 @@ begin
   end;
 end;
 
-function NotaDeColoresSinAlfa(const APath, ATexto, AEnc, AAntes: string): TArray<string>;
+function NotaDeColoresSinAlfa(const APath, ATexto, AEnc, AAntes: string; ADesde: UInt64): TArray<string>;
 var
   Colores: TArray<TColorSinAlfa>;
 begin
   Result := [];
-  if not ColoresSinAlfaDeForm(APath, ATexto, AEnc, AAntes, Colores) or (Length(Colores) = 0) then
+  if not ColoresSinAlfaDeForm(APath, ATexto, AEnc, AAntes, Colores, ADesde) or (Length(Colores) = 0) then
     Exit;
   Result := [MsgFmt(SN_DESIGNER_COLORES_SIN_ALFA_FMT, [ExtractFileName(APath), Length(Colores),
     SufijoDeLaEdicion(AAntes <> '')])];
@@ -2503,14 +2553,17 @@ begin
   end;
 end;
 
-function LoQueNoCargaElIde(const APath, ATexto, AEnc: string; out ANoPregunto: string): TArray<string>;
+function LoQueNoCargaElIde(const APath, ATexto, AEnc: string; out ANoPregunto: string;
+  ADesde: UInt64): TArray<string>;
 var
   Doc: TStyleDoc;
 begin
   Result := [];
   ANoPregunto := '';
   try
-    var R := JuezDelIde(APath, ATexto, AEnc);
+    // sin tiempo, por que no se pregunto sin el DSGN-185 de una edicion que no se
+    // escribe: aqui lo juzgado ya esta escrito, o es un lint
+    var R := JuezDelIde(APath, ATexto, AEnc, '', '', '', ADesde, True);
     // leido SIN un ancestro (PARTIAL=): cada 'inherited' sin el dice "Ancestor
     // for X not found", y eso es de NUESTRA lectura, no del form - una vista
     // FMX sin el .pas de su maestro al lado, o con uno que no la declara, "no

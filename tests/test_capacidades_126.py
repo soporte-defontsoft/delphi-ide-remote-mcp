@@ -348,7 +348,7 @@ try:
     r = otro.call('delphi_designer', {'command': 'to-binary', 'path': os.path.join(C5, 'UP.dfm')}, t=240)
 finally:
     otro.cierra()
-TIEMPO_DEL_CONVERSOR = mc.catalogo()['SF_DSGN_CONVERSOR_TIEMPO_FMT'].split('%')[0].strip()
+TIEMPO_DEL_CONVERSOR = mc.trozo_de_formato('SF_DSGN_CONVERSOR_TIEMPO_FMT', 0).strip()
 check('P5 el conversor parado por su vigia: el tiempo del conversor, no "algo del form espera"',
       mc.es(r, 'SR_DSGN_CONVERSOR_FALLO_FMT') and TIEMPO_DEL_CONVERSOR in r and 'ZZTIEMPOZZ' not in r, r[:400])
 
@@ -502,8 +502,7 @@ ADB = de_mentira('AdbFalso',
 # se compila en la jaula; el que nombra el SDK va FUERA: uno en una carpeta que la sesion escribe no se lanza
 # (ADB-035, revisor del paisaje de la 1.27), y RF0 lo mide con el de dentro
 ADB_DENTRO = ADB
-ADB = os.path.join(BASE, 'adb-fuera', os.path.basename(ADB_DENTRO))
-os.makedirs(os.path.dirname(ADB))
+ADB = os.path.join(mc.fuera_de_la_jaula('capacidades_126'), os.path.basename(ADB_DENTRO))
 shutil.copy(ADB_DENTRO, ADB)
 import struct, zlib
 
@@ -549,6 +548,20 @@ finally:
 check('RF0 el adb que nombra el SDK en una carpeta de la jaula no se lanza: ADB-035',
       mc.es(r, 'SR_ADB_DONDE_ESCRIBE_FMT') and not os.path.isdir(os.path.join(os.path.dirname(ADB_DENTRO), 'Dev')),
       r[:300])
+# RF0b (B6 del revisor del paisaje de la 1.27) el MISMO juez para el motor: su DelphiLSP.exe sale de la bin del IDE,
+# como paclient, y no pasaba por ProgramaFueraDelAgente. Con la carpeta del IDE como raiz de ESCRITURA de un servidor
+# de prueba (nada se escribe alli: el motor ni arranca), LSP-053 (ROJA contra c582da0: arrancaba y contestaba)
+UMOTOR = os.path.join(JAIL, 'UMotorB6.pas')
+with open(UMOTOR, 'w', newline='') as f:
+    f.write('unit UMotorB6;\r\n\r\ninterface\r\n\r\nprocedure Uno;\r\n\r\nimplementation\r\n\r\n'
+            'procedure Uno;\r\nbegin\r\nend;\r\n\r\nend.\r\n')
+otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL + ';' + mc.raiz_del_ide()}), nombre='rf0b', t=120)
+try:
+    r = otro.call('delphi_symbols', {'path': UMOTOR}, t=120)
+finally:
+    otro.cierra()
+check('RF0b el DelphiLSP.exe de una instalacion donde la sesion escribe no se lanza: LSP-053',
+      mc.es(r, 'SR_LSP_EXE_DONDE_ESCRIBE_FMT') and 'Uno' not in r, r[:300])
 
 
 def captura(nombre, res):
@@ -617,6 +630,9 @@ check('R23 un filtro de delphi_test con una comilla se niega (TEST-037): no pued
       mc.rechazado(r) and mc.es(r, 'SR_TEST_FILTRO_COMILLA_FMT'), r[:300])
 check('A4 un filtro con un caracter de control (un tabulador) se niega tambien (TEST-037)',
       mc.rechazado(r2) and mc.es(r2, 'SR_TEST_FILTRO_COMILLA_FMT'), r2[:300])
+# y dice CUAL (Qwen, dirigido de la 1.27: "no nombra el caracter"); roja contra c582da0
+check('A4b TEST-037 nombra el caracter que no llega: U+0022 la comilla, U+0009 el tabulador',
+      'U+0022' in r and 'U+0009' in r2, (r[:200], r2[:200]))
 
 # R14 dos repositorios en carpetas que NTFS separa (ss y la eszett): delphi_projects lista los dos. GUARDA: el
 # IndexOf de un TStringList SIN ordenar descarta por la longitud antes de comparar, y estos dos no se juntaban

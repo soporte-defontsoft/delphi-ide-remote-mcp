@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """MANUAL: RENDER_REACH_HELPER = copia VCL con URenderReachDummy y vigia interno apagado.
-El producto no enlaza esa unidad. Mide el limite REAL exterior de 75 segundos.
+El producto no enlaza esa unidad. Mide el limite REAL exterior (RENDER_TIEMPO_MS, del fuente).
 Mutante: omitir AssignProcessToJobObject en la rama sin AppContainer de RunCore.
 El arnes limpia solo sus PID verificados, tambien con el mutante.
 """
@@ -67,8 +67,14 @@ try:
         for name in ['DUMMY-parent.pid','DUMMY-child.pid']:
             path=os.path.join(os.path.dirname(counter),name)
             if os.path.isfile(path):pids.append(int(mc.lee(path)))
-    worker.join(100);elapsed=time.monotonic()-start
-    mc.check('limite exterior real entre 74 y 90 segundos',not worker.is_alive() and 74<elapsed<90,str(elapsed))
+    # el limite exterior, del fuente (eran 74 y 90 a mano): el plazo del servidor (RENDER_TIEMPO_MS; un
+    # segundo menos, lo que pasa entre que la bateria pide y el servidor empieza a contar) y ese plazo
+    # mas el margen de su vigia (MARGEN_DEL_VIGIA_MS), que sin el vigia interno ya no habla antes
+    PLAZO=mc.entero_del_fuente('Server/Lsp.FormRender.pas','RENDER_TIEMPO_MS')/1000
+    MARGEN=mc.entero_del_fuente('Server/Lsp.FormRender.pas','MARGEN_DEL_VIGIA_MS')/1000
+    worker.join(PLAZO+MARGEN+10);elapsed=time.monotonic()-start
+    mc.check('limite exterior real entre %g y %g segundos'%(PLAZO-1,PLAZO+MARGEN),
+             not worker.is_alive() and PLAZO-1<elapsed<PLAZO+MARGEN,str(elapsed))
     mc.check('rechazo etiquetado del vigia exterior',mc.es(result.get('out',''),'SR_DESIGNER_RENDER_TIEMPO_FMT'),result)
     last=tick(counter) if counter else None;time.sleep(.7);after=tick(counter) if counter else None
     mc.check('contador se detiene',last is not None and after==last,(last,after))

@@ -192,8 +192,11 @@ for f, fuente in LIMPIAS.items():
     for l in fuente.splitlines():
         for m in re.finditer(r'\b(S[RNK]_[A-Z0-9_]+)\b', l):
             if m.group(1) in NOMBRES and not re.search(
-                    # NotaDeRecorte (Lsp.Listas, A17-W5 de la 1.23): la nota de recorte de una lista, por MsgFmt
-                    r'\b(MsgText|MsgFmt|MsgEnvuelve|MsgConCausa|HasMsg|EsMsg|MsgTag|NotaDeRecorte)\(\s*(\w+,\s*)?%s\b'
+                    # NotaDeRecorte (Lsp.Listas, A17-W5 de la 1.23): la nota de recorte de una lista, por MsgFmt;
+                    # PlazoDelCliente (Lsp.FormRender, R4 de la 1.27): DSGN-185/188 con lo que se juzgaba y los
+                    # segundos, por MsgFmt; su primer argumento es el reloj de la llamada (F.JuzgandoDesde)
+                    r'\b(MsgText|MsgFmt|MsgEnvuelve|MsgConCausa|HasMsg|EsMsg|MsgTag|NotaDeRecorte|PlazoDelCliente)'
+                    r'\(\s*([\w.]+,\s*)?%s\b'
                     % m.group(1), l):
                 directas.append('%s: %s' % (os.path.basename(f), l.strip()[:120]))
 check('C9 todo mensaje sale por su helper (MsgText/MsgFmt/...)', not directas, directas[:10])

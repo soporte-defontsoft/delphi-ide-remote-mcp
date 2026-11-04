@@ -356,7 +356,7 @@ try:
     r = srv.call('delphi_create', {'kind': 'unit', 'name': 'UFn', 'project': uproj, 'formname': 'X'})
     check('K2 formname con kind=unit: CREATE-035 y "goes with" nombra form-vcl...datamodule, no "form"',
           mc.es(r, 'SR_CREATE_NO_VA_CON_KIND_FMT') and 'form-vcl' in r and 'datamodule' in r
-          and 'goes with: form.' not in r, r[:400])
+          and not mc.dice_que_va_con(r, 'form'), r[:400])
 
     # add-deployfile como el Deployment Manager del IDE: el .dproj (su seccion Deployment) y el .deployproj
     ddir = os.path.join(JAIL, 'dep')
@@ -583,7 +583,7 @@ try:
     open(cinco, 'w', newline='\r\n').write('unit UCinco;\ninterface\nimplementation\n\nend.\n')
     r = srv.call('delphi_read', {'path': cinco, 'fromline': 9})
     check('R1 read con fromline pasado el final: READ-010 y fromline=9',
-          mc.es(r, 'SR_EDIT_DESDE_MAS_ALLA_FINAL_FMT') and '[READ-010' in r and 'fromline=9' in r, r[:300])
+          mc.es(r, 'SR_EDIT_DESDE_MAS_ALLA_FINAL_FMT') and 'fromline=9' in r, r[:300])
     r = srv.call('delphi_create', {'kind': 'form-vcl', 'name': 'UFormSuelto', 'dir': plano})
     check('C1 create form-vcl sin project: CREATE-036 (no un GUARD-018 generico)',
           mc.es(r, 'SR_CREATE_FORM_NEED_PROJECT') and not os.path.exists(os.path.join(plano, 'UFormSuelto.pas')),
@@ -704,23 +704,29 @@ try:
     check('Y1 digest de carpeta: const de una linea, constantes con tipo y variables',
           all(x in r for x in ('MAX_UNO', 'TIPADA', 'NOMBRES', 'GContador')), r[:600])
 
-    def siguiente_de_random(cola):
-        # el Random de Delphi: RandSeed := RandSeed * $08088405 + 1, y Random($10000) son sus 16 bits altos
+    def siguientes_de_random(cola):
+        # el Random de Delphi: RandSeed := RandSeed * $08088405 + 1, y Random($10000) son sus 16 bits altos.
+        # TODAS las colas siguientes posibles: dos salidas de 16 bits no fijan la semilla (la explican 1,34
+        # 'bajos' de media), y con solo el primero el check salia verde contra el LCG 62 de 400 veces
+        # (simulado el 4-nov-2026; con todas, 0 de 400)
         paso = lambda s: (s * 0x08088405 + 1) & 0xFFFFFFFF
         a, b = int(cola[:4], 16), int(cola[4:8], 16)
+        res = set()
         for bajo in range(0x10000):
             s2 = paso((a << 16) | bajo)
             if (s2 >> 16) == b:
                 s3 = paso(s2)
-                return '%04X%04X' % (s3 >> 16, paso(s3) >> 16)
-        return None
+                res.add('%04X%04X' % (s3 >> 16, paso(s3) >> 16))
+        return res
 
-    # sin prediccion (pred None) tambien mide: la cola de un LCG SIEMPRE tiene un 'bajo' que la explica, asi que
-    # no encontrarlo ya dice que no es del LCG (Fable lo leyo como vacuo, revision de la 1.22.2)
+    # sin prediccion (ninguna) tambien mide: la cola de un LCG SIEMPRE tiene un 'bajo' que la explica, asi que
+    # no encontrarlo ya dice que no es del LCG (Fable lo leyo como vacuo, revision de la 1.22.2). Contra una cola
+    # de GUID, que acierte alguna de las 1,34 es un falso rojo de 3 entre 10^10: se acepta
     ids = [mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'})) for _ in range(2)]
-    pred = siguiente_de_random(ids[0].rsplit('-', 1)[-1]) if ids[0] else None
+    preds = siguientes_de_random(ids[0].rsplit('-', 1)[-1]) if ids[0] else set()
     check('CS1 la cola del id de un changeset no se predice desde el anterior (era un LCG)',
-          all(ids) and len(ids[1].rsplit('-', 1)[-1]) == 8 and not ids[1].endswith(pred or 'x'), (ids, pred))
+          all(ids) and len(ids[1].rsplit('-', 1)[-1]) == 8 and ids[1].rsplit('-', 1)[-1] not in preds,
+          (ids, sorted(preds)))
     for i in ids:
         if i:
             srv.call('delphi_changeset', {'command': 'rollback', 'id': i})

@@ -323,7 +323,7 @@ try:
     tocado = llama(c, 'delphi_workspace', {}) if c else {}
     check('U1 (control) el aviso SYS-001 funciona: sin tocar el ini no sale; tocado con el servidor en marcha, si',
           'settingsChangedNote' not in sin_tocar.get('server', {})
-          and '[SYS-001]' in tocado.get('server', {}).get('settingsChangedNote', ''),
+          and mc.es(tocado.get('server', {}).get('settingsChangedNote', ''), 'SN_SERVER_INI_CHANGED_FMT'),
           json.dumps(tocado.get('server', {}))[:400])
     para(proc)
 
@@ -373,7 +373,7 @@ try:
     except subprocess.TimeoutExpired:
         rc = None
     texto = '\n'.join(mensajes(ruta))
-    partes = re.split(r'%[sd]', CAT['SE_GUARD_INI_BOM_FMT'])
+    partes = mc.trozos_de_formato('SE_GUARD_INI_BOM_FMT')
     check('U11 settings.ini con BOM delante de [Server]: NO arranca - no escucha y sale con 1',
           c is None and rc == 1, 'cli=%s rc=%s' % (c, rc))
     check('U11 ...y dice por que, en que linea (la 1) y como arreglarlo',
@@ -417,7 +417,7 @@ try:
     except subprocess.TimeoutExpired:
         rc = None
     texto = '\n'.join(mensajes(ruta))
-    partes = re.split(r'%[sd]', CAT['SE_GUARD_INI_CODIFICACION_FMT'])
+    partes = mc.trozos_de_formato('SE_GUARD_INI_CODIFICACION_FMT')
     check('U11d settings.ini en UTF-16 big endian: NO arranca, y dice por que y como guardarlo',
           c is None and rc == 1 and all(p in texto for p in partes) and 'utf16-be' in texto,
           'cli=%s rc=%s %s' % (c, rc, texto[-300:]))
@@ -470,7 +470,7 @@ try:
               h not in (None, ctypes.c_void_p(-1).value), h)
         proc, ruta, c = lanza(exe11f, 'ini-bloqueado')
         texto = '\n'.join(mensajes(ruta))
-        partes = [p for p in re.split(r'%[sd]', CAT['SL_GUARD_INI_SIN_LEER_FMT']) if p.strip()]
+        partes = [p for p in mc.trozos_de_formato('SL_GUARD_INI_SIN_LEER_FMT') if p.strip()]
         check('U11f un settings.ini que no se puede leer: arranca y el log de arranque lo dice',
               c is not None and all(p in texto for p in partes), 'cli=%s %s' % (c, texto[-500:]))
         para(proc)
@@ -491,7 +491,7 @@ try:
               all(p in srv11f.get('settingsUnreadable', '') for p in partes), json.dumps(srv11f)[:400])
         check('U11f ...sin decir que el ini se toco despues de arrancar (no settingsChangedNote: no lo esta)',
               'settingsChangedNote' not in srv11f, json.dumps(srv11f)[:400])
-        pne = [p for p in re.split(r'%[sd]', CAT.get('SL_DISC_NO_ESCRITA_FMT', '')) if len(p.strip()) > 10]
+        pne = [p for p in mc.trozos_de_formato('SL_DISC_NO_ESCRITA_FMT') if len(p.strip()) > 10]
         check('U11f ...ni que le falta [Server] DelphiVersion (no se sabe: no se ha leido)',
               bool(pne) and not any(p in texto for p in pne), texto[-400:])
         # un cliente stdio lanzado con un token (o token o nada): el workspace
@@ -522,7 +522,7 @@ try:
               h not in (None, ctypes.c_void_p(-1).value), h)
         proc, ruta, c = lanza(exe11g, 'ini-compartido')
         texto = '\n'.join(mensajes(ruta))
-        partes11g = [p for p in re.split(r'%[sd]', CAT['SL_GUARD_INI_SIN_LEER_FMT']) if p.strip()]
+        partes11g = [p for p in mc.trozos_de_formato('SL_GUARD_INI_SIN_LEER_FMT') if p.strip()]
         w11g = mc.como_json(c.call('delphi_workspace', {})).get('server', {}) if c else {}
         check('U11g ...se lee: ni la nota del ini sin leer, y el token del ini entra (delphi_workspace contesta)',
               c is not None and not any(p in texto for p in partes11g) and bool(w11g) and

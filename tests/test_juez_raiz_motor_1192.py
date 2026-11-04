@@ -130,7 +130,7 @@ try:
     hereda(PAS3, DFM3, 'USoloBase', 'TBaseS', ['  Zeta = 1', '  ModalResult = mrOK'])
     for f in ('PSolo.dproj', 'PSolo.dpr'):
         r = s.call('delphi_delete', {'path': os.path.join(solo, f)}, t=120)
-        assert 'FILE-021' in r, r
+        assert mc.es(r, 'SK_FILE_BORRADO_PAPELERA_FMT'), r
     r = lint(DFM3)
     check('R6 sin .dpr ni .dproj: la raiz no se juzga (sin motor; ni ModalResult), CLEAN y sin error',
           limpio(r), r[:400])

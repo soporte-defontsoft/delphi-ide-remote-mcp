@@ -1810,10 +1810,10 @@ begin
     Exit(MsgFmt(SR_PASERVER_PLATFORM_FMT, [V, PaclientPlatformsList]));
   // la contrasena va a la linea de paclient, un programa Delphi: EL juez de los
   // valores nuestros (ValorDeLaCasaLlega: su ParamStr la recibe entera, sin
-  // caracteres de control)
+  // caracteres de control), y dice CUAL no llega, como TEST-037 (B7)
   V := ArgStr(AArguments, 'password');
   if not ValorDeLaCasaLlega(V) then
-    Exit(MsgText(SR_PASERVER_PASSWORD));
+    Exit(MsgFmt(SR_PASERVER_PASSWORD_FMT, [CaracterQueNoLlega(V)]));
 end;
 
 { '' unless APath IS one of the configured roots (the jail itself). With no
@@ -5300,6 +5300,9 @@ begin
   end;
 end;
 
+// LA politica de reintentos (abajo, junto al renombre que la uso primero)
+function ConReintentos(const AOperacion: TFunc<Boolean>; out ACodigo: Cardinal): Boolean; forward;
+
 procedure QuitaCarpetasCreadas(const ADesde, AAncestro: string;
   const AJuez: TJuezDeCarpeta);
 var
@@ -5322,8 +5325,24 @@ begin
       if (Length(D) <= Length(SinBarraFinal(AAncestro))) or (Denegado(D) <> '') then
         Break;
       // un enlace no lo creo nadie aqui: nunca se quita (decima revision)
-      if EsEnlace(D) or not RemoveDir(D) then
-        Break; // no esta vacia (otro dejo algo) o no se puede: se queda
+      if EsEnlace(D) then
+        Break;
+      // por LA politica de reintentos: un lector de un instante la tiene
+      // abierta y rebota con 32 (V45 de la 1.27, medido: un clone fallido
+      // dejaba la suya, y un segundo despues se podia quitar)
+      var Err: Cardinal;
+      var Carpeta := D;
+      if not ConReintentos(
+        function: Boolean
+        begin
+          Result := RemoveDir(Carpeta);
+        end, Err) then
+      begin
+        // no esta vacia (otro dejo algo) o no se puede: se queda, y el log
+        // dice por que
+        try TLogger.Warning(MsgFmt(SL_CARPETA_CREADA_SE_QUEDA_FMT, [Err, D])); except end;
+        Break;
+      end;
     end;
   except
     // quitar lo creado nunca lanza
@@ -5439,14 +5458,18 @@ begin
       [TPath.GetFileName(APath), ACodigo, SysErrorMessage(ACodigo).Trim]);
 end;
 
-function RenombraConReintentos(const AOrigen, ADestino: string; AFlags: Cardinal;
-  out ACodigo: Cardinal): Boolean;
+{ LA politica de reintentos de una operacion sobre el disco que un lector de un
+  instante hace rebotar (5, 32, 33): cinco intentos, 100 ms entre uno y otro;
+  otro codigo no se reintenta. AOperacion devuelve si pudo y deja su codigo en
+  GetLastError. La comparten el renombre (RenombraConReintentos) y quitar una
+  carpeta vacia que creo la llamada (QuitaCarpetasCreadas: un clone fallido
+  dejaba la suya con 32, V45 de la 1.27). }
+function ConReintentos(const AOperacion: TFunc<Boolean>; out ACodigo: Cardinal): Boolean;
 begin
-  Result := False;
   ACodigo := 0;
   for var Intento := 1 to 5 do
   begin
-    Result := MoveFileEx(PChar(AOrigen), PChar(ADestino), AFlags);
+    Result := AOperacion();
     if Result then
       Exit;
     ACodigo := GetLastError;
@@ -5455,6 +5478,16 @@ begin
       Exit;
     Sleep(100);
   end;
+end;
+
+function RenombraConReintentos(const AOrigen, ADestino: string; AFlags: Cardinal;
+  out ACodigo: Cardinal): Boolean;
+begin
+  Result := ConReintentos(
+    function: Boolean
+    begin
+      Result := MoveFileEx(PChar(AOrigen), PChar(ADestino), AFlags);
+    end, ACodigo);
 end;
 
 function MotivoToolOculta(const AToolName: string): TMotivoOculta;

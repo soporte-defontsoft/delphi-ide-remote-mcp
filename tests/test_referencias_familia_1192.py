@@ -108,7 +108,7 @@ try:
     look = mc.aciertos(r, 'lookalikes')
     check('R4 rename TFoo de UHomoA (preview): no escribe en UHomoB - sus TFoo son parecidos (RENAME-017) y los '
           'cambios son de UN fichero',
-          j.get('applicable') is False and any('RENAME-017' in b for b in j.get('blockers', []))
+          j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_HOMONYMS_FMT') for b in j.get('blockers', []))
           and j.get('filesTouched') == 1 and look and all(h['path'].endswith('UHomoB.pas') for h in look),
           {'applicable': j.get('applicable'), 'filesTouched': j.get('filesTouched'), 'blockers': j.get('blockers'),
            'lookalikes': [h.get('text') for h in look]})
@@ -146,7 +146,7 @@ try:
     r = srv.call('delphi_rename_symbol', {'path': pas_h, 'line': virt + 1, 'character': LH[virt].index('Pinta'),
                                           'newname': 'Pinta2'}, t=240)
     check('J3 LSP-003 de rename dice que las lineas son 0-based aqui (N de un read es N-1), y no manda a delphi_read',
-          'LSP-003' in r and 'N-1' in r and 'gives you line and column' not in r, r[:400])
+          mc.es(r, 'SR_REFS_NO_DEFINITION_FMT') and 'N-1' in r and 'gives you line and column' not in r, r[:400])
 finally:
     srv.cierra()
 

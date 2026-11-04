@@ -51,7 +51,7 @@ EXE = mc.copia_exe(BASE)
 S = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='setver', t=600)
 # un trozo de la respuesta (SF_) no lleva etiqueta: se busca por su frase
 NO_INCLUIDA = mc.catalogo()['SF_CFG_VERSION_NO_INCLUIDA'].strip()[:40]
-INCLUIDA = mc.catalogo()['SF_CFG_VERSION_INCLUIDA_FMT'].split('%')[0]
+INCLUIDA = mc.trozo_de_formato('SF_CFG_VERSION_INCLUIDA_FMT', 0)
 
 # donde esta la instalacion: lo dice el servidor, no se supone
 RAIZ = mc.raiz_ide(S.call)

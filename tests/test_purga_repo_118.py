@@ -73,11 +73,24 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': MINE}), nombre='purga-repo-118', lee_stderr=True)
 
 
-def avisos(nombre_dia):
-    """Cuantas veces dijo el log que el dia NOMBRE_DIA de la papelera se queda."""
-    time.sleep(0.3)  # el hilo que lee el log
-    return sum(1 for l in srv.errores if 'trash: the day' in l and nombre_dia in l)
+# 'trash: the day %s stays': el aviso del log, del catalogo (SL_PAPELERA_DIA_SE_QUEDA_FMT); su %s
+# es la carpeta del dia entera (AvisaDiaQueSeQueda), que acaba en su nombre
+SE_QUEDA_ANTES, SE_QUEDA_DESPUES = mc.trozos_de_formato('SL_PAPELERA_DIA_SE_QUEDA_FMT')[:2]
 
+
+def avisos(nombre_dia, espera=15):
+    """Cuantas veces dijo el log que el dia NOMBRE_DIA de la papelera se queda. El servidor lo
+    escribe antes de contestar, pero lo trae un hilo (Stdio, lee_stderr): se ESPERA a que llegue la
+    primera, con tope (dormia 0,3 s fijos). Para contar que solo hay una, el log entero: tras
+    srv.cierra(), que espera a ese hilo, con espera=0."""
+    tope = time.time() + espera
+    while True:
+        n = sum(1 for l in srv.errores if SE_QUEDA_ANTES in l and (nombre_dia + SE_QUEDA_DESPUES) in l)
+        if n or time.time() >= tope:
+            return n
+        time.sleep(0.05)
+
+P7_DIA = None
 try:
     # P1 - un repo ENTERO va a la papelera (ya iba) y de ahi se purga a mano
     git_init(os.path.join(MINE, 'repo1'))
@@ -192,14 +205,19 @@ try:
         srv.call('delphi_textedit', {'path': os.path.join(MINE, n), 'old': 'uno', 'new': 'dos'})
     check('P7 el dia con el repo del enlace hacia fuera se QUEDA y la victima sigue',
           os.path.isfile(os.path.join(cajon(E7), 'repo7', '.git', 'HEAD')) and victima_intacta())
-    check('P7b ...y lo dice en el log UNA vez, con su motivo, aunque la purga pase dos',
-          avisos(E7) == 1 and any(E7 in l and mc.es(l, 'SR_GUARD_GIT_METADATA_FMT') for l in srv.errores),
-          [l for l in srv.errores if 'trash' in l][-3:])
+    P7_DIA = E7
 finally:
     srv.cierra()
     for L in ENLACES:
         if os.path.isjunction(L):
             os.rmdir(L)
+# P7b con el log ENTERO (cierra() espera al hilo que lo lee): "UNA vez" cuenta todo lo que el servidor
+# dijo, no lo que el hilo llevaba traido al mirar
+if P7_DIA:
+    check('P7b ...y lo dice en el log UNA vez, con su motivo, aunque la purga pase dos',
+          avisos(P7_DIA, espera=0) == 1 and any(P7_DIA in l and mc.es(l, 'SR_GUARD_GIT_METADATA_FMT')
+                                                for l in srv.errores),
+          [l for l in srv.errores if 'trash' in l][-3:])
 check('la victima de fuera de las raices sale intacta', victima_intacta(), sorted(os.listdir(OUT)))
 mc.borra(BASE)
 check('BASE eliminada con su copia del exe', not os.path.exists(BASE), BASE)

@@ -160,7 +160,7 @@ try:
     j = mc.como_json(r) or {}
     check('S6 FMX set Width (stored False): ni notStored ni linea 0, storedIn con Size.Width = 120 y DSGN-167',
           not mc.fallo(r) and 'notStored' not in j and 'Size.Width = 120' in str(j.get('storedIn'))
-          and mc.tiene(r, 'DSGN-167') and (j.get('line') or 0) > 0, r[:500])
+          and mc.es(r, 'SN_DESIGNER_IDE_GUARDA_EN_OTRAS_FMT') and (j.get('line') or 0) > 0, r[:500])
     nota = j.get('storedNote', '')
     check('S6c ...y storedNote remite a storedIn sin repetir lo que escribe el IDE (V103)',
           'storedIn' in nota and 'Size.Width' not in nota, nota)

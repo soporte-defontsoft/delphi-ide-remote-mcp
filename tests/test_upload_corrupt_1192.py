@@ -64,7 +64,7 @@ try:
     j, r = sube(b'MALO-1', '0' * 64)
     q1 = str(j.get('quarantined', ''))
     check('K1 sha mal: UPLOAD-011, a la papelera (cajon corrupt), nada publicado y ningun .corrupt al lado',
-          'UPLOAD-011' in r and ('\\%s\\' % mc.PAPELERA) in q1 and ('\\%s\\' % mc.CAJON_CORRUPTOS) in q1
+          mc.es(r, 'SR_UPLOAD_SHA_MISMATCH_FMT') and ('\\%s\\' % mc.PAPELERA) in q1 and ('\\%s\\' % mc.CAJON_CORRUPTOS) in q1
           and not os.path.exists(F)
           and corruptos() == [], (r[:400], corruptos()))
     copias = mc.copias(DIR, 'carga.bin', 'CAJON_CORRUPTOS')
@@ -95,7 +95,7 @@ try:
     r = s.call('delphi_upload', a2)
     copia = j1.get('backup', '')
     check('K7 a trozos sobre el bueno con el sha mal: UPLOAD-011 dice como volver al de antes',
-          'UPLOAD-011' in r and 'delphi_move' in r and 'backup' in r and copia != '' and not os.path.exists(F),
+          mc.es(r, 'SR_UPLOAD_SHA_MISMATCH_FMT') and 'delphi_move' in r and 'backup' in r and copia != '' and not os.path.exists(F),
           (r[:400], copia))
     r = s.call('delphi_move', {'path': copia, 'dest': F})
     check('K7 ...y siguiendo el mensaje vuelve byte a byte',

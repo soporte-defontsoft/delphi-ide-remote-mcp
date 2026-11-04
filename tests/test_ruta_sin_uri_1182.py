@@ -45,10 +45,10 @@ try:
     dpr, lin, col = proyecto(srv, 'Suelto' + chr(0xD800) + 'X')
     pos = {'path': dpr, 'line': lin, 'character': col}
     r = srv.call('delphi_definition', pos, t=240)
-    check('S1 definition bajo una carpeta con medio caracter: LSP-044', 'LSP-044' in r, ascii(r[:300]))
+    check('S1 definition bajo una carpeta con medio caracter: LSP-044', mc.es(r, 'SR_LSP_RUTA_SIN_URI_FMT'), ascii(r[:300]))
     otros = [srv.call('delphi_hover', pos, t=240), srv.call('delphi_references', pos, t=240),
              srv.call('delphi_diagnostics', {'path': dpr}, t=240)]
-    check('S2 hover, references y diagnostics: LSP-044', all('LSP-044' in x for x in otros),
+    check('S2 hover, references y diagnostics: LSP-044', all(mc.es(x, 'SR_LSP_RUTA_SIN_URI_FMT') for x in otros),
           [ascii(x[:120]) for x in otros])
     dpr, lin, col = proyecto(srv, 'Normal')
     r = srv.call('delphi_definition', {'path': dpr, 'line': lin, 'character': col}, t=240)
@@ -84,7 +84,7 @@ try:
     # respuesta, ni una ruta que no es la del fichero
     check('S5 una unidad bajo una carpeta con medio caracter en el arbol: el motor pierde la carpeta '
           '(LSP-043, medido) o el candidato queda sin verificar con su motivo (LSP-044); nunca U+FFFD',
-          ('LSP-043' in r or ('LSP-044' in r and 'UB.pas' in r)) and '�' not in r and 'FFFD' not in r,
+          (mc.es(r, 'SR_LSP_MOTOR_SIN_CARPETA_FMT') or (mc.es(r, 'SR_LSP_RUTA_SIN_URI_FMT') and 'UB.pas' in r)) and '�' not in r and 'FFFD' not in r,
           ascii(r[:500]))
 finally:
     srv.cierra()

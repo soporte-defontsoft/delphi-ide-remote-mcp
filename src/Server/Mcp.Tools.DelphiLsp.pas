@@ -152,7 +152,8 @@ uses
   Lsp.PascalDecl, // EL lector de clases: de quien es cada declaracion
   Lsp.ConfigFabricator, // NotaDeRecorte, UnitsDeFueraDelProyecto
   Lsp.Mascara,
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.ProjectUnits;
 
 const
   MAX_COMPLETION_ITEMS = 50;
@@ -1044,11 +1045,11 @@ end;
   the picture, 7 of them reads). }
 function InterfaceDigest(const APath: string): TJSONObject;
 var
-  Text, Enc, L, Cur, Seccion: string;
+  Text, Enc, L, Seccion: string;
   Lines, Vista: TArray<string>;
   Arr: TJSONArray;
   Obj: TJSONObject;
-  I, J, Kept: Integer;
+  I, J, Kept, LinInt, ColInt, LinImp, ColImp, Nada: Integer;
   U: TUnidadPas;
   Dueno: TTipoPas;
 
@@ -1094,22 +1095,38 @@ begin
   try
   Arr := TJSONArray.Create;
   Result.AddPair('declares', Arr);
-  Cur := '';
+  // LA regla de la seccion (Lsp.ProjectUnits.FinDeSeccion, por lineas): la
+  // primera vez que la palabra sale entera en el codigo, este donde este en
+  // su linea. Se buscaba una linea que solo dijera 'interface' o
+  // 'implementation': con 'implementation uses X;' las rutinas del
+  // implementation salian como de la interfaz, y con 'unit X; interface' no
+  // salia nada (revisor del paisaje de la 1.27, B2). Solo en una unit: un
+  // programa no tiene secciones, y su 'IX = interface' no es una
+  var Codigo := CodigoPascal(Text);
+  if (U.Nombre = '') or not SeccionEnLineas(Codigo, 'interface', LinInt, Nada, ColInt) then
+    LinInt := MaxInt;
+  if (U.Nombre = '') or not SeccionEnLineas(Codigo, 'implementation', LinImp, ColImp, Nada) then
+    LinImp := MaxInt;
   Seccion := '';
   Kept := 0;
   I := 0;
-  while I <= High(Lines) do
+  while (I <= High(Lines)) and (I <= LinImp) do
   begin
-    L := Vista[I].Trim;
-    if TRegEx.IsMatch(L, '(?i)^interface[ ]*$') then
+    if I < LinInt then
     begin
-      Cur := 'interface';
       Inc(I);
       Continue;
     end;
-    if TRegEx.IsMatch(L, '(?i)^implementation[ ]*$') then
-      Break;
-    if Cur <> 'interface' then
+    // de la linea, lo que es del interface: detras de su palabra y delante
+    // de la del implementation
+    var Desde := 1;
+    var Hasta := Length(Vista[I]);
+    if I = LinInt then
+      Desde := ColInt;
+    if I = LinImp then
+      Hasta := ColImp - 1;
+    L := Copy(Vista[I], Desde, Hasta - Desde + 1).Trim;
+    if ((I = LinInt) or (I = LinImp)) and (L = '') then
     begin
       Inc(I);
       Continue;

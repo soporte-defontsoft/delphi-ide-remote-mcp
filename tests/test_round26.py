@@ -25,19 +25,14 @@ REPO = mc.REPO
 
 pas = open(os.path.join(REPO, 'src', 'Server', 'Mcp.Tools.PAServer.pas'),
            encoding='utf-8').read()
-texts = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Texts.pas'),
-             encoding='utf-8').read()
 
-# ---- 1. the table itself: group semantics, no per-entry requiredness ----
-check('TSdkPull ya no tiene campo Optional (per-entry requiredness fuera)',
-      'Optional: Boolean' not in pas)
-check('TSdkPull declara Group', 'Group: string' in pas)
-
+# ---- the table itself: each distro variant in its GROUP ----
+# (4-nov-2026: fuera las dos comprobaciones de la FORMA del codigo -sin campo Optional, con campo
+# Group- y la de "parseada", que la cabecera ya daba por retiradas: una fila sin su Group no se lee
+# y su variante sale roja abajo; la regla de grupos la mide test_get_sdk_1230 en vivo)
 rows = re.findall(
     r"\(RemoteBase:\s*'([^']+)';\s*Recursive:\s*(True|False);\s*"
     r"Group:\s*'([^']*)'\)", pas)
-check('LINUX64_PULLS parseada (al menos sus cuatro variantes de gcc y libc)', len(rows) >= 4, rows)
-
 table = {base: grp for base, _rec, grp in rows}
 check('tripleta Debian/Ubuntu en grupo gcc',
       table.get('/usr/lib/gcc/x86_64-linux-gnu') == 'gcc', table)

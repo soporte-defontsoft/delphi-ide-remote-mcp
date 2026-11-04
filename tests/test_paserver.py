@@ -191,7 +191,11 @@ check('gate: plataforma desconocida rechazada',
 out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1", "password": 'has"quote'})
 check('gate: password con comillas rechazada',
-      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PASSWORD') and 'password' in out, out[:200])
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PASSWORD_FMT') and 'password' in out, out[:200])
+# B7 del revisor del paisaje de la 1.27: PAS-019 dice CUAL no llega, como TEST-037 (CaracterQueNoLlega), y la
+# contrasena no se repite (ROJA contra c582da0: no lo decia)
+check('gate: PAS-019 nombra el caracter (U+0022) y no repite la contrasena',
+      'U+0022' in out and 'has"quote' not in out, out[:200])
 
 # --- add-profile: functional validation of required params ---
 out = puerta.call('delphi_paserver', {"command": "add-profile", "host": "127.0.0.1",
@@ -302,6 +306,23 @@ try:
     check('V186 la sonda dice que paso porque RemoteHosts deja ese host', 'RemoteHosts' in d.get('note', ''), out[:400])
 except Exception:
     check('probe TCP abierto: parsea', False, out[:300])
+
+# B8 del revisor del paisaje de la 1.27: el puerto lo compone el servidor con el NUMERO que juzgo la puerta
+# (PuertoDeLaLlamada, y PASERVER_PUERTO con nombre si no hay); tecleado en hexadecimal la sonda marcaba bien y
+# contestaba el texto tecleado (ROJA contra c582da0)
+lst = socket.socket()
+lst.bind(('127.0.0.1', 0))
+lst.listen(1)
+num_port = lst.getsockname()[1]
+out = srv.call('delphi_paserver', {"command": "test-connection", "host": "127.0.0.1",
+                                   "port": '0x%X' % num_port}, t=60)
+lst.close()
+try:
+    d = json.loads(out)
+except ValueError:
+    d = {}
+check('B8 probe TCP con el puerto en hexadecimal: llega y contesta el NUMERO (%d), no lo tecleado' % num_port,
+      d.get('tcpReachable') is True and d.get('port') == str(num_port), out[:250])
 
 # --- log masker: the password must NOT appear in the stderr log ---
 time.sleep(0.5)

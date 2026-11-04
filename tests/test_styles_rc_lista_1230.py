@@ -29,6 +29,9 @@ sigue compilando y el .res lleva el mismo recurso.
      convertir; antes compilaba el primero que listaba Windows
   L7 (R12) ...y lint dice lo mismo
   L8 (control) con uno solo vuelve a compilar
+  L9 (revisor del paisaje de la 1.27) el brcc32 de una instalacion donde la sesion escribe no se lanza
+     (STYLE-068), aunque corra en el contenedor: ProgramaFueraDelAgente, como paclient y DelphiLSP.exe
+     [ROJO contra c582da0: compilaba]
 
 Uso:  python tests/test_styles_rc_lista_1230.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -157,6 +160,19 @@ try:
     r = srv.call('delphi_styles', {'path': STY, 'command': 'build'})
     check('L8 (control) con uno solo vuelve a compilar',
           mc.como_json(r).get('rcOk') is True and res_lleva(RES, 'BAT'), r[:400])
+
+    # L9: la carpeta del IDE como raiz de ESCRITURA de otro servidor (nada se escribe alli: la negativa es antes
+    # de lanzar nada); el mismo build que L8 compilo
+    limpia()
+    s9 = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL + ';' + mc.raiz_del_ide()}), nombre='styles-rc-l9',
+                  t=120)
+    try:
+        r = s9.call('delphi_styles', {'path': STY, 'command': 'build'})
+    finally:
+        s9.cierra()
+    check('L9 un brcc32 donde la sesion escribe no se lanza: STYLE-068, sin convertir ni dejar .res',
+          mc.abre(r, 'SR_STYLE_BRCC_DONDE_ESCRIBE_FMT') and not os.path.exists(RES) and not os.path.exists(BIN),
+          r[:400])
 finally:
     srv.cierra()
 mc.borra(BASE)

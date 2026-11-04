@@ -126,8 +126,8 @@ try:
     r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
     mc.check('cond: un <Import> con letra no cae por el deny UNC (A25): se niega por ser de fuera',
              mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and
-             mc.catalogo()['SF_CFG_HAZARD_IMPORT_FUERA_FMT'].split(' (%s)')[0] in r and
-             mc.catalogo()['SF_CFG_HAZARD_IMPORT_UNC_FMT'].split(' (%s)')[0] not in r, r[:400])
+             mc.trozo_de_formato('SF_CFG_HAZARD_IMPORT_FUERA_FMT', 0) in r and
+             mc.trozo_de_formato('SF_CFG_HAZARD_IMPORT_UNC_FMT', 0) not in r, r[:400])
 
     # Un Import de un fichero FUERA de las raices, INOCUO a proposito: la puerta
     # de leer no lo deja leer (bloque de las puertas de la 1.18.0) y el build lo

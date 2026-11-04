@@ -171,8 +171,7 @@ const
   INSERT_Y = 10;
   MAX_USOS = 30;
   MAX_NOMBRES = 40;
-  // hay clientes MCP que se rinden al minuto: lo que espera uno (Lsp.FormRender)
-  PLAZO_DEL_JUICIO_MS = ESPERA_DEL_CLIENTE_MS;
+  // (lo que espera un cliente, su plazo y su reloj: Lsp.FormRender.PlazoDelCliente)
   // (que valor toma cada tipo lo dice la tabla, leido del fuente: la base
   // de un tipo 'o' y las constantes de un entero, BaseQueNoCasa; aqui habia
   // tres listas de nombres de tipos a mano, que dejaban pasar un TColor
@@ -181,7 +180,7 @@ const
 type
   TFormEnEdicion = record
     Dfm, Pas, DfmNombre, PasNombre, Marco: string;
-    JuzgandoDesde: UInt64; // AbreFormParaJuzgar: desde cuando se juzga esta edicion (JuezQueTardo)
+    JuzgandoDesde: UInt64; // AbreFormParaJuzgar: desde cuando se juzga esta edicion (EmpiezaLaEspera, JuezQueTardo)
     FrameCiclico: string;  // JuezDelOrden: lo que dijo el lector si el form propuesto cierra un ciclo de frames
     EsFmx, HayPas: Boolean;
     Doc: TStyleDoc;
@@ -3727,7 +3726,7 @@ function AbreFormParaJuzgar(const APath: string; ANecesitaPas, ANecesitaTabla: B
 var
   Desde: UInt64;
 begin
-  Desde := GetTickCount64;
+  Desde := EmpiezaLaEspera;
   F := Default(TFormEnEdicion);
   AAntes := nil;
   AAntesPas := nil;
@@ -3786,14 +3785,10 @@ end;
   primera vez (las tablas, la caja de paquetes) ya esta listo al repetir. }
 function JuezQueTardo(const F: TFormEnEdicion): string;
 var
-  Ms: UInt64;
+  Queda: Integer;
 begin
-  Result := '';
-  if F.JuzgandoDesde = 0 then
-    Exit;
-  Ms := GetTickCount64 - F.JuzgandoDesde;
-  if Ms >= PLAZO_DEL_JUICIO_MS then
-    Result := MsgFmt(SR_DESIGNER_JUEZ_TARDO_FMT, [F.DfmNombre, Ms div 1000]);
+  // EL plazo del cliente, el mismo que el juez del IDE (Lsp.FormRender.PlazoDelCliente)
+  Result := PlazoDelCliente(F.JuzgandoDesde, SR_DESIGNER_JUEZ_TARDO_FMT, F.DfmNombre, Queda);
 end;
 
 { CON el cerrojo, justo antes de escribir: '' si el form -y la unidad, si se

@@ -60,17 +60,24 @@ try:
           j.get('success') is True and j.get('platform') == 'Win64'
           and '\\Win64\\' in str(j.get('output')), out[:300])
 
-    out = srv.call('delphi_build', {'project': D, 'platform': 'Linux64', 'sdk': 'zorin18'}, 900)
+    # el SDK de Linux64 que el IDE de ESTA maquina tiene por defecto (delphi_paserver profiles), no
+    # zorin18 a mano. Sin ninguno Linux64 no se compila aqui: Q3 no se mide (Q2 y Q4 si: la negativa
+    # va antes de mirar ningun SDK)
+    SDK = mc.sdk_por_defecto(srv.call, 'Linux64')
+    CON_SDK = {'sdk': SDK} if SDK else {}
+    out = srv.call('delphi_build', dict({'project': D, 'platform': 'Linux64'}, **CON_SDK), 900)
     check('Q2 Linux64 sin declarar: BUILD-046 y no se compila nada',
           mc.es(out, 'SR_BUILD_PLATAFORMA_NO_DECLARADA_FMT')
           and not os.path.isdir(os.path.join(JAIL, 'PD', 'Linux64')), out[:300])
 
-    r = srv.call('delphi_config', {'command': 'add-platform', 'platform': 'Linux64', 'sdk': 'zorin18',
-                                   'project': D})
-    out = srv.call('delphi_build', {'project': D, 'platform': 'Linux64'}, 900)
-    j = J(out)
-    check('Q3 control: declarada con add-platform, compila', j.get('success') is True,
-          r[:120] + ' | ' + out[:300])
+    r = srv.call('delphi_config', dict({'command': 'add-platform', 'platform': 'Linux64', 'project': D}, **CON_SDK))
+    if SDK:
+        out = srv.call('delphi_build', {'project': D, 'platform': 'Linux64'}, 900)
+        j = J(out)
+        check('Q3 control: declarada con add-platform (sdk=%s), compila' % SDK, j.get('success') is True,
+              r[:120] + ' | ' + out[:300])
+    else:
+        print('NOTA: Q3 no se mide: el IDE de esta maquina no tiene SDK por defecto para Linux64')
 
     srv.call('delphi_config', {'command': 'remove-platform', 'platform': 'Linux64', 'project': D})
     out = srv.call('delphi_build', {'project': D, 'platform': 'Linux64'}, 900)

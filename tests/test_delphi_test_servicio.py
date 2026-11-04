@@ -208,6 +208,34 @@ def J(t):
         return {}
 
 
+# La SENAL con que la bateria suelta cada ejecucion del test (eran un Sleep(4000) en el test y 1,5 s de
+# espera antes del segundo: con la maquina cargada el segundo podia no llegar a solaparse, y S5/S6 no
+# median nada). El test espera, con tope de 120 s, a que aparezca go-<su pid> en esta carpeta, que su
+# contenedor puede leer: lectura para ALL APPLICATION PACKAGES (S-1-15-2-1) y nada mas
+SENAL = os.path.join(BASE, 'senal')
+os.makedirs(SENAL)
+_g = subprocess.run(['icacls', SENAL, '/grant', '*S-1-15-2-1:(OI)(CI)(RX)'], capture_output=True, text=True)
+if _g.returncode != 0:
+    raise OSError('icacls de la carpeta de la senal: %s' % ' '.join((_g.stdout + _g.stderr).split()))
+
+
+def tests_vivos(minimo, hilo, tope=120):
+    """Los pids de los SrvTest.exe hijos del servidor (mc.hijos_de), en cuanto hay MINIMO; antes, al
+    tope o si la llamada de HILO ya acabo."""
+    fin = time.monotonic() + tope
+    while True:
+        vivos = mc.hijos_de(pi.dwProcessId, 'SrvTest.exe')
+        if len(vivos) >= minimo or time.monotonic() > fin or not hilo.is_alive():
+            return vivos
+        time.sleep(0.1)
+
+
+def suelta(*pids):
+    """La senal de esos tests: acaban en cuanto la ven."""
+    for p in pids:
+        open(os.path.join(SENAL, 'go-%d' % p), 'w').close()
+
+
 try:
     check('fixture: el servidor arranca en el escritorio restringido (sesion 0 simulada)',
           mc.espera_puerto(PORT, None, 30), 'no escucho en %d' % PORT)
@@ -224,9 +252,15 @@ try:
     texto = '\n'.join(l.split('|', 1)[1] for l in leido.splitlines() if re.match(r'^\d+\|', l))
     clase = re.search(r'\b(\w+)\s*=\s*class\b', texto).group(1)
     cli.call('delphi_edit', {'path': unidad, 'adduses': 'Winapi.Windows', 'section': 'implementation'})
-    r = cli.call('delphi_edit', {'path': unidad, 'insert': 'metodo', 'inclass': clase,
-                               'code': '[Test] procedure MantieneLaEjecucion;\nbegin\n  Winapi.Windows.Sleep(4000);\nend;'})
-    check('fixture: test DUnitX mantiene viva la ejecucion durante la medida', mc.es(r, 'SK_EDIT_ESCRITO_EN_FMT'), r[:300])
+    cli.call('delphi_edit', {'path': unidad, 'adduses': 'System.SysUtils', 'section': 'implementation'})
+    r = cli.call('delphi_edit', {'path': unidad, 'insert': 'metodo', 'inclass': clase, 'code': (
+        '[Test] procedure MantieneLaEjecucion;\nvar\n  T0: UInt64;\nbegin\n'
+        '  T0 := Winapi.Windows.GetTickCount64;\n'
+        "  while not System.SysUtils.FileExists('%s' + System.SysUtils.IntToStr(Winapi.Windows.GetCurrentProcessId)) and\n"
+        '    (Winapi.Windows.GetTickCount64 - T0 < 120000) do\n'
+        '    Winapi.Windows.Sleep(20);\nend;') % os.path.join(SENAL, 'go-').replace("'", "''")})
+    check('fixture: test DUnitX mantiene viva la ejecucion hasta que la bateria lo suelta (su senal)',
+          mc.es(r, 'SK_EDIT_ESCRITO_EN_FMT'), r[:300])
     antes = foto_permisos(hdesk)
     antes_estacion = foto_permisos(hstation) if hstation else None
     requiere_sid_estacion = bool(hstation) and not any(
@@ -254,6 +288,10 @@ try:
         check('S9 estacion: solo los SID necesarios reciben el minimo 0x20020',
               sorted(durante_estacion) == permisos_estacion_esperados(nuevos, requiere_sid_estacion),
               str(durante_estacion))
+    # medido con el test aun vivo (espera su senal): ahora se le suelta
+    vivos = tests_vivos(1, trabajo)
+    check('fixture: el test vivo, por su pid (lo suelta la bateria)', len(vivos) == 1, vivos)
+    suelta(*vivos)
     trabajo.join(900)
     out = respuesta[0] if respuesta else 'sin respuesta del test'
     j = J(out)
@@ -289,7 +327,9 @@ try:
         if inicial: break
         time.sleep(.01)
     inicial_estacion = permisos_nuevos(hstation, antes_estacion) if hstation else []
-    time.sleep(1.5)
+    # el primero sigue vivo hasta que se le suelte: el segundo se solapa siempre (antes, 1,5 s de espera
+    # y un test de 4 s, con la carga de la maquina en medio)
+    p1 = tests_vivos(1, primero)
     segundo.start()
     ambos = []
     limite = time.monotonic() + 30
@@ -297,6 +337,9 @@ try:
         ambos = permisos_nuevos(hdesk, antes)
         if len(ambos) == 2: break
         time.sleep(.01)
+    ambos_pids = tests_vivos(2, segundo)
+    check('fixture: los dos tests vivos, por su pid (el primero, el de antes)',
+          len(p1) == 1 and len(ambos_pids) == 2 and p1[0] in ambos_pids, (p1, ambos_pids))
     check('S5 dos tests vivos reciben dos SID propios con 0x81',
           len(inicial) == 1 and len(ambos) == 2 and len({x[0] for x in ambos}) == 2 and
           all(x[0].startswith('S-1-15-2-') and x[0] != 'S-1-15-2-1' and x[1] == 0x81 for x in ambos), str(ambos))
@@ -305,6 +348,8 @@ try:
         check('S11 estacion: solapamiento conserva solo los SID necesarios con 0x20020',
               sorted(ambos_estacion) == permisos_estacion_esperados(ambos, requiere_sid_estacion),
               str(ambos_estacion))
+    # se suelta SOLO el primero: el segundo, retenido, sigue vivo cuando el primero acaba (S6)
+    suelta(*p1)
     primero.join(900)
     restante = permisos_nuevos(hdesk, antes)
     check('S6 terminar uno retira solo SU permiso y conserva el del otro vivo',
@@ -314,6 +359,7 @@ try:
         check('S12 estacion: terminar uno retira solo SU permiso',
               segundo.is_alive() and sorted(restante_estacion) ==
               sorted(x for x in ambos_estacion if x not in inicial_estacion), str(restante_estacion))
+    suelta(*[p for p in ambos_pids if p not in p1])
     segundo.join(900)
     resultados = [J(x[0]) if x else {} for x in salidas]
     check('S7 ambos tests pasan dentro de su AppContainer',

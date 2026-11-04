@@ -10,7 +10,8 @@ agente confinado la jaula le niega __delphi-temp y, sin raiz escribible, la
 temporal del servidor esta fuera de las raices. Medido contra el Zorin el
 11-oct-2026: DESK-019 en los dos (con GUARD-015 y GUARD-002 dentro).
 
-Necesita el Zorin encendido (perfil zorin-desktop) con una
+Necesita el Zorin encendido (perfil zorin-desktop, u otro con
+MCP_BATERIAS_PERFIL_ESCRITORIO=<perfil>) con una
 sesion grafica, y que se pida (MCP_BATERIAS_DESTINO_REAL=1, V52 de la 1.23:
 una bateria no despliega su nodo en un destino real salvo que se le pida):
 si no se pide o no contesta, la bateria lo dice (NOTA) y solo mide D0c.
@@ -44,8 +45,15 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 REPO = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-PERFIL = 'zorin-desktop'
-HOST = mc.host_de_perfil(PERFIL)
+# El perfil del destino real lo nombra quien pide medir contra el (MCP_BATERIAS_PERFIL_ESCRITORIO;
+# sin ella, el de David), y su host se lee SOLO si se pide (V52): leido al importar, una maquina
+# sin ese .profile reventaba la bateria antes de D0c y D4c, que no lo necesitan
+PERFIL = os.environ.get('MCP_BATERIAS_PERFIL_ESCRITORIO') or 'zorin-desktop'
+PEDIDO = mc.destino_real_pedido()
+try:
+    HOST = mc.host_de_perfil(PERFIL) if PEDIDO else ''
+except OSError:
+    HOST = ''
 BASE = mc.carpeta('desktop_casa_1182')
 atexit.register(mc.borra, BASE)
 JAIL = os.path.join(BASE, 'jail')
@@ -55,8 +63,9 @@ for d in (JAIL, SOLO):
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 # el nodo viaja con el servidor (Lsp.RemoteRun: ServerDir('node'))
 shutil.copytree(os.path.join(REPO, 'node'), os.path.join(BASE, 'srv', 'node'))
-COMUN = {'DELPHI_MCP_REMOTE_HOSTS': HOST, 'DELPHI_MCP_ALLOW_REMOTE_RUN': '1',
-         'DELPHI_MCP_REMOTE_RUN_PROJECTS': 'all', 'DELPHI_MCP_DESKTOP_HOSTS': '*'}
+COMUN = {'DELPHI_MCP_ALLOW_REMOTE_RUN': '1', 'DELPHI_MCP_REMOTE_RUN_PROJECTS': 'all', 'DELPHI_MCP_DESKTOP_HOSTS': '*'}
+if HOST:   # una variable vacia no existe en Windows: sin host, no se pone
+    COMUN['DELPHI_MCP_REMOTE_HOSTS'] = HOST
 
 
 def entorno(extra):
@@ -118,8 +127,8 @@ try:
                                      'out': os.path.join(SOLO, 'x.png')}, t=60)
     check('D4c sin destino: un out= fuera de las raices lo niega la jaula (GUARD-002), sin dejar nada',
           mc.abre(r0, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(SOLO, 'x.png')), r0[:300])
-    # contra el Zorin, que recibiria el nodo de ESTE servidor, solo si se pide (V52)
-    pedido = mc.destino_real_pedido()
+    # contra el Zorin, que recibiria el nodo de ESTE servidor, solo si se pide (V52) y su perfil esta
+    pedido = PEDIDO and bool(HOST)
     st = srv.call('delphi_desktop', {'command': 'status', 'profile': PERFIL}, t=120) if pedido else ''
     # vivo = su status dice reachable (desde la 1.22.1 un destino caido es reachable=false, no un fallo)
     vivo = mc.como_json(st).get('reachable') is True
@@ -147,10 +156,14 @@ try:
 finally:
     srv.cierra()
 
-if not pedido:
+if not PEDIDO:
     print('NOTA no se mide contra el Zorin: una bateria no despliega su nodo en un destino real salvo que '
           'se le pida (%s=1, V52); solo D0c y D4c' % mc.DESTINO_REAL)
     mc.fin('desktop casa 1182', sin_checks='destino real no pedido (%s)' % mc.DESTINO_REAL)
+if not pedido:
+    print('NOTA no se mide contra el destino real: el perfil %s no esta en esta maquina (o no tiene host); '
+          'solo D0c y D4c' % PERFIL)
+    mc.fin('desktop casa 1182', sin_checks='sin el perfil %s en esta maquina' % PERFIL)
 if not vivo:
     print('NOTA el Zorin (%s, %s) no contesta: la bateria no mide nada. %s' % (PERFIL, HOST, st[:200]))
     mc.fin('desktop casa 1182', sin_checks='el Zorin no contesta (perfil %s)' % PERFIL)

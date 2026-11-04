@@ -59,14 +59,17 @@ try:
     # --- T1 ------------------------------------------------------------------------
     r = srv.call('delphi_adb', {'command': 'devices', 'device': 'emulator-5554'})
     check('T1 adb devices device=x: ADB-005 dice que, si la orden no usa uno, se quite',
-          mc.abre(r, 'SR_ADB_ALLOWLIST_FMT') and 'leave it out' in r, r[:400])
+          # lo que lo dice, del catalogo: la cola de ADB-005 tras el dispositivo (su ultima frase incluida)
+          mc.abre(r, 'SR_ADB_ALLOWLIST_FMT') and mc.trozo_de_formato('SR_ADB_ALLOWLIST_FMT', -1) in r, r[:400])
 
     # --- T2 ------------------------------------------------------------------------
     BIN = escribe(os.path.join(JAIL, 'sty', 'Prueba.bin.style'),
                   b'FMX_STYLE 2.0TPF0\x0fTStyleContainer\x00\x00\x00')
     r = srv.call('delphi_styles', {'command': 'view', 'path': BIN})
     check('T2 styles view de un .bin.style: STYLE-003 sin "cannot READ" (el servidor lee un TPF0)',
-          mc.abre(r, 'SR_STYLES_BINARY_FMT') and 'cannot READ' not in r and 'TEXT .style' in r, r[:400])
+          # lo que dice tras el nombre, entero y del catalogo (que el TEXT .style es el que se lee)
+          mc.abre(r, 'SR_STYLES_BINARY_FMT') and 'cannot READ' not in r
+          and mc.trozo_de_formato('SR_STYLES_BINARY_FMT', 1) in r, r[:400])
 
     # --- T3, T4 --------------------------------------------------------------------
     BUS = os.path.join(JAIL, 'busca')
@@ -212,7 +215,7 @@ try:
         check('T12 Deploy de Linux64 sin perfil: toma el del IDE (%s) y lo juzga (su host, negado aqui), '
               'no "Missing profile name"' % del_ide,
               mc.rechazado(r) and 'Missing profile name' not in r and 'RemoteHosts' in r
-              and 'the profile the IDE keeps for Linux64' in r, r[:600])
+              and (mc.catalogo()['SF_BUILD_PERFIL_DEL_IDE_FMT'] % (del_ide, 'Linux64')).strip() in r, r[:600])
     else:
         # el salto se VE, no pasa callado (revisor de baterias de la 1.27)
         print('NOTA: T12 no medido: el IDE de esta maquina no tiene perfil por defecto para Linux64')

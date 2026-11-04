@@ -28,6 +28,7 @@ Uso:  python tests/test_deploy_config_127.py [ruta-a-DelphiLspMcp.exe]
 import os
 import re
 import sys
+import xml.etree.ElementTree as ET
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -52,6 +53,23 @@ def deploy(proyecto, config):
     return t, mc.como_json(t) or {}
 
 
+def salidas_del_manifiesto(texto, plataforma):
+    """Las DeployFile de clase ProjectOutput del grupo de esa plataforma de un .deployproj, como
+    (Condition, Include): la Condition de la entrada, o la de su grupo si no lleva."""
+    def nombre(e):
+        return e.tag.rsplit('}', 1)[-1]  # sin el espacio de nombres de msbuild
+    res = []
+    for g in ET.fromstring(texto).iter():
+        cg = g.get('Condition') or ''
+        if nombre(g) != 'ItemGroup' or "'$(Platform)'=='%s'" % plataforma not in cg:
+            continue
+        for e in g:
+            clase = [(c.text or '').strip() for c in e if nombre(c) == 'DeployClass']
+            if nombre(e) == 'DeployFile' and clase == ['ProjectOutput']:
+                res.append(((e.get('Condition') or cg).strip(), e.get('Include') or ''))
+    return res
+
+
 try:
     for p in (P1, P2, P3):
         srv.call('delphi_create', {'kind': 'project-console', 'dir': os.path.dirname(p),
@@ -62,8 +80,10 @@ try:
 
     t = srv.call('delphi_config', {'command': 'add-deployfile', 'platform': 'Linux64', 'path': 'datos.txt',
                                    'project': P1})
+    # ", configuration %s only" de su formato, con la configuracion que toma (Debug)
+    solo_debug = mc.trozo_de_formato('SN_CONFIG_DEPLOY_ADDED_FMT', 1, 'Debug')
     check('D1 add-deployfile sin config= dice que es solo de esa configuracion',
-          mc.abre(t, 'SN_CONFIG_DEPLOY_ADDED_FMT') and 'configuration Debug only' in t, t[:400])
+          mc.abre(t, 'SN_CONFIG_DEPLOY_ADDED_FMT') and solo_debug in t, (solo_debug, t[:400]))
 
     t, r = deploy(P1, 'Release')
     # y falla en msbuild, no antes: una puerta que lo negara antes no compondria la respuesta del build
@@ -98,8 +118,14 @@ try:
     check('D6 fixture: el Deploy de Prod llega a msbuild', r.get('success') is False and bool(r.get('errors')), t[:600])
     with open(os.path.splitext(P3)[0] + '.deployproj', encoding='utf-8-sig') as f:
         man3 = f.read()
+    # por el XML y no por el texto: las dos cadenas sueltas las daba ya la salida de Debug (ProjectOutput)
+    # con cualquier 'Prod' en otro sitio. Una DeployFile de clase ProjectOutput del grupo de Linux64 cuya
+    # Condition es la de Prod (la suya, o la de su grupo: como las lee EntradasDelManifiesto), y su
+    # Include, de la salida de Prod
+    salidas3 = salidas_del_manifiesto(man3, 'Linux64')
     check('D6 el manifiesto gana el binario de Prod (una configuracion sin su entrada de salida)',
-          "'$(Config)'=='Prod'" in man3 and 'ProjectOutput' in man3, man3[-900:])
+          any(c in ("'$(Config)'=='Prod'", "'$(Platform)'=='Linux64' And '$(Config)'=='Prod'")
+              and 'Prod' in re.split(r'[\\/]', inc) for c, inc in salidas3), (salidas3, man3[-900:]))
 
     t, r = deploy(P2, 'Debug')
     man = r.get('deployManifest', '')

@@ -118,7 +118,8 @@ begin
       // (ValorDeLaCasaLlega: tambien sin caracteres de control; A4 de la 1.27);
       // sin filtro no va nada a la linea
       if not ValorDeLaCasaLlega(Params.Filter.Trim) then
-        Exit(MsgFmt(SR_TEST_FILTRO_COMILLA_FMT, [Params.Filter.Trim]));
+        Exit(MsgFmt(SR_TEST_FILTRO_COMILLA_FMT, [Params.Filter.Trim,
+          CaracterQueNoLlega(Params.Filter.Trim)]));
       Ret := TestRun(Params.Project.Trim, Params.Config.Trim,
         Params.Filter.Trim, Params.Platform.Trim, Params.TimeoutMs,
         Params.NoBuild);

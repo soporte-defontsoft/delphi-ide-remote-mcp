@@ -734,11 +734,14 @@ FORMS AND COMPONENTS, structured - never guess what a class publishes or what a 
 
 A value the framework tables cannot judge - a property a class stores by code
 (`DefineProperties`: `FontColor` on an FMX `TEdit`, the `Explicit*` of a VCL
-control) - is judged by the IDE's own form reader, the renderer loading the form
-as the designer does (1.20): `set` asks it before writing (`DSGN-149`), `lint`
+control), and the loading of an inline frame - is judged by the IDE's own form
+reader, the renderer loading the form as the designer does (1.20); the answer
+says which of the two it was asked about. `set` asks it before writing (`DSGN-149`), `lint`
 says `CLEAN` only if it loads (`DSGN-154` when it could not be asked), and a
 write by `delphi_edit`, the changeset or `delphi_upload` that leaves a form it
-does not load gets `EDIT-127`. A `preview` the reader cannot load answers
+does not load gets `EDIT-127` (`EDIT-131` when it could not be asked). The
+reader gets what is left of the time a client waits, counted from the start of
+the call (1.27). A `preview` the reader cannot load answers
 `DSGN-153` - the file, not the renderer - with what the reader said and the line
 it names; `DSGN-061` is left for a package or a component that fails while
 painting.

@@ -53,7 +53,7 @@ try:
         srv.call('delphi_create', {'kind': 'unit', 'name': nombre, 'dir': carpeta}, t=120)
         r = srv.call('delphi_config', {'command': 'add-unit', 'project': dpr,
                                        'path': os.path.join(carpeta, nombre + '.pas')}, t=120)
-        assert 'CFG-041' in r, r
+        assert mc.es(r, 'SN_UNIT_ADDED_FMT'), r
     assert "UDef in '..\\scratch\\UDef.pas'" in dpr_texto(dpr), dpr_texto(dpr)
 
     def nombra(r, p):

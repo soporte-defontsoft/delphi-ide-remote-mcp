@@ -141,7 +141,9 @@ ORIGINALES = {a: manifiesto(a) for a in AYUDANTES}
 check('C4 los ayudantes de la instalacion llevan el manifiesto del IDE: Common Controls 6, y nada de DPI',
       all(con_comctl6(t) and 'dpiAware' not in t for t in ORIGINALES.values()),
       {os.path.basename(a): t[:200] for a, t in ORIGINALES.items()})
-COPIAS = glob.glob(os.path.join(os.path.dirname(EXE), mc.TEMPORALES, 'render-paquetes-*', 'DelphiFormRender*.exe'))
+# la caja de paquetes por el prefijo que la nombra en el servidor, no copiado a mano
+CAJA = mc.cadena_del_fuente('Server/Lsp.FormRender.pas', 'PREFIJO_CAJA_DE_PAQUETES')
+COPIAS = glob.glob(os.path.join(os.path.dirname(EXE), mc.TEMPORALES, CAJA + '*', 'DelphiFormRender*.exe'))
 DE_COPIAS = {c: manifiesto(c) for c in COPIAS}
 check('C5 las copias de la caja llevan el manifiesto con esas clases',
       len(COPIAS) == 2 and all('comClass' in t for t in DE_COPIAS.values()), COPIAS)

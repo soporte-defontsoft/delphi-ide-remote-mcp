@@ -42,8 +42,10 @@ def denied(n,out,prop):
     mc.check(n+' se niega antes del ayudante',mc.es(out,'SR_DESIGNER_LITERAL_FUERA_FMT') and prop in out,out[:400])
     mc.check(n+' no muestra valor',SIS not in mc.real(out) and 'win.ini' not in out,out[:400])
 def sin_abrir(out):
-    # lo intento y no llego: el contenedor no lo deja leer
-    return mc.es(out,'SR_DESIGNER_RENDER_FALLO_FMT') and 'Cannot open AVI' in out
+    # lo intento y no llego: el contenedor no lo deja leer. Por el id del catalogo y el form que
+    # nombra; el motivo es el texto de la VCL (Cannot open AVI) en el idioma de sus recursos, y que
+    # es el AVI lo dice el control: el mismo form con el AVI junto a el se dibuja
+    return mc.es(out,'SR_DESIGNER_RENDER_FALLO_FMT') and os.path.basename(f) in out
 try:
     template=open(os.path.join(FIX,'DUMMY-path.dfm'),encoding='utf-8-sig').read()
     # el AVI RELATIVO junto al form: se le copia con el form, porque alli donde

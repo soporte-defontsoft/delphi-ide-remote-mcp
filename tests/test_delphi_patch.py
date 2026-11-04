@@ -321,7 +321,9 @@ with open(ANI, 'wb') as f:
         'end.', '']).encode('cp1252'))
 out = call('delphi_edit', {"path": ANI, "insert": "metodo", "code": mcode,
                             "inclass": "TFuera", "visibility": "public"})
-check('insert metodo con tipo anidado: DOS mitades', 'BOTH halves' in out and 'Half 2' in out, out)
+# EDIT-105, y su segunda mitad escrita: la linea "--- Half 2: implementation '" de su formato
+check('insert metodo con tipo anidado: DOS mitades', mc.es(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT') and
+      mc.trozo_de_formato('SK_EDIT_INSERT_METODO_DOS_MITADES_FMT', 4) in out, out)
 ctx = open(ANI, 'rb').read().decode('cp1252')
 check('insert metodo con tipo anidado: la declaracion cae en public, DESPUES del tipo anidado',
       '    procedure Ping;' in ctx and ctx.index('procedure Ping;') > ctx.index('FLista: TDentro;')
@@ -334,8 +336,11 @@ if os.path.exists(NU):
 out = call('delphi_edit', {"path": NU, "createunit": True})
 check('createunit: crea', mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out)
 nb2 = open(NU, 'rb').read()
-check('createunit: UTF-8 BOM + CRLF + esqueleto',
-      nb2.startswith(b'\xef\xbb\xbf') and b'\r\n' in nb2 and b'unit Naciente;' in nb2,
+# la codificacion de un fuente NUEVO es la que pide el IDE de esta maquina (su DefaultFileFilter: el juez
+# del servidor, NewFileEncName): UTF-8 con BOM si es utf8toutf8, ANSI sin BOM si no. Era el BOM a mano
+_utf8 = mc.ide_prefiere_utf8()
+check('createunit: %s + CRLF + esqueleto (lo que pide el IDE)' % ('UTF-8 BOM' if _utf8 else 'ANSI sin BOM'),
+      nb2.startswith(b'\xef\xbb\xbf') == _utf8 and b'\r\n' in nb2 and b'unit Naciente;' in nb2,
       nb2[:40])
 out = call('delphi_edit', {"path": NU, "createunit": True})
 check('createunit: jamas sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_EDIT_EXISTE_CREATEUNIT_JAMAS_SOBREESCRIBE_FMT'), out)
@@ -1366,7 +1371,7 @@ check('ida y vuelta: un U+FFFD legitimo (EF BF BD en un UTF-8 valido) vuelve igu
 _CAT = mc.catalogo()
 _out = call('delphi_read', {'path': _roto})
 check('ida y vuelta: READ-007 nombra la primera linea que no cuadra y como se leeria en cp1252 (gestión)',
-      _CAT['SF_READ_PRIMERA_NO_CUADRA_FMT'].split('%s')[0] in _out and
+      mc.trozo_de_formato('SF_READ_PRIMERA_NO_CUADRA_FMT', 0) in _out and
       (_CAT['SF_READ_OTRA_LECTURA_FMT'] % ('cp1252', '')).rstrip() in _out and
       "S = 'gesti\u00f3n';" in _out, _out[:600])
 # (8) acentos UTF-8 validos y una secuencia prohibida (un sustituto en CESU-8)

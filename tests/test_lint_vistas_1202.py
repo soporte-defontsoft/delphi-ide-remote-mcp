@@ -73,7 +73,7 @@ JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)
 S = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='lint-vistas', t=300)
-PARCIAL = mc.catalogo()['SF_DSGN_LECTOR_SIN_ANCESTRO_FMT'].split('(')[0].strip()
+PARCIAL = mc.trozo_de_formato('SF_DSGN_LECTOR_SIN_ANCESTRO_FMT', 0)
 
 
 def dsg(args, t=200):

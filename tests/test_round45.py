@@ -287,12 +287,16 @@ try:
           not sin_clasificar,
           'sin clasificar: %s  (anadelo a PROBAR o a EXCLUIDOS con su motivo)'
           % sorted(sin_clasificar))
-    # 42 = el contrato entero (37 + las 5 vault_*) con los interruptores y el vault de escritura
-    # encendidos (decia 41 desde que se retiro delphi_run, y una tool que desapareciese pasaba).
-    # Con >=30, un recorte de ocho tools pasaba callado y el descubridor
+    # el contrato ENTERO (con las vault_*, que solo se registran con VaultPath) con los interruptores
+    # y el vault de escritura encendidos: las tools del manifiesto generado del tools/list vivo
+    # (docs/CAPABILITIES.json), no un numero (decia >= 42 a mano: una tool que desapareciese y otra
+    # que llegase pasaban). Con >=30, un recorte de ocho tools pasaba callado y el descubridor
     # perdia justo a las de registro condicional (auditoria 21-sep).
-    check('G1b ...y la lista mira el contrato VIVO, no una copia',
-          len(tools) >= 42, '%d tools' % len(tools))
+    nombres = sorted(t['name'] for t in tools)
+    contrato = sorted(mc.capacidades()['toolNames'])
+    check('G1b ...y la lista mira el contrato VIVO entero (las %d tools de CAPABILITIES.json)' % len(contrato),
+          len(contrato) > 0 and nombres == contrato,
+          (sorted(set(contrato) - set(nombres)), sorted(set(nombres) - set(contrato))))
 
     # ------------------------------------------------------------------ G2
     # Y ahora, una por una. Cada fallo aqui es un parametro por el que se
@@ -314,28 +318,13 @@ try:
         print()
 
     # ------------------------------------------------------------------ G4
-    # El suelo es una capa REDUNDANTE: si se quedase vacio (RTTI que no
-    # emite, un registro que cambia) no romperia nada y nadie lo notaria.
-    # Por eso publica cuantos parametros vigila. Son 39 y no las MARCAS
-    # que hay en el fuente: la de TDelphiFileParams.path la heredan cuatro
-    # tools (definition, signature, hover, completion) - una marca, cuatro
-    # parametros del contrato. El primer censo contaba marcas y decia 39;
-    # lo corrigio el propio servidor la primera vez que se le pregunto.
-    # 1.0.16: 42 -> 43, porque delphi_desktop paso a ser la tool del
-    # escritorio por perfil y gano el "project" marcado que tenia su alias.
-    # 22-sep: 43 -> 41, al retirar el alias delphi_adb_linux (out y project).
-    # 23-sep: 41 -> 39, al retirar delphi_run (path y workdir).
-    # 26-sep: 39 -> 40, delphi_git gana path (worktree, 1.4.0).
-    # 7-oct: 40 -> 42, delphi_designer gana out y style (preview, 1.17.0).
-    # 14-oct: 42 -> 43, delphi_git gana paths (sin args, 1.19.0).
-    # 21-oct: 43 -> 44, delphi_config gana paths (varias carpetas de searchpath, 1.21.4).
-    w = call('delphi_workspace', {})
-    try:
-        vigilados = json.loads(w).get('server', {}).get('jailedParams', -1)
-    except Exception:
-        vigilados = -1
-    check('G4 el suelo de la puerta vigila los 44 parametros marcados',
-          vigilados == 44, 'jailedParams=%s' % vigilados)
+    # (retirado, 4-nov-2026) El suelo es una capa REDUNDANTE y por eso publica
+    # cuantos parametros vigila (jailedParams). G4 lo comparaba con un numero
+    # a mano (44, subido a mano ocho veces desde la 1.0.16); test_jaula_generica
+    # J0 mide LO MISMO contra el fuente: los pares [RutaDelServidor] que lee de
+    # src (la marca, la herencia de las clases *Params y el registro) frente al
+    # jailedParams del servidor. Un suelo vacio o una marca de mas o de menos
+    # sale alli, sin numero que mantener.
 
     # ----------------------------------------------------------------- G2b
     # Los dos parametros de delphi_changeset que la tabla no puede sondar

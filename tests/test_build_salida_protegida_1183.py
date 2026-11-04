@@ -65,7 +65,7 @@ try:
     con_version(dprojB, '<BRCC_OutputDir>%s\\</BRCC_OutputDir>' % FUERA)
     r = s.call('delphi_build', {'project': dprB}, t=600)
     check('B2 BRCC_OutputDir FUERA de las raices: BUILD-029 y nada escrito fuera',
-          'BUILD-029' in r and 'BRCC_OutputDir' in r and os.listdir(FUERA) == [],
+          mc.es(r, 'SR_BUILD_OUTPUT_DENIED_FMT') and 'BRCC_OutputDir' in r and os.listdir(FUERA) == [],
           (r[:300], os.listdir(FUERA)))
     dC, dprC, dprojC = proyecto(s, 'PC')
     con_version(dprojC)
@@ -87,10 +87,10 @@ s = lanza(';'.join([exeA, resC]))
 try:
     r = s.call('delphi_build', {'project': dprA}, t=600)
     check('B1 un P.exe de ReadOnlyPaths dentro de la carpeta de salida: BUILD-029 y el exe intacto',
-          'BUILD-029' in r and h(exeA) == antes[exeA], (r[:300], h(exeA) == antes[exeA]))
+          mc.es(r, 'SR_BUILD_OUTPUT_DENIED_FMT') and h(exeA) == antes[exeA], (r[:300], h(exeA) == antes[exeA]))
     r = s.call('delphi_build', {'project': dprC}, t=600)
     check('B3 el .res de version junto al .dproj, de solo lectura: BUILD-029 y el .res intacto',
-          'BUILD-029' in r and h(resC) == antes[resC] and antes[resC] is not None,
+          mc.es(r, 'SR_BUILD_OUTPUT_DENIED_FMT') and h(resC) == antes[resC] and antes[resC] is not None,
           (r[:300], antes[resC] is not None, h(resC) == antes[resC]))
 finally:
     s.cierra()

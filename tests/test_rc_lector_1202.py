@@ -102,7 +102,7 @@ try:
     r = call('delphi_styles', {'command': 'lint', 'path': STY}, t=180)
     negados = [e.get('refused', '') for e in mc.como_json(r).get('rcMissingFiles', []) if e.get('refused')]
     check('R6 lint: un fichero de la jaula fuera de la carpeta de estilos: refused con STYLE-052 (el juez de build)',
-          any('STYLE-052' in n for n in negados) and mc.como_json(r).get('clean') is False, (negados, r[:200]))
+          any(mc.es(n, 'SR_STYLES_RC_FUERA_DE_CARPETA_FMT') for n in negados) and mc.como_json(r).get('clean') is False, (negados, r[:200]))
 
     # ------------------------------------------------------------------ R7
     # el incluido en una subcarpeta: dos .rc en la carpeta de estilos son otra

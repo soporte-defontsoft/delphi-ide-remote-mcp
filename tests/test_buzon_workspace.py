@@ -84,19 +84,27 @@ try:
     # W1
     r = informe(c1, 'informe de uno', 'de uno', 'hermes')
     B1 = mc.buzon(REPORTS, 'hermes', WS1)
+    # la carpeta que el SERVIDOR creo, por su nombre en disco y lo que tiene dentro, como W2: comparar
+    # la ruta del helper con un literal no media al servidor (B1 sale del helper y el literal tambien)
+    de_uno = md(os.path.join(REPORTS, 'Workspace.uno', 'hermes'))
     check('W1 el informe cae en reports\\<workspace>\\<agente> (el workspace, el del token)',
           mc.abre(r, 'SN_REPORT_OK_FMT') and len(md(B1)) == 1
-          and B1.lower().endswith('\\workspace.uno\\hermes')
+          and 'Workspace.uno' in os.listdir(REPORTS) and len(de_uno) == 1
+          and 'informe de uno' in open(de_uno[0], encoding='utf-8').read()
           and not os.path.exists(os.path.join(REPORTS, 'hermes')), (r[:150], B1, os.listdir(REPORTS)))
 
     # W2
     r2 = informe(c2, 'informe de vm', 'de vm', 'hermes')
     r3 = informe(c3, 'informe de vm2', 'de vm2', 'hermes')
     B2, B3 = mc.buzon(REPORTS, 'hermes', WS2), mc.buzon(REPORTS, 'hermes', WS3)
+    # la carpeta que el SERVIDOR creo, por su nombre en disco (listdir distingue mayusculas) y por lo que
+    # tiene dentro: comparar el helper con un literal no media al servidor, y B3 sale del mismo helper
+    de_vm2 = md(os.path.join(REPORTS, 'Workspace.hermes-vm', 'hermes'))
     check('W2 "Hermes VM" y "Hermes-VM" (el mismo slug) no comparten carpeta',
           mc.abre(r2, 'SN_REPORT_OK_FMT') and mc.abre(r3, 'SN_REPORT_OK_FMT')
           and B2.lower() != B3.lower() and len(md(B2)) == 1 and len(md(B3)) == 1
-          and mc.carpeta_de_workspace(WS3) == 'Workspace.hermes-vm', (os.listdir(REPORTS), md(B2), md(B3)))
+          and 'Workspace.hermes-vm' in os.listdir(REPORTS) and len(de_vm2) == 1
+          and 'informe de vm2' in open(de_vm2[0], encoding='utf-8').read(), (os.listdir(REPORTS), md(B2), md(B3)))
 
     # W3
     informe(c1, 'sin agente', 'raiz', kind='question')
@@ -170,7 +178,7 @@ try:
     lee1 = a1.call('delphi_messages', {'command': 'read'})
     check('W8 el correo de un workspace no lo ve ni lo consume otro (check, read, PENDING)',
           'para-uno' in chk and 'para-vm' not in chk
-          and mc.tiene(pend2, 'MSGS-001') and not mc.es(pend3, 'SN_MESSAGES_PENDING_FMT')
+          and mc.es(pend2, 'SN_MESSAGES_PENDING_FMT') and not mc.es(pend3, 'SN_MESSAGES_PENDING_FMT')
           and 'PARA-UNO' in lee1 and 'PARA-VM' not in lee1
           and not md(M1) and len(md(M2)) == 1, (chk[:200], pend2[-200:], pend3[-200:], lee1[:200]))
 

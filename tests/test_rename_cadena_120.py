@@ -55,7 +55,7 @@ try:
                                                    'newname': 'Saludar'}, 300))
     blk = ' '.join(j.get('blockers') or [])
     check('N1 una cadena con el nombre en OTRA unidad: applicable=false con RENAME-020',
-          j.get('applicable') is False and mc.tiene(blk, 'RENAME-020'), str(j)[:600])
+          j.get('applicable') is False and mc.es(blk, 'SR_RENAME_STRINGS_FMT'), str(j)[:600])
 
     r = mc.como_json(call('delphi_references', {'path': comun, 'line': 2, 'character': 12}, 300))
     check('N2 references: stringMentionsCount=1 de mentionsCount=2 (la cadena y el comentario)',

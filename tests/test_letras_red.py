@@ -229,7 +229,7 @@ if HAY_ENLACES:
 SE_AVISAN = ('SoloFuera', 'SoloUnidad', 'SoloRelFuera', 'SoloEnlaceFuera')
 FUERA_FMT = mc.catalogo()['SL_GUARD_SOLO_LECTURA_FUERA_FMT']
 # el trozo fijo del aviso, entre la clave y la entrada: para decir que NO esta
-FUERA_TROZO = FUERA_FMT.split('%s')[1]
+FUERA_TROZO = mc.trozo_de_formato('SL_GUARD_SOLO_LECTURA_FUERA_FMT', 1)
 
 ini = [
     '[Workspace.Local]', 'Token=local-lr', 'Roots=%s' % JAIL,

@@ -111,10 +111,11 @@ check('run: delphi_run ya no existe (retirada 2026-09-23: una sola via de ejecuc
 #     own on a copy of its folder since 1.11.0 (a low-integrity sandbox until
 #     then) - so the measurement moves there.
 _q = chr(39)
-_pub = r'C:\Users\Public\PWNED_guard_test.txt'
+# la carpeta publica de ESTA maquina (%PUBLIC%, la que dice Windows), no C:\Users\Public a mano
+_pub = os.path.join(os.environ['PUBLIC'], 'PWNED_guard_test.txt')
 if os.path.exists(_pub):
     os.remove(_pub)
-# si el contenedor fallara y la bateria reventara a mitad, el de C:\Users\Public tambien se va (la
+# si el contenedor fallara y la bateria reventara a mitad, el de %PUBLIC% tambien se va (la
 # limpieza de abajo no esta en un finally; revisor de baterias de la 1.27)
 atexit.register(lambda: os.path.exists(_pub) and os.remove(_pub))
 call('delphi_create', {"kind": "project-console", "dir": os.path.join(INSIDE, 'SbxTest'), "name": "SbxTest"})

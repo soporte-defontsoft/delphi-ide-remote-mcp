@@ -3179,6 +3179,10 @@ begin
     // it: say WHERE the artifact landed, or it has to hunt the disk for it
     // (measured in the field: 20 calls chasing a fresh exe that delphi_list
     // kept hidden as build output).
+    // un Clean dice que limpio y que no (BUILD-069): el agente lo averiguaba con
+    // delphi_list (Qwen, test completo de la 1.27)
+    if (ExitCode = 0) and SameText(Target, 'Clean') then
+      Result.AddPair('cleanNote', MsgText(SN_BUILD_CLEAN_NOTE));
     if (ExitCode = 0) and not SameText(Target, 'Clean') then
     begin
       var Artifact := ResolveBuildOutput(TPath.GetFullPath(ADprojPath), Plat, Cfg);

@@ -359,15 +359,23 @@ def hijos_lsp(ppid):
 
     Si la pregunta FALLA, lo dice (RuntimeError): devolvia [] y "no queda
     ningun motor" pasaba sin haber mirado (segunda revision de la 1.7.7)."""
+    return hijos_de(ppid, 'DelphiLSP.exe')
+
+
+def hijos_de(ppid, nombre):
+    """Los procesos NOMBRE (el nombre de su exe) cuyo padre es ESE proceso: sus
+    pids, ordenados. EL lector de hijos_lsp, para cualquier exe (el programa de
+    test que lanza delphi_test, test_delphi_test_servicio). Si la pregunta
+    FALLA, RuntimeError (ver hijos_lsp)."""
     p = subprocess.run(
         ['powershell', '-NoProfile', '-Command',
          "$ErrorActionPreference = 'Stop'; "
-         "Get-CimInstance Win32_Process -Filter \"Name='DelphiLSP.exe'\" | "
-         "ForEach-Object { \"$($_.ProcessId),$($_.ParentProcessId)\" }"],
+         "Get-CimInstance Win32_Process -Filter \"Name='%s'\" | "
+         "ForEach-Object { \"$($_.ProcessId),$($_.ParentProcessId)\" }" % nombre.replace("'", '')],
         capture_output=True, text=True, timeout=60)
     if p.returncode != 0:
-        raise RuntimeError('no se pudo preguntar por los motores (powershell rc=%d): %s'
-                           % (p.returncode, ' '.join(p.stderr.split())[:200]))
+        raise RuntimeError('no se pudo preguntar por los %s (powershell rc=%d): %s'
+                           % (nombre, p.returncode, ' '.join(p.stderr.split())[:200]))
     out = p.stdout
     r = []
     for l in out.splitlines():
@@ -763,26 +771,90 @@ def idioma_rtl(exe, idioma):
             winreg.DeleteValue(k, nombre)
 
 
+def valor_del_ide(subclave, nombre, bds=None):
+    """EL lector de la configuracion por usuario del IDE, como la lee el servidor
+    (Lsp.Discovery.IdeConfigValue): el valor NOMBRE ('' = el por defecto) de
+    HKCU\\Software\\Embarcadero\\BDS\\<ver>\\<subclave> ('' = la de la version). Sin
+    bds, la version activa (version_activa). '' si no esta o no es texto. La
+    clave del IDE estaba compuesta a mano en raiz_del_ide y en varias baterias."""
+    ruta = 'Software\\Embarcadero\\BDS\\%s' % (bds or version_activa()) + ('\\' + subclave if subclave else '')
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, ruta) as k:
+            valor, tipo = winreg.QueryValueEx(k, nombre)
+    except OSError:
+        return ''
+    return valor if tipo in (winreg.REG_SZ, winreg.REG_EXPAND_SZ) else ''
+
+
 def raiz_del_ide(bds=None):
     """La carpeta del IDE sin la barra final, leida del registro: lo que el
     servidor le dice al renderizador con --bdsroot. Sin bds, la de la version
-    activa (version_activa)."""
-    bds = bds or version_activa()
-    with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Software\\Embarcadero\\BDS\\%s' % bds) as k:
-        return winreg.QueryValueEx(k, 'RootDir')[0].rstrip('\\')
+    activa (version_activa). '' sin esa instalacion."""
+    return valor_del_ide('', 'RootDir', bds).rstrip('\\')
 
 
-def juez_en_idioma(render, form, idioma, bds=None):
+def ide_prefiere_utf8(bds=None):
+    """True si el IDE de esta maquina crea los fuentes en UTF-8 (con BOM): su
+    Editor\\DefaultFileFilter nombra el filtro utf8toutf8. EL juez del servidor
+    (Lsp.Discovery.IdeDefaultUtf8, NewFileEncName): con False crea en ANSI, sin
+    BOM. Dos baterias daban el BOM por hecho, como en el IDE de David."""
+    return 'utf8toutf8' in valor_del_ide('Editor', 'DefaultFileFilter', bds).lower()
+
+
+def sufijo_del_ide(raiz=None):
+    """Los tres digitos que llevan los paquetes de ESTA instalacion ('370': dclstd370.bpl,
+    paclientcore370.bpl), del compilador que HAY en su bin (dcc32<NNN>.dll), por la misma
+    regla del servidor (Lsp.Discovery.SufijoDelCompilador). Sin raiz, la del IDE activo.
+    '' si no hay ninguno."""
+    for f in sorted(glob.glob(os.path.join(raiz or raiz_del_ide(), 'bin', 'dcc32*.dll'))):
+        n = os.path.basename(f).lower()
+        if len(n) == 12 and n[5:8].isdigit():
+            return n[5:8]
+    return ''
+
+
+def juez_en_idioma(render, form, idioma=None, bds=None):
     """Lo que dice el renderizador RENDER, lanzado a mano y con su RTL en ese
     idioma, al cargar FORM como lo juzga el servidor. A mano: el idioma de un
     exe se elige en HKCU (idioma_rtl), que dentro del contenedor no se lee y
-    alli no llegaria; dentro habla el de Windows (V65 de la 1.24)."""
+    alli no llegaria; dentro habla el de Windows (V65 de la 1.24). Sin idioma,
+    el que le da Windows, sin elegirlo: el mismo con el que el servidor lo
+    lanza, el juez de lo que el lector le dice a una puerta."""
     bds = bds or version_activa()
-    with idioma_rtl(render, idioma):
+    with idioma_rtl(render, idioma) if idioma else contextlib.nullcontext():
         p = subprocess.run([render, '--path', form, '--writeback', 'on', '--timeout', '120000', '--bds', bds,
                             '--bdsroot', raiz_del_ide(bds)], capture_output=True, timeout=240,
                            cwd=os.path.dirname(form))
     return p.stdout.decode('utf-8', 'replace')
+
+
+def rtl_tiene_idioma(idioma, raiz=None):
+    """True si el RTL de la instalacion trae los recursos de ese idioma ('DE'): el
+    rtl<sufijo>.de que instala el IDE junto a su rtl<sufijo>.bpl, en su bin, el que
+    carga el RTL de un exe al que se le pide ese idioma (idioma_rtl). Sin el no hay
+    ese idioma que medir: el RTL habla el de su base. El sufijo, el de la instalacion
+    (sufijo_del_ide); sin raiz, la del IDE activo. Estaba copiado en dos baterias."""
+    raiz = raiz or raiz_del_ide()
+    sufijo = sufijo_del_ide(raiz)
+    return bool(sufijo) and os.path.isfile(os.path.join(raiz, 'bin', 'rtl%s.%s' % (sufijo, idioma.lower())))
+
+
+def lo_que_dijo_el_lector(salida, componente, propiedad):
+    """(motivo, mensaje) de lo que el lector del IDE dijo de componente.propiedad en la
+    salida de un renderizador (juez_en_idioma): su linea NOTLOADED= o IGNORED=, partida
+    por EL formato del protocolo, leido de FormRenderProtocolo.inc (<cabeza>|<fichero>|
+    <Name>|<ruta>|<motivo>|<mensaje>: lo compone FormRender.Comun.EnCabezaYPartes y lo lee
+    Lsp.FormRender.DeCabezaYPartes), en el idioma de SU RTL. ('', '') si no la hay. Dos
+    baterias lo partian a mano por '|Edit1|FontColor|'."""
+    rel = 'Render/FormRenderProtocolo.inc'
+    claves = (cadena_del_fuente(rel, 'FR_NOT_LOADED'), cadena_del_fuente(rel, 'FR_IGNORED'))
+    sep = cadena_del_fuente(rel, 'FR_PARTES_SEP')
+    for linea in (salida or '').splitlines():
+        clave = next((c for c in claves if linea.startswith(c)), None)
+        partes = linea[len(clave):].split(sep, 5) if clave else []
+        if len(partes) == 6 and partes[2] == componente and partes[3] == propiedad:
+            return partes[4], partes[5]
+    return '', ''
 
 
 def carpeta(nombre):
@@ -925,6 +997,16 @@ def letras_libres(cuantas):
     return libres
 
 
+def unidades_fijas():
+    """La otra cara de letras_libres: las letras ('C', 'D'...) de las unidades de
+    disco FIJAS que existen en esta sesion, como las dice Windows (GetLogicalDrives
+    y GetDriveTypeW = DRIVE_FIXED). Una bateria que necesita OTRA unidad que de
+    verdad exista la toma de aqui, no da por hecho C: o D:."""
+    mapa = ctypes.windll.kernel32.GetLogicalDrives()
+    return [letra for i, letra in enumerate(string.ascii_uppercase)
+            if mapa & (1 << i) and ctypes.windll.kernel32.GetDriveTypeW(letra + ':\\') == 3]
+
+
 def espera_puerto(puerto, proc=None, segundos=30):
     """True en cuanto 127.0.0.1:puerto acepta conexiones; False si se agota
     el plazo o si proc (el servidor) muere antes. Sustituye al sleep fijo."""
@@ -938,6 +1020,78 @@ def espera_puerto(puerto, proc=None, segundos=30):
         except OSError:
             time.sleep(0.1)
     return False
+
+
+def host_testnet_nuevo():
+    """Una IP de documentacion (TEST-NET, nadie contesta) que ninguna bateria ha usado en
+    las ultimas 24 h. Windows RECUERDA un host de SMB que fallo y el siguiente acceso falla
+    al momento, sin red: con el mismo host cada vez, "no toco la red" pasaba tambien
+    tocandola. Las reservas se reciclan al dia (la memoria de Windows es de minutos): sin
+    reciclar, a cinco por pasada se agotaban (revisor de version de la 1.18.0). Vivia en
+    test_render_unc_118 y test_resultados la necesito (E84, E132)."""
+    carpeta = os.path.join(tempfile.gettempdir(), 'delphi-mcp-testnet-reservado')
+    os.makedirs(carpeta, exist_ok=True)
+    limite = time.time() - 24 * 3600
+    for f in os.listdir(carpeta):
+        p = os.path.join(carpeta, f)
+        try:
+            if os.path.getmtime(p) < limite:
+                os.remove(p)
+        except OSError:
+            pass
+    for red in ('198.51.100.', '203.0.113.', '192.0.2.'):
+        for n in range(1, 255):
+            ip = red + str(n)
+            if ip in ('198.51.100.7', '203.0.113.211'):
+                continue
+            try:
+                fd = os.open(os.path.join(carpeta, ip), os.O_CREAT | os.O_EXCL | os.O_WRONLY)
+            except FileExistsError:
+                continue
+            os.close(fd)
+            return ip
+    raise RuntimeError('TEST-NET agotado: no se reutiliza un host cacheado')
+
+
+def conexiones_a(host):
+    """Las conexiones TCP hacia HOST que Windows tiene ahora en su tabla (netstat -n):
+    sus lineas. Las de CUALQUIER proceso: las de SMB son del redirector del sistema, no del
+    servidor. RuntimeError si netstat no contesta."""
+    p = subprocess.run(['netstat', '-n', '-p', 'TCP'], capture_output=True, text=True, timeout=60)
+    if p.returncode != 0:
+        raise RuntimeError('netstat rc=%d: %s' % (p.returncode, ' '.join(p.stderr.split())[:200]))
+    return [' '.join(l.split()) for l in p.stdout.splitlines() if (' %s:' % host) in l]
+
+
+def red_durante(host, fn):
+    """(lo que devuelve fn(), [las conexiones hacia HOST vistas MIENTRAS fn corria y justo
+    despues]). "No toca la red" se mide por lo que pasa en la tabla TCP y no por lo que
+    tarda: un acceso de SMB a un host que no contesta deja su SYN_SENT a :445 los 21 s que
+    espera (medido el 4-nov-2026), y un plazo de 2-5 s fallaba con la maquina cargada. Con
+    un host de host_testnet_nuevo: uno recordado falla sin SYN."""
+    vistas, fallos, fin = [], [], threading.Event()
+
+    def mira():
+        while True:
+            ultima = fin.is_set()   # la ultima mirada empieza DESPUES de acabar fn
+            try:
+                vistas.extend(conexiones_a(host))
+            except Exception as e:
+                fallos.append(e)
+                return
+            if ultima:
+                return
+
+    hilo = threading.Thread(target=mira, daemon=True)
+    hilo.start()
+    try:
+        r = fn()
+    finally:
+        fin.set()
+        hilo.join(120)
+    if fallos:
+        raise RuntimeError('no se pudo mirar la tabla TCP: %s' % fallos[0])
+    return r, sorted(set(vistas))
 
 
 class ServidorHttp(subprocess.Popen):
@@ -1299,7 +1453,17 @@ _HUELLAS = []
 
 
 def carpeta_sdks():
-    """Documents\\Embarcadero\\Studio\\SDKs de este usuario, preguntado a Windows (CSIDL_PERSONAL)."""
+    """La carpeta de SDKs del IDE activo, en el orden del servidor (Lsp.Discovery.IdeSdksDir):
+    la BDSPLATFORMSDKSDIR que el operador redefine en las Environment Variables del IDE
+    (valor_del_ide; sus $(X) del entorno, resueltos), y si no la redefine o queda un $( sin
+    resolver, el default: Documents\\Embarcadero\\Studio\\SDKs de este usuario, preguntado a
+    Windows (CSIDL_PERSONAL). Solo leia el default, y con la carpeta redefinida paclient dejaba
+    la huella en otra. (El paso intermedio del servidor, la carpeta de un SDK ya registrado,
+    coincide con estas dos mientras nadie mueva un SDK a mano.)"""
+    redefinida = re.sub(r'\$\((\w+)\)', lambda m: os.environ.get(m.group(1), m.group(0)),
+                        valor_del_ide('Environment Variables', 'BDSPLATFORMSDKSDIR'))
+    if redefinida and '$(' not in redefinida:
+        return redefinida.rstrip('\\')
     buf = ctypes.create_unicode_buffer(260)
     ctypes.windll.shell32.SHGetFolderPathW(None, 5, None, 0, buf)
     return os.path.join(buf.value, 'Embarcadero', 'Studio', 'SDKs')
@@ -1389,6 +1553,34 @@ def variable_de_rsvars(call, nombre):
         return ''
     m = re.search(r'(?im)^\s*@?SET\s+%s=(.*)$' % re.escape(nombre), texto)
     return m.group(1).strip() if m else ''
+
+
+def sdk_por_defecto(call, plataforma):
+    """El SDK que el IDE de ESTA maquina tiene por defecto para una plataforma ('zorin18',
+    sin el .sdk): el que usa un build que no nombra ninguno. Lo dice el servidor
+    (delphi_paserver profiles, ideSdkDefaults: 'Linux64 = zorin18.sdk', del registro del
+    IDE). '' si no tiene ninguno: entonces esa plataforma no se compila aqui y la bateria
+    lo dice (NOTA). Tres baterias llevaban zorin18 a mano."""
+    for d in (como_json(call('delphi_paserver', {'command': 'profiles'})) or {}).get('ideSdkDefaults', []):
+        p, igual, sdk = str(d).partition('=')
+        if igual and p.strip().lower() == plataforma.lower():
+            sdk = sdk.strip()
+            return sdk[:-4] if sdk.lower().endswith('.sdk') else sdk
+    return ''
+
+
+_CAPACIDADES = {}
+
+
+def capacidades():
+    """docs/CAPABILITIES.json, el manifiesto que scripts/gen-capabilities.py genera del
+    tools/list vivo (test_docs_consistency vigila que diga lo mismo que el servidor): el
+    censo de tools (toolNames), las condicionales (optionalToolNames) y el acceso de cada
+    una. Leido una vez por bateria. Dos baterias contaban las tools a mano."""
+    if not _CAPACIDADES:
+        with open(os.path.join(REPO, 'docs', 'CAPABILITIES.json'), encoding='utf-8') as fh:
+            _CAPACIDADES.update(json.load(fh))
+    return _CAPACIDADES
 
 
 def a_la_vez(call, primera, segunda, retraso=0.5):
@@ -1575,12 +1767,18 @@ def entero_del_fuente(rel, nombre):
     """La constante entera NOMBRE (NOMBRE = 123;) de un fuente del servidor, rel desde
     src ('Server/Lsp.FormRender.pas'): un plazo o un tope que una bateria mide se lee
     del fuente, no se copia (revisor de baterias de la 1.27: test_juez_plazo_127 llevaba
-    50 y 15 a mano). Una que no esta es un fallo de la BATERIA."""
+    50 y 15 a mano). Una que no esta es un fallo de la BATERIA. Lee tambien la tipada
+    (LspSweepMs: Cardinal = 2000;) y un producto de enteros (LspHungMs: UInt64 = 20 * 1000;),
+    las dos formas en que el fuente escribe un plazo; nada mas: otra forma no se adivina."""
     with open(os.path.join(REPO, 'src', *rel.split('/')), encoding='utf-8-sig') as fh:
-        m = re.search(r'^\s*%s\s*=\s*(\d+)\s*;' % re.escape(nombre), fh.read(), re.M | re.I)
+        m = re.search(r'^\s*%s\s*(?::\s*[\w.]+\s*)?=\s*(\d+(?:\s*\*\s*\d+)*)\s*;' % re.escape(nombre),
+                      fh.read(), re.M | re.I)
     if not m:
         raise RuntimeError('la constante %s no esta en %s' % (nombre, rel))
-    return int(m.group(1))
+    valor = 1
+    for factor in m.group(1).split('*'):
+        valor *= int(factor)
+    return valor
 
 
 def cadena_del_fuente(rel, nombre):
@@ -1602,6 +1800,68 @@ def id_de(nombre):
     if not ids_:
         raise KeyError('%s: no esta en el catalogo o no lleva etiqueta' % nombre)
     return ids_[0]
+
+
+# LA gramatica de un especificador de Format de Delphi (System.SysUtils): '%' [indice ':'] ['-']
+# [ancho] ['.' precision] tipo, y '%%' es un '%' suelto. Juez no hay desde una bateria (Format
+# vive en el RTL compilado): gramatica PROPIA, UNA, la de la ayuda de Format. Las baterias
+# cortaban los formatos del catalogo a mano por su '%s' o su '%d', cada una a su manera, y el
+# mismo trozo estaba en tres (revisor de baterias de la 1.27)
+_ESPECIFICADOR = re.compile(r'%(?:%|(?:(?:\d+|\*):)?-?(?:\d+|\*)?(?:\.(?:\d+|\*))?[dDuUeEfFgGnNmMpPsSxX])')
+
+
+def trozos_de_formato(nombre, formato=None):
+    """Los trozos FIJOS de la constante NOMBRE del catalogo (catalogo), los que quedan entre
+    sus especificadores de Format ('%s', '%d', '%.8X', '%0:s'; '%%' queda como el '%' que
+    escribe), por la gramatica de _ESPECIFICADOR: 'a %s b %d c' -> ['a ', ' b ', ' c'], uno
+    mas que huecos. Con formato, el de una constante que no es del catalogo (la de otro
+    fuente, cadena_del_fuente), y nombre solo la nombra. Una constante que no esta es un
+    fallo de la BATERIA (KeyError)."""
+    texto = catalogo()[nombre] if formato is None else formato
+    trozos, actual, i = [], '', 0
+    for m in _ESPECIFICADOR.finditer(texto):
+        actual += texto[i:m.start()]
+        if m.group(0) == '%%':
+            actual += '%'
+        else:
+            trozos.append(actual)
+            actual = ''
+        i = m.end()
+    return trozos + [actual + texto[i:]]
+
+
+def trozo_de_formato(nombre, i, *valores, formato=None):
+    """El trozo fijo i (desde 0; negativo, desde el final) de la constante NOMBRE del catalogo
+    (trozos_de_formato, y su formato=) y, con valores, el tramo que sigue con ellos en sus
+    huecos, uno por hueco en el orden en que salen (un %0:s repetido se da dos veces):
+    (NOMBRE, 1, 'Debug') = trozo 1 + 'Debug' + trozo 2. Un valor va como str(), lo que escriben
+    %s y %d; el de otro especificador (%.8X) lo da la bateria ya escrito. Un trozo que no
+    esta es un fallo de la BATERIA (IndexError)."""
+    t = trozos_de_formato(nombre, formato)
+    j = i + len(t) if i < 0 else i
+    if j < 0 or j + len(valores) >= len(t):
+        raise IndexError('%s: no tiene el trozo %d con %d hueco(s) detras' % (nombre, i, len(valores)))
+    return t[j] + ''.join(str(v) + t[j + 1 + k] for k, v in enumerate(valores))
+
+
+def patron_de_formato(nombre, hueco=r'(.*?)', formato=None):
+    """La regex (sin compilar) que casa con un mensaje de la constante NOMBRE del catalogo
+    (o de su formato=, trozos_de_formato): sus trozos fijos escapados y HUECO en cada
+    especificador. Las baterias la componian a mano con re.escape y un replace('%s', ...)."""
+    return hueco.join(re.escape(t) for t in trozos_de_formato(nombre, formato))
+
+
+# los dos formatos con que el servidor dice con que va lo enviado que sobra (el AVaCon de
+# Lsp.Guard.ParametroQueNoVa): uno suelto, '"x" goes with: ...', o varios, 'What you sent
+# (x, y) goes with: ...'
+VA_CON = ('SF_PARAMETRO_VA_CON_FMT', 'SF_LO_ENVIADO_VA_CON_FMT')
+
+
+def dice_que_va_con(t, modos):
+    """True si t dice que lo enviado que sobra va con MODOS ('dirs=false'), por cualquiera de
+    los dos formatos de VA_CON (su tramo desde ' goes with: '). Dos baterias leian a mano
+    'goes with: x.' (contratos_1221 L3, contratos_1222 K2)."""
+    return any(trozo_de_formato(n, 1, modos) in t for n in VA_CON)
 
 
 def pascal_sin_comentarios(src):
@@ -2241,6 +2501,17 @@ def atomos_rtl_dejados(antes):
     return [n for n, vivo in atomos_rtl() if not vivo and n not in antes]
 
 
+def es_atomo_de(nombre, pid, tid):
+    """True si el atomo del RTL NOMBRE es del proceso pid de hilo principal tid: por su
+    nombre exacto (Delphi<pid>, FIREMONKEY<pid>_ de fmx<nnn>.bpl) o, los de ControlOfs/
+    WndProcPtr<HInstance><tid>, por el tid del final. LA regla del arnes, la de
+    Lsp.AtomosRtl (Borra) en el servidor: atomos_rtl_recoge la usa, y estaba copiada en
+    test_hijo_sin_finalizar_1212."""
+    m = _ATOMO_RTL.match(nombre)
+    return bool(m) and (nombre == 'Delphi%08X' % pid or nombre.startswith('FIREMONKEY%08X_' % pid) or
+                        (bool(m.group(1)) and bool(tid) and m.group(2) == '%08X' % tid))
+
+
 def atomos_rtl_recoge(pid, tid):
     """Lo que matamos, lo limpiamos, tambien el arnes (Lsp.AtomosRtl lo hace
     en el servidor): los atomos del RTL que dejo un proceso MUERTO de pid y
@@ -2258,10 +2529,7 @@ def atomos_rtl_recoge(pid, tid):
         return 0
     borrados = 0
     for nombre, _v in atomos_rtl():
-        m = _ATOMO_RTL.match(nombre)
-        suyo = (nombre == 'Delphi%08X' % pid or nombre.startswith('FIREMONKEY%08X_' % pid) or
-                (bool(m.group(1)) and bool(tid) and m.group(2) == '%08X' % tid))
-        if not suyo:
+        if not es_atomo_de(nombre, pid, tid):
             continue
         a = k32.GlobalFindAtomW(nombre)
         # GlobalDeleteAtom devuelve 0 si quito una referencia (dos muertos con la

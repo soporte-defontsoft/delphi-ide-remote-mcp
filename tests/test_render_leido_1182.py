@@ -74,7 +74,7 @@ HIJA = escribe('UHija.dfm', 'inherited FormHija: TFormHija\n  Caption = \'Hija\'
 
 # el renderizador, como lo lanza ComoLoEscribeElIde (Lsp.FormRender.ComponeOrdenDeRender)
 p = subprocess.run([RENDER, '--path', HIJA, '--writeback', 'on',
-                    '--timeout', '60000', '--bds', '37.0', '--bdsroot', mc.raiz_del_ide()],
+                    '--timeout', '60000', '--bds', mc.version_activa(), '--bdsroot', mc.raiz_del_ide()],
                    capture_output=True, timeout=120, cwd=JAIL)
 salida = p.stdout.decode('utf-8', 'replace').replace('\r', '').split('\n')
 leidos = {}

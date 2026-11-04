@@ -176,7 +176,7 @@ try:
     ])})
     check('B6b ...y si el fichero FINAL queda roto (el (* no se cierra), la tanda avisa UNA vez',
           mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and
-          r.count('EDIT-085') == 1, r[:400])
+          mc.ids(r).count(mc.id_de('SN_EDIT_ESTRUCTURA_ROTA_END_FMT')) == 1, r[:400])
 
     # B7 (medido el 9-oct-2026): anclas que solo difieren en la SANGRIA. La
     # descripcion promete que la sangria no cuenta; delphi_edit casaba "la

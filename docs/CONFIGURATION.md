@@ -426,7 +426,9 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
 - **AllowTests**: lets `delphi_test` build and run a workspace test project here — the only
   thing an agent can run on this server (besides what a build runs with `AllowBuildScripts=1`), and without it an agent can write code but never
   learn whether it works. The test runs in a Windows container (an AppContainer) of its
-  own, created for that run and deleted with its answer, on a COPY of its output folder in
+  own, created for that run and deleted with its answer (its name is a slot of the server that a
+  later run reuses, since Windows keeps an entry per distinct container for the whole logon
+  session; two runs at the same time never share one), on a COPY of its output folder in
   the server's own temp: it reads and writes that copy and, besides it, only what Windows
   gives every container (its own temp folder, deleted with it, and the system files under
   Windows and Program Files) — no other file of the machine, no network, no network drive —
@@ -480,7 +482,8 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   (`Roots`, `ReadOnlyPaths`, `ReadOnlyRoots`, `RemoteRunProjects`) only `;`, since a path may
   hold a comma. Blanks and quotes around an entry are ignored in both.
 - **`[Tools]` profiles**: `full` / `coder` / `reader` (or an explicit `Only=` allowlist) trim
-  what `tools/list` advertises — ~15k tokens of schemas drown a small model. Listing only:
+  what `tools/list` advertises — the whole list is ~26k tokens of schemas (measured in 1.27:
+  `coder` ~25k, `reader` ~7k), which a client that loads it at once pays in context. Listing only:
   hidden tools stay callable, permissions live in the layers above. A workspace can carry its
   own `Profile=`.
 - **`VaultPath=` / `VaultReadOnly=` (per workspace)**: optional persistent memory for

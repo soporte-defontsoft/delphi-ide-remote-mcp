@@ -14,6 +14,13 @@ que la palabra sale entera en el codigo, este donde este en su linea.
   y en los tres: el cuerpo detras del implementation, y el fichero sigue en CRLF (la declaracion se
   compone con #10: un LF suelto saldria aqui; revisor de baterias de la 1.27)
 
+Y el segundo lector de la misma regla (B2 del revisor del paisaje de la 1.27): el resumen del interface de
+delphi_symbols de una carpeta buscaba tambien una linea que solo dijera 'interface' / 'implementation'.
+
+  D1 "implementation uses System.SysUtils;": Publica sale una vez y Privada (del implementation) no (ROJA
+     contra c582da0: salian las rutinas del implementation como de la interfaz)
+  D2 "unit UD2; interface uses System.Classes;": la interfaz sale, con su uses (ROJA: no salia nada)
+
 Uso:  python tests/test_seccion_visible_127.py [exe]
 """
 import os
@@ -46,6 +53,24 @@ try:
               0 <= x.find('TX = record A: Integer; end;') < decl < imp < cuerpo, (r[:300], x))
         check('%s el fichero sigue en CRLF, sin saltos sueltos' % etiqueta,
               x.count('\n') == x.count('\r\n') > 0, repr(x))
+
+    DIG = os.path.join(JAIL, 'digest')
+    os.makedirs(DIG)
+    open(os.path.join(DIG, 'UD1.pas'), 'w', newline='').write(
+        'unit UD1;\r\n\r\ninterface\r\n\r\nprocedure Publica;\r\n\r\nimplementation uses System.SysUtils;\r\n\r\n'
+        'procedure Privada;\r\nbegin\r\nend;\r\n\r\nprocedure Publica;\r\nbegin\r\n  Privada;\r\nend;\r\n\r\nend.\r\n')
+    open(os.path.join(DIG, 'UD2.pas'), 'w', newline='').write(
+        'unit UD2; interface uses System.Classes;\r\n\r\nprocedure Visible;\r\n\r\nimplementation\r\n\r\n'
+        'procedure Oculta;\r\nbegin\r\nend;\r\n\r\nprocedure Visible;\r\nbegin\r\nend;\r\n\r\nend.\r\n')
+    r = srv.call('delphi_symbols', {'path': DIG})
+    uds = {u.get('unit'): u for u in mc.ficheros(mc.como_json(r), 'units')}
+    d1 = [x.get('decl') for x in uds.get('UD1', {}).get('declares', [])]
+    d2 = uds.get('UD2', {})
+    check('D1 resumen con "implementation uses System.SysUtils;": Publica sale una vez y Privada (del '
+          'implementation) no (ROJA contra c582da0)', d1 == ['procedure Publica;'], (d1, r[:400]))
+    check('D2 resumen de "unit UD2; interface uses System.Classes;": la interfaz sale, con su uses (ROJA: nada)',
+          [x.get('decl') for x in d2.get('declares', [])] == ['procedure Visible;'] and
+          d2.get('uses') == 'System.Classes', (d2, r[:400]))
 finally:
     srv.cierra()
 mc.borra(BASE)

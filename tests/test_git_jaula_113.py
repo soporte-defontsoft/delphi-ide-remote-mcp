@@ -142,7 +142,7 @@ try:
     out = srv.call('delphi_textedit', {'path': CFG, 'old': '[core]',
         'new': '[push]\n\trecurseSubmodules = on-demand\n[core]'})
     check('el agente ya no toca config por textedit',
-          '[GUARD-033 DENIED]' in out, out)
+          mc.es(out, 'SR_GUARD_GIT_METADATA_FMT'), out)
     # El operador del arnes planta la config para medir TAMBIEN el compositor.
     git('config', 'push.recurseSubmodules', 'on-demand')
     open(TRACE, 'w').close()

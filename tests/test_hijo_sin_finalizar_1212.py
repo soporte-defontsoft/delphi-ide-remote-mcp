@@ -64,7 +64,26 @@ renderizador_hijo_de = mc.renderizador_hijo_de
 
 
 def atomos_de(pid, tid):
-    return [n for n, _v in mc.atomos_rtl() if n == 'Delphi%08X' % pid or n.endswith('%08X' % tid)]
+    # los de ESE proceso, por la regla del arnes (mc.es_atomo_de, la de mc.atomos_rtl_recoge)
+    return [n for n, _v in mc.atomos_rtl() if mc.es_atomo_de(n, pid, tid)]
+
+
+def renderizador_vivo(cond=lambda pid, tid: True, plazo=20):
+    """(pid, tid) del renderizador de este servidor, medido VIVO (muerto ya no se ve su hilo) y
+    en cuanto cumple cond; tid 0 si no se vio en el plazo."""
+    rpid, fin = 0, time.time() + plazo
+    while time.time() < fin:
+        rpid = rpid or renderizador_hijo_de(srv.p.pid)
+        tid = mc.hilo_principal(rpid) if rpid else 0
+        if tid and cond(rpid, tid):
+            return rpid, tid
+        time.sleep(0.005)
+    return rpid, 0
+
+
+# lo que dicen la respuesta y el log, por sus formatos del catalogo: 'exit code %d and no answer'
+# (DSGN-061) y '%s ended with code 0x%.8X without finalizing' (SL_HIJO_SIN_FINALIZAR_FMT)
+SIN_FINALIZAR_COLA = mc.trozo_de_formato('SL_HIJO_SIN_FINALIZAR_FMT', 2)  # ' without finalizing (...', con cualquier codigo
 
 
 def espera_log(srv, aguja, t=3):
@@ -90,16 +109,8 @@ try:
     resp = []
     hilo = threading.Thread(target=lambda: resp.append(srv.call('delphi_designer', {'command': 'preview', 'path': DFM}, t=120)))
     hilo.start()
-    rpid = tid = 0
-    fin = time.time() + 20
-    while time.time() < fin and not tid:
-        rpid = rpid or renderizador_hijo_de(srv.p.pid)
-        if rpid:
-            tid = mc.hilo_principal(rpid)
-            # hasta que lleve los suyos (los del exe y los de los paquetes: 4 o mas)
-            if tid and len(atomos_de(rpid, tid)) < 4:
-                tid = 0
-        time.sleep(0.005)
+    # hasta que lleve los suyos (los del exe y los de los paquetes: 4 o mas)
+    rpid, tid = renderizador_vivo(lambda p, t: len(atomos_de(p, t)) >= 4)
     suyos = atomos_de(rpid, tid) if tid else []
     h = k32.OpenProcess(0x0001 | 0x00100000, False, rpid) if rpid else None  # TERMINATE | SYNCHRONIZE
     matado = bool(h) and bool(k32.TerminateProcess(h, 7))
@@ -111,12 +122,17 @@ try:
     hilo.join(120)
     r = resp[0] if resp else ''
     check('H1 la respuesta dice que el renderizador acabo mal (codigo 7, DSGN-061)',
-          'DSGN-061' in r and 'exit code 7' in r, r[:300])
-    dej = mc.atomos_rtl_dejados(antes)
-    check('H1 el servidor limpia lo que dejo: ningun atomo nuevo de proceso muerto', not dej, (dej, suyos))
+          mc.es(r, 'SR_DESIGNER_RENDER_FALLO_FMT')
+          and mc.trozo_de_formato('SF_DESIGNER_RENDER_SIN_RESPUESTA_FMT', 0, 7) in r, r[:300])
+    # solo los del renderizador MATADO (su pid y su hilo, la regla de atomos_de): la tabla de atomos es de
+    # toda la maquina, y cualquier proceso que muriera entre medias (otra bateria) la ponia roja. Sin el
+    # renderizador medido (tid 0) no hay nada que mirar: no pasa en verde
+    de_el = set(atomos_de(rpid, tid)) if tid else set()
+    dej = [n for n in mc.atomos_rtl_dejados(antes) if n in de_el]
+    check('H1 el servidor limpia lo que dejo: ningun atomo nuevo de proceso muerto', bool(tid) and not dej, (dej, suyos))
     check('H1 ...y lo apunta en su log con el codigo (SL_HIJO_SIN_FINALIZAR)',
-          espera_log(srv, 'without finalizing') and any('0x00000007' in l for l in srv.errores),
-          [l for l in srv.errores if 'finaliz' in l][:3])
+          espera_log(srv, mc.trozo_de_formato('SL_HIJO_SIN_FINALIZAR_FMT', 1, '%.8X' % 7)),
+          [l for l in srv.errores if SIN_FINALIZAR_COLA in l][:3])
     # lo que la bateria dejara si el arreglo falta, no es de nadie mas: se recoge
     if dej and tid:
         mc.atomos_rtl_recoge(rpid, tid)
@@ -124,14 +140,23 @@ try:
     # ---- H2: control, el mismo preview intacto
     n_log = len(srv.errores)
     antes = mc.atomos_rtl_nombres()
-    r = srv.call('delphi_designer', {'command': 'preview', 'path': DFM}, t=120)
+    resp = []
+    hilo = threading.Thread(target=lambda: resp.append(srv.call('delphi_designer', {'command': 'preview', 'path': DFM}, t=120)))
+    hilo.start()
+    rpid, tid = renderizador_vivo()
+    hilo.join(120)
+    r = resp[0] if resp else ''
+    # solo los del renderizador de ESTE preview, medido vivo como en H1: la tabla de atomos es de toda
+    # la maquina, y cualquier proceso ajeno que muriera a la vez la ponia roja. Sin el renderizador
+    # medido no hay nada que mirar: no pasa en verde
+    dej = [n for n in mc.atomos_rtl_dejados(antes) if tid and mc.es_atomo_de(n, rpid, tid)]
     check('H2 control: el mismo preview intacto da imagen y no deja atomos',
           # (sin fallo y con imagen, como la preparacion de H1; revisor de baterias de la 1.27)
-          not mc.fallo(r) and mc.como_json(r).get('inlineImage') is True and not mc.atomos_rtl_dejados(antes),
-          (r[:200], mc.atomos_rtl_dejados(antes)))
+          bool(tid) and not mc.fallo(r) and mc.como_json(r).get('inlineImage') is True and not dej,
+          (r[:200], rpid, tid, dej))
     time.sleep(0.5)
     check('H2 ...y nada nuevo en el log de hijos sin finalizar',
-          not any('without finalizing' in l for l in srv.errores[n_log:]), srv.errores[n_log:][:3])
+          not any(SIN_FINALIZAR_COLA in l for l in srv.errores[n_log:]), srv.errores[n_log:][:3])
 
     # ---- H3: la TFMAppClass no se ve en la barra ni un instante
     PROC = ctypes.WINFUNCTYPE(ctypes.c_int, ctypes.c_void_p, ctypes.c_void_p)

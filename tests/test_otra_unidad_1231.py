@@ -25,7 +25,14 @@ JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
 TESTS = os.path.dirname(os.path.abspath(__file__))
 UNIDAD = os.path.splitdrive(TESTS)[0]
-OTRA = 'C:' if UNIDAD.upper() != 'C:' else 'D:'
+# OTRA unidad que de verdad existe en esta maquina (mc.unidades_fijas, las fijas que dice Windows),
+# no C: o D: dados por hechos: O3 la pone ENTERA de raiz y con una que no existe no mediria nada
+OTRAS = [l + ':' for l in mc.unidades_fijas() if l + ':' != UNIDAD.upper()]
+if not OTRAS:
+    print('NOTA: no se mide: esta maquina no tiene otra unidad de disco fija que la de las baterias (%s)' % UNIDAD)
+    mc.borra(BASE)
+    mc.fin('la ruta en otra unidad 1.23.1 (V92)', sin_checks='sin otra unidad de disco fija que %s' % UNIDAD)
+OTRA = OTRAS[0]
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_READONLY_ROOTS': TESTS}),
                nombre='otra-unidad', t=120)
@@ -41,16 +48,16 @@ try:
 finally:
     srv.cierra()
 
-# O3: C:\ entera (de solo lectura) DELANTE de la carpeta tests: por texto la ruta
+# O3: la OTRA unidad entera (de solo lectura) DELANTE de la carpeta tests: por texto la ruta
 # cabe en las dos, y solo existe en la de tests
 LIBRE = mc.letras_libres(1)[0] + ':'
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_READONLY_ROOTS': 'C:\\;' + TESTS}),
+srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_READONLY_ROOTS': OTRA + '\\;' + TESTS}),
                nombre='otra-unidad-2', t=120)
 try:
     cola = os.path.splitdrive(os.path.join(TESTS, 'mcp_cliente.py'))[1]
     r = srv.call('delphi_read', {'path': LIBRE + cola, 'toline': 2})
-    check('O3 con una unidad entera de raiz, la pista nombra la ruta que EXISTE (%s), no la de C:' % buena,
-          mc.abre(r, 'SR_JAIL_FMT') and buena in r and ('srvc:' + cola) not in r, r[:900])
+    check('O3 con una unidad entera de raiz, la pista nombra la ruta que EXISTE (%s), no la de %s' % (buena, OTRA),
+          mc.abre(r, 'SR_JAIL_FMT') and buena in r and mc.virtual(OTRA + cola) not in r, r[:900])
 finally:
     srv.cierra()
 mc.borra(BASE)

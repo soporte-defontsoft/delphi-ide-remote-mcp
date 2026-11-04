@@ -114,11 +114,12 @@ check('T4 read de uno con saltos mezclados: los contadores enteros',
 r = call('delphi_edit', {'path': PAS, 'old': 'interface', 'new': 'interface // uno'})
 check('T5 edit de un fichero limpio: una linea de auditoria, sin antes/despues',
       'audit=clean' in r and 'before:' not in r and 'after:' not in r, r[:400])
+YA_EXISTIA = mc.catalogo()['SF_EDIT_COPIA_YA_EXISTIA']  # 'already existed (the first one of today stays)'
 check('T6 la primera edicion del dia dice donde quedo la copia',
-      mc.PAPELERA in r and 'already existed' not in r, r[:400])
+      mc.PAPELERA in r and YA_EXISTIA not in r, r[:400])
 r = call('delphi_edit', {'path': PAS, 'old': 'interface // uno', 'new': 'interface // dos'})
 check('T6 la segunda dice que ya existia, sin repetir la ruta',
-      'already existed (the first one of today stays)' in r and mc.PAPELERA not in r, r[:400])
+      YA_EXISTIA in r and mc.PAPELERA not in r, r[:400])
 r = call('delphi_edit', {'path': MIX, 'old': 'implementation', 'new': 'implementation // x'})
 check('T5 edit de uno con saltos mezclados: antes y despues, con los contadores',
       'before:' in r and 'after:' in r and 'loneLF=' in r, r[:400])
@@ -126,7 +127,7 @@ check('T5 edit de uno con saltos mezclados: antes y despues, con los contadores'
 # T7
 r = call('delphi_list', {'root': BASE})
 nota = mc.como_json(r).get('maskNote', '')
-check('T7 LIST-009 en una linea', 'LIST-009' in nota and len(nota) < 90, nota)
+check('T7 LIST-009 en una linea', mc.es(nota, 'SN_LIST_DEFAULT_MASK') and len(nota) < 90, nota)
 
 # T8: el resumen de una carpeta, por tamano
 GRANDE = os.path.join(BASE, 'grande')
@@ -141,12 +142,16 @@ fuera = j.get('notShown', [])
 check('T8 una carpeta grande se corta por tamano y NOMBRA lo que falta (LSP-034)',
       j.get('total') == 12 and fuera and len(mc.ficheros(j, 'units')) + len(fuera) == 12 and
       all(f.endswith('.pas') and ':' not in f for f in fuera) and
-      'LSP-034' in j.get('notShownNote', ''), json.dumps(j)[:300])
+      mc.es(j.get('notShownNote', ''), 'SN_SYMBOLS_DIGEST_FUERA_FMT'), json.dumps(j)[:300])
+# lo que dice la nota, por su formato: '...: %d units are not in it, and "notShown" names %d of them (...'
+def nota_fuera(n, nombra):
+    return mc.trozo_de_formato('SN_SYMBOLS_DIGEST_FUERA_FMT', 1, n, nombra)
+
+
 # (revision de la 1.13.0) notShown tiene tope: la nota dice cuantas nombra, y
 # decia que las nombraba todas
 check('T8 la nota dice cuantas no entraron y cuantas nombra notShown',
-      ('%d units are not in it' % len(fuera)) in j.get('notShownNote', '') and
-      ('names %d of them' % len(fuera)) in j.get('notShownNote', ''), j.get('notShownNote', ''))
+      nota_fuera(len(fuera), len(fuera)) in j.get('notShownNote', ''), j.get('notShownNote', ''))
 # ...y con mas de las que nombra (tope 200): las cuenta todas y nombra 200
 MUCHAS = os.path.join(BASE, 'muchas')
 os.makedirs(MUCHAS)
@@ -160,7 +165,7 @@ nota, fuera = j.get('notShownNote', ''), j.get('notShown', [])
 no_entran = j.get('total', 0) - len(mc.ficheros(j, 'units'))
 check('T8 con mas de 200 fuera: notShown nombra 200 y la nota lo dice (no "todas")',
       j.get('total') == 260 and len(fuera) == 200 and no_entran > 200 and
-      ('%d units are not in it' % no_entran) in nota and 'names 200 of them' in nota, nota)
+      nota_fuera(no_entran, 200) in nota, nota)
 PEQUE = os.path.join(BASE, 'peque')
 os.makedirs(PEQUE)
 open(os.path.join(PEQUE, 'P.pas'), 'w').write('unit P;\ninterface\nconst X = 1;\nimplementation\nend.\n')

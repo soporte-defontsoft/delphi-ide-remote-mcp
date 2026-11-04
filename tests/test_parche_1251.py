@@ -139,7 +139,7 @@ r2 = d(command='lint', path=AUTO)
 check('C4 preview y lint no culpan del ciclo al codigo de un componente',
       mc.es(r, 'SR_RENDER_FRAME_CICLICO_FMT') and mc.es(r2, 'SR_RENDER_FRAME_CICLICO_FMT') and
       not mc.es(r, 'SN_DESIGNER_PREVIEW_IGNORADAS_NO_CONFIRMADAS_FMT') and
-      mc.catalogo()['SF_DSGN_LECTOR_DEL_CODIGO_FMT'].split('): ', 1)[1][:40] not in r2,  # del catalogo, no en ingles a mano
+      mc.trozo_de_formato('SF_DSGN_LECTOR_DEL_CODIGO_FMT', 1) not in r2,  # del catalogo, no en ingles a mano
       (r[:300], r2[:300]))
 
 # ---- I: insert no cierra un ciclo

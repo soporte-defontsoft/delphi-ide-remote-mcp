@@ -282,7 +282,7 @@ try:
 
     # ------------------------------------------------------------------- L9
     # la pagina siguiente, leida con el texto del catalogo (no con la frase)
-    SIGUIENTE = re.compile(re.escape(cat['SF_VAULT_SIGUIENTE_FMT']).replace('%d', r'(\d+)'))
+    SIGUIENTE = re.compile(mc.patron_de_formato('SF_VAULT_SIGUIENTE_FMT', r'(\d+)'))
 
     def lineas(t):
         return [l for l in t.split('\n\n', 1)[-1].splitlines() if l.strip()] if '\n\n' in t else []

@@ -20,7 +20,8 @@ uses
   Lsp.Pascal in '..\Server\Lsp.Pascal.pas',
   Lsp.ShaCache in '..\Server\Lsp.ShaCache.pas',
   Lsp.AtomosRtl in '..\Server\Lsp.AtomosRtl.pas',
-  Lsp.Reparse in '..\Server\Lsp.Reparse.pas';
+  Lsp.Reparse in '..\Server\Lsp.Reparse.pas',
+  Lsp.PascalDecl in '..\Server\Lsp.PascalDecl.pas';
 
 // el .res del proyecto, como en todo programa del IDE: lleva el manifiesto que
 // su build compone (Common Controls 6, como bds.exe; sin el, un control nativo

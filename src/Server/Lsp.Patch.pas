@@ -895,6 +895,9 @@ type
     // cargar el form (con ALector) y por que no se le pudo preguntar
     // (DSGN-061 de la 1.20)
     SinJuez: Integer;
+    // ...y si lleva un frame en linea: esa carga tampoco la juzga ninguna tabla
+    // y va al lector aunque no haya lineas (LlevaFrameInline; PorQueAlLector)
+    FrameInline: Boolean;
     Lector: TArray<string>;
     SinLector: string;
     // los StyleLookup de un form FMX que ningun estilo que ve define: una
@@ -920,11 +923,19 @@ type
   el texto del form ANTES de la edicion que se juzga ('' en el lint o en un
   form nuevo): la nota de los StyleLookup dice solo los que la edicion trae
   (V143 de la 1.23.1), y la de los colores sin alfa, que pregunta al
-  escritor del IDE y por eso va solo con ALector, tambien (V154). Nunca
-  lanza. }
+  escritor del IDE y por eso va solo con ALector, tambien (V154). ADesde: el
+  instante en que empezo la llamada que espera (Lsp.FormRender.EmpiezaLaEspera),
+  y los jueces del IDE tienen lo que le queda (PlazoDelCliente); 0, sin plazo de
+  cliente. Nunca lanza. }
 function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
   AEsperaMs: Cardinal = ESPERA_TABLA_MS; ALector: Boolean = False;
-  const AAntes: string = ''): TLintDeForm;
+  const AAntes: string = ''; ADesde: UInt64 = 0): TLintDeForm;
+{ POR QUE se le pregunta al lector del IDE por el form de AL: las lineas que la
+  tabla no juzga (SinJuez), el frame en linea (FrameInline) o las dos. EL que lo
+  compone para DSGN-154 del lint y EDIT-127 / EDIT-131 de una escritura: con un
+  frame en linea y ninguna linea, DSGN-154 decia '0 line(s) hold a property' y
+  EDIT-127 que se le pregunto por una propiedad (medido el 4-nov-2026). }
+function PorQueAlLector(const AL: TLintDeForm): string;
 
 { Los avisos de una respuesta del motor (ExecutePatch, ExecuteTextEdit): las
   lineas desde el primer aviso marcado *** (la marca va detras de la
@@ -962,11 +973,17 @@ function JuicioDeLoEscrito(const APath, ATexto, AEnc: string;
   que escriben forms al acabar (delphi_edit, el changeset, upload).
   DSGN-061 de la 1.20. Y los colores sin alfa que la escritura trae (DSGN-176,
   V154 de la 1.23.1): AAntes, el texto de antes ('' = todos: un form nuevo, o
-  un upload, que trae el fichero entero). Nunca lanza. }
-function AvisosDelLector(const APath: string; const AAntes: string = ''): TArray<string>;
+  un upload, que trae el fichero entero). ADesde: el instante en que empezo la
+  llamada (Lsp.FormRender.EmpiezaLaEspera, lo toma la tool al empezar): sus
+  jueces tienen lo que le queda al cliente, y sin tiempo no se lanzan. Cada uno
+  tenia el plazo de un preview, con lo escrito ya en disco: un cliente que se
+  rinde y repite duplicaba la edicion (A3 del revisor del paisaje de la 1.27).
+  Nunca lanza. }
+function AvisosDelLector(const APath, AAntes: string; ADesde: UInt64): TArray<string>;
 { ARespuesta (la de una escritura de APath) con AvisosDelLector detras, si
-  APath es un form y no fue un fallo. AAntes, el de TextoAntesDeEditar. }
-function ConAvisosDelLector(const ARespuesta, APath: string; const AAntes: string = ''): string;
+  APath es un form y no fue un fallo. AAntes, el de TextoAntesDeEditar;
+  ADesde, el de AvisosDelLector. }
+function ConAvisosDelLector(const ARespuesta, APath, AAntes: string; ADesde: UInt64): string;
 { Lo que dice el disco de APath ANTES de una edicion, si es un form (las notas
   dicen solo lo que la edicion trae); '' si no lo es o no se lee. Nunca lanza. }
 function TextoAntesDeEditar(const APath: string): string;
@@ -5619,20 +5636,17 @@ begin
               // LA regla de la seccion (FinDeSeccion, la de adduses): la primera vez
               // que la palabra sale entera en el codigo, este donde este en su linea.
               // Se buscaba una linea que solo dijera eso: con 'implementation uses X;'
-              // no la habia, y se deshacia el cuerpo (revisor del paisaje de la 1.27, P10)
+              // no la habia, y se deshacia el cuerpo (revisor del paisaje de la 1.27, P10).
+              // Por lineas, su helper (SeccionEnLineas, el del resumen de
+              // delphi_symbols): la linea y la columna se contaban aqui a mano
               var Vista := CodigoPascal(string.Join(#10, Crudas));
-              var FinImp := FinDeSeccion(Vista, 'implementation');
-              if FinImp > 0 then
+              var ImpIdx, ColImp, Nada: Integer;
+              if SeccionEnLineas(Vista, 'implementation', ImpIdx, ColImp, Nada) then
               begin
-                var DelanteVista := Copy(Vista, 1, FinImp - Length('implementation') - 1);
-                var ImpIdx := 0;
-                for var C in DelanteVista do
-                  if C = #10 then
-                    Inc(ImpIdx);
                 // lo que la linea lleva delante de la palabra es del interface: se
                 // queda en su linea, y la declaracion entre ello y el implementation
-                var Delante := Copy(Crudas[ImpIdx], 1, Length(DelanteVista) - DelanteVista.LastIndexOf(#10) - 1);
-                var DesdeImp := Copy(Crudas[ImpIdx], Length(Delante) + 1, MaxInt);
+                var Delante := Copy(Crudas[ImpIdx], 1, ColImp - 1);
+                var DesdeImp := Copy(Crudas[ImpIdx], ColImp, MaxInt);
                 var Decl := string.Join(#10, FirmaLineas);
                 if not Decl.EndsWith(';') then Decl := Decl + ';';
                 if Directivas <> '' then
@@ -6031,7 +6045,7 @@ begin
 end;
 
 function LosJuecesDeUnForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
-  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string): TLintDeForm;
+  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string; ADesde: UInt64): TLintDeForm;
 var
   Lineas: TArray<string>;
 begin
@@ -6066,7 +6080,7 @@ begin
   // proceso aparte, asi que solo con el lector, fuera de los cerrojos (V154)
   if ALector and EsDesignerFmx(ADfm) then
   begin
-    Result.Colores := NotaDeColoresSinAlfa(ADfm, ATexto, AEnc, AAntes);
+    Result.Colores := NotaDeColoresSinAlfa(ADfm, ATexto, AEnc, AAntes, ADesde);
     var ConStyleBook: Boolean;
     var Usados := LookupsDeDesigner(ADfm, Lineas, ConStyleBook);
     if ConStyleBook then
@@ -6081,13 +6095,24 @@ begin
   // FontColor = -65536 en un TEdit FMX pasaba delphi_edit sin aviso y el lint
   // con CLEAN de un form que no abria. Solo si la tabla no encontro nada: con
   // un aviso suyo el form ya no carga, y el lector no diria mas
-  if ALector and ((Result.SinJuez > 0) or LlevaFrameInline(Lineas)) and (Result.Parser = '') and
+  Result.FrameInline := LlevaFrameInline(Lineas);
+  if ALector and ((Result.SinJuez > 0) or Result.FrameInline) and (Result.Parser = '') and
      (Length(Result.Propiedades) = 0) and (Result.Falta.Razon = '') then
-    Result.Lector := LoQueNoCargaElIde(ADfm, ATexto, AEnc, Result.SinLector);
+    Result.Lector := LoQueNoCargaElIde(ADfm, ATexto, AEnc, Result.SinLector, ADesde);
+end;
+
+function PorQueAlLector(const AL: TLintDeForm): string;
+begin
+  if AL.FrameInline and (AL.SinJuez > 0) then
+    Result := MsgFmt(SF_DSGN_LECTOR_POR_LINEAS_Y_FRAME_FMT, [AL.SinJuez])
+  else if AL.FrameInline then
+    Result := MsgText(SF_DSGN_LECTOR_POR_FRAME)
+  else
+    Result := MsgFmt(SF_DSGN_LECTOR_POR_LINEAS_FMT, [AL.SinJuez]);
 end;
 
 function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
-  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string): TLintDeForm;
+  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string; ADesde: UInt64): TLintDeForm;
 begin
   // con el cerrojo de escritura cogido (DesignerLint de delphi_edit y del
   // changeset, delete del disenador), ningun juez arranca ni pregunta al
@@ -6096,10 +6121,10 @@ begin
   // raiz con su base en otra unidad queda sin juzgar, como sin ajustes de
   // proyecto; el lint de fuera (delphi_designer lint) la juzga entera
   if not EnCerrojoDeEscritura then
-    Exit(LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes));
+    Exit(LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes, ADesde));
   VedaElMotor;
   try
-    Result := LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes);
+    Result := LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes, ADesde);
   finally
     LevantaElMotor;
   end;
@@ -6108,7 +6133,7 @@ end;
 { Lo que delphi_edit (y el changeset y la tanda, que escriben por el) dice del
   form que acaba de escribir: LintDeForm con el texto escrito, sin esperar a
   una tabla, presentado como avisos de una edicion. }
-function AvisosDelLector(const APath, AAntes: string): TArray<string>;
+function AvisosDelLector(const APath, AAntes: string; ADesde: UInt64): TArray<string>;
 var
   Texto, Enc: string;
 begin
@@ -6116,10 +6141,17 @@ begin
   try
     if not EsRutaDeDesigner(APath) or (TextoDeDesigner(APath, Texto, Enc) <> '') then
       Exit;
-    // la tabla sin esperarla, como tras cada edicion; y el lector
-    var L := LintDeForm(APath, Texto, Enc, True, 0, True, AAntes);
+    // la tabla sin esperarla, como tras cada edicion; y el lector, con lo que le queda
+    // al cliente de la llamada
+    var L := LintDeForm(APath, Texto, Enc, True, 0, True, AAntes, ADesde);
     if Length(L.Lector) > 0 then
-      Result := [MsgFmt(SN_EDIT_AVISO_LECTOR_FMT, [ExtractFileName(APath)])] + L.Lector;
+      Result := [MsgFmt(SN_EDIT_AVISO_LECTOR_FMT, [ExtractFileName(APath), PorQueAlLector(L)])] + L.Lector;
+    // ...y si no se le pudo preguntar (el plazo, sin renderizador...) o lo que salto
+    // no se situa en el form, se dice, como el lint (DSGN-154): callado, se leia como
+    // que el form carga
+    if L.SinLector <> '' then
+      Result := Result + [MsgFmt(SN_EDIT_LECTOR_SIN_CONFIRMAR_FMT, [ExtractFileName(APath), PorQueAlLector(L),
+        L.SinLector])];
     Result := Result + L.Colores;
   except
     // un juicio que no se pudo hacer no tumba una escritura ya hecha
@@ -6127,12 +6159,12 @@ begin
   end;
 end;
 
-function ConAvisosDelLector(const ARespuesta, APath, AAntes: string): string;
+function ConAvisosDelLector(const ARespuesta, APath, AAntes: string; ADesde: UInt64): string;
 begin
   Result := ARespuesta;
   if EsFallo(ARespuesta) or not EsRutaDeDesigner(APath) then
     Exit;
-  var Avisos := AvisosDelLector(TPath.GetFullPath(APath), AAntes);
+  var Avisos := AvisosDelLector(TPath.GetFullPath(APath), AAntes, ADesde);
   if Length(Avisos) > 0 then
     Result := Result + #13#10 + string.Join(#13#10, Avisos);
 end;

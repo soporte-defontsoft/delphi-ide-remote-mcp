@@ -262,6 +262,12 @@ try:
     r = call('vault_append', {'path': 'ancla.md', 'content': 'tres', 'anchor': 'uno'})
     check('V4 vault_append con ancla: el ancla conserva su LF, lo anadido con el dominante',
           lee(n) == b'# Nota\r\nuno\ntres\r\n\r\ndos\r\n', '%s %s' % (lee(n), corto(r)))
+    # V4b lo mismo con el dominante al reves. En V4 el dominante es CRLF, que es tambien el de Windows y el
+    # de una nota sin saltos (SaltoDominante): un CRLF fijo para lo anadido salia igual de verde
+    n = fichero('ancla-lf.md', b'# Nota\nuno\r\ndos\n', VAULT)
+    r = call('vault_append', {'path': 'ancla-lf.md', 'content': 'tres', 'anchor': 'uno'})
+    check('V4b ...y en una nota LF con el ancla en CRLF: el ancla conserva su CRLF, lo anadido va en LF',
+          lee(n) == b'# Nota\nuno\r\ntres\n\ndos\n', '%s %s' % (lee(n), corto(r)))
 finally:
     srv.cierra()
 

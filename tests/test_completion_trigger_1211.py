@@ -41,7 +41,7 @@ try:
     nota = con_s.get('triggerNote', '')
     # el trigger y la lista de la nota, leidos con su formato del catalogo (la inversa del que la
     # compone): '.' in nota salia siempre, el propio mensaje lleva puntos (revisor de baterias de la 1.27)
-    m = re.search(re.escape(mc.catalogo()['SN_COMPLETION_TRIGGER_NO_ES_FMT']).replace('%s', '(.*?)'), nota, re.S)
+    m = re.search(mc.patron_de_formato('SN_COMPLETION_TRIGGER_NO_ES_FMT'), nota, re.S)
     disparos = m.group(2).split() if m else []
     check('T1 trigger "S": triggerNote con lo que anuncia el motor',
           mc.es(nota, 'SN_COMPLETION_TRIGGER_NO_ES_FMT') and m is not None and m.group(1) == 'S' and

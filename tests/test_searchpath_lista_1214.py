@@ -123,7 +123,7 @@ try:
     os.makedirs(FUERA, exist_ok=True)
     r = srv.call('delphi_config', {'project': dproj, 'command': 'add-searchpath', 'paths': [C, FUERA]})
     check('L10 paths con una carpeta FUERA de las raices: la jaula la niega (GUARD-002)',
-          mc.rechazado(r) and 'GUARD-002' in r, r[:300])
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT'), r[:300])
     check('L10 ...el .dproj byte a byte', bytes_de(dproj) == antes)
 finally:
     srv.cierra()

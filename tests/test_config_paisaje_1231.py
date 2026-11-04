@@ -47,17 +47,19 @@ try:
     srv.call('delphi_create', {'kind': 'project-console', 'name': 'Cons', 'dir': D})
     DPROJ = os.path.join(D, 'Cons.dproj')
 
-    # (revisor de baterias de la 1.27) la version, la de la instalacion activa (delphi_installs), no '37.0' a mano
-    VER = mc.instalacion_activa(srv.call).get('version', '')
-    SDK = os.path.join(os.environ.get('APPDATA', ''), 'Embarcadero', 'BDS', VER, 'zorin18.sdk')
-    if VER and os.path.exists(SDK):
+    # un SDK de Linux64 que el IDE de ESTA maquina tiene registrado: su SDK por defecto, como lo dice
+    # el servidor (delphi_paserver profiles); era zorin18 a mano (revisor de baterias de la 1.27: la
+    # version ya salia de delphi_installs)
+    SDK = mc.sdk_por_defecto(srv.call, 'Linux64')
+    if SDK and SDK.upper() != SDK:
         config(DPROJ, 'add-platform', platform='Linux64')
-        r = config(DPROJ, 'set-sdk', platform='Linux64', sdk='ZORIN18')
+        r = config(DPROJ, 'set-sdk', platform='Linux64', sdk=SDK.upper())
         x = lee(DPROJ)
-        check('K1 set-sdk sdk=ZORIN18: el .dproj lleva el nombre de la lista del IDE (zorin18.sdk)',
-              '<PlatformSDK>zorin18.sdk</PlatformSDK>' in x, (r[:200], re.findall(r'<PlatformSDK>[^<]*<', x)))
+        check('K1 set-sdk sdk=%s: el .dproj lleva el nombre de la lista del IDE (%s.sdk)' % (SDK.upper(), SDK),
+              '<PlatformSDK>%s.sdk</PlatformSDK>' % SDK in x, (r[:200], re.findall(r'<PlatformSDK>[^<]*<', x)))
     else:
-        print('NOTA: K1 no se mide: zorin18.sdk no esta registrado en el IDE de esta maquina')
+        print('NOTA: K1 no se mide: el IDE de esta maquina no tiene un SDK de Linux64 por defecto con minusculas '
+              'en su nombre (%r)' % SDK)
 
     os.makedirs(os.path.join(D, 'lib', 'Win64'))
     r = config(DPROJ, 'add-searchpath', platform='Win64', path='lib\\$(Platform)')
@@ -84,7 +86,7 @@ try:
     # (revisor de baterias de la 1.27) las plataformas, las que el servidor conoce (su BUILD-003 las lista, la
     # misma PlataformasConocidas de Lsp.Dproj), no 7 de las 13 a mano
     rp = config(DPROJ, 'add-platform', platform='NoEsPlataforma')
-    _p = mc.catalogo()['SR_PLATAFORMA_NO_VALIDA_FMT'].split('%s')
+    _p = mc.trozos_de_formato('SR_PLATAFORMA_NO_VALIDA_FMT')
     todas = ([p.strip() for p in rp.split(_p[1], 1)[1].split(_p[2], 1)[0].split(',')]
              if mc.abre(rp, 'SR_PLATAFORMA_NO_VALIDA_FMT') and _p[1] in rp and _p[2] in rp else [])
     gi = lee(os.path.join(D, '.gitignore'))

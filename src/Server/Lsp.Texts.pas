@@ -2271,13 +2271,17 @@ const
   { un argumento que un programa de un destino Windows no recibe: lo lee con
     ParamStr de Delphi, que no tiene escape para una comilla (System.GetParamStr),
     y llegaba con barras (revisor del paisaje de la 1.26, C); y se salta uno vacio,
-    y los de detras se corrian uno (C7 del cierre). %d: cual, %s: el }
+    y los de detras se corrian uno (C7 del cierre). %d: cual, %s: el, %s: por que
+    (SF_RUN_ARG_LLEVA_FMT o SF_RUN_ARG_VACIO: dice CUAL, como TEST-037; revisor
+    del paisaje de la 1.27, B7) }
   SR_RUN_ARG_COMILLA_FMT =
     '[RUN-025 DENIED] Argument %d (%s) cannot reach a program on a Windows ' +
-    'target: it reads its command line by the rules of Delphi''s ParamStr, which ' +
+    'target - %s: it reads its command line by the rules of Delphi''s ParamStr, which ' +
     'skips an empty argument (the ones after it move up one), where a double ' +
     'quote only groups and a NUL character ends the line. Pass that value another ' +
     'way (a file the program reads) or without it. Nothing was run.';
+  SF_RUN_ARG_LLEVA_FMT = 'it carries %s, a double quote or a NUL character';
+  SF_RUN_ARG_VACIO = 'it is empty';
   { un argumento con un salto de linea (o un NUL): cada argumento viaja al
     destino en una linea del fichero de trabajo, y se cambiaba en silencio por un
     espacio (A4 de la 1.27). %d: cual, %s: el }
@@ -2582,10 +2586,12 @@ const
   SR_PASERVER_PLATFORM_FMT =
     '[PAS-018 INVALID_PARAM] "%s" is not a paclient platform. Valid: %s.';
 
-  SR_PASERVER_PASSWORD =
-    '[PAS-019 INVALID_PARAM] The password contains double quotes or control ' +
-    'characters, which would break the paclient command line. Set a ' +
-    'password without those characters on the PAServer and call again.';
+  { %s = el caracter que no llega (CaracterQueNoLlega: U+0022), como TEST-037;
+    la contrasena no se repite (revisor del paisaje de la 1.27, B7) }
+  SR_PASERVER_PASSWORD_FMT =
+    '[PAS-019 INVALID_PARAM] The password contains %s, a double quote or a ' +
+    'control character, which would break the paclient command line. Set a ' +
+    'password without it on the PAServer and call again.';
 
   SR_PASERVER_NO_PACLIENT =
     '[PAS-020 INTERNAL] The RAD Studio this server uses ships no ' +
@@ -4240,10 +4246,14 @@ const
     '[STYLE-007 DENIED] A style ''%s'' already exists in the file. Choose ' +
     'another name or change the existing one with set.';
 
+  { un agente sin el IDE no sabia que un .style de texto se puede escribir (luna,
+    test completo de la 1.27: se quedo sin medir delphi_styles) }
   SR_STYLES_NO_TEXT_FMT =
     '[STYLE-008 NOT_FOUND] There is no TEXT .style in %s (.bin.style files ' +
     'and binaries do not count). Export the style as text from the ' +
-    'Bitmap Style Designer or point to the right folder.';
+    'Bitmap Style Designer, write one with delphi_textedit create=true - a ' +
+    'text .style is "object TStyleContainer" with one object per style inside, ' +
+    'each with its StyleName - or point to the right folder.';
 
   SR_STYLES_PROJECT_NO_EXISTE_FMT =
     '[STYLE-041 NOT_FOUND] project=%s does not exist: give the .dproj (or ' +
@@ -4630,13 +4640,20 @@ const
     '("unreadable"), so a reference in them would be missed: not applicable ' +
     'until they can be read.';
 
+  { lo que un form ata por NOMBRE: no solo un miembro publicado - la variable
+    global del form es su Name en el .dfm (luna y Qwen, 4-nov-2026: renombraban
+    FormMain y el texto decia "a published member"); la raiz no se renombra con
+    set (DSGN-085) }
   SR_RENAME_DESIGNER_FMT =
-    '[RENAME-019 DENIED] %d occurrences in designers (.dfm/.fmx): ' +
-    'renaming a published member breaks the form''s binding (the IDE only ' +
-    'repairs it interactively). For a COMPONENT of the form, delphi_designer ' +
-    'command=set prop=Name renames it as the IDE does - the component, its ' +
-    'field, the handlers named after it and the form lines that name it - ' +
-    'and lists the uses left in the code (usesInCode).';
+    '[RENAME-019 DENIED] %d occurrences in designers (.dfm/.fmx): a form ' +
+    'binds by NAME what the compiler does not see - a component to its ' +
+    'field, an event to its handler, the form to its own Name -, and the IDE ' +
+    'only repairs that interactively. For a COMPONENT of the form, ' +
+    'delphi_designer command=set prop=Name renames it as the IDE does - the ' +
+    'component, its field, the handlers named after it and the form lines ' +
+    'that name it - and lists the uses left in the code (usesInCode). The ' +
+    'form itself (its Name, its class and its global variable) is renamed ' +
+    'in the IDE.';
 
   SR_RENAME_STRINGS_FMT =
     '[RENAME-020 DENIED] %d occurrences inside string literals ' +
@@ -5313,9 +5330,10 @@ const
     'project). command=discover lists them for you.';
   { un filtro con una comilla: el runner de DUnitX la lee con ParamStr, donde
     solo agrupa; cerraba el filtro y lo de detras eran otras opciones del runner
-    (revisor del paisaje de la 1.26, 23; la regla de RUN-025). %s = el filtro }
+    (revisor del paisaje de la 1.26, 23; la regla de RUN-025). %s = el filtro, %s =
+    el caracter que no llega (CaracterQueNoLlega: U+0009; Qwen, dirigido de la 1.27) }
   SR_TEST_FILTRO_COMILLA_FMT =
-    '[TEST-037 INVALID_PARAM] The filter (%s) has a double quote or a control ' +
+    '[TEST-037 INVALID_PARAM] The filter (%s) has %s, a double quote or a control ' +
     'character: the test runner, a Delphi program, reads its command line with ' +
     'ParamStr, where a double quote only groups and a NUL ends the line. Name ' +
     'the tests without it. Nothing was run.';
@@ -5428,6 +5446,18 @@ const
   SL_TEST_COPIA_NO_BORRADA_FMT =
     'delphi_test: the copy %s was not deleted (%s); the next start of this ' +
     'server purges it';
+  // ...y el puesto de esa copia: su SID tiene permiso en ella, y la siguiente
+  // ejecucion del puesto la heredaria (C29 de la 1.27)
+  SL_CONTENEDOR_PUESTO_RETIRADO_FMT =
+    'the container slot %s is out of use until what it left (its folder, or ' +
+    'a profile Windows did not remove) can be removed: the next run in that ' +
+    'slot would have reached it';
+  // ...y sin ningun puesto libre: un contenedor de una sola ejecucion, que gasta
+  // una entrada de la sesion de Windows (C29 de la 1.27)
+  SL_CONTENEDOR_SIN_PUESTO_FMT =
+    'all %d container slots of this server are taken or out of use: this run ' +
+    'uses a container of its own, which takes one more entry of the Windows ' +
+    'session until it ends';
 
   // La purga de 15 dias: un dia de la papelera que no se deja quitar (lo que
   // el guard niega, algo abierto dentro) se queda y se reintenta en cada
@@ -5446,6 +5476,10 @@ const
   SL_TEST_JOB_CONSULTAR_FMT =
     'delphi_test: could not query the test Job Object (error %d); stopped ' +
     'waiting for its processes - the copy is cleaned up anyway';
+  // QuitaCarpetasCreadas no pudo quitar una carpeta que creo la llamada: con el
+  // codigo de Windows, para saber quien la tenia (V45 de la 1.27)
+  SL_CARPETA_CREADA_SE_QUEDA_FMT =
+    'a folder this call created could not be removed (Windows error %d): %s';
 
   // Un hijo de RunCore que acabo por su cuenta SIN finalizar (su Job lo mato
   // por una excepcion sin tratar, revento un paquete de diseno): dejaba sus
@@ -5857,10 +5891,12 @@ const
   SF_RENDER_CAJA_CLASES = 'declaring its COM classes';
   SF_RENDER_CAJA_RENOMBRE = 'moving it into place';
 
+  { %s = el valor, %s = el caracter que no llega (CaracterQueNoLlega: U+0022),
+    como TEST-037 (revisor del paisaje de la 1.27, B7) }
   SR_DESIGNER_VALOR_CON_COMILLAS_FMT =
-    '[DSGN-065 INVALID_PARAM] "%s" carries a double quote or a control ' +
+    '[DSGN-065 INVALID_PARAM] "%s" carries %s, a double quote or a control ' +
     'character, which cannot travel to the renderer as one value. Nothing ' +
-    'was drawn: write it without them.';
+    'was drawn: write it without it.';
 
   SR_DESIGNER_PREVIEW_SIN_COMPONENTE_FMT =
     '[DSGN-066 NOT_FOUND] There is no component %s drawn in %s, so there ' +
@@ -6642,6 +6678,14 @@ const
     'what is slow the first time is ready now. If it is slow every time, ' +
     'something in the form waits when it loads (a connection with nothing to ' +
     'open, usually): change that with delphi_edit.';
+  { ...y el mismo plazo, agotado, cuando lo juzgado ya esta escrito o es un lint:
+    por que no se le pregunto al lector (Lsp.FormRender.LoQueNoCargaElIde; A3 de
+    la 1.27). Los mismos argumentos que DSGN-185: el form y los segundos. Con su
+    id: es un motivo como los demas del lector (DSGN-062, RENDER-007), y sin el
+    ni un agente ni el corpus lo distinguian (sin id). }
+  SR_DSGN_JUEZ_SIN_TIEMPO_FMT =
+    '[DSGN-188 DENIED] The IDE''s form reader was not asked: this call had ' +
+    'already taken %1:d s with %0:s, longer than a client may wait for an answer';
 
   SR_DESIGNER_GENERANDOSE_FMT =
     '[DSGN-051 DENIED] The designer table of %s is still being generated ' +
@@ -7055,16 +7099,17 @@ const
   SF_COLOR_NO_GUARDADO = 'nothing (the class''s own value)';
 
   { lint (b) sin el lector: la tabla no encontro nada, pero hay lineas que
-    la clase guarda por codigo y el lector del IDE no se pudo preguntar (sin
-    renderizador, el tiempo...) - o SI se le pregunto y lo que salto no se
-    puede cargar a este fichero (la raiz que no ve, una excepcion del codigo
-    de un componente, las partes de una clase del proyecto; 1.20.2). %d:
-    cuantas; %s: por que. Va como nota: el lint no dice CLEAN de lo que no
-    sabe (DSGN-061 de la 1.20). }
+    la clase guarda por codigo o un frame en linea, y el lector del IDE no se
+    pudo preguntar (sin renderizador, el tiempo...) - o SI se le pregunto y lo
+    que salto no se puede cargar a este fichero (la raiz que no ve, una
+    excepcion del codigo de un componente, las partes de una clase del
+    proyecto; 1.20.2). El primer %s, por que se le preguntaba
+    (Lsp.Patch.PorQueAlLector: las lineas, el frame o las dos; con un frame y
+    ninguna linea decia '0 line(s) hold a property'); el segundo, por que no
+    contesto. Va como nota: el lint no dice CLEAN de lo que no sabe (DSGN-061
+    de la 1.20). }
   SN_DESIGNER_LINT_SIN_LECTOR_FMT =
-    '[DSGN-154] Not confirmed: %d line(s) hold a property the class ' +
-    'stores by code, whose value only the IDE''s own form reader can judge ' +
-    '(preview loads the form), and either it could not be asked or what it ' +
+    '[DSGN-154] Not confirmed: %s, and either it could not be asked or what it ' +
     'skipped cannot be pinned on this file: %s';
 
   SN_LINT_UNKNOWN_CLASS_FMT =
@@ -7112,29 +7157,30 @@ const
     'of its container shows up clipped, and when two overlap the top one ' +
     'hides the one below. Fix it before calling the form done.';
 
+  { con el renderizador, lo juzgado sale de lo que la VCL resolvio, no del texto
+    (R8 del revisor del paisaje de la 1.27) }
   SN_DESIGNER_LAYOUT_HOW =
-    '[DSGN-026] How I measure it: I resolve Align from the text, close to ' +
-    'TWinControl.AlignControls (each aligned control takes its band from ' +
-    'the space that is left, in .dfm order - the VCL orders controls of ' +
-    'the same Align by their position, so a reordered file can differ: ' +
-    'preview shows the real place), with one key detail: ' +
-    'alClient does NOT shrink the rectangle, so two alClient controls ' +
-    'get the WHOLE space and cover each other 100%. I apply the class''s ' +
-    'default Align when the .dfm does not write it (TStatusBar=alBottom, ' +
-    'TToolBar=alTop, TSplitter=alLeft, TTabSheet=alClient...). I skip ' +
-    'what is invisible (Visible= False), I do not judge the children of ' +
-    'a TGridPanel (they go by cells), I do not treat a ' +
-    'TBevel/TShape/TImage as covering anything (it is decoration), and a ' +
-    'TScrollBox may have larger content on purpose. In "boxes" you get ' +
-    'the resolved rectangle of each control in form coordinates: that is ' +
-    'where each thing ends up, so you can place the next one without ' +
-    'seeing the screen: with boxesFrom=renderer, as the VCL really placed it, and ' +
-    'with what the text does not list - an inline frame and what is inside it -, ' +
-    'listed and not judged. A box''s line is where its object is written; with ' +
-    'file, in that file (an inline frame''s or an ancestor''s), not in this form. What ' +
-    'I judge comes from the text and is approximate: I take a container''s usable ' +
-    'area as its Width/Height, and Anchors (which govern RESIZING) is ' +
-    'not what I measure.';
+    '[DSGN-026] How I measure it: with boxesFrom=renderer, from the VCL itself - ' +
+    'the renderer loads the form, "boxes" holds the rectangle where the VCL ' +
+    'placed each control, in form coordinates, and the client size of the form ' +
+    'and what I judge (a side at zero, sticking out of its container, an aligned ' +
+    'band with no room, two controls covering each other) are measured on those ' +
+    'rectangles, inline frames and inherited controls included; the coordinates ' +
+    'in a warning are relative to the container it names. The Align that ' +
+    'names a warning (two alClient, a band with no room) is the one the .dfm ' +
+    'writes, or the class''s default when it writes none (TStatusBar=alBottom, ' +
+    'TToolBar=alTop...). I skip what is invisible (Visible = False), I do not ' +
+    'judge the children of a container that places them itself (a TGridPanel, ' +
+    'a TFlowPanel), I do not treat a TBevel/TShape/TImage or an alCustom control ' +
+    'as covering anything, and a TScrollBox may have larger content on purpose. ' +
+    'Without the renderer (boxesFrom=text, with the reason) I work it out from ' +
+    'the text, close to TWinControl.AlignControls - each aligned control takes ' +
+    'its band from the space that is left, in .dfm order; alClient does NOT ' +
+    'shrink it, so two alClient controls cover each other 100%; a container''s ' +
+    'usable area is its Width/Height -, and that is approximate. A box''s line ' +
+    'is where its object is written; with file, in that file (an inline ' +
+    'frame''s or an ancestor''s), not in this form. Anchors (which govern ' +
+    'RESIZING) is not what I measure.';
 
   { delphi_completion con mas candidatos de los que contesta (Hermes, punto 9
     de la 1.18.2): cuantos casan y como acotarlos. }
@@ -7177,10 +7223,16 @@ const
     'the FMX CLASSGROUP - asks the form renderer where each control ends up, and it ' +
     'could not say: %s';
 
+  { lo juzga el mismo juez que un form VCL, con sus exenciones y las coordenadas de
+    un aviso relativas al padre (A2 del revisor del paisaje de la 1.27) }
   SN_DESIGNER_LAYOUT_FMX_HOW =
     '[DSGN-179] How I measure it: FMX laid the form out and the renderer said where ' +
-    'each control ended up, in form coordinates ("boxes"). A hidden control is not ' +
-    'judged. "overlapping" does not take clean away: in FMX one control over another ' +
+    'each control ended up, in form coordinates ("boxes"), and I judge those ' +
+    'rectangles by the rules of a VCL form: the coordinates in a warning are ' +
+    'relative to the container it names, a hidden control is not judged, nor are ' +
+    'the children of a container that places them itself (a TTabControl, a ' +
+    'TGridPanelLayout, a TFlowLayout), and a scroll box may have larger content on ' +
+    'purpose. "overlapping" does not take clean away: in FMX one control over another ' +
     'is how a form is composed, so read it as a list to check against preview. A ' +
     'box''s line is where its object is written; with file, in that file (an inline ' +
     'frame''s or an ancestor''s), not in this form.';
@@ -8665,6 +8717,16 @@ const
     'the project had none. Files the IDE Deployment Manager already ' +
     'wrote are never overwritten.';
 
+  { un Clean no decia que limpio: el agente lo averiguo con delphi_list (Qwen,
+    test completo de la 1.27: tras un set-output el exe de la carpeta de antes
+    seguia en disco) }
+  SN_BUILD_CLEAN_NOTE =
+    '[BUILD-069] Clean removed what msbuild builds for this platform and ' +
+    'configuration into the project''s declared output folders. What another ' +
+    'configuration built, or an output folder the project no longer declares ' +
+    '(the one before a set-output), is not touched: delphi_list shows what is ' +
+    'left.';
+
   SN_BUILD_APK_NOTE =
     '[BUILD-040] This is the built .apk (debug-signed, sideloadable). ' +
     'msbuild does not install Android apps (DeviceId only auto-installs ' +
@@ -9700,6 +9762,14 @@ const
     '[STYLE-028 INTERNAL] brcc32.exe (the resource compiler of RAD ' +
     'Studio) is not in %s: the installation on this server is ' +
     'incomplete. Tell the operator with delphi_report.';
+  { ...y el que hay esta donde la sesion escribe: no se lanza, aunque corra en
+    el contenedor (ProgramaFueraDelAgente, como paclient, adb y DelphiLSP.exe;
+    revisor del paisaje de la 1.27). %s = su ruta }
+  SR_STYLE_BRCC_DONDE_ESCRIBE_FMT =
+    '[STYLE-068 DENIED] The brcc32.exe this server would run (%s) is in a ' +
+    'folder this session can write, so it is not run. The operator keeps the ' +
+    'RAD Studio installation outside the workspace roots. Nothing was ' +
+    'converted or compiled.';
 
   SR_STYLES_BUILD_CONVERT_FMT =
     '[STYLE-039 DENIED] %d of %d styles did not convert ' +
@@ -10186,15 +10256,38 @@ const
     'and the app CRASHES when it loads the form at runtime - on Android ' +
     'it dies with no message. Fix them before deploying: ***';
   { Lo que el LECTOR del IDE no carga de un form escrito, cuando las tablas
-    callan (una propiedad que la clase guarda por codigo): lo mismo que
-    DSGN-149 de set, como aviso de una escritura (DSGN-061 de la 1.20). %s =
-    el form; debajo, lo que dijo el lector con su linea. }
+    callan (una propiedad que la clase guarda por codigo, un frame en linea):
+    lo mismo que DSGN-149 de set, como aviso de una escritura (DSGN-061 de la
+    1.20). %s = el form; %s = por que se le pregunto (Lsp.Patch.PorQueAlLector);
+    debajo, lo que dijo el lector con su linea. }
   SN_EDIT_AVISO_LECTOR_FMT =
     '[EDIT-127] *** DESIGNER WARNING: the IDE''s own form reader does NOT ' +
-    'load %s (it was asked because the tables cannot judge a property the ' +
-    'class stores by code). The build packs it anyway, the IDE will not ' +
+    'load %s - it was asked because %s. The build packs it anyway, the IDE will not ' +
     'open it and the app dies creating the form - on Android with no ' +
     'message. What the reader said: ***';
+  { ...y cuando el LECTOR no se pudo preguntar (el plazo del cliente, sin
+    renderizador, un ancestro que no ve) o lo que salto no se puede situar en
+    el form: lo que el lint dice con DSGN-154. Se callaba, y un agente leia el
+    silencio como que el form carga (A3 de la 1.27). %s = el form; %s = por que
+    se le preguntaba (Lsp.Patch.PorQueAlLector); %s = por que no contesto. }
+  SN_EDIT_LECTOR_SIN_CONFIRMAR_FMT =
+    '[EDIT-131] NOTE: it is NOT confirmed that the IDE loads %s as written ' +
+    '(delphi_designer lint asks again): %s, and either it could not be asked ' +
+    'or what it skipped cannot be pinned on this file: %s';
+  { Por que se le pregunta al LECTOR por un form (Lsp.Patch.PorQueAlLector, EL
+    que lo compone para DSGN-154, EDIT-127 y EDIT-131): las lineas que la tabla
+    no juzga, un frame en linea, o las dos. Con un frame en linea y ninguna
+    linea, DSGN-154 decia '0 line(s) hold a property' (medido el 4-nov-2026). }
+  SF_DSGN_LECTOR_POR_LINEAS_FMT =
+    '%d line(s) hold a property the class stores by code, whose value only ' +
+    'the IDE''s own form reader can judge (preview loads the form)';
+  SF_DSGN_LECTOR_POR_FRAME =
+    'the form carries an inline frame, whose loading no table judges: only ' +
+    'the IDE''s own form reader can (preview loads the form)';
+  SF_DSGN_LECTOR_POR_LINEAS_Y_FRAME_FMT =
+    '%d line(s) hold a property the class stores by code and the form carries ' +
+    'an inline frame: no table judges them, only the IDE''s own form reader can ' +
+    '(preview loads the form)';
 
   SR_EDIT_ANCLA_NO_UNICA_FMT =
     '[EDIT-077 INVALID_PARAM] The anchor appears %d times (lines %s), it is ' +
@@ -11612,6 +11705,15 @@ const
   SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED =
     'No RAD Studio installation discovered.';
 
+  { el DelphiLSP.exe de la instalacion esta donde la sesion escribe: correria
+    como el servicio, fuera de contenedor (ProgramaFueraDelAgente, como
+    paclient y adb; revisor del paisaje de la 1.27, B6). %s = su ruta }
+  SR_LSP_EXE_DONDE_ESCRIBE_FMT =
+    '[LSP-053 DENIED] The DelphiLSP.exe this server would start (%s) is in a ' +
+    'folder this session can write, so it is not run: it would run as this ' +
+    'server. The operator keeps the RAD Studio installation outside the ' +
+    'workspace roots.';
+
   SE_BUILD_RSVARS_BAT_FOUND_FMT =
     'rsvars.bat not found: %s';
 
@@ -11929,9 +12031,12 @@ const
     '*** visible: could NOT add the declaration to the interface - write ' +
     'it with old/new. ***';
 
+  { la regla de la seccion (FinDeSeccion): la palabra en el CODIGO, este donde
+    este en su linea; decia "ninguna linea que solo diga implementation", la
+    regla de antes de P10 (revisor del paisaje de la 1.27, B2) }
   SF_EDIT_VISIBLE_NO_ENCUENTRO_IMPLEMENTATION =
-    '*** visible: no single ''implementation'' line found; add the ' +
-    'declaration with old/new. ***';
+    '*** visible: the unit has no ''implementation'' in its code (a comment ' +
+    'or a string does not count); add the declaration with old/new. ***';
 
   SK_EDIT_INSERT_RUTINA_ANTES_FMT =
     '[EDIT-103] INSERT rutina-global: placed BEFORE line %d (|%s|), the ' +

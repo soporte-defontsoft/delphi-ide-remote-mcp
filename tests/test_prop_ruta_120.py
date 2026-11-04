@@ -45,6 +45,7 @@ es un objeto dice que su clase se pregunta con info, y la lista cortada de
 Uso:  python tests/test_prop_ruta_120.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
+import re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -75,7 +76,11 @@ def prop(clase, fw, p):
     return plano(srv.call('delphi_designer', {'command': 'prop', 'classname': clase, 'framework': fw, 'prop': p}))
 
 
-ENLACE_TLABEL_FMX = ' - all, with their types: info classname=TLabel framework=fmx'
+# lo que dice el servidor, por sus formatos del catalogo (texto NUESTRO: Lsp.Texts), no copiado en ingles
+ENLACE_TLABEL_FMX = mc.catalogo()['SF_DSGN_LISTA_ENTERA_FMT'] % ('TLabel', 'fmx')
+# lo que toma un entero con constantes con nombre: uno de sus tres textos (LoQueToma)
+TOMA_CONSTANTES = [re.compile(mc.patron_de_formato(n, '.*'), re.S) for n in
+                   ('SF_DESIGNER_TOMA_CONSTANTE', 'SF_DESIGNER_TOMA_CONSTANTES_FMT', 'SF_DESIGNER_TOMA_ABIERTA_FMT')]
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='prop-ruta', t=240)
 try:
@@ -98,19 +103,24 @@ try:
 
     r = prop('TLabel', 'fmx', 'TextSettings')
     check('P3 prop TLabel fmx TextSettings: un objeto, con el enlace a info de su clase',
-          not mc.fallo(r) and '"kind":"class"' in r and mc.tiene(r, 'DSGN-155')
-          and 'command=info classname=TTextSettings framework=fmx' in r
-          and '(TextSettings.<property>)' in r, r[:600])
+          not mc.fallo(r) and '"kind":"class"' in r and mc.es(r, 'SN_DESIGNER_PROP_CLASE_FMT')
+          # (DSGN-155 entero, por su formato: clase, clase, marco y la ruta con punto)
+          and mc.trozo_de_formato('SN_DESIGNER_PROP_CLASE_FMT', 0, 'TTextSettings', 'TTextSettings', 'fmx',
+                                  'TextSettings') in r, r[:600])
 
     r = prop('TLabel', 'fmx', 'Alignment')
     check('P4 prop TLabel fmx Alignment: el juez, la pista de la VCL y el enlace a la lista entera',
-          mc.tiene(r, 'DSGN-016')
-          and 'Alignment is not a published property of TLabel: "Alignment" does not exist in TLabel' in r
-          and '"Alignment" is what the VCL TLabel publishes' in r and ENLACE_TLABEL_FMX in r, r[:900])
+          mc.es(r, 'SR_DESIGNER_PROP_FMT')
+          and mc.trozo_de_formato('SR_DESIGNER_PROP_FMT', 0, 'Alignment', 'TLabel') in r
+          and mc.trozo_de_formato('SF_DSGN_NO_EXISTE_SEGUN_FRAMEWORK_FMT', 0, 'Alignment', 'TLabel') in r
+          and mc.trozo_de_formato('SF_DSGN_EN_EL_OTRO_MARCO_FMT', 0, 'Alignment', 'VCL', 'TLabel') in r
+          and ENLACE_TLABEL_FMX in r, r[:900])
 
+    # ' nor in any class that descends from it, ...', de su formato (SF_DSGN_NO_EXISTE_EN_LA_FAMILIA_FMT)
+    FAMILIA = mc.trozo_de_formato('SF_DSGN_NO_EXISTE_EN_LA_FAMILIA_FMT', 2)
     r = prop('TLabel', 'fmx', 'TextSettings.Foo120')
     check('P5 prop TLabel fmx TextSettings.Foo120: no lo publica nadie de la familia',
-          mc.tiene(r, 'DSGN-016') and 'nor in any class that descends from it' in r, r[:700])
+          mc.es(r, 'SR_DESIGNER_PROP_FMT') and FAMILIA in r, r[:700])
 
     r = prop('TButton', 'vcl', 'Caption')
     check('P6 control: prop TButton vcl Caption, una hoja de primer nivel, igual que antes',
@@ -118,17 +128,20 @@ try:
 
     r = prop('TLabel', 'fmx', 'FontColor')
     check('P7 control: FontColor del TLabel FMX (guardado por codigo): el DSGN-016 de antes',
-          mc.tiene(r, 'DSGN-016') and 'FontColor is not a published property of TLabel' in r, r[:500])
+          mc.es(r, 'SR_DESIGNER_PROP_FMT') and mc.trozo_de_formato('SR_DESIGNER_PROP_FMT', 0, 'FontColor', 'TLabel') in r,
+          r[:500])
 
     r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Label1',
                                            'prop': 'Alignment', 'value': 'taRightJustify'}))
     check('P8 set Alignment en un form FMX: el enlace a la lista entera tambien en set',
-          mc.tiene(r, 'DSGN-087') and ENLACE_TLABEL_FMX in r, r[:900])
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and ENLACE_TLABEL_FMX in r, r[:900])
 
-    r = plano(srv.call('delphi_designer', {'command': 'info', 'classname': 'TLabel', 'framework': 'fmx'}))
+    ri = srv.call('delphi_designer', {'command': 'info', 'classname': 'TLabel', 'framework': 'fmx'})
+    r = plano(ri)
+    # (la nota es DSGN-018 entera, del catalogo: la que explica los objetos de clase, no su ingles)
     check('P9 el enlace lleva a algo: info TLabel fmx trae TextSettings como clase, y la nota lo explica',
           '{"name":"TextSettings","kind":"class","type":"TTextSettings"}' in r
-          and 'A property of kind class whose type is not a component is an object' in r, r[-700:])
+          and mc.catalogo()['SN_DESIGNER_INFO_NOTE'] in (mc.como_json(ri).get('note') or ''), r[-700:])
 
     r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Label1',
                                            'prop': 'TextSettings.HorzAlign', 'value': 'Trailing'}))
@@ -154,7 +167,7 @@ try:
 
     r = info('TButton', 'vcl', 'AutoPopup')
     check('P13 info TButton vcl filter=AutoPopup: PopupMenu es una referencia y no se abre',
-          'PopupMenu.AutoPopup' not in r and mc.tiene(r, 'DSGN-048'), r[:700])
+          'PopupMenu.AutoPopup' not in r and mc.es(r, 'SN_DESIGNER_INFO_FILTRO_VACIO_FMT'), r[:700])
 
     r = info('TLabel', 'vcl', 'Size')
     check('P14 info TLabel vcl filter=Size: Font.Size, tambien en VCL',
@@ -176,12 +189,12 @@ try:
           not mc.fallo(r) and '"takes":' in r and 'claAliceblue' in r and 'xFF00FF00' in r, r[:900])
     r = prop('TLabel', 'vcl', 'Font.Color')
     check('P18 prop TLabel vcl Font.Color (TColor): takes con sus constantes con nombre',
-          not mc.fallo(r) and '"takes":' in r and 'named constants' in r, r[:900])
+          not mc.fallo(r) and any(t.fullmatch(mc.como_json(r).get('takes', '')) for t in TOMA_CONSTANTES), r[:900])
     t = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Label1',
                                            'prop': 'TextSettings.FontColor', 'value': 'Rojo'}))
     toma = mc.como_json(r17).get('takes', '')
     check('P19 ...y es EL mismo texto que da set al negar un valor (Rojo en el TAlphaColor de un form FMX)',
-          mc.tiene(t, 'DSGN-093') and toma != '' and toma in t, (toma[:200], t[:600]))
+          mc.es(t, 'SR_DESIGNER_SET_TIPO_FMT') and toma != '' and toma in t, (toma[:200], t[:600]))
     r = prop('TLabel', 'fmx', 'TextSettings.HorzAlign')
     # contesta, y es el enumerado (sin takes); "no lleva takes" sobre un error
     # pasaba (revisor de baterias, 18-oct-2026)

@@ -9,7 +9,11 @@
 // o una subclave nueva senalan UNA vez y el rearme sigue vigilando; una clave
 // hermana no senala; el evento sobrevive al hilo que armo
 // (REG_NOTIFY_THREAD_AGNOSTIC: cada peticion del servidor es un hilo); y una
-// lista pregunta y rearma a todas. No es "pura": escribe en el registro del
+// lista pregunta y rearma a todas. Y la que NO existe se vigila desde su primer
+// ancestro: su nacimiento es un cambio (de golpe o a tramos), una hermana que
+// nace no lo es, y una borrada que vuelve se ve (revisor de la 1.27: el vigia
+// de una clave del IDE que aun no existia quedaba vacio para siempre; la sonda
+// del 4-nov-2026 midio la API). No es "pura": escribe en el registro del
 // usuario, asi que corre en la suite entera (test_engine_dunitx); y donde HKCU
 // no se deja escribir desde el proceso (la capa virtual de un proceso MSIX: la
 // bateria lanza la suite desde uno, medido el 21-oct-2026) cada prueba pasa
@@ -30,13 +34,17 @@ type
     FSinRegistro: Boolean; // HKCU no se dejo escribir en el Setup: no se mide
     procedure SiSePuede;
     procedure Escribe(const ASub, AValor, ADato: string);
+    procedure Borra(const ASub: string);
     function Vigila(const ASub: string): TVigiaDeClave;
     function Senalada(var AVigia: TVigiaDeClave): Boolean;
     function Quieta(var AVigia: TVigiaDeClave): Boolean;
   public
     [Setup] procedure Setup;
     [TearDown] procedure TearDown;
-    [Test] procedure UnaClaveQueNoExisteNoTieneVigia;
+    [Test] procedure UnaClaveQueNoExisteSeVeNacer;
+    [Test] procedure UnaHermanaQueNaceNoEsCambio;
+    [Test] procedure UnCaminoQueNaceATramos;
+    [Test] procedure UnaBorradaQueVuelveSeVe;
     [Test] procedure SinCambiosNoSenala;
     [Test] procedure UnValorEscritoDebajoSenalaUnaVez;
     [Test] procedure UnaSubclaveNuevaSenala;
@@ -150,6 +158,19 @@ begin
   end;
 end;
 
+procedure TVigiaDeClaveTests.Borra(const ASub: string);
+var
+  Reg: TRegistry;
+begin
+  Reg := TRegistry.Create(KEY_ALL_ACCESS);
+  try
+    Reg.RootKey := HKEY_CURRENT_USER;
+    Assert.IsTrue(Reg.DeleteKey(FRuta + '\' + ASub), 'borrar ' + ASub); // con sus subclaves
+  finally
+    Reg.Free;
+  end;
+end;
+
 function TVigiaDeClaveTests.Vigila(const ASub: string): TVigiaDeClave;
 begin
   Result := VigilaClave(HKEY_CURRENT_USER, FRuta + '\' + ASub);
@@ -175,14 +196,77 @@ begin
   Result := not CambioLaClave(AVigia);
 end;
 
-procedure TVigiaDeClaveTests.UnaClaveQueNoExisteNoTieneVigia;
+procedure TVigiaDeClaveTests.UnaClaveQueNoExisteSeVeNacer;
 var
   V: TVigiaDeClave;
 begin
   SiSePuede;
-  V := VigilaClave(HKEY_CURRENT_USER, FRuta + '\NoEsta');
-  Assert.IsTrue((V.Clave = 0) and (V.Evento = 0), 'sin vigia');
-  Assert.IsFalse(CambioLaClave(V), 'sin vigia nunca cambia');
+  V := Vigila('NoEsta'); // en espera, en su ancestro
+  try
+    Assert.IsTrue(Quieta(V), 'recien armada, sin cambios');
+    Escribe('NoEsta', '', '');
+    Assert.IsTrue(Senalada(V), 'su nacimiento es un cambio');
+    Assert.IsTrue(Quieta(V), 'una vez');
+    Escribe('NoEsta', 'BDSPLATFORMSDKSDIR', 'C:\Uno');
+    Assert.IsTrue(Senalada(V), 'y desde ahi se la vigila a ella: un valor suyo senala');
+  finally
+    SueltaVigia(V);
+  end;
+end;
+
+procedure TVigiaDeClaveTests.UnaHermanaQueNaceNoEsCambio;
+var
+  V: TVigiaDeClave;
+begin
+  SiSePuede;
+  V := Vigila('NoEsta');
+  try
+    Escribe('OtraMas', '', '');
+    Assert.IsTrue(Quieta(V), 'nace una hermana: no es la vigilada');
+    Escribe('Otra', 'x', 'y');
+    Assert.IsTrue(Quieta(V), 'un valor en otra rama tampoco');
+    Escribe('NoEsta', '', '');
+    Assert.IsTrue(Senalada(V), 'y la vigilada, tras ellas, si');
+  finally
+    SueltaVigia(V);
+  end;
+end;
+
+procedure TVigiaDeClaveTests.UnCaminoQueNaceATramos;
+var
+  V: TVigiaDeClave;
+begin
+  SiSePuede;
+  V := Vigila('Nueva\Honda');
+  try
+    Escribe('Nueva', '', '');
+    Assert.IsTrue(Quieta(V), 'nace un tramo del camino: aun no es ella');
+    Escribe('Nueva\Honda', '', '');
+    Assert.IsTrue(Senalada(V), 'nace ella: cambio');
+  finally
+    SueltaVigia(V);
+  end;
+end;
+
+procedure TVigiaDeClaveTests.UnaBorradaQueVuelveSeVe;
+var
+  V: TVigiaDeClave;
+begin
+  SiSePuede;
+  V := Vigila('Library');
+  try
+    Borra('Library');
+    Assert.IsTrue(Senalada(V), 'borrarla es un cambio');
+    // lo latente del borrado (su subclave y ella: dos cambios), fuera
+    repeat
+      Sleep(REPOSO_MS);
+    until not CambioLaClave(V);
+    Assert.IsTrue((V.Clave <> 0) and V.EnEspera, 'y sigue vigilada, desde su ancestro');
+    Escribe('Library\Win32', 'Search Path', 'C:\Uno');
+    Assert.IsTrue(Senalada(V), 'vuelve a nacer: se ve');
+  finally
+    SueltaVigia(V);
+  end;
 end;
 
 procedure TVigiaDeClaveTests.SinCambiosNoSenala;

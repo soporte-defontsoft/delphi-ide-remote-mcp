@@ -198,28 +198,32 @@ try:
     check('L14 una vista FMX (el StyleBook de su maestro): sin DSGN-175',
           sin_nota(r) and 'devistaquenoexiste' not in r, r[:500])
 
-    # un Sample con su StyleBook, del BDSCOMMONDIR que pone el rsvars.bat del IDE (como el corpus)
+    # un Sample con su StyleBook, del BDSCOMMONDIR que pone el rsvars.bat del IDE (como el corpus).
+    # Una instalacion sin los Samples no lo trae: L15, L16 y L20 lo dicen (NOTA) y no se miden, como
+    # S1 de test_lint_vistas_1202 (era un check rojo y la bateria reventaba al copiarlo)
     SAMPLE_BT = os.path.join(mc.variable_de_rsvars(srv.call, 'BDSCOMMONDIR'), 'Samples', 'Object Pascal',
                              'Multi-Device Samples', 'Device Sensors and Services', 'Bluetooth',
                              'Classic Bluetooth Basic app')
-    check('L15 el Sample con StyleBook esta en esta maquina', os.path.isdir(SAMPLE_BT), SAMPLE_BT)
-    bt = os.path.join(BASE, 'bt')
-    shutil.copytree(SAMPLE_BT, bt)
-    estilos = os.path.join(bt, 'Styles')
-    os.makedirs(estilos)
-    with open(os.path.join(estilos, 'Uno.style'), 'w', newline='') as f:
-        f.write("object TStyleContainer\r\n  object TLayout\r\n    StyleName = 'mibotonstyle'\r\n  end\r\nend\r\n")
-    with open(os.path.join(bt, 'Otro.fmx'), 'w', encoding='utf-8-sig', newline='') as f:
-        f.write("object F2: TForm\r\n  object B: TButton\r\n    StyleLookup = 'faltaenotro'\r\n  end\r\nend\r\n")
-    r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos, 'project': bt}, 300)
-    j = mc.como_json(r)
-    faltas = json.dumps(j.get('lookupsWithoutStyle'))
-    check('L15 el lint de un form con su StyleBook: TabItem1Style1 no es una falta',
-          'TabItem1Style1' not in faltas and 'TabItem2Style1' not in faltas, faltas)
-    check('L15 ...va en formsWithAStyleBook, con su nota STYLE-057',
-          any(x.endswith('Unit1.fmx') for x in (j.get('formsWithAStyleBook') or [])) and
-          mc.es(r, 'SN_STYLES_FORMS_CON_STYLEBOOK'), r[:800])
-    check('L16 control: un form SIN StyleBook del mismo proyecto sigue juzgado', 'faltaenotro' in faltas, faltas)
+    bt = os.path.join(BASE, 'bt') if os.path.isdir(SAMPLE_BT) else ''
+    if bt:
+        shutil.copytree(SAMPLE_BT, bt)
+        estilos = os.path.join(bt, 'Styles')
+        os.makedirs(estilos)
+        with open(os.path.join(estilos, 'Uno.style'), 'w', newline='') as f:
+            f.write("object TStyleContainer\r\n  object TLayout\r\n    StyleName = 'mibotonstyle'\r\n  end\r\nend\r\n")
+        with open(os.path.join(bt, 'Otro.fmx'), 'w', encoding='utf-8-sig', newline='') as f:
+            f.write("object F2: TForm\r\n  object B: TButton\r\n    StyleLookup = 'faltaenotro'\r\n  end\r\nend\r\n")
+        r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos, 'project': bt}, 300)
+        j = mc.como_json(r)
+        faltas = json.dumps(j.get('lookupsWithoutStyle'))
+        check('L15 el lint de un form con su StyleBook: TabItem1Style1 no es una falta',
+              'TabItem1Style1' not in faltas and 'TabItem2Style1' not in faltas, faltas)
+        check('L15 ...va en formsWithAStyleBook, con su nota STYLE-057',
+              any(x.endswith('Unit1.fmx') for x in (j.get('formsWithAStyleBook') or [])) and
+              mc.es(r, 'SN_STYLES_FORMS_CON_STYLEBOOK'), r[:800])
+        check('L16 control: un form SIN StyleBook del mismo proyecto sigue juzgado', 'faltaenotro' in faltas, faltas)
+    else:
+        print('NOTA: L15, L16 y L20 no se miden: no esta el Sample con StyleBook de esta instalacion (%s)' % SAMPLE_BT)
 
     # V151: un frame toma el StyleBook de la form que lo aloja
     con('buttonstyle')
@@ -265,13 +269,14 @@ try:
     faltas = json.dumps(mc.como_json(r).get('lookupsWithoutStyle'))
     check('L19 el .pas de un frame: su StyleLookup := no es una falta', 'pasdelmarco' not in faltas, faltas)
     check('L21 (control) una unidad sin designer: su StyleLookup := sigue siendo falta', 'pasplano' in faltas, faltas)
-    con_codigo(os.path.join(bt, 'Unit1.pas'), 'pasdelsample')
-    r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos, 'project': bt}, 300)
-    faltas = json.dumps(mc.como_json(r).get('lookupsWithoutStyle'))
-    # ...en una respuesta que juzga: la falta de Otro.fmx (L16) sigue en la misma lista; sin ella, "no es
-    # una falta" pasaba con un lint fallido ('null') (revisor de baterias de la 1.27)
-    check('L20 el .pas de una form con su StyleBook: no es una falta',
-          'pasdelsample' not in faltas and 'faltaenotro' in faltas, faltas)
+    if bt:
+        con_codigo(os.path.join(bt, 'Unit1.pas'), 'pasdelsample')
+        r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos, 'project': bt}, 300)
+        faltas = json.dumps(mc.como_json(r).get('lookupsWithoutStyle'))
+        # ...en una respuesta que juzga: la falta de Otro.fmx (L16) sigue en la misma lista; sin ella, "no es
+        # una falta" pasaba con un lint fallido ('null') (revisor de baterias de la 1.27)
+        check('L20 el .pas de una form con su StyleBook: no es una falta',
+              'pasdelsample' not in faltas and 'faltaenotro' in faltas, faltas)
 finally:
     srv.cierra()
     mc.borra(BASE)

@@ -206,20 +206,20 @@ try:
 
     r = motor('delphi_definition', {'path': U1, 'line': 8, 'character': 14})
     check('F1 definition de un simbolo de una unit del search path de FUERA: nada de alli, y la nota LSP-037',
-          not fugas(r) and mc.tiene(r, 'LSP-037'), (fugas(r), r[:300]))
+          not fugas(r) and mc.es(r, 'SN_LSP_RECORTE_FMT'), (fugas(r), r[:300]))
     r = motor('delphi_hover', {'path': U1, 'line': 8, 'character': 14})
     check('F2 hover: ni su firma ni su ruta, y lo dice (LSP-037)',
-          contesta(r) and mc.tiene(r, 'LSP-037') and not fugas(r), (fugas(r), r[:300]))
+          contesta(r) and mc.es(r, 'SN_LSP_RECORTE_FMT') and not fugas(r), (fugas(r), r[:300]))
     r = motor('delphi_completion', {'path': U1, 'line': 9, 'character': 5})
     check('F3 completion: ni sus nombres ni el VALOR de su constante, y lo dice (LSP-037)',
-          contesta(r) and mc.tiene(r, 'LSP-037') and not fugas(r) and 'SECRETO_DE_FUERA' not in r
+          contesta(r) and mc.es(r, 'SN_LSP_RECORTE_FMT') and not fugas(r) and 'SECRETO_DE_FUERA' not in r
           and '"DesdeFuera"' not in r, (fugas(r), r[:400]))
     r = motor('delphi_signature', {'path': U1, 'line': 8, 'character': 23})
     check('F4 signature: ni su firma, y lo dice (LSP-037)',
-          contesta(r) and mc.tiene(r, 'LSP-037') and not fugas(r), (fugas(r), r[:300]))
+          contesta(r) and mc.es(r, 'SN_LSP_RECORTE_FMT') and not fugas(r), (fugas(r), r[:300]))
     r = motor('delphi_completion', {'path': UG, 'line': 6, 'character': 4, 'trigger': '.'})
     check('F3b completion de `G.` (G de dentro, tipo de fuera, el fichero no usa la unit): ni un miembro de fuera',
-          contesta(r) and mc.tiene(r, 'LSP-037') and not fugas(r), (fugas(r), r[:300]))
+          contesta(r) and mc.es(r, 'SN_LSP_RECORTE_FMT') and not fugas(r), (fugas(r), r[:300]))
     r = call('delphi_diagnostics', {'path': U1}, t=120) or ''
     for _ in range(20):
         if not mc.es(r, 'SN_LSP_HINT_HOVER_USAGES') and 'in progress' not in r:
@@ -227,7 +227,7 @@ try:
         time.sleep(3)
         r = call('delphi_diagnostics', {'path': U1}, t=120) or ''
     check('F5 diagnostics: dice por que esa unit no se encuentra (LSP-037)',
-          mc.tiene(r, 'LSP-037') and not fugas(r), r[:400])
+          mc.es(r, 'SN_LSP_RECORTE_FMT') and not fugas(r), r[:400])
 
     # F8b: una unit de la Library Search Path FUERA de la instalacion (componentes,
     # GetIt), con la zona APAGADA: el motor puede hablar de ella (ltBiblioteca: la
@@ -287,7 +287,7 @@ try:
     t0 = time.time()
     while True:
         r = call('delphi_references', {'path': UD, 'line': 7, 'character': 14}, t=120) or ''
-        if not (mc.tiene(r, 'LSP-025') or mc.es(r, 'SR_REFS_WARMING_FMT')) or time.time() - t0 > 180:
+        if not (mc.es(r, 'SR_LSP_WARMING') or mc.es(r, 'SR_REFS_WARMING_FMT')) or time.time() - t0 > 180:
             break
         time.sleep(3)
     check('F8d references de una rutina de la RTL (zona APAGADA): su uso de dentro, no LSP-014',
@@ -314,21 +314,21 @@ try:
     U2 = os.path.join(P2, 'UDentro2.pas')
     r = motor('delphi_definition', {'path': U2, 'line': 7, 'character': 14})
     check('F7 definition de un simbolo de una unit que el .dpr nombra FUERA: LSP-038, sin su ruta',
-          mc.tiene(r, 'LSP-038') and not fugas(r), r[:300])
+          mc.es(r, 'SR_LSP_DEF_FUERA_FMT') and not fugas(r), r[:300])
     r = motor('delphi_hover', {'path': U2, 'line': 7, 'character': 14})
-    check('F7 hover: LSP-038', mc.tiene(r, 'LSP-038') and not fugas(r), r[:300])
+    check('F7 hover: LSP-038', mc.es(r, 'SR_LSP_DEF_FUERA_FMT') and not fugas(r), r[:300])
     r = motor('delphi_completion', {'path': U2, 'line': 8, 'character': 5})
     check('F7 completion: LSP-039 (nombra la unit, que esta en el .dpr del agente)',
-          mc.tiene(r, 'LSP-039') and 'UFuera2' in r and not fugas(r), r[:300])
+          mc.es(r, 'SR_LSP_NOMBRES_FUERA_FMT') and 'UFuera2' in r and not fugas(r), r[:300])
     r = motor('delphi_signature', {'path': U2, 'line': 7, 'character': 24})
-    check('F7 signature: LSP-039', mc.tiene(r, 'LSP-039') and not fugas(r), r[:300])
+    check('F7 signature: LSP-039', mc.es(r, 'SR_LSP_NOMBRES_FUERA_FMT') and not fugas(r), r[:300])
     r = motor('delphi_completion', {'path': os.path.join(P4, 'UDentro4.pas'), 'line': 8, 'character': 5})
     check('F7b completion con una entrada del .dpr que no se deja juzgar: LSP-039 igual (nombra UFuera2)',
-          mc.tiene(r, 'LSP-039') and 'UFuera2' in r and not fugas(r), r[:300])
+          mc.es(r, 'SR_LSP_NOMBRES_FUERA_FMT') and 'UFuera2' in r and not fugas(r), r[:300])
     r = motor('delphi_references', {'path': U2, 'line': 7, 'character': 14})
     # (lo niega LSP-014 antes de leer: la puerta de LoadSourceText, que no dejaria
     # leer el fichero de la definicion, es aqui una GUARDA)
-    check('F7 references: LSP-014, sin nada de la unit de fuera', mc.tiene(r, 'LSP-014') and not fugas(r), r[:300])
+    check('F7 references: LSP-014, sin nada de la unit de fuera', mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT') and not fugas(r), r[:300])
 finally:
     srv.mata()
 

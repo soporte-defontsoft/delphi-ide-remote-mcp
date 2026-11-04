@@ -90,15 +90,17 @@ try:
     r = cli.call('delphi_build', {'project': dproj, 'platform': 'Win64'})
     check('C4 sin el, el proyecto compila otra vez', verde(r), r[:300])
 
-    biblio = sonda(cli, 'LNKDFM380', True, 'Win32')
-    f, fdproj = proyecto(cli, 'project-fmx', 'Fmx')
-    fmarca = os.path.join(f, MARCA)
-    shutil.copy(biblio, os.path.join(f, 'LNKDFM380.DLL'))
-    cli.call('delphi_config', {'project': fdproj, 'command': 'add-platform', 'platform': 'Android64'})
-    r = cli.call('delphi_build', {'project': fdproj, 'platform': 'Android64'})
-    if 'SDK' in r and not verde(r) and 'E2141' not in r:
-        print('NOTA C5 no se mide: esta maquina no compila Android64 (%s)' % r[:160])
+    # C5 necesita compilar Android64: con el SDK que el IDE tiene por defecto para Android64, que se le
+    # pregunta al servidor (delphi_paserver profiles). Se decidia por la palabra 'SDK' en la respuesta
+    if not mc.sdk_por_defecto(cli.call, 'Android64'):
+        print('NOTA C5 no se mide: el IDE de esta maquina no tiene SDK por defecto para Android64')
     else:
+        biblio = sonda(cli, 'LNKDFM380', True, 'Win32')
+        f, fdproj = proyecto(cli, 'project-fmx', 'Fmx')
+        fmarca = os.path.join(f, MARCA)
+        shutil.copy(biblio, os.path.join(f, 'LNKDFM380.DLL'))
+        cli.call('delphi_config', {'project': fdproj, 'command': 'add-platform', 'platform': 'Android64'})
+        r = cli.call('delphi_build', {'project': fdproj, 'platform': 'Android64'})
         check('C5 un LNKDFM380.DLL en la carpeta del proyecto no se carga', not os.path.exists(fmarca), r[:300])
         check('C5 ...y Android64 compila', verde(r), r[:300])
 finally:

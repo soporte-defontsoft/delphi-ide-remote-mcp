@@ -3060,6 +3060,13 @@ begin
   end;
 end;
 
+const
+  { La primera linea de un fichero de tablas: que marco, de que instalacion y como
+    se genero. No la lee el servidor; con nombre, para que test_designer_tablas la
+    lea del fuente }
+  CABECERA_DE_TABLA_FMT = '# designer table %s of RAD Studio %s (build %s, compiler %s, %s): ' +
+    '%d units read from %d source folders in %d ms by DelphiLspMcp %s (generation %d)';
+
 { Las dos tablas de una instalacion, si no estan: en el hilo del generador.
   Un fallo se recuerda (GFallos); el cierre del servidor la corta (EAbort). }
 procedure GeneraYGuarda(const AInfo: TRadStudioInfo);
@@ -3113,8 +3120,7 @@ begin
       CrearCarpeta(Dir);
       for M := Low(TMarcoDisenador) to High(TMarcoDisenador) do
       begin
-        Cabecera := Format('# designer table %s of RAD Studio %s (build %s, compiler %s, %s): ' +
-          '%d units read from %d source folders in %d ms by DelphiLspMcp %s (generation %d)',
+        Cabecera := Format(CABECERA_DE_TABLA_FMT,
           [UpperCase(NombreDeMarco(M)), AInfo.Version, AInfo.Build, D.VersionCompilador, D.Plataforma,
           Tablas.Unidades, Length(D.Carpetas), Tablas.Ms, SERVER_VERSION, GENERACION_TABLAS]);
         EscribeEnCasaDelServidor(Ficheros[M],
@@ -3339,6 +3345,11 @@ begin
   end;
 end;
 
+const
+  { lo que la finalizacion espera al hilo de las tablas antes de dejarlo; con
+    nombre, para que test_atomos_1202 lo lea del fuente }
+  ESPERA_HILO_TABLAS_MS = 5000;
+
 initialization
   GGenLock := TObject.Create;
   GCola := TList<TRadStudioInfo>.Create;
@@ -3365,7 +3376,7 @@ finalization
     // 25-oct-2026 con 12 procesos quemando CPU: 5,3 s, y 0,1 s con esto).
     // SetThreadPriority y no TThread.Priority, que lanza si el hilo ya acabo
     SetThreadPriority(GHilo.Handle, THREAD_PRIORITY_NORMAL);
-    WaitForSingleObject(GHilo.Handle, 5000);
+    WaitForSingleObject(GHilo.Handle, ESPERA_HILO_TABLAS_MS);
   end;
 
 end.

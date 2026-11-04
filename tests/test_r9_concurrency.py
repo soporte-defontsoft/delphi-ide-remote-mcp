@@ -95,7 +95,8 @@ try:
     for t in threads: t.join()
 
     ok_reports = sum(1 for r in results if r and mc.abre(r, 'SK_VAULT_ANADIDO_COPIA_PREVIA_FMT'))
-    collisions = sum(1 for r in results if r and ('Cannot create' in r or 'No se puede' in r))
+    # una colision es una respuesta de error (su etiqueta), no el texto de la RTL en un idioma
+    collisions = sum(1 for r in results if r and mc.fallo(r))
     disk = open(os.path.join(VAULT, 'conc', 'base.md'), encoding='utf-8').read()
     on_disk = sum(1 for i in range(N) if ('MARK-%02d' % i) in disk)
 

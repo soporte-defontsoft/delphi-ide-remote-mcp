@@ -264,7 +264,7 @@ try:
                                 {'kind': 'edit', 'path': mc.virtual(B), 'old': 'dos', 'new': 'DOS'},
                                 {'kind': 'create', 'path': N, 'content': 'nuevo'},
                                 {'kind': 'move', 'path': M1, 'dest': M2}])
-    check('V41 ops: las cuatro apiladas, y dice cada una', t.count('CHSET-021') == 4 and mc.es(t, 'SN_CHANGESET_STAGED_FMT') and not mc.fallo(t), t[:400])
+    check('V41 ops: las cuatro apiladas, y dice cada una', mc.ids(t).count(mc.id_de('SN_CHANGESET_STAGED_FMT')) == 4 and not mc.fallo(t), t[:400])
     check('V41 ops: lo que vale para todas, una vez', t.count('MANDATORY') == 1, t[:600])
     p = cs('preview', id=ID)
     check('V41 ops: el preview las ve, con la unidad virtual ya traducida', not mc.fallo(p), p[:400])
@@ -618,8 +618,10 @@ try:
     tardo = time.time() - t0
     sigue = hilo.is_alive()
     hilo.join()
+    # lo mide el EVENTO: el otro contesta con el primero aun esperando a su paclient de 6 s (sigue). El
+    # 'tardo < 3' de antes no anadia nada a eso y con la maquina cargada fallaba solo
     check('V42 un perfil caido no retiene a otro: contesta mientras el primero sigue esperando a paclient',
-          sigue and tardo < 3 and mc.como_json(r).get('reachable') is False, (sigue, tardo, r[:200]))
+          sigue and mc.como_json(r).get('reachable') is False, (sigue, tardo, r[:200]))
 
     # el control: un sello que no esta NO es falta de conexion, y el nodo se sube
     with open(os.path.join(SCRATCH, '_sin_trabajos'), 'w') as f:

@@ -205,15 +205,48 @@ begin
       ' XAUTHORITY=' + GetEnvironmentVariable('XAUTHORITY') + ']';
 end;
 
+{ El titulo como lo pone la aplicacion: _NET_WM_NAME (EWMH), en UTF-8; y si no
+  lo lleva, WM_NAME (ICCCM), que es Latin-1. Se leia solo WM_NAME y como UTF-8:
+  una 'o' con tilde salia '?' (medido en Plasma, 4-nov-2026, con el puente de
+  Xwayland de KDE) y un window= con acentos no encontraba su ventana. }
 function TOjos.LeerTitulo(AVentana: NativeUInt): string;
 var
   P: MarshaledAString;
+  Atomo, Utf8, TipoReal, Num, Restan: NativeUInt;
+  Formato: Integer;
+  Datos: Pointer;
+  N: UTF8String;
+  Bytes: RawByteString;
 begin
   Result := '';
+  N := Cadena('_NET_WM_NAME');
+  Atomo := XInternAtom(FDisp, MarshaledAString(PAnsiChar(N)), 1);
+  N := Cadena('UTF8_STRING');
+  Utf8 := XInternAtom(FDisp, MarshaledAString(PAnsiChar(N)), 1);
+  if (Atomo <> 0) and (Utf8 <> 0) then
+  begin
+    Datos := nil;
+    // 1024 de 32 bits: 4 KB, mas que cualquier titulo
+    if (XGetWindowProperty(FDisp, AVentana, Atomo, 0, 1024, 0, Utf8,
+         TipoReal, Formato, Num, Restan, Datos) = 0) and (Datos <> nil) then
+    begin
+      if (TipoReal = Utf8) and (Formato = 8) and (Num > 0) then
+      begin
+        SetString(Bytes, PAnsiChar(Datos), Num);
+        SetCodePage(Bytes, CP_UTF8, False);
+        Result := string(Bytes);
+      end;
+      XFree(Datos);
+    end;
+    if Result <> '' then
+      Exit;
+  end;
   P := nil;
   if (XFetchName(FDisp, AVentana, P) <> 0) and (P <> nil) then
   begin
-    Result := Texto(P);
+    Bytes := RawByteString(PAnsiChar(P));
+    SetCodePage(Bytes, 28591, False); // ISO-8859-1, el STRING de ICCCM
+    Result := string(Bytes);
     XFree(P);
   end;
 end;

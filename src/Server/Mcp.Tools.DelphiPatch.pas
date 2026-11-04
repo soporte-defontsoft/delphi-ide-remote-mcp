@@ -132,7 +132,8 @@ uses
   Lsp.ProjectUnits,
   System.StrUtils, // IfThen: la lista de modos de ModosQueNoCombinan
   Lsp.Pascal,      // SinMayusculas: EL pliegue de lo que no es una ruta
-  MCPServer.Registration;
+  MCPServer.Registration,
+  Lsp.FormRender;  // EmpiezaLaEspera: el reloj de lo que espera el cliente
 
 { TDelphiReadTool }
 
@@ -212,6 +213,9 @@ function TDelphiPatchTool.ExecuteWithParams(const Params: TDelphiPatchParams): s
 var
   A: TPatchArgs;
 begin
+  // la llamada empieza: lo que espera su cliente cuenta desde aqui, y viaja hasta
+  // los jueces del IDE de lo escrito (ConAvisosDelLector; A3 de la 1.27)
+  var Desde := EmpiezaLaEspera;
   // los modos que no combinan: uno por llamada (Lsp.Patch.ModosQueNoCombinan)
   Result := ModosQueNoCombinan([
     IfThen(Params.Edits.Trim <> '', 'edits'),
@@ -263,7 +267,7 @@ begin
     // (AvisosDelLector: DSGN-061 de la 1.20), y los colores sin alfa que la
     // edicion trae: con el texto de antes (V154 de la 1.23.1)
     var Antes := TextoAntesDeEditar(Params.Path);
-    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Params.Edits), Params.Path, Antes));
+    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Params.Edits), Params.Path, Antes, Desde));
   end;
   // ADDUSES: la clausula la escribe el motor de clausulas (Lsp.ProjectUnits),
   // el mismo del .dpr y el .dpk; aqui solo la jaula y el reparto de nombres.
@@ -294,7 +298,7 @@ begin
     if Result <> '' then
       Exit;
     var Antes := TextoAntesDeEditar(Params.Path);
-    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Tanda), Params.Path, Antes));
+    Exit(ConAvisosDelLector(ApplyEdits(TPath.GetFullPath(Params.Path), Tanda), Params.Path, Antes, Desde));
   end;
   A := Default(TPatchArgs);
   A.Path := Params.Path;
@@ -318,7 +322,7 @@ begin
   A.Confirm := Params.Confirm;
   // ExecutePatch suelta el cerrojo al volver: el lector, despues
   var Antes := TextoAntesDeEditar(Params.Path);
-  Result := ConAvisosDelLector(ExecutePatch(A), Params.Path, Antes);
+  Result := ConAvisosDelLector(ExecutePatch(A), Params.Path, Antes, Desde);
 end;
 
 initialization

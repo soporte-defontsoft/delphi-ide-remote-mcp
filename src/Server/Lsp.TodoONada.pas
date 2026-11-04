@@ -14,9 +14,12 @@ unit Lsp.TodoONada;
 
 interface
 
-{ Tamano y fecha de escritura de un fichero SIN abrirlo (FindFirst): se leen
-  aunque otro proceso lo tenga abierto sin compartir. False si no esta. La
-  usan la foto de los escritores y la de la carpeta de un test. }
+{ Tamano y fecha de escritura de un fichero SIN abrirlo (GetFileAttributesEx,
+  la llamada de DiskStamp): se leen aunque otro proceso lo tenga abierto sin
+  compartir, y de un enlace, los suyos. False si no esta. La fecha, en UTC:
+  la que guarda el sistema de ficheros. La usan la foto de los
+  escritores y la de la carpeta de un test, y la huella de lo que nombra una
+  cache (la del estilo por defecto, la caja de paquetes). }
 function HuellaDeFichero(const ARuta: string; out ATam: Int64;
   out AFecha: TDateTime): Boolean;
 
@@ -116,23 +119,29 @@ uses
   Lsp.Patch,            // EscribeBytes: el escritor atomico de la jaula, para devolver
   Lsp.Guard;            // las puertas de escritura y los escritores que deshacen
 
-{ Tamano y fecha de escritura de un fichero SIN abrirlo (FindFirst): se leen
-  aunque otro proceso lo tenga abierto sin compartir. False si no esta. }
+{ Tamano y fecha de escritura de un fichero SIN abrirlo: se leen aunque otro
+  proceso lo tenga abierto sin compartir. False si no esta. }
 function HuellaDeFichero(const ARuta: string; out ATam: Int64;
   out AFecha: TDateTime): Boolean;
 var
-  SR: TSearchRec;
+  Data: TWin32FileAttributeData;
+  ST: TSystemTime;
 begin
   ATam := -1;
   AFecha := 0;
-  Result := FindFirst(ARuta, faAnyFile, SR) = 0;
+  Result := GetFileAttributesEx(PChar(ARuta), GetFileExInfoStandard, @Data);
   if Result then
-    try
-      ATam := SR.Size;
-      AFecha := SR.TimeStamp;
-    finally
-      FindClose(SR);
-    end;
+  begin
+    ATam := Int64(Data.nFileSizeHigh) shl 32 or Data.nFileSizeLow;
+    // la del disco tal cual, en UTC. TSearchRec.TimeStamp (la de antes) la
+    // pasa a local por la zona de la maquina (SystemTimeToTzSpecificLocalTime,
+    // por la fecha del fichero: el cambio de hora no la mueve, medido el
+    // 4-nov-2026), pero la mueven otra zona o sus reglas, y la hora repetida de
+    // octubre da la misma local a dos instantes. Como DiskStamp (Lsp.ShaCache)
+    // y la huella de las tablas del disenador
+    if FileTimeToSystemTime(Data.ftLastWriteTime, ST) then
+      AFecha := SystemTimeToDateTime(ST);
+  end;
 end;
 
 procedure TFotoDeFicheros.Toma(const ARutas: array of string);

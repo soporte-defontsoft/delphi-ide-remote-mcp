@@ -134,7 +134,7 @@ try:
               not mc.rechazado(r) and sin_bom_ancho and "Caption = 'Configuraci'#243'n'" in texto and
               'object Button1: TButton' in texto and texto.count('\r\n') == texto.count('\n'), (r[:300], b[:80]))
         r2 = dsg(command='lint', path=p)
-        check('T %s: ...y lint lo da por CLEAN despues' % enc, 'DSGN-020' in r2, r2[:300])
+        check('T %s: ...y lint lo da por CLEAN despues' % enc, mc.es(r2, 'SN_DESIGNER_LINT_OK_FMT'), r2[:300])
         check('T %s: ...y la unit (UTF-8 con BOM) no se toca: byte a byte igual' % enc, bytes_de(pas) == antes_pas, '')
 
     d = os.path.join(JAIL, 'totext_utf8')
@@ -219,7 +219,7 @@ try:
         d = os.path.join(JAIL, 'guarda_' + etiqueta.split()[0].replace('-', ''))
         p = form(d, 'UG', contenido)
         r = dsg(command='lint', path=p)
-        check('G %s: lint CLEAN' % etiqueta, 'DSGN-020' in r, r[:300])
+        check('G %s: lint CLEAN' % etiqueta, mc.es(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:300])
         out = os.path.join(d, 'png')
         os.makedirs(out)
         r = dsg(command='preview', path=p, out=out + '\\')

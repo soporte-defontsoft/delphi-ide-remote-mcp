@@ -55,6 +55,11 @@ def vcl(nombre):
     return p
 
 
+# lo que DSGN-093 propone, por sus formatos del catalogo: con la forma x que lee su lector, o solo con su signo
+MISMOS_HEX = mc.catalogo()['SF_DESIGNER_MISMOS_32_BITS_HEX_FMT']
+MISMOS = mc.catalogo()['SF_DESIGNER_MISMOS_32_BITS_FMT']
+
+
 def plano(r):
     return (r or '').replace('\\"', '"')
 
@@ -70,7 +75,7 @@ try:
     r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Edit1',
                                            'prop': 'TextSettings.FontColor', 'value': '$FF00A152'}))
     check('T1 $FF00A152 en un TAlphaColor: DSGN-093 con xFF00A152 y -16735918',
-          mc.tiene(r, 'DSGN-093') and 'the same 32 bits go as xFF00A152, which its reader takes, or as -16735918' in r,
+          mc.es(r, 'SR_DESIGNER_SET_TIPO_FMT') and (MISMOS_HEX % ('xFF00A152', -16735918)) in r,
           r[:600])
 
     r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Edit1',
@@ -82,7 +87,8 @@ try:
     r = plano(srv.call('delphi_designer', {'path': pv, 'command': 'set', 'component': 'Label1',
                                            'prop': 'Width', 'value': '$FFFFFFF0'}))
     check('T3 un Integer sin forma x: solo con su signo, -16',
-          mc.tiene(r, 'DSGN-093') and 'the same 32 bits go as -16' in r and 'which its reader takes' not in r,
+          mc.es(r, 'SR_DESIGNER_SET_TIPO_FMT') and (MISMOS % -16) in r
+          and mc.trozo_de_formato('SF_DESIGNER_MISMOS_32_BITS_HEX_FMT', 1) not in r,
           r[:600])
 
     p4 = fmx('UF4', edit='    TextSettings.FontColor = $FF00A152\r\n')
@@ -93,7 +99,8 @@ try:
     r = plano(srv.call('delphi_designer', {'path': pv, 'command': 'set', 'component': 'Label1',
                                            'prop': 'Width', 'value': '-2147483649'}))
     check('T5 control: lo que no cabe ni sin signo no propone nada',
-          mc.tiene(r, 'DSGN-093') and 'the same 32 bits' not in r, r[:600])
+          mc.es(r, 'SR_DESIGNER_SET_TIPO_FMT')
+          and mc.trozo_de_formato('SF_DESIGNER_MISMOS_32_BITS_FMT', 0).lstrip('; ') not in r, r[:600])
 finally:
     srv.cierra()
 

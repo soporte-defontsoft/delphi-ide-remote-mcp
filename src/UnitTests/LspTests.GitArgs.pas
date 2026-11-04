@@ -298,6 +298,11 @@ begin
   Assert.IsFalse(LlegaAParamStr(''), 'un vacio se salta');
   Assert.IsFalse(LlegaAParamStr('di "hola"'), 'una comilla solo agrupa');
   Assert.IsFalse(LlegaAParamStr('a' + #0 + 'b'), 'un NUL acaba la linea');
+  // y CUAL no llega, por su nombre (TEST-037 lo dice; Qwen, dirigido de la 1.27)
+  Assert.AreEqual('U+0009', CaracterQueNoLlega('Uno' + #9 + 'Dos'), 'el tabulador');
+  Assert.AreEqual('U+0022', CaracterQueNoLlega('di "hola"'), 'la comilla');
+  Assert.AreEqual('', CaracterQueNoLlega('Uno.Dos'), 'uno que llega');
+  Assert.AreEqual('', CaracterQueNoLlega(''), 'uno vacio vale, como en ValorDeLaCasaLlega');
 end;
 
 initialization

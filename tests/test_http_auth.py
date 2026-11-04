@@ -20,9 +20,11 @@ TOKEN = 'test-token-123'
 REPOROOT = mc.REPO
 _maindir = mc.carpeta('http-main')
 _mainexe = mc.copia_exe(_maindir)
+# la version de la instalacion activa (su delphi_installs, mc.version_activa), no '37.0' a mano
+VER = mc.version_activa()
 with open(os.path.join(_maindir, 'settings.ini'), 'w') as f:
     f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)
-            + 'DelphiVersion=37.0' + chr(10) * 2   # pinned to the one install here (of the server since 5-oct-2026)
+            + 'DelphiVersion=%s' % VER + chr(10) * 2   # pinned to the active install (of the server since 5-oct-2026)
             + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
             # el repo, de SOLO LECTURA: este servidor solo lee (delphi_list de src, workspace,
             # help, installs) y con escritura sobre el repo vivo un guardian que volviera atras
@@ -125,38 +127,43 @@ try:
         ws = json.loads(json.loads(body)['result']['content'][0]['text'])
     except Exception:
         ws = {}
-    check('DelphiVersion=37.0 instalada: activeDelphi 37.0, pedida 37.0',
-          ws.get('activeDelphi') == '37.0' and ws.get('delphiVersionRequested') == '37.0',
+    check('DelphiVersion=%s instalada: activeDelphi %s, pedida %s' % (VER, VER, VER),
+          bool(VER) and ws.get('activeDelphi') == VER and ws.get('delphiVersionRequested') == VER,
           json.dumps(ws)[:200])
-    # the number means nothing to an agent: the NAME travels with it
-    check('activeDelphiName nombra la version (RAD Studio 13) y activeDelphiRoot su carpeta',
-          'RAD Studio 13' in ws.get('activeDelphiName', '') and '37.0' in ws.get('activeDelphiRoot', ''),
+    # the number means nothing to an agent: the NAME travels with it. Lo que la instalacion dice
+    # de si misma, preguntado a sus jueces (eran 'RAD Studio 13', 'Delphi 13' y '37.0.' a mano):
+    # su clave Personalities (como Lsp.Discovery), su RootDir y el recurso de version de su bds.exe
+    RAIZ_IDE = mc.raiz_del_ide(VER)
+    NOMBRE_IDE = mc.valor_del_ide('Personalities', '', VER)
+    PERSONALIDAD = mc.valor_del_ide('Personalities', 'Delphi.Win32', VER)
+    _v = subprocess.run(['powershell', '-NoProfile', '-Command',
+                         "$v = [System.Diagnostics.FileVersionInfo]::GetVersionInfo('%s'); "
+                         "'{0}.{1}.{2}.{3}|{4}' -f $v.FileMajorPart, $v.FileMinorPart, $v.FileBuildPart, "
+                         "$v.FilePrivatePart, $v.ProductName" % os.path.join(RAIZ_IDE, 'bin', 'bds.exe').replace("'", "''")],
+                        capture_output=True, text=True, timeout=60).stdout.strip()
+    BUILD_IDE, _, EDICION_IDE = _v.partition('|')
+    check('activeDelphiName es el nombre de su clave Personalities (%s) y activeDelphiRoot su RootDir' % NOMBRE_IDE,
+          bool(NOMBRE_IDE) and ws.get('activeDelphiName') == NOMBRE_IDE and bool(RAIZ_IDE)
+          and mc.real(ws.get('activeDelphiRoot', '')).rstrip('\\').lower() == RAIZ_IDE.lower(),
           json.dumps(ws)[:300])
     # nothing composed by hand: the personality, edition and build come from the
     # registry and bds.exe of THAT install
-    check('personality, edition y build salen de la instalacion (Delphi 13, edicion, 37.0.x.y)',
-          ws.get('activeDelphiPersonality', '').startswith('Delphi 13') and ws.get('activeDelphiEdition', '') != ''
-          and ws.get('activeDelphiBuild', '').startswith('37.0.'), json.dumps(ws)[:300])
+    check('personality, edition y build salen de la instalacion (%s, %s, %s)' % (PERSONALIDAD, EDICION_IDE.strip(), BUILD_IDE),
+          bool(PERSONALIDAD) and ws.get('activeDelphiPersonality') == PERSONALIDAD
+          and bool(EDICION_IDE.strip()) and ws.get('activeDelphiEdition') == EDICION_IDE.strip()
+          and BUILD_IDE.count('.') == 3 and ws.get('activeDelphiBuild') == BUILD_IDE, (json.dumps(ws)[:300], _v))
     code, body = post({"jsonrpc": "2.0", "id": 2, "method": "tools/list",
                        "params": {}}, TOKEN)
     try:
         names = sorted(t['name'] for t in json.loads(body)['result']['tools'])
     except Exception:
         names = []
-    expected = ['delphi_build', 'delphi_completion', 'delphi_create',
-                'delphi_definition', 'delphi_diagnostics', 'delphi_edit',
-                'delphi_fetch', 'delphi_git', 'delphi_hover',
-                'delphi_installs', 'delphi_list', 'delphi_package',
-                'delphi_config', 'delphi_projects', 'delphi_read',
-                'delphi_references', 'delphi_report',
-                'delphi_search', 'delphi_signature', 'delphi_symbols',
-                'delphi_textedit', 'delphi_upload', 'delphi_workspace',
-                'delphi_paserver', 'delphi_delete', 'delphi_move',
-                'delphi_adb', 'delphi_desktop',
-                'delphi_components', 'delphi_styles', 'delphi_messages',
-                'delphi_changeset', 'delphi_designer', 'delphi_rename_symbol',
-                'delphi_test', 'delphi_help', 'delphi_docs']
-    check('http: tools/list = %d tools' % len(expected), sorted(names) == sorted(expected), names)
+    # el contrato sin vault: las tools del manifiesto generado (docs/CAPABILITIES.json) menos sus
+    # condicionales (las vault_*, que sin VaultPath no se registran). Eran 37 nombres a mano
+    expected = sorted(set(mc.capacidades()['toolNames']) - set(mc.capacidades()['optionalToolNames']))
+    check('http: tools/list = las %d tools del contrato (CAPABILITIES.json sin las condicionales)' % len(expected),
+          len(expected) > 0 and sorted(names) == expected,
+          (sorted(set(names) - set(expected)), sorted(set(expected) - set(names))))
 
     code, body = post({"jsonrpc": "2.0", "id": 3, "method": "tools/call",
         "params": {"name": "delphi_list",
@@ -387,8 +394,13 @@ try:
         ro_nombres = {t['name'] for t in json.loads(body)['result']['tools']}
         rw = {t['name'] for t in anunciadas if (t.get('_meta') or {}).get('access') == 'read-write'}
         resto = {t['name'] for t in anunciadas} - rw
+        # las de escritura, EXACTAMENTE las que el manifiesto generado declara read-write (eran "9 o
+        # mas": una que dejara de anunciarse como de escritura pasaba)
+        rw_contrato = {t['name'] for t in anunciadas
+                       if mc.capacidades()['access'].get(t['name']) == 'read-write'}
         check('anuncio: al token RO no se le anuncian las de escritura (al RW si: %d)' % len(rw),
-              len(rw) >= 9 and not (rw & ro_nombres), sorted(rw & ro_nombres))
+              rw and rw == rw_contrato and not (rw & ro_nombres),
+              (sorted(rw ^ rw_contrato), sorted(rw & ro_nombres)))
         check('anuncio: al token RO SI se le anuncian las de lectura y las mixtas',
               resto <= ro_nombres, sorted(resto - ro_nombres))
         # ...y la tabla de delphi_help, que las nombraria, se lo dice
@@ -514,7 +526,7 @@ try:
                                          'args': '--output=' + tmpdir3 + '\\PWN.txt'},
                           RO_TOKEN)
         check('ro: git diff con args --output: GIT-068, no llega a git (ni a la jaula)',
-              'GIT-068' in body and mc.rechazado(mc.texto(json.loads(body)))
+              mc.es(body, 'SR_GIT_ARGS_RETIRADO') and mc.rechazado(mc.texto(json.loads(body)))
               and not mc.llego_a_git(mc.texto(json.loads(body)))
               and not mc.es(body, 'SR_JAIL_FMT'), '%s %s' % (code, body[:120]))
         check('ro: git diff --output no escribio el fichero',
@@ -773,14 +785,20 @@ finally:
 # --- session expiry: [Server] SessionTimeoutMinutes ---------------------------
 # 1.0.17: a session idle longer than the timeout is DEAD - 404 with the reason,
 # the same door an id this process never issued already got - and initialize
-# opens a new one. Three seconds here (decimals are accepted for exactly this).
+# opens a new one. Six seconds here (decimals are accepted for exactly this).
+# Eran 3 s con tramos de 2: un segundo de margen, que una peticion lenta con la
+# maquina cargada se comia. Los tramos y la espera salen del plazo, con 2 s de margen
+TTL_MIN = 0.1
+TTL_S = TTL_MIN * 60
+TRAMO = TTL_S - 2              # cada tramo MENOR que el plazo; los dos juntos, MAYOR
+CADUCA = TTL_S + 2             # sin tocarla, MAS que el plazo entero
 TTL_PORT = mc.puerto_libre()
 tmpdir5 = mc.carpeta('http-ttl')
 try:
     exe5 = mc.copia_exe(tmpdir5)
     with open(os.path.join(tmpdir5, 'settings.ini'), 'w') as f:
         f.write('[Server]' + chr(10) + 'Port=%d' % TTL_PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)
-                + 'SessionTimeoutMinutes=0.05' + chr(10) * 2
+                + 'SessionTimeoutMinutes=%g' % TTL_MIN + chr(10) * 2
                 + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
                 + 'Roots=%s' % tmpdir5 + chr(10))
     proc5 = mc.lanza_http(exe5, None, mc.entorno(), espera_en=TTL_PORT)
@@ -799,23 +817,23 @@ try:
         except Exception:
             srv = {}
         check('ttl: delphi_workspace publica sessions y sessionTimeoutMinutes',
-              srv.get('sessions', 0) >= 1 and abs(float(srv.get('sessionTimeoutMinutes', -1)) - 0.05) < 1e-6,
+              srv.get('sessions', 0) >= 1 and abs(float(srv.get('sessionTimeoutMinutes', -1)) - TTL_MIN) < 1e-6,
               json.dumps(srv)[:200])
         # (5-oct-2026: la version fijada que no esta ya no se mide aqui - un
         # servidor sin su Delphi no arranca; test_un_delphi U5)
-        # (revisor de baterias de la 1.27) dos tramos de 2 s: cada uno MENOR que el plazo (3 s) y los dos
-        # juntos MAYOR. Con uno solo de 1,5 s la sesion seguia viva aunque ninguna peticion la tocara
-        time.sleep(2)
+        # (revisor de baterias de la 1.27) dos tramos: cada uno MENOR que el plazo y los dos juntos
+        # MAYOR. Con uno solo de 1,5 s la sesion seguia viva aunque ninguna peticion la tocara
+        time.sleep(TRAMO)
         code, _, body = cli5.post({"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}, sid5, accept=JSON)
         viva = code == 200 and 'delphi_build' in body
-        time.sleep(2)
+        time.sleep(TRAMO)
         code, _, body = cli5.post({"jsonrpc": "2.0", "id": 41, "method": "tools/list", "params": {}}, sid5, accept=JSON)
-        check('ttl: cada peticion la toca (2 s + 2 s, mas que el plazo entero, sigue viva)',
+        check('ttl: cada peticion la toca (%g s + %g s, mas que el plazo entero de %g, sigue viva)' % (TRAMO, TRAMO, TTL_S),
               viva and code == 200 and 'delphi_build' in body, '%s %s' % (code, body[:120]))
-        time.sleep(4)
+        time.sleep(CADUCA)
         code, _, body = cli5.post({"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {}}, sid5, accept=JSON)
-        check('ttl: 4 s sin usarla -> 404 "Session expired" con el plazo',
-              code == 404 and mc.es(body, 'SR_SESSION_EXPIRED_FMT') and '0.05' in body, '%s %s' % (code, body[:200]))
+        check('ttl: %g s sin usarla -> 404 "Session expired" con el plazo' % CADUCA,
+              code == 404 and mc.es(body, 'SR_SESSION_EXPIRED_FMT') and ('%g' % TTL_MIN) in body, '%s %s' % (code, body[:200]))
         code, h, body = cli5.post(INIT, sid5, accept=JSON)
         sid5b = h.get('Mcp-Session-Id')
         check('ttl: initialize con la sesion caducada abre otra nueva',

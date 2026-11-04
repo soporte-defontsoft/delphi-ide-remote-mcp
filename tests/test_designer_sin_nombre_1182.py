@@ -91,10 +91,10 @@ try:
 
     r = dsg(PADRE, {'component': 'Button2', 'before': 'Button1'})
     check('N1 un padre SIN nombre: DSGN-150 y nada escrito (no "without TPanel")',
-          mc.rechazado(r) and 'DSGN-150' in r and open(PADRE, 'rb').read() == T_PADRE, r[:300])
+          mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_ORDEN_PADRE_SIN_NOMBRE_FMT') and open(PADRE, 'rb').read() == T_PADRE, r[:300])
     r = dsg(HERM, {'component': 'Button2', 'index': 3})
     check('N2 Button2 detras de un TTimer SIN nombre: el IDE no lo guarda (DSGN-136, su orden), nada escrito',
-          mc.rechazado(r) and 'DSGN-136' in r and 'TTimer' in r and open(HERM, 'rb').read() == T_HERM,
+          mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_ORDEN_EL_IDE_FMT') and 'TTimer' in r and open(HERM, 'rb').read() == T_HERM,
           (r[:300], orden(HERM)))
     open(HERM, 'wb').write(T_HERM)
     # N3-N5: exito es no fallar; not mc.rechazado dejaba pasar un INTERNAL (revisor de baterias de la 1.27)

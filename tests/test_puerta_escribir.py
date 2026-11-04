@@ -53,9 +53,9 @@ try:
           mc.es(r, 'SR_GUARD_FUERA_DE_LUGARES_FMT') and not detras(), (detras(), r[:300]))
 
     r = mc.espera_info(srv.call, {'command': 'info', 'classname': 'TButton', 'framework': 'vcl'},
-                       lambda x: mc.tiene(x, 'DSGN-053'))
+                       lambda x: mc.es(x, 'SR_DESIGNER_TABLA_FALLO_FMT'))
     check('C1 la cache de tablas que es una union: la generacion falla con su motivo, y nada detras',
-          mc.tiene(r, 'DSGN-053') and 'GUARD-034' in r and not detras(), (detras(), r[:300]))
+          mc.es(r, 'SR_DESIGNER_TABLA_FALLO_FMT') and mc.es(r, 'SR_GUARD_FUERA_DE_LUGARES_FMT') and not detras(), (detras(), r[:300]))
 
     # P4-a de la 1.18.0: el ESCRITOR de la jaula juzga tambien DONDE nace su
     # temporal (la carpeta real + el nombre, RutaDelEnlace). Una carpeta de la raiz
@@ -115,7 +115,7 @@ try:
         rs = srv.call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'delete', 'path': _por})
         check('W2 delete, move y el delete de un changeset por una union afuera con un enlace de vuelta: '
               'GUARD-038 y la victima sigue con su enlace',
-              mc.tiene(r1, 'GUARD-038') and mc.tiene(r2, 'GUARD-038') and mc.tiene(rs, 'GUARD-038')
+              all(mc.es(x, 'SR_ENTRADA_CARPETA_REAL_FMT') for x in (r1, r2, rs))
               and os.path.islink(_ve) and os.path.exists(_e), (r1[:200], r2[:200], rs[:200]))
         mc.borra(_j)
     elif not _hay_e:

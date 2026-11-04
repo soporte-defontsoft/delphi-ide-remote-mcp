@@ -89,8 +89,25 @@ def plano(r):
     return (r or '').replace('\\"', '"')
 
 
+# lo que dice el servidor, por sus formatos del catalogo (texto NUESTRO: Lsp.Texts), no copiado en ingles
 def pista(propiedad, marco, clase, este):
-    return '"%s" is what the %s %s publishes; this form is %s' % (propiedad, marco, clase, este)
+    return mc.catalogo()['SF_DSGN_EN_EL_OTRO_MARCO_FMT'] % (propiedad, marco, clase, este)
+
+
+PISTA = mc.trozo_de_formato('SF_DSGN_EN_EL_OTRO_MARCO_FMT', 1)      # '" is what the ': la pista, con cualquier valor
+QUIZAS = mc.trozo_de_formato('SF_DESIGNER_QUIZAS_FMT', 0)           # ' Did you mean ': la parecida, con cualquiera
+
+
+def quizas(parecida):
+    return mc.catalogo()['SF_DESIGNER_QUIZAS_FMT'] % parecida
+
+
+def va_con(parametro, modos):
+    return mc.catalogo()['SF_PARAMETRO_VA_CON_FMT'] % (parametro, modos)
+
+
+def lo_enviado_va_con(enviado, comando):
+    return mc.catalogo()['SF_LO_ENVIADO_VA_CON_FMT'] % (enviado, comando)
 
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='con-quien-va', t=240)
@@ -104,50 +121,50 @@ try:
 
     r = plano(srv.call('delphi_designer', {'path': pf, 'maxdepth': 3}))
     check('V1 sin command, con path y maxdepth: DSGN-047 y "goes with: tree"',
-          mc.tiene(r, 'DSGN-047') and 'What you sent (path, maxdepth) goes with: tree.' in r, r[:400])
+          mc.es(r, 'SR_DESIGNER_NO_VA_CON_COMANDO_FMT') and lo_enviado_va_con('path, maxdepth', 'tree') in r, r[:400])
 
     r = plano(srv.call('delphi_designer', {'path': pv, 'command': 'to-text', 'out': JAIL}))
     check('V2 to-text con path y out: lo enviado va con preview',
-          mc.tiene(r, 'DSGN-047') and 'What you sent (path, out) goes with: preview.' in r, r[:400])
+          mc.es(r, 'SR_DESIGNER_NO_VA_CON_COMANDO_FMT') and lo_enviado_va_con('path, out', 'preview') in r, r[:400])
 
     pu = os.path.join(JAIL, 'UF.pas')
     r = plano(srv.call('delphi_edit', {'path': pu, 'old': '  FormF: TFormF;', 'new': '  FormF: TFormF;',
                                        'code': 'procedure X;\r\nbegin\r\nend;'}))
     check('V3 delphi_edit old/new con code: "code" va con los dos insert',
-          mc.tiene(r, 'EDIT-115') and '"code" goes with: insert=rutina-global, insert=metodo.' in r, r[:400])
+          mc.es(r, 'SR_EDIT_NO_VA_CON_MODO_FMT') and va_con('code', 'insert=rutina-global, insert=metodo') in r, r[:400])
 
     r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Label1',
                                            'prop': 'Alignment', 'value': 'taRightJustify'}))
     check('V4 Alignment en un TLabel FMX: la del TLabel de la VCL, sin parecida',
-          mc.tiene(r, 'DSGN-087') and pista('Alignment', 'VCL', 'TLabel', 'FMX') in r
-          and 'Did you mean' not in r, r[:700])
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and pista('Alignment', 'VCL', 'TLabel', 'FMX') in r
+          and QUIZAS not in r, r[:700])
 
     r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Edit1',
                                            'prop': 'Font.Color', 'value': '-65536'}))
     check('V5 Font.Color en un TEdit FMX: la del TEdit de la VCL, y no Hint.Color',
-          mc.tiene(r, 'DSGN-087') and pista('Font.Color', 'VCL', 'TEdit', 'FMX') in r
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and pista('Font.Color', 'VCL', 'TEdit', 'FMX') in r
           and 'Hint.Color' not in r, r[:700])
 
     r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'insert', 'classname': 'TButton',
                                            'component': 'Btn1', 'props': 'Caption=Guardar;Width=120'}))
     check('V6 insert de un TButton FMX con Caption: la del TButton de la VCL, y no Action',
-          mc.tiene(r, 'DSGN-087') and pista('Caption', 'VCL', 'TButton', 'FMX') in r
-          and 'Did you mean' not in r and 'Btn1' not in open(pf, 'rb').read().decode('utf-8-sig'), r[:700])
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and pista('Caption', 'VCL', 'TButton', 'FMX') in r
+          and QUIZAS not in r and 'Btn1' not in open(pf, 'rb').read().decode('utf-8-sig'), r[:700])
 
     r = plano(srv.call('delphi_designer', {'path': pv, 'command': 'set', 'component': 'Label1',
                                            'prop': 'Position.X', 'value': '35'}))
     check('V7 Position.X en un TLabel VCL: la del TLabel de FMX',
-          mc.tiene(r, 'DSGN-087') and pista('Position.X', 'FMX', 'TLabel', 'VCL') in r, r[:700])
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and pista('Position.X', 'FMX', 'TLabel', 'VCL') in r, r[:700])
 
     r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Layout1',
                                            'prop': 'AlignTo', 'value': 'Edit1'}))
     check('V8 control: AlignTo en un TLayout FMX sigue diciendo "Did you mean Align?", sin pista',
-          mc.tiene(r, 'DSGN-087') and 'Did you mean Align?' in r and 'is what the' not in r, r[:700])
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and quizas('Align') in r and PISTA not in r, r[:700])
 
     r = plano(srv.call('delphi_designer', {'path': pv, 'command': 'set', 'component': 'Label1',
                                            'prop': 'NoExisteEnNinguno120', 'value': '1'}))
     check('V9 control: lo que no existe en ningun marco, ni pista ni parecida',
-          mc.tiene(r, 'DSGN-087') and 'is what the' not in r and 'Did you mean' not in r, r[:700])
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and PISTA not in r and QUIZAS not in r, r[:700])
 
     p10 = fmx('UF10', label="    Alignment = taRightJustify\r\n    TextSettings.Font.Color = clNavy\r\n")
     r = plano(srv.call('delphi_designer', {'path': p10, 'command': 'lint'}, t=240))
@@ -158,18 +175,18 @@ try:
     r = plano(srv.call('delphi_designer', {'path': pv, 'command': 'set', 'component': 'Label1',
                                            'prop': 'Hent.Color', 'value': 'clRed'}))
     check('V11 Hent.Color en un TLabel VCL: ni "Did you mean Hint.Color?" (Hint es una cadena)',
-          mc.tiene(r, 'DSGN-087') and 'Hint.Color' not in r, r[:700])
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and 'Hint.Color' not in r, r[:700])
 
     r = plano(srv.call('delphi_designer', {'path': pv, 'command': 'set', 'component': 'Label1',
                                            'prop': 'Fant.Size', 'value': '12'}))
     check('V12 control: Fant.Size sigue proponiendo Font.Size, que existe',
-          mc.tiene(r, 'DSGN-087') and 'Did you mean Font.Size?' in r, r[:700])
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and quizas('Font.Size') in r, r[:700])
 
     pt = os.path.join(JAIL, 't.txt')
     open(pt, 'wb').write(b'a\r\n')
     r = plano(srv.call('delphi_textedit', {'path': pt, 'old': 'a', 'new': 'b', 'content': 'x'}))
     check('V13 la misma regla en otra tool: "content" va con create',
-          mc.tiene(r, 'EDIT-115') and '"content" goes with: create.' in r, r[:400])
+          mc.es(r, 'SR_EDIT_NO_VA_CON_MODO_FMT') and va_con('content', 'create') in r, r[:400])
 finally:
     srv.cierra()
 

@@ -47,7 +47,7 @@ try:
           len(antes) == 2 and len(de_p) == 1 and len(de_q) == 1, (antes, de_p, de_q))
 
     r = srv.call('delphi_delete', {'path': os.path.join(P, 'x', 'Units')})
-    check('F2 delete de x\\Units: va a la papelera', 'FILE-021' in r, r[:200])
+    check('F2 delete de x\\Units: va a la papelera', mc.es(r, 'SK_FILE_BORRADO_PAPELERA_FMT'), r[:200])
     fin_espera = time.time() + 10   # por si la parada no es al instante
     while mc.motores_en(srv.p.pid, P) and time.time() < fin_espera:
         time.sleep(0.2)

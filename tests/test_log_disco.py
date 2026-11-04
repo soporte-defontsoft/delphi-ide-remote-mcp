@@ -32,6 +32,18 @@ BASE = os.path.join(RAIZ, 'log_disco')
 VICTIM = os.path.join(RAIZ, 'log_disco_victima')
 LOGS = os.path.join(BASE, 'logs')
 VIVO = os.path.join(LOGS, 'actual.log')
+# la linea de parada ('%s v%s: stopped'), por su formato del catalogo: lo que va tras la version
+PARADO = mc.trozo_de_formato('SL_SYS_PARADO_FMT', -1)
+# las del arranque, por sus formatos (texto NUESTRO: Lsp.Texts), no copiadas en ingles: 'Log on disk: %s
+# (actual.log live; ...', el modo '(stdio)' / '(HTTP :<puerto>' y el 'Ready.' de la consola
+LOG_EN_DISCO = mc.trozo_de_formato('SL_SYS_LOG_EN_DISCO_FMT', 0)
+LOG_VIVO = mc.trozo_de_formato('SL_SYS_LOG_EN_DISCO_FMT', 1)
+EN_STDIO = mc.trozo_de_formato('SL_SYS_SERVICE_STDIO_FMT', -1)
+LISTO = mc.catalogo()['SL_SYS_READY_CTRL_STOP']
+
+
+def en_http(puerto):
+    return mc.trozo_de_formato('SL_SYS_SERVICE_HTTP_FMT', 1, puerto)
 INI = os.path.join(BASE, 'settings.ini')
 # lo que compone el nombrador del servidor: sin sufijo, o -2, -3... (nunca -1 ni -01)
 BLOQUE = re.compile(r'^\d{8}-\d{6}(-([2-9]|[1-9]\d+))?\.log$')
@@ -81,10 +93,10 @@ print('== log en disco ==')
 # ---- A: stdio, salida limpia
 s = mc.Stdio(EXE, ENV, nombre='log-battery')
 check('A actual.log aparece junto al exe con el proceso VIVO',
-      espera(lambda: 'Log on disk:' in lee(VIVO)), os.listdir(BASE))
+      espera(lambda: LOG_EN_DISCO in lee(VIVO)), os.listdir(BASE))
 t = lee(VIVO)
 check('A el arranque dice donde esta el log (la misma nota en los tres modos)',
-      'Log on disk:' in t and 'actual.log live' in t and '(stdio)' in t, t[-400:])
+      LOG_EN_DISCO in t and LOG_VIVO in t and EN_STDIO in t, t[-400:])
 s.call('delphi_help', {"command": "tool", "name": "MARCA-VIVA-1"})
 check('A una peticion llega a disco en ~medio segundo, sin salir el proceso',
       espera(lambda: 'MARCA-VIVA-1' in lee(VIVO), 3), lee(VIVO)[-300:])
@@ -92,7 +104,7 @@ s.call('delphi_help', {"command": "tool", "name": "delphi_read", "password": "SE
 check('A una contrasena NUNCA llega al log (el enmascarador de siempre)',
       espera(lambda: '"password"' in lee(VIVO), 3) and 'SECRETO-LOG-123' not in lee(VIVO),
       [l for l in lee(VIVO).splitlines() if 'password' in l][:1])
-check('A antes de salir no hay linea de parada', ': stopped' not in lee(VIVO))
+check('A antes de salir no hay linea de parada', PARADO not in lee(VIVO))
 # F: una tira base64 (600 simbolos, con la barra escapada como la manda JSON)
 # y una palabra corta del mismo alfabeto que NO es una tira
 blob = base64.b64encode(bytes(range(256)) * 2).decode()[:600]
@@ -125,20 +137,20 @@ check('G la respuesta registrada pasa por el enmascarador: "token":"***", nunca 
       '"token":"***"' in linea and '"token":"MARCA-TOK"' not in linea, linea[:400])
 s.cierra()
 check('A salida limpia: queda la linea "parado" (la cola de la sesion llega a disco)',
-      ': stopped' in lee(VIVO), lee(VIVO)[-300:])
+      PARADO in lee(VIVO), lee(VIVO)[-300:])
 
 # ---- B: --http matado desde fuera
 shutil.rmtree(LOGS, ignore_errors=True)
 PORT = mc.puerto_libre()
 h = mc.lanza_http(EXE, PORT, ENV, stdin=subprocess.DEVNULL)
 check('B --http: el arranque esta en disco con el proceso vivo',
-      espera(lambda: ('HTTP :%d' % PORT) in lee(VIVO) and 'Ready.' in lee(VIVO)), lee(VIVO)[-300:])
+      espera(lambda: en_http(PORT) in lee(VIVO) and LISTO in lee(VIVO)), lee(VIVO)[-300:])
 # matado DE VERDAD (no h.kill(): desde la 1.21.0 ese PARA el servidor, que escribe
 # su ": stopped"); y lo que deja en la tabla de atomos, recogido (mc.mata_y_recoge)
 mc.mata_y_recoge(h)
 t = lee(VIVO)
 check('B matado desde fuera: lo registrado sigue ahi (no hace falta salir bien)',
-      ('HTTP :%d' % PORT) in t and ': stopped' not in t, t[-300:])
+      en_http(PORT) in t and PARADO not in t, t[-300:])
 
 # ---- C: rotacion, poda y el nombrador
 shutil.rmtree(LOGS, ignore_errors=True)
@@ -164,7 +176,7 @@ for i in range(400):
 check('C un bloque cada LinesPerFile lineas, con el proceso vivo', len(nuevos) >= 1, bloques())
 t_bloques = ''.join(lee(os.path.join(LOGS, n)) for n in nuevos)
 check('C el bloque ES la cola en vivo renombrada: empieza en el arranque de esta ejecucion',
-      'Log on disk:' in t_bloques and 'ROTA-000' in t_bloques, t_bloques[:200])
+      LOG_EN_DISCO in t_bloques and 'ROTA-000' in t_bloques, t_bloques[:200])
 s.call('delphi_help', {"command": "tool", "name": "TRAS-CORTE"})
 check('C tras el corte, lo nuevo va a un actual.log nuevo (nada se pierde en el corte)',
       espera(lambda: 'TRAS-CORTE' in lee(VIVO), 3) and 'ROTA-000' not in lee(VIVO), lee(VIVO)[:200])
@@ -217,7 +229,7 @@ faltan = [m for m in ['MARCA-%s-%02d' % (g, i) for g in ('P1', 'P2') for i in ra
 check('E dos escritores a la vez: no se pierde ninguna linea', not faltan, faltan[:5])
 rotas = [l for l in t.splitlines() if 'MARCA-P' in l and not l.startswith('[')]
 check('E ninguna linea cortada dentro de otra', not rotas, rotas[:2])
-check('E las dos salidas limpias dejan su "stopped"', t.count(': stopped') >= 2, t.count(': stopped'))
+check('E las dos salidas limpias dejan su "stopped", una cada una', t.count(PARADO) == 2, t.count(PARADO))
 
 if mc.F == 0:
     limpia()

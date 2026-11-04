@@ -255,7 +255,11 @@ var
   GLibVigias: TArray<TVigiaDeClave>;
   GLibGeneracion: Integer = 0; // sube en cada carga
   // los lugares del IDE: se miden una vez (las puertas los preguntan por cada
-  // fichero, y IdeSdksDir lee el registro); los sysroots, por llamada
+  // fichero, y IdeSdksDir lee el registro) y otra cuando Windows dice que el IDE
+  // cambio las claves de la carpeta de los SDK (GIdeVigias; B9 de la 1.27); los
+  // sysroots, por llamada
+  GIdeCandado: TObject;
+  GIdeVigias: TArray<TVigiaDeClave>;
   GIdeLoaded: Boolean = False;
   GIdeInstalacion: string;      // la instalacion: solo para leer
   GIdeLugares: TArray<string>;  // datos del usuario y SDK: leer y escribir
@@ -884,30 +888,39 @@ begin
   // (las puertas la preguntan a ELLA: lo que lee por ellas -rsvars.bat, por la
   // tabla del IDE que da IdeSdksDir- lo admiten por la instalacion, antes)
   Info := DiscoverRadStudio;
-  if not GIdeLoaded then
-  begin
-    // en locales, y las globales al final: otro hilo que ya viese GIdeLoaded
-    // no se encuentra la instalacion a medio calcular (revisor de P3)
-    Lugares := nil;
-    Instalacion := '';
-    // solo lo ABSOLUTO: con APPDATA vacia la carpeta de perfiles saldria
-    // relativa a la carpeta de trabajo del proceso (medida M3), y eso no es
-    // un lugar del IDE
-    if Info.Found then
+  TMonitor.Enter(GIdeCandado);
+  try
+    // los vigias ANTES de la primera lectura: un cambio que llegue mientras se
+    // lee sale en la siguiente pregunta (como la biblioteca)
+    if not GIdeLoaded and Info.Found and (GIdeVigias = nil) then
+      GIdeVigias := VigiasDeLaCarpetaDeSdks(Info.Version);
+    if (not GIdeLoaded) or CambioAlgunaClave(GIdeVigias) then
     begin
-      Instalacion := InstalacionDelIde;
-      for var L in TArray<string>.Create(IdeProfilesDir(Info.Version),
-        IdeSdksDir(Info.Version)) do
-        if EsRutaAbsoluta(L.Trim) then
-          Lugares := Lugares + [FormaLarga(L)];
+      // en locales, y las globales al final: otro hilo que ya viese GIdeLoaded
+      // no se encuentra la instalacion a medio calcular (revisor de P3)
+      Lugares := nil;
+      Instalacion := '';
+      // solo lo ABSOLUTO: con APPDATA vacia la carpeta de perfiles saldria
+      // relativa a la carpeta de trabajo del proceso (medida M3), y eso no es
+      // un lugar del IDE
+      if Info.Found then
+      begin
+        Instalacion := InstalacionDelIde;
+        for var L in TArray<string>.Create(IdeProfilesDir(Info.Version),
+          IdeSdksDir(Info.Version)) do
+          if EsRutaAbsoluta(L.Trim) then
+            Lugares := Lugares + [FormaLarga(L)];
+      end;
+      GIdeInstalacion := Instalacion;
+      GIdeLugares := Lugares;
+      GIdeLoaded := True;
     end;
-    GIdeInstalacion := Instalacion;
-    GIdeLugares := Lugares;
-    GIdeLoaded := True;
+    Result := GIdeLugares;
+    if not AParaEscribir and (GIdeInstalacion <> '') then
+      Result := [GIdeInstalacion] + Result;
+  finally
+    TMonitor.Exit(GIdeCandado);
   end;
-  Result := GIdeLugares;
-  if not AParaEscribir and (GIdeInstalacion <> '') then
-    Result := [GIdeInstalacion] + Result;
   // los sysroots registrados, EN CADA llamada: get-sdk, remove-sdk o el SDK
   // Manager los cambian con el servidor en marcha. Los que llevan la macro
   // viven en IdeSdksDir, que ya esta
@@ -992,5 +1005,6 @@ end;
 
 initialization
   GLibCandado := TObject.Create;
+  GIdeCandado := TObject.Create;
 
 end.

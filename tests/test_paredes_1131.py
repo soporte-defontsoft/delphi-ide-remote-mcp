@@ -210,10 +210,10 @@ try:
 
     cat = mc.catalogo()
     check('W9 la nota de las menciones (LSP-015) dice que una cadena SI bloquea el rename (RENAME-020)',
-          'RENAME-020' in cat['SN_REFS_MENTIONS_FMT'] and 'do not block' not in cat['SN_REFS_MENTIONS_FMT'],
+          mc.id_de('SR_RENAME_STRINGS_FMT') in cat['SN_REFS_MENTIONS_FMT'] and 'do not block' not in cat['SN_REFS_MENTIONS_FMT'],
           cat['SN_REFS_MENTIONS_FMT'][:300])
     check('W9 ...y la descripcion de delphi_references (decia "listed but harmless")',
-          'RENAME-020' in desc('delphi_references') and 'listed but harmless' not in desc('delphi_references'),
+          mc.id_de('SR_RENAME_STRINGS_FMT') in desc('delphi_references') and 'listed but harmless' not in desc('delphi_references'),
           desc('delphi_references')[:400])
     fetch = desc('delphi_fetch') + ' | ' + prop('delphi_fetch', 'maxbytes') + ' | ' + cat['SN_WS_DOWNLOAD_WITH_FETCH']
     check('W9 WS-020, delphi_fetch y su maxbytes dicen el umbral de 1 MB, y ninguno los 4 MB de antes',
@@ -236,7 +236,7 @@ salida.close()
 # la jaula sigue como esta declarada (W1-W5 lo miden con el mismo servidor)
 with open(os.path.join(BASE, 'paredes-normal.txt'), 'rb') as f:
     ARRANQUE = f.read().decode('utf-8', 'replace')
-PREFIJO = mc.catalogo()['SL_SYS_RAIZ_NO_DISPONIBLE_ARRANQUE_FMT'].split('%s')[0]
+PREFIJO = mc.trozo_de_formato('SL_SYS_RAIZ_NO_DISPONIBLE_ARRANQUE_FMT', 0)
 NOTAS = [l for l in ARRANQUE.splitlines() if PREFIJO in l]
 
 

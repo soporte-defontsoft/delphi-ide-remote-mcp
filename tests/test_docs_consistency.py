@@ -66,8 +66,8 @@ for m in re.finditer(r'the other (\d+)\b', readme):
     check('README "the other %d" cuadra (no-LSP: %d con vault, %d core)' %
           (n, TOTAL - len(LSP_BACKED), NON_LSP_CORE), ok,
           readme[max(0, m.start() - 60):m.end() + 20])
-check('README nombra los 5 vault_* como opcionales',
-      '5 optional `vault_*`' in readme and len(VAULT_TOOLS) == 5, VAULT_TOOLS)
+check('README nombra los %d vault_* como opcionales' % len(VAULT_TOOLS),
+      bool(VAULT_TOOLS) and ('%d optional `vault_*`' % len(VAULT_TOOLS)) in readme, VAULT_TOOLS)
 
 # ---- TOOLS.md ----------------------------------------------------------
 toolsmd = open(os.path.join(REPO, 'docs', 'TOOLS.md'), encoding='utf-8').read()

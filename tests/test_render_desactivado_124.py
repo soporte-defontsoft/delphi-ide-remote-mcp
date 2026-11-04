@@ -27,7 +27,8 @@ JAIL = os.path.join(BASE, 'jail')
 os.makedirs(JAIL)
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)
 RENDER = os.path.join(os.path.dirname(EXE), 'DelphiFormRenderVcl.exe')
-BDS = '37.0'
+# la version de la instalacion activa (delphi_installs), no '37.0' a mano
+BDS = mc.version_activa()
 
 
 def escribe(nombre, texto):
@@ -70,9 +71,11 @@ def con_lista(rutas):
 
 
 BIN = os.path.join(mc.raiz_del_ide(BDS), 'bin')
-ESTANDAR = [os.path.join(BIN, n) for n in ('dclstd370.bpl', 'dclsmp370.bpl')]
+# los dos paquetes estandar de ESTA instalacion: su nombre lleva el sufijo de sus paquetes
+# (mc.sufijo_del_ide, del compilador de su bin), no el 370 a mano
+ESTANDAR = [os.path.join(BIN, n % mc.sufijo_del_ide(mc.raiz_del_ide(BDS))) for n in ('dclstd%s.bpl', 'dclsmp%s.bpl')]
 c0, s0 = con_lista(ESTANDAR)
-check('D1 control: con dclsmp370.bpl en la lista, el TGauge se dibuja (no sale sustituido)',
+check('D1 control: con %s en la lista, el TGauge se dibuja (no sale sustituido)' % os.path.basename(ESTANDAR[1]),
       c0 == 0 and 'TGauge' not in s0.get('SUBSTITUTED', '') and conocidos(s0.get('PACKAGES')) == 2, (c0, s0))
 c1, s1 = con_lista(ESTANDAR[:1])
 check('D2 sin el en la lista, TGauge sale sustituido y hay un conocido menos',

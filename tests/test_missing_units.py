@@ -35,10 +35,23 @@ check('platform view names candidates or completeness',
 # la frase espanola escrita a mano, tras traducir la negativa ya no podia
 # fallar. Y si hay candidatos, el trozo TIENE que verse: una negativa que
 # no ve la forma que vigila no vigila nada.
-CAND = mc.catalogo()['SF_COMP_REGISTRADO_EN_FMT'].split('%s')[1]
+CAND = mc.trozo_de_formato('SF_COMP_REGISTRADO_EN_FMT', 1)
+# los arboles del propio IDE acaban en ...\Studio\<su version>: la de la instalacion activa
+# (delphi_installs), no '37.0' a mano
+VER = mc.instalacion_activa(call).get('version', '')
 check('platform view never shows the IDE own documents tree as a candidate',
-      '\\Studio\\37.0' + CAND not in r
+      bool(VER) and '\\Studio\\' + VER + CAND not in r
       and (CAND in r or not mc.es(r, 'SN_COMPONENTS_PLATFORM_MISSING_FMT')), r)
+# La unidad de muestra de missingUnits: Tee.Grid, de TeeChart, que compila para Linux64 desde su
+# fuente. Se mide con ella solo si ESTA maquina la tiene en una carpeta que otras plataformas
+# registran y Linux64 no (una candidata de esta misma vista); era TeeChart dado por instalado
+MUESTRA = 'Tee.Grid'
+TEE = next((d for d in (mc.real(l.split(CAND)[0].strip()) for l in r.splitlines() if CAND in l)
+            if os.path.isfile(os.path.join(d, MUESTRA + '.pas'))), '')
+if not TEE:
+    print('NOTA: missingUnits con carpeta candidata no se mide: %s.pas no esta en ninguna carpeta que otra '
+          'plataforma registre y Linux64 no' % MUESTRA)
+USADAS = (MUESTRA + ', ' if TEE else '') + 'NoSuchUnitXyz,'
 r = call('delphi_components', {'platform': 'Marte'})
 check('unknown platform refused with the list',
       mc.es(r, 'SR_PLATAFORMA_NO_VALIDA_FMT') and 'Linux64' in r, r)  # LA negativa de toda tool (A36 de la 1.23)
@@ -61,7 +74,7 @@ libre = None
 for l in rw.split('\n\n')[0].split('\n')[1:]:
     d = l.strip().split('  (')[0]
     hoja = d.rstrip('\\').split('\\')[-1]
-    if len(hoja) >= 5 and hoja.lower() not in paquetes and '\\studio\\37.0' not in d.lower():
+    if len(hoja) >= 5 and hoja.lower() not in paquetes and ('\\studio\\' + VER.lower()) not in d.lower():
         libre = (d, hoja)
         break
 check('filter (preparacion): una carpeta del Library Search Path de Win64 que ningun paquete nombra',
@@ -81,7 +94,7 @@ dprs = glob.glob(os.path.join(BASE, '**', 'MissU.dpr'), recursive=True)
 check('dpr on disk', bool(dprs))
 dpr = dprs[0]
 s = open(dpr, encoding='utf-8-sig').read()
-s = s.replace('uses', 'uses\n  Tee.Grid, NoSuchUnitXyz,', 1)
+s = s.replace('uses', 'uses\n  ' + USADAS, 1)
 open(dpr, 'w', encoding='utf-8').write(s)
 dproj = dpr[:-4] + '.dproj'
 # 1.16.0: solo se compila una plataforma que el proyecto declara (BUILD-046)
@@ -96,14 +109,20 @@ check('build fails', j.get('success') is False, r)
 mu = j.get('missingUnits') or []
 check('missingUnits present', bool(mu), r)
 names = [m.get('unit') for m in mu]
-check('first missing unit named', 'Tee.Grid' in names, str(names))
-tg = next((m for m in mu if m.get('unit') == 'Tee.Grid'), {})
-check('Tee.Grid source folder found in the library zone (Steema Sources)',
-      any('Steema' in d for d in tg.get('sourceFolders', [])), json.dumps(tg))
-check('folders come masked (srvc:)', all(d.lower().startswith('srv') for d in tg.get('sourceFolders', [])), json.dumps(tg))
-check('note explains add-searchpath',
-      mc.es(j.get('missingUnitsNote') or '', 'SN_BUILD_MISSING_UNITS_NOTE')
-      and 'add-searchpath' in (j.get('missingUnitsNote') or ''), r)
+check('first missing unit named', (MUESTRA if TEE else 'NoSuchUnitXyz') in names, str(names))
+tg = next((m for m in mu if m.get('unit') == MUESTRA), {})
+if TEE:
+    check('%s source folder found in the library zone (%s)' % (MUESTRA, TEE),
+          any(mc.real(d).rstrip('\\').lower() == TEE.rstrip('\\').lower() for d in tg.get('sourceFolders', [])),
+          json.dumps(tg))
+    check('folders come masked (srvc:)', bool(tg.get('sourceFolders')) and
+          all(d.lower().startswith('srv') for d in tg.get('sourceFolders', [])), json.dumps(tg))
+    check('note explains add-searchpath',
+          mc.es(j.get('missingUnitsNote') or '', 'SN_BUILD_MISSING_UNITS_NOTE')
+          and 'add-searchpath' in (j.get('missingUnitsNote') or ''), r)
+else:
+    check('NoSuchUnitXyz missing with no candidates',
+          not next((m for m in mu if m.get('unit') == 'NoSuchUnitXyz'), {'sourceFolders': ['?']}).get('sourceFolders'), r)
 
 # the suggested fix closes the loop: add-searchpath -> the unit resolves
 folder = tg.get('sourceFolders', [''])[0]
@@ -116,12 +135,12 @@ if folder:
     except Exception: j = {}
     mu = j.get('missingUnits') or []
     names = [m.get('unit') for m in mu]
-    check('Tee.Grid resolved after add-searchpath', 'Tee.Grid' not in names, str(names))
+    check('%s resolved after add-searchpath' % MUESTRA, MUESTRA not in names, str(names))
     check('NoSuchUnitXyz still missing with no candidates',
           'NoSuchUnitXyz' in names and not next((m for m in mu if m.get('unit') == 'NoSuchUnitXyz'), {}).get('sourceFolders'), r)
 
 # a successful build carries no missingUnits
-s = open(dpr, encoding='utf-8-sig').read().replace('  Tee.Grid, NoSuchUnitXyz,\n', '')
+s = open(dpr, encoding='utf-8-sig').read().replace('  ' + USADAS + '\n', '')
 open(dpr, 'w', encoding='utf-8').write(s)
 r = call('delphi_build', {'project': dproj, 'platform': 'Win64', 'config': 'Debug'})
 try: j = json.loads(r)

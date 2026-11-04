@@ -74,17 +74,14 @@ Status page as of 2026-11-03 (current release v1.26.1; 42 tools).
 
 Stabilizing what is there, not adding to it:
 
-- Working from Linux: what exists, measured end to end on the Linux targets through PAServer (an FMX app deployed without the IDE's deploy files, desktops beyond GNOME)
+- Working from Linux: the desktop node on KDE Plasma. Measured in 1.27: the capture works through the desktop portal; the window list, the screen scale and the hands go through GNOME's own interfaces (Mutter's, and the name of its Xwayland authorization) and have to learn Plasma's. An FMX app deployed to Linux without the IDE's deploy files was measured end to end through PAServer in 1.27
 - The designer: what it already does, measured where it is not yet (preview at other DPIs and from the tray)
 - The jail measured, not only declared: the protections that need a privilege measured in the suite, and fewer rules of our own where a real judge can answer
-- A more restricted token (LPAC) for the resource compiler of `delphi_styles build`: measured on 2026-10-24 that it would not lift the styles-folder rule of 1.21.0 (`STYLE-052`), since `C:\Windows` and `Program Files` grant read to restricted application packages as well - whether it is still worth it is open
+- Dead code by symbol, with the engine as the judge: what nothing in a file or a project references (uses, types, routines, fields), and what is used by name (RTTI, forms) told apart
 
 ## Open
 
-- KDE and other non-GNOME Linux desktops on the desktop node
-- The two-Delphi-versions case, measured on a machine that has them
-- Progress and cancellation for long builds; `POST /files` upload
-- LSIF as a references backend (measured feasible, see [DELPHILSP-NOTES.md](DELPHILSP-NOTES.md))
+- Database and API access by name (`delphi_db`, `delphi_api`): connections the operator defines (the IDE's FireDAC definitions, an API in `settings.ini`) and grants by name, which an agent uses without seeing inside - to be agreed with the operator
 
 ## Parked (the operator keeps them on the list, not now)
 
@@ -96,3 +93,11 @@ Stabilizing what is there, not adding to it:
 - `[URGENTE]`-style priority messages in the mailbox
 - GetIt / package installation from the MCP
 - GUI control of Linux from the MCP outside the PAServer node
+- Several Delphi versions on one machine: one server serves one Delphi (`[Server] DelphiVersion`). To work with several versions, run one server per version - for example one virtual machine per Delphi, each with its own MCP server - and let the agent choose which one it talks to
+- Several servers federated behind one endpoint: the same reason - each Delphi has its own server, and the agent chooses
+- Progress notifications and cancellation for long builds, and a `POST /files` upload: a build or a test answers when it ends, within its time limit, and files travel through `delphi_upload` and `delphi_fetch`
+- LSIF as a references backend (measured feasible, see [DELPHILSP-NOTES.md](DELPHILSP-NOTES.md)): the references come from the DelphiLSP engine with each project's own settings
+- A more restricted token (LPAC) for the resource compiler of `delphi_styles build`: measured on 2026-10-24 that it would not lift the styles-folder rule of 1.21.0 (`STYLE-052`), since `C:\Windows` and `Program Files` grant read to restricted application packages as well; the `.rc` it compiles is composed by the server from a whitelist
+- Attaching a style to a StyleBook as the IDE does (an embedded style): styles are worked on as text `.style` files and built with `delphi_styles build`
+- Watching a running application from inside (accessibility trees): what runs is seen through the captures of the desktop node and `delphi_adb`
+- Renaming a unit as one operation: a move touches only what it names, and `delphi_config fix-references` re-points the projects

@@ -1144,11 +1144,11 @@ REGLAS = [
     ('la seccion interface/implementation buscada a mano',
      r"'\^(?:\[ \\t\]\*|\\s\*)'\s*\+\s*\w+\s*\+\s*'\\b'|\^(?:interface|implementation)\[ \]\*\$|"
      r"(?:\.Trim\.ToLower|\bSinMayusculas\(\s*\w+\.Trim\s*\))\s*=\s*'(?:interface|implementation)'",
-     [('Mcp.Tools.DelphiLsp.pas', 'InterfaceDigest')],
+     [],
      'FinDeSeccion (Lsp.ProjectUnits): la palabra entera en el codigo, este donde este (estaba cinco '
      'veces en tres funciones de ProjectUnits; a principio de linea hasta el 18-oct-2026, y una unit de '
-     'una linea no tenia seccion). DEUDA declarada: la linea exacta (InterfaceDigest), otra regla para '
-     'lo mismo (inventario del 10-oct-2026). La de ExecutePatch, la linea que es la palabra para la '
+     'una linea no tenia seccion). La deuda que quedaba, la linea exacta de InterfaceDigest (delphi_symbols '
+     'de una carpeta), cerrada en la 1.27 con SeccionEnLineas (B2 del revisor). La de ExecutePatch, la linea que es la palabra para la '
      'declaracion de una rutina visible, la pregunta desde la 1.27 (P10: con "implementation uses X;" '
      'se deshacia el cuerpo)'),
     ('la forma canonica de una ruta preguntada a Windows',
@@ -2734,9 +2734,10 @@ REGLAS_PY = [
     # (r5-L4: seis baterias buscaban la instalacion activa a mano, y seis
     # componian Program Files o Public Documents con su version)
     # (A7 de la 1.27: la carpeta de SDKs donde paclient deja la de cada perfil. El servidor la
-    # toma de la tabla del IDE (BDSPLATFORMSDKSDIR, IdeSdksDir) y mc.carpeta_sdks del default de
-    # Windows: coinciden mientras el operador no la redefina. Su juez es paclient, y
-    # test_sdks_perfil_127 S1 la mide contra el; revisor de baterias de la 1.27)
+    # toma de la tabla del IDE (BDSPLATFORMSDKSDIR, IdeSdksDir) y mc.carpeta_sdks, en el mismo
+    # orden, de la BDSPLATFORMSDKSDIR que el operador redefine en las Environment Variables del
+    # IDE y si no, del default de Windows (4-nov-2026: solo leia el default). Su juez es paclient,
+    # y test_sdks_perfil_127 S1 la mide contra el; revisor de baterias de la 1.27)
     ('la carpeta del IDE compuesta a mano', r"""Embarcadero(?:[\\/]+|['"]\s*,\s*['"])Studio""",
      [('mcp_cliente.py', 'def carpeta_sdks')],
      'mc.raiz_ide (delphi_installs) o mc.variable_de_rsvars (BDSCOMMONDIR...); la de SDKs, mc.carpeta_sdks'),
@@ -2762,6 +2763,17 @@ REGLAS_PY = [
      [('mcp_cliente.py', 'def idioma_rtl'), ('test_get_sdk_1230.py', 'def recoge'),
       ('test_get_sdk_1230.py', 'def pon_asiento'), ('test_paserver.py', 'def cleanup_profile')],
      'mc.idioma_rtl, y la deuda declarada de los asientos del IDE'),
+    # (4-nov-2026: ~40 cortes en 32 baterias - por su '%s' o su '%d', o el texto del catalogo partido
+    # a mano -, cada uno a su manera y el mismo trozo en tres, y tres regex o instancias compuestas con
+    # un replace('%s', ...)). La gramatica de un especificador de Format es UNA, la de su casa: no hay
+    # juez desde una bateria (Format vive en el RTL compilado)
+    ('un formato del catalogo cortado a mano',
+     r"""\b(?:re\.)?r?split\(\s*r?(['"])[^'"\n]*%[^'"\n]*\1\s*[,)]|\.replace\(\s*(['"])%[^'"\n]*\2\s*,"""
+     r"""|\bcatalogo\(\)\[[^\]]+\]\s*\.\s*r?(?:split|partition)\("""
+     r"""|\bre\.(?:compile|findall|finditer|sub|search|match|fullmatch)\(\s*r?(['"])%[(\[]""",
+     [('mcp_cliente.py', '_ESPECIFICADOR =')],
+     'mc.trozos_de_formato / mc.trozo_de_formato / mc.patron_de_formato, por la gramatica de '
+     'mc._ESPECIFICADOR (formato= para uno que no es del catalogo)'),
 ]
 
 
@@ -2831,6 +2843,7 @@ PLANTADO_PY = {
     'la ausencia de un mensaje por su id a mano': "    ok = 'CFG-043' not in r",
     'el paclient de mentira compuesto a mano': "    s = os.path.join(HERE, 'paclient_stub.py')",
     'una escritura en el registro': "    winreg.SetValueEx(k, 'x', 0, winreg.REG_SZ, 'y')",
+    'un formato del catalogo cortado a mano': "    f = mc.catalogo()['SR_X_FMT'].split('%s')[1]",
 }
 for regla in REGLAS_PY:
     nombre = regla[0]
@@ -2851,12 +2864,25 @@ _c = fuera_de_casa_py(_IDS, [('plantado.py', "a = not mc.tiene(r, 'GIT-067')\nb 
                                               "c = '[GIT-051 DENIED]' not in r\n")])
 check('mutante py de los ids: not mc.tiene con el id a mano se caza, y una marca de fixture no',
       [x.split(' ')[0] for x in _c] == ['plantado.py:1', 'plantado.py:3'], _c)
+# la regla de los formatos: el corte por su especificador se caza en sus formas (rsplit, el replace
+# de una regex, re.split, el texto del catalogo partido), y un split por un texto que se compone
+# con % (test_round36: ' [%s]' % id) o una regex compuesta con % no
+_FMTS = next(r for r in REGLAS_PY if r[0] == 'un formato del catalogo cortado a mano')
+_c = fuera_de_casa_py(_FMTS, [('plantado.py', "a = s.split(' [%s]' % mc.id_de('X'))[0]\n"
+                                               "b = mc.catalogo()['Y_FMT'].rsplit('%s', 1)[1]\n"
+                                               "c = re.compile(re.escape(t).replace('%d', r'(\\d+)'))\n"
+                                               "d = re.split(r'%[sd]', t)\n"
+                                               "e = mc.catalogo()['W_FMT'].split(' (')[0]\n"
+                                               "f = re.fullmatch(r\"%s in 'x'\" % y, z)\n")])
+check('mutante py de los formatos: los cortes plantados se cazan, y el split de round36 y una regex '
+      'compuesta con % no',
+      [x.split(' ')[0] for x in _c] == ['plantado.py:2', 'plantado.py:3', 'plantado.py:4', 'plantado.py:5'], _c)
 POSITIVOS = re.compile(r"""(['"])\[?(?:%s)-\d{3}(?: [A-Z_]+)?\]?\1\s+in\b|(?<!not )(?<![\w.])(?:mc\.)?tiene\(\s*[^,()]+,\s*(['"])(?:%s)-\d{3}\2"""
                        % (AREAS_PY, AREAS_PY))
 check('mutante de los ids positivos: se cuentan las dos formas, y las negativas no',
       len(POSITIVOS.findall("x = 'CFG-043' in r and mc.tiene(r, 'GIT-067') and not mc.tiene(r, 'GIT-001') "
                             "and 'GIT-002' not in r and '[GIT-051 DENIED]' in r")) == 3)
-IDS_POSITIVOS_TOPE = 192  # medido el 25-oct-2026 (V56; 201 tras V19, que paso los de una bateria a mc.es; 200 tras V65; 198 sin LSP-046, V61; 197 sin el CFG-014 de test_deploy_remotehost, revisor de baterias de la 1.27; 192 sin las copias de GIT-068, que se miden una vez)
+IDS_POSITIVOS_TOPE = 0  # medido el 25-oct-2026 (V56; 201 tras V19, que paso los de una bateria a mc.es; 200 tras V65; 198 sin LSP-046, V61; 197 sin el CFG-014 de test_deploy_remotehost, revisor de baterias de la 1.27; 192 sin las copias de GIT-068, que se miden una vez; 0 el 4-nov-2026: los 192 de 64 baterias, a mc.es / mc.id_de por su constante)
 _n = sum(len(POSITIVOS.findall(l)) for _, t in TEXTOS_PY for l in codigo_py(t))
 check('los ids positivos a mano: %d, el tope declarado (solo puede encoger: si baja, se baja el tope)' % _n,
       _n == IDS_POSITIVOS_TOPE, IDS_POSITIVOS_TOPE)

@@ -73,7 +73,7 @@ try:
     r = srv.call('delphi_config', {'command': 'set-output', 'project': dproj, 'output': 'none'})
     x = lee(dproj)
     check('C4 set-output output=none vuelve a lo de RAD Studio, sin una carpeta "none"',
-          not mc.rechazado(r) and '(RAD Studio default)' in r and
+          not mc.fallo(r) and mc.catalogo()['SF_CFG_RAD_STUDIO_DEFAULT'] in r and
           not any('none' in v.lower() for v in re.findall(r'<DCC_ExeOutput>([^<]*)', x)),
           (r[:300], re.findall(r'<DCC_ExeOutput>[^<]*', x)[:3]))
 

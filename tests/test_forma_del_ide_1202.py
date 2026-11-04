@@ -59,6 +59,17 @@ def lee(ruta):
     return open(ruta, 'rb').read()
 
 
+# la linea que nombran los avisos de la forma del IDE, por sus formatos del catalogo
+def en_linea(n):
+    # ', line %d: ' de DSGN-160
+    return mc.trozo_de_formato('SR_DSGN_FORMA_DISTINTA_FMT', 1, n)
+
+
+def linea_del_aviso(nombre, n):
+    # '*** Line %d: ' de DSGN-161 / DSGN-162, sin su etiqueta
+    return mc.trozo_de_formato(nombre, 0, n).split('] ', 1)[1]
+
+
 try:
     PROY = os.path.join(JAIL, 'lin')
     DFM = os.path.join(PROY, 'UMain.dfm')
@@ -73,13 +84,15 @@ try:
     r = call('delphi_edit', {'path': DFM, 'old': '  object StatusBar1: TStatusBar', 'new': SUELTO})
     check('F1 delphi_edit escribe el > suelto (el IDE lo carga)', not mc.fallo(r) and b'      >\r\n' in lee(DFM),
           r[:200])
-    check('F1 ...y su aviso dice que no es la forma del IDE (DSGN-161)', 'DSGN-161' in r, r[-400:])
+    check('F1 ...y su aviso dice que no es la forma del IDE (DSGN-161)', mc.es(r, 'SN_DSGN_FORMA_DISTINTA_FMT'), r[-400:])
+    n_suelto = lee(DFM).split(b'\r\n').index(b'      >') + 1  # la linea del > suelto
 
     # ------------------------------------------------------------------ F2
     antes = lee(DFM)
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'StatusBar1',
                                  'prop': 'Left', 'value': '20'})
-    check('F2 set Left: negado (DSGN-160), nada escrito', 'DSGN-160' in r and lee(DFM) == antes, r[:300])
+    check('F2 set Left: negado (DSGN-160), nada escrito', mc.es(r, 'SR_DSGN_FORMA_DISTINTA_FMT') and lee(DFM) == antes,
+          r[:300])
 
     # ------------------------------------------------------------------ F3
     for cmd, extra in (('tree', {}), ('get', {'component': 'StatusBar1'}), ('layout', {}),
@@ -87,16 +100,18 @@ try:
         args = {'command': cmd, 'path': DFM}
         args.update(extra)
         r = call('delphi_designer', args)
-        check('F3 %s: negado (DSGN-160), con la linea del >' % cmd, 'DSGN-160' in r and 'line 19' in r, r[:300])
+        check('F3 %s: negado (DSGN-160), con la linea del > (%d)' % (cmd, n_suelto),
+              mc.es(r, 'SR_DSGN_FORMA_DISTINTA_FMT') and en_linea(n_suelto) in r, r[:300])
 
     # ------------------------------------------------------------------ F4
     r = call('delphi_designer', {'command': 'lint', 'path': DFM})
-    check('F4 lint: DSGN-161 con su linea, no CLEAN', 'DSGN-161' in r and 'Line 19' in r and
+    check('F4 lint: DSGN-161 con su linea, no CLEAN', mc.es(r, 'SN_DSGN_FORMA_DISTINTA_FMT') and
+          linea_del_aviso('SN_DSGN_FORMA_DISTINTA_FMT', n_suelto) in r and
           not mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:300])
 
     # ------------------------------------------------------------------ F5
     r = call('delphi_designer', {'command': 'preview', 'path': DFM}, t=180)
-    check('F5 preview: negado (DSGN-160)', 'DSGN-160' in r, r[:300])
+    check('F5 preview: negado (DSGN-160)', mc.es(r, 'SR_DSGN_FORMA_DISTINTA_FMT'), r[:300])
 
     # ------------------------------------------------------------------ F6
     r = call('delphi_designer', {'command': 'to-binary', 'path': DFM}, t=120)
@@ -133,7 +148,8 @@ try:
     n_detras = t.count(b'\n') + 1
     r = call('delphi_designer', {'command': 'lint', 'path': DFM})
     check('F9 un end de mas detras de la raiz: lint lo dice (DSGN-162) con su linea, no CLEAN',
-          'DSGN-162' in r and ('Line %d' % n_detras) in r and not mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:300])
+          mc.es(r, 'SN_DSGN_DETRAS_DE_LA_RAIZ_FMT') and linea_del_aviso('SN_DSGN_DETRAS_DE_LA_RAIZ_FMT', n_detras) in r
+          and not mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:300])
     r = call('delphi_designer', {'command': 'tree', 'path': DFM})
     check('F9 ...y tree lee la raiz como el IDE', not mc.fallo(r) and 'StatusBar1' in r, r[:250])
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'StatusBar1',
@@ -152,8 +168,9 @@ try:
            'end\r\n')
     open(STY, 'w', encoding='utf-8', newline='').write(MAL)
     r = call('delphi_styles', {'command': 'view', 'path': STY})
-    check('F7 view de un .style con dos propiedades en una linea: negado (DSGN-160)',
-          'DSGN-160' in r and 'line 4' in r, r[:300])
+    n_dos = MAL.split('\r\n').index('    Height = 10.000000000000000000 Width = 20.000000000000000000') + 1
+    check('F7 view de un .style con dos propiedades en una linea: negado (DSGN-160), con su linea (%d)' % n_dos,
+          mc.es(r, 'SR_DSGN_FORMA_DISTINTA_FMT') and en_linea(n_dos) in r, r[:300])
     r = call('delphi_styles', {'command': 'lint', 'path': STY}, t=180)
     check('F7 ...y el lint de estilos lo dice (notInTheIdeShape), no clean',
           'notInTheIdeShape' in r and '"clean":false' in r.replace(' ', ''), r[:400])

@@ -40,6 +40,7 @@ un componente que falle en su Loaded por ese valor).
 Uso:  python tests/test_designer_carga_1182.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
+import re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -65,6 +66,24 @@ PAS = ("unit {u};\r\n\r\ninterface\r\n\r\nuses\r\n  System.SysUtils, System.Type
        "implementation\r\n\r\n{$R *.fmx}\r\n\r\nend.\r\n")
 
 
+# DSGN-149 lleva entre parentesis lo que dijo el lector, en el idioma de su RTL: se mira que lo
+# lleve por el formato del catalogo, no por su texto en ingles (Invalid property value)
+# (su hueco 4, entre los trozos 3 y 4 del formato, hasta el punto de la frase)
+_DIJO = re.compile(re.escape(mc.trozo_de_formato('SR_DESIGNER_SET_NO_CARGA_FMT', 3)) + r'([^)]+)' +
+                   re.escape(mc.trozo_de_formato('SR_DESIGNER_SET_NO_CARGA_FMT', 4).split('.')[0]))
+
+
+def dijo_el_lector(r):
+    """Lo que dijo el lector en un DSGN-149 (el (%s) de su formato); '' si no lo lleva."""
+    m = _DIJO.search(r or '')
+    return m.group(1).strip() if m else ''
+
+
+def motivo(d):
+    """El motivo que da el ayudante de Edit1.FontColor (sus partes), en el idioma de su RTL."""
+    return mc.lo_que_dijo_el_lector(d, 'Edit1', 'FontColor')[0]
+
+
 def form(nombre, con_edit2=False, edit2=''):
     edit2 = EDIT2_MALO if con_edit2 else edit2
     texto = FMX.replace('{otro}', edit2)
@@ -83,7 +102,8 @@ try:
     r = srv.call('delphi_designer', {'path': p, 'command': 'set', 'component': 'Edit1', 'prop': 'FontColor',
                                      'value': '-65536'}, t=240)
     check('C1 set FontColor=-65536 (por codigo): DSGN-149 con lo que dijo el lector, y el form intacto',
-          mc.abre(r, 'SR_DESIGNER_SET_NO_CARGA_FMT') and 'Invalid property value' in r and open(p, 'rb').read() == antes,
+          mc.abre(r, 'SR_DESIGNER_SET_NO_CARGA_FMT') and 'Edit1.FontColor = -65536' in r and dijo_el_lector(r) != ''
+          and open(p, 'rb').read() == antes,
           r[:300])
 
     p = form('UC2')
@@ -126,9 +146,15 @@ try:
     p = form('UC7')
     t = open(p, 'rb').read().replace(b'    Position.X', b'    FontColor = -65536\r\n    Position.X', 1)
     open(p, 'wb').write(t)
-    d = mc.juez_en_idioma(RENDER, p, 'DE')
-    check('C7 con el lector en aleman: FontColor=-65536 lo dice en aleman y partido, propiedad y motivo',
-          '|Edit1|FontColor|Ungültiger Eigenschaftswert|' in d, d[:600])
+    # en aleman = el motivo NO es el de la base (el RTL sin recursos de idioma: 'EN' no tiene
+    # rtlNNN.en); sin el rtlNNN.de del IDE junto a su rtlNNN.bpl no hay aleman que medir
+    if mc.rtl_tiene_idioma('DE'):
+        d = mc.juez_en_idioma(RENDER, p, 'DE')
+        base = motivo(mc.juez_en_idioma(RENDER, p, 'EN'))
+        check('C7 con el lector en aleman: FontColor=-65536 lo dice en aleman y partido, propiedad y motivo',
+              motivo(d) != '' and base != '' and motivo(d) != base, (base, d[:600]))
+    else:
+        mc.imprime('SKIP C7: el RTL del IDE no trae el aleman (rtlNNN.de junto a rtlNNN.bpl)')
     p = form('UC8')
     t = open(p, 'rb').read().replace(b'    Position.X', b'    FontColor = claRed\r\n    Position.X', 1)
     open(p, 'wb').write(t)

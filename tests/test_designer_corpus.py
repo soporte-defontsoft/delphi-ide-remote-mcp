@@ -128,6 +128,9 @@ check('corpus: las tablas VCL y FMX del Delphi activo estan', listo, (a + ' | ' 
 # preguntar (DSGN-154) se cuenta por su motivo, nunca por falta de
 # renderizador (este arnes los pone)
 LINEA_N = re.compile(r'\s*line (\d+): (.*?)\s+->\s+(.*)$')
+# la propiedad que no esta en la familia de la clase (la politica pendiente), por su formato:
+# ' nor in any class that descends from it, ...'
+FAMILIA = mc.trozo_de_formato('SF_DSGN_NO_EXISTE_EN_LA_FAMILIA_FMT', 2)
 # los avisos VERDADEROS, medidos: un Sample que de verdad falla (el form, y lo
 # que tiene que decir su aviso). Si uno deja de salir, se quita de aqui.
 #  - FireDAC InterBase Admin (2015): un TStringGrid y ninguna unidad del
@@ -144,8 +147,8 @@ sin_lector, sin_render, contesto = {}, [], {}
 # la raiz que no ve, una excepcion del codigo de un componente, una clase del proyecto), o no
 # se le pudo preguntar, con el id de su fallo. Se buscaba 'could not be asked: [', que el
 # mensaje no escribe asi: todo caia en 'sin id' (revisor de baterias de la 1.27)
-CABEZA = mc.catalogo()['SN_DESIGNER_LINT_SIN_LECTOR_FMT'].rsplit('%s', 1)[0].split('%d')[-1]
-CONTESTO = {n: re.compile('.*?'.join(re.escape(p) for p in mc.catalogo()[n].split('%s')), re.S)
+CABEZA = mc.trozo_de_formato('SN_DESIGNER_LINT_SIN_LECTOR_FMT', 1)
+CONTESTO = {n: re.compile(mc.patron_de_formato(n, '.*?'), re.S)
             for n in ('SF_DSGN_LECTOR_SIN_ANCESTRO_FMT', 'SF_DSGN_LECTOR_RAIZ_NO_VISTA_FMT',
                       'SF_DSGN_LECTOR_DEL_CODIGO_FMT', 'SF_DSGN_LECTOR_CLASE_DEL_PROYECTO_FMT')}
 # t=300: un lint puede preguntar al lector mas de una vez, y el lector tiene 75
@@ -196,9 +199,9 @@ for dst, r in zip(copiados, respuestas):
         if not m:
             continue
         msg = m.group(3)
-        if 'DSGN-039' in msg or 'DSGN-055' in msg:
+        if mc.es(msg, 'SN_LINT_UNKNOWN_CLASS_FMT') or mc.es(msg, 'SN_LINT_CLASE_AMBIGUA_FMT'):
             notas += 1          # una clase sin fuente, o ambigua: no juzga, lo dice
-        elif 'descends from it' in msg:
+        elif FAMILIA in msg:
             familia += 1        # politica pendiente (ver la cabecera)
         else:
             falsos += 1
@@ -220,7 +223,10 @@ for motivo, forms in sorted(sin_lector.items()):
 # un lector que no se pudo preguntar por OTRA cosa que su plazo (RENDER-007: hay Samples que
 # lo agotan) es un rojo: un DSGN-177 o un ayudante que no arranca se quedaban en esa NOTA y
 # la bateria salia verde (revisor de baterias de la 1.27)
-PLAZOS = (mc.id_de('SR_RENDER_TIEMPO_FMT'), mc.id_de('SR_DESIGNER_RENDER_TIEMPO_FMT'))
+# (y desde la 1.27, el plazo del CLIENTE: los lint van en paralelo y uno puede quedarse sin el
+# tiempo que espera un cliente antes de preguntar, DSGN-188; antes era un fragmento sin id)
+PLAZOS = (mc.id_de('SR_RENDER_TIEMPO_FMT'), mc.id_de('SR_DESIGNER_RENDER_TIEMPO_FMT'),
+          mc.id_de('SR_DSGN_JUEZ_SIN_TIEMPO_FMT'))
 # ...ni por el propio form, MEDIDO el 4-nov-2026 (y lo mismo en su sitio): un componente que
 # revienta al cargarse aqui (DSGN-061: un AV en vcl370.bpl) o un literal con una ruta fuera de
 # lo que se lee (DSGN-115, la jaula). Uno nuevo, o con otro id, es rojo; uno que ya se lee,

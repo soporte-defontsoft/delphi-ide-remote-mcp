@@ -77,7 +77,7 @@ try:
     e = mete(DFM, '  TextHeight = 15', '  ModalResult = mrOK')
     r = lint(DFM)
     check('L1 VCL, raiz con ModalResult = mrOK: la edicion avisa (EDIT-076) y lint lo nombra',
-          mc.tiene(e, 'EDIT-076') and 'ModalResult' in e and not limpio(r) and 'ModalResult' in r,
+          mc.es(e, 'SN_EDIT_AVISO_DESIGNER_PROPIEDADES_FMT') and 'ModalResult' in e and not limpio(r) and 'ModalResult' in r,
           (e[-300:], r[:300]))
     s.call('delphi_edit', {'path': DFM, 'old': '  Color = clBtnFace', 'new': '  Color = clNoExiste'})
     r = lint(DFM)

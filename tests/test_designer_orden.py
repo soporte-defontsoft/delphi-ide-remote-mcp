@@ -651,7 +651,7 @@ try:
           'con SU motivo: DSGN-140)',
           hijos_de_panel(RARO) == ['Button1', 'Button2', 'Raro1', 'LabelRaro']
           and mc.abre(J(r).get('orderNote', ''), 'SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT')
-          and 'DSGN-140' in J(r).get('orderNote', ''),
+          and mc.es(J(r).get('orderNote', ''), 'SR_DESIGNER_ORDEN_SIN_CLASE_FMT'),
           (hijos_de_panel(RARO), r[:400]))
     # I7: en una form heredada cuyo ancestro tiene su TLabel, el juez CONTESTA y el
     # ancla que da puede ser un hijo del ancestro que la form no escribe: DSGN-145

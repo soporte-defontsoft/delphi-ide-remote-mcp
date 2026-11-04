@@ -18,7 +18,17 @@ unit Lsp.Sandbox;
   Lo que NO hay, decidido asi (David, 2-oct-2026): red (localhost se queda
   colgado hasta que TCP se rinde, unos 21 s), paquetes en tiempo de ejecucion
   (los .bpl de fuera de Program Files no se leen) y nada del proyecto que no
-  viaje en su carpeta de salida. Es una jaula para tests de logica. }
+  viaje en su carpeta de salida. Es una jaula para tests de logica.
+
+  El NOMBRE del contenedor no es de una ejecucion sino de un PUESTO de esta
+  casa (NombreDeContenedor): cada ejecucion toma el primero libre, le registra
+  un perfil nuevo y lo borra al acabar. Windows da a cada SID de contenedor
+  distinto una entrada de la sesion que no suelta hasta que la sesion acaba
+  (TokenAppContainerNumber; medido el 4-nov-2026: veinte nombres nuevos
+  seguidos, veinte numeros nuevos; el mismo nombre, borrado y recreado, siempre
+  el mismo). Con un nombre nuevo por ejecucion, tras ocho dias de baterias la
+  sesion ya no lanzaba ningun proceso en un contenedor (CreateProcess 1450, C29
+  de la 1.27). Dos ejecuciones vivas siguen en puestos distintos. }
 
 interface
 
@@ -28,9 +38,10 @@ uses
   System.IOUtils;
 
 type
-  { Un AppContainer de UNA ejecucion. Nombre es el perfil registrado (lo
-    compone CreaContenedor, con la marca de esta casa del servidor) y Sid el
-    suyo, que suelta BorraContenedor. }
+  { Un AppContainer de UNA ejecucion. Nombre es el perfil registrado, el de su
+    puesto (NombreDeContenedor, con la marca de esta casa del servidor), Sid el
+    suyo, que suelta BorraContenedor, y Puesto el semaforo que lo reserva
+    mientras dura la ejecucion. }
   TContenedor = record
     Nombre: string;
     Sid: PSID;
@@ -39,15 +50,20 @@ type
     // Lo pone quien va a lanzar un programa con ventanas (el renderizador, aunque
     // no se vean): un test de consola no las crea, y no las pide.
     ConVentanas: Boolean;
+    Puesto: THandle;
   end;
   PContenedor = ^TContenedor;
 
-{ Registra un contenedor nuevo, sin ninguna capacidad. 0 si lo hay; si no, el
-  codigo que dio Windows (un HRESULT) y AC queda vacio. }
+{ Toma el primer puesto libre de esta casa y registra en el un perfil NUEVO,
+  sin ninguna capacidad (el que dejo una caida se borra antes; el de un puesto
+  cuyo perfil Windows no deja quitar se retira y se prueba otro; sin ninguno
+  libre, un nombre de una sola ejecucion). 0 si lo hay; si no, el codigo que dio
+  Windows (un HRESULT) y AC queda vacio. }
 function CreaContenedor(out AC: TContenedor): DWORD;
 
-{ Lo borra (el perfil y la carpeta que le hace Windows) y suelta el SID. Con
-  AC vacio no hace nada, y nunca lanza. Se llama con el proceso ya muerto. }
+{ Lo borra (el perfil y la carpeta que le hace Windows), suelta el SID y
+  devuelve su puesto. Con AC vacio no hace nada, y nunca lanza. Se llama con el
+  proceso ya muerto. }
 procedure BorraContenedor(var AC: TContenedor);
 
 { Da al contenedor una carpeta VACIA recien creada por el servidor: permisos
@@ -81,7 +97,9 @@ function AbreEtapa(const AEtapa: string; AConVentanas: Boolean; out AC: TContene
   (ReclamaArbol: una que dejo cerrada lo que corrio dentro, el codigo de un
   paquete o de un test) y borrada sin cruzar enlaces. Con lo que AbreEtapa no
   llego a hacer, nada. Nunca lanza: '' o por que la carpeta se quedo, que se lleva
-  la purga del arranque. El conversor y brcc32 no la recuperaban. }
+  la purga del arranque; entonces su puesto no se devuelve mientras viva este
+  proceso (la carpeta da permiso a SU SID). El conversor y brcc32 no la
+  recuperaban. }
 function CierraEtapa(var AC: TContenedor; const AEtapa: string): string;
 
 { CreateProcess DENTRO del contenedor, heredando handles (la tuberia de la
@@ -96,7 +114,8 @@ function CreateProcessEnContenedor(const AC: TContenedor; const ACmdLine: string
   AWorkDir: PChar; ACreateFlags: DWORD; const ASI: TStartupInfo;
   out API: TProcessInformation; const AEntorno: string = ''): Boolean;
 
-{ Al arrancar: borra los contenedores de ESTA casa que dejo una caida. Los
+{ Al arrancar: borra los contenedores de ESTA casa que dejo una caida; uno
+  cuyo puesto tiene tomado otro proceso de la casa esta en uso y se queda. Los
   de otro servidor de la misma cuenta (una bateria, una segunda instalacion)
   llevan otra marca y no se tocan: pueden estar en uso. Nunca lanza. }
 procedure PurgaContenedoresHuerfanos;
@@ -237,6 +256,175 @@ end;
 function PrefijoDeEstaCasa: string;
 begin
   Result := LowerCase(CONTENEDOR_PREFIJO + MarcaDeEstaCasa + '.');
+end;
+
+const
+  // cuantas ejecuciones en contenedor a la vez admite una casa: una por puesto
+  PUESTOS_POR_CASA = 64;
+  // HRESULT_FROM_WIN32(ERROR_ALREADY_EXISTS): el perfil que dejo una caida en su puesto
+  HR_PERFIL_YA_EXISTE = HRESULT($800700B7);
+
+  // lo que se espera entre dos intentos de recuperar un puesto retirado: el
+  // borrado de lo que no se deja borrar cuesta sus reintentos (ConReintentos)
+  RETIRADO_REINTENTO_MS = 2000;
+
+type
+  { Un puesto fuera de uso: su semaforo, tomado mientras siga asi, y lo que lo
+    retiro - la etapa que no se pudo borrar (con permiso para SU SID) o el perfil
+    que Windows no quito. }
+  TPuestoRetirado = record
+    Semaforo: THandle;
+    Nombre, Etapa: string;
+    PerfilQueda: Boolean;
+    UltimoIntento: UInt64;
+  end;
+
+var
+  GPuestosLock: TObject;
+  GPuestosRetirados: TArray<TPuestoRetirado>;
+
+{ EL nombre del contenedor del puesto APuesto de esta casa, el que registra
+  CreaContenedor (y su SID, que Windows deriva del nombre) }
+function NombreDeContenedor(APuesto: Integer): string;
+begin
+  Result := PrefijoDeEstaCasa + IntToStr(APuesto);
+end;
+
+{ El semaforo que reserva el puesto de un contenedor, de su nombre: de cuenta
+  uno, sin dueno por hilo (lo suelta quien acaba, no quien empezo), con EL
+  nombrador de los objetos con nombre de la casa (NombreDeMutex, Global\): lo ven
+  el servicio y un stdio del mismo exe, en sesiones distintas y con los mismos
+  perfiles (son del usuario, no de la sesion; con Local\ los dos tomaban el puesto
+  0: revisores de la 1.27). Windows lo cierra si el proceso que lo tiene muere. }
+function SemaforoDePuesto(const ANombre: string): string;
+begin
+  Result := NombreDeMutex(ANombre);
+end;
+
+{ El primer puesto libre de esta casa: su nombre y su semaforo, tomado. Se
+  saltan el que tiene otra ejecucion (de este proceso o de otro de la casa), el
+  retirado y el que no se deja abrir (otro objeto con ese nombre). Sin ninguno,
+  un nombre de UNA sola ejecucion, sin semaforo: gasta una entrada de la sesion
+  (C29), pero ningun estado de los puestos deja sin contenedor a nadie. }
+procedure TomaPuesto(out ANombre: string; out ASemaforo: THandle);
+begin
+  ASemaforo := 0;
+  for var I := 0 to PUESTOS_POR_CASA - 1 do
+  begin
+    var Nombre := NombreDeContenedor(I);
+    var S := CreateSemaphore(nil, 1, 1, PChar(SemaforoDePuesto(Nombre)));
+    if S = 0 then
+      Continue;
+    if WaitForSingleObject(S, 0) = WAIT_OBJECT_0 then
+    begin
+      ANombre := Nombre;
+      ASemaforo := S;
+      Exit;
+    end;
+    CloseHandle(S);
+  end;
+  // 'delphilspmcp.test.' + 8 + '.u' + 32 = 60: el limite de Windows es 64
+  ANombre := PrefijoDeEstaCasa + 'u' +
+    LowerCase(TGUID.NewGuid.ToString.Replace('{', '').Replace('}', '').Replace('-', ''));
+  try
+    TLogger.Warning(MsgFmt(SL_CONTENEDOR_SIN_PUESTO_FMT, [PUESTOS_POR_CASA]));
+  except
+    // apuntarlo no puede dejar sin contenedor
+  end;
+end;
+
+{ Los puestos retirados vuelven si lo que los retiro ya no esta: la etapa que no
+  se pudo borrar se borra ahora, el perfil que Windows no quito se quita ahora;
+  lo que sigue sin poder, sigue retirado, y no se reintenta antes de
+  RETIRADO_REINTENTO_MS. Lo mira cada contenedor nuevo: algo de un momento (un
+  antivirus con un fichero abierto) no se lleva un puesto para siempre, y un test
+  que deja algo imborrable no se queda con los 64 (revisor de la 1.27). }
+procedure RecuperaRetirados;
+var
+  Quedan: TArray<TPuestoRetirado>;
+  Ahora: UInt64;
+begin
+  TMonitor.Enter(GPuestosLock);
+  try
+    if Length(GPuestosRetirados) = 0 then
+      Exit;
+    Ahora := GetTickCount64;
+    Quedan := nil;
+    for var R in GPuestosRetirados do
+    begin
+      var Listo := False;
+      if Ahora - R.UltimoIntento >= RETIRADO_REINTENTO_MS then
+      begin
+        Listo := True;
+        if R.Etapa <> '' then
+          try
+            ReclamaArbol(R.Etapa);
+            BorraArbol(R.Etapa); // sin cruzar enlaces: ver Lsp.Guard
+          except
+            Listo := False;
+          end;
+        if Listo and R.PerfilQueda then
+        begin
+          // S_OK, o ya no esta (ERROR_NOT_FOUND, ERROR_FILE_NOT_FOUND)
+          var Hr := DeleteAppContainerProfile(PChar(R.Nombre));
+          Listo := (Hr = S_OK) or (Hr = HRESULT($80070490)) or (Hr = HRESULT($80070002));
+        end;
+      end;
+      if Listo then
+      begin
+        ReleaseSemaphore(R.Semaforo, 1, nil);
+        CloseHandle(R.Semaforo);
+      end
+      else
+      begin
+        var Sigue := R;
+        if Ahora - R.UltimoIntento >= RETIRADO_REINTENTO_MS then
+          Sigue.UltimoIntento := Ahora;
+        Quedan := Quedan + [Sigue];
+      end;
+    end;
+    GPuestosRetirados := Quedan;
+  finally
+    TMonitor.Exit(GPuestosLock);
+  end;
+end;
+
+{ Devuelve el puesto de AC para la siguiente ejecucion o, si su etapa AEtapaQueda
+  se quedo en disco (con permiso para ESTE SID: la siguiente del puesto la
+  alcanzaria) o su perfil no se pudo quitar (APerfilQueda), lo retira: tomado
+  hasta que RecuperaRetirados pueda con ello o el proceso acabe; la purga del
+  arranque se lleva la etapa. Un nombre de una sola ejecucion no tiene puesto.
+  Nunca lanza. }
+procedure SueltaPuesto(var AC: TContenedor; const AEtapaQueda: string; APerfilQueda: Boolean);
+begin
+  if AC.Puesto = 0 then
+    Exit;
+  if (AEtapaQueda <> '') or APerfilQueda then
+  begin
+    var R := Default(TPuestoRetirado);
+    R.Semaforo := AC.Puesto;
+    R.Nombre := AC.Nombre;
+    R.Etapa := AEtapaQueda;
+    R.PerfilQueda := APerfilQueda;
+    R.UltimoIntento := GetTickCount64;
+    TMonitor.Enter(GPuestosLock);
+    try
+      GPuestosRetirados := GPuestosRetirados + [R];
+    finally
+      TMonitor.Exit(GPuestosLock);
+    end;
+    try
+      TLogger.Warning(MsgFmt(SL_CONTENEDOR_PUESTO_RETIRADO_FMT, [AC.Nombre]));
+    except
+      // apuntarlo no puede hacer que soltar lance
+    end;
+  end
+  else
+  begin
+    ReleaseSemaphore(AC.Puesto, 1, nil);
+    CloseHandle(AC.Puesto);
+  end;
+  AC.Puesto := 0;
 end;
 
 function SidComoTexto(ASid: PSID): string;
@@ -402,31 +590,58 @@ end;
 function CreaContenedor(out AC: TContenedor): DWORD;
 var
   Hr: HRESULT;
-  G: string;
 begin
-  AC.Sid := nil;
-  AC.ConVentanas := False;
-  AC.Estacion := GetProcessWindowStation;
-  AC.Escritorio := GetThreadDesktop(GetCurrentThreadId);
-  // 'DelphiLspMcp.Test.' + 8 + '.' + 32 = 59: el limite de Windows es 64
-  G := TGUID.NewGuid.ToString.Replace('{', '').Replace('}', '').Replace('-', '');
-  AC.Nombre := PrefijoDeEstaCasa + LowerCase(G);
-  Hr := CreateAppContainerProfile(PChar(AC.Nombre), PChar(AC.Nombre),
-    PChar(AC.Nombre), nil, 0, AC.Sid);
-  if Hr = S_OK then
-    Exit(0);
-  AC.Nombre := '';
-  AC.Sid := nil;
-  Result := DWORD(Hr);
+  RecuperaRetirados;
+  // un puesto mas que puestos: el ultimo intento, como mucho, es el nombre de una
+  // sola ejecucion (TomaPuesto)
+  for var Intento := 0 to PUESTOS_POR_CASA do
+  begin
+    AC := Default(TContenedor);
+    // 'DelphiLspMcp.Test.' + 8 + '.' + el puesto: el limite de Windows es 64
+    TomaPuesto(AC.Nombre, AC.Puesto);
+    Hr := CreateAppContainerProfile(PChar(AC.Nombre), PChar(AC.Nombre),
+      PChar(AC.Nombre), nil, 0, AC.Sid);
+    // el perfil que dejo una caida en este puesto: fuera, y uno nuevo; nada de
+    // aquella ejecucion pasa a esta
+    if Hr = HR_PERFIL_YA_EXISTE then
+    begin
+      DeleteAppContainerProfile(PChar(AC.Nombre));
+      Hr := CreateAppContainerProfile(PChar(AC.Nombre), PChar(AC.Nombre),
+        PChar(AC.Nombre), nil, 0, AC.Sid);
+    end;
+    if Hr = S_OK then
+    begin
+      AC.Estacion := GetProcessWindowStation;
+      AC.Escritorio := GetThreadDesktop(GetCurrentThreadId);
+      Exit(0);
+    end;
+    // un perfil que Windows no deja quitar: su puesto se retira y se prueba el
+    // siguiente (se tomaba siempre el mismo, el mas bajo, y fallaba todo)
+    if (Hr = HR_PERFIL_YA_EXISTE) and (AC.Puesto <> 0) then
+    begin
+      SueltaPuesto(AC, '', True);
+      Continue;
+    end;
+    SueltaPuesto(AC, '', False);
+    AC := Default(TContenedor);
+    Exit(DWORD(Hr));
+  end;
+  AC := Default(TContenedor);
+  Result := DWORD(HR_PERFIL_YA_EXISTE);
 end;
 
 function PermisoDeVentanas(AObj: THandle; ASid: PSID; AMascara: DWORD;
   const ATipo: string): DWORD; forward;
 
-procedure BorraContenedor(var AC: TContenedor);
+{ BorraContenedor sin devolver el puesto: lo devuelve quien sabe si se
+  retira (CierraEtapa). El nombre se queda, para decir que puesto era. False
+  si Windows no quito el perfil: con el puesto, la siguiente ejecucion lo
+  heredaria (su carpeta, su AC\Temp). }
+function QuitaContenedor(var AC: TContenedor): Boolean;
 var
   Hr: HRESULT;
 begin
+  Result := True;
   if AC.Sid <> nil then
   begin
     PermisoDeVentanas(AC.Escritorio, AC.Sid, 0, 'desktop');
@@ -440,13 +655,22 @@ begin
   begin
     Hr := DeleteAppContainerProfile(PChar(AC.Nombre));
     if Hr <> S_OK then
+    begin
+      Result := False;
       try
         TLogger.Warning(MsgFmt(SL_TEST_CONTENEDOR_NO_BORRADO_FMT,
           [AC.Nombre, IntToHex(Cardinal(Hr), 8)]));
       except
         // apuntarlo no puede hacer que borrar lance
       end;
+    end;
   end;
+end;
+
+procedure BorraContenedor(var AC: TContenedor);
+begin
+  var PerfilQuitado := QuitaContenedor(AC);
+  SueltaPuesto(AC, '', not PerfilQuitado);
   AC.Nombre := '';
 end;
 
@@ -499,20 +723,23 @@ end;
 function CierraEtapa(var AC: TContenedor; const AEtapa: string): string;
 begin
   Result := '';
-  BorraContenedor(AC);
-  if AEtapa = '' then
-    Exit;
-  try
-    ReclamaArbol(AEtapa);
-    BorraArbol(AEtapa); // sin cruzar enlaces: ver Lsp.Guard
-  except
-    on E: Exception do
-      Result := E.Message;
-  end;
+  var PerfilQuitado := QuitaContenedor(AC);
+  if AEtapa <> '' then
+    try
+      ReclamaArbol(AEtapa);
+      BorraArbol(AEtapa); // sin cruzar enlaces: ver Lsp.Guard
+    except
+      on E: Exception do
+        Result := E.Message;
+    end;
+  // una etapa que se queda da permiso al SID de su puesto: no se devuelve hasta
+  // que se pueda con ella (RecuperaRetirados)
+  SueltaPuesto(AC, (if Result <> '' then AEtapa else ''), not PerfilQuitado);
+  AC.Nombre := '';
 end;
 
 
-{ Una ACE para el SID de ESTA ejecucion, retirada por BorraContenedor.
+{ Una ACE para el SID de ESTA ejecucion, retirada por QuitaContenedor.
   La estacion y el escritorio deben admitirlo antes de iniciar user32
   (0xC0000142 del servicio, medido 3-oct-2026). El permiso del escritorio
   aparece solo durante el DUnitX: su SID, 0x81, y al terminar las ACE de antes.
@@ -550,7 +777,7 @@ var
   I: Integer;
   PAce: Pointer;
   Nuevo: TSecurityDescriptor;
-  Encontrada: Boolean;
+  Exacta, Otra, Cubierta: Boolean;
 begin
   if (AObj = 0) or (ASid = nil) then
     Exit(ERROR_INVALID_PARAMETER);
@@ -573,7 +800,13 @@ begin
       Exit(GetLastError);
     if (not Hay) or (DaclVieja = nil) then
       Exit(0);
-    Encontrada := False;
+    // la ACE de ESTE SID con la mascara pedida (Exacta) o con otra (Otra): el SID
+    // de un puesto se repite entre ejecuciones (C29), y la ACE que dejo colgada
+    // un servidor matado no puede dar su mascara a la siguiente (revisor de la
+    // 1.27); con mascara cero, toda ACE del SID es Otra
+    Exacta := False;
+    Otra := False;
+    Cubierta := False;
     for I := 0 to Integer(DaclVieja^.AceCount) - 1 do
     begin
       if not GetAce(DaclVieja^, I, PAce) then
@@ -581,15 +814,16 @@ begin
       if PCabeceraAce(PAce)^.AceType <> ACCESS_ALLOWED_ACE_TYPE_ then
         Continue;
       if EqualSid(PSID(@PAcePermiso(PAce)^.SidStart), ASid) then
-        Encontrada := True;
-      if (Paquetes <> nil) and EqualSid(
-        PSID(@PAcePermiso(PAce)^.SidStart), Paquetes) then
-        // Una ACE parcial no sustituye a los derechos necesarios del objeto.
-        if (PAcePermiso(PAce)^.Mask and AMascara) = AMascara then
-          Exit(0);
+        if (AMascara <> 0) and (PAcePermiso(PAce)^.Mask = AMascara) then
+          Exacta := True
+        else
+          Otra := True;
+      // Una ACE parcial no sustituye a los derechos necesarios del objeto.
+      if (Paquetes <> nil) and EqualSid(PSID(@PAcePermiso(PAce)^.SidStart), Paquetes) and
+         ((PAcePermiso(PAce)^.Mask and AMascara) = AMascara) then
+        Cubierta := True;
     end;
-    if ((AMascara <> 0) and Encontrada) or
-       ((AMascara = 0) and not Encontrada) then
+    if not Otra and ((AMascara = 0) or Exacta or Cubierta) then
       Exit(0);
     Bytes := DaclVieja^.AclSize;
     if AMascara <> 0 then
@@ -602,16 +836,15 @@ begin
     begin
       if not GetAce(DaclVieja^, I, PAce) then
         Exit(GetLastError);
-      // Mascara cero retira solo las ACE de permiso de ESTE contenedor.
-      if (AMascara = 0) and
-         (PCabeceraAce(PAce)^.AceType = ACCESS_ALLOWED_ACE_TYPE_) and
+      // las ACE de permiso de ESTE contenedor fuera, todas: la que se pide va nueva
+      if (PCabeceraAce(PAce)^.AceType = ACCESS_ALLOWED_ACE_TYPE_) and
          EqualSid(PSID(@PAcePermiso(PAce)^.SidStart), ASid) then
         Continue;
       if not AddAce(DaclNueva^, ACL_REVISION_, MAXDWORD, PAce,
         PCabeceraAce(PAce)^.AceSize) then
         Exit(GetLastError);
     end;
-    if (AMascara <> 0) and not AddAccessAllowedAce(DaclNueva^,
+    if (AMascara <> 0) and not Cubierta and not AddAccessAllowedAce(DaclNueva^,
       ACL_REVISION_, AMascara, ASid) then
       Exit(GetLastError);
     if not InitializeSecurityDescriptor(@Nuevo, SECURITY_DESCRIPTOR_REVISION) then
@@ -698,7 +931,21 @@ begin
           begin
             Moniker := R.ReadString('Moniker');
             if StartsText(Mio, Moniker) then
-              DeleteAppContainerProfile(PChar(Moniker));
+            begin
+              // con su puesto tomado por otro proceso de esta casa, esta en uso
+              var Puesto := CreateSemaphore(nil, 1, 1, PChar(SemaforoDePuesto(Moniker)));
+              if Puesto <> 0 then
+              try
+                if WaitForSingleObject(Puesto, 0) = WAIT_OBJECT_0 then
+                try
+                  DeleteAppContainerProfile(PChar(Moniker));
+                finally
+                  ReleaseSemaphore(Puesto, 1, nil);
+                end;
+              finally
+                CloseHandle(Puesto);
+              end;
+            end;
           end;
         finally
           R.CloseKey;
@@ -726,8 +973,11 @@ end;
 
 initialization
   GSpawnLock := TObject.Create;
+  GPuestosLock := TObject.Create;
 
 finalization
+  // los semaforos de los puestos retirados no se sueltan: los cierra Windows
+  GPuestosLock.Free;
   GSpawnLock.Free;
 
 end.

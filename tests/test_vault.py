@@ -255,7 +255,7 @@ with open(os.path.join(VAULT, 'conventions', 'aes.md'), 'w', encoding='utf-8') a
     f.write('# aes\n\n' + 'a' * 40 + 'b\n')
 out = s.call('vault_search', {"target": "content", "pattern": "(a+)+$"})
 check('search content: una regex que se dispara lo dice, con la nota y la linea (SEARCH-005)',
-      mc.rechazado(out) and mc.tiene(out, 'SEARCH-005') and 'aes.md' in out, out[:300])
+      mc.rechazado(out) and mc.es(out, 'SR_SEARCH_REGEX_CARA_FMT') and 'aes.md' in out, out[:300])
 out = s.call('vault_search', {"target": "content", "pattern": "(sin cerrar"})
 check('search content: una regex mal escrita es INVALID_PARAM',
       mc.abre(out, 'SR_VAULT_PATTERN_REGEX_INVALIDA_FMT') and mc.resultado(out) == 'INVALID_PARAM', out[:200])
@@ -480,7 +480,7 @@ _vuelta9 = os.path.join(_dentro9, 'nota.md')
 if mc.junction(_j9, _dentro9) and mc.junction(_vuelta9, os.path.join(VAULT, 'x9')):
     out = s.call('vault_create', {"path": "j9/nota.md", "content": "# Por la union\n"})
     check('(c) una carpeta del vault que es una union afuera, con un enlace que vuelve: GUARD-034 y nada fuera',
-          'GUARD-034' in out and os.listdir(_dentro9) == ['nota.md'] and
+          mc.es(out, 'SR_GUARD_FUERA_DE_LUGARES_FMT') and os.listdir(_dentro9) == ['nota.md'] and
           not os.listdir(os.path.join(VAULT, 'x9')), (out[:300], os.listdir(_dentro9)))
 else:
     check('(c) las uniones de la prueba se crean', False)

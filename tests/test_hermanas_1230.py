@@ -30,8 +30,12 @@ NADA = os.path.join(JAIL, 'no-existe')
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 
 
+# '%s walks folders' de LIST-002, por su formato: el nombre de la tool y lo que va tras el
+_RECORRE = mc.trozo_de_formato('SR_LIST_IS_FILE_FMT', 2).split('.')[0]
+
+
 def es_fichero(r, tool):
-    return 'LIST-002' in r and ('%s walks folders' % tool) in r
+    return mc.es(r, 'SR_LIST_IS_FILE_FMT') and (tool + _RECORRE) in r
 
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='test-hermanas', t=120)
@@ -47,7 +51,8 @@ try:
     r4 = [srv.call('delphi_list', {'root': NADA}), srv.call('delphi_package', {'dir': NADA}),
           srv.call('delphi_projects', {'root': NADA})]
     check('H4 (guarda) lo que no existe: list y package WS-008, projects PROJ-003',
-          'WS-008' in r4[0] and 'WS-008' in r4[1] and 'PROJ-003' in r4[2], [r[:120] for r in r4])
+          mc.es(r4[0], 'SR_WS_DIR_NOT_FOUND_FMT') and mc.es(r4[1], 'SR_WS_DIR_NOT_FOUND_FMT')
+          and mc.es(r4[2], 'SR_PROJECTS_NO_ROOT_FMT'), [r[:120] for r in r4])
 finally:
     srv.cierra()
 

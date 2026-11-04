@@ -69,7 +69,7 @@ first version of this step (two judges at one level, the main source lost).
 
 Usage:  python tests/test_json_nuestro_1202.py [path-to-DelphiLspMcp.exe]
 """
-import ctypes, json, os, re, shutil
+import ctypes, glob, json, os, re, shutil
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -86,10 +86,19 @@ def servidor():
 
 S = servidor()
 
-# la plantilla del IDE, donde delphi_installs dice que esta la instalacion
-SDI = os.path.join(mc.raiz_ide(S.call), 'ObjRepos', 'en', 'DelphiWin32', 'SDIApp')
-check('la plantilla VCL del IDE esta (ObjRepos\\en\\DelphiWin32\\SDIApp)',
-      os.path.isfile(os.path.join(SDI, 'SDIAPP.dproj')), SDI)
+# la plantilla VCL SDI del IDE, donde delphi_installs dice que esta la instalacion y en el idioma
+# que pone su rsvars.bat (LANGDIR; el 'en' iba a mano), y si no, en el que la traiga
+_raiz = mc.raiz_ide(S.call)
+_idioma = mc.variable_de_rsvars(S.call, 'LANGDIR')
+SDI = next((d for d in ([os.path.join(_raiz, 'ObjRepos', _idioma, 'DelphiWin32', 'SDIApp')] if _idioma else []) +
+            sorted(glob.glob(os.path.join(_raiz, 'ObjRepos', '*', 'DelphiWin32', 'SDIApp')))
+            if os.path.isfile(os.path.join(d, 'SDIAPP.dproj'))), '')
+if not SDI:
+    print('NOTA: no se mide: la instalacion no trae la plantilla VCL SDI (ObjRepos\\<idioma>\\DelphiWin32\\SDIApp)')
+    S.cierra()
+    mc.borra(BASE)
+    mc.fin('json-nuestro-1202 battery', sin_checks='sin la plantilla SDIApp del IDE en %s' % _raiz)
+print('  (la plantilla VCL del IDE: %s)' % SDI)   # sin ella, la bateria lo dice arriba y no mide
 
 U_EXTRA = ('unit UExtra;\r\n\r\ninterface\r\n\r\nfunction Triple(A: Integer): Integer;\r\n\r\n'
            'implementation\r\n\r\nfunction Triple(A: Integer): Integer;\r\nbegin\r\n  Result := A * 3;\r\n'
@@ -290,7 +299,7 @@ for args, que, cual in (({'config': 'Inventada'}, 'una configuracion que no decl
 # lo daba por bueno; revisor de baterias, 18-oct-2026)
 antes = open(dproj3, 'rb').read()
 r = S.call('delphi_config', {'command': 'set-active', 'project': dproj3, 'platform': 'Linux64'})
-VCL_SOLO = mc.catalogo()['SF_CFG_VCL_SOLO_WINDOWS_FMT'].split('(')[0].strip()
+VCL_SOLO = mc.trozo_de_formato('SF_CFG_VCL_SOLO_WINDOWS_FMT', 0)
 check('J6 set-active con una plataforma que el VCL no puede: negado por la regla del framework',
       mc.abre(r, 'SR_RECHAZADO_FMT') and VCL_SOLO in r and 'Linux64' in r
       and not mc.es(r, 'SR_BUILD_PLATAFORMA_NO_DECLARADA_FMT'), r[:300])

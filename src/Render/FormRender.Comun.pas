@@ -413,6 +413,7 @@ uses
   FormRender.Textos,
   Lsp.DesignerForma, // la forma del fichero, la misma que lee el servidor
   Lsp.Pascal,        // EL lexico Pascal: que es codigo y que comentario
+  Lsp.PascalDecl,    // EL lector de declaraciones: el ancestro de una clase, los uses
   Lsp.ShaCache,      // Sha256DeBytes: la huella de READ=, la misma con la que compara el servidor
   Lsp.Reparse,
   Lsp.AtomosRtl,
@@ -1058,22 +1059,24 @@ end;
 function AncestroDeClase(const AFichero, AClase: string; ALeidos: TStrings): string;
 var
   Pas: string;
-  M: TMatch;
 begin
   Result := '';
   Pas := UnidadDeDesigner(AFichero);
   if not TFile.Exists(Pas) or EsEnlace(Pas) then
     Exit;
-  // 'TX = class(TY)', tambien 'class abstract(...)' y con la unidad delante
-  // (Unidad.TY); el nombre por lo que lo rodea, no por \w (ASCII). El lector
-  // de clases del servidor (Lsp.PascalDecl) no se enlaza aqui; la raiz, form
-  // o frame, ya la manda el servidor con --root (revision de la 1.17.0). Sobre
-  // el CODIGO solo (CodigoPascal): una declaracion vieja comentada encima de
-  // la buena se tomaba por ella (segunda revision de la 1.17.0)
-  M := TRegEx.Match(CodigoPascal(TextoDeUnidadAnotada(Pas, ALeidos)), '\b' + TRegEx.Escape(AClase) +
-    '\s*=\s*class(?:\s+(?:abstract|sealed))?\s*\(\s*([^\s,)]+)', [roIgnoreCase]);
-  if M.Success then
-    Result := M.Groups[1].Value.Substring(M.Groups[1].Value.LastIndexOf('.') + 1);
+  // por EL lector de declaraciones del servidor (Lsp.PascalDecl), el de
+  // check-binding y el de la cadena de ancestros del servidor: era una regex
+  // propia de 'TX = class(TY)' (R7 del revisor del paisaje de la 1.27). Con la
+  // unidad delante (Vcl.Forms.TForm), su ultimo trozo; la raiz, form o frame, ya
+  // la manda el servidor con --root (revision de la 1.17.0)
+  var U := LeeFuentePascal(TextoDeUnidadAnotada(Pas, ALeidos));
+  try
+    var T := U.Clase(AClase);
+    if T <> nil then
+      Result := T.Ancestro.Substring(T.Ancestro.LastIndexOf('.') + 1);
+  finally
+    U.Free;
+  end;
 end;
 
 { La VISTA de un form FMX (<unidad>.<Vista>.fmx): su ancestro es el maestro
@@ -1714,18 +1717,20 @@ begin
   end;
 end;
 
-{ Las unidades de los uses de un fuente, por su clave. El servidor tiene sus
-  lectores (Lsp.PascalDecl), que no se enlazan aqui; sobre el CODIGO solo. }
+{ Las unidades de los uses de un fuente, por su clave: por EL lector de
+  declaraciones del servidor (Lsp.PascalDecl), las del interface y las del
+  implementation. Era una regex propia de 'uses ... ;' (R7 del revisor del
+  paisaje de la 1.27). }
 function UnidadesEnUses(const AFuente: string): TArray<string>;
 begin
   Result := nil;
-  for var M in TRegEx.Matches(CodigoPascal(AFuente), '\buses\b([^;]*);', [roIgnoreCase]) do
-    for var E in M.Groups[1].Value.Split([',']) do
-    begin
-      var Trozos := E.Trim.Split([' ', #9, #13, #10], TStringSplitOptions.ExcludeEmpty);
-      if Length(Trozos) > 0 then
-        Result := Result + [ClaveDeIdentificador(Trozos[0])];
-    end;
+  var U := LeeFuentePascal(AFuente);
+  try
+    for var N in U.UsesInterface + U.UsesImplementation do
+      Result := Result + [ClaveDeIdentificador(N)];
+  finally
+    U.Free;
+  end;
 end;
 
 function TCargador.FicheroDeClase(const ACarpeta, AClase, AQuienLaNombra: string): string;

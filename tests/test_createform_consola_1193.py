@@ -38,7 +38,7 @@ try:
     r = crea(kind='form-vcl', name='UFrmCons', project=os.path.join(JAIL, 'cons1', 'PCons1.dproj'))
     d = dpr('cons1', 'PCons1')
     check('F1 create form-vcl en un proyecto de consola: sin CFG-043, con CFG-046, y el .dpr sin CreateForm',
-          not mc.rechazado(r) and 'CFG-042' in r and not mc.es(r, 'SN_UNIT_CREATEFORM') and 'CFG-046' in r
+          not mc.rechazado(r) and mc.es(r, 'SN_UNIT_ADDED_FORM_FMT') and not mc.es(r, 'SN_UNIT_CREATEFORM') and mc.es(r, 'SN_UNIT_NO_RUN_ANCHOR')
           and 'CreateForm' not in d and 'UFrmCons' in d, (r[:700], d[:400]))
 
     crea(kind='project-console', name='PCons2', dir=os.path.join(JAIL, 'cons2'))
@@ -47,14 +47,14 @@ try:
                                  'path': os.path.join(JAIL, 'cons1', 'UFrmCons.pas')}, t=180)
     d = dpr('cons2', 'PCons2')
     check('F2 add-unit de un form existente en otro proyecto de consola: sin CFG-043, el .dpr sin CreateForm',
-          not mc.rechazado(r) and 'CFG-042' in r and not mc.es(r, 'SN_UNIT_CREATEFORM') and 'CFG-046' in r
+          not mc.rechazado(r) and mc.es(r, 'SN_UNIT_ADDED_FORM_FMT') and not mc.es(r, 'SN_UNIT_CREATEFORM') and mc.es(r, 'SN_UNIT_NO_RUN_ANCHOR')
           and 'CreateForm' not in d and 'UFrmCons' in d, (r[:700], d[:400]))
 
     crea(kind='project-vcl', name='PVcl', dir=os.path.join(JAIL, 'vcl'))
     r = crea(kind='form-vcl', name='UFrmVcl', project=os.path.join(JAIL, 'vcl', 'PVcl.dproj'))
     d = dpr('vcl', 'PVcl')
     check('C1 control: form-vcl en un proyecto VCL: CFG-043 y el CreateForm en el .dpr',
-          not mc.rechazado(r) and 'CFG-043' in r and 'Application.CreateForm(TFormUFrmVcl' in d,
+          not mc.rechazado(r) and mc.es(r, 'SN_UNIT_CREATEFORM') and 'Application.CreateForm(TFormUFrmVcl' in d,
           (r[:700], d[:600]))
 finally:
     s.cierra()

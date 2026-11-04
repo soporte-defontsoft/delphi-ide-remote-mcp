@@ -69,12 +69,12 @@ try:
     dpr, lin, col = proyecto(srv, 'Emo\U0001F600')
     r = srv.call('delphi_definition', {'path': dpr, 'line': lin, 'character': col}, t=240)
     check('E1 definition bajo una carpeta con emoji: LSP-043 (el motor pierde la carpeta), no LSP-038',
-          'LSP-043' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])
+          mc.es(r, 'SR_LSP_MOTOR_SIN_CARPETA_FMT') and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])
     r = srv.call('delphi_references', {'path': dpr, 'line': lin, 'character': col}, t=240)
-    check('E2 references del mismo: LSP-043', 'LSP-043' in r, r[:300])
+    check('E2 references del mismo: LSP-043', mc.es(r, 'SR_LSP_MOTOR_SIN_CARPETA_FMT'), r[:300])
     r = diagnostics_con_error(srv, dpr)
     check('E4 diagnostics de un E2003 bajo la carpeta con emoji: LSP-045, no "0 errors"',
-          'LSP-045' in r and '"errors":0' not in r, r[:300])
+          mc.es(r, 'SR_LSP_LINT_MOTOR_PIERDE_FMT') and '"errors":0' not in r, r[:300])
     dpr, lin, col = proyecto(srv, 'SinEmo')
     r = srv.call('delphi_definition', {'path': dpr, 'line': lin, 'character': col}, t=240)
     check('E3 control: sin emoji la definicion sale (UEmo.pas, linea 9)',

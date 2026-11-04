@@ -69,14 +69,16 @@ try:
     check('V1 ReadOnlyPaths con la unidad virtual: el workspace se CIERRA (403 SYS-034, que lo dice), ni en prot '
           'ni fuera', not os.path.exists(os.path.join(prot, 'a.txt')) and
           not os.path.exists(os.path.join(jail, 'b.txt')) and
-          all('403' in x and 'SYS-034' in x and '[Workspace.W]' in x for x in (r, fuera)), (r[:300], fuera[:300]))
+          all('403' in x and mc.es(x, 'SR_SYS_WORKSPACE_CERRADO_FMT') and '[Workspace.W]' in x for x in (r, fuera)),
+          (r[:300], fuera[:300]))
     otro = intenta(puerto, 'no-es-de-nadie-0123456789', os.path.join(jail, 'c.txt'))
     check('V4 control: un token que no es de nadie sigue siendo 401 SYS-017',
-          '401' in otro and 'SYS-017' in otro and not mc.es(otro, 'SR_SYS_WORKSPACE_CERRADO_FMT'), otro[:300])
+          '401' in otro and mc.es(otro, 'SR_SYS_UNAUTHORIZED') and not mc.es(otro, 'SR_SYS_WORKSPACE_CERRADO_FMT'),
+          otro[:300])
 finally:
     proc.kill()
 check('V2 el aviso del arranque dice que es la forma virtual de los agentes',
-      'VIRTUAL form the agents see' in log_de(srv), log_de(srv)[-600:])
+      mc.catalogo()['SF_GUARD_SITIO_VIRTUAL'] in log_de(srv), log_de(srv)[-600:])
 
 srv, jail, prot, token, puerto, proc = servidor('v3', lambda p: p)
 try:

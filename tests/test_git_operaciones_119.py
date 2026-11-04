@@ -70,7 +70,7 @@ def g(**kw):
 try:
     # (O1, args: GIT-068, lo mide UNA vez test_git_argfilter; revisor de baterias de la 1.27)
     r = g(command='status', paths='a.txt')
-    check('O2 paths como texto suelto: GIT-069', 'GIT-069' in r, r[:200])
+    check('O2 paths como texto suelto: GIT-069', mc.es(r, 'SR_GIT_PATHS_NO_ES_LISTA'), r[:200])
 
     open(os.path.join(REPO, 'a.txt'), 'w').write('uno\ndos\n')
     open(os.path.join(REPO, 'b.txt'), 'w').write('be\n')
@@ -90,7 +90,7 @@ try:
     check('O5 diff ref/to stat; diff staged', 'a.txt' in r and '|' in r and '+be2' in r2, (r[:300], r2[:300]))
 
     r = g(command='diff', ref='no-existe-esta-rama')
-    check('O6 una ref que no existe: GIT-070', 'GIT-070' in r, r[:200])
+    check('O6 una ref que no existe: GIT-070', mc.es(r, 'SR_GIT_REF_NO_VALE_FMT'), r[:200])
 
     g(command='commit', message='tercero')
     r = g(command='switch', branch='rama1', create=True)
@@ -100,12 +100,12 @@ try:
     r2 = g(command='switch', branch='main')
     r3 = g(command='switch', branch='-f')
     check('O7 switch create y vuelta; "-f" no es opcion: GIT-071', 'exit=0' in r and 'exit=0' in r2 and
-          'GIT-071' in r3 and git('branch', '--show-current').strip() == 'main', (r[:150], r2[:150], r3[:200]))
+          mc.es(r3, 'SR_GIT_NOMBRE_NO_VALE_FMT') and git('branch', '--show-current').strip() == 'main', (r[:150], r2[:150], r3[:200]))
 
     r = g(command='merge', branch='rama1')
     r2 = g(command='merge', action='squash')
     check('O8 merge ff de rama1; action=squash: GIT-007', 'exit=0' in r and os.path.isfile(os.path.join(REPO, 'c.txt'))
-          and 'GIT-007' in r2, (r[:200], r2[:200]))
+          and mc.es(r2, 'SR_GIT_MERGE_ARGS'), (r[:200], r2[:200]))
 
     open(os.path.join(REPO, 'a.txt'), 'w').write('cambiado\n')
     open(os.path.join(REPO, 'b.txt'), 'w').write('cambiado b\n')
@@ -128,7 +128,7 @@ try:
     r2 = g(command='tag')
     r3 = g(command='tag', ref='HEAD')
     check('O11 tag anotado; tag lista; tag sin nombre con ref: GIT-038',
-          'exit=0' in r and 'v0.1' in r2 and git('cat-file', '-t', 'v0.1').strip() == 'tag' and 'GIT-038' in r3,
+          'exit=0' in r and 'v0.1' in r2 and git('cat-file', '-t', 'v0.1').strip() == 'tag' and mc.es(r3, 'SR_GIT_NO_VA_CON_COMANDO_FMT'),
           (r[:150], r2[:150], r3[:200]))
 
     r = g(command='show', ref='HEAD~1', patch=True)
@@ -138,18 +138,18 @@ try:
 
     r = g(command='log', search='be2')
     r2 = g(command='log', search='texto-que-no-esta')
-    check('O13 log search lo encuentra; sin resultado, GIT-058', 'tercero' in r and 'GIT-058' in r2,
+    check('O13 log search lo encuentra; sin resultado, GIT-058', 'tercero' in r and mc.es(r2, 'SN_GIT_PICKAXE_VACIO'),
           (r[:200], r2[:300]))
 
     r = g(command='status', branch='main')
-    check('O14 un campo que no va con el comando: GIT-038', 'GIT-038' in r, r[:200])
+    check('O14 un campo que no va con el comando: GIT-038', mc.es(r, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), r[:200])
 
     r = g(command='push', ref='main')
     r2 = g(command='push', remote='origin', ref='main')
     r3 = g(command='push', remote='origin', ref='+main')
     check('O15 push: ref sin remote GIT-074; origin main sube; "+main" GIT-046',
-          'GIT-074' in r and 'exit=0' in r2 and
-          git('rev-parse', 'main', cwd=REMOTO).strip() == git('rev-parse', 'main').strip() and 'GIT-046' in r3,
+          mc.es(r, 'SR_GIT_SIN_REMOTO_FMT') and 'exit=0' in r2 and
+          git('rev-parse', 'main', cwd=REMOTO).strip() == git('rev-parse', 'main').strip() and mc.es(r3, 'SR_GIT_PUSH_NOMBRE_FMT'),
           (r[:200], r2[:200], r3[:200]))
 
     otro_clon = os.path.join(BASE, 'clon2')
@@ -162,7 +162,7 @@ try:
           r[:300])
 
     r = g(command='add', paths=[os.path.join(OTRO, 'fuera.txt')])
-    check('O17 una ruta de paths fuera del repo: GIT-012', 'GIT-012' in r, r[:200])
+    check('O17 una ruta de paths fuera del repo: GIT-012', mc.es(r, 'SR_GIT_STASH_RUTA_FMT'), r[:200])
 
     open(os.path.join(REPO, 'v.txt'), 'w').write('ve\n')
     r = g(command='add', paths=[mc.virtual(os.path.join(REPO, 'v.txt'))])

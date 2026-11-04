@@ -1,34 +1,13 @@
 # -*- coding: utf-8 -*-
 """Literales UNC/dispositivo: decidir por texto antes de cualquier E/S.
-Mutante: retirar RutaSinTocarElDisco de Comprueba -> latencia o rechazo rojo.
-La reserva TEST-NET sobrevive a run_all: Windows recuerda hosts fallidos.
-Pero esa memoria es de minutos: las marcas de mas de un dia se reciclan. Sin
-reciclar, 760 hosts a cinco por pasada se agotaban a las ~152 y la bateria
-quedaba roja para siempre (revisor de version de la 1.18.0); y la carpeta solo
-guarda las del ultimo dia.
+Mutante: retirar RutaSinTocarElDisco de Comprueba -> conexion o rechazo rojo.
+Un host TEST-NET nuevo por caso (mc.host_testnet_nuevo: Windows recuerda hosts
+fallidos, y uno recordado falla sin red). Que no se toca la red se mide en la
+tabla TCP mientras corre el preview (mc.red_durante: el SMB deja su SYN_SENT
+a :445 los ~21 s que espera); era "responde antes de 2 s", que la carga movia.
 """
-import atexit,json,os,tempfile,time
+import atexit,json,os,time
 import mcp_cliente as mc
-
-def host_nuevo():
-    carpeta=os.path.join(tempfile.gettempdir(),'delphi-mcp-testnet-reservado')
-    os.makedirs(carpeta,exist_ok=True)
-    limite=time.time()-24*3600
-    for f in os.listdir(carpeta):
-        p=os.path.join(carpeta,f)
-        try:
-            if os.path.getmtime(p)<limite:os.remove(p)
-        except OSError:pass
-    for red in ('198.51.100.','203.0.113.','192.0.2.'):
-        for n in range(1,255):
-            ip=red+str(n)
-            if ip in ('198.51.100.7','203.0.113.211'):continue
-            try:
-                fd=os.open(os.path.join(carpeta,ip),os.O_CREAT|os.O_EXCL|os.O_WRONLY)
-            except FileExistsError:continue
-            os.close(fd)
-            return ip
-    raise RuntimeError('TEST-NET agotado: no se reutiliza un host cacheado')
 
 def main():
     base=mc.carpeta('render-unc-118');atexit.register(mc.borra,base)
@@ -48,16 +27,16 @@ def main():
     try:
         control()
         for caso in ('form','hermano','state','dispositivo-largo','dispositivo-win32'):
-            ip=host_nuevo();value='\\\\'+ip+'\\share\\DUMMY.txt'
+            ip=mc.host_testnet_nuevo();value='\\\\'+ip+'\\share\\DUMMY.txt'
             if caso=='dispositivo-largo':value='\\\\?\\UNC\\'+ip+'\\share\\DUMMY.txt'
             if caso=='dispositivo-win32':value='\\\\.\\UNC\\'+ip+'\\share\\DUMMY.txt'
             escribe(form,value if caso not in ('hermano','state') else 'DUMMY control')
             if caso=='hermano':escribe(child,value)
             before=time.monotonic()
-            out=preview('Dummy.Caption='+value if caso=='state' else '')
+            out,red=mc.red_durante(ip,lambda:preview('Dummy.Caption='+value if caso=='state' else ''))
             elapsed=time.monotonic()-before
             mc.check(caso+' niega por propiedad',mc.es(out,'SR_DESIGNER_LITERAL_FUERA_FMT') and 'Caption' in out,out[:250])
-            mc.check(caso+' responde antes de 2 s',elapsed<2,elapsed)
+            mc.check(caso+' no toca la red (%.1f s)'%elapsed,not red,red)
             mc.check(caso+' no revela valor',ip not in out and 'share' not in out,out[:250])
             if caso=='hermano':os.remove(child)
         control()

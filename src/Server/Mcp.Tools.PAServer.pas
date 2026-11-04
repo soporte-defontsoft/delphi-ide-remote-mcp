@@ -305,6 +305,13 @@ begin
   Result := SinMayusculas(Result);
 end;
 
+const
+  // el prefijo de la carpeta de la casa (CarpetaUnica) donde se baja el
+  // os-release del target: con nombre, como los de delphi_test
+  // (TEST_ETAPA_PREFIJO) y del nodo (REMOTERUN_VER_PREFIJO) (revisor del
+  // paisaje de la 1.27, B9)
+  GETSDK_ETAPA_PREFIJO = 'sdk-';
+
 { Que distro es el target, por su /etc/os-release y por el mismo transporte que
   el resto del SDK: 'zorin18', 'fedora44', 'ubuntu2404'. '' si no se puede leer,
   y entonces get-sdk se niega (PAS-065): se caia al nombre del perfil y se
@@ -317,7 +324,7 @@ begin
   // Temporal DEL SERVIDOR: se baja el /etc/os-release del target, se lee y se
   // tira. El agente no lo ve nunca, asi que va junto al ejecutable y no en la
   // jaula de nadie (ver el nombrador en Lsp.Casa).
-  Tmp := CarpetaUnica(ServerTempDir, 'sdk-');
+  Tmp := CarpetaUnica(ServerTempDir, GETSDK_ETAPA_PREFIJO);
   try
     CrearCarpeta(Tmp);
     Paclient(APaClient, PaclientPlazo(30) + ' ' + PaclientGet('/etc/os-release', Tmp), AProfName, Salida);
@@ -825,11 +832,26 @@ begin
     Result := ProfileHostDenied(ANombre);
 end;
 
+{ El puerto de la llamada: el NUMERO que juzgo la puerta (PAServerArgDenied:
+  TryStrToInt, 1-65535), o el de un PAServer al que nadie da otro
+  (PASERVER_PUERTO). Lo compone el servidor: $1F o 0x1F pasaban la puerta y
+  viajaban asi a paclient, mientras el registro del IDE guardaba el numero
+  (revisor del paisaje de la 1.27: el agente elige, el servidor compone). Lo
+  piden add-profile y test-connection, que lo leian cada uno con su literal. }
+function PuertoDeLaLlamada(const Params: TDelphiPAServerParams): Integer;
+begin
+  if Params.Port.Trim = '' then
+    Result := PASERVER_PUERTO
+  else
+    Result := StrToInt(Params.Port.Trim);
+end;
+
 function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
-  PaClient, ProfName, Host, Port, Plat, P, Output, ProfileFile: string;
+  PaClient, ProfName, Host, Plat, P, Output, ProfileFile: string;
   AvisoDup: string;
+  Puerto: Integer;
   ExitCode: Cardinal;
   Return: TJSONObject;
 begin
@@ -846,13 +868,7 @@ begin
   Result := ProbeHostDenied(Host);
   if Result <> '' then
     Exit;
-  Port := Params.Port.Trim;
-  if Port = '' then Port := '64211';
-  // el NUMERO que juzgo la puerta (TryStrToInt), compuesto aqui: $1F o 0x1F
-  // pasaban la puerta y viajaban asi a paclient, mientras el registro del IDE
-  // guardaba el numero (revisor del paisaje de la 1.27: el agente elige, el
-  // servidor compone)
-  Port := IntToStr(StrToInt(Port));
+  Puerto := PuertoDeLaLlamada(Params);
   // the gate already refused anything outside PACLIENT_PLATFORMS; this loop
   // just restores paclient's exact casing (and applies the default).
   Plat := PLATAFORMA_DE_GETSDK;
@@ -872,14 +888,14 @@ begin
   for var Otro in PerfilesDelIde(Info.Version) do // EL lector de la lista
     try
       var Campos := CamposDePerfil(LeeTexto(RutaDePerfil(Info.Version, Otro), [ltIde]));
-      if SameText(Campos.Host, Host) and (Campos.Puerto = Port) then
+      if SameText(Campos.Host, Host) and (Campos.Puerto = IntToStr(Puerto)) then
         AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT, [Otro]);
     except
       // un perfil ilegible no impide crear el nuevo
     end;
   // cualificada: la variable local PaClient tapa a la funcion (sin mayusculas)
   ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient,
-    PaclientPerfilNuevo(Host, Port, Params.Password, Plat), ProfName, Output, 30000));
+    PaclientPerfilNuevo(Host, Puerto, Params.Password, Plat), ProfName, Output, 30000));
   if (ExitCode = 0) and TFile.Exists(ProfileFile) then
   begin
     // el asiento gemelo del IDE, con la contrasena YA cifrada por paclient;
@@ -888,8 +904,7 @@ begin
     var CopiaAsiento := '';
     var SinAsiento := '';
     try
-      CopiaAsiento := RegistrarPerfilEnIde(Info.Version, ProfName, Plat, Host,
-        StrToIntDef(Port, 64211),
+      CopiaAsiento := RegistrarPerfilEnIde(Info.Version, ProfName, Plat, Host, Puerto,
         CamposDePerfil(LeeTexto(ProfileFile, [ltIde])).Password);
     except
       on E: Exception do
@@ -900,7 +915,7 @@ begin
       Return.AddPair('profile', ProfName);
       Return.AddPair('file', ProfileFile);
       Return.AddPair('host', Host);
-      Return.AddPair('port', Port);
+      Return.AddPair('port', IntToStr(Puerto));
       Return.AddPair('platform', Plat);
       Return.AddPair('delphiVersion', Info.Version);
       Return.AddPair('ideRegistered', TJSONBool.Create(SinAsiento = ''));
@@ -935,7 +950,7 @@ end;
   credentials involved, so a failure here is ALWAYS network/NAT/firewall. }
 
 
-function TcpProbe(const AHost, APort: string): string;
+function TcpProbe(const AHost: string; APuerto: Integer): string;
 var
   Client: TIdTCPClient;
   Return: TJSONObject;
@@ -949,7 +964,7 @@ begin
   Client := TIdTCPClient.Create(nil);
   try
     Client.Host := AHost;
-    Client.Port := StrToIntDef(APort, 64211);
+    Client.Port := APuerto;
     Client.ConnectTimeout := 5000;
     try
       Client.Connect;
@@ -966,7 +981,7 @@ begin
   Return := TJSONObject.Create;
   try
     Return.AddPair('host', AHost);
-    Return.AddPair('port', APort);
+    Return.AddPair('port', IntToStr(APuerto));
     Return.AddPair('tcpReachable', TJSONBool.Create(Ok));
     Return.AddPair('elapsedMs', TJSONNumber.Create(SW.ElapsedMilliseconds));
     if Ok then
@@ -1061,8 +1076,7 @@ begin
       Result := ProbeHostDenied(Params.Host.Trim);
       if Result <> '' then
         Exit;
-      Exit(TcpProbe(Params.Host.Trim,
-        IfThen(Params.Port.Trim <> '', Params.Port.Trim, '64211')));
+      Exit(TcpProbe(Params.Host.Trim, PuertoDeLaLlamada(Params)));
     end;
     Exit(MsgText(SR_PASERVER_NEED_NAME));
   end;
@@ -1196,7 +1210,9 @@ end;
   .deployproj despliega en la plataforma del perfil (por su RemoteName, o el
   nombre de su Include si no lo lleva). Era cualquier fichero de la carpeta
   del destino (Fable, revision de la 1.22.2; David: "si, tiene razon
-  Fable"). }
+  Fable"). Los nombres, por EL juez del destino (MismoNombreEnElDestino): en
+  Linux exe=Tool pasaba porque se despliega tool, y se ejecutaba un fichero
+  que el proyecto no despliega (revisor del paisaje de la 1.27, A4). }
 function ExeNoDesplegado(const AProj, AProf, AExe: string): string;
 var
   Nombres: TArray<string>;
@@ -1204,7 +1220,7 @@ begin
   Result := '';
   var Plat := PlataformaDelPerfil(AProf);
   // el binario del proyecto, con el nombre que tiene en el destino
-  if SameText(AExe, BinarioDelDestino(TPath.GetFileNameWithoutExtension(AProj), Plat)) then
+  if MismoNombreEnElDestino(Plat, AExe, BinarioDelDestino(TPath.GetFileNameWithoutExtension(AProj), Plat)) then
     Exit;
   var Manifiesto := ManifiestoDe(AProj);
   Nombres := [];
@@ -1215,11 +1231,11 @@ begin
       if SameText(E.Plataforma, Plat) then
       begin
         var N := NombreEnElDestino(M, E);
-        if (N <> '') and not MatchText(N, Nombres) then
+        if (N <> '') and (PosicionEnElDestino(Plat, N, Nombres) < 0) then
           Nombres := Nombres + [N];
       end;
   end;
-  if not MatchText(AExe, Nombres) then
+  if PosicionEnElDestino(Plat, AExe, Nombres) < 0 then
     Result := MsgFmt(SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT,
       [AExe, Plat, ONinguno(string.Join(', ', Nombres))]);
 end;
@@ -1709,7 +1725,7 @@ begin
             [Nombre, IfThen(Plat = '', 'platform', 'host')])];
           Continue;
         end;
-        Puerto := StrToIntDef(Campos.Puerto, 64211);
+        Puerto := StrToIntDef(Campos.Puerto, PASERVER_PUERTO);
         Pwd := Campos.Password; { ya viene cifrada: se copia tal cual }
         // un asiento que no se pudo escribir se dice con lo demas que no se
         // sembro (la puerta del registro lanza: V10)

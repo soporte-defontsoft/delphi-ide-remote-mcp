@@ -559,7 +559,14 @@ begin
   if not Info.Found or (Info.DelphiLspExe = '') then
     raise ELspSession.Create(
       MsgText(SE_BUILD_RAD_STUDIO_INSTALLATION_DISCOVERED));
-  Result := Info.DelphiLspExe;
+  // por su ruta, y nunca donde el agente escribe: un DelphiLSP.exe que deje en
+  // la carpeta del IDE correria como el servicio, fuera de contenedor. EL juez
+  // del paclient de la misma bin (ProgramaFueraDelAgente), aqui, al lanzarlo,
+  // con la jaula de quien lo pide: DiscoverRadStudio es una por proceso y no
+  // sabe de sesiones (revisor del paisaje de la 1.27, B6)
+  Result := ProgramaFueraDelAgente(Info.DelphiLspExe);
+  if Result = '' then
+    raise ELspSession.Create(MsgFmt(SR_LSP_EXE_DONDE_ESCRIBE_FMT, [Info.DelphiLspExe]));
 end;
 
 constructor TLspSession.Create;
@@ -951,7 +958,8 @@ begin
   FTables.Enter;
   try
     for I := 0 to FLeaving.Count - 1 do
-      if SameText(FLeaving[I].Folder, AFolder) then
+      // la igualdad de rutas de la casa (SameFileName; a92f053), no SameText (B9)
+      if SameFileName(FLeaving[I].Folder, AFolder) then
       begin
         L := FLeaving[I];
         L.Since := TThread.GetTickCount64;
@@ -969,7 +977,7 @@ begin
   FTables.Enter;
   try
     for I := FLeaving.Count - 1 downto 0 do
-      if SameText(FLeaving[I].Folder, AFolder) then
+      if SameFileName(FLeaving[I].Folder, AFolder) then
       begin
         FLeaving.Delete(I);
         Break;

@@ -88,7 +88,13 @@ def _minusculas(s):
 # la marca de ESTE servidor: MarcaDeEstaCasa = los 8 primeros de ClaveDeCarpeta
 # (el MD5 de la ruta canonica LARGA de su carpeta, en minusculas)
 MARCA = hashlib.md5(_minusculas(mc.larga(os.path.dirname(EXE))).rstrip('\\').encode('utf-8')).hexdigest()[:8]
-MIO = 'delphilspmcp.test.' + MARCA + '.'
+# el prefijo de los contenedores y el de la etapa de cada run, de SU fuente (mc.cadena_del_fuente; revisor del
+# paisaje de la 1.27, B9): estaban copiados a mano. El del contenedor, en minusculas, como lo guarda Windows en su
+# Moniker (Lsp.Sandbox.PrefijoDeEstaCasa); de lo que va detras de la marca, la bateria no depende
+CONTENEDOR_FUENTE = mc.cadena_del_fuente('Server/Lsp.Sandbox.pas', 'CONTENEDOR_PREFIJO')
+CONTENEDOR = _minusculas(CONTENEDOR_FUENTE)
+ETAPA = mc.cadena_del_fuente('Server/Lsp.TestRunner.pas', 'TEST_ETAPA_PREFIJO')
+MIO = CONTENEDOR + MARCA + '.'
 # la misma casa por dos caminos: el primer servidor se lanza por la ruta 8.3
 # y el segundo por la larga (K13), y la marca tiene que ser la misma
 EXE_CORTO = mc.corta(EXE) or EXE
@@ -114,7 +120,7 @@ def contenedores(todos=False):
             try:
                 with winreg.OpenKey(k, sid) as s:
                     m = winreg.QueryValueEx(s, 'Moniker')[0].lower()
-                    if m.startswith(MIO if not todos else 'delphilspmcp.test.'):
+                    if m.startswith(MIO if not todos else CONTENEDOR):
                         out.add(m)
             except OSError:
                 pass
@@ -122,7 +128,7 @@ def contenedores(todos=False):
 
 
 def copias():
-    return [d for d in os.listdir(TEMP_SRV) if d.startswith('test-')] if os.path.isdir(TEMP_SRV) else []
+    return [d for d in os.listdir(TEMP_SRV) if d.startswith(ETAPA)] if os.path.isdir(TEMP_SRV) else []
 
 
 def log_de_la_copia(s):
@@ -150,7 +156,7 @@ def J(t):
 
 ENTORNO = mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_ALLOW_TESTS': '1'})
 VIVOS = []          # los servidores de la bateria, para la limpieza
-AJENO = 'DelphiLspMcp.Test.00000000.' + uuid.uuid4().hex   # la marca de OTRA casa
+AJENO = CONTENEDOR_FUENTE + '00000000.' + uuid.uuid4().hex   # la marca de OTRA casa
 
 
 def spawn(exe=EXE_CORTO):

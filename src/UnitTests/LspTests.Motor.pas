@@ -86,6 +86,19 @@ type
     [Test] procedure LaUltimaFijaDeUnNombreGana;
   end;
 
+  { Los puestos de los contenedores (Lsp.Sandbox): Windows da a cada SID de
+    contenedor distinto una entrada de la sesion que no suelta hasta que la
+    sesion acaba, y con un nombre nuevo por ejecucion la sesion de las baterias
+    se quedo sin contenedores (C29 de la 1.27). }
+  [TestFixture]
+  TPuestosDelContenedorTests = class
+  public
+    [Test] procedure UnaEjecucionTrasOtraReusaElPuesto;
+    [Test] procedure DosVivasVanEnPuestosDistintos;
+    [Test] procedure UnaEtapaQueSeQuedaRetiraSuPuesto;
+    [Test] procedure ElPuestoQueTieneOtroProcesoNoSeToma;
+  end;
+
 implementation
 
 uses
@@ -102,7 +115,10 @@ uses
   Lsp.Transport.Process,
   Lsp.Client,
   Lsp.Session,
-  Lsp.Sandbox;
+  Lsp.Casa,
+  Lsp.Guard,
+  Lsp.Sandbox,
+  LspTests.Comun;
 
 const
   TOPE_MS = 5000;   // una parada sana tarda decimas; el plazo de la peticion es de 30 s
@@ -1464,9 +1480,146 @@ begin
   Assert.IsTrue(Pos('QUITA_B2=', B) = 0, 'una vacia al final la quita');
 end;
 
+{ TPuestosDelContenedorTests }
+
+{ Lo que contesta CreaContenedor o AbreEtapa, juzgado: 0 o un fallo. El perfil del
+  contenedor lo escribe Windows en HKCU y en %LOCALAPPDATA%, y lanzada la suite
+  desde una app MSIX (la consola de un agente y sus baterias) los dos son la capa
+  virtual del paquete: en ella hay casas cuyo perfil se niega con E_ACCESSDENIED.
+  Medido el 4-nov-2026: el mismo binario, 4/4 copiado en una carpeta nueva y 0/4 en
+  Win64\Debug, sin semaforos tomados ni perfil de esa casa a la vista, y el mismo
+  nombre creado a mano desde PowerShell. Ahi no se mide: lo real lo mide el
+  servicio, en vivo (C29 de la 1.27). Cualquier otro codigo es un fallo. }
+procedure EsCero(ACodigo: DWORD; const AQue: string);
+begin
+  if ACodigo = DWORD(E_ACCESSDENIED) then
+    NoSeMide('Windows niega a este proceso el perfil del contenedor (' + AQue +
+      ': la capa virtual de una app MSIX): no se mide; lo mide el servicio en vivo');
+  Assert.AreEqual(0, Integer(ACodigo), AQue);
+end;
+
+{ El patron del servicio y de las baterias: una ejecucion detras de otra. Con un
+  nombre nuevo cada vez, Windows gastaba una entrada de la sesion por ejecucion. }
+procedure TPuestosDelContenedorTests.UnaEjecucionTrasOtraReusaElPuesto;
+var
+  AC: TContenedor;
+  Primero: string;
+begin
+  for var I := 1 to 10 do
+  begin
+    EsCero(CreaContenedor(AC), 'CreaContenedor');
+    try
+      if I = 1 then
+        Primero := AC.Nombre
+      else
+        Assert.AreEqual(Primero, AC.Nombre, 'la ejecucion ' + IntToStr(I) + ' estrena nombre, y con el SID');
+    finally
+      BorraContenedor(AC);
+    end;
+  end;
+end;
+
+{ Dos vivas no comparten SID (cada una ve solo lo suyo), y el puesto que deja
+  una es el primero que se toma }
+procedure TPuestosDelContenedorTests.DosVivasVanEnPuestosDistintos;
+var
+  A, B, C: TContenedor;
+begin
+  EsCero(CreaContenedor(A), 'A');
+  try
+    EsCero(CreaContenedor(B), 'B');
+    try
+      Assert.AreNotEqual(A.Nombre, B.Nombre, 'dos vivas en el mismo puesto');
+      var NombreA := A.Nombre;
+      BorraContenedor(A);
+      EsCero(CreaContenedor(C), 'C');
+      try
+        Assert.AreEqual(NombreA, C.Nombre, 'C no toma el puesto que dejo A');
+      finally
+        BorraContenedor(C);
+      end;
+    finally
+      BorraContenedor(B);
+    end;
+  finally
+    BorraContenedor(A); // ya vacio: no hace nada
+  end;
+end;
+
+{ Una etapa que no se pudo borrar da permiso al SID de su puesto: la siguiente
+  ejecucion de ese puesto la alcanzaria, y el puesto no vuelve }
+procedure TPuestosDelContenedorTests.UnaEtapaQueSeQuedaRetiraSuPuesto;
+var
+  AC, Otro: TContenedor;
+begin
+  var Etapa := CarpetaUnica(ServerTempDir, 'prueba-puesto-');
+  EsCero(AbreEtapa(Etapa, False, AC), 'AbreEtapa');
+  var Nombre := AC.Nombre;
+  // algo dentro que no se deja borrar
+  var H := CreateFile(PChar(TPath.Combine(Etapa, 'abierto.txt')), GENERIC_WRITE, 0, nil,
+    CREATE_ALWAYS, FILE_ATTRIBUTE_NORMAL, 0);
+  Assert.IsTrue(H <> INVALID_HANDLE_VALUE, 'el fichero abierto');
+  try
+    Assert.AreNotEqual('', CierraEtapa(AC, Etapa), 'la etapa no se quedo');
+  finally
+    CloseHandle(H);
+  end;
+  EsCero(CreaContenedor(Otro), 'Otro');
+  try
+    Assert.AreNotEqual(Nombre, Otro.Nombre, 'el puesto de la etapa que se quedo volvio');
+  finally
+    BorraContenedor(Otro);
+  end;
+  // ya sin nada abierto, el siguiente contenedor (pasado el plazo entre intentos)
+  // borra la etapa y el puesto vuelve: no se pierde para siempre (revisor de la 1.27)
+  Sleep(2100);
+  EsCero(CreaContenedor(Otro), 'Otro, despues');
+  try
+    Assert.AreEqual(Nombre, Otro.Nombre, 'el puesto no volvio con la etapa ya borrable');
+    Assert.IsFalse(TDirectory.Exists(Etapa), 'la etapa que se quedo sigue ahi');
+  finally
+    BorraContenedor(Otro);
+  end;
+end;
+
+{ El puesto lo reserva un semaforo con EL nombrador de la casa (Global\): el
+  servicio y un stdio del mismo exe, en sesiones distintas, se ven. Con Local\
+  los dos tomaban el puesto 0 y el segundo borraba el perfil vivo del primero
+  (revisores de la 1.27). Otro proceso se simula sosteniendo su semaforo. }
+procedure TPuestosDelContenedorTests.ElPuestoQueTieneOtroProcesoNoSeToma;
+var
+  A, B: TContenedor;
+begin
+  EsCero(CreaContenedor(A), 'A');
+  var Nombre := A.Nombre;
+  try
+    var Visto := OpenSemaphore(SYNCHRONIZE, False, PChar(NombreDeMutex(Nombre)));
+    Assert.IsTrue(Visto <> 0, 'el semaforo del puesto no esta en el espacio global');
+    CloseHandle(Visto);
+  finally
+    BorraContenedor(A);
+  end;
+  // "otro proceso" toma ese puesto
+  var Ajeno := CreateSemaphore(nil, 1, 1, PChar(NombreDeMutex(Nombre)));
+  Assert.IsTrue(Ajeno <> 0, 'el semaforo ajeno');
+  try
+    Assert.IsTrue(WaitForSingleObject(Ajeno, 0) = WAIT_OBJECT_0, 'tomarlo');
+    EsCero(CreaContenedor(B), 'B');
+    try
+      Assert.AreNotEqual(Nombre, B.Nombre, 'tomo el puesto que tenia otro proceso');
+    finally
+      BorraContenedor(B);
+    end;
+  finally
+    ReleaseSemaphore(Ajeno, 1, nil);
+    CloseHandle(Ajeno);
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TMotorParadoTests);
   TDUnitX.RegisterTestFixture(TFabricaTests);
   TDUnitX.RegisterTestFixture(TEntornoDelHijoTests);
+  TDUnitX.RegisterTestFixture(TPuestosDelContenedorTests);
 
 end.

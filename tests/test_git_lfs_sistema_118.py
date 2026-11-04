@@ -15,8 +15,14 @@ def raw(*args,cwd=JAIL):
     p=subprocess.run(['git','-c','commit.gpgsign=false',*args],cwd=cwd,env=env,capture_output=True,text=True,timeout=30)
     if p.returncode:raise RuntimeError(p.stderr)
     return p.stdout
-filters=raw('config','--system','--get-regexp',r'^filter\.lfs\.')
-mc.check('fixture filtros LFS en SYSTEM real',all('filter.lfs.'+n in filters for n in ('clean','smudge','process','required')))
+# Lo que mide necesita los filtros de LFS en la configuracion SYSTEM de git de ESTA maquina (los pone el
+# instalador de Git for Windows con LFS). Sin ellos no hay nada que medir y se dice: git config sale con
+# 1 si no hay ninguno, y raw() reventaba la bateria sin el motivo
+_p=subprocess.run(['git','config','--system','--get-regexp',r'^filter\.lfs\.'],cwd=JAIL,env=env,capture_output=True,text=True,timeout=30)
+filters=_p.stdout if _p.returncode==0 else ''
+if not all('filter.lfs.'+n in filters for n in ('clean','smudge','process','required')):
+    print('NOTA: no se mide: sin los filtros de LFS (clean, smudge, process, required) en la configuracion SYSTEM de git (rc=%d)'%_p.returncode)
+    mc.fin('git LFS sistema 118',sin_checks='sin los filtros de LFS en la configuracion SYSTEM de git de esta maquina')
 REMOTE=os.path.join(JAIL,'remote.git');raw('init','-q','--bare','-b','main',REMOTE)
 repos=[]
 for name,url in (('https','https://github.com/example/DUMMY.git'),('carpeta',REMOTE)):

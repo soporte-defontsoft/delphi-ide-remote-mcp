@@ -84,7 +84,8 @@ uses
   Lsp.Pascal,  // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.TextEdit, // NotaDeEstiloFmx: lo que FMX dice de un .style, fuera del cerrojo
   Lsp.Json,     // ListaJson: las ops, desenvueltas si llegaron dos veces codificadas
-  Lsp.Changeset;
+  Lsp.Changeset,
+  Lsp.FormRender; // EmpiezaLaEspera: el reloj de lo que espera el cliente
 
 constructor TDelphiChangesetTool.Create;
 begin
@@ -170,6 +171,9 @@ end;
 
 function TDelphiChangesetTool.ExecuteWithParams(const Params: TDelphiChangesetParams): string;
 begin
+  // la llamada empieza: lo que espera su cliente cuenta desde aqui, y viaja hasta
+  // los jueces del IDE de los forms que escriba el commit (A3 de la 1.27)
+  var Desde := EmpiezaLaEspera;
   // lo que no va con el COMANDO se dice (Lsp.Guard.ParametroQueNoVa): commit
   // o preview con kind / path / old / n se ignoraban (octava revision). Lo
   // de cada kind lo mira stage (CHSET-030)
@@ -211,7 +215,7 @@ begin
         AnadeLineaDeRuta(Avisos, MaskDriveText('', F.Ruta), Nota);
     end
     else
-      for var L in AvisosDelLector(F.Ruta, F.Antes) do
+      for var L in AvisosDelLector(F.Ruta, F.Antes, Desde) do
         AnadeLineaDeRuta(Avisos, MaskDriveText('', F.Ruta), L);
   if Avisos <> '' then
     Result := Result + #10 + IfThen(HasMsg(Result, SN_CHANGESET_AVISOS_FMT), Avisos,

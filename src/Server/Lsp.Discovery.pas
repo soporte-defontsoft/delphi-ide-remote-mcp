@@ -105,9 +105,13 @@ function ClaveDelIde(const AVersion, ASubKey: string): string;
   (Lsp.Lugares.LibraryRoots; medido el 21-oct-2026 en la VM: el operador
   registro 19 carpetas en el Library Path con el servidor en marcha y
   delphi_list las negaba con GUARD-002 mientras el IDE y msbuild ya
-  compilaban con ellas). Clave = 0 es "sin vigia" (la clave no existe o no
-  se deja abrir): CambioLaClave contesta siempre False y lo cacheado vive lo
-  que el proceso, como hasta la 1.21.4. Medido con una clave de prueba
+  compilaban con ellas). Una clave que NO existe (aun, o ya no) se vigila
+  desde su primer ancestro que si: su nacimiento es un cambio, y desde ahi se
+  vigila ella (la primera redefinicion de BDSPLATFORMSDKSDIR o el primer SDK
+  no se veian hasta reiniciar: el vigia quedaba vacio para siempre; revisor
+  de la 1.27). Clave = 0 es "sin vigia" (ni un ancestro se deja abrir):
+  CambioLaClave contesta siempre False y lo cacheado vive lo que el proceso,
+  como hasta la 1.21.4. Medido con una clave de prueba
   (sonda del 21-oct-2026, y LspTests.Vigia): no se senala sola; un cambio en
   una clave hermana no la senala; dos cambios seguidos sin rearme entre
   medias dejan uno latente que sale al siguiente rearme (una recarga de mas,
@@ -115,8 +119,12 @@ function ClaveDelIde(const AVersion, ASubKey: string): string;
   morir el hilo que armo - aqui cada peticion es un hilo. }
 type
   TVigiaDeClave = record
-    Clave: NativeUInt;   // la clave abierta con KEY_NOTIFY (0 = sin vigia)
+    Clave: NativeUInt;   // la clave abierta con KEY_NOTIFY (0 = sin vigia): la
+                         // vigilada o, si no existe, su primer ancestro
     Evento: NativeUInt;  // el evento (manual) que Windows senala
+    Raiz: NativeUInt;    // la vigilada, por su raiz y su ruta: para abrirla
+    Ruta: string;        // cuando nazca
+    EnEspera: Boolean;   // Clave es el ancestro: se espera a que nazca
   end;
 { Vigila una clave de la configuracion del IDE de esa version (relativa a
   HKCU\...\BDS\<ver>, como IdeConfigValue), o cualquiera por su raiz y su
@@ -130,6 +138,12 @@ function VigilaClave(ARaiz: NativeUInt; const ARuta: string): TVigiaDeClave;
   con las que se expanden, y los catalogos). Junto a sus lectores, para que
   la clave se nombre aqui y no en quien cachea. }
 function VigiasDeLaBiblioteca(const AVersion: string): TArray<TVigiaDeClave>;
+{ Los vigias de lo que compone la CARPETA DE LOS SDK (IdeSdksDir): las
+  Environment Variables, donde el operador la redefine (paso 1), y
+  PlatformSDKs, de donde sale cuando no (paso 2). Para quien la cachea (los
+  lugares del IDE, Lsp.Lugares): vivia lo que el proceso (B9 del revisor del
+  paisaje de la 1.27), como la biblioteca hasta la 1.21.4. }
+function VigiasDeLaCarpetaDeSdks(const AVersion: string): TArray<TVigiaDeClave>;
 { Si Windows senalo el evento desde la ultima pregunta: True UNA vez por
   cambio, y REARMADA antes de contestar, para que un cambio que llegue
   mientras quien pregunta recarga salga en la siguiente pregunta. Sin vigia,
@@ -1238,22 +1252,90 @@ const
   cambio de un valor o de una subclave, en todo el arbol. LA llamada a
   RegNotifyChangeKeyValue de la casa (test_paisaje). }
 function ArmaVigia(const AVigia: TVigiaDeClave): Boolean;
+var
+  Filtro: DWORD;
 begin
-  Result := RegNotifyChangeKeyValue(HKEY(AVigia.Clave), True,
-    REG_NOTIFY_CHANGE_NAME or REG_NOTIFY_CHANGE_LAST_SET or REG_NOTIFY_THREAD_AGNOSTIC,
-    THandle(AVigia.Evento), True) = ERROR_SUCCESS;
+  // en espera, solo el nacimiento de una subclave del ancestro, sin su arbol:
+  // lo que el IDE escribe en otras no la despierta
+  if AVigia.EnEspera then
+    Filtro := REG_NOTIFY_CHANGE_NAME
+  else
+    Filtro := REG_NOTIFY_CHANGE_NAME or REG_NOTIFY_CHANGE_LAST_SET;
+  Result := RegNotifyChangeKeyValue(HKEY(AVigia.Clave), not AVigia.EnEspera,
+    Filtro or REG_NOTIFY_THREAD_AGNOSTIC, THandle(AVigia.Evento), True) = ERROR_SUCCESS;
+end;
+
+// cierra la clave del vigia, no su evento
+procedure SueltaClave(var AVigia: TVigiaDeClave);
+begin
+  if AVigia.Clave <> 0 then
+    RegCloseKey(HKEY(AVigia.Clave));
+  AVigia.Clave := 0;
+  AVigia.EnEspera := False;
+end;
+
+{ Abre la vigilada y la arma; si no existe (aun, o ya no), arma su primer
+  ancestro que exista, por el nacimiento de una subclave suya. True si quedo
+  vigilando a la vigilada misma. Medido el 4-nov-2026 con una clave de prueba:
+  el ancestro sin su arbol y con REG_NOTIFY_CHANGE_NAME se senala cuando nace
+  una subclave suya (tambien dos tramos de una vez), y no por un valor suyo ni
+  por una nieta; borrar la vigilada la senala, y rearmarla da
+  ERROR_KEY_DELETED. }
+function AnclaVigia(var AVigia: TVigiaDeClave): Boolean;
+
+  function Abre(const ARuta: string; out AH: HKEY): Boolean;
+  begin
+    Result := RegOpenKeyEx(HKEY(AVigia.Raiz), PChar(ARuta), 0, KEY_NOTIFY, AH) = ERROR_SUCCESS;
+  end;
+
+  function Existe(const ARuta: string): Boolean;
+  var
+    H: HKEY;
+  begin
+    Result := Abre(ARuta, H);
+    if Result then
+      RegCloseKey(H);
+  end;
+
+var
+  H: HKEY;
+  R: string;
+begin
+  Result := False;
+  SueltaClave(AVigia);
+  if Abre(AVigia.Ruta, H) then
+  begin
+    AVigia.Clave := H;
+    if ArmaVigia(AVigia) then
+      Exit(True);
+    SueltaClave(AVigia); // borrada entre abrirla y armarla: a su ancestro
+  end;
+  // el primer ancestro que existe ('' es la raiz misma)
+  R := AVigia.Ruta;
+  repeat
+    if R = '' then
+      Exit; // ni la raiz: sin vigia
+    R := Copy(R, 1, LastDelimiter('\', R) - 1);
+  until Abre(R, H);
+  AVigia.Clave := H;
+  AVigia.EnEspera := True;
+  if not ArmaVigia(AVigia) then
+    SueltaClave(AVigia) // no se deja vigilar: sin vigia
+  // nacida entre la primera mirada y el armado: su nacimiento ya no se
+  // senalara, asi que se senala aqui y la siguiente pregunta la abre
+  else if Existe(AVigia.Ruta) then
+    SetEvent(THandle(AVigia.Evento));
 end;
 
 function VigilaClave(ARaiz: NativeUInt; const ARuta: string): TVigiaDeClave;
-var
-  H: HKEY;
 begin
   Result := Default(TVigiaDeClave);
-  if RegOpenKeyEx(HKEY(ARaiz), PChar(ARuta), 0, KEY_NOTIFY, H) <> ERROR_SUCCESS then
-    Exit;
-  Result.Clave := H;
+  Result.Raiz := ARaiz;
+  Result.Ruta := ARuta;
   Result.Evento := CreateEvent(nil, True, False, nil); // manual: se baja al leerlo
-  if (Result.Evento = 0) or not ArmaVigia(Result) then
+  if Result.Evento <> 0 then
+    AnclaVigia(Result);
+  if Result.Clave = 0 then
     SueltaVigia(Result);
 end;
 
@@ -1268,6 +1350,12 @@ begin
     VigilaClaveDelIde(AVersion, 'Environment Variables')];
 end;
 
+function VigiasDeLaCarpetaDeSdks(const AVersion: string): TArray<TVigiaDeClave>;
+begin
+  Result := [VigilaClaveDelIde(AVersion, 'Environment Variables'),
+    VigilaClaveDelIde(AVersion, 'PlatformSDKs')];
+end;
+
 function CambioLaClave(var AVigia: TVigiaDeClave): Boolean;
 begin
   Result := False;
@@ -1276,10 +1364,14 @@ begin
   if WaitForSingleObject(THandle(AVigia.Evento), 0) <> WAIT_OBJECT_0 then
     Exit;
   ResetEvent(THandle(AVigia.Evento));
+  // en espera, lo que cambio es una subclave del ancestro: es un cambio solo
+  // si nacio la vigilada (AnclaVigia la abre y la arma; si no, sigue esperando)
+  if AVigia.EnEspera then
+    Exit(AnclaVigia(AVigia));
   // rearmada ANTES de contestar; una clave que ya no se deja vigilar
-  // (borrada) se suelta, y este cambio se contesta igual
+  // (borrada) vuelve a esperar en su ancestro, y este cambio se contesta igual
   if not ArmaVigia(AVigia) then
-    SueltaVigia(AVigia);
+    AnclaVigia(AVigia);
   Result := True;
 end;
 
@@ -1294,8 +1386,7 @@ end;
 
 procedure SueltaVigia(var AVigia: TVigiaDeClave);
 begin
-  if AVigia.Clave <> 0 then
-    RegCloseKey(HKEY(AVigia.Clave));
+  SueltaClave(AVigia);
   if AVigia.Evento <> 0 then
     CloseHandle(THandle(AVigia.Evento));
   AVigia := Default(TVigiaDeClave);

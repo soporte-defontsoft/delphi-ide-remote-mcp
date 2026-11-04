@@ -56,7 +56,7 @@ def nuevo_repo(nombre):
 
     def git(*a):
         subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@e.com'] + list(a),
-                       cwd=repo, capture_output=True)
+                       cwd=repo, capture_output=True, env=entorno_git())
 
     def w(rel, txt):
         open(os.path.join(repo, rel.replace('/', os.sep)), 'w', encoding='utf-8').write(txt)
@@ -78,10 +78,19 @@ def lee(repo, rel):
 # sin el interruptor del servidor
 GLOBAL = os.path.join(BASE, 'global.gitconfig')
 open(GLOBAL, 'w').close()
+# ...y la de SISTEMA tampoco (GIT_CONFIG_NOSYSTEM): el gitconfig de la instalacion de git puede
+# traer core.quotePath o core.autocrlf, que cambiarian lo que se mide (en el servidor) y los bytes
+# del fixture (en el git de aqui, que monta los repos con la misma config vacia)
+SIN_CONFIG = {'GIT_CONFIG_GLOBAL': GLOBAL, 'GIT_CONFIG_NOSYSTEM': '1'}
+
+
+def entorno_git():
+    """El entorno del git con que la bateria monta sus repos: sin config global ni de sistema."""
+    return dict(os.environ, **SIN_CONFIG)
 
 
 def arranca(ro_paths='', ro_roots=''):
-    env = {'DELPHI_MCP_ROOTS': JAIL, 'GIT_CONFIG_GLOBAL': GLOBAL}
+    env = dict(SIN_CONFIG, DELPHI_MCP_ROOTS=JAIL)
     if ro_paths:
         env['DELPHI_MCP_READONLY_PATHS'] = ro_paths
     if ro_roots:
@@ -113,7 +122,7 @@ srv = arranca(ro_paths=os.path.join(repo, 'vendor', 'Café.dfm'))
 try:
     r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'b2'})
     check('Q4 switch b2 que cambia el protegido vendor/Café.dfm: GIT-065 nombrandolo, intacto',
-          mc.rechazado(r) and 'GIT-065' in r and 'vendor/Café.dfm' in r and not mc.es(r, 'SR_ERROR_FMT')
+          mc.rechazado(r) and mc.es(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and 'vendor/Café.dfm' in r and not mc.es(r, 'SR_ERROR_FMT')
           and lee(repo, 'vendor/Café.dfm') == 'EN_MAIN', r[:400])
     r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'b3'})
     check('Q5 switch b3 que solo cambia src/Año.txt (no protegido): se hace',
@@ -132,7 +141,7 @@ srv = arranca(ro_roots=os.path.join(repo, 'vendor'))
 try:
     r = srv.call('delphi_git', {'repo': repo, 'command': 'stash', 'action': 'pop'})
     check('Q6 ReadOnlyRoots=vendor, stash pop que devolveria vendor/Café.dfm: GIT-065, intacto',
-          mc.rechazado(r) and 'GIT-065' in r and 'vendor/Café.dfm' in r and not mc.es(r, 'SR_ERROR_FMT')
+          mc.rechazado(r) and mc.es(r, 'SR_GIT_REESCRIBE_PROTEGIDO_FMT') and 'vendor/Café.dfm' in r and not mc.es(r, 'SR_ERROR_FMT')
           and lee(repo, 'vendor/Café.dfm') == 'EN_MAIN', r[:400])
 finally:
     srv.cierra()
@@ -152,7 +161,7 @@ os.makedirs(repo)
 
 def git_c(*a):
     subprocess.run(['git', '-c', 'user.name=t', '-c', 'user.email=t@e.com'] + list(a),
-                   cwd=repo, capture_output=True)
+                   cwd=repo, capture_output=True, env=entorno_git())
 
 
 def escribe(rel, txt, enc):

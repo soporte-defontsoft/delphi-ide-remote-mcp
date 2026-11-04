@@ -14,7 +14,7 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 LARGA = mc.larga(CAJA)
 CORTA = mc.corta(CAJA)
 HAY83 = bool(CORTA and CORTA.lower() != LARGA.lower())
-AVISO = mc.catalogo()['SL_GUARD_SOLO_LECTURA_FUERA_FMT'].split('%s')[1]
+AVISO = mc.trozo_de_formato('SL_GUARD_SOLO_LECTURA_FUERA_FMT', 1)
 check('fixture forma larga independiente del TEMP', '~' not in LARGA, LARGA)
 if not HAY83:
     print('NOTA: este volumen no da un alias 8.3 distinto; solo forma larga')

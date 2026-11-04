@@ -1643,7 +1643,7 @@ begin
   Assert.AreEqual('"--Remove=P/a;P/b"', PaclientRemove(['P/a', 'P/b']));
   Assert.AreEqual('"--Remove=P/a"', PaclientRemove(['P/a']));
   Assert.AreEqual('--local "--host=h" --port=64211 "--password=p\" "--platform=Linux64"',
-    PaclientPerfilNuevo('h', '64211', 'p\', 'Linux64'));
+    PaclientPerfilNuevo('h', 64211, 'p\', 'Linux64'));
 end;
 
 procedure TLectoresDeJaulaTests.LoProtegidoNoDependeDelEntorno;

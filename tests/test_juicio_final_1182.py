@@ -139,7 +139,7 @@ try:
         {'old': "  Caption = 'Form1'", 'new': "  Caption = 'Form1'"},
         {'old': '    Top = 40', 'new': '    Top = 40'}]}, t=240)
     check('J10 una tanda SIN cambios sobre un form ya roto: dice que no cambio nada y no lo juzga',
-          'EDIT-114' in r and not mc.es(r, 'SN_EDIT_DESIGNER_FORMATO_TEXTO') and dsgn021(r) == 0 and open(dfm, 'rb').read() == antes,
+          mc.es(r, 'SN_PATCH_EDITS_SIN_CAMBIOS_FMT') and not mc.es(r, 'SN_EDIT_DESIGNER_FORMATO_TEXTO') and dsgn021(r) == 0 and open(dfm, 'rb').read() == antes,
           r[:600])
 
     pas, dfm = par_roto('j11')
@@ -205,7 +205,7 @@ try:
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
     check('J16 changeset que crea un form ilegible: DSGN-123 UNA vez (el juicio final, no el paso)',
-          not mc.rechazado(r) and r.count('DSGN-123') == 1, r[:700])
+          not mc.rechazado(r) and mc.ids(r).count(mc.id_de('SN_DSGN_PARSER_FMT')) == 1, r[:700])
     # W10 del revisor de cierre: en un changeset con move, el form que queda en
     # disco es el DESTINO, y no se juzgaba (Seen guardaba el origen). De la B de
     # la 1.19.2 a la 1.22 un form no se movia por changeset (CHSET-033); desde
@@ -220,8 +220,8 @@ try:
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
     check('J17 changeset que MUEVE un form ilegible: movido, y se juzga el DESTINO (DSGN-123 una vez, Otro.dfm)',
           not mc.rechazado(r) and os.path.exists(otro) and not os.path.exists(dfm) and
-          r.count('DSGN-123') == 1 and
-          any('DSGN-123' in l and 'Otro.dfm' in l for l in r.replace('\\n', '\n').split('\n')), r[:700])
+          mc.ids(r).count(mc.id_de('SN_DSGN_PARSER_FMT')) == 1 and
+          any(mc.es(l, 'SN_DSGN_PARSER_FMT') and 'Otro.dfm' in l for l in r.replace('\\n', '\n').split('\n')), r[:700])
     pas, dfm = par('j5')
     r = srv.call('delphi_edit', {'path': dfm, 'old': '  object Panel1: TPanel', 'new': '  object Panel9: TPanel'},
                  t=240)

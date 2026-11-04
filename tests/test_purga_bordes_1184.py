@@ -70,7 +70,7 @@ try:
                    check=True, capture_output=True)
     r = s.call('delphi_delete', {'path': T3})
     check('G3 ...con un enlace en su .git hacia fuera: negado (GUARD-033) y la victima intacta',
-          'GUARD-033' in r and os.path.isdir(T3) and foto(FUERA) == ANTES, (r[:300], foto(FUERA) == ANTES))
+          mc.es(r, 'SR_GUARD_GIT_METADATA_FMT') and os.path.isdir(T3) and foto(FUERA) == ANTES, (r[:300], foto(FUERA) == ANTES))
 finally:
     s.cierra()
 

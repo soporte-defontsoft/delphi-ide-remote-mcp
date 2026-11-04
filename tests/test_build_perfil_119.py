@@ -32,7 +32,7 @@ try:
     r = s.call('delphi_build', {'project': DPROJ, 'target': 'Build', 'profile': 'noexiste'}, t=300)
     j = mc.como_json(r)
     check('P1 profile=noexiste: PAS-053 y sin compilar',
-          'PAS-053' in r and 'noexiste' in r and not j.get('success', False) and 'binary' not in j, r[:300])
+          mc.es(r, 'SR_PROFILE_NO_EXISTE_FMT') and 'noexiste' in r and not j.get('success', False) and 'binary' not in j, r[:300])
 
     r = s.call('delphi_build', {'project': DPROJ, 'target': 'make'}, t=300)
     j = mc.como_json(r)

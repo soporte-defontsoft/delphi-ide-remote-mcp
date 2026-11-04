@@ -219,7 +219,8 @@ try:
     antes = bytes_de(VDFM)
     r = dsg(command='set', path=VDFM, component='Button1', prop='Captoin', value="'x'")
     check('V4 una propiedad que la clase no publica: DSGN-087 con la parecida, nada escrito',
-          mc.abre(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and 'Did you mean Caption?' in r and bytes_de(VDFM) == antes,
+          mc.abre(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and (mc.catalogo()['SF_DESIGNER_QUIZAS_FMT'] % 'Caption') in r
+          and bytes_de(VDFM) == antes,
           r[:400])
     r = dsg(command='set', path=VDFM, component='Panel1', prop='Align', value='alNada')
     check('V4 un valor de enumerado que no existe: DSGN-087 con los legales',
@@ -258,7 +259,8 @@ try:
     check('V4b una cadena en un TColor: DSGN-093', mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT'), r[:300])
     r = dsg(command='set', path=VDFM, component='Panel1', prop='Color', value='clYelow')
     check('V4b una constante mal escrita: DSGN-093 con las del mapa del fuente y la parecida',
-          mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT') and 'Did you mean clYellow?' in r and 'clBlack' in r, r[:400])
+          mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT') and (mc.catalogo()['SF_DESIGNER_QUIZAS_FMT'] % 'clYellow') in r
+          and 'clBlack' in r, r[:400])
     r = dsg(command='set', path=VDFM, component='Button1', prop='Cursor', value='3.5')
     check('V4b un decimal en un TCursor: DSGN-093', mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT'), r[:300])
     check('V4b ...y nada de eso escribio', bytes_de(VDFM) == antes, '')
@@ -909,7 +911,8 @@ try:
           'xFF00FF00' in r and bytes_de(FFMX) == antes, r[:400])
     r = dsg(command='set', path=FFMX, component='Fondo', prop='Fill.Color', value='claRde')
     check('R13 ...claRde tampoco: se niega con la parecida (Did you mean claRed?)',
-          mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT') and 'Did you mean claRed?' in r and bytes_de(FFMX) == antes,
+          mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT') and (mc.catalogo()['SF_DESIGNER_QUIZAS_FMT'] % 'claRed') in r
+          and bytes_de(FFMX) == antes,
           r[:400])
     compila_y_cuadra('R13', FPROJ, FFMX)
 
@@ -984,11 +987,14 @@ try:
     BOM = b'\xef\xbb\xbf'
     call('delphi_create', {'kind': 'form-vcl', 'name': 'UAcento', 'formname': 'FormAcento', 'project': RDPR})
     ACDFM, ACPAS = os.path.join(RDIR, 'UAcento.dfm'), os.path.join(RDIR, 'UAcento.pas')
-    check('R17 (de partida) el form y la unidad recien creados llevan BOM (el IDE de esta maquina, en UTF-8)',
-          bytes_de(ACDFM).startswith(BOM) and bytes_de(ACPAS).startswith(BOM), bytes_de(ACDFM)[:3])
+    # (de partida) lo que pide el IDE de esta maquina para un fuente nuevo (su DefaultFileFilter, el juez del
+    # servidor: mc.ide_prefiere_utf8): con BOM en UTF-8, sin el en ANSI. Era el BOM dado por hecho
+    _utf8 = mc.ide_prefiere_utf8()
+    check('R17 (de partida) el form y la unidad recien creados %s (lo que pide el IDE de esta maquina)'
+          % ('llevan BOM' if _utf8 else 'no llevan BOM'),
+          bytes_de(ACDFM).startswith(BOM) == _utf8 and bytes_de(ACPAS).startswith(BOM) == _utf8, bytes_de(ACDFM)[:3])
     # (revisor de baterias de la 1.27) el BOM se quita SI esta: con un IDE en ANSI el creador no lo pone y [3:]
-    # cortaba el principio del form (y de la unidad, abajo). El "(de partida)" de arriba sigue siendo de esta
-    # maquina (pendiente: un juez de la preferencia del IDE)
+    # cortaba el principio del form (y de la unidad, abajo)
     sin_bom = bytes_de(ACDFM)  # leido ANTES: open('wb') lo vacia
     sin_bom = sin_bom[3:] if sin_bom.startswith(BOM) else sin_bom
     open(ACDFM, 'wb').write(sin_bom)  # como lo guarda el IDE con todo ASCII

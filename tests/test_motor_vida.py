@@ -36,6 +36,10 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 TOPE = 90
+# el EngineIdleMinutes del ini de esta bateria (doce segundos) y la pasada del barrendero del
+# servidor, del fuente (LspSweepMs): V0 espera el plazo del ini y tres pasadas (eran 18 s a mano)
+IDLE_MIN = 0.2
+PASADA_S = mc.entero_del_fuente('Server/Lsp.Session.pas', 'LspSweepMs') / 1000
 BASE = mc.carpeta('motor-vida')
 SRVDIR = os.path.join(BASE, 'srv')
 EXE = mc.copia_exe(SRVDIR)
@@ -48,7 +52,7 @@ def lanza(entorno=None):
     puerto = mc.puerto_libre()
     with open(os.path.join(SRVDIR, 'settings.ini'), 'w') as f:
         f.write('[Server]' + NL + 'Port=%d' % puerto + NL + 'BindIP=127.0.0.1' + NL
-                + 'EngineIdleMinutes=0.2' + NL * 2
+                + 'EngineIdleMinutes=%g' % IDLE_MIN + NL * 2
                 + '[Workspace.Op]' + NL + 'Token=%s' % TOKEN + NL + 'Roots=%s' % BASE + NL)
     proc = mc.lanza_http(EXE, None, mc.entorno(entorno), espera_en=puerto)
     return proc, puerto
@@ -156,19 +160,22 @@ try:
     d, dpr = proyecto(uno, 'Dos')
     ok, h = caliente(uno, dpr)
     antes = mc.motores_en(proc.pid, d)
-    time.sleep(18)      # el plazo del ini (12 s) y tres pasadas del barrendero
+    ESPERA_V0 = IDLE_MIN * 60 + 3 * PASADA_S     # el plazo del ini y tres pasadas del barrendero
+    time.sleep(ESPERA_V0)
     sigue = mc.motores_en(proc.pid, d)
-    check('V0 el entorno gana al ini (que dice 12 s): con DELPHI_MCP_ENGINE_IDLE_MINUTES=0 el motor sin uso '
-          'SIGUE a los 18 s, el mismo', ok and len(antes) == 1 and sigue == antes,
-          'antes %s, 18 s despues %s' % (antes, sigue))
+    check('V0 el entorno gana al ini (que dice %g s): con DELPHI_MCP_ENGINE_IDLE_MINUTES=0 el motor sin uso '
+          'SIGUE a los %g s, el mismo' % (IDLE_MIN * 60, ESPERA_V0), ok and len(antes) == 1 and sigue == antes,
+          'antes %s, %g s despues %s' % (antes, ESPERA_V0, sigue))
 
     # V3 - una peticion que un motor sano no contestaba nunca
     t0 = time.time()
     r = uno.call('delphi_completion', {'path': dpr, 'line': 9, 'character': 4, 'trigger': '"'})
     dt = time.time() - t0
+    # SE CONTESTA lo dice la respuesta (sus items, del mismo motor), no lo que tarda: el motor que no
+    # contesta acaba en 'timed out' o en LSP-033, sin items (el 'dt < 15' de antes no anadia nada)
     check('V3 la completion cuyo trigger es una comilla SE CONTESTA (%.1f s), y el motor sigue siendo el mismo: '
           'iba al motor como JSON roto, y a eso no contesta nada' % dt,
-          dt < 15 and not mc.fallo(r) and '"items"' in r and 'timed out' not in r
+          not mc.fallo(r) and '"items"' in r and 'timed out' not in r
           and mc.motores_en(proc.pid, d) == antes, ' '.join(r.split())[:160])
 
     # V2 - el motor colgado, con una peticion que espera su respuesta

@@ -63,6 +63,11 @@ open(os.path.join(PRJDIR, PROJNAME + '.deployproj'), 'w', encoding='utf-8').writ
     + ''.join('        <DeployFile Include="%s"><RemoteDir>Saluda\\</RemoteDir><RemoteName>%s</RemoteName>'
               '<DeployClass>File</DeployClass></DeployFile>\n' % (n, n) for n in ('noexiste.exe', 'run.py', '@kill',
                                                                              'Eco.exe')) +
+    '    </ItemGroup>\n'
+    # A4 del revisor del paisaje de la 1.27: para Linux64 despliega Eco (en un destino Linux, eco es OTRO fichero)
+    '    <ItemGroup Condition="\'$(Platform)\'==\'Linux64\'">\n'
+    '        <DeployFile Include="Eco"><RemoteDir>Saluda\\</RemoteDir><RemoteName>Eco</RemoteName>'
+    '<DeployClass>File</DeployClass></DeployFile>\n'
     '    </ItemGroup>\n</Project>\n')
 
 # paclient stub: a .cmd that calls python on the stub script
@@ -85,6 +90,10 @@ env['DELPHI_MCP_DESKTOP_HOSTS'] = '*'
 _ad, _host = mc.appdata_perfil(BASE, PROFILE, '127.0.0.1')
 env['APPDATA'] = _ad
 env['DELPHI_MCP_REMOTE_HOSTS'] = _host
+# A4 del revisor del paisaje de la 1.27: un perfil Linux64 en el MISMO APPDATA de prueba (y el mismo host), para
+# los nombres en un destino que distingue mayusculas
+PERFIL_LINUX = 'perfil-linux'
+mc.appdata_perfil(BASE, PERFIL_LINUX, '127.0.0.1', platform='Linux64')
 srv = mc.Stdio(EXE, env, nombre='rr')
 call = srv.call
 
@@ -224,12 +233,23 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project'
                              'args': '"di \\"hola\\""', 'timeoutms': 30000}, t=180)
 check('C ...y un argumento con una comilla, que un programa Delphi no puede recibir, se niega sin lanzar nada',
       mc.rechazado(r) and mc.es(r, 'SR_RUN_ARG_COMILLA_FMT'), r[:400])
+# B7 del revisor del paisaje de la 1.27: RUN-025 dice CUAL no llega (CaracterQueNoLlega), como TEST-037, PAS-019 y
+# DSGN-065 (ROJA contra c582da0: no lo decia)
+check('C RUN-025 nombra el caracter que no llega (U+0022)', 'U+0022' in r, r[:400])
+# ...por SU juez, el de LlegaAParamStr: un tabulador si llega al programa del agente, asi que con uno delante de la
+# comilla se nombra la comilla (con el juez de los valores de la casa saldria U+0009)
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'Eco.exe',
+                             'args': '"a\tb \\"c\\""', 'timeoutms': 30000}, t=180)
+check('C RUN-025 con un tabulador y una comilla nombra la comilla, no el tabulador (que si llega)',
+      mc.es(r, 'SR_RUN_ARG_COMILLA_FMT') and 'U+0022' in r and 'U+0009' not in r, r[:400])
 # C7 (revisor del paisaje del cierre de la 1.26): un argumento VACIO tampoco lo recibe: GetParamStr se salta un "" y
 # los de detras se corren uno (medido en System.pas, y con este eco contra p127n: 'a "" b' llegaba [a][b])
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'Eco.exe',
                              'args': 'a "" b', 'timeoutms': 30000}, t=180)
 check('C7 ...ni un argumento vacio, que ParamStr se salta y corre los de detras: se niega sin lanzar nada',
       mc.rechazado(r) and mc.es(r, 'SR_RUN_ARG_COMILLA_FMT'), r[:400])
+check('C7 RUN-025 dice que ese argumento va vacio (B7; ROJA contra c582da0)',
+      mc.catalogo()['SF_RUN_ARG_VACIO'] in r, r[:400])
 # A4 de la 1.27 (decision de David: quitar la lista negra de shell de run): sin shell en ningun sitio, lo que
 # un shell leeria llega LITERAL al programa (ROJA contra la 1.26.1: SR_SHELL_META_FMT)
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'Eco.exe',
@@ -539,6 +559,26 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE.upper(), '
 j = json.loads(r) if r.startswith('{') else {}
 check('ID6 profile=%s tecleado sigue como %s, el nombre del IDE (ROJO contra r1222u: seguia con lo tecleado)'
       % (PROFILE.upper(), PROFILE), j.get('profile') == PROFILE and 'hola desde el target' in r, r[:300])
+
+# ---- A4 del revisor del paisaje de la 1.27: el nombre del exe= lo juzga EL juez del destino
+# (Lsp.Dproj.MismoNombreEnElDestino), el del sitio del manifiesto. En Linux Tool y tool son dos ficheros: exe=saluda y
+# exe=eco pasaban (SameText/MatchText siempre) y se ejecutaba un fichero que el proyecto no despliega ----
+# Con el script como argumento: si el juez falla, lo que corre (aqui el gemelo Win64 del lanzador, y NTFS si encuentra
+# Saluda.exe por saluda) acaba solo. Sin el, la roja dejo un python esperando su entrada que tenia la carpeta abierta
+for exe_l, que in (('saluda', 'el binario del proyecto (Saluda)'), ('eco', 'lo que su .deployproj despliega (Eco)')):
+    r = call('delphi_paserver', {'command': 'remote-run', 'name': PERFIL_LINUX, 'project': DPROJ, 'exe': exe_l,
+                                 'args': '"%s"' % SCRIPT.replace(chr(92), '/'), 'timeoutms': 20000}, t=180)
+    check('A4 exe=%s en un destino Linux, con otras mayusculas que %s: PAS-063, nada ejecutado (ROJA contra '
+          'c582da0: pasaba)' % (exe_l, que), mc.es(r, 'SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT'), r[:300])
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PERFIL_LINUX, 'project': DPROJ, 'exe': 'Eco',
+                             'args': '"%s"' % SCRIPT.replace(chr(92), '/'), 'timeoutms': 20000}, t=180)
+check('A4 control: exe=Eco, con las mayusculas que despliega, pasa el juez en Linux',
+      not mc.es(r, 'SR_PASERVER_RUN_EXE_NO_DESPLEGADO_FMT'), r[:300])
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                             'exe': PROJNAME.lower() + '.exe', 'args': '"%s"' % SCRIPT.replace(chr(92), '/'),
+                             'timeoutms': 30000}, t=180)
+check('A4 control: en Windows exe=%s es el mismo fichero que %s.exe (como lo compara NTFS): pasa y corre'
+      % (PROJNAME.lower() + '.exe', PROJNAME), 'hola desde el target' in r, r[:300])
 
 srv.mata()
 mc.fin('remote-run')

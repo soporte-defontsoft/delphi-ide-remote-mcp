@@ -34,11 +34,11 @@ try:
 
     r = srv.call('delphi_help', {'command': 'tool'})
     check('V1 HELP-007 lista lo que tools/list anuncia: vault_read si, vault_append no',
-          mc.tiene(r, 'HELP-007') and 'vault_read' in r and 'vault_append' not in r, r[:600])
+          mc.es(r, 'SR_HELP_NEED_NAME') and 'vault_read' in r and 'vault_append' not in r, r[:600])
 
     r = srv.call('delphi_help', {'command': 'tool', 'name': 'zzqqxx120'})
     check('V2 HELP-002 lista lo que tools/list anuncia: vault_read si, vault_append no',
-          mc.tiene(r, 'HELP-002') and 'vault_read' in r and 'vault_append' not in r, r[:600])
+          mc.es(r, 'SR_HELP_NO_TOOL_ALL_FMT') and 'vault_read' in r and 'vault_append' not in r, r[:600])
 finally:
     srv.cierra()
 

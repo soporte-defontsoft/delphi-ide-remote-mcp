@@ -322,6 +322,13 @@ function PrimerCondicionalAbierto(const ATexto: string): Integer;
   1-based detras de su palabra en ACodigo (la vista CodigoPascal), 0 si no
   esta. La de adduses, el renombrado y la declaracion de una rutina visible. }
 function FinDeSeccion(const ACodigo, ASec: string): Integer;
+{ ...y la misma por LINEAS, para quien lee el fuente linea a linea
+  (LineasDelTexto: el mismo salto que LineaDePosicion): la linea 0-based de
+  su palabra y, en ella, la columna 1-based donde empieza (AColIni) y la de
+  detras (AColFin). False si no esta. El resumen del interface de
+  delphi_symbols buscaba una linea que solo dijera la palabra (revisor del
+  paisaje de la 1.27, B2). }
+function SeccionEnLineas(const ACodigo, ASec: string; out ALinea, AColIni, AColFin: Integer): Boolean;
 
 { ---- grupos de proyectos (.groupproj) ---- }
 
@@ -2944,6 +2951,22 @@ begin
     Result := M.Index + M.Length
   else
     Result := 0;
+end;
+
+function SeccionEnLineas(const ACodigo, ASec: string; out ALinea, AColIni, AColFin: Integer): Boolean;
+begin
+  ALinea := -1;
+  AColIni := 0;
+  AColFin := 0;
+  var Fin := FinDeSeccion(ACodigo, ASec);
+  Result := Fin > 0;
+  if not Result then
+    Exit;
+  var Ini := Fin - Length(ASec);
+  var IniLinea := InicioDeLaLinea(ACodigo, Ini);
+  ALinea := LineaDePosicion(ACodigo, Ini) - 1;
+  AColIni := Ini - IniLinea + 1;
+  AColFin := Fin - IniLinea + 1;
 end;
 
 { El eco de adduses y removeuses: la clausula de ASec de APasPath tal y como

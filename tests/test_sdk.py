@@ -388,7 +388,7 @@ try:
     sdk_file(os.path.join(PROFILES_DIR, 'zzfuera.sdk'), sysroot=raiz_fuera)
     out = srv.call('delphi_paserver', {"command": "reseat-sdk", "sdk": "zzfuera"})
     check('reseat-sdk de un .sdk cuyo sysroot no esta bajo la carpeta de SDKs del IDE: no se asienta y lo dice (PAS-060)',
-          'PAS-060' in out and '"seated":[]' in out.replace(' ', ''), out[:300])
+          mc.es(out, 'SN_PASERVER_SDK_RESEAT_FUERA_FMT') and '"seated":[]' in out.replace(' ', ''), out[:300])
     # el asiento es del registro REAL del IDE (el APPDATA es de mentira, el registro no): si
     # PAS-060 volviera atras, la bateria dejaba un SDK falso en el SDK Manager de quien la
     # corre. Se MIRA (solo lectura) y, si esta, lo quita la propia herramienta (revisor de
@@ -454,7 +454,7 @@ try:
     nuevas = [f for f in os.listdir(copias) if f not in previas and f.endswith('-zzp3perfil.profile')]
     check('remove-profile: el .profile se copia ANTES en la cache, byte a byte, y lo dice (PAS-058)',
           not os.path.exists(perfil) and len(nuevas) == 1 and
-          open(os.path.join(copias, nuevas[0]), 'rb').read() == antes and 'PAS-058' in out,
+          open(os.path.join(copias, nuevas[0]), 'rb').read() == antes and mc.es(out, 'SN_PAS_COPIA_DEL_IDE_FMT'),
           (nuevas, out[:300]))
     # las copias que dejo ESTA bateria, fuera: la cache de las baterias dura entre corridas
     for f in os.listdir(copias):

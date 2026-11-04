@@ -58,8 +58,8 @@ for m in re.finditer(r'the other (\d+)\b', readme):
     ok = n in (TOTAL - len(LSP_BACKED), NON_LSP_CORE)
     check('README "the other %d" cuadra' % n, ok,
           readme[max(0, m.start() - 60):m.end() + 20])
-check('README nombra los 5 vault_* como opcionales',
-      '5 optional `vault_*`' in readme and len(VAULT_TOOLS) == 5, VAULT_TOOLS)
+check('README nombra los %d vault_* como opcionales' % len(VAULT_TOOLS),
+      bool(VAULT_TOOLS) and ('%d optional `vault_*`' % len(VAULT_TOOLS)) in readme, VAULT_TOOLS)
 
 # ---- lo que se publica no nombra proyectos internos nuestros -----------
 # David, 21-oct-2026 ("eso debe convertirse en regla"): una entrada nombraba el

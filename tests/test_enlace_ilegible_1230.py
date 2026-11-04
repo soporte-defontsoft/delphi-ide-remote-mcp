@@ -84,7 +84,7 @@ def foto():
 
 
 def jaula(r):
-    return 'GUARD-001' in r and 'INTERNAL' not in r
+    return mc.es(r, 'SR_JAIL_LINK_FMT') and 'INTERNAL' not in r
 
 
 temp_planta = False

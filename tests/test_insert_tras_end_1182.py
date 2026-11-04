@@ -53,7 +53,7 @@ try:
           0 <= t.find('procedure Nueva;') < t.find('end.\r\n' + PROSA) and t.endswith(PROSA + '\r\n'), t)
     r = srv.call('delphi_edit', {'path': U2, 'insert': 'rutina-global', 'code': CODE})
     check('I3 control: dos end. en ramas de un IFDEF: EDIT-049 y nada escrito',
-          mc.rechazado(r) and 'EDIT-049' in r and open(U2, newline='').read() == T2, r[:300])
+          mc.rechazado(r) and mc.es(r, 'SR_EDIT_ENCUENTRO_FRONTERA_FINAL_UNIT') and open(U2, newline='').read() == T2, r[:300])
     r = srv.call('delphi_edit', {'path': U3, 'insert': 'rutina-global', 'code': CODE})
     t = open(U3, encoding='utf-8', newline='').read()
     check('I4 initialization dentro de {$IFDEF DEBUG}: la rutina va DELANTE del IFDEF, fuera del bloque',

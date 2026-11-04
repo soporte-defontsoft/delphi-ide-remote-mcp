@@ -37,7 +37,11 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 # el interruptor del servidor (GIT_ADVICE=0)
 GLOBAL = os.path.join(BASE, 'global.gitconfig')
 open(GLOBAL, 'w').close()
-s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'GIT_CONFIG_GLOBAL': GLOBAL}), nombre='git-consejos', t=120)
+# ...y la de SISTEMA tampoco (GIT_CONFIG_NOSYSTEM): un advice.*=false en el gitconfig de la instalacion
+# de git hacia lo mismo que en el global. (El ingles de los textos de git que se juzgan lo pone el
+# servidor: LC_ALL=C y LANGUAGE=C en GitCorre)
+s = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'GIT_CONFIG_GLOBAL': GLOBAL, 'GIT_CONFIG_NOSYSTEM': '1'}),
+             nombre='git-consejos', t=120)
 
 
 def git(**kw):
@@ -68,12 +72,12 @@ try:
     r = git(command='restore', paths=['c01.txt'])
     st = git(command='status')
     check('A5 restore: GIT-077 nombra command=stash, y el arbol sigue " M c01.txt"',
-          not mc.rechazado(r) and 'GIT-077' in r and 'command=stash' in r and ' M c01.txt' in st,
+          not mc.rechazado(r) and mc.es(r, 'SN_GIT_RESTORE_SOLO_INDICE') and 'command=stash' in r and ' M c01.txt' in st,
           (r[:400], st[:200]))
 
     r = git(command='commit', message='nada preparado')
     check('A2 commit sin nada preparado: GIT-036 con c01.txt, sin "git restore" ni "commit -a"',
-          mc.rechazado(r) and 'GIT-036' in r and 'c01.txt' in r and 'git restore' not in r
+          mc.rechazado(r) and mc.es(r, 'SR_GIT_EXIT_FMT') and 'c01.txt' in r and 'git restore' not in r
           and 'commit -a' not in r, r[:600])
 
     git(command='stash', paths=['c01.txt'], message='aparca')
@@ -95,7 +99,10 @@ try:
     git(command='commit', message='en base')
     r = git(command='merge', branch='rama')
     check('A4 merge que no va en fast-forward: GIT-008 y "Not possible to fast-forward", sin "hint:"',
-          mc.rechazado(r) and 'GIT-008' in r and 'Not possible to fast-forward' in r and not hay_hint(r),
+          # 'Not possible to fast-forward' es la linea de GIT (en ingles siempre: LC_ALL=C, GitCorre):
+          # que siga mientras los hint: se van, no un texto nuestro
+          mc.rechazado(r) and mc.es(r, 'SN_GIT_MERGE_DIVERGED') and 'Not possible to fast-forward' in r
+          and not hay_hint(r),
           r[:900])
 finally:
     s.cierra()

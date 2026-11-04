@@ -183,12 +183,18 @@ finally:
 # cdb: 23,9 s y la mataba el arnes). La parada del HTTP tiene ahora un plazo de
 # 3 s (TMCPIdHTTPServer.Stop). Y con la CPU llena aun hay paradas de 6 a 10 s, 6
 # de 120 (V59, sin medir su causa: dos veces fueron 3-4 s dentro de
-# TMcpHost.Destroy): ninguna se cuelga (menos de 12 s, el arnes espera 15) y la
-# MEDIANA sigue cazando el hilo de las tablas, que retenia CADA parada (13 de 13)
+# TMcpHost.Destroy): ninguna se cuelga y la MEDIANA sigue cazando el hilo de las
+# tablas, que retenia CADA parada (13 de 13). Los dos limites, de lo que dicen el
+# arnes y el fuente (eran 12 y 4 s a mano): colgada es la que el arnes no ve salir
+# en su plazo (mc.ServidorHttp.PLAZO_PARADA: la mata, y su codigo ya no es 0), y
+# la mediana tiene que quedar por debajo de lo que la finalizacion de
+# Lsp.DesignerMetaGen espera al hilo de las tablas (ESPERA_HILO_TABLAS_MS)
+ESPERA_HILO_S = mc.entero_del_fuente('Server/Lsp.DesignerMetaGen.pas', 'ESPERA_HILO_TABLAS_MS') / 1000
 check('C1 con la CPU llena, proc.kill() de un servidor recien arrancado sale limpio: ninguna se cuelga '
-      '(menos de 12 s) y la mediana, menos de 4 s (antes 5,3 cada una)',
-      len(tiempos) == 3 and all(rc == 0 and dt < 12 for dt, rc in tiempos)
-      and sorted(dt for dt, _ in tiempos)[1] < 4, tiempos)
+      '(menos de %g s, el plazo del arnes) y la mediana, menos de los %g s que se esperaba al hilo de las tablas '
+      '(antes 5,3 cada una)' % (mc.ServidorHttp.PLAZO_PARADA, ESPERA_HILO_S),
+      len(tiempos) == 3 and all(rc == 0 and dt < mc.ServidorHttp.PLAZO_PARADA for dt, rc in tiempos)
+      and sorted(dt for dt, _ in tiempos)[1] < ESPERA_HILO_S, tiempos)
 
 mc.borra(BASE)
 mc.fin('atomos battery')

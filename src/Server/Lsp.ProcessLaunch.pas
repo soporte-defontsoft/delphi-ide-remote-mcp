@@ -67,6 +67,15 @@ function LlegaAParamStr(const AValor: string): Boolean;
   programa (remote-run) solo pregunta LlegaAParamStr: alli un tabulador vale. }
 function ValorDeLaCasaLlega(const AValor: string): Boolean;
 
+{ El primer caracter de AValor por el que ValorDeLaCasaLlega dice que no, como
+  lo nombran los mensajes (U+0009, U+0022); '' si llega. Para decir CUAL: TEST-037
+  decia "una comilla o un caracter de control" y el agente no veia cual (Qwen,
+  dirigido de la 1.27). EL juez de los dos. AControles = False: solo lo que mira
+  LlegaAParamStr (la comilla, el NUL), para el valor que el AGENTE da a SU
+  programa (RUN-025 de remote-run), donde un tabulador vale; uno vacio no tiene
+  caracter que nombrar (revisor del paisaje de la 1.27, B7). }
+function CaracterQueNoLlega(const AValor: string; AControles: Boolean = True): string;
+
 { La ruta completa de APrograma, con su extension ('msbuild.exe'), en las
   carpetas de APath (una lista con ';', la de un entorno) como la resuelve
   Windows (SearchPath, el juez) y SOLO en ellas: sin la carpeta actual ni la
@@ -310,12 +319,17 @@ end;
 
 function ValorDeLaCasaLlega(const AValor: string): Boolean;
 begin
-  if AValor = '' then
-    Exit(True);
+  // uno vacio vale (quien compone no lo pasa); si no, ninguno que no llegue
+  Result := CaracterQueNoLlega(AValor) = '';
+end;
+
+function CaracterQueNoLlega(const AValor: string; AControles: Boolean): string;
+begin
+  // caracter a caracter por LlegaAParamStr (la comilla, el NUL), mas los de control
   for var C in AValor do
-    if C < ' ' then
-      Exit(False);
-  Result := LlegaAParamStr(AValor);
+    if (AControles and (C < ' ')) or not LlegaAParamStr(C) then
+      Exit('U+' + IntToHex(Ord(C), 4));
+  Result := '';
 end;
 
 function EnComillas(const AValor: string): string;

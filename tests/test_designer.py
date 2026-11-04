@@ -132,9 +132,9 @@ check('tree maxdepth=2: los hijos del form, y el panel dice cuantos lleva dentro
       str(k2)[:300])
 r = call('delphi_designer', {'command': 'tree', 'path': DFM, 'maxdepth': -1})
 check('tree maxdepth negativo: lo niega la capa de parametros (SYS-016), como todo entero',
-      mc.rechazado(r) and mc.tiene(r, 'SYS-016'), r[:200])
+      mc.rechazado(r) and mc.es(r, 'SR_SYS_PARAM_VALUE_FMT'), r[:200])
 r = call('delphi_designer', {'command': 'lint', 'path': DFM, 'maxdepth': 2})
-check('maxdepth con otro comando: no va con el (DSGN-047)', mc.rechazado(r) and mc.tiene(r, 'DSGN-047'), r[:200])
+check('maxdepth con otro comando: no va con el (DSGN-047)', mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_NO_VA_CON_COMANDO_FMT'), r[:200])
 
 # ---- get ----
 r = call('delphi_designer', {'command': 'get', 'path': DFM, 'component': 'BotonUno'})

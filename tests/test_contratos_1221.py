@@ -52,7 +52,7 @@ try:
 
     r = srv.call('delphi_list', {'root': d, 'dirs': True, 'pattern': '*.pas'})
     check('L3 LIST-015 dice con que modo SI va: dirs=false (no "goes with: false")',
-          'goes with: dirs=false.' in r and 'goes with: false' not in r, r[:400])
+          mc.dice_que_va_con(r, 'dirs=false') and not mc.dice_que_va_con(r, 'false'), r[:400])
 
     carpeta = os.path.join(BASE, 'fixture')
     r = srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fixture', 'dir': carpeta})

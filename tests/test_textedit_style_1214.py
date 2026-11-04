@@ -43,7 +43,7 @@ try:
     check('T2 edit que lo arregla: escrito y sin la nota', not mc.rechazado(r) and not mc.es(r, 'SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT'), r[:300])
     r = srv.call('delphi_textedit', {'path': sty, 'edits': [{'old': "    TextSettings.FontColor = xFFFF0000",
                                                              'new': "    TextSettings.FontColor = $FFFF0000"}]})
-    check('T3 edits (la tanda) que lo rompe otra vez: la nota', not mc.rechazado(r) and 'STYLE-055' in r, r[:300])
+    check('T3 edits (la tanda) que lo rompe otra vez: la nota', not mc.rechazado(r) and mc.es(r, 'SN_TEXTEDIT_STYLE_FMX_NO_CARGA_FMT'), r[:300])
     srv.call('delphi_textedit', {'path': sty, 'old': "    TextSettings.FontColor = $FFFF0000",
                                  'new': "    TextSettings.FontColor = xFFFF0000"})
     i = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))

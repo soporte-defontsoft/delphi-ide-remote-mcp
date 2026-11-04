@@ -10,7 +10,7 @@
 
 Usage:  python tests/test_v012.py [path-to-DelphiLspMcp.exe]
 """
-import json, subprocess, os, re
+import json, subprocess, os, re, time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -149,7 +149,7 @@ check('delete: new junto a delete rechazado',
 DPR_PATH = os.path.join(INSIDE, 'Mini.dpr')
 out = call('delphi_edit', {"path": DPR_PATH, "insert": "rutina-global",
                            "code": "procedure Saluda;\nbegin\n  Writeln('hola');\nend;"})
-check('dpr: insert rutina-global aceptado', 'INSERT rutina-global (.dpr)' in out, out)
+check('dpr: insert rutina-global aceptado', mc.es(out, 'SK_EDIT_INSERT_RUTINA_DPR_FMT'), out)
 raw = open(DPR_PATH, 'rb').read().decode('cp1252')
 iuses = raw.find('System.SysUtils;')
 iproc = raw.find('procedure Saluda;')
@@ -167,7 +167,7 @@ UF = os.path.join(INSIDE, 'UF.pas')
 out = call('delphi_edit', {"path": UF, "insert": "metodo", "inclass": "TFormPrueba",
                            "visibility": "published",
                            "code": "procedure BotonClick(Sender: TObject);\nbegin\n  FDato := 1;\nend;"})
-check('published implicita: aceptado', 'INSERT metodo' in out and 'the tool did BOTH halves' in out, out)
+check('published implicita: aceptado', mc.es(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT'), out)
 raw = open(UF, 'rb').read().decode('cp1252')
 icls = raw.find('TFormPrueba = class(TObject)')
 idecl = raw.find('procedure BotonClick(Sender: TObject);')
@@ -227,7 +227,8 @@ open(FORM2, 'wb').write(FORM.replace('TFormPrueba', 'TFormDos').encode('cp1252')
 out = call('delphi_edit', {"path": FORM2, "insert": "metodo", "inclass": "TFormDos",
                            "visibility": "published",
                            "code": "procedure BotonClick(Sender: TObject);\nbegin\nend;"})
-check('C1-bis: insert aceptado', 'INSERT metodo' in out, out[:150])
+check('C1-bis: insert aceptado', mc.es(out, 'SK_EDIT_INSERT_METODO_DOS_MITADES_FMT')
+      or mc.es(out, 'SK_EDIT_INSERT_METODO_SOLO_IMPL_FMT'), out[:150])
 raw = open(FORM2, 'rb').read().decode('cp1252')
 icampo = raw.find('Nombre: string;')
 idecl = raw.find('procedure BotonClick(Sender: TObject);')
@@ -249,8 +250,10 @@ new_files = after - before
 check('report: creo exactamente 1 fichero .md', len(new_files) == 1, new_files)
 if new_files:
     txt = open(list(new_files)[0], encoding='utf-8-sig').read()
+    # la version y la fecha por su VALOR (la del fuente y la de hoy), no por la etiqueta en ingles
     check('report: lleva version, fecha y mensaje',
-          'Server version' in txt and 'Date' in txt and 'esperaba Z' in txt, txt[:200])
+          mc.cadena_del_fuente('Server/Lsp.Texts.pas', 'SERVER_VERSION') in txt
+          and time.strftime('%Y-%m-%d') in txt and 'esperaba Z' in txt, txt[:200])
 out = call('delphi_report', {"message": ""})
 check('report: mensaje vacio rechazado',
       mc.rechazado(out) and mc.es(out, 'SR_REPORT_EMPTY'), out[:120])
@@ -350,7 +353,7 @@ out = call('delphi_config', {"project": VCLP, "command": "add-platform", "platfo
 # la regla del framework por su texto del catalogo, no "VCL" suelto (revisor de
 # baterias, 18-oct-2026)
 check('config: add-platform Linux64 en VCL RECHAZADO (regla VCL!=FMX)',
-      mc.rechazado(out) and mc.catalogo()['SF_CFG_VCL_SOLO_WINDOWS_FMT'].split('(')[0].strip() in out, out[:150])
+      mc.rechazado(out) and mc.trozo_de_formato('SF_CFG_VCL_SOLO_WINDOWS_FMT', 0) in out, out[:150])
 out = call('delphi_config', {"project": CON, "command": "add-platform", "platform": "Linux64"})
 # shape, not data: the fixture is a copy of the live .dproj, so Linux64 may
 # arrive undeclared (ANADIDA) or declared-but-disabled (HABILITADA) - both
@@ -443,7 +446,7 @@ check('set-version: escribe los cuatro numeros del VERSIONINFO',
 check('set-version: FileVersion y ProductVersion dicen lo MISMO',
       'FileVersion=3.4.5.0;' in _d and 'ProductVersion=3.4.5.0' in _d, out[:200])
 check('set-version: el sufijo -beta no entra en el .dproj',
-      '-beta' not in _d and 'The suffix "-beta"' in out, out[:200])
+      '-beta' not in _d and (mc.catalogo()['SF_CFG_SUFIJO_NO_VA_DPROJ_FMT'] % '-beta') in out, out[:200])
 check('set-version: no toca Android ni iOS',
       'versionCode=1;' in _d and 'CFBundleVersion=1.0.0' in _d,
       'la numeracion de las tiendas es otra cosa')
@@ -612,7 +615,7 @@ check('paserver: platforms distingue local vs remoto',
 # con su SDK salia buildsLocally=false (test completo de Opus de la 1.22.0)
 # sin ninguna plataforma con SDK, all([]) daba PASS sin mirar nada: entonces se dice y no se
 # cuenta (revisor de baterias de la 1.27)
-_con_sdk = [p for p in pf.get('platforms', []) if 'SDK present' in p.get('status', '')]
+_con_sdk = [p for p in pf.get('platforms', []) if p.get('status') == mc.catalogo()['SF_PAS_STATUS_READY_SDK']]
 if _con_sdk:
     check('paserver: platforms, la que tiene su SDK se compila aqui (buildsLocally)',
           all(p['buildsLocally'] for p in _con_sdk), out[:400])
@@ -710,10 +713,10 @@ check('read: contenido que empieza por "Error" sigue verbatim',
 out = call('delphi_read', {"path": IN_PAS, "fromline": "abc"})
 check('tipos: fromline no numerico rechazado con el nombre del parametro',
       mc.resultado(out) == 'INVALID_PARAM' and 'fromline' in out.lower()
-      and 'whole number' in out, out[:200])
+      and (mc.catalogo()['SF_SYS_EXPECTED_WHOLE_FMT'] % 'abc') in out, out[:200])
 out = call('delphi_list', {"root": INSIDE, "dirs": "quiza"})
 check('tipos: booleano invalido rechazado',
-      mc.resultado(out) == 'INVALID_PARAM' and 'true or false' in out, out[:200])
+      mc.resultado(out) == 'INVALID_PARAM' and (mc.catalogo()['SF_SYS_EXPECTED_BOOL_FMT'] % 'quiza') in out, out[:200])
 # ...but what parses cleanly is still accepted (clients that send text)
 out = call('delphi_read', {"path": IN_PAS, "fromline": "2", "toline": "4"})
 check('tipos: numero en texto ("2") sigue valiendo',

@@ -33,17 +33,31 @@ exe_src = sys.argv[1] if len(sys.argv) > 1 else None
 
 
 def search_path(clave):
-    """El Search Path de Library\\<clave> del IDE de este servidor ('' sin la clave)."""
-    try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'SOFTWARE\Embarcadero\BDS\37.0\Library\%s' % clave) as k:
-            return winreg.QueryValueEx(k, 'Search Path')[0]
-    except OSError:
-        return ''
+    """El Search Path de Library\\<clave> del IDE de este servidor ('' sin la clave): por EL lector
+    de la clave del IDE (mc.valor_del_ide), de la version activa (era la 37.0 a mano)."""
+    return mc.valor_del_ide('Library\\' + clave, 'Search Path')
+
+
+def carpeta_de_las_dos():
+    """El filtro de L4: el nombre de una biblioteca que el IDE registra IGUAL (la misma entrada)
+    en las claves Android32 y Android64 de esta maquina, sin $(Platform) (la misma carpeta en las
+    dos) y que no es del propio IDE ($(BDS...)): su carpeta en el CatalogRepository (GetIt), o la
+    ultima de la ruta. '' si no hay ninguna (era 'LockBox' a mano)."""
+    def trozos(clave):
+        return [t.strip().rstrip('\\') for t in search_path(clave).split(';') if t.strip()]
+    de64 = {t.lower() for t in trozos('Android64')}
+    comunes = [t for t in trozos('Android32') if t.lower() in de64 and '$(platform)' not in t.lower()
+               and not (t.lower().startswith('$(bds') and not t.lower().startswith('$(bdscatalogrepository'))]
+    for t in comunes:
+        if t.lower().startswith('$(bdscatalogrepository') and len(t.split('\\')) > 1:
+            return t.split('\\')[1]
+    return comunes[0].split('\\')[-1] if comunes else ''
 
 
 # el "(registered in: X)" de cada carpeta, leido con su formato del catalogo (la inversa del que lo
 # compone, SF_COMP_REGISTRADO_EN_FMT): la regex estaba a mano dos veces (revisor de baterias de la 1.27)
-REGISTRADO = re.escape(mc.catalogo()['SF_COMP_REGISTRADO_EN_FMT'].split('   ', 1)[1]).replace('%s', '([^)]*)')
+REGISTRADO = (re.escape(mc.trozo_de_formato('SF_COMP_REGISTRADO_EN_FMT', 1)) + '([^)]*)' +
+              re.escape(mc.trozo_de_formato('SF_COMP_REGISTRADO_EN_FMT', 2)))
 ANDROID32 = search_path('Android32')
 if not ANDROID32:
     # un salto que se dice: con sys.exit(0) y 0 checks, run_all la pintaba ROJA sin el
@@ -67,10 +81,14 @@ try:
           'lib\\android\\release' in r.lower() and '\\lib\\android32' not in r.lower(), r[:600])
     check('L3 platform=Android: nada de su propia clave sale como de otra plataforma (registered in: Android32)',
           not any('Android32' in e for e in re.findall(REGISTRADO, r)), r[:900])
-    r = srv.call('delphi_components', {'filter': 'LockBox'})
-    check('L4 filter: las plataformas por su nombre (Android), no por la clave del registro (Android32)',
-          'Android64' in r and re.findall(REGISTRADO, r) and not any('Android32' in e for e in re.findall(REGISTRADO, r))
-          and 'Android,' in r.replace('Android64', ''), r[-700:])
+    FILTRO = carpeta_de_las_dos()
+    if FILTRO:
+        r = srv.call('delphi_components', {'filter': FILTRO})
+        check('L4 filter=%s: las plataformas por su nombre (Android), no por la clave del registro (Android32)' % FILTRO,
+              'Android64' in r and re.findall(REGISTRADO, r) and not any('Android32' in e for e in re.findall(REGISTRADO, r))
+              and 'Android,' in r.replace('Android64', ''), r[-700:])
+    else:
+        print('NOTA: L4 no se mide: ninguna biblioteca esta registrada igual en Android32 y Android64 en esta maquina')
     r = srv.call('delphi_components', {'platform': 'Win64'})
     check('L5 control: platform=Win64 da sus carpetas, con lib\\Win64\\Release',
           mc.es(r, 'SN_COMPONENTS_PLATFORM_HEAD_FMT') and 'lib\\win64\\release' in r.lower(), r[:400])

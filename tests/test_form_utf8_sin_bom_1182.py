@@ -52,9 +52,9 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='form-utf8-si
 try:
     p = form('A', TXT.encode('utf-8'))
     r = srv.call('delphi_read', {'path': p})
-    check('F1 delphi_read de un form UTF-8 sin BOM: READ-009', 'READ-009' in r, r[:400])
+    check('F1 delphi_read de un form UTF-8 sin BOM: READ-009', mc.es(r, 'SN_READ_FORM_UTF8_SIN_BOM_FMT'), r[:400])
     r = srv.call('delphi_designer', {'command': 'lint', 'path': p}, t=240)
-    check('F2 designer lint del mismo: READ-009', 'READ-009' in r, r[:400])
+    check('F2 designer lint del mismo: READ-009', mc.es(r, 'SN_READ_FORM_UTF8_SIN_BOM_FMT'), r[:400])
     p = form('B', b'\xef\xbb\xbf' + TXT.encode('utf-8'))
     r1 = srv.call('delphi_read', {'path': p})
     r2 = srv.call('delphi_designer', {'command': 'lint', 'path': p}, t=240)
@@ -72,22 +72,23 @@ try:
              .encode('cp1252'))
     r = srv.call('delphi_read', {'path': p})
     check('F5 un ANSI que casa con UTF-8 por azar: la nota no lo afirma y ensena las dos lecturas',
-          'READ-009' in r and 'its bytes are UTF-8' not in r and "CAFÉ…" in r.split('READ-009', 1)[1],
+          # (la que lo afirma, "its bytes are UTF-8", es READ-008: por su constante, no por su ingles)
+          mc.es(r, NOTA9) and not mc.es(r, 'SN_READ_UTF8_SIN_BOM_FMT') and "CAFÉ…" in r.split(mc.id_de(NOTA9), 1)[1],
           r[:900])
     p = os.path.join(JAIL, 'UA.dfm')
     r = srv.call('delphi_read', {'path': p})
     check('F6 ...y en el UTF-8 sin BOM de verdad tambien las dos: la ANSI partida (ConfiguraciÃ³n)',
-          'READ-009' in r and 'ConfiguraciÃ³n' in r.split('READ-009', 1)[1], r[:900])
+          mc.es(r, NOTA9) and 'ConfiguraciÃ³n' in r.split(mc.id_de(NOTA9), 1)[1], r[:900])
     # W9 del revisor de cierre: la nota de codificacion (encodingNote) tenia tres
     # emisores y dos sin READ-009: preview componia la suya (solo el form ancho) y el
     # lint de delphi_edit/tanda/changeset (DesignerLint) igual. Ahora UNA casa
     # (NotaDeCodificacionDeForm) y los tres la llevan
     r = srv.call('delphi_designer', {'command': 'preview', 'path': p, 'maxwidth': 120}, t=240)
     check('F7 preview del form UTF-8 sin BOM: encodingNote con READ-009',
-          'READ-009' in r and 'encodingNote' in r, r[:500])
+          mc.es(r, NOTA9) and 'encodingNote' in r, r[:500])
     # (el ancla, una linea sin letras altas: el servidor lee el form sin BOM en ANSI)
     r = srv.call('delphi_edit', {'path': p, 'old': "  Left = 0", 'new': "  Left = 1"}, t=240)
-    check('F8 delphi_edit del mismo form: su lint lleva READ-009', 'READ-009' in r, r[:600])
+    check('F8 delphi_edit del mismo form: su lint lleva READ-009', mc.es(r, NOTA9), r[:600])
 finally:
     srv.cierra()
 

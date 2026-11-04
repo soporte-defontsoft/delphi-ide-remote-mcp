@@ -47,6 +47,11 @@ const
     subio): lo baja la comprobacion y lo sube la subida (V106 de la 1.23.1:
     eran dos literales) }
   NODE_SELLO = 'node.ver';
+  { El puerto en que escucha un PAServer si nadie le da otro (paserver
+    -port=N): el de add-profile y test-connection sin port, y el de un
+    .profile que no lo dice. Era el literal 64211 en cinco sitios de
+    Mcp.Tools.PAServer (revisor del paisaje de la 1.27, B8). }
+  PASERVER_PUERTO = 64211;
 
 { La clave con la que el nodo reconoce que le llama ESTE servidor. Vive en
   un solo sitio para que los dos proyectos no se desincronicen. }
@@ -113,7 +118,9 @@ function PaclientGet(const ARemoto, ALocal: string): string;
 function PaclientPut(const ALocal, ACarpetaRemota: string; AFlag: Integer;
   const ANombreRemoto: string): string;
 function PaclientRemove(const ARemotos: array of string): string;
-function PaclientPerfilNuevo(const AHost, APuerto, APassword, APlataforma: string): string;
+{ ...el de add-profile recibe el NUMERO de puerto y lo escribe el: lo que
+  tecleo el agente ($1F, 0x1F) no llega a la linea (B8). }
+function PaclientPerfilNuevo(const AHost: string; APuerto: Integer; const APassword, APlataforma: string): string;
 { ...y el PLAZO para conectar, en segundos (--timeout=N): estaba a mano en
   cuatro sitios de Mcp.Tools.PAServer (forma 18 de la 1.26). }
 function PaclientPlazo(ASegundos: Integer): string;
@@ -326,9 +333,9 @@ begin
   Result := ComillasSinEscape('--Remove=' + string.Join(';', ARemotos));
 end;
 
-function PaclientPerfilNuevo(const AHost, APuerto, APassword, APlataforma: string): string;
+function PaclientPerfilNuevo(const AHost: string; APuerto: Integer; const APassword, APlataforma: string): string;
 begin
-  Result := '--local ' + ComillasSinEscape('--host=' + AHost) + ' --port=' + APuerto + ' ' +
+  Result := '--local ' + ComillasSinEscape('--host=' + AHost) + ' --port=' + IntToStr(APuerto) + ' ' +
     ComillasSinEscape('--password=' + APassword) + ' ' + ComillasSinEscape('--platform=' + APlataforma);
 end;
 
@@ -816,8 +823,13 @@ begin
     for var I := 0 to High(AArgv) do
       if not LlegaAParamStr(AArgv[I]) then
       begin
+        // y POR QUE: el caracter, por EL juez que lo nombra (CaracterQueNoLlega, sin
+        // los de control: aqui un tabulador vale), o que va vacio (B7)
+        var PorQue := MsgText(SF_RUN_ARG_VACIO);
+        if AArgv[I] <> '' then
+          PorQue := MsgFmt(SF_RUN_ARG_LLEVA_FMT, [CaracterQueNoLlega(AArgv[I], False)]);
         Result.AddPair('success', TJSONBool.Create(False));
-        Result.AddPair('error', MsgFmt(SR_RUN_ARG_COMILLA_FMT, [I + 1, AArgv[I]]));
+        Result.AddPair('error', MsgFmt(SR_RUN_ARG_COMILLA_FMT, [I + 1, AArgv[I], PorQue]));
         Exit;
       end;
 

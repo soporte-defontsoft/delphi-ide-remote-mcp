@@ -77,10 +77,12 @@ try:
               r[:300])
         r = srv.call('delphi_build', {'project': DDPROJ, 'platform': 'Win64', 'config': 'Debug',
                                       'target': 'Deploy'}, t=600)
+        # 'Profiles that deploy %s:' de su formato, con la plataforma
+        perfiles_de = mc.trozo_de_formato('SR_BUILD_DEPLOY_SIN_PERFIL_FMT', 1, 'Win64')
         check('E1 Deploy Win64 sin perfil en ningun sitio y con manifiesto: BUILD-058 antes de msbuild '
               '(no "Missing profile name"), nada compilado, y nombra la plataforma',
               mc.abre(r, 'SR_BUILD_DEPLOY_SIN_PERFIL_FMT') and 'Missing profile name' not in r
-              and 'Profiles that deploy Win64:' in r
+              and perfiles_de in r
               and tam(os.path.join(DDIR, 'Win64', 'Debug', 'Dm.exe')) < 0, r[:400])
         r = srv.call('delphi_config', {'command': 'set-property', 'project': DDPROJ, 'name': 'BT_BuildType',
                                        'value': 'AppStore', 'platform': 'Win64'})
@@ -123,22 +125,28 @@ try:
     r = build('Win64', 'Build')
     check('E3 previo: Build Win64 deja el .res con sus recursos, sin nota',
           J(r).get('success') is True and tam(RES) > 32 and 'resNote' not in J(r), (tam(RES), r[:300]))
-    srv.call('delphi_config', {'command': 'add-platform', 'project': RDPROJ, 'platform': 'Linux64'})
-    r = build('Linux64', 'Build')
-    check('E3 Build Linux64: deja el .res SIN recursos y lo dice (BUILD-059), con el Make y el Build de Windows',
-          J(r).get('success') is True and tam(RES) == 32
-          and mc.abre(J(r).get('resNote', ''), 'SN_BUILD_RES_SIN_RECURSOS_FMT')
-          and 'target=Build' in J(r).get('resNote', ''), (tam(RES), r[:500]))
-    r = build('Linux64', 'Build')
-    check('E3 ...otro Build Linux64 con el .res ya vacio: no lo repite',
-          J(r).get('success') is True and 'resNote' not in J(r), r[:400])
-    r = build('Win64', 'Make')
-    check('E3 Make Win64 con el .res vacio: no lo rehace y lo dice (BUILD-060)',
-          J(r).get('success') is True and tam(RES) == 32
-          and mc.abre(J(r).get('resNote', ''), 'SN_BUILD_RES_SIN_RECURSOS_MAKE_FMT'), (tam(RES), r[:500]))
-    r = build('Win64', 'Build')
-    check('E3 Build Win64: lo rehace (con recursos) y calla',
-          J(r).get('success') is True and tam(RES) > 32 and 'resNote' not in J(r), (tam(RES), r[:400]))
+    # el Build de Linux64 va sin sdk=: con el SDK que el IDE tiene por defecto para Linux64, que se le
+    # pregunta antes (delphi_paserver profiles). Sin ninguno Linux64 no se compila aqui, y lo que sigue
+    # (el .res que deja vacio) no se puede montar: NOTA (compilaba a ciegas y salia rojo)
+    if mc.sdk_por_defecto(srv.call, 'Linux64'):
+        srv.call('delphi_config', {'command': 'add-platform', 'project': RDPROJ, 'platform': 'Linux64'})
+        r = build('Linux64', 'Build')
+        check('E3 Build Linux64: deja el .res SIN recursos y lo dice (BUILD-059), con el Make y el Build de Windows',
+              J(r).get('success') is True and tam(RES) == 32
+              and mc.abre(J(r).get('resNote', ''), 'SN_BUILD_RES_SIN_RECURSOS_FMT')
+              and 'target=Build' in J(r).get('resNote', ''), (tam(RES), r[:500]))
+        r = build('Linux64', 'Build')
+        check('E3 ...otro Build Linux64 con el .res ya vacio: no lo repite',
+              J(r).get('success') is True and 'resNote' not in J(r), r[:400])
+        r = build('Win64', 'Make')
+        check('E3 Make Win64 con el .res vacio: no lo rehace y lo dice (BUILD-060)',
+              J(r).get('success') is True and tam(RES) == 32
+              and mc.abre(J(r).get('resNote', ''), 'SN_BUILD_RES_SIN_RECURSOS_MAKE_FMT'), (tam(RES), r[:500]))
+        r = build('Win64', 'Build')
+        check('E3 Build Win64: lo rehace (con recursos) y calla',
+              J(r).get('success') is True and tam(RES) > 32 and 'resNote' not in J(r), (tam(RES), r[:400]))
+    else:
+        print('NOTA: E3 (Linux64) no se mide: el IDE de esta maquina no tiene SDK por defecto para Linux64')
 
     # --- E4 ------------------------------------------------------------------------
     MDIR = os.path.join(JAIL, 'conpapelera')

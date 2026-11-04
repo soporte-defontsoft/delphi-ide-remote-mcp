@@ -144,7 +144,7 @@ try:
         j = {}
     ign = [i.get('property') for i in j.get('ignored', []) if i.get('component') == 'FormMain']
     check('S17 preview: las publicadas por la base en ignored, con la nota DSGN-152 (no es un error del form)',
-          'Modo' in ign and 'DSGN-152' in j.get('ignoredUserNote', '') and 'TBaseForm' in j.get('ignoredUserNote', ''),
+          'Modo' in ign and mc.es(j.get('ignoredUserNote', ''), 'SN_DESIGNER_PREVIEW_DEL_USUARIO_FMT') and 'TBaseForm' in j.get('ignoredUserNote', ''),
           (ign, j.get('ignoredUserNote'), r[:300]))
 finally:
     s.cierra()

@@ -91,11 +91,6 @@ def ids_de(t):
     return [x['id'] for x in mc.como_json(t).get('results', [])]
 
 
-def prefijo(nombre):
-    """El texto fijo de una constante _FMT del catalogo, hasta su primer %."""
-    return mc.catalogo()[nombre].split('%')[0]
-
-
 def ayudas_en_el_disco(version):
     """Los .chm que el IDE de esa version registra (Help\\HtmlHelp1Files, del
     usuario y de la maquina) y estan en el disco, leidos AQUI y no por el
@@ -217,7 +212,7 @@ try:
         check('D4 sin command, con id: lee; la nota dice de donde sale',
               mc.es(r.get('note', ''), 'SN_DOCS_FUENTE_FMT'), r.get('note', '')[:200])
         check('D4 los antepasados de la clase, el mas cercano primero',
-              (prefijo('SF_DOCS_ANCESTROS_FMT') + 'Vcl.StdCtrls.TCustomButton') in texto, texto[:200])
+              mc.trozo_de_formato('SF_DOCS_ANCESTROS_FMT', 0, 'Vcl.StdCtrls.TCustomButton') in texto, texto[:200])
         check('D4 related: sus listas de miembros',
               all('vcl:Vcl.StdCtrls.TButton_%s.htm' % k in rel for k in ('Methods', 'Properties', 'Events')),
               rel)

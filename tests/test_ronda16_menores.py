@@ -113,11 +113,12 @@ check('R2/R4 premisa: la comun se sirve con OTRO proyecto (PB), no con el que pr
 # R3: el .delphilsp.json que el IDE escribe DESPUES no se toma (1.20.2: el
 # del IDE no se toma nunca; hasta entonces si, y arrancaba otro motor). Con su
 # propio nombre: los settings fabricados se llaman <proyecto>-<hash>-..., y los
-# tres P de R1 casaban con el mismo glob (revision de la 1.13.0)
+# tres P de R1 casaban con el mismo glob (revision de la 1.13.0); se buscan por el
+# proyecto que nombran, con el lector de mcp_cliente, no por un nombre compuesto a mano
 dpr, _ = proyecto('PTres', os.path.join(BASE, 'r3'))
 call('delphi_hover', {'path': dpr, 'line': 0, 'character': 9}, 300)
 antes = motores()
-fab = glob.glob(os.path.join(mc.cache_servidor('configs', APPDATA), 'PTres-*.delphilsp.json'))
+fab = [f for f in [mc.ajustes_fabricados(dpr, APPDATA)] if f]
 check('R3 preparacion: los settings fabricados de PTres, y solo esos', len(fab) == 1, fab)
 if fab:
     # el del IDE al lado del proyecto: el mismo motor sigue con los nuestros

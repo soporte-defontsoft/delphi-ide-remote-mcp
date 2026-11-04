@@ -675,7 +675,7 @@ begin
   // TestRun es publica y lo juzgaba solo su llamador (segunda barrera; A4 de la 1.27)
   if not ValorDeLaCasaLlega(AFilter) then
   begin
-    Result.AddPair('error', MsgFmt(SR_TEST_FILTRO_COMILLA_FMT, [AFilter]));
+    Result.AddPair('error', MsgFmt(SR_TEST_FILTRO_COMILLA_FMT, [AFilter, CaracterQueNoLlega(AFilter)]));
     Exit;
   end;
   // A bare name ("InventarioTest") is what delphi_projects lists, so it is
