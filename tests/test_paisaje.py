@@ -497,6 +497,31 @@ REGLAS = [
      [('Lsp.Mascara.pas', '*')],
      'HOST_VIRTUAL: MaskDriveText lo escribe y ExpandDriveValue lo lee de vuelta, con la misma '
      'constante (2.10 de la 1.18.0: un literal suelto a cada lado)'),
+    # un MOVIMIENTO que puede copiar: entre unidades MoveFile a secas y TFile.Move copian y
+    # borran un fichero (medido el 3-nov-2026, J4 del revisor del paisaje de la 1.27)
+    # (RenameFile en Windows ES MoveFile: System.SysUtils de la 37.0, revisor de baterias)
+    ('un movimiento que puede copiar',
+     r'\bMoveFile[AW]?\s*\(|\bRenameFile\s*\(|MoveFileWithProgress|TFile\.Move\s*\(|MOVEFILE_COPY_ALLOWED',
+     [# la rotacion de nuestro log, en su misma carpeta
+      ('Lsp.LogSink.pas', 'CierraBloque'),
+      # un temporal NUESTRO a su destino, que puede estar en otro volumen
+      ('Lsp.Patch.pas', 'Coloca')],
+     'RenombraConReintentos (Lsp.Guard) con 0: renombra o falla, nunca copia. El comentario de '
+     'MueveArbol daba por hecho que MoveFile a secas no copia, y es verdad de una carpeta; MezclaArbol, '
+     'la papelera y delphi_move mueven ficheros'),
+    # donde EMPIEZA una ruta en un texto: el caracter de antes y la opcion pegada se
+    # preguntan solo en Lsp.Lugares; el enmascarador y la casa preguntan su regla
+    ('donde empieza una ruta en un texto, preguntado a mano', r'\b(?:CaracterPrevio|OpcionPegada)\s*\(',
+     [('Lsp.Lugares.pas', 'OpcionPegada'), ('Lsp.Lugares.pas', 'InicioDeRuta'),
+      ('Lsp.Lugares.pas', 'DelimitadorDeRed'),
+      # DECLARADA: la casa de red de CasaEn no empieza detras de \ / ni : (la mitad de
+      # una doblada, https://) y si detras de lo demas, donde DelimitadorDeRed no ve
+      # una ruta (. - _ @): enmascara DE MAS, y de mas nunca ensena la casa. Era la
+      # casa '*' de la fila, que la tapaba (revisor de baterias de la 1.27)
+      ('Lsp.Lugares.pas', 'CambiaPrefijosEnTexto')],
+     'InicioDeRuta (una letra o la casa) y DelimitadorDeRed (la red), en Lsp.Lugares junto a '
+     'CaracterPrevio y OpcionPegada: el barrido de las letras del enmascarador (MaskDriveText) y la casa '
+     '(CambiaPrefijosEnTexto) lo escribian cada uno (P8 del revisor del paisaje de la 1.27)'),
     # LA REGLA de la expansion de ida (B-9, 10-oct-2026; escrita una vez en
     # Lsp.Attributes, ContenidoAttribute): lo que se escribe dentro de un fichero es
     # contenido y no se expande; value, props y state del disenador son la excepcion
@@ -1120,12 +1145,13 @@ REGLAS = [
     ('la seccion interface/implementation buscada a mano',
      r"'\^(?:\[ \\t\]\*|\\s\*)'\s*\+\s*\w+\s*\+\s*'\\b'|\^(?:interface|implementation)\[ \]\*\$|"
      r"(?:\.Trim\.ToLower|\bSinMayusculas\(\s*\w+\.Trim\s*\))\s*=\s*'(?:interface|implementation)'",
-     [('Mcp.Tools.DelphiLsp.pas', 'InterfaceDigest'), ('Lsp.Patch.pas', 'ExecutePatch')],
+     [('Mcp.Tools.DelphiLsp.pas', 'InterfaceDigest')],
      'FinDeSeccion (Lsp.ProjectUnits): la palabra entera en el codigo, este donde este (estaba cinco '
      'veces en tres funciones de ProjectUnits; a principio de linea hasta el 18-oct-2026, y una unit de '
-     'una linea no tenia seccion). DEUDA declarada: la linea exacta (InterfaceDigest) y la linea que es '
-     'la palabra (ExecutePatch, la frontera del insert; la vio el revisor 7), dos reglas mas para lo '
-     'mismo (inventario del 10-oct-2026)'),
+     'una linea no tenia seccion). DEUDA declarada: la linea exacta (InterfaceDigest), otra regla para '
+     'lo mismo (inventario del 10-oct-2026). La de ExecutePatch, la linea que es la palabra para la '
+     'declaracion de una rutina visible, la pregunta desde la 1.27 (P10: con "implementation uses X;" '
+     'se deshacia el cuerpo)'),
     ('la forma canonica de una ruta preguntada a Windows',
      r'\bGet(?:LongPathName|FinalPathNameByHandle)\w*\s*\(',
      [('Lsp.Rutas.pas', 'LongCanonical'), ('Lsp.Rutas.pas', 'NombreFinal'),
@@ -1286,8 +1312,8 @@ REGLAS = [
       # (ArgPathOutsideDenied y BordeDeMudanza salieron el 25-oct-2026: preguntan HayJaula, V30 de la 1.23)
       # (NegativaDeUnc salio el 23-oct-2026: su lista de raices es la de RaicesDisponibles)
       ('Lsp.Guard.pas', 'InVault'), ('Lsp.Guard.pas', 'JaulaDecide'),
-      # (EnUnVault, la regla del vault por su ruta real, la de la puerta y los recorredores: 1.27)
-      ('Lsp.Guard.pas', 'EnUnVault'),
+      # (EnUnVault entro el 3-nov-2026 por un Length(TodosLosVaults) y salio el mismo dia:
+      # pregunta HayVaults, revisor de baterias de la 1.27)
       # (PurgeServerTemp salio el 24-oct-2026 con la purga de las raices: V31 de la 1.23)
       ('Lsp.Guard.pas', 'LugaresProtegidos'),
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
@@ -1426,21 +1452,16 @@ REGLAS = [
       ('Lsp.Patch.pas', 'BackupFile'), ('Lsp.Patch.pas', 'GuardaContenidoActual'),
       # los recorredores y movimientos de la jaula (no cruzan enlaces; la puerta antes)
       ('Lsp.Guard.pas', 'CopiaNuestra'), ('Lsp.Guard.pas', 'CopiaArbol'),
-      ('Lsp.Guard.pas', 'MueveArbol'),
       # (ApplyOneConAvisos salio el 3-nov-2026: el move del changeset renombra por
-      # RenombraConReintentos tras MovidoDenegado; su TFile.Move cruzaba volumenes, 1.27)
+      # RenombraConReintentos tras MovidoDenegado; su TFile.Move cruzaba volumenes, 1.27.
+      # Y MueveArbol, MezclaArbol, DeshazMezcla, MoveToTrash y BorrarNucleo el mismo dia:
+      # su MoveFile a secas copiaba un FICHERO entre volumenes, J4 de la 1.27)
       # la caja de paquetes del render: lo de la instalacion a NUESTRO temporal, lo
       # que ningun agente nombra y su jaula negaria (V65 de la 1.24)
       ('Lsp.FormRender.pas', 'CajaDePaquetes'),
       # ...y la vuelta de una copia del ayudante cuyo manifiesto Windows no acepto
       ('Lsp.FormRender.pas', 'DaSusClasesAlContenedor'),
-      ('Mcp.Tools.FileOps.pas', 'MoveToTrash'), ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
-      # el mezclador de una carpeta que ya esta en el destino y su deshacer (V19: la
-      # puerta del arbol antes, MovidoDenegado; entrada a entrada, un enlace como
-      # enlace) y la vuelta de un borrado con comodin que no pudo ir entero: lo que
-      # esa misma operacion acaba de mover
-      ('Lsp.Guard.pas', 'MezclaArbol'), ('Lsp.Guard.pas', 'DeshazMezcla'),
-      ('Mcp.Tools.FileOps.pas', 'BorrarNucleo'),
+      ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
       # la copia de la regla 11 dentro del vault (DentroDelVault antes) y la subida por
       # trozos de delphi_upload (la puerta de la jaula a la entrada; no atomica)
       ('Mcp.Tools.Vault.pas', 'VaultBackup'), ('Mcp.Tools.Workspace.pas', 'SubirNucleo'),
@@ -2037,6 +2058,8 @@ PLANTADO = {
     'la extension de la marca de dueno': "  M := Copia + '.by';",
     "la forma 'srvX:'": "  U := 'srv' + LowerCase(Letra) + ':';",
     'el host virtual srvhost': "  H := '\\\\srvhost\\' + Resto;",
+    'donde empieza una ruta en un texto, preguntado a mano': "  if CharInSet(CaracterPrevio(T, I), ['A'..'Z']) then Exit;",
+    'un movimiento que puede copiar': "  if not MoveFile(PChar(A), PChar(B)) then Exit;",
     'la expansion de ida de una unidad virtual': "  V := ExpandDriveValue(V);",
     'la clave tool|parametro de las marcas': "  K := LowerCase(T) + '|' + TMCPSerializer.NormalizeKey(P);",
     'un paseo del arbol por cada mascara': "  for var Ext in MascarasDe(SOURCE_EXTS) do Fs := WalkFiles(D, Ext);",
@@ -2656,16 +2679,17 @@ check('la tabla de accesos (ConstruyeAccesos) declara TODAS las tools registrada
 # lo borrado en 7). Una comprobacion de AUSENCIA con el formato a mano pasa en
 # verde si el servidor lo cambia. Casas: (fichero, marca) - la linea que la
 # lleva, o la funcion (def) cuya cabecera la lleva. Fuera: esta bateria (sus
-# reglas y mutantes SON los formatos) y release_check (el arnes del ritual,
-# que no importa mcp_cliente: anotado para David).
-FUERA_PY = ('test_paisaje.py', 'release_check.py')
+# reglas y mutantes SON los formatos). release_check estuvo fuera porque no
+# importaba mcp_cliente; lo importa, y su poda del zip escribia a mano la
+# papelera y el temporal (revisor de baterias de la 1.27): ya entra.
+FUERA_PY = ('test_paisaje.py',)
 # las areas de los ids del catalogo (CFG, GIT, DSGN...): la regla de los ids a mano
 # mira solo esas; una marca de un fixture ('ROTA-000', 'DENTRO-1211') no es un id
 AREAS_PY = '|'.join(sorted({i.split('-')[0] for tx in mc.catalogo().values() for i in mc.ids(tx)[:1]}))
 REGLAS_PY = [
     ('el nombre de la papelera a mano', r"""(['"])__delphi-patch\1""",
-     # fija a proposito la constante del fuente del servidor
-     [('test_round44.py', 'BACKUP_SUB =')],
+     # (la casa de test_round44, que leia el fuente, salio con su T6f: 1.27)
+     [],
      'mc.PAPELERA, leido de BACKUP_SUB (Lsp.Casa)'),
     ('el dia de la papelera a mano', r"""strftime\(\s*['"]%Y%m%d['"]""",
      [('mcp_cliente.py', 'def dia_de_papelera')],
@@ -2684,8 +2708,8 @@ REGLAS_PY = [
      'mc.casa_de_capturas, leido de CAPTURAS_SUB (Lsp.Casa)'),
     # (revisor de baterias, 18-oct-2026: 40 lineas en 17 baterias, y 4 de reports)
     ('la carpeta de los temporales a mano', r"""(['"])__delphi-temp\1""",
-     # mira el FUENTE del servidor a proposito (su nombrador y su lector)
-     [('test_round44.py', 'g_src')],
+     # (la casa de test_round44, que leia el fuente, salio con su T6c: 1.27)
+     [],
      'mc.TEMPORALES, leido de TempFolderName'),
     ('la carpeta de los informes a mano', r"""(['"])reports\1""", [],
      'mc.INFORMES, leido de CarpetaDeInformes'),
@@ -2704,8 +2728,10 @@ REGLAS_PY = [
      'mc.ANSI, y en_la_1252 / check_1252 / bateria_de_la_1252 para lo que es de la 1252'),
     # (r5-L4: seis baterias buscaban la instalacion activa a mano, y seis
     # componian Program Files o Public Documents con su version)
-    # (A7 de la 1.27: la carpeta de SDKs donde paclient deja la de cada perfil no la da ni el
-    # IDE ni rsvars.bat; su juez es paclient, y test_sdks_perfil_127 S1 la mide contra el)
+    # (A7 de la 1.27: la carpeta de SDKs donde paclient deja la de cada perfil. El servidor la
+    # toma de la tabla del IDE (BDSPLATFORMSDKSDIR, IdeSdksDir) y mc.carpeta_sdks del default de
+    # Windows: coinciden mientras el operador no la redefina. Su juez es paclient, y
+    # test_sdks_perfil_127 S1 la mide contra el; revisor de baterias de la 1.27)
     ('la carpeta del IDE compuesta a mano', r"""Embarcadero(?:[\\/]+|['"]\s*,\s*['"])Studio""",
      [('mcp_cliente.py', 'def carpeta_sdks')],
      'mc.raiz_ide (delphi_installs) o mc.variable_de_rsvars (BDSCOMMONDIR...); la de SDKs, mc.carpeta_sdks'),
@@ -2718,6 +2744,10 @@ REGLAS_PY = [
      r"""(['"])\[?(?:%s)-\d{3}(?: [A-Z_]+)?\]?\1\s+not\s+in\b|\bnot\s+(?:mc\.)?tiene\(\s*[^,()]+,\s*(['"])(?:%s)-\d{3}\2"""
      % (AREAS_PY, AREAS_PY), [],
      'not mc.es(r, CONSTANTE) o mc.tabla_lista: el id sale del catalogo y revienta si la constante desaparece'),
+    # (revisor de baterias de la 1.27: el helper decia "cinco baterias" y quedaban tres copias a mano)
+    ('el paclient de mentira compuesto a mano', r"""['"]paclient_stub\.py['"]""",
+     [('mcp_cliente.py', 'def paclient_falso')],
+     'mc.paclient_falso: su .cmd fuera de la jaula, donde el servidor si lo lanza'),
 ]
 
 
@@ -2735,10 +2765,11 @@ def codigo_py(texto):
     return out
 
 
-def fuera_de_casa_py(regla, ficheros_texto):
+def aciertos_py(regla, ficheros_texto):
+    """Cada linea de codigo que casa con la regla: (fichero, numero, linea, las casas que la
+    cubren). UN recorrido para las dos preguntas: fuera de casa y casas sin uso."""
     _, formato, casas, _ = regla
     rx = re.compile(formato)
-    malos = []
     for f, texto in ficheros_texto:
         base = os.path.basename(f)
         lineas = codigo_py(texto)
@@ -2747,9 +2778,23 @@ def fuera_de_casa_py(regla, ficheros_texto):
             if not rx.search(l):
                 continue
             cabecera = next((crudas[k] for k in range(n, -1, -1) if crudas[k].startswith('def ')), '')
-            if not any(base == cf and (marca in crudas[n] or marca in cabecera) for cf, marca in casas):
-                malos.append('%s:%d %s' % (base, n + 1, l.strip()[:90]))
-    return malos
+            yield base, n, l, [(cf, marca) for cf, marca in casas
+                               if base == cf and (marca in crudas[n] or marca in cabecera)]
+
+
+def fuera_de_casa_py(regla, ficheros_texto):
+    return ['%s:%d %s' % (base, n + 1, l.strip()[:90])
+            for base, n, l, cubren in aciertos_py(regla, ficheros_texto) if not cubren]
+
+
+def casas_sin_uso_py(regla, ficheros_texto):
+    """Las casas declaradas de una regla de las baterias en las que el formato ya no aparece:
+    la deuda solo encoge si se ve (el lado Pascal lo miraba y este no; revisor de baterias de
+    la 1.27)."""
+    usadas = set()
+    for _, _, _, cubren in aciertos_py(regla, ficheros_texto):
+        usadas.update(cubren)
+    return [c for c in regla[2] if c not in usadas]
 
 
 TEXTOS_PY = [(f, open(f, encoding='utf-8', errors='replace').read())
@@ -2770,6 +2815,7 @@ PLANTADO_PY = {
     'la carpeta del IDE compuesta a mano': "    rtl = r'C:\\Program Files (x86)\\Embarcadero\\Studio\\37.0\\source'",
     'la instalacion activa buscada a mano': "    act = next(i for i in inst['installs'] if i.get('active'))",
     'la ausencia de un mensaje por su id a mano': "    ok = 'CFG-043' not in r",
+    'el paclient de mentira compuesto a mano': "    s = os.path.join(HERE, 'paclient_stub.py')",
 }
 for regla in REGLAS_PY:
     nombre = regla[0]
@@ -2779,6 +2825,8 @@ for regla in REGLAS_PY:
           len(cazados) == 1 and ':3 ' in cazados[0], cazados)
     malos = fuera_de_casa_py(regla, TEXTOS_PY)
     check('"%s" en ninguna bateria - %s' % (nombre, regla[3]), not malos, malos)
+    sobran = casas_sin_uso_py(regla, TEXTOS_PY)
+    check('"%s": cada casa declarada tiene uso (la deuda solo puede encoger)' % nombre, not sobran, sobran)
 # la regla de los ids (V56): su otra forma se caza y una marca de un fixture no. Las
 # positivas ('X-NNN' in r, mc.tiene) se ponen rojas si el id cambia, pero leen el id a
 # mano: deuda declarada que solo puede encoger (la que se toque, a mc.es / mc.abre)
@@ -2793,7 +2841,7 @@ POSITIVOS = re.compile(r"""(['"])\[?(?:%s)-\d{3}(?: [A-Z_]+)?\]?\1\s+in\b|(?<!no
 check('mutante de los ids positivos: se cuentan las dos formas, y las negativas no',
       len(POSITIVOS.findall("x = 'CFG-043' in r and mc.tiene(r, 'GIT-067') and not mc.tiene(r, 'GIT-001') "
                             "and 'GIT-002' not in r and '[GIT-051 DENIED]' in r")) == 3)
-IDS_POSITIVOS_TOPE = 198  # medido el 25-oct-2026 (V56; 201 tras V19, que paso los de una bateria a mc.es; 200 tras V65; 198 sin LSP-046, V61)
+IDS_POSITIVOS_TOPE = 197  # medido el 25-oct-2026 (V56; 201 tras V19, que paso los de una bateria a mc.es; 200 tras V65; 198 sin LSP-046, V61; 197 sin el CFG-014 de test_deploy_remotehost, revisor de baterias de la 1.27)
 _n = sum(len(POSITIVOS.findall(l)) for _, t in TEXTOS_PY for l in codigo_py(t))
 check('los ids positivos a mano: %d, el tope declarado (solo puede encoger: si baja, se baja el tope)' % _n,
       _n == IDS_POSITIVOS_TOPE, IDS_POSITIVOS_TOPE)

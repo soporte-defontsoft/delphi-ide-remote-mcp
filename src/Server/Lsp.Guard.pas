@@ -1455,7 +1455,7 @@ begin
   ARutaReal := '';
   if InVault(APath) then
     Exit(True);
-  if Length(TodosLosVaults) = 0 then
+  if not HayVaults then
     Exit(False);
   ARutaReal := IncludeTrailingPathDelimiter(RealPath(APath));
   Result := InVault(ARutaReal);
@@ -4560,16 +4560,19 @@ begin
   // ...y lo NUESTRO, fuera: una mudanza que el guard niega no suelta nada
   SueltaLoNuestroBajo(AOrigen);
   try
-  // MoveFile a secas: ni MOVEFILE_COPY_ALLOWED ni TDirectory.Move. En la
-  // misma unidad renombra de un golpe; si no puede, devuelve False sin
+  // un RENOMBRE (MoveFileEx sin MOVEFILE_COPY_ALLOWED), ni TDirectory.Move:
+  // en la misma unidad renombra de un golpe; si no puede, devuelve False sin
   // haber tocado nada. Entre unidades falla con ERROR_NOT_SAME_DEVICE: el
   // mismo rechazo, por si la unidad llego disfrazada (un punto de montaje).
-  if not MoveFile(PChar(SinBarraFinal(AOrigen)),
-       PChar(SinBarraFinal(ADestino))) then
+  // MoveFile a secas no vale: a una CARPETA no la copia, pero un fichero lo
+  // copia y lo borra entre unidades (medido el 3-nov-2026, J4 del revisor del
+  // paisaje de la 1.27), y MezclaArbol y delphi_move mueven ficheros
+  var Codigo: Cardinal;
+  if not RenombraConReintentos(SinBarraFinal(AOrigen), SinBarraFinal(ADestino), 0, Codigo) then
   begin
-    if GetLastError = ERROR_NOT_SAME_DEVICE then
+    if Codigo = ERROR_NOT_SAME_DEVICE then
       raise Exception.Create(MsgFmt(SR_MUDANZA_OTRA_UNIDAD_FMT, [AOrigen, ADestino]));
-    RaiseLastOSError;
+    RaiseLastOSError(Codigo);
   end;
   finally
     YaNoSeQuita(AOrigen);
@@ -4598,8 +4601,9 @@ procedure MezclaArbol(const AOrigen, ADestino: string; var AHechos: TArray<TPaso
         Mezcla(E, N)
       else
       begin
-        if not MoveFile(PChar(E), PChar(N)) then
-          raise Exception.Create(MotivoDeRenombre(E, GetLastError));
+        var Codigo: Cardinal;
+        if not RenombraConReintentos(E, N, 0, Codigo) then
+          raise Exception.Create(MotivoDeRenombre(E, Codigo));
         Anota(E, N);
       end;
     end;
@@ -4632,8 +4636,12 @@ begin
       begin
         CrearCarpeta(AHechos[I].De) // la que la mezcla vacio y quito
       end
-      else if not MoveFile(PChar(AHechos[I].A), PChar(AHechos[I].De)) then
-        RaiseLastOSError;
+      else
+      begin
+        var Codigo: Cardinal;
+        if not RenombraConReintentos(AHechos[I].A, AHechos[I].De, 0, Codigo) then
+          RaiseLastOSError(Codigo);
+      end;
     except
       on E: Exception do
         AnadeLineaDeRuta(Result, IfThen(AHechos[I].A <> '', AHechos[I].A, AHechos[I].De), E.Message.Trim);

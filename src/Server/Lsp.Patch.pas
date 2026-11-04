@@ -4867,22 +4867,6 @@ function DoEdit(const APath, AOld, ANew: string; AAtLine: Integer;
   AIsDesigner: Boolean; ADelete: Boolean = False;
   AToLine: Integer = 0; AEnsayo: Boolean = False): string; forward;
 
-function FindUniqueLine(const Lines: TArray<string>;
-  const APred: TFunc<string, Boolean>; out AIdx: Integer): Boolean;
-var
-  I, Cnt: Integer;
-begin
-  Cnt := 0;
-  AIdx := -1;
-  for I := 0 to High(Lines) do
-    if APred(Lines[I]) then
-    begin
-      Inc(Cnt);
-      AIdx := I;
-    end;
-  Result := Cnt = 1;
-end;
-
 function FicheroQueNoEditaDelphiEdit(const APath: string): string;
 var
   Ext: string;
@@ -5631,14 +5615,24 @@ begin
             var FalloCausa := '';
             try
               FotoVis.Vigila(A.Path);
-              var ImpIdx: Integer;
               var Crudas := SplitToLines(DecodeBytes(TFile.ReadAllBytes(A.Path), K));
-              if FindUniqueLine(SplitToLines(CodigoPascal(string.Join(#10, Crudas))),
-                function(L: string): Boolean
-                begin
-                  Result := SinMayusculas(L.Trim) = 'implementation';
-                end, ImpIdx) then
+              // LA regla de la seccion (FinDeSeccion, la de adduses): la primera vez
+              // que la palabra sale entera en el codigo, este donde este en su linea.
+              // Se buscaba una linea que solo dijera eso: con 'implementation uses X;'
+              // no la habia, y se deshacia el cuerpo (revisor del paisaje de la 1.27, P10)
+              var Vista := CodigoPascal(string.Join(#10, Crudas));
+              var FinImp := FinDeSeccion(Vista, 'implementation');
+              if FinImp > 0 then
               begin
+                var DelanteVista := Copy(Vista, 1, FinImp - Length('implementation') - 1);
+                var ImpIdx := 0;
+                for var C in DelanteVista do
+                  if C = #10 then
+                    Inc(ImpIdx);
+                // lo que la linea lleva delante de la palabra es del interface: se
+                // queda en su linea, y la declaracion entre ello y el implementation
+                var Delante := Copy(Crudas[ImpIdx], 1, Length(DelanteVista) - DelanteVista.LastIndexOf(#10) - 1);
+                var DesdeImp := Copy(Crudas[ImpIdx], Length(Delante) + 1, MaxInt);
                 var Decl := string.Join(#10, FirmaLineas);
                 if not Decl.EndsWith(';') then Decl := Decl + ';';
                 if Directivas <> '' then
@@ -5653,7 +5647,8 @@ begin
                   // un comentario detras): con el literal no casaba la que la
                   // busqueda encontro, y la declaracion caia y se deshacia el
                   // cuerpo (V202 de la 1.23.1)
-                  R2 := DoEdit(A.Path, Crudas[ImpIdx], Decl + #10#10 + Crudas[ImpIdx], ImpIdx + 1, False);
+                  R2 := DoEdit(A.Path, Crudas[ImpIdx], (if Delante.Trim = '' then Decl + #10#10 + Crudas[ImpIdx]
+                    else Delante.TrimRight + #10 + Decl + #10#10 + DesdeImp), ImpIdx + 1, False);
                 finally
                   AplazaJuicioDeForm(False);
                 end;

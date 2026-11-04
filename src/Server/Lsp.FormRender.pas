@@ -361,18 +361,22 @@ function ManifiestoDeClases(const AClases: TArray<TClaseCom>): string;
   fallo fue el lector (NOTLOADED=), en AParada su error en partes. La
   propuesta se escribe en una carpeta de descarga del temporal del disenador
   y se borra siempre. ASoltado: el componente que se acaba de soltar en el
-  form (TPeticionRender.Soltado). }
+  form (TPeticionRender.Soltado). ADesde: el GetTickCount64 en que empezo a
+  juzgarse la edicion, que tiene ESPERA_DEL_CLIENTE_MS desde ahi; 0 = el
+  plazo de un preview (JuezDelIde). }
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
   out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
   out AError: string; out AParada: TIgnorada; const ASoltado: string = '';
-  const AUnidad: string = ''): string;
+  const AUnidad: string = ''; ADesde: UInt64 = 0): string;
 
 { EL JUEZ de las propiedades de UN componente (1.22.1): ATexto, un form
   PROPUESTO para APath, cargado y escrito como lo guarda el IDE (el de
   ComoLoEscribeElIde) y, del componente AComponente, el orden en que su
   escritor escribe sus propiedades (Orden). La respuesta entera, con lo que
-  sustituyo, salto o no leyo; Fallo si no se pudo preguntar. }
-function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string): TRespuestaRender;
+  sustituyo, salto o no leyo; Fallo si no se pudo preguntar. ADesde, el de
+  ComoLoEscribeElIde. }
+function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string;
+  ADesde: UInt64 = 0): TRespuestaRender;
 
 { Los colores sin alfa del form FMX APath con el texto ATexto (en AEnc): los
   candidatos de la gramatica (Lsp.Styles.CandidatosSinAlfa) que no estaban
@@ -2191,14 +2195,32 @@ end;
   llamada y cargada por el ayudante de su framework en modo juez (--writeback:
   el form como lo carga el designer, sin pintar): lo que contesto, con Fallo
   si ni se pudo escribir. La carpeta se borra siempre. EL juez de
-  ComoLoEscribeElIde y de LoQueNoCargaElIde. }
+  ComoLoEscribeElIde y de LoQueNoCargaElIde. Con ADesde, el de una edicion:
+  tiene lo que espera un cliente desde que empezo a juzgarse, y su vigia salta
+  al acabarse (el servidor lo para MARGEN_DEL_VIGIA_MS despues, si ni el
+  contesta); sin tiempo, ni se lanza. Tenia el plazo de un preview: uno colgado
+  contestaba a los 75 s, con el cliente rendido al minuto, y el segundo juez de
+  la misma edicion otros 75 (R4 del revisor del paisaje de la 1.27, medido). }
 function JuezDelIde(const APath, ATexto, AEnc: string; const AComponente: string = '';
-  const ASoltado: string = ''; const AUnidad: string = ''): TRespuestaRender;
+  const ASoltado: string = ''; const AUnidad: string = ''; ADesde: UInt64 = 0): TRespuestaRender;
 var
   Pet: TPeticionRender;
   Dir, Cand: string;
+  Plazo: Integer;
 begin
   Result := Default(TRespuestaRender);
+  Plazo := 0;
+  if ADesde <> 0 then
+  begin
+    var Pasado := GetTickCount64 - ADesde;
+    if Pasado >= ESPERA_DEL_CLIENTE_MS then
+    begin
+      Result.Codigo := FR_RC_TIMEOUT;
+      Result.Fallo := MsgFmt(SR_DESIGNER_JUEZ_TARDO_FMT, [TPath.GetFileName(APath), Pasado div 1000]);
+      Exit;
+    end;
+    Plazo := Integer(ESPERA_DEL_CLIENTE_MS - Pasado) + MARGEN_DEL_VIGIA_MS;
+  end;
   // una carpeta de descarga de ESTA llamada en el temporal del SERVIDOR (EL
   // nombrador: el guard del borrado la reconoce), con la propuesta bajo el
   // nombre del form de verdad: su .pas y sus hermanos los lee el ayudante de
@@ -2235,6 +2257,7 @@ begin
     Pet.Escribe := True;
     Pet.Componente := AComponente; // con el, tambien su orden (ORDER=)
     Pet.Soltado := ASoltado;
+    Pet.PlazoMs := Plazo;
     if AUnidad <> '' then
       Pet.UnidadPropuesta := TPath.Combine(Dir, TPath.GetFileName(UnidadDeDesigner(APath)));
     Result := CorreRender(Pet);
@@ -2260,14 +2283,14 @@ end;
 function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: string;
   out ASustituidas, AAvisos, ASinLeer: TArray<string>; out ALeidos: TArray<TLeidoPorElJuez>;
   out AError: string; out AParada: TIgnorada; const ASoltado: string;
-  const AUnidad: string): string;
+  const AUnidad: string; ADesde: UInt64): string;
 begin
   AEscrito := '';
   ASustituidas := [];
   AAvisos := [];
   ASinLeer := [];
   ALeidos := [];
-  var R := JuezDelIde(APath, ATexto, AEnc, '', ASoltado, AUnidad);
+  var R := JuezDelIde(APath, ATexto, AEnc, '', ASoltado, AUnidad, ADesde);
   // el que se paro por tiempo (su vigia: RENDER-027, RENDER-007) no juzgo nada.
   // CargaLoPuesto lo tomaba por un juicio, juzgaba el form de antes y, si ese
   // cargaba ya con los paquetes revisados, negaba DSGN-158 un valor sano
@@ -2289,9 +2312,10 @@ begin
   ALeidos := R.Leidos;
 end;
 
-function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string): TRespuestaRender;
+function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string;
+  ADesde: UInt64): TRespuestaRender;
 begin
-  Result := JuezDelIde(APath, ATexto, AEnc, AComponente);
+  Result := JuezDelIde(APath, ATexto, AEnc, AComponente, '', '', ADesde);
 end;
 
 function ColoresSinAlfaDeForm(const APath, ATexto, AEnc, AAntes: string;

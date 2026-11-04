@@ -327,6 +327,10 @@ function AgentConfinementNow: Boolean;
 function SharedFoldersNow: TArray<string>;
 function EsSitioConLetra(const AFull: string): Boolean;
 function TodosLosVaults: TArray<string>;
+{ Si hay ALGUN vault declarado, de cualquier workspace: la pregunta corta de
+  quien resolveria una ruta solo para compararla con ellos (Lsp.Guard.EnUnVault,
+  que preguntan los recorredores por cada entrada). }
+function HayVaults: Boolean;
 function VaultModoEscritura: Boolean;
 function SitiosQueNoSeTocan: TArray<string>;
 function AdbTargetAllowed(const ATarget: string): Boolean;
@@ -1995,6 +1999,11 @@ end;
 function VaultWritable: Boolean;
 begin
   Result := VaultConfigured and VaultModoEscritura;
+end;
+
+function HayVaults: Boolean;
+begin
+  Result := Length(TodosLosVaults) > 0;
 end;
 
 { Si HAY vault en alguna parte (workspace por defecto o cualquier seccion):

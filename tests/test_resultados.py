@@ -75,8 +75,8 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E42 git diff con cambios no hereda las pistas de fallo (1.19.0: sin
       --exit-code, el diff a secas)
   E43 un fichero que otro proceso tiene abierto es DENIED (era INTERNAL)
-  E44 insert rutina-global visible=true: si la declaracion no se puede,
-      no se escribe nada (salia exito con la rutina privada)
+  E44 (retirado en la 1.27: su "sin sitio" es un sitio legal, P10; lo mide
+      test_seccion_visible_127. El deshacer de visible=true queda sin fixture)
   E45 el deshacer de un commit quita las carpetas que creo
   E46 un FICHERO donde el servidor guarda sus copias es DENIED, no
       INVALID_PARAM (la ruta del agente era buena)
@@ -643,21 +643,14 @@ try:
           res.get('isError') is True and sc.get('code') == 'DENIED' and mc.abre(t, 'SR_FICHERO_OCUPADO_FMT'),
           '%s | %s' % (json.dumps(sc)[:120], t[:200]))
 
-    # sin sitio DE VERDAD para la declaracion: su sitio es delante de la linea
-    # que es 'implementation', y aqui esa linea lleva tambien su uses (el
-    # cuerpo si entra: la frontera la da el lector, que ve el implementation).
-    # Hasta la 1.10.0 se forzaba con un 'implementation' DENTRO de un
-    # comentario, que el lector de entonces contaba como un segundo; y hasta el
-    # 10-oct-2026 con una unit SIN implementation, donde el cuerpo iba a parar
-    # al interface (alli ya no hay frontera: E44b)
-    VIS = os.path.join(JAIL, 'Vis.pas')
-    open(VIS, 'w', newline='\r\n').write('unit Vis;\n\ninterface\n\nimplementation uses System.SysUtils;\n\nend.\n')
-    VIS_ANTES = open(VIS, 'rb').read()
-    res, sc, t = llama('delphi_edit', {'path': VIS, 'insert': 'rutina-global', 'visible': True,
-                                       'code': 'procedure Hola;\nbegin\nend;'})
-    check('E44 insert visible=true sin sitio para la declaracion: FALLO y nada escrito',
-          res.get('isError') is True and mc.abre(t, 'SR_EDIT_VISIBLE_DESHECHO_FMT') and
-          open(VIS, 'rb').read() == VIS_ANTES, '%s | %s' % (json.dumps(sc)[:120], t[:250]))
+    # E44 RETIRADO en la 1.27: su fixture ('implementation uses System.SysUtils;'
+    # en una linea) era el "sin sitio para la declaracion", y lo era solo para la
+    # regla de la linea que es la palabra. Por LA regla de la seccion
+    # (FinDeSeccion) es un sitio legal, y la declaracion entra (P10 del revisor
+    # del paisaje; lo mide test_seccion_visible_127 V1). HUECO declarado: el
+    # deshacer de visible=true (SR_EDIT_VISIBLE_DESHECHO_FMT) ya solo lo alcanza
+    # un fallo de la SEGUNDA escritura (otro proceso coge el fichero entre las
+    # dos), y no hay fixture determinista para eso
     VIS2 = os.path.join(JAIL, 'Vis2.pas')
     open(VIS2, 'w', newline='\r\n').write('unit Vis2;\n\ninterface\n\nend.\n')
     VIS2_ANTES = open(VIS2, 'rb').read()

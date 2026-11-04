@@ -11,7 +11,8 @@ unit Lsp.Lugares;
   resuelto (FormaDeclarada, FormaDeclaradaDe, FormaDeclaradaEnTexto); y las
   preguntas sobre donde empieza una ruta en un texto (CaracterPrevio, que se
   hace aqui y en el enmascarador; DelimitadorDeRed, que hace el enmascarador;
-  y OpcionPegada, que hacen los dos).
+  OpcionPegada, que hacen los dos; e InicioDeRuta, la de una letra o de la
+  casa, que hacen los dos).
 
   No decide ningun acceso: la jaula (JaulaDecide, UncFueraDeLugares,
   NegativaDeUnc, RootItselfDenied...) sigue en Lsp.Guard y LEE este mapa.
@@ -216,6 +217,17 @@ function DelimitadorDeRed(const ATexto: string; AI: Integer): Boolean;
   preguntan DelimitadorDeRed (la ruta de red), el barrido de las letras del
   enmascarador (MaskDriveText) y la casa (CambiaPrefijosEnTexto). }
 function OpcionPegada(const ATexto: string; AI: Integer): Boolean;
+
+type
+  TInicioDeRuta = (irNo, irLibre, irPegada);
+
+{ Si en AI de un texto puede EMPEZAR una ruta de una letra o de la casa: no
+  (pegada a una palabra: deja HEAD: y las palabras), libre, o pegada a una
+  opcion de una linea de ordenes (OpcionPegada). LA regla del barrido de las
+  letras del enmascarador (MaskDriveText) y de la casa (CambiaPrefijosEnTexto),
+  escrita en los dos hasta la 1.27 (P8 del revisor del paisaje); lo de DETRAS
+  (el separador, un escape de JSON) lo mira cada uno. }
+function InicioDeRuta(const ATexto: string; AI: Integer): TInicioDeRuta;
 
 implementation
 
@@ -511,6 +523,16 @@ end;
   Pegada a una carpeta NO: es el separador doblado del eco del enlazador
   (Linux64\\Debug), y tomarlo por una ruta de red se comia la cola entera
   (227 srvhost en una salida, 2026-08-26). }
+function InicioDeRuta(const ATexto: string; AI: Integer): TInicioDeRuta;
+begin
+  if not CharInSet(CaracterPrevio(ATexto, AI), ['A' .. 'Z', 'a' .. 'z', '0' .. '9']) then
+    Result := irLibre
+  else if OpcionPegada(ATexto, AI) then
+    Result := irPegada
+  else
+    Result := irNo;
+end;
+
 function DelimitadorDeRed(const ATexto: string; AI: Integer): Boolean;
 const
   ANTES: TSysCharSet = [' ', #9, '"', '''', '(', ',', '=', ';', '<', '>', '|', '[', #10, #13];
@@ -714,7 +736,7 @@ var
     if Pos(UpCase(ATexto[AI]), Primeras) = 0 then
       Exit;
     Previo := CaracterPrevio(ATexto, AI);
-    if CharInSet(Previo, ['A' .. 'Z', 'a' .. 'z', '0' .. '9']) and not OpcionPegada(ATexto, AI) then
+    if InicioDeRuta(ATexto, AI) = irNo then
       Exit;
     for M := 0 to High(Agujas) do
     begin

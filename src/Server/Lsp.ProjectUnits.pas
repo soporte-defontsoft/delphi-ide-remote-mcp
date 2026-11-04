@@ -318,6 +318,11 @@ function DirectivasDeFichero(const ATexto: string): TArray<TDirectivaFichero>;
   rutina DENTRO del bloque (W1 del revisor de cierre de la 1.18.2). }
 function PrimerCondicionalAbierto(const ATexto: string): Integer;
 
+{ LA regla de la seccion (interface|implementation) de una unit: la posicion
+  1-based detras de su palabra en ACodigo (la vista CodigoPascal), 0 si no
+  esta. La de adduses, el renombrado y la declaracion de una rutina visible. }
+function FinDeSeccion(const ACodigo, ASec: string): Integer;
+
 { ---- grupos de proyectos (.groupproj) ---- }
 
 { El Include de cada <Projects> de un grupo, en orden. }

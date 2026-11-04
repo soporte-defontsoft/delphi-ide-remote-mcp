@@ -355,16 +355,17 @@ begin
       // aqui solo: delphi_move siguio un mes con TDirectory.Move y se trajo a
       // la jaula y BORRO lo de detras de un junction (2026-09-25).
       MueveArbol(APath, ATrash)
-    else if EsEnlace(SinBarraFinal(APath)) then
-    begin
-      // un enlace COLGANTE (su destino se borro): se renombra su NOMBRE, como
-      // viaja todo enlace; TFile.Move preguntaba si existe SIGUIENDOLO y
-      // fallaba (H10 de la revision del paisaje de Fable). La puerta, arriba
-      if not MoveFile(PChar(SinBarraFinal(APath)), PChar(ATrash)) then
-        raise Exception.Create(MotivoDeRenombre(APath, GetLastError));
-    end
     else
-      TFile.Move(APath, ATrash);
+    begin
+      // un fichero, o un enlace COLGANTE (su destino se borro): se renombra su
+      // NOMBRE, como viaja todo enlace, y nunca se copia. TFile.Move preguntaba
+      // si existe SIGUIENDOLO y fallaba (H10 de la revision del paisaje de
+      // Fable), y entre unidades copia y borra, como MoveFile a secas (J4 de la
+      // 1.27, medido). La puerta, arriba
+      var Codigo: Cardinal;
+      if not RenombraConReintentos(SinBarraFinal(APath), ATrash, 0, Codigo) then
+        raise Exception.Create(MotivoDeRenombre(APath, Codigo));
+    end;
   except
     // un borrado que no se hizo no deja su cajon del dia vacio (FILE-036
     // decia "no he tocado NADA" con deleted\ recien creado; septima)
@@ -622,8 +623,12 @@ var
       try
         if TDirectory.Exists(Copias[I]) and not EsEnlace(Copias[I]) then
           MueveArbol(Copias[I], Rutas[I])
-        else if not MoveFile(PChar(Copias[I]), PChar(SinBarraFinal(Rutas[I]))) then
-          RaiseLastOSError;
+        else
+        begin
+          var Codigo: Cardinal;
+          if not RenombraConReintentos(Copias[I], SinBarraFinal(Rutas[I]), 0, Codigo) then
+            RaiseLastOSError(Codigo);
+        end;
         QuitaMarcaDeDueno(Copias[I]);
         QuitaCarpetasCreadas(TPath.GetDirectoryName(Copias[I]), Ancestros[I]);
       except
@@ -931,8 +936,11 @@ var
       try
         case Formas[I] of
           FM_FICHERO:
-            if not MoveFile(PChar(Hechos[I].Destino), PChar(Hechos[I].Origen)) then
-              RaiseLastOSError;
+            begin
+              var Codigo: Cardinal;
+              if not RenombraConReintentos(Hechos[I].Destino, Hechos[I].Origen, 0, Codigo) then
+                RaiseLastOSError(Codigo);
+            end;
           FM_CARPETA:
             MueveArbol(Hechos[I].Destino, Hechos[I].Origen);
           FM_MEZCLA, FM_COPIA_MEZCLA:
@@ -1202,9 +1210,12 @@ begin
       end;
       if not EsCarpeta then
       begin
-        // renombrar: con otras mayusculas, el mismo fichero (punto 4 de Fable)
-        if not MoveFile(PChar(SinBarraFinal(P.Origen)), PChar(SinBarraFinal(P.Destino))) then
-          raise Exception.Create(MotivoDeRenombre(P.Origen, GetLastError));
+        // renombrar: con otras mayusculas, el mismo fichero (punto 4 de Fable);
+        // nunca copiar: MoveFile a secas copia y borra un fichero entre unidades
+        // (J4 de la 1.27, medido), y la mudanza ya lo nego por la letra
+        var Codigo: Cardinal;
+        if not RenombraConReintentos(SinBarraFinal(P.Origen), SinBarraFinal(P.Destino), 0, Codigo) then
+          raise Exception.Create(MotivoDeRenombre(P.Origen, Codigo));
         Anota(P.Origen, P.Destino, FM_FICHERO, nil, '');
       end
       else if Mezcla then

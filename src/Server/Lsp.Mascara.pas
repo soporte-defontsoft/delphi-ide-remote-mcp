@@ -589,7 +589,7 @@ var
   Sb: TStringBuilder;
   Letters: string;
   I, L: Integer;
-  C, PrevC: Char;
+  C: Char;
   EnJson: Boolean;
 begin
   // delphi_read was the FIRST exemption: its payload is the file's TEXT, which
@@ -740,20 +740,19 @@ begin
         // previous char for every path that starts a line, and the guard below
         // let it through unmasked: the real C:\Program Files... leaked in
         // multi-line fields (build outputTail) while the same path masked fine
-        // inside single-line ones (errors[]). Measured, field round 8.
-        PrevC := CaracterPrevio(AText, I);
+        // inside single-line ones (errors[]). Measured, field round 8. That
+        // char is CaracterPrevio's, asked by InicioDeRuta (Lsp.Lugares).
         // A drive prefix only starts where the previous char is not a
         // letter/digit (keeps git's "HEAD:" and words intact)...
-        var EmpiezaAqui := not CharInSet(PrevC, ['A'..'Z', 'a'..'z', '0'..'9']);
+        var Inicio := InicioDeRuta(AText, I);
         // ...o donde va pegada a una opcion de una linea de ordenes, con su
         // separador detras (la forma A): dcc64 escribe -LEC:\..., -NBC:\... sin
         // comillas y salia la letra REAL (A8 de la 1.27). La opcion es la regla
         // de las rutas de red (OpcionPegada); en un JSON una barra sola es un
         // escape (-L<letra>:\n), y un separador alli son dos
-        if not EmpiezaAqui and OpcionPegada(AText, I) and (I + 2 <= L) and
+        var EmpiezaAqui := (Inicio = irLibre) or ((Inicio = irPegada) and (I + 2 <= L) and
            (AText[I + 1] = ':') and ((AText[I + 2] = '/') or ((AText[I + 2] = '\') and
-           (not EnJson or ((I + 3 <= L) and (AText[I + 3] = '\'))))) then
-          EmpiezaAqui := True;
+           (not EnJson or ((I + 3 <= L) and (AText[I + 3] = '\'))))));
         if EmpiezaAqui then
         begin
           // form A - plain path: <letter>:<separator> (D:\ or D:/)

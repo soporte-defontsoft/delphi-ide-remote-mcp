@@ -1260,8 +1260,9 @@ type
   carga, llega del ANCESTRO -o del frame en linea que lo trae- sin bloque
   aqui; AH, lo que dijo. Por la ruta, como lo nombra el agente (NombreDe y su
   inversa, ObjetoPorNombre). False si el juez no lo carga o no se le pudo
-  preguntar. }
-function HeredadoSegunElIde(ADoc: TStyleDoc; const ADfm, ANombre: string; out AH: TLoHeredado): Boolean;
+  preguntar. ADesde: el de una edicion (ComoLoEscribeElIde). }
+function HeredadoSegunElIde(ADoc: TStyleDoc; const ADfm, ANombre: string; out AH: TLoHeredado;
+  ADesde: UInt64 = 0): Boolean;
 var
   Escrito, ErrorAyudante: string;
   Avisos, SinLeer: TArray<string>;
@@ -1274,7 +1275,7 @@ begin
   if (ADoc = nil) or (ADoc.Root = nil) or (ANombre.Trim = '') then
     Exit;
   if ComoLoEscribeElIde(ADfm, ADoc.TextoDe(ADoc.Lines), ADoc.Encoding, Escrito, AH.Sustituidas, Avisos,
-    SinLeer, AH.Leidos, ErrorAyudante, Parada) <> '' then
+    SinLeer, AH.Leidos, ErrorAyudante, Parada, '', '', ADesde) <> '' then
     Exit;
   Suyo := TStyleDoc.DeTexto(Escrito);
   try
@@ -1339,7 +1340,7 @@ var
   H: TLoHeredado;
 begin
   Result := BuscaComponente(F, AName, AObj);
-  if (Result = '') or not HeredadoSegunElIde(F.Doc, F.Dfm, AName, H) then
+  if (Result = '') or not HeredadoSegunElIde(F.Doc, F.Dfm, AName, H, F.JuzgandoDesde) then
     Exit;
   if H.Frame <> '' then
     Result := MsgFmt(SR_DESIGNER_DENTRO_DE_INLINE_FMT, [H.Cadena[High(H.Cadena)].Ruta, H.Frame])
@@ -1366,7 +1367,7 @@ begin
   Result := BuscaComponente(F, AName, AObj);
   if Result = '' then
     Exit;
-  if not HeredadoSegunElIde(F.Doc, F.Dfm, AName, H) then
+  if not HeredadoSegunElIde(F.Doc, F.Dfm, AName, H, F.JuzgandoDesde) then
     Exit; // no esta, tampoco para el lector del IDE
   // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
   F.LeidoPorElJuez := F.LeidoPorElJuez + H.Leidos;
@@ -1897,7 +1898,7 @@ begin
       Motivo := MsgFmt(SF_DESIGNER_IDE_HEREDADO_FMT, [ANomObj])
     else
     begin
-      R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj);
+      R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj, F.JuzgandoDesde);
       // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
       F.LeidoPorElJuez := F.LeidoPorElJuez + R.Leidos;
       if R.Fallo <> '' then
@@ -3570,7 +3571,7 @@ begin
   ASuyo := [];
   AEscrito := '';
   Result := ComoLoEscribeElIde(F.Dfm, ATexto, F.Doc.Encoding, Escrito, Sustituidas, Avisos, SinLeer,
-    Leidos, ErrorAyudante, Parada, ASoltado, AUnidad);
+    Leidos, ErrorAyudante, Parada, ASoltado, AUnidad, F.JuzgandoDesde);
   if EsFrameCiclico(Parada) then
     F.FrameCiclico := Parada.Texto;
   // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
@@ -4167,7 +4168,7 @@ begin
   if Valores = '' then
     Exit;
   var Juicio := ComoLoEscribeElIde(F.Dfm, F.Doc.TextoDe(F.Doc.Lines), F.Doc.Encoding, Escrito, Sustituidas,
-    Avisos, SinLeer, Leidos, ErrorAyudante, Lectura);
+    Avisos, SinLeer, Leidos, ErrorAyudante, Lectura, '', '', F.JuzgandoDesde);
   // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
   F.LeidoPorElJuez := F.LeidoPorElJuez + Leidos;
   if Juicio = '' then
@@ -4194,7 +4195,7 @@ begin
   // carga, lo rompe este cambio; si tampoco, ya no cargaba (y no niega)
   var Motivo := ErrorAyudante;
   var Antes := ComoLoEscribeElIde(F.Dfm, F.Doc.TextoDe(F.Doc.Leidas), F.Doc.Encoding, Escrito, Sustituidas,
-    Avisos, SinLeer, Leidos, ErrorAyudante, Lectura);
+    Avisos, SinLeer, Leidos, ErrorAyudante, Lectura, '', '', F.JuzgandoDesde);
   F.LeidoPorElJuez := F.LeidoPorElJuez + Leidos;
   if Antes = '' then
     Exit(MsgFmt(SR_DESIGNER_SET_ROMPE_CARGA_FMT, [Valores, Motivo]));
