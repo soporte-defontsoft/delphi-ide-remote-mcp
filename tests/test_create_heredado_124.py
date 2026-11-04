@@ -96,8 +96,11 @@ try:
     check('B1 todo compila con dcc', J(r).get('success') is True, r[:600])
     r = srv.call('delphi_designer', {'command': 'check-binding', 'path': HIJA}, t=120)
     j = J(r)
+    # las claves que check-binding EMITE (Lsp.DesignerBinding): miraba missingFields y
+    # orphanFields, que no existen, y se quedaba en not rechazado (revisor de baterias de la 1.27)
     check('B2 check-binding: nada que decir del form contra su clase',
-          not j.get('missingFields') and not j.get('orphanFields') and not mc.rechazado(r), r[:500])
+          not mc.fallo(r) and j.get('clean') is True and not j.get('componentsWithoutField')
+          and not j.get('fieldsWithoutComponent'), r[:500])
 
     # ---- FMX
     DIRF = os.path.join(JAIL, 'AppF')

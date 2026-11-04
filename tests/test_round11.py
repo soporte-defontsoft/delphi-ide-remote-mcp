@@ -98,10 +98,14 @@ try:
                                    'host': '198.51.100.9', 'port': '64211',
                                    'password': 'x', 'platform': 'Linux64'}, t=300)
     # with the IDE open on the server, paclient cannot save profiles (W0013,
-    # now answered as a clear refusal): tolerate it - a human may be working
-    created = (not mc.fallo(r)) and ('W0013' not in r) and ('bds.exe' not in r)
-    check('S2 con el host permitido, el perfil SI se crea (o el IDE abierto se explica)',
-          created or 'bds.exe' in r, r[:250])
+    # now answered as a clear refusal, PAS-029): eso es un SALTO que se dice, no un
+    # PASS - con el IDE abierto, que aqui es lo normal, S2 salia verde sin crear
+    # nada (revisor de baterias de la 1.27)
+    created = (not mc.fallo(r)) and ('W0013' not in r) and not mc.es(r, 'SR_PASERVER_IDE_OPEN')
+    if mc.es(r, 'SR_PASERVER_IDE_OPEN'):
+        print('SKIP S2/S3: el IDE esta abierto en esta maquina y paclient no guarda perfiles (PAS-029)')
+    else:
+        check('S2 con el host permitido, el perfil SI se crea', created, r[:250])
     if created:
         r = B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
         borrado = mc.abre(r, 'SN_PASERVER_PROFILE_REMOVED_FMT')

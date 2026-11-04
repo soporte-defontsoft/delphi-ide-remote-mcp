@@ -202,7 +202,8 @@ try:
 
     cargado = carga_msxml(proyecto)
     if cargado is None:
-        print('    P7 no se mide: sin pywin32 no hay MSXML desde python')
+        # NOTA, que run_all lista (revisor de baterias de la 1.27)
+        print('NOTA P7 no se mide: sin pywin32 no hay MSXML desde python')
     else:
         check('P7 el .dproj escrito lo carga MSXML6, el cargador del IDE', cargado, proyecto)
 finally:

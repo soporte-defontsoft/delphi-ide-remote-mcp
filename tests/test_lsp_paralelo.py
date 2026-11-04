@@ -617,8 +617,10 @@ try:
     except Exception as ex:
         check('P3 (preparacion) se puede preguntar por los motores', False, str(ex))
 finally:
-    proc.kill()
-    proc.wait()
+    # el kill DE VERDAD: proc.kill() de ServidorHttp es la parada ordenada, en la que
+    # TLspSession.Shutdown para los motores, y P3 dejaba de medir que cada motor ve
+    # cerrarse su tuberia (revisor de baterias de la 1.27)
+    mc.mata_y_recoge(proc)
 
 # P3 - sin servidor, cada motor ve cerrarse SU tuberia y se va
 quedan = motores

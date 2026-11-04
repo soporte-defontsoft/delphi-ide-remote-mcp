@@ -53,7 +53,8 @@ uses
   Winapi.Windows,
   System.SysUtils,
   System.Classes,
-  System.Win.Registry;
+  System.Win.Registry,
+  LspTests.Comun;
 
 const
   RAIZ = 'Software\DelphiMcpTests';
@@ -108,7 +109,7 @@ end;
 procedure TVigiaDeClaveTests.SiSePuede;
 begin
   if FSinRegistro then
-    Assert.Pass('HKCU no se deja escribir desde este proceso (capa virtual): no se mide; ' +
+    NoSeMide('HKCU no se deja escribir desde este proceso (capa virtual): no se mide; ' +
       'lo mide el servicio con el IDE');
 end;
 

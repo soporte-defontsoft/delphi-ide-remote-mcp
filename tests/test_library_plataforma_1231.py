@@ -43,8 +43,9 @@ def search_path(clave):
 
 ANDROID32 = search_path('Android32')
 if not ANDROID32:
-    print('NOTA: sin Library\\Android32 en el registro de esta maquina: L1-L4 no se miden')
-    sys.exit(0)
+    # un salto que se dice: con sys.exit(0) y 0 checks, run_all la pintaba ROJA sin el
+    # motivo (revisor de baterias de la 1.27)
+    mc.fin('el Library del IDE de una plataforma cuya clave no es su nombre 1231 (V198)', sin_checks='sin Library\\Android32 en el registro de esta maquina')
 # los trozos que el lector da: los completos (sin un macro que el no conozca se quedan los demas)
 ESPERADAS = len([t for t in ANDROID32.split(';') if t.strip()])
 

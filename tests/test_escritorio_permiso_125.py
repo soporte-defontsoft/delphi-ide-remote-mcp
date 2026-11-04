@@ -20,9 +20,7 @@ RAIZ = os.path.join(BASE, 'raiz')
 os.makedirs(RAIZ)
 SCRATCH = os.path.join(BASE, 'scratch')
 os.makedirs(SCRATCH)
-STUB = os.path.join(BASE, 'paclient.cmd')
-with open(STUB, 'w') as f:
-    f.write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
+STUB = mc.paclient_falso('escritorio_permiso_125')  # el de la casa (revisor de baterias de la 1.27)
 # 192.0.2.x (TEST-NET): nada los marca, contesta el stub
 HOSTS = {'actua': '192.0.2.10', 'mira': '192.0.2.11', 'nada': '192.0.2.12'}
 for perfil, host in HOSTS.items():
@@ -117,7 +115,7 @@ try:
     check('remote-run no pide el permiso del escritorio', not mc.es(t, NIEGA), t[:300])
     # ...y sin proyecto sigue pidiendolo: quitar el nodo de esa puerta no le abre un hueco
     t = s.call('delphi_paserver', {'command': 'remote-run', 'profile': 'actua'}, 120)
-    check('remote-run sin project sigue negado', mc.fallo(t) and not mc.es(t, NIEGA), t[:300])
+    check('remote-run sin project sigue negado', mc.rechazado(t) and not mc.es(t, NIEGA), t[:300])
 finally:
     s.cierra()
 mc.borra(BASE)

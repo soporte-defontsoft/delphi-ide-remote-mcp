@@ -19,6 +19,9 @@ va tambien con un Deploy que falla; el camino bueno se midio en vivo.
   D6 (revisor del paisaje de la 1.27) un proyecto SIN configuraciones declaradas, desplegado en Debug y luego en
      Prod: el manifiesto gana el binario de Prod (ROJA: EnsurePlatformOutputEntries salia con CUALQUIER
      ProjectOutput de la plataforma, y el Deploy de Prod no enviaba el binario)
+  D7 la salida de Debug con una Condition propia que no se sabe leer (Exists(...)) no es "de todas": el
+     Deploy de Debug le pone la suya (ROJA sin ConfigIlegible en EnsurePlatformOutputEntries, que salia sin
+     anadir nada; el arreglo no tenia un check que cayera sin el: revisor de baterias de la 1.27)
 
 Uso:  python tests/test_deploy_config_127.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -102,6 +105,22 @@ try:
     man = r.get('deployManifest', '')
     check('D5 el manifiesto que se genera en Linux dice lo medido (BUILD-067), no BUILD-005',
           mc.es(man, 'SN_BUILD_MANIFEST_NEW_LINUX') and not mc.es(man, 'SN_BUILD_MANIFEST_NEW'), t[:900])
+
+    MAN2 = os.path.splitext(P2)[0] + '.deployproj'
+    with open(MAN2, encoding='utf-8-sig', newline='') as f:
+        man2 = f.read()
+    SUYA = 'Condition="\'$(Config)\'==\'Debug\'"'
+    ilegible = man2.replace(SUYA, 'Condition="Exists(\'x\')"')
+    check('D7 fixture: la salida de Debug llevaba su Condition y ahora una que no se sabe leer',
+          SUYA in man2 and SUYA not in ilegible and 'ProjectOutput' in man2, man2[-900:])
+    with open(MAN2, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(ilegible)
+    t, r = deploy(P2, 'Debug')
+    check('D7 fixture: el Deploy de Debug llega a msbuild', r.get('success') is False and bool(r.get('errors')), t[:600])
+    with open(MAN2, encoding='utf-8-sig', newline='') as f:
+        man2b = f.read()
+    check('D7 una salida con una Condition que no se sabe leer no tapa la de Debug: el Deploy la anade',
+          SUYA in man2b and 'Exists(\'x\')' in man2b, man2b[-1200:])
 finally:
     srv.cierra()
 

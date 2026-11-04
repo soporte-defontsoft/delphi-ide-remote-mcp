@@ -679,6 +679,14 @@ cdir = os.path.join(BASE, 'Copia')
 os.makedirs(os.path.join(cdir, mc.PAPELERA, 'x'), exist_ok=True)
 open(os.path.join(cdir, 'UOrig.pas'), 'wb').write(b'unit UOrig;\r\n\r\ninterface\r\n\r\nimplementation\r\n\r\nend.\r\n')
 open(os.path.join(cdir, 'UOrig.dfm'), 'wb').write(b'object FormOrig: TFormOrig\r\nend\r\n')
+
+
+def en_la_papelera(d):
+    """Lo que hay en la papelera de una carpeta (ficheros, relativos)."""
+    return sorted(os.path.relpath(os.path.join(r, f), d) for r, _, fs in os.walk(os.path.join(d, mc.PAPELERA)) for f in fs)
+
+
+papelera_antes = en_la_papelera(cdir)
 out = call('delphi_move', {"path": os.path.join(cdir, 'UOrig.pas'), "dest": os.path.join(cdir, 'UCopia.pas'), "copy": True})
 check('copy unit: COPIADO y el origen sigue', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(cdir, 'UOrig.pas')), out[:300])
 check('copy unit: como la del operador, su cabecera igual (V19)', 'unit UOrig;' in rd(os.path.join(cdir, 'UCopia.pas'))
@@ -686,8 +694,11 @@ check('copy unit: como la del operador, su cabecera igual (V19)', 'unit UOrig;' 
 check('copy unit: el designer no viaja solo (UOrig.* lo llevaria), y FILE-051 lo dice',
       not os.path.exists(os.path.join(cdir, 'UCopia.dfm')) and mc.es(out, 'SN_FILE_PAR_PARTIDO_FMT') and
       'UOrig.*' in out, out[:400])
-check('copy unit: ningun proyecto tocado y sin copia de seguridad',
-      not mc.es(out, 'SN_UNIT_RENAMED_FMT') and not mc.es(out, 'SN_FILE_COPIA_SEGURIDAD_EN_FMT'), out[:400])
+# HECHOS, no la ausencia de dos notas que copy=true ya no puede dar (una solo la da
+# fix-references y la otra va bajo "not Copy"): no podia fallar desde 546555c
+# (revisor de baterias de la 1.27). Una copia no deja copia de seguridad
+check('copy unit: sin copia de seguridad (la papelera de la carpeta, como estaba)',
+      not mc.fallo(out) and en_la_papelera(cdir) == papelera_antes, (papelera_antes, en_la_papelera(cdir), out[:300]))
 out = call('delphi_move', {"path": cdir, "dest": os.path.join(BASE, 'Copia2'), "copy": True})
 check('copy carpeta: COPIADO, las dos existen, sin la papelera del origen', mc.abre(out, 'SK_MOVE_COPIADO_FMT') and os.path.exists(os.path.join(BASE, 'Copia2', 'UCopia.pas')) and os.path.isdir(cdir) and not os.path.isdir(os.path.join(BASE, 'Copia2', mc.PAPELERA)), out[:300])
 out = call('delphi_move', {"path": VDIR, "dest": os.path.join(BASE, 'AppCopia'), "copy": True})

@@ -52,8 +52,10 @@ UNIDAD, _ = os.path.splitdrive(JAIL)
 OTRA = os.path.dirname(os.path.abspath(__file__))
 DOS_UNIDADES = os.path.splitdrive(OTRA)[0].upper() != UNIDAD.upper()
 if not DOS_UNIDADES:
-    print('GUARDA: la jaula y la carpeta actual del servidor estan en la misma unidad (%s): '
-          'los checks pasan, pero no hay roja que medir' % UNIDAD)
+    # NOTA, que run_all lista entre lo que NO se midio: con 'GUARDA:' salia verde sin
+    # decirlo (revisor de baterias de la 1.27)
+    print('NOTA M1-M9 no discriminan: la jaula y la carpeta actual del servidor estan en la misma '
+          'unidad (%s); los checks pasan, pero no hay roja que medir' % UNIDAD)
 
 
 def sin_unidad(p):

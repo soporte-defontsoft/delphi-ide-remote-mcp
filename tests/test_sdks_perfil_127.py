@@ -42,15 +42,18 @@ try:
     srv = mc.Stdio(EXE, env, nombre='sdks-perfil-127', t=180)
     try:
         r = srv.call('delphi_paserver', {'command': 'test-connection', 'profile': PERFIL}, 120)
-        check('S1 test-connection con un perfil de bateria: paclient deja SDKs\\<perfil>',
-              os.path.isdir(HUELLA), r[:300])
+        s1 = os.path.isdir(HUELLA)
+        check('S1 test-connection con un perfil de bateria: paclient deja SDKs\\<perfil>', s1, r[:300])
     finally:
         srv.cierra()
 
     mc.recoge_huellas()
-    check('S2 mc.recoge_huellas() se lleva la carpeta que dejo la bateria', not os.path.lexists(HUELLA), HUELLA)
+    # (sin S1 no hay nada que recoger: S2 no puede pasar por eso; revisor de baterias de la 1.27)
+    check('S2 mc.recoge_huellas() se lleva la carpeta que dejo la bateria', s1 and not os.path.lexists(HUELLA), HUELLA)
     check('S3 la que ya estaba no se toca', os.path.isdir(os.path.join(SDKS, YA_ESTABA)), YA_ESTABA)
 finally:
+    # si algo revento entre S1 y la recogida, la huella no se queda en la carpeta real
+    mc.recoge_huellas()
     # la plantada para S3 es de esta bateria: se quita aqui, a mano y solo ella
     if os.path.isdir(os.path.join(SDKS, YA_ESTABA)):
         os.rmdir(os.path.join(SDKS, YA_ESTABA))

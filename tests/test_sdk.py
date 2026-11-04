@@ -97,6 +97,28 @@ PROFILES_DIR = os.path.join(FAKE_APPDATA, 'Embarcadero', 'BDS', VER)
 os.makedirs(PROFILES_DIR)
 print('(RAD Studio %s; SDKs de mentira en %s)' % (VER, PROFILES_DIR))
 
+def asientos_del_ide(nombre):
+    """Las subclaves de PlatformSDKs del registro REAL del IDE que llevan ese nombre, SOLO
+    LEIDAS: el asiento de un SDK vive alli, no en el APPDATA de mentira."""
+    import winreg
+    vistas = []
+    try:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER,
+                            r'Software\Embarcadero\BDS\%s\PlatformSDKs' % VER) as k:
+            i = 0
+            while True:
+                try:
+                    sub = winreg.EnumKey(k, i)
+                except OSError:
+                    break
+                if nombre.lower() in sub.lower():
+                    vistas.append(sub)
+                i += 1
+    except OSError:
+        pass
+    return vistas
+
+
 srv = Server({'APPDATA': FAKE_APPDATA})
 try:
     # un proyecto de verdad, para que el build llegue hasta la eleccion de SDK
@@ -189,10 +211,13 @@ try:
         dados = json.loads(out).get('ideSdkDefaults', [])
     except Exception:
         dados = None
+    # sin ninguno, all([]) era un PASS vacio: se dice como salto y no se cuenta (revisor de
+    # baterias de la 1.27)
     if not esperados:
         print('NOTA: ideSdkDefaults no medible: el IDE de esta maquina no tiene ningun Default_ en PlatformSDKs')
-    check('ideSdkDefaults: los Default_ del IDE, los mismos que el registro (%d aqui)' % len(esperados),
-          dados is not None and all(e in dados for e in esperados), (esperados, dados))
+    else:
+        check('ideSdkDefaults: los Default_ del IDE, los mismos que el registro (%d aqui)' % len(esperados),
+              dados is not None and all(e in dados for e in esperados), (esperados, dados))
 
     # --- 5-ter) una ficha tocada a mano: lo que no es texto se salta -------
     # (revision de la 1.13.0: GetValue<string> de un objeto lanzaba, y la
@@ -240,8 +265,10 @@ try:
         f.write(xml2)
     out = srv.call('delphi_build', {"project": dproj, "platform": "Linux64"},
                    t=600)
+    # el SDK que el build TOMO (su campo), no 'uno.sdk' en cualquier parte: la negativa de
+    # varios SDK (SR_BUILD_SDK_VARIOS) tambien lo lista (revisor de baterias de la 1.27)
     check('un PlatformSDK del grupo de OTRA plataforma no manda en Linux64',
-          'uno.sdk' in out and 'ajeno' not in out, out[:300])
+          '"sdk":"uno.sdk"' in out.replace(' ', '') and 'ajeno' not in out, out[:300])
     # y view lo DICE: SDK y perfil por plataforma remota, con su procedencia
     out = srv.call('delphi_config', {"project": dproj, "command": "view",
                                      "section": "platforms"})
@@ -362,6 +389,14 @@ try:
     out = srv.call('delphi_paserver', {"command": "reseat-sdk", "sdk": "zzfuera"})
     check('reseat-sdk de un .sdk cuyo sysroot no esta bajo la carpeta de SDKs del IDE: no se asienta y lo dice (PAS-060)',
           'PAS-060' in out and '"seated":[]' in out.replace(' ', ''), out[:300])
+    # el asiento es del registro REAL del IDE (el APPDATA es de mentira, el registro no): si
+    # PAS-060 volviera atras, la bateria dejaba un SDK falso en el SDK Manager de quien la
+    # corre. Se MIRA (solo lectura) y, si esta, lo quita la propia herramienta (revisor de
+    # baterias de la 1.27)
+    asentado = asientos_del_ide('zzfuera')
+    check('reseat-sdk: ningun asiento zzfuera en el registro del IDE', not asentado, asentado)
+    if asentado:
+        srv.call('delphi_paserver', {"command": "remove-sdk", "sdk": "zzfuera"})
     os.remove(os.path.join(PROFILES_DIR, 'zzfuera.sdk'))
     # --- 6d/6e/6f) el SDK que YA existe se nombra como lo lista profiles (1.19.1,
     # Hermes 15-oct): remove-sdk y reseat-sdk pasaban el nombre por el formador

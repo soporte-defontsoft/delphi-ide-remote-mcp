@@ -22,6 +22,7 @@ verifying agent) needs: version, commit, checks, artifact, sha256.
 Usage:  python tests/release_check.py [--skip-regression]
 """
 import ctypes, hashlib, json, os, re, subprocess, sys, zipfile, time
+import mcp_cliente as mc  # FUENTES_DE / binario_rancio, los nombradores de la papelera y del temporal
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 REPO = os.path.abspath(os.path.join(HERE, '..'))
@@ -59,23 +60,14 @@ exe = os.path.join(REPO, 'src', 'Server', 'Compiled', 'Win64', 'Release', 'Delph
 check('built exe exists', os.path.exists(exe), exe)
 
 
-def newest_source(folder):
-    t = 0.0
-    for root, dirs, files in os.walk(folder):
-        # Pruebas: la bateria manual de src/Render no es fuente de los ayudantes
-        dirs[:] = [d for d in dirs if d not in ('Win64', 'Win32', 'Linux64', 'Compiled', '__delphi-patch', '__history', 'Pruebas')]
-        for f in files:
-            if f.lower().endswith(('.pas', '.dpr', '.inc', '.dproj')):
-                t = max(t, os.path.getmtime(os.path.join(root, f)))
-    return t
 # ...y no mas viejo que sus fuentes: con un build FALLIDO el exe de antes
 # seguia ahi y las 86 baterias salieron en verde probando el codigo de
 # ayer (medido el 27-sep-2026: E2034 en Lsp.Scaffold y la puerta dijo OK).
+# Sus fuentes, de la tabla de mc (con los .inc de protocolo de sus ayudantes)
 if os.path.exists(exe):
-    check('built exe not older than its sources (src/Server, vendor/src)',
-          os.path.getmtime(exe) >= max(newest_source(os.path.join(REPO, 'src', 'Server')),
-                                       newest_source(os.path.join(REPO, 'vendor', 'src'))),
-          'the sources changed after the exe (a failed build?): run BuildGroup.bat quiet build Release')
+    _rancio = mc.binario_rancio(mc.EXE_COMPILADO)
+    check('built exe not older than its sources', not _rancio,
+          _rancio + ': run BuildGroup.bat quiet build Release')
 
 
 def exe_version(path):
@@ -122,9 +114,24 @@ check('skills/SKILL.md reviewed for v%s' % ver, bool(marca) and marca.group(1) =
       '<!-- contract reviewed: v%s -->' % (ver, ver))
 
 # 5) full regression
+# "0 fallos" como CAMPO del resumen: como subcadena casaba con 10, 20 o 100 fallos
+# (revisor de baterias de la 1.27)
+LIMPIA = re.compile(r'\|\s*0 fallos\s*\|')
 if '--skip-regression' in sys.argv:
-    print('SKIP regression (--skip-regression)')
-    reg_line = 'SKIPPED'
+    # saltarla solo vale si la ULTIMA regresion completa (su regression.log) salio
+    # limpia y es posterior al exe: un salto a ciegas acababa en "OK - listo para
+    # taggear y publicar" (revisor de baterias de la 1.27). El ritual la salta
+    # tras un release_check completo del mismo build
+    log = os.path.join(OUT, 'regression.log')
+    previa = ''
+    if os.path.exists(log):
+        previa = next((l for l in open(log, encoding='utf-8', errors='replace').read().splitlines()
+                       if l.startswith('== ') and 'baterias' in l), '')
+    fresca = os.path.exists(log) and os.path.exists(exe) and os.path.getmtime(log) >= os.path.getmtime(exe)
+    check('regression skipped: the last full run is green and newer than the exe (%s)' % (previa or 'none'),
+          fresca and bool(LIMPIA.search(previa)),
+          'run the full release_check first (no regression.log of this build, or not green)')
+    reg_line = 'SKIPPED (last full run: %s)' % (previa or 'none')
 else:
     r = subprocess.run([sys.executable, os.path.join(HERE, 'run_all.py')],
                        capture_output=True, text=True, encoding='utf-8', errors='replace')
@@ -142,7 +149,7 @@ else:
     for _l in _lineas:
         if _l.lstrip().startswith('FAIL') or _l.startswith('FALLA') or _l.startswith('--- '):
             print('   ', _l[:240])
-    check('regression green (%s)' % reg_line, r.returncode == 0 and '0 fallos' in reg_line,
+    check('regression green (%s)' % reg_line, r.returncode == 0 and bool(LIMPIA.search(reg_line)),
           reg_line or r.stderr[-200:] if r.stderr else '')
 
 # 6) package + sha256
@@ -201,29 +208,18 @@ CONTENT = [
     (os.path.join(REPO, 'CHANGELOG.md'), 'CHANGELOG.md'),
     (os.path.join(REPO, 'LICENSE'), 'LICENSE'),
 ]
-# 6b) the four node/ binaries are build output (never versioned since
-# 2026-09-24): BuildGroup.bat Release produces them. A release must carry
-# binaries of the code it publishes, so a missing one, or one older than
-# the newest source of its project, is a FAIL here - not a stale binary
-# quietly zipped from whatever was on disk.
-for binario, fuente in (('McpDesktopNode', 'DesktopNode'), ('McpDesktopNode.exe', 'DesktopNode'),
-                        ('McpRunJob', 'RunJob'), ('McpRunJob.exe', 'RunJob')):
-    b = os.path.join(REPO, 'node', binario)
-    if not os.path.exists(b):
-        check('node binary present: %s' % binario, False, 'run BuildGroup.bat quiet build Release')
-    else:
-        check('node binary not older than its sources: %s' % binario,
-              os.path.getmtime(b) >= newest_source(os.path.join(REPO, 'src', fuente)),
-              'src/%s changed after the binary: run BuildGroup.bat quiet build Release' % fuente)
-# ...y los renderizadores, igual: un binario de otro codigo no viaja
-for binario in ('DelphiFormRenderVcl.exe', 'DelphiFormRenderFmx.exe'):
-    b = os.path.join(REPO, 'src', 'Render', 'Win32', 'Release', binario)
-    if not os.path.exists(b):
-        check('renderer present: %s' % binario, False, 'run BuildGroup.bat quiet build Release')
-    else:
-        check('renderer not older than its sources: %s' % binario,
-              os.path.getmtime(b) >= newest_source(os.path.join(REPO, 'src', 'Render')),
-              'src/Render changed after the binary: run BuildGroup.bat quiet build Release')
+# 6b) the four node/ binaries, the two renderers and the style converter are
+# build output (never versioned): BuildGroup.bat Release produces them. A
+# release must carry binaries of the code it publishes, so a missing one, or
+# one older than the newest source of its project, is a FAIL here - not a
+# stale binary quietly zipped from whatever was on disk. The table is mc's
+# (FUENTES_DE): the converter had no check at all (revisor de baterias de la 1.27)
+for b in mc.FUENTES_DE:
+    if b == mc.EXE_COMPILADO:
+        continue
+    _rancio = mc.binario_rancio(b)
+    check('binary present and not older than its sources: %s' % os.path.basename(b), not _rancio,
+          _rancio + ': run BuildGroup.bat quiet build Release')
 
 with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
     for src, arc in CONTENT:
@@ -241,7 +237,7 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
     # de temporales del servidor y cuando cae dentro de un workspace puede
     # aparecer bajo docs\ igual que la papelera. Anadirla ahora cuesta una
     # linea; descubrirlo abriendo un zip publicado costo un release.
-    PODA = ('__delphi-patch', '__delphi-temp', '__history', '__recovery')
+    PODA = (mc.PAPELERA, mc.TEMPORALES, '__history', '__recovery')
     for root, dirs, files in os.walk(os.path.join(REPO, 'docs')):
         dirs[:] = [d for d in dirs if d not in PODA]
         for f in files:
@@ -253,8 +249,7 @@ with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as z:
 # (%TEMP%\dtfXXXX.tmp) y, con el %TEMP% del perfil, los dos ELF de node\
 # viajaban con el alias 8.3 del usuario. BuildGroup.bat compila con un TEMP
 # suyo; esto vigila que siga asi, y que nada mas lo traiga.
-from mcp_cliente import nombres_del_usuario  # noqa: E402
-USUARIO = nombres_del_usuario()
+USUARIO = mc.nombres_del_usuario()
 with zipfile.ZipFile(zip_path) as z:
     con_usuario = [i.filename for i in z.infolist() if any(n in z.read(i).lower() for n in USUARIO)]
 check('no artifact member carries the Windows user of the machine that built it',

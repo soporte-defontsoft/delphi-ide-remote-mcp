@@ -588,6 +588,18 @@ begin
   Assert.AreEqual('Datos.txt (Debug)', string.Join('|', SoloEnOtrasConfigs(M, 'Linux64', 'Release')),
     'en Linux Datos.txt y datos.txt son dos; y raro.dat no sale');
   Assert.AreEqual('', string.Join('|', SoloEnOtrasConfigs(M, 'Win64', 'Release')), 'en Windows, uno');
+  // ...y una ilegible en el MISMO sitio que la de otra configuracion no la tapa como "de
+  // todas": sin el arreglo, Exists(...) contaba como todas y otra.txt (Debug) no salia. Lo
+  // de arriba solo miraba el flag, y quitarle su efecto seguia en verde (revisor de
+  // baterias de la 1.27)
+  M := '<Project>' +
+    XmlGrupoDeDespliegue(DeployGroupCondition('Linux64'),
+      XmlDeployFile('otra.txt', 'Debug', 'App\', 'otra.txt', 'File', 0, False) +
+      '        <DeployFile Include="otra2.dat" Condition="Exists(''x'')"><RemoteDir>App\</RemoteDir>' +
+      '<RemoteName>otra.txt</RemoteName></DeployFile>'#13#10) +
+    '</Project>';
+  Assert.AreEqual('otra.txt (Debug)', string.Join('|', SoloEnOtrasConfigs(M, 'Linux64', 'Release')),
+    'una entrada ilegible en el mismo sitio no cuenta como de todas');
 end;
 
 procedure CompruebaImport(const AForma: string;
@@ -1446,6 +1458,9 @@ begin
     T.Add('BDSPLATFORMSDKSDIR=$(NOEXISTE_A5)\SDKs');
     CompletaTablaDelIde(Info, T);
     Assert.IsFalse(T.Values['BDSPLATFORMSDKSDIR'].Contains('$('), T.Values['BDSPLATFORMSDKSDIR']);
+    // (guarda, no cae sin el arreglo: la 99.9 no tiene registro, y el cuerpo de antes de
+    // IdeSdksDir caia al mismo default; lo que caeria es una redefinicion en el registro, que
+    // una prueba no toca. Revisor de baterias de la 1.27)
     Assert.AreEqual(IdeSdksDir('99.9'), T.Values['BDSPLATFORMSDKSDIR'], 'una sola respuesta');
     // (guarda) la que se resuelve con la tabla se queda resuelta
     T.Clear;

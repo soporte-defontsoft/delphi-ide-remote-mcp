@@ -105,7 +105,8 @@ try:
                                          'trigger': '.'}, t=120)
         check('N3 ...y completar tras "Application." da sus miembros', 'BringToFront' in r, r[:300])
     else:
-        print('  (N2 y N3 sin medir: LockBox no esta en la biblioteca del IDE de esta maquina)')
+        # SKIP, que run_all lista: con un print suelto salia verde sin su nucleo (revisor de baterias de la 1.27)
+        print('SKIP N2/N3: LockBox no esta en la biblioteca del IDE de esta maquina')
     check('N4 la carpeta de -NU sigue vacia: el motor no escribe en ella',
           os.path.isdir(SALIDA) and os.listdir(SALIDA) == [], os.listdir(SALIDA) if os.path.isdir(SALIDA) else 'no existe')
 finally:

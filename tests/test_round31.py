@@ -77,7 +77,10 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R26]',
     'Token=%s' % TOK,
-    'Roots=%s;%s' % (REPO, JAIL),
+    # el repo, de SOLO LECTURA: R1 lo lee y nada mas; con escritura, el recorredor que purga
+    # papeleras caducadas al pasar podia tocar las del repo (revisor de baterias de la 1.27)
+    'Roots=%s' % JAIL,
+    'ReadOnlyRoots=%s' % REPO,
     '',
 ]))
 
@@ -368,8 +371,11 @@ try:
           ruta.lower().startswith('srv') and ':' in ruta[:6], ruta)
 
     # ----------------------------------------------------------------- R3
-    t = call('delphi_build', {
-        'project': os.path.join(REPO, 'CHANGELOG.md'), 'platform': 'Win64'})
+    # un .md de SU jaula: el del repo, ahora de solo lectura, lo para antes la regla de
+    # un proyecto de referencia (GUARD-016), y R3 mide la de "no es un proyecto"
+    md = os.path.join(JAIL, 'NOTAS.md')
+    open(md, 'w', encoding='utf-8').write('# notas\n')
+    t = call('delphi_build', {'project': md, 'platform': 'Win64'})
     check('R3 build sobre un .md se niega por no ser un proyecto',
           mc.es(t, 'SR_BUILD_NOT_A_PROJECT_FMT'), t[:200])
     # Ojo con buscar 'exec' a secas: el envoltorio "Error executing tool:"

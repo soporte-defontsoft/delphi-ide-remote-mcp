@@ -59,9 +59,5 @@ check('governance refusal ofrece la via humana',
 check('governance refusal deja claro que la nota creada vale',
       'you created is valid' in gov, gov)
 
-m = re.search(r"SERVER_VERSION = '(\d+)\.(\d+)", texts)
-check('SERVER_VERSION >= 0.93',
-      m and (int(m.group(1)), int(m.group(2))) >= (0, 93),
-      m.group(0) if m else 'sin SERVER_VERSION')
-
+# (el suelo de version SERVER_VERSION >= 0.93 salio en la 1.27: no podia fallar; revisor de baterias)
 mc.fin('round27 (vault index protocol)')

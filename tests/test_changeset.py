@@ -222,7 +222,7 @@ r = cs({'command': 'preview', 'id': cid})
 check('M-4 delete-line sin old de una linea CON texto: el preview no sale limpio (EDIT-123)',
       mc.es(r, 'SR_EDIT_LINEA_NO_EN_BLANCO_FMT') and json.loads(r).get('unresolved') == 1, r[:300])
 r = cs({'command': 'commit', 'id': cid})
-check('...y el commit no la borra', mc.fallo(r) and open(_dl, 'rb').read() == b'uno\r\ndos\r\n', r[:300])
+check('...y el commit no la borra', mc.rechazado(r) and open(_dl, 'rb').read() == b'uno\r\ndos\r\n', r[:300])
 # ...y el COMMIT (revisor 2 de la noche, B-11: el commit de arriba se niega por el
 # preview, CHSET-016, y no llega a su propia comprobacion). MEDIDO: esa
 # comprobacion no se alcanza por la API - el preview mira el original, una

@@ -65,8 +65,7 @@ MARCADOR = 'FUGA_INOCUA.txt'
 open(os.path.join(CASA, MARCADOR), 'w', encoding='utf-8').write('fichero inofensivo de la casa del servidor')
 
 # paclient = el stub, que imita el reparto por ',' y ';'
-STUB = os.path.join(BASE, 'paclient.cmd')
-open(STUB, 'w').write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
+STUB = mc.paclient_falso('paclient_nombre_1231')  # el de la casa (revisor de baterias de la 1.27)
 open(os.path.join(SCRATCH, '_espera'), 'w').write('3')  # el stub no espera a que remate un trabajo
 
 PROF = 'perfil'

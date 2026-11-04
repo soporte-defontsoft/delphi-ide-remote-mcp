@@ -18,7 +18,7 @@ import glob
 import hashlib
 import json, os, queue, re, shutil, signal, socket, stat, subprocess, sys, tempfile, threading, time
 import urllib.error, urllib.parse, urllib.request
-import string, winreg
+import string, traceback, winreg
 import concurrent.futures
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -807,6 +807,46 @@ CONVERSOR_COMPILADO = os.path.join(REPO, 'src', 'StyleConvert', 'Compiled', 'Win
 RENDERIZADORES = ('DelphiFormRenderVcl.exe', 'DelphiFormRenderFmx.exe')
 AYUDANTES = {CONVERSOR: CONVERSOR_COMPILADO}
 AYUDANTES.update({r: os.path.join(REPO, 'src', 'Render', 'Win32', 'Release', r) for r in RENDERIZADORES})
+# Lo que compila cada binario que viaja: sus carpetas y, del servidor, los .inc de protocolo que
+# incluye de las de sus ayudantes. Un binario mas viejo que sus fuentes es el de un build fallido, y
+# las baterias probaban el codigo de ayer (27-sep-2026). UNA tabla para release_check y run_all: la
+# frescura del servidor no veia esos .inc, y el conversor no tenia ninguna (revisor de baterias de la 1.27)
+FUENTES_DE = {
+    EXE_COMPILADO: (('src', 'Server'), ('vendor', 'src'), ('src', 'Render', '*.inc'),
+                    ('src', 'DesktopNode', '*.inc'), ('src', 'StyleConvert', '*.inc')),
+    CONVERSOR_COMPILADO: (('src', 'StyleConvert'),),
+    os.path.join(REPO, 'node', 'McpDesktopNode'): (('src', 'DesktopNode'),),
+    os.path.join(REPO, 'node', 'McpDesktopNode.exe'): (('src', 'DesktopNode'),),
+    os.path.join(REPO, 'node', 'McpRunJob'): (('src', 'RunJob'),),
+    os.path.join(REPO, 'node', 'McpRunJob.exe'): (('src', 'RunJob'),),
+}
+FUENTES_DE.update({AYUDANTES[r]: (('src', 'Render'),) for r in RENDERIZADORES})
+
+
+def fuente_mas_nueva(*partes):
+    """La fecha del fuente mas nuevo de una carpeta del repo (sin lo compilado, la papelera, el
+    historial del IDE ni la bateria manual de src/Render), o de los ficheros de una mascara
+    ('src', 'Render', '*.inc'). Estaba en release_check."""
+    ruta = os.path.join(REPO, *partes)
+    if '*' in partes[-1]:
+        return max([os.path.getmtime(f) for f in glob.glob(ruta)] or [0.0])
+    t = 0.0
+    for root, dirs, files in os.walk(ruta):
+        dirs[:] = [d for d in dirs if d not in ('Win64', 'Win32', 'Linux64', 'Compiled', PAPELERA, '__history', 'Pruebas')]
+        for f in files:
+            if f.lower().endswith(('.pas', '.dpr', '.inc', '.dproj')):
+                t = max(t, os.path.getmtime(os.path.join(root, f)))
+    return t
+
+
+def binario_rancio(binario):
+    """'' si el binario (una clave de FUENTES_DE) existe y no es mas viejo que sus fuentes; si
+    no, por que."""
+    if not os.path.exists(binario):
+        return 'no existe: %s' % binario
+    viejas = ['/'.join(p) for p in FUENTES_DE[binario] if fuente_mas_nueva(*p) > os.path.getmtime(binario)]
+    return ('%s es mas viejo que %s (un build fallido?)' % (os.path.basename(binario), ', '.join(viejas))
+            if viejas else '')
 
 
 def copia_exe(dest_dir, src=None, con_conversor=False, con_render=False):
@@ -820,9 +860,12 @@ def copia_exe(dest_dir, src=None, con_conversor=False, con_render=False):
     origen = src or exe_origen()
     exe = os.path.join(dest_dir, 'DelphiLspMcp.exe')
     shutil.copy(origen, exe)
+    # el de junto al exe solo con OTRO build (run_all, un mutante): junto al compilado, uno que
+    # alguien dejo ahi tapaba al recien compilado (30-oct-2026; revisor de baterias de la 1.27)
+    otro_build = os.path.normcase(os.path.abspath(origen)) != os.path.normcase(EXE_COMPILADO)
     for nombre in ((CONVERSOR,) if con_conversor else ()) + (RENDERIZADORES if con_render else ()):
         junto = os.path.join(os.path.dirname(os.path.abspath(origen)), nombre)
-        shutil.copy(junto if os.path.exists(junto) else AYUDANTES[nombre],
+        shutil.copy(junto if otro_build and os.path.exists(junto) else AYUDANTES[nombre],
                     os.path.join(dest_dir, nombre))
     return exe
 
@@ -954,7 +997,7 @@ def check(name, ok, detail=''):
     global P, F
     if ok:
         P += 1
-        print('  PASS', name)
+        imprime('  PASS %s' % name)
     else:
         F += 1
         # en UNA linea: un detalle con saltos partiria el FAIL, y una linea suya
@@ -1046,6 +1089,15 @@ def fin(titulo, sin_checks=None):
     Suelta, para el adb que ella arranco; dentro de run_all eso lo hace la
     suite, una vez al final, para no parar el que otra esta usando."""
     global F
+    # llamada desde un finally con una excepcion en curso, el sys.exit de abajo la
+    # SUSTITUIA: salia rc 0 sin traza y con los checks que faltaban sin hacer (seis
+    # baterias, medido por el revisor de baterias de la 1.27). La excepcion es un FAIL
+    en_curso = sys.exc_info()
+    if en_curso[0] is not None and not issubclass(en_curso[0], SystemExit):
+        F += 1
+        imprime('  FAIL %s: excepcion a mitad de la bateria | %s: %s' % (titulo, en_curso[0].__name__,
+                                                                     ' '.join(str(en_curso[1]).splitlines())[:300]))
+        traceback.print_exception(*en_curso)
     recoge_huellas()
     if P == 0 and F == 0:
         if sin_checks:
@@ -1473,6 +1525,18 @@ def catalogo():
                 for n, tx in constantes(fh.read()).items():
                     _CATALOGO.setdefault(n, tx)
     return _CATALOGO
+
+
+def entero_del_fuente(rel, nombre):
+    """La constante entera NOMBRE (NOMBRE = 123;) de un fuente del servidor, rel desde
+    src ('Server/Lsp.FormRender.pas'): un plazo o un tope que una bateria mide se lee
+    del fuente, no se copia (revisor de baterias de la 1.27: test_juez_plazo_127 llevaba
+    50 y 15 a mano). Una que no esta es un fallo de la BATERIA."""
+    with open(os.path.join(REPO, 'src', *rel.split('/')), encoding='utf-8-sig') as fh:
+        m = re.search(r'^\s*%s\s*=\s*(\d+)\s*;' % re.escape(nombre), fh.read(), re.M | re.I)
+    if not m:
+        raise RuntimeError('la constante %s no esta en %s' % (nombre, rel))
+    return int(m.group(1))
 
 
 def id_de(nombre):

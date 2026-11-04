@@ -78,7 +78,8 @@ uses
   Lsp.DesignerMetaGen,
   Lsp.DesignerEdit,
   System.IOUtils,
-  Lsp.Discovery;
+  Lsp.Discovery,
+  LspTests.Comun;
 
 type
   // un componente con una cadena publicada: lo que la RTL escribe de el
@@ -1663,7 +1664,7 @@ begin
   Raiz := DiscoverRadStudio.RootDir;
   if (Raiz = '') or not TDirectory.Exists(TPath.Combine(Raiz, 'source')) then
   begin
-    Assert.Pass('sin el fuente de la instalacion: no se mide');
+    NoSeMide('sin el fuente de la instalacion: no se mide');
     Exit;
   end;
   Raiz := TPath.Combine(Raiz, 'source');

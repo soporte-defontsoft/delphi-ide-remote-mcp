@@ -3,7 +3,7 @@
 Usage:  python tests/test_workspace_tools.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Uses an independent repository as the git fixture.
 """
-import json, os, base64, hashlib, subprocess
+import json, os, base64, hashlib, shutil, subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -46,8 +46,11 @@ for _i in range(5):
 # Explicit git URLs need the operator's allowlist since v0.62 (an arbitrary URL
 # made the SERVER open the connection). The clone check below is about cloning,
 # not about the allowlist, so allow the host it uses.
-# v0.98: sin jaula = solo lectura; esta bateria toca el repo Y su carpeta
-_env = mc.entorno({'DELPHI_MCP_ROOTS': REPO + ';' + BASE,
+# v0.98: sin jaula = solo lectura. Escribe en SU carpeta; el repo lo LEE (busca, lista, el
+# motor), y entra como raiz de solo lectura: con escritura, los vetos de textedit de abajo
+# apuntaban al Lsp.Guard.pas y al .dproj DEL REPO, y si el veto volviera atras la bateria
+# los reescribiria (revisor de baterias de la 1.27)
+_env = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_READONLY_ROOTS': REPO,
                    'DELPHI_MCP_GIT_REMOTES': 'github.com'})
 # 'servidor' y no 'srv': mas abajo 'srv' es la ficha de delphi_workspace
 servidor = mc.Stdio(EXE, _env, inicializa=False, t=90)
@@ -677,12 +680,18 @@ try:
     check('textedit: ancla inexistente rechaza', mc.rechazado(out) and mc.es(out, 'SR_ANCLA_NO_ESTA_FMT'), out[:150])
     out = call('delphi_textedit', {"path": md, "new": "reescritura entera"})
     check('textedit: reescritura sin ancla rechaza', mc.rechazado(out) and mc.es(out, 'SR_TEXT_FALTA_ANCLA_OLD_ESTA'), out[:150])
-    out = call('delphi_textedit', {"path": os.path.join(SRC, 'Lsp.Guard.pas'),
-                                   "old": "interface", "new": "x"})
-    check('textedit: .pas vetado (usa delphi_edit)', mc.rechazado(out) and mc.es(out, 'SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT') and 'delphi_edit' in out, out[:150])
-    out = call('delphi_textedit', {"path": os.path.join(SRC, 'DelphiLspMcp.dproj'),
-                                   "old": "x", "new": "y"})
-    check('textedit: .dproj vetado, y manda a delphi_config (no al IDE)', mc.rechazado(out) and mc.es(out, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT') and 'delphi_config' in out, out[:150])
+    # los vetos, sobre COPIAS en la carpeta de la bateria: el veto es del TIPO de fichero
+    pas_copia = os.path.join(tmptxt, 'Lsp.Guard.pas')
+    dproj_copia = os.path.join(tmptxt, 'DelphiLspMcp.dproj')
+    shutil.copy(os.path.join(SRC, 'Lsp.Guard.pas'), pas_copia)
+    shutil.copy(os.path.join(SRC, 'DelphiLspMcp.dproj'), dproj_copia)
+    pas_antes, dproj_antes = open(pas_copia, 'rb').read(), open(dproj_copia, 'rb').read()
+    out = call('delphi_textedit', {"path": pas_copia, "old": "interface", "new": "x"})
+    check('textedit: .pas vetado (usa delphi_edit)', mc.rechazado(out) and mc.es(out, 'SR_TEXT_FICHERO_DELPHI_FUENTES_DESIGNERS_FMT')
+          and 'delphi_edit' in out and open(pas_copia, 'rb').read() == pas_antes, out[:150])
+    out = call('delphi_textedit', {"path": dproj_copia, "old": "x", "new": "y"})
+    check('textedit: .dproj vetado, y manda a delphi_config (no al IDE)', mc.rechazado(out) and mc.es(out, 'SR_EDIT_FICHERO_DE_PROYECTO_FMT')
+          and 'delphi_config' in out and open(dproj_copia, 'rb').read() == dproj_antes, out[:150])
     html = os.path.join(tmptxt, 'index.html')
     out = call('delphi_textedit', {"path": html, "create": True,
         "content": "<html><body>hola</body></html>\r\n"})

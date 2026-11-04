@@ -68,11 +68,11 @@ version = str(J(call('delphi_workspace', {})).get('activeDelphi') or '')
 # los Samples cuelgan del BDSCOMMONDIR que pone el rsvars.bat del IDE (r5-L4: se componia a mano)
 SAMPLES = os.path.join(mc.variable_de_rsvars(call, 'BDSCOMMONDIR'), 'Samples')
 if not os.path.isdir(SAMPLES):
-    print('NOTA: no hay Samples de RAD Studio %s en %s: nada que medir' % (version, SAMPLES))
+    # un salto que se dice (sin_checks): salia rojo por 0 checks, sin el motivo (revisor de
+    # baterias de la 1.27)
     para()
     mc.borra(BASE)
-    mc.fin('designer-corpus battery')
-    raise SystemExit(0)
+    mc.fin('designer-corpus battery', sin_checks='no hay Samples de RAD Studio %s en %s' % (version, SAMPLES))
 
 # los forms de TEXTO de los Samples, a la raiz del servidor (los binarios se
 # leen al vuelo, pero aqui se mide el lint, no el conversor)
@@ -102,6 +102,10 @@ for d, dirs, fs in os.walk(SAMPLES):
             if os.path.isfile(pas):
                 shutil.copyfile(pas, os.path.splitext(dst)[0] + '.pas')
                 con_pas += 1
+# (sin los .dpr: con ellos el servidor trae los ancestros de otras carpetas, de vuelta en vuelta
+# del ayudante, y medido el 4-nov-2026 resolvio 9 de 52 forms heredados de FireDAC a cambio de
+# 437 -> 765 s; los demas tienen 4 ancestros lejanos y VUELTAS_POR_LO_LEJANO son 3. Esos van a
+# su NOTA, abajo, por su motivo)
 check('corpus: los forms de texto de los Samples (%d)' % len(copiados), len(copiados) > 100, str(len(copiados)))
 check('corpus: con su .pas los que lo tienen (%d)' % con_pas, con_pas > 100, con_pas)
 
@@ -133,7 +137,16 @@ VERDADEROS = {os.path.join('Object Pascal', 'Database', 'FireDAC', 'Samples', 'D
                            'Admin', 'AdminUtility.fmx'): 'FMX.Grid.Style'}
 vistos_verdaderos = set()
 falsos, familia, notas, ejemplos, sin_lint = 0, 0, 0, [], []
-sin_lector, sin_render = {}, []
+sin_lector, sin_render, contesto = {}, [], {}
+# el motivo de DSGN-154 va detras de su cabecera: o el lector CONTESTO y lo que salto no se
+# puede cargar a este fichero (un fragmento SF_DSGN_LECTOR_*, sin id: el ancestro que falta,
+# la raiz que no ve, una excepcion del codigo de un componente, una clase del proyecto), o no
+# se le pudo preguntar, con el id de su fallo. Se buscaba 'could not be asked: [', que el
+# mensaje no escribe asi: todo caia en 'sin id' (revisor de baterias de la 1.27)
+CABEZA = mc.catalogo()['SN_DESIGNER_LINT_SIN_LECTOR_FMT'].rsplit('%s', 1)[0].split('%d')[-1]
+CONTESTO = {n: re.compile('.*?'.join(re.escape(p) for p in mc.catalogo()[n].split('%s')), re.S)
+            for n in ('SF_DSGN_LECTOR_SIN_ANCESTRO_FMT', 'SF_DSGN_LECTOR_RAIZ_NO_VISTA_FMT',
+                      'SF_DSGN_LECTOR_DEL_CODIGO_FMT', 'SF_DSGN_LECTOR_CLASE_DEL_PROYECTO_FMT')}
 # t=300: un lint puede preguntar al lector mas de una vez, y el lector tiene 75
 # s (RENDER_TIEMPO_MS; 8 forms de los Samples los agotan, RENDER-007)
 # y lo que los renderizadores dejan ver en el escritorio mientras tanto: NADA
@@ -155,9 +168,13 @@ for dst, r in zip(copiados, respuestas):
         if mc.es(r, 'SR_DESIGNER_SIN_RENDER_FMT'):
             sin_render.append(rel)
         else:
-            m = re.search(r'could not be asked: (\[[A-Z]+-\d+[^\]]*\])?', r)
-            motivo = (m.group(1) if m and m.group(1) else 'sin id')
-            sin_lector.setdefault(motivo, []).append(rel)
+            motivo = r.split(CABEZA, 1)[1] if CABEZA in r else r
+            suyo = next((n for n, rx in CONTESTO.items() if rx.match(motivo)), None)
+            if suyo:
+                contesto.setdefault(suyo, []).append(rel)
+            else:
+                m = mc.ETIQUETA.match(motivo.lstrip())
+                sin_lector.setdefault(m.group(1) if m else 'sin id', []).append(rel)
     # los avisos del bloque de DSGN-038 sin linea de este fichero: los del
     # lector y los del form contra su clase (check-binding)
     bloque = None
@@ -191,10 +208,40 @@ check('corpus: al lector se le pregunta (el arnes pone los renderizadores)',
       not sin_render, ' || '.join(sin_render[:5]))
 # (18-oct-2026) TODOS, uno por linea: el detalle de check se recorta y con
 # los 8 primeros no se podia medir cuantos ni cuales eran
-for motivo, forms in sorted(sin_lector.items()):
-    print('NOTA: corpus: %d forms sin confirmar por el lector, %s:' % (len(forms), motivo))
+for motivo, forms in sorted(contesto.items()):
+    print('NOTA: corpus: %d forms que el lector leyo y no se le pueden cargar, %s:' % (len(forms), motivo))
     for f in forms:
         print('    ' + f)
+for motivo, forms in sorted(sin_lector.items()):
+    print('NOTA: corpus: %d forms sin confirmar: no se le pudo preguntar al lector, %s:' % (len(forms), motivo))
+    for f in forms:
+        print('    ' + f)
+# un lector que no se pudo preguntar por OTRA cosa que su plazo (RENDER-007: hay Samples que
+# lo agotan) es un rojo: un DSGN-177 o un ayudante que no arranca se quedaban en esa NOTA y
+# la bateria salia verde (revisor de baterias de la 1.27)
+PLAZOS = (mc.id_de('SR_RENDER_TIEMPO_FMT'), mc.id_de('SR_DESIGNER_RENDER_TIEMPO_FMT'))
+# ...ni por el propio form, MEDIDO el 4-nov-2026 (y lo mismo en su sitio): un componente que
+# revienta al cargarse aqui (DSGN-061: un AV en vcl370.bpl, un control que pide COMCTL32 4.70)
+# o un literal con una ruta fuera de lo que se lee (DSGN-115, la jaula). Uno nuevo, o con otro
+# id, es rojo; uno que ya se lee, tambien: se quita de aqui (la lista solo encoge)
+_MD = os.path.join('Object Pascal', 'Multi-Device Samples')
+NO_SE_LEEN = {
+    os.path.join(_MD, 'User Interface', 'Controls', 'Unit1.fmx'): 'SR_DESIGNER_RENDER_FALLO_FMT',
+    os.path.join(_MD, 'User Interface', 'Controls', 'Unit1.LgXhdpiPh.fmx'): 'SR_DESIGNER_RENDER_FALLO_FMT',
+    os.path.join('Object Pascal', 'VCL', 'Windows 10 SharingContract', 'Component', 'FormShareComponent.dfm'):
+        'SR_DESIGNER_RENDER_FALLO_FMT',
+    os.path.join(_MD, 'Device Sensors and Services', 'Address Book', 'Contacts', 'main_u.fmx'):
+        'SR_DESIGNER_LITERAL_FUERA_FMT',
+    os.path.join(_MD, 'Device Sensors and Services', 'Address Book', 'Contacts', 'main_u.iPhone47in.fmx'):
+        'SR_DESIGNER_LITERAL_FUERA_FMT'}
+sin_preguntar = {f: m for m, fs in sin_lector.items() for f in fs}
+otros = ['%s: %s' % (f, m) for f, m in sorted(sin_preguntar.items())
+         if m not in PLAZOS and (f not in NO_SE_LEEN or mc.id_de(NO_SE_LEEN[f]) != m)]
+check('corpus: al lector se le pregunta de cada form, salvo su plazo y los medidos que no se leen (%d)'
+      % len(NO_SE_LEEN), not otros, ' || '.join(otros[:5]))
+ya_se_leen = sorted(set(NO_SE_LEEN) - set(sin_preguntar))
+check('corpus: los medidos que no se leen siguen sin leerse (si ya se leen, fuera de NO_SE_LEEN)',
+      not ya_se_leen, ya_se_leen)
 for e in ejemplos:
     print('AVISO: ' + e)
 check('corpus: ni un aviso sobre los forms que el IDE escribio (%d forms; %d avisos, arriba)' % (len(copiados), falsos),

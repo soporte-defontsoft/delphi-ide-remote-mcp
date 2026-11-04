@@ -35,8 +35,19 @@ SRC = args[0] if args else os.path.join(
 if not os.path.exists(SRC):
     sys.exit('no encuentro el exe: ' + SRC)
 
+# con el exe compilado, nada mas viejo que sus fuentes: las baterias probarian el codigo de ayer, y
+# solo release_check lo miraba (revisor de baterias de la 1.27). Con otro exe (un mutante, el build
+# anterior) se prueba ese, a proposito
+if not args:
+    _rancios = [x for x in (mc.binario_rancio(b) for b in mc.FUENTES_DE) if x]
+    if _rancios:
+        sys.exit('FALLA: binarios mas viejos que sus fuentes - compila antes (BuildGroup.bat quiet build '
+                 'Release):\n  ' + '\n  '.join(_rancios))
+
 RAIZ = mc.RAIZ
 CLEAN = os.path.join(RAIZ, '_cleanexe')
+# lo mas que puede tardar UNA bateria (las mas largas, unos minutos): pasado, roja
+PLAZO_POR_BATERIA_S = 1800
 # El adb que arranquen las baterias se para al final, una vez: dentro de la
 # suite ninguna lo para por su cuenta (mc.fin mira esta variable).
 os.environ[mc.SUITE] = '1'
@@ -90,8 +101,18 @@ for b in batteries:
     name = os.path.basename(b)[:-3]
     t0 = time.time()
     atomos_b = mc.atomos_rtl_nombres()
-    r = subprocess.run([sys.executable, b, EXE], capture_output=True,
-                       text=True, encoding='utf-8', errors='replace', cwd=REPO)
+    # con un plazo: una bateria colgada colgaba la suite entera (52 minutos una vez;
+    # revisor de baterias de la 1.27). Pasado, se para y es roja
+    try:
+        r = subprocess.run([sys.executable, b, EXE], capture_output=True,
+                           text=True, encoding='utf-8', errors='replace', cwd=REPO,
+                           timeout=PLAZO_POR_BATERIA_S)
+    except subprocess.TimeoutExpired as e:
+        def _txt(x):
+            return x.decode('utf-8', 'replace') if isinstance(x, bytes) else (x or '')
+        r = subprocess.CompletedProcess(e.cmd, 1, _txt(e.stdout),
+                                        _txt(e.stderr) + '\nFAIL plazo: la bateria no acabo en %d s y se paro'
+                                        % PLAZO_POR_BATERIA_S)
     dejados_b = mc.atomos_rtl_dejados(atomos_b)
     if dejados_b:
         atomos_de.append('%s (%s)' % (name, ', '.join(dejados_b[:3])))
@@ -103,9 +124,10 @@ for b in batteries:
     # release se dedica a arreglar en el servidor).
     bad = sum(1 for line in out.splitlines() if line.lstrip().startswith('FAIL'))
     notas += ['%s: %s' % (name, line.strip()[:200]) for line in out.splitlines()
-              if line.lstrip().startswith(('NOTA', 'SKIP'))]
-    # batteries print their own tally; trust rc for the verdict...
-    verdict = 'OK  ' if r.returncode == 0 else 'FALLA'
+              if line.lstrip().startswith(('NOTA', 'SKIP', mc.SIN_CHECKS))]
+    # batteries print their own tally; trust rc for the verdict... y una con lineas
+    # FAIL es roja aunque salga con 0 (revisor de baterias de la 1.27)
+    verdict = 'OK  ' if r.returncode == 0 and bad == 0 else 'FALLA'
     # ...salvo con 0 checks y sin decir por que: una que no mide nada no
     # sale verde, pase por mc.fin o se le olvide (la marca la pone mc.fin)
     if r.returncode == 0 and ok == 0 and bad == 0 and not mc.sin_checks_de(out):

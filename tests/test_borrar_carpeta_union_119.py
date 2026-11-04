@@ -9,7 +9,9 @@ borrarse (la union se quita como enlace; lo de detras no se toca). MEDIDO el
 no se toca sin una causa medida; esta bateria vigila que siga asi.
 
   B1 la unit detras de la union sigue en el disco y la union se fue
-  B2 el .dpr del proyecto de fuera SIGUE listando la unit
+  B2 la nota del borrado (FILE-046, lo que referencia a lo borrado) no nombra la unit: el
+     recorrido no cruzo la union. Era "el .dpr sigue listandola", que desde V19 (delete no
+     toca el .dpr) no podia fallar (revisor de baterias de la 1.27)
 
 Uso:  python tests/test_borrar_carpeta_union_119.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -47,7 +49,8 @@ try:
     check('delete de Tmp va', not mc.fallo(r), r[:300])
     check('B1 la unit detras de la union sigue en el disco y la union se fue',
           os.path.isfile(U) and not os.path.lexists(ENLACE), (os.path.isfile(U), os.path.lexists(ENLACE)))
-    check('B2 el .dpr de P SIGUE listando ULib (la unit no se ha borrado)', dpr_lista('ULib'), r[:300])
+    check('B2 la nota del borrado no nombra ULib: el recorrido no cruzo la union (y el .dpr sigue igual)',
+          not (mc.es(r, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and 'ULib' in r) and dpr_lista('ULib'), r[:300])
 finally:
     s.cierra()
 

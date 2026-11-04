@@ -16,6 +16,7 @@ F2 es ROJA contra 1.21.3 (pasar su exe como argumento).
 Uso:  python tests/test_folder_leaves_docs_1214.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
+import time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -38,14 +39,22 @@ try:
     srv.call('delphi_hover', {'path': unidad, 'line': 0, 'character': 5}, t=240)
     srv.call('delphi_hover', {'path': os.path.join(Q, 'Otro.dpr'), 'line': 0, 'character': 8}, t=240)
     antes = mc.hijos_lsp(srv.p.pid)
-    check('F1 los hover arrancan los motores: uno por proyecto', len(antes) == 2, antes)
+    # CUAL es cual, por su carpeta de trabajo (el motor se pone en la del .dpr de su
+    # proyecto): contar 2 y luego 1 pasaba aunque se parara el de Otro y quedara el de
+    # Arriba (revisor de baterias de la 1.27)
+    de_p, de_q = mc.motores_en(srv.p.pid, P), mc.motores_en(srv.p.pid, Q)
+    check('F1 los hover arrancan los motores: uno por proyecto, cada uno en el suyo',
+          len(antes) == 2 and len(de_p) == 1 and len(de_q) == 1, (antes, de_p, de_q))
 
     r = srv.call('delphi_delete', {'path': os.path.join(P, 'x', 'Units')})
-    despues = mc.hijos_lsp(srv.p.pid)
     check('F2 delete de x\\Units: va a la papelera', 'FILE-021' in r, r[:200])
-    check('F2 ...y el motor que tenia la unidad abierta se para (queda solo el de Otro)',
-          len(despues) == 1, (antes, despues))
-    check('F3 control: el motor de Otro sigue vivo', len(despues) == 1 and despues[0] in antes, (antes, despues))
+    fin_espera = time.time() + 10   # por si la parada no es al instante
+    while mc.motores_en(srv.p.pid, P) and time.time() < fin_espera:
+        time.sleep(0.2)
+    check('F2 ...y el motor que tenia la unidad abierta (el de Arriba) se para',
+          bool(de_p) and not mc.motores_en(srv.p.pid, P), (de_p, mc.hijos_lsp(srv.p.pid)))
+    check('F3 control: el motor de Otro sigue vivo, el mismo',
+          bool(de_q) and mc.motores_en(srv.p.pid, Q) == de_q, (de_q, mc.motores_en(srv.p.pid, Q)))
 finally:
     srv.cierra()
     mc.borra(BASE)

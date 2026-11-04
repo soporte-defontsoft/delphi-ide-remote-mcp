@@ -117,6 +117,7 @@ try:
     b.para()
 
     ajena = {'A': jailB, 'B': jailA}
+    negadas = []
     for quien in ('A', 'B'):
         r = respuestas[quien]
         otra = ajena[quien]
@@ -138,6 +139,7 @@ try:
                     and IDENT in r)
         print('  (jaula %s: el motor %s)' % (quien, 'contesta con referencias' if contesta else
               'resuelve fuera y se niega' if se_niega else 'NO da ninguna salida legitima'))
+        negadas.append(se_niega)
 
         # -------------------------------------------------------------- X1
         # EL INVARIANTE: pase lo que pase por dentro, en la respuesta no
@@ -189,6 +191,11 @@ try:
                    for s in j.get('scope', []))) or
               (se_niega and mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT')),
               'scope=%s | %s' % (j.get('scope'), r[:200]))
+    # el corte (LSP-014) solo se mide si en alguna pasada el motor se contamino: si no,
+    # se dice, y run_all lo lista (revisor de baterias de la 1.27)
+    if not any(negadas):
+        print('NOTA LSP-014 no se midio: en ninguna pasada el motor resolvio fuera de su jaula '
+              '(solo se midio el invariante X1/X2)')
 finally:
     for s in (a, b):
         if s:

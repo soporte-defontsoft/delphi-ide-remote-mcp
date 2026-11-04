@@ -71,9 +71,12 @@ try:
 
     # lo que no es otra version sigue diciendo lo suyo
     pv, _ = con_ayudante(ayudante('Muere', [], 7), 'Muere')
-    check('un ayudante que muere sin decir nada no es "otra version"', not mc.es(pv, OTRA) and mc.fallo(pv), pv[:300])
+    # un error que el servidor CONTESTA: mc.fallo a secas pasaba con el servidor caido (G5 del revisor de baterias)
+    check('un ayudante que muere sin decir nada no es "otra version"',
+          not mc.es(pv, OTRA) and mc.fallo(pv) and not mc.sin_respuesta(pv), pv[:300])
     pv, _ = con_ayudante(ayudante('Runtime', ['Runtime error 217 at 00000000'], 217), 'Runtime')
-    check('uno que revienta con su codigo tampoco', not mc.es(pv, OTRA) and mc.fallo(pv), pv[:300])
+    check('uno que revienta con su codigo tampoco', not mc.es(pv, OTRA) and mc.fallo(pv) and not mc.sin_respuesta(pv),
+          pv[:300])
 
     # el de verdad
     d = os.path.join(BASE, 'srv-real')

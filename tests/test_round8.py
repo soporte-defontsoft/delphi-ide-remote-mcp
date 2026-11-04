@@ -533,15 +533,9 @@ r = A.call('delphi_help', {'command': 'volar'})
 check('M4 command invalido: los tres validos', 'tasks' in r and 'conventions' in r, r[:200])
 
 # ------------------------------------------------ C2/C4/F2 del campo -------
-j = J(A.call('delphi_projects', {}))
-proj = mc.ficheros(j, 'projects')
-# desde la 1.15.0 el repositorio va UNA vez arriba (repos = [{dir, branch}]),
-# no en cada proyecto: ('repo' in p) == ('branch' in p) era siempre False ==
-# False (revisor de baterias). Con un repositorio de verdad lo mide
-# test_listas_1150 L7; aqui, que ningun proyecto lo lleve y la forma de repos
-check('C2 delphi_projects: repo y rama UNA vez arriba (repos), ninguno en cada proyecto',
-      bool(proj) and not any({'repo', 'branch'} & set(p) for p in proj)
-      and all(set(r) <= {'dir', 'branch'} and 'dir' in r for r in j.get('repos', [])), str(j)[:200])
+# (C2 RETIRADA en la 1.27: aqui no hay repositorio, repos=[] y all() sobre una lista
+# vacia daba PASS con o sin el arreglo de la 1.15.0. Lo mide, con un repositorio de
+# verdad, test_listas_1150 L7; revisor de baterias)
 # (revisor de baterias, 18-oct-2026) VARIOS errores de verdad: FugaU tenia uno,
 # y "menos de dos" pasaba sin mirar nada
 open(FUGAU, 'w', encoding='utf-8-sig', newline='\r\n').write(

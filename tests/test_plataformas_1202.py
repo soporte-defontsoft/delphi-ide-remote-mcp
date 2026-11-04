@@ -107,8 +107,14 @@ try:
                                'path': so})
     dep = os.path.join(PROY, 'PFmx.deployproj')
     texto = open(dep, encoding='utf-8-sig', errors='replace').read() if os.path.isfile(dep) else ''
+    # en la entrada de ESE fichero, en el .dproj (donde la escribe add-deployfile): la cadena
+    # ya la pone la del ProjectOutput (libPFmx.so) en el .deployproj, y buscada alli pasaba
+    # fuera donde fuera libextra.so (revisor de baterias de la 1.27)
+    texto = open(DPROJ, encoding='utf-8-sig', errors='replace').read()
+    i = texto.find('libextra.so')
+    bloque = texto[texto.rfind('<DeployFile', 0, i):texto.find('</DeployFile>', i)] if i >= 0 else ''
     check('P7 add-deployfile de un .so en Android64: a library\\lib\\arm64-v8a\\ del apk',
-          not mc.rechazado(r) and 'library\\lib\\arm64-v8a\\' in texto, r[:250])
+          not mc.fallo(r) and 'library\\lib\\arm64-v8a\\' in bloque, bloque or r[:250])
 
     # ------------------------------------------------------------------ P6
     TEST = os.path.join(JAIL, 'ptest')

@@ -111,6 +111,11 @@ check('run: dice que binario compilo y corrio, y existe', os.path.isfile(EXE_SUI
 r = subprocess.run([EXE_SUITE], cwd=os.path.dirname(EXE_SUITE), capture_output=True, timeout=300,
                    env=mc.entorno({'DELPHI_MCP_ROOTS': REPO}))
 salida = (r.stdout + r.stderr).decode('utf-8', 'replace')
+# lo que la suite NO midio en esta maquina (LspTests.Comun.NoSeMide): cuenta como pasado
+# para DUnitX, y aqui se dice, para que run_all lo liste (revisor de baterias de la 1.27)
+for _l in salida.splitlines():
+    if _l.startswith('NOTA no se mide'):
+        print('NOTA suite entera: ' + _l[len('NOTA '):])
 
 
 def cuenta(nombre):

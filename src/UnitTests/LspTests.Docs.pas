@@ -74,7 +74,8 @@ uses
   Lsp.Chm,
   Lsp.Docs,
   Lsp.Codificacion, // UsaPaginaAnsi: la ayuda no sigue a la ANSI de la maquina
-  System.IOUtils;
+  System.IOUtils,
+  LspTests.Comun;
 
 const
   // un indice de palabras (.hhk): un bloque <OBJECT> por entrada
@@ -203,7 +204,7 @@ begin
   begin
     if HayAyudaEnElDisco then
       Assert.Fail('system.chm esta en la instalacion y la lista del IDE no lo da');
-    Assert.Pass(Format('esta maquina no registra system.chm (%d ayudas)', [Length(Ayudas)]));
+    NoSeMide(Format('esta maquina no registra system.chm (%d ayudas)', [Length(Ayudas)]));
     Exit;
   end;
   Chm := TChm.Create(Sistema);
@@ -230,7 +231,7 @@ begin
   begin
     if HayAyudaEnElDisco then
       Assert.Fail('system.chm esta en la instalacion y no sale ninguna ayuda');
-    Assert.Pass('esta maquina no tiene la ayuda instalada');
+    NoSeMide('esta maquina no tiene la ayuda instalada');
     Exit;
   end;
   Vistos := nil;
@@ -522,7 +523,7 @@ begin
   begin
     if HayAyudaEnElDisco then
       Assert.Fail('system.chm esta en la instalacion y la lista del IDE no lo da');
-    Assert.Pass('esta maquina no registra system.chm');
+    NoSeMide('esta maquina no registra system.chm');
     Exit;
   end;
   // en la carpeta del ejecutor: la unica donde el sandbox escribe; con un

@@ -127,11 +127,9 @@ try:
     # bateria que miente en verde.
     print('NOTA: T3 y T4 no se miden aqui desde 1.0.16 (el escritorio va por '
           'PAServer y perfil); medidos en vivo el 2026-09-22.')
-    # Esta SI se mide siempre: aunque la captura falle, lo que no puede pasar
-    # es que el servidor vuelva a tocar el %TEMP% de la maquina.
-    check('T3b el servidor no vuelve a tocar el %TEMP% de la maquina',
-          all(not os.path.isdir(v) for v in VIEJAS),
-          'han vuelto: %s' % [v for v in VIEJAS if os.path.isdir(v)])
+    # (T3b RETIRADA en la 1.27: exigia que no existieran carpetas del %TEMP% que la
+    # bateria borra al empezar y que nada de lo que llama -git, textedit, list, search,
+    # delete- crearia ni con el codigo viejo: no podia fallar; revisor de baterias)
 
     # ------------------------------------------------------------------ T7
     # "__delphi-temp puede limpiarse entero en cada arranque del server"
@@ -278,21 +276,10 @@ try:
     check('T8d la temporal ENTERA no: es de todos los agentes del servidor',
           mc.rechazado(d4) and mc.es(d4, 'SR_FILE_DELETE_TEMP_ROOT_FMT') and os.path.isdir(TEMP_JAULA),
           d4[:200])
-    # El lector de Lsp.References (SkipReason) tenia los nombres como
-    # literales, y esto comprobaba que dijeran lo mismo que el nombrador
-    # (TempFolderName, Lsp.Casa). Desde la forma 9 de la 1.26 compone con el
-    # nombrador: lo que se comprueba es que lo haga.
-    g_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Casa.pas'), 'rb').read().decode('utf-8', 'replace')
-    r_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.References.pas'), 'rb').read().decode('utf-8', 'replace')
-    check('T6c el lector de la temporal compone con su nombrador',
-          "Result := '__delphi-temp';" in g_src and "'\\' + TempFolderName + '\\'" in r_src,
-          'el lector de Lsp.References ya no compone con TempFolderName')
-    # ...y la PAPELERA, su hermana, por el mismo motivo: su nombrador es
-    # BACKUP_SUB / TrashFolderName (Lsp.Casa, desde el 8-oct-2026)
-    p_src = open(os.path.join(REPO, 'src', 'Server', 'Lsp.Casa.pas'), 'rb').read().decode('utf-8', 'replace')
-    check('T6f el lector de la papelera compone con su nombrador',
-          "BACKUP_SUB = '__delphi-patch';" in p_src and "'\\' + TrashFolderName + '\\'" in r_src,
-          'el lector de Lsp.References ya no compone con TrashFolderName')
+    # (T6c y T6f RETIRADAS en la 1.27: buscaban texto en Lsp.Casa y Lsp.References,
+    # casaban tambien en un comentario y no median comportamiento. Que el lector de
+    # Lsp.References componga con los nombradores lo vigilan las filas de test_paisaje
+    # de la papelera y de la temporal escritas a mano; revisor de baterias)
 finally:
     try:
         proc.kill()

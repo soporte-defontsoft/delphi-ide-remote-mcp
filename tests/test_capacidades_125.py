@@ -78,8 +78,16 @@ try:
     d = json.loads(call('delphi_search', {'root': os.path.join(RAIZ, 'UNo.pas'), 'query': 'unit UNo', 'context': 3}))
     h = hits(d)['UNo.pas'][0]
     check('V44 context en la primera linea: before vacio', h.get('before') == [] and len(h.get('after', [])) == 3, h)
-    d = json.loads(call('delphi_search', {'root': os.path.join(RAIZ, 'UNo.pas'), 'query': 'AGUJA', 'context': 500}))
-    check('V44 context tiene su tope', len(hits(d)['UNo.pas'][0].get('before', [])) == 3, d)
+    # el tope de VERDAD: 12 lineas antes del acierto. Con AGUJA en la linea 4 solo habia 3,
+    # y len == 3 pasaba con cualquier tope (revisor de baterias de la 1.27). Se planta y se
+    # quita aqui: las de abajo cuentan los ficheros de RAIZ
+    larga = os.path.join(RAIZ, 'ULarga.pas')
+    with open(larga, 'w', newline='') as f:
+        f.write('unit ULarga;\r\n' + ''.join('// l%d\r\n' % i for i in range(12)) + '// TOPEHIT\r\nend.\r\n')
+    d = json.loads(call('delphi_search', {'root': larga, 'query': 'TOPEHIT', 'context': 500}))
+    os.remove(larga)
+    check('V44 context tiene su tope (10, el que dice su esquema)',
+          len(hits(d).get('ULarga.pas', [{}])[0].get('before', [])) == 10, d)
     d = json.loads(call('delphi_search', {'root': os.path.join(RAIZ, 'UNo.pas'), 'query': 'AGUJA'}))
     check('V44 sin context, ni before ni after', 'before' not in hits(d)['UNo.pas'][0] and 'after' not in hits(d)['UNo.pas'][0], d)
 
@@ -536,9 +544,7 @@ EXE2 = mc.copia_exe(SRV)
 shutil.copytree(os.path.join(os.path.dirname(HERE), 'node'), os.path.join(SRV, 'node'))
 SCRATCH = os.path.join(BASE, 'scratch')
 os.makedirs(SCRATCH)
-STUB = os.path.join(BASE, 'paclient.cmd')
-with open(STUB, 'w') as f:
-    f.write('@echo off\r\npython "%s" %%*\r\n' % os.path.join(HERE, 'paclient_stub.py'))
+STUB = mc.paclient_falso('capacidades_125')  # el de la casa (revisor de baterias de la 1.27)
 LOG = os.path.join(BASE, 'paclient.log')
 for perfil in ('caido', 'otro', 'vivo'):
     ad, host = mc.appdata_perfil(BASE, perfil, '127.0.0.1')

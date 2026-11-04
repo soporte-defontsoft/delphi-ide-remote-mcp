@@ -304,7 +304,8 @@ uses
   Lsp.Reparse,
   Lsp.TextoDelNodo,
   System.Classes,
-  System.Types;
+  System.Types,
+  LspTests.Comun;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;
@@ -633,7 +634,7 @@ begin
   Assert.AreEqual('<server-cache>\x.txt', MaskDriveText('', Larga + '\x.txt'), 'la larga');
   Corta := ExtractShortPathName(Cache);
   if (Corta = '') or SameText(Corta, Larga) then
-    Assert.Pass('esta maquina no da forma 8.3 de ' + Cache + ': la corta no se mide')
+    NoSeMide('esta maquina no da forma 8.3 de ' + Cache + ': la corta no se mide')
   else
     Assert.AreEqual('<server-cache>\x.txt', MaskDriveText('', Corta + '\x.txt'), 'la 8.3: ' + Corta);
 end;
@@ -1029,7 +1030,7 @@ begin
     end;
   if F = '' then
   begin
-    Assert.Pass('sin carpeta de la Library Search Path fuera de la instalacion: no se mide');
+    NoSeMide('sin carpeta de la Library Search Path fuera de la instalacion: no se mide');
     Exit;
   end;
   Assert.AreEqual('', LugarDeLecturaDenegado(F, [ltBiblioteca]), F);
@@ -1253,7 +1254,7 @@ procedure TLugarDeRedTests.UnaLetraQueNoEstaNoContieneUnaRutaLocal;
 begin
   var L := LetraAusente;
   if L = #0 then
-    Assert.Pass('esta maquina no tiene ninguna letra libre');
+    NoSeMide('esta maquina no tiene ninguna letra libre');
   Assert.IsTrue(LugarDeRedParaRutaLocal(Letra + ':\ws\x.pas', L + ':\vault'));
 end;
 
@@ -1471,7 +1472,7 @@ begin
     if Libre > 2 * MARGEN_DISCO_LIBRE then
       Assert.AreEqual('', EspacioDenegado(Casa, 1024 * 1024), 'un mega con el margen de sobra cabe')
     else
-      Assert.Pass('la unidad de la casa tiene menos de dos margenes libres: lo que cabe no se mide');
+      NoSeMide('la unidad de la casa tiene menos de dos margenes libres: lo que cabe no se mide');
   finally
     RemoveDir(Casa);
   end;

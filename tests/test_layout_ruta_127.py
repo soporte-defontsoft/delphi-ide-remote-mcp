@@ -55,9 +55,13 @@ try:
     j = mc.como_json(r) or {}
     cajas = j.get('boxes') or []
     check('fixture: las cajas las da el renderizador', j.get('boxesFrom') == 'renderer', r[:300])
-    en_frame = [b for b in cajas if b.get('name') == 'FrameX1.PanelFrame']
+    # TODAS las cajas del frame con ese nombre, con ruta o sin ella: antes del arreglo eran
+    # dos (la del texto por el nombre a secas y la del renderizador como 'lo que el texto no
+    # lista'), y mirar solo la de la ruta pasaba igual (revisor de baterias de la 1.27)
+    en_frame = [b for b in cajas if b.get('parent') == 'FrameX1' and b.get('name', '').endswith('PanelFrame')]
     check('L1 lo sobrescrito en el frame, UNA vez y por su ruta, con el rectangulo del renderizador (dentro del frame)',
-          len(en_frame) == 1 and en_frame[0].get('y', 0) > 32 and en_frame[0].get('y', 0) < 152, str(cajas))
+          len(en_frame) == 1 and en_frame[0].get('name') == 'FrameX1.PanelFrame' and
+          32 < en_frame[0].get('y', 0) < 152, str(cajas))
     del_form = [b for b in cajas if b.get('name') == 'PanelFrame']
     check('L2 el homonimo del form conserva el suyo', len(del_form) == 1 and del_form[0].get('y') == 300, str(del_form))
     check('L3 ninguna caja PanelFrame con padre FrameX1 (el nombre a secas del texto)',

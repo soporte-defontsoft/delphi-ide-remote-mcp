@@ -49,7 +49,8 @@ uses
   Lsp.DesignerBin,
   Lsp.DesignerForma,
   Lsp.Codificacion, // EncodeText: lo que cabe en la ANSI de ESTA maquina
-  Lsp.Texts;
+  Lsp.Texts,
+  LspTests.Comun;
 
 const
   FORM_TXT = 'object FormX: TFormX'#13#10 +
@@ -160,7 +161,7 @@ begin
   // ANSI es UTF-8
   if GetACP <> 1252 then
   begin
-    Assert.Pass('la ANSI de esta maquina no es 1252');
+    NoSeMide('la ANSI de esta maquina no es 1252');
     Exit;
   end;
   Bin := DesignerTextoARecurso(TEncoding.UTF8.GetBytes(

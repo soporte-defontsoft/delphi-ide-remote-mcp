@@ -85,6 +85,14 @@ try:
     ok, det = compila()
     check('O3 cambiar la que ya estaba: se queda en su sitio, detras de MiRuta, y sigue compilando',
           h[len(antes):] == ['MiRuta', 'DCC_UnitSearchPath'] and ok, (h, det))
+    # ...y la que NO es la ultima: DCC_UnitSearchPath ya lo era, y "quitar y anadir al final"
+    # la dejaba igual (revisor de baterias de la 1.27). MiRuta movida al final quedaria
+    # DETRAS de quien la usa, y msbuild la veria vacia (F2613)
+    config('set-property', name='MiRuta', value='lib;.')
+    h = hijos(BASE_G)
+    ok, det = compila()
+    check('O3b cambiar MiRuta, que no es la ultima: se queda delante de DCC_UnitSearchPath, y sigue compilando',
+          h[len(antes):] == ['MiRuta', 'DCC_UnitSearchPath'] and ok, (h, det))
 
     antes64 = hijos(WIN64_G)
     r = config('add-searchpath', path='lib', platform='Win64')

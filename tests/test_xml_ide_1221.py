@@ -76,7 +76,11 @@ try:
     check('X1 el preview de crear un .deployproj que MSXML no carga dice CFG-142, con la linea',
           mc.es(r, 'SR_PATCH_XML_MAL_FORMADO_FMT') and 'line 4' in r, r[:400])
     r = cs({'command': 'commit', 'id': cid})
-    check('X2 ...y el commit lo niega: el fichero no existe', not os.path.exists(malo), r[:400])
+    # lo que lo para es CHSET-016 (el preview no salio limpio), no el juez MSXML del
+    # escritor: X2 lo dice y lo exige; el juez del escritor lo mide X3 (revisor de
+    # baterias de la 1.27: solo miraba que el fichero no existiera)
+    check('X2 ...y el commit, sin un preview limpio, lo niega (CHSET-016): el fichero no existe',
+          mc.rechazado(r) and mc.abre(r, 'SR_CHANGESET_NOT_PREVIEWED') and not os.path.exists(malo), r[:400])
 
     r = srv.call('delphi_create', {'kind': 'project-console', 'name': 'App', 'dir': os.path.join(BASE, 'app')})
     check('fixture: el proyecto que entra en el grupo (delphi_create)', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])

@@ -33,7 +33,8 @@ uses
   LspTests.Vigia in 'LspTests.Vigia.pas',
   LspTests.ReclamaArbol in 'LspTests.ReclamaArbol.pas',
   LspTests.RutasOrdinal in 'LspTests.RutasOrdinal.pas',
-  LspTests.RestauraEnlaceDuro in 'LspTests.RestauraEnlaceDuro.pas';
+  LspTests.RestauraEnlaceDuro in 'LspTests.RestauraEnlaceDuro.pas',
+  LspTests.Comun in 'LspTests.Comun.pas';
 
 var
   Runner: ITestRunner;
