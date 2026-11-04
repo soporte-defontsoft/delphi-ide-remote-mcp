@@ -949,7 +949,11 @@ begin
           Max(0, C.X + C.W - PX)]))
       else if not SameText(Al, 'alCustom') then
       begin
-        AOutside.Add(MsgFmt(SF_DSGN_OCUPA_SE_SALE_FMT, [C.Ruta, C.Clase, Donde(C), C.X - PX, C.Y - PY,
+        // "no se ve" es de la VCL; FMX no recorta salvo ClipChildren (dirigido de Hermes, 1.27)
+        var SeSale := SF_DSGN_OCUPA_SE_SALE_FMT;
+        if AFmx then
+          SeSale := SF_DSGN_OCUPA_SE_SALE_FMX_FMT;
+        AOutside.Add(MsgFmt(SeSale, [C.Ruta, C.Clase, Donde(C), C.X - PX, C.Y - PY,
           C.X - PX + C.W, C.Y - PY + C.H, Padre.Ruta, PW, PH]));
         AFuera := AFuera + [C.Ruta];
       end;

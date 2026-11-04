@@ -194,6 +194,10 @@ fuera = json.dumps(o.get('outsideParent') or [], ensure_ascii=False)
 check('L4 se sale por la derecha del panel que lo contiene',
       o.get('clean') is False and 'BtnFuera' in fuera and 'Panel1' in fuera, o)
 check('L4 y tambien por abajo', 'BtnAlto' in fuera, o)
+# en la VCL un contenedor recorta lo que se sale: esa parte no se ve (su texto lo dice;
+# el de FMX no, V74i)
+check('L4c en la VCL el aviso dice que esa parte no se ve',
+      any(t.startswith('BtnFuera') and 'not visible' in t for t in o.get('outsideParent') or []), o)
 
 # L4b - negative coordinates count as outside too
 NEG = OUT.replace('Left = 360', 'Left = -20').replace('Left = 10', 'Left = 10')
@@ -485,6 +489,12 @@ check('V74g FMX: dos que se solapan, con el tramo compartido relativo a su padre
 check('V74h FMX: lo de un contenedor que coloca a sus hijos (TFlowLayout) no se juzga fuera del padre, como en la VCL',
       bx.get('Ancho', {}).get('parent') == 'Flujo' and 'Ancho' not in json.dumps(j.get('outsideParent')),
       (bx.get('Ancho'), j.get('outsideParent') if j else r[:300]))
+# FMX no recorta a los hijos salvo ClipChildren, y el renderizador dibuja lo que se sale:
+# el aviso no puede decir que esa parte no se ve (dirigido de Hermes de la 1.27: el
+# preview lo mostraba entero y el aviso decia "not visible")
+_sale = [t for t in (j.get('outsideParent') or []) if t.startswith('Sale:')]
+check('V74i FMX: lo que se sale no se da por invisible: FMX lo dibuja salvo ClipChildren',
+      _sale and 'not visible' not in _sale[0] and 'ClipChildren' in _sale[0], _sale or (j.get('outsideParent') if j else r[:300]))
 
 # (en su carpeta: el renderizador juzga los hermanos del form, y aqui los hay truncados a proposito)
 os.makedirs(os.path.join(BASE, 'paginas'))
