@@ -123,6 +123,45 @@ try:
     check('P6 (punto 1, arbitro) la puerta del build (segunda barrera) lee "" en el punto: niega '
           'Win64 Debug con BUILD-050 ($(MiLib)\\comun = \\comun, fuera de la jaula), no compila',
           not compila(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT'), mc.como_json(r).get('firstError') or r[:400])
+
+    # --- P9 punto 1b (2a revision de la principal): add-searchpath mete la ruta DENTRO del
+    # DCC_UnitSearchPath que YA haya en el grupo (lo normal en un proyecto guardado por el IDE), no
+    # al final. Si una propiedad se define en el MISMO grupo DETRAS de ese elemento, msbuild la lee
+    # "" ahi. La sonda va donde add escribe (delante del elemento), por la misma funcion compartida
+    # TramoDeSearchPath (escritor y sonda no se separan).
+    carpeta4 = os.path.join(BASE, 'fix4')
+    srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fix4', 'dir': carpeta4})
+    p4 = os.path.join(carpeta4, 'Fix4.dproj')
+    os.makedirs(os.path.join(carpeta4, 'libs', 'sub'))  # existe: sin el arreglo, v2 la aceptaba
+    # set-property anade cada nueva TRAS las del grupo (medido: conserva el orden de insercion);
+    # DCC_UnitSearchPath primero y MiLib despues deja MiLib DETRAS del DCC (detras del elemento
+    # donde add mete la ruta)
+    config(p4, 'set-property', name='DCC_UnitSearchPath', value='keep', platform='Win64')
+    config(p4, 'set-property', name='MiLib', value='libs', platform='Win64')
+    r = config(p4, 'add-searchpath', path=r'$(MiLib)\sub', platform='Win64')
+    check('P7 (punto 1b) MiLib detras del DCC_UnitSearchPath en el mismo grupo: add-searchpath lo '
+          'NIEGA (msbuild lee "" donde mete la ruta), no acepta libs\\sub; ROJA contra 27d8c82',
+          mc.rechazado(r), r[:300])
+
+    # arbitro: con DCC_UnitSearchPath=$(MiLib)\sub DELANTE de MiLib en el grupo, el build lee "" ahi
+    # -> \sub -> BUILD-050 (fuera de la jaula), no compila, aunque libs\sub tenga la unit
+    carpeta5 = os.path.join(BASE, 'fix5')
+    srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fix5', 'dir': carpeta5})
+    p5 = os.path.join(carpeta5, 'Fix5.dproj')
+    os.makedirs(os.path.join(carpeta5, 'libs', 'sub'))
+    open(os.path.join(carpeta5, 'libs', 'sub', 'Ajena.pas'), 'w', encoding='utf-8').write(
+        'unit Ajena;\r\ninterface\r\nimplementation\r\nend.\r\n')
+    dpr5 = os.path.join(carpeta5, 'Fix5.dpr')
+    with open(dpr5, encoding='utf-8-sig') as f:
+        fuente5 = f.read()
+    with open(dpr5, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(fuente5.replace('uses', 'uses\r\n  Ajena,', 1))
+    config(p5, 'set-property', name='DCC_UnitSearchPath', value=r'$(MiLib)\sub', platform='Win64')
+    config(p5, 'set-property', name='MiLib', value='libs', platform='Win64')
+    r = srv.call('delphi_build', {'project': p5, 'platform': 'Win64', 'config': 'Debug'}, 600)
+    check('P8 (punto 1b, arbitro) DCC_UnitSearchPath=$(MiLib)\\sub delante de MiLib en el grupo: el '
+          'build lee "" ahi -> BUILD-050, no compila aunque libs\\sub tenga la unit',
+          not compila(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT'), mc.como_json(r).get('firstError') or r[:400])
 finally:
     srv.cierra()
     mc.borra(BASE)

@@ -873,6 +873,22 @@ begin
     Exit(MsgFmt(SR_CONFIG_PATH_MACRO_FMT, [AEco.Trim]));
 end;
 
+{ EL sitio donde add-searchpath pone una ruta en el grupo G: el DCC_UnitSearchPath
+  que ya hay -el escritor antepone la ruta DENTRO de su valor (Tramo.Ini); la sonda
+  de la puerta pone un elemento igual JUSTO DELANTE (Tramo.Abre), para leer lo que
+  msbuild fija en ese punto- o ninguno (al final del grupo, AnadeAlGrupo). UNA
+  funcion para que el escritor (AddSearchPath) y la sonda (SearchPathDenied) no se
+  separen en donde va la ruta. }
+function TramoDeSearchPath(const AXml: string; const AGrupo: TGrupoXml; out ATramo: TTramoXml): Boolean;
+var
+  Tramos: TArray<TTramoXml>;
+begin
+  Tramos := TramosEnGrupo(AXml, 'DCC_UnitSearchPath', AGrupo);
+  Result := Length(Tramos) > 0;
+  if Result then
+    ATramo := Tramos[0];
+end;
+
 { Vets a search path the way every read is vetted: expand the macros with
   THE build's table (MacrosDelProyecto), resolve relative to the project,
   then the read jail (roots + library zone) and existence. $(Platform) and
@@ -896,6 +912,7 @@ var
   G: TGrupoXml;
   Falta: TFaltaDeGrupo;
   IdxSonda: Integer;
+  TramoSP: TTramoXml;
 begin
   AShow := '';
   if ARaw.Trim = '' then
@@ -934,7 +951,14 @@ begin
       // del servidor sigue negado a proposito (A10 de la 1.27)
       Xml := PatchLoadText(ADproj, Enc);
       if AseguraGrupoDelBuild(Xml, APlat, '', G, Falta) then
-        AnadeAlGrupo(Xml, G, XmlElemento(SONDA, ARaw.Trim));
+      begin
+        // donde add antepone la ruta: un elemento igual DELANTE del DCC_UnitSearchPath
+        // que ya hay (su valor se lee en ese punto), o al final del grupo si no hay
+        if TramoDeSearchPath(Xml, G, TramoSP) then
+          Xml := Copy(Xml, 1, TramoSP.Abre - 1) + XmlElemento(SONDA, ARaw.Trim) + Copy(Xml, TramoSP.Abre, MaxInt)
+        else
+          AnadeAlGrupo(Xml, G, XmlElemento(SONDA, ARaw.Trim));
+      end;
       Elementos := ElementosDe(Xml, Mal);
       for var I := 0 to High(Elementos) do
         if SameText(Elementos[I].Nombre, SONDA) then
@@ -1015,7 +1039,8 @@ var
   Enc, Xml, Plat, Etiqueta, Compila, Crudo, P: string;
   Shows, Actuales, Nuevos, YaEstaban: TArray<string>;
   G: TGrupoXml;
-  Tramos: TArray<TTramoXml>;
+  TramoSP: TTramoXml;
+  HaySP: Boolean;
   VS: Integer;
   Falta: TFaltaDeGrupo;
 
@@ -1059,10 +1084,10 @@ begin
   // definidor como lo crea el IDE si falta (EL creador, Lsp.Dproj)
   if not AseguraGrupoDelBuild(Xml, Plat, '', G, Falta) then
     Exit(MensajeDeFalta(Falta, Xml, Plat, '', 'DCC_UnitSearchPath'));
-  Tramos := TramosEnGrupo(Xml, 'DCC_UnitSearchPath', G);
+  HaySP := TramoDeSearchPath(Xml, G, TramoSP);
   Actuales := nil;
-  if Length(Tramos) > 0 then
-    Actuales := SplitPaths(Copy(Xml, Tramos[0].Ini, Tramos[0].Fin - Tramos[0].Ini));
+  if HaySP then
+    Actuales := SplitPaths(Copy(Xml, TramoSP.Ini, TramoSP.Fin - TramoSP.Ini));
   Nuevos := nil;
   YaEstaban := nil;
   for var R in ARawPaths do
@@ -1082,9 +1107,9 @@ begin
     Exit;
   end;
   Crudo := string.Join(';', Nuevos) + ';';
-  if Length(Tramos) > 0 then
+  if HaySP then
   begin
-    VS := Tramos[0].Ini;
+    VS := TramoSP.Ini;
     Xml := Copy(Xml, 1, VS - 1) + XmlEscape(Crudo) + Copy(Xml, VS, MaxInt);
   end
   else
