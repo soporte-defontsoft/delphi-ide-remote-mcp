@@ -4158,7 +4158,8 @@ const
     '8 hex digits (FMX loads them transparent); build converts ' +
     'every text .style of the folder to .bin.style (the form an app embeds: ' +
     'embedded TEXT loads but does not resolve StyleLookup) and compiles the ' +
-    'folder''s .rc to .res with brcc32. Binary styles are never edited. ' +
+    'folder''s .rc to .res with brcc32 (one .rc per folder: with more, ' +
+    'build refuses and lint says so). Binary styles are never edited. ' +
     'Edits keep encoding and leave a __delphi-patch copy (the way back).';
 
   SP_STYLES_PATH =
@@ -7933,6 +7934,16 @@ const
     '(a directive, an #include or RCINCLUDE, a block, LANGUAGE..., or a file ' +
     'given by a macro or without quotes). The project build still takes a ' +
     'full .rc; delphi_styles takes a plain list.';
+
+  { Mas de un .rc en la carpeta de estilos: build compilaba el primero que
+    listaba Windows, sin decirlo, y lint los juzgaba todos (R12 de la 1.27).
+    Un .rc por carpeta es regla de la casa: el IDE no tiene carpeta de
+    estilos, no hay juez al que preguntar cual. }
+  SR_STYLES_VARIOS_RC_FMT =
+    '[STYLE-067 DENIED] The styles folder has %d .rc files (%s): build ' +
+    'compiles ONE manifest per styles folder, and picking one of them would ' +
+    'be a guess. Keep the one the project names in its {$R ...} and move ' +
+    'or delete the others.';
 
   // PAS-031 (un nombre de perfil CON punto) retirado el 9-oct-2026:
   // set-profile y remove-profile contestan PAS-015, la regla de la puerta

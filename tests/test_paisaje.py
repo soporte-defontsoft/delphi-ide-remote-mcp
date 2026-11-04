@@ -127,16 +127,14 @@ REGLAS = [
      [('Lsp.BuildRunner.pas', 'RunCaptured'),
       ('Lsp.BuildRunner.pas', 'RunMsBuild'), ('Lsp.BuildRunner.pas', 'RunDetached'),
       ('Lsp.ProcessLaunch.pas', '*'), ('Lsp.RemoteRun.pas', 'Paclient'),
-      ('Lsp.Styles.pas', 'CorreStyleConvert'),
       # brcc32 del build de estilos, DENTRO del AppContainer (2al de la 1.18.2):
       # el lanzado se movio aqui desde BuildStyles (antes compilaba el .rc directo)
       ('Mcp.Tools.Styles.pas', 'CompilaRcEnContenedor'),
       ('Lsp.TestRunner.pas', 'CorreEnContenedor'), ('Mcp.Tools.Adb.pas', 'RunAdb'),
       ('Mcp.Tools.Git.pas', 'GitCorre'),
-      # el ayudante del render, DENTRO de su contenedor (V65 de la 1.24)
-      ('Lsp.FormRender.pas', 'CorreEnSuContenedor'),
-      # ...y la pregunta de la caja de paquetes: que clases COM no alcanza (V65)
-      ('Lsp.FormRender.pas', 'DaSusClasesAlContenedor'),
+      # un ayudante de la caja en su contenedor (los renderizadores, su pregunta de
+      # las clases COM y el conversor de estilos): eran tres a mano, R5 de la 1.27
+      ('Lsp.FormRender.pas', 'CorreAyudante'),
       # los que la regla no veia hasta el 18-oct-2026: el nucleo de RunCaptured*
       # (con y sin contenedor), el lanzador del AppContainer, el del motor LSP
       # (DelphiLSP.exe) y el ayudante de remote-run que arranca lo pedido
@@ -2749,6 +2747,15 @@ REGLAS_PY = [
     ('el paclient de mentira compuesto a mano', r"""['"]paclient_stub\.py['"]""",
      [('mcp_cliente.py', 'def paclient_falso')],
      'mc.paclient_falso: su .cmd fuera de la jaula, donde el servidor si lo lanza'),
+    # (1.27: una bateria no toca el registro real; las que lo hacen, aqui y con su motivo.
+    # idioma_rtl: el RTL elige el idioma de un exe SOLO por esa clave (GetLocaleOverride), un
+    # valor con la ruta de la copia de la bateria, quitado al salir y sus huerfanos al entrar.
+    # Deuda declarada, que solo puede encoger: los asientos del IDE con el prefijo de la
+    # bateria en test_get_sdk_1230 (PlatformSDKs/RemoteProfiles mcpvdiez*) y test_paserver)
+    ('una escritura en el registro', r"\bwinreg\.(?:SetValueEx|SetValue|CreateKey|CreateKeyEx|DeleteValue|DeleteKey|DeleteKeyEx)\b",
+     [('mcp_cliente.py', 'def idioma_rtl'), ('test_get_sdk_1230.py', 'def recoge'),
+      ('test_get_sdk_1230.py', 'def pon_asiento'), ('test_paserver.py', 'def cleanup_profile')],
+     'mc.idioma_rtl, y la deuda declarada de los asientos del IDE'),
 ]
 
 
@@ -2817,6 +2824,7 @@ PLANTADO_PY = {
     'la instalacion activa buscada a mano': "    act = next(i for i in inst['installs'] if i.get('active'))",
     'la ausencia de un mensaje por su id a mano': "    ok = 'CFG-043' not in r",
     'el paclient de mentira compuesto a mano': "    s = os.path.join(HERE, 'paclient_stub.py')",
+    'una escritura en el registro': "    winreg.SetValueEx(k, 'x', 0, winreg.REG_SZ, 'y')",
 }
 for regla in REGLAS_PY:
     nombre = regla[0]
@@ -2842,7 +2850,7 @@ POSITIVOS = re.compile(r"""(['"])\[?(?:%s)-\d{3}(?: [A-Z_]+)?\]?\1\s+in\b|(?<!no
 check('mutante de los ids positivos: se cuentan las dos formas, y las negativas no',
       len(POSITIVOS.findall("x = 'CFG-043' in r and mc.tiene(r, 'GIT-067') and not mc.tiene(r, 'GIT-001') "
                             "and 'GIT-002' not in r and '[GIT-051 DENIED]' in r")) == 3)
-IDS_POSITIVOS_TOPE = 197  # medido el 25-oct-2026 (V56; 201 tras V19, que paso los de una bateria a mc.es; 200 tras V65; 198 sin LSP-046, V61; 197 sin el CFG-014 de test_deploy_remotehost, revisor de baterias de la 1.27)
+IDS_POSITIVOS_TOPE = 192  # medido el 25-oct-2026 (V56; 201 tras V19, que paso los de una bateria a mc.es; 200 tras V65; 198 sin LSP-046, V61; 197 sin el CFG-014 de test_deploy_remotehost, revisor de baterias de la 1.27; 192 sin las copias de GIT-068, que se miden una vez)
 _n = sum(len(POSITIVOS.findall(l)) for _, t in TEXTOS_PY for l in codigo_py(t))
 check('los ids positivos a mano: %d, el tope declarado (solo puede encoger: si baja, se baja el tope)' % _n,
       _n == IDS_POSITIVOS_TOPE, IDS_POSITIVOS_TOPE)

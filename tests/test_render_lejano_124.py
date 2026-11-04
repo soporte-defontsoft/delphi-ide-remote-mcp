@@ -19,8 +19,10 @@ servidor le lleva ese form, juzgado como un hermano.
   L12 un frame lejano que se contiene a si mismo ya no tumba al ayudante (1.25.1): RENDER-026 y el resto dibujado
   L13 lo que se trae hace fallar al ayudante: el form a medias que ya salio, y lo dice (DSGN-181). De
       andamio, la segunda vuelta del ayudante suspendida hasta su plazo: el ciclo de L12 ya no la tumba
+  L14 (1.27) una cadena de CUATRO ancestros, cada uno en su carpeta: el form entero. Era una vuelta del
+      ayudante por eslabon con tope de tres, y salia a medias (los ejemplos de FireDAC y de Skia4Delphi)
 
-ROJO contra un build sin el arreglo: L1, L2, L3 y L4.
+ROJO contra un build sin el arreglo: L1, L2, L3 y L4; L14 contra la 1.26 (tope de tres vueltas).
 
 Uso:  python tests/test_render_lejano_124.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -126,6 +128,22 @@ escribe(SUSP, 'forms\\UHijaS.pas', unidad('UHijaS', 'TFormHijaS', 'TForm', USOS 
 HIJA_SUSP = escribe(SUSP, 'forms\\UHijaS.dfm', "object FormHijaS: TFormHijaS\n  Left = 0\n  Top = 0\n  Caption = 'S'\n  ClientHeight = 200\n  ClientWidth = 400\n"
                 "  inline BienF1: TBienF\n    Left = 0\n    Top = 0\n    TabOrder = 0\n  end\nend\n")
 
+# ---- L14: cuatro ancestros, cada uno en su carpeta, y la hija en la suya
+CUATRO = os.path.join(JAIL, 'cuatro')
+escribe(CUATRO, 'C4.dpr', dpr('C4', ["UHija4 in 'hija\\UHija4.pas' {FormHija4}"] +
+                               ["UA%d in 'a%d\\UA%d.pas' {FormA%d}" % (k, k, k, k) for k in range(1, 5)]))
+escribe(CUATRO, 'a1\\UA1.pas', unidad('UA1', 'TFormA1', 'TForm', USOS, '    Button1: TButton;\n'))
+escribe(CUATRO, 'a1\\UA1.dfm', "object FormA1: TFormA1\n  Left = 0\n  Top = 0\n  Caption = 'A1'\n  ClientHeight = 200\n  ClientWidth = 500\n"
+        + BOTON % ('Button1', 8, '1', 0) + 'end\n')
+for k in range(2, 5):
+    escribe(CUATRO, 'a%d\\UA%d.pas' % (k, k), unidad('UA%d' % k, 'TFormA%d' % k, 'TFormA%d' % (k - 1),
+                                                  USOS + ', UA%d' % (k - 1), '    Button%d: TButton;\n' % k))
+    escribe(CUATRO, 'a%d\\UA%d.dfm' % (k, k), "inherited FormA%d: TFormA%d\n  Caption = 'A%d'\n" % (k, k, k)
+            + BOTON % ('Button%d' % k, 8 + 80 * (k - 1), str(k), k - 1) + 'end\n')
+escribe(CUATRO, 'hija\\UHija4.pas', unidad('UHija4', 'TFormHija4', 'TFormA4', USOS + ', UA4', '    ButtonH: TButton;\n'))
+HIJA4 = escribe(CUATRO, 'hija\\UHija4.dfm', "inherited FormHija4: TFormHija4\n  Caption = 'H4'\n"
+                + BOTON % ('ButtonH', 330, 'H', 4) + 'end\n')
+
 # ---- sin proyecto
 SOLA = os.path.join(JAIL, 'sola')
 escribe(SOLA, 'base\\UBaseS.pas', unidad('UBaseS', 'TFormBaseS', 'TForm', USOS, '    ButtonBase: TButton;\n'))
@@ -194,6 +212,10 @@ try:
 
     r = preview(HIJAMALA, 'm.png')
     check('L4 el literal de un ancestro lejano se juzga como el de un hermano (DSGN-115)', mc.abre(r, 'SR_DESIGNER_LITERAL_FUERA_FMT'), r[:400])
+
+    r = preview(HIJA4, 'h4.png')
+    check('L14 cuatro ancestros en cuatro carpetas: el form entero (los cinco botones), sin sustituidos ni a medias',
+          J(r).get('components') == 5 and not J(r).get('substituted') and not mc.es(r, SIN_ANCESTRO), r[:700])
 
     r = preview(HIJAS, 's.png')
     check('L7 sin proyecto que lo liste, a medias y lo dice (RENDER-010)', mc.es(r, SIN_ANCESTRO) and J(r).get('components') == 0, r[:500])

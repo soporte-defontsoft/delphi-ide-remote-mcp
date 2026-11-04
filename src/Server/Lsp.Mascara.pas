@@ -47,6 +47,12 @@ uses
   tools masked their whole answer again with their own name, and the real
   line of a delphi_changeset refusal left masked (4-oct-2026). }
 function MaskDriveText(const AToolName, AText: string): string;
+{ LA casa del servidor en un texto, por su nombre (<server>, <server-cache>;
+  la temporal, como la casa): lo que hace el filtro de salida antes del
+  barrido de las letras. Para quien compone un mensaje con un fallo del disco
+  antes de que llegue a ese filtro (SinNuestraCasa, Lsp.FormRender): el mismo
+  nombrador, no otro. }
+function CasaEnTexto(const ATexto: string): string;
 { Para la tool cuya respuesta mezcla lineas SUYAS con lineas de CONTENIDO del
   disco (delphi_git diff / show / log: las de un fichero o de un mensaje de
   commit empiezan por +, - o espacio; y un trozo de un diff es contenido
@@ -543,7 +549,7 @@ begin
     GCasasLock.Leave;
   end;
   Result := Default(TAgujasDeCasa);
-  for var K := 0 to 1 do
+  for var K := 0 to 2 do
   begin
     var Raiz := ServerDir;
     var Nombre := NOMBRE_CASA_SERVIDOR;
@@ -551,7 +557,13 @@ begin
     begin
       Raiz := ServerCacheDir;
       Nombre := NOMBRE_CASA_CACHE;
-    end;
+    end
+    // la temporal es la casa, sin su nombre: ni el de la carpeta llega al
+    // agente (gana por mas larga que la de la casa). Era SinNuestraCasa, con
+    // otro nombre, '(server)', y solo en los mensajes del renderizador (J6 de
+    // la 1.27)
+    else if K = 2 then
+      Raiz := ServerTempDir;
     if not EsRutaAbsoluta(Raiz) then
       Continue;
     // la casa DENTRO de una raiz es del agente; las raices que empiezan como

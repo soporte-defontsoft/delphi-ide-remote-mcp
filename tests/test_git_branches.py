@@ -8,7 +8,7 @@ paths, ref/to, remote, name, count). Los checks de una opcion colada (stash
 push -u, restore --worktree, pull --rebase...) miran ahora el campo donde se
 intentaria colar: un nombre que empieza por '-' lo niega git (GIT-071), una
 accion que no es de la lista GIT-013, una ruta detras de "--" es un nombre;
-las opciones de red (pull --tags) ya no existen (GIT-068, nada hecho).
+las opciones de red (pull --tags) ya no existen (GIT-068: test_git_argfilter).
 
 Usage:  python tests/test_git_branches.py [path-to-DelphiLspMcp.exe]
 """
@@ -211,16 +211,12 @@ r = git({'command': 'pull', 'remote': 'origin', 'branch': rama})
 check('pull de lo que va por delante (fast-forward): integra',
       'exit=0' in r and os.path.exists(os.path.join(REPO_T, 'r1.txt')), r[:250])
 llega_al_remoto('r2.txt', 'v-remoto')
-# 1.19.0: las opciones de la bajada (--tags...) no existen: la llamada vieja
-# con args no hace nada; el pull de siempre integra, y la etiqueta la trae
+# 1.19.0: las opciones de la bajada (--tags...) no existen (args, GIT-068: lo
+# mide test_git_argfilter); el pull de siempre integra, y la etiqueta la trae
 # fetch del remoto (git sigue las etiquetas de lo que baja a sus ramas de
 # seguimiento; un pull con la rama solo llena FETCH_HEAD y no la trae, medido)
-r = git({'command': 'pull', 'args': '--tags origin ' + rama})
-check('pull con una opcion de la BAJADA en args (--tags): GIT-068 y nada hecho',
-      mc.rechazado(r) and mc.es(r, 'SR_GIT_ARGS_RETIRADO') and not mc.llego_a_git(r)
-      and not os.path.exists(os.path.join(REPO_T, 'r2.txt')), r[:250])
 r = git({'command': 'pull', 'remote': 'origin', 'branch': rama})
-check('...y el pull sin opciones integra',
+check('el pull sin opciones integra',
       'exit=0' in r and os.path.exists(os.path.join(REPO_T, 'r2.txt')), r[:250])
 r = git({'command': 'fetch', 'remote': 'origin'})
 check('...y fetch del remoto trae su etiqueta (sin --tags)',

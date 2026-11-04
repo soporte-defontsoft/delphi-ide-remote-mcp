@@ -283,15 +283,11 @@ check('report sin agent: sigue en la raiz de reports',
       mc.abre(out, 'SN_REPORT_OK_FMT') and saved_name is not None and '/' not in saved_name and '\\' not in saved_name, out[:150])
 
 # ---- git dangerous options refused at the GATE (both access levels) --------
-# 1.19.0: sin args; una opcion de git ni se puede escribir. Al cliente con el
-# esquema viejo el gate le contesta GIT-068 y nada se hace; y el campo donde
-# una revision viaja suelta (ref) lo juzga git (rev-parse: GIT-070), con la
-# segunda barrera detras (empieza por '-': GIT-075)
+# 1.19.0: sin args; una opcion de git ni se puede escribir (args, GIT-068: lo
+# mide UNA vez test_git_argfilter; con un token de solo lectura, test_http_auth).
+# El campo donde una revision viaja suelta (ref) lo juzga git (rev-parse:
+# GIT-070), con la segunda barrera detras (empieza por '-': GIT-075)
 PWN = os.path.join(INSIDE, 'PWNED.txt')
-out = call('delphi_git', {"repo": INSIDE, "command": "diff", "args": "--output=" + PWN})
-check('git: args retirado en el gate (GIT-068, aun con token RW)',
-      mc.rechazado(out) and mc.es(out, 'SR_GIT_ARGS_RETIRADO') and 'exit=' not in out, out[:150])
-check('git: --output no escribio nada', not os.path.exists(PWN), PWN)
 out = call('delphi_git', {"repo": GITDIR, "command": "diff", "ref": "--output=" + PWN})
 check('git: una opcion en ref no es una revision: la para el juez (GIT-070), no la segunda barrera',
       mc.rechazado(out) and mc.es(out, 'SR_GIT_REF_NO_VALE_FMT') and 'exit=' not in out, out[:150])

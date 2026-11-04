@@ -16,9 +16,11 @@ disfrazada pasa y git la ejecuta (medido: escribe el fichero de --output).
 Corre:  python tests/test_git_argfilter.py <ruta-a-DelphiLspMcp.exe-1.5.4>
 
 1.19.0 (delphi_git sin "args"): la puerta de opciones se fue con los args.
-Cada check manda la llamada vieja (GIT-068, nada hecho: el fichero de
---output sigue sin existir) Y el mismo disfraz en el campo que lo llevaria
-hoy: en ref/to lo juzga git como revision (GIT-070), en un nombre de rama o
+Cada check manda el disfraz en el campo que lo llevaria hoy (la llamada vieja,
+con args, se mide UNA vez, en el control de --output: GIT-068, nada hecho; las
+~30 copias de las baterias se retiraron, revisor de baterias de la 1.27: la
+puerta rechaza args entero sin mirar su contenido, y todas caian con el mismo
+mutante): en ref/to lo juzga git como revision (GIT-070), en un nombre de rama o
 tag como nombre (GIT-071), en remote tiene que ser un remoto del repo
 (GIT-049), en paths va detras de "--" como nombre del repo (GIT-012 si no lo
 es) y en search viaja PEGADO a -S, como un solo argumento: es texto. Lo
@@ -74,39 +76,35 @@ def sin_args(r):
 # ---- opciones prohibidas DISFRAZADAS: la puerta las ve como las vera git ----
 # 1.19.0: sin args, el disfraz solo cabe en un campo; en ref lo juzga git como
 # revision (rev-parse --end-of-options) y no es ninguna: GIT-070
-r = git({'command': 'diff', 'args': '--o"utput"=' + LEAK + ' HEAD'})
 r2 = git({'command': 'diff', 'ref': '--o"utput"=' + LEAK})
-check('diff --o"utput" (comillas en medio): en args GIT-068, en ref GIT-070, y no escribe',
-      sin_args(r) and mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REF_NO_VALE_FMT') and
-      not mc.llego_a_git(r2) and sin_fuga(), (r[:120], r2[:200]))
+check('diff --o"utput" (comillas en medio): en ref GIT-070, y no escribe',
+      mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REF_NO_VALE_FMT') and
+      not mc.llego_a_git(r2) and sin_fuga(), r2[:200])
 # "RECHAZADO" = lo paro la PUERTA: un git que corre y acaba mal tambien es
 # una negativa (GIT-036 DENIED desde la 1.7.0), y con la puerta abierta estos
 # checks salian verdes (quinta revision)
-r = git({'command': 'diff', 'args': '"--output=' + LEAK + '" HEAD'})
 r2 = git({'command': 'diff', 'ref': '"--output=' + LEAK + '"'})
-check('diff "--output=..." (comillas envolviendo): en args GIT-068, en ref GIT-070, y no escribe',
-      sin_args(r) and mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REF_NO_VALE_FMT') and
-      not mc.llego_a_git(r2) and sin_fuga(), (r[:120], r2[:200]))
-r = git({'command': 'show', 'args': '--outp"ut"=' + LEAK})
+check('diff "--output=..." (comillas envolviendo): en ref GIT-070, y no escribe',
+      mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REF_NO_VALE_FMT') and
+      not mc.llego_a_git(r2) and sin_fuga(), r2[:200])
 r2 = git({'command': 'show', 'ref': '--outp"ut"=' + LEAK})
-check('show --outp"ut": en args GIT-068, en ref GIT-070, y no escribe',
-      sin_args(r) and mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REF_NO_VALE_FMT') and
-      not mc.llego_a_git(r2) and sin_fuga(), (r[:120], r2[:200]))
+check('show --outp"ut": en ref GIT-070, y no escribe',
+      mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REF_NO_VALE_FMT') and
+      not mc.llego_a_git(r2) and sin_fuga(), r2[:200])
 # 1.19.0: --no-index no se puede escribir; lo que buscaba (leer una ruta de
 # fuera del repo) en paths es GIT-012
-r = git({'command': 'diff', 'args': '--no-"index" a.txt a.txt'})
 r2 = git({'command': 'diff', 'paths': [FUERA]})
-check('diff --no-"index" (lee rutas arbitrarias): en args GIT-068; una ruta de fuera del repo en paths, GIT-012',
-      sin_args(r) and mc.rechazado(r2) and mc.es(r2, 'SR_GIT_STASH_RUTA_FMT') and
-      not mc.llego_a_git(r2) and 'de fuera del repo' not in r2, (r[:120], r2[:200]))
-r = git({'command': 'log', 'args': '-"c" core.pager=x'})
+check('diff --no-index (lee rutas arbitrarias): una ruta de fuera del repo en paths, GIT-012',
+      mc.rechazado(r2) and mc.es(r2, 'SR_GIT_STASH_RUTA_FMT') and
+      not mc.llego_a_git(r2) and 'de fuera del repo' not in r2, r2[:200])
 r2 = git({'command': 'log', 'ref': '-c'})
-check('log -"c" (config, disfrazado): en args GIT-068, en ref no es una revision (GIT-070)',
-      sin_args(r) and mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REF_NO_VALE_FMT') and
-      not mc.llego_a_git(r2), (r[:120], r2[:200]))
+check('log -c (config): en ref no es una revision (GIT-070)',
+      mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REF_NO_VALE_FMT') and
+      not mc.llego_a_git(r2), r2[:200])
 # control sin disfraz: la opcion tal cual tambien se rechaza y no escribe. En
 # paths iria detras de "--" (un nombre, nunca una opcion), pero antes pasa los
-# jueces de toda ruta: el ':' de su unidad, fuera de la unidad, es GUARD-009
+# jueces de toda ruta: el ':' de su unidad, fuera de la unidad, es GUARD-009.
+# Y la llamada vieja, con args: la UNICA comprobacion de GIT-068 de las baterias
 r = git({'command': 'diff', 'args': '--output=' + LEAK})
 r2 = git({'command': 'diff', 'ref': '--output=' + LEAK})
 r3 = git({'command': 'diff', 'paths': ['--output=' + LEAK]})
@@ -118,13 +116,12 @@ check('diff --output directo (control): en args GIT-068, en ref GIT-070, en path
 
 # ---- host remoto disfrazado con comillas: la puerta lo ve igual ----
 # 1.19.0: remote es el NOMBRE de un remoto del repo; una direccion no lo es
-r = git({'command': 'fetch', 'args': '"https://evil.example/repo"'})
 r2 = git({'command': 'fetch', 'remote': '"https://evil.example/repo"'})
 r3 = git({'command': 'fetch', 'remote': 'https://evil.example/repo'})
-check('fetch a un host no permitido, con comillas: en args GIT-068; en remote no es un remoto del repo (GIT-049)',
-      sin_args(r) and mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REMOTO_NO_ESTA_FMT') and not mc.llego_a_git(r2)
+check('fetch a un host no permitido, con comillas o sin ellas: en remote no es un remoto del repo (GIT-049)',
+      mc.rechazado(r2) and mc.es(r2, 'SR_GIT_REMOTO_NO_ESTA_FMT') and not mc.llego_a_git(r2)
       and mc.rechazado(r3) and mc.es(r3, 'SR_GIT_REMOTO_NO_ESTA_FMT') and not mc.llego_a_git(r3),
-      (r[:120], r2[:200], r3[:200]))
+      (r2[:200], r3[:200]))
 
 # ---- lo LEGITIMO sigue pasando: la recomposicion no rompe args validos ----
 # 1.19.0: cada valor de un campo va como UN argumento (EnComillas): un commit
@@ -149,46 +146,32 @@ r = git({'command': 'log', 'search': 'Open', 'count': 1})
 check('log search=Open (pickaxe, valor con O mayuscula): pasa', 'exit=0' in r and 'con lo que se busca' in r, r[:200])
 # 1.19.0: -G no existe (search es -S); un valor de search que empieza por '-'
 # viaja pegado a -S: es texto, no una opcion
-r = git({'command': 'log', 'args': '-GOpen --max-count=1 --oneline'})
 r2 = git({'command': 'log', 'search': '-GOpen', 'count': 1})
-check('log -GOpen: en args GIT-068; en search, texto pegado a -S (pasa)',
-      sin_args(r) and 'exit=0' in r2 and '-S-GOpen' in r2, (r[:120], r2[:200]))
+check('log -GOpen: en search, texto pegado a -S (pasa)',
+      'exit=0' in r2 and '-S-GOpen' in r2, r2[:200])
 # ...pero -S SUELTO no se traga el siguiente argumento como su valor: cada token
 # se revisa por separado, asi que una opcion prohibida DETRAS se caza igual.
 # 1.19.0: en search, la opcion es el TEXTO que se busca (-S--output=...)
-r = git({'command': 'log', 'args': '-S --output=' + LEAK})
 r2 = git({'command': 'log', 'search': '--output=' + LEAK})
-check('log -S --output=...: en args GIT-068; en search es el texto buscado; no escribe',
-      sin_args(r) and 'exit=0' in r2 and '-S--output=' in r2 and sin_fuga(), (r[:120], r2[:200]))
+check('log -S --output=...: en search es el texto buscado; no escribe',
+      'exit=0' in r2 and '-S--output=' in r2 and sin_fuga(), r2[:200])
 
 # ---- firma: la REAL (gpg) se niega; --signoff NO firma ----
 # 1.18.0: --signoff (y -s, y --sign en commit, que es su abreviatura) solo pone
 # "Signed-off-by" y se admite; -S / --gpg-sign (y en TAG --sign, que si es -s
 # de gpg) se siguen negando. Antes `commit --signoff` caia por StartsWith('--sign').
-# 1.19.0: sin args no se pide ni la una ni la otra (GIT-068, ningun commit);
-# commit es message y nada mas
+# 1.19.0: sin args no se pide ni la una ni la otra; commit es message y nada
+# mas (la firma de test_git_config_cerrado: ni el config la enciende)
 open(os.path.join(REPO_T, 'b.txt'), 'w').write('dos\n')
 git({'command': 'add', 'paths': ['.']})
-cabeza = git({'command': 'log', 'count': 1})
-r = git({'command': 'commit', 'args': '--signoff', 'message': 'con Signed-off-by'})
-check('commit --signoff: en args GIT-068 y ningun commit',
-      sin_args(r) and git({'command': 'log', 'count': 1}) == cabeza, r[:200])
-r = git({'command': 'commit', 'args': '--gpg-sign', 'message': 'x'})
-check('commit --gpg-sign (firma gpg): en args GIT-068 y ningun commit',
-      sin_args(r) and git({'command': 'log', 'count': 1}) == cabeza, r[:200])
-r = git({'command': 'commit', 'args': '-S', 'message': 'x'})
-check('commit -S (firma gpg, grupo corto): en args GIT-068 y ningun commit',
-      sin_args(r) and git({'command': 'log', 'count': 1}) == cabeza, r[:200])
 r = git({'command': 'commit', 'message': 'sin firmar'})
-check('...y el commit con su message llega a git', 'exit=0' in r, r[:200])
+check('commit con su message llega a git', 'exit=0' in r, r[:200])
 # 1.19.0: en tag, la opcion solo cabe en name, y un nombre que empieza por '-'
 # no lo admite git (check-ref-format): GIT-071
-r = git({'command': 'tag', 'args': '--sign probe-firma'})
 r2 = git({'command': 'tag', 'name': '--sign'})
-check('tag --sign (en tag SI es gpg): en args GIT-068; en name no es un nombre (GIT-071); ningun tag',
-      sin_args(r) and mc.rechazado(r2) and mc.es(r2, 'SR_GIT_NOMBRE_NO_VALE_FMT') and
-      'probe-firma' not in git({'command': 'tag'}) and '--sign' not in git({'command': 'tag'}),
-      (r[:120], r2[:200]))
+check('tag --sign (en tag SI es gpg): en name no es un nombre (GIT-071); ningun tag',
+      mc.rechazado(r2) and mc.es(r2, 'SR_GIT_NOMBRE_NO_VALE_FMT') and
+      '--sign' not in git({'command': 'tag'}), r2[:200])
 
 srv.mata()
 

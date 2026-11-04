@@ -30,6 +30,7 @@ interface
 uses
   System.Classes,   // TStrings: la tabla de macros del IDE (RutaDePaqueteDelIde)
   Lsp.Styles,       // TStyleDoc: la linea de lo que dijo el lector (LineaDeLoLeido)
+  Lsp.Sandbox,      // TContenedor: donde corre un ayudante (CorreAyudante)
   Lsp.DesignerMeta; // TPropiedadDelUsuario: lo que publica una clase del usuario
 
 const
@@ -303,6 +304,14 @@ function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
   con SueltaCaja cuando su ayudante acaba: una caja en uso no se purga. }
 function CajaDeLosAyudantes(out ACaja, APath: string): string;
 procedure SueltaCaja(const ACaja: string);
+{ LA ejecucion de un ayudante de la caja (los renderizadores, el conversor de
+  estilos) en su contenedor AC, con su carpeta AEtapa: su consola, y el entorno
+  sin la configuracion del servidor y con el PATH de la caja (APathHijo, el de
+  CajaDeLosAyudantes). La escribian a mano los tres que lanzan uno (R5 del
+  revisor del paisaje de la 1.27). Lanza como RunCapturedEnContenedor. }
+function CorreAyudante(const AOrden, AEtapa: string; const AC: TContenedor;
+  const APathHijo: string; ATimeoutMs: Integer; out ACodigo: Cardinal;
+  out AVencido: Boolean): string;
 { Si un ayudante dijo OTRA version de su protocolo que AVersion (ADijo, lo de su
   PROTOCOL=; '' si no lo dijo) en una salida con algo, sin que el servidor lo
   parara por el plazo y con un codigo de los suyos (hasta AUltimoCodigo): lo que
@@ -457,7 +466,6 @@ uses
   Lsp.Dproj,        // XmlEscape: las rutas del manifiesto de la caja
   Lsp.Guard,
   Lsp.BuildRunner,  // RunCapturedEnContenedor: el lanzador de los programas externos
-  Lsp.Sandbox,      // el contenedor del ayudante y el entorno que lleva
   Lsp.TodoONada,    // HuellaDeFichero: la generacion de la caja de paquetes
   Lsp.ProjectUnits, // RaizDeDesigner: a que raiz llega la unidad de un designer
   Lsp.DesignerForma, // UnidadDeDesigner
@@ -473,7 +481,9 @@ uses
   Lsp.Listas,
   System.StrUtils,
   Lsp.ProcessLaunch,
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.Mascara,
+  Lsp.PascalDecl;
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
@@ -1514,8 +1524,7 @@ const
         RaiseLastOSError(Err);
       try
         AC.ConVentanas := True;
-        ASalida := RunCapturedEnContenedor(Orden, ACaja, AC, PREGUNTA_TIEMPO_MS,
-          Codigo, Vencido, phConsola, EntornoSinConfiguracion(['PATH=' + APath]));
+        ASalida := CorreAyudante(Orden, ACaja, AC, APath, PREGUNTA_TIEMPO_MS, Codigo, Vencido);
         Result := not Vencido and (Codigo = FR_RC_OK);
       finally
         BorraContenedor(AC);
@@ -1572,8 +1581,11 @@ end;
   del form la puede llevar de verdad. }
 function SinNuestraCasa(const AMensaje: string): string;
 begin
-  Result := StringReplace(AMensaje, PrefijoSinBarra(ServerTempDir), '(server)',
-    [rfReplaceAll, rfIgnoreCase]);
+  // EL nombrador de la casa, el del filtro de salida: aqui la temporal salia
+  // como '(server)' y alli como '<server>\__delphi-temp' (J6 de la 1.27). La
+  // llamada se queda: un mensaje compuesto aqui puede ir a otro sitio que la
+  // respuesta, y es la segunda barrera
+  Result := CasaEnTexto(AMensaje);
 end;
 
 const
@@ -1807,6 +1819,14 @@ begin
   Result := CajaDePaquetes(DiscoverRadStudio, ACaja, APath, Paquetes);
 end;
 
+function CorreAyudante(const AOrden, AEtapa: string; const AC: TContenedor;
+  const APathHijo: string; ATimeoutMs: Integer; out ACodigo: Cardinal;
+  out AVencido: Boolean): string;
+begin
+  Result := RunCapturedEnContenedor(AOrden, AEtapa, AC, ATimeoutMs, ACodigo, AVencido,
+    phConsola, EntornoSinConfiguracion(['PATH=' + APathHijo]));
+end;
+
 { Lo que el ayudante lee de las raices, COPIADO a AEtapa: el form (APeticion.Path,
   a veces una propuesta en la casa), sus hermanos del mismo tipo por sus frames y
   ancestros, y las unidades de todos, que dicen de que clase hereda cada uno. Por
@@ -1917,8 +1937,7 @@ begin
       Result := ComponeOrdenDeRender(TPath.Combine(Caja, TPath.GetFileName(AExe)), Pet, Orden);
       if Result <> '' then
         Exit;
-      ASalida := RunCapturedEnContenedor(Orden, Etapa, AC, PlazoDeRender(APeticion), ACodigo, AVencido,
-        phConsola, EntornoSinConfiguracion(['PATH=' + PathHijo]));
+      ASalida := CorreAyudante(Orden, Etapa, AC, PathHijo, PlazoDeRender(APeticion), ACodigo, AVencido);
       Origen := CarpetaDelFormDeVerdad(APeticion);
       // un lejano vuelve a su carpeta, no a la del form: CambioEnLoLeido lo relee
       for var L in APeticion.Lejanos do
@@ -1949,8 +1968,38 @@ begin
   end;
 end;
 
+{ El ancestro de la clase raiz de AForm como lo escribe su unidad (el nombre
+  simple; '' si no se lee o desciende de TObject): EL lector de las
+  declaraciones (AnotaAncestros, el de check-binding), por la puerta de leer. }
+function AncestroDelForm(const AForm: TFormDelProyecto): string;
+begin
+  Result := '';
+  try
+    var U := LeeFuentePascal(LeeTexto(UnidadDeDesigner(AForm.Designer), [ltJaula]));
+    var Mapa := TDictionary<string, string>.Create;
+    try
+      AnotaAncestros(U, Mapa);
+      if Mapa.TryGetValue(ClaveDeIdentificador(AForm.Clase), Result) then
+        Result := UltimoTrozo(Result)
+      else
+        Result := '';
+    finally
+      Mapa.Free;
+      U.Free;
+    end;
+  except
+    // lo que no se lee no se sigue
+    Result := '';
+  end;
+end;
+
 { Los forms del proyecto de APeticion, fuera de la carpeta que el ayudante ve, cuya
-  raiz es de una de AClases (lo que dijo que le faltaba: un ancestro o un frame).
+  raiz es de una de AClases (lo que dijo que le faltaba: un ancestro o un frame)
+  o de un ancestro de esas, por la cadena entera: de cada form encontrado, el de
+  su ancestro, si el proyecto lo tiene (AncestroDelForm). Era una vuelta del
+  ayudante por eslabon, con tope de tres, y una cadena de cuatro en otras
+  carpetas se quedaba a medias (los ejemplos de FireDAC y de Skia4Delphi, 1.27). El
+  ayudante sigue siendo el juez: lo que se traiga y no entre, lo dice.
   El proyecto, el .dpr o .dpk que lista la unidad del form (ProjectsUsingUnit),
   porque ahi dcc encuentra esas unidades; a cuales llega lo dice FormsDeLasClases.
   Nunca lanza: sin proyecto, el form sigue a medias y lo dice. }
@@ -1963,18 +2012,31 @@ begin
     var Form := FormDeVerdad(APeticion);
     var Carpeta := TPath.GetDirectoryName(Form);
     for var P in ProjectsUsingUnit(UnidadDeDesigner(Form)) do
-      for var F in FormsDeLasClases(P, AClases, ExtractFileExt(Form)) do
-        if not SameFileName(TPath.GetDirectoryName(F.Designer), Carpeta) and not RutaEnLista(F.Designer, Result) then
-          Result := Result + [F.Designer];
+    begin
+      var Vistas: TArray<string> := [];
+      var Pendientes := AClases;
+      while Length(Pendientes) > 0 do
+      begin
+        Vistas := Vistas + Pendientes;
+        var Siguientes: TArray<string> := [];
+        for var F in FormsDeLasClases(P, Pendientes, ExtractFileExt(Form)) do
+        begin
+          if not SameFileName(TPath.GetDirectoryName(F.Designer), Carpeta) and not RutaEnLista(F.Designer, Result) then
+            Result := Result + [F.Designer];
+          // tambien desde uno de la carpeta del form: su ancestro puede no estarlo
+          var Ancestro := AncestroDelForm(F);
+          if (Ancestro <> '') and (IndexText(Ancestro, Vistas) < 0) and (IndexText(Ancestro, Siguientes) < 0) then
+            Siguientes := Siguientes + [Ancestro];
+        end;
+        Pendientes := Siguientes;
+      end;
+    end;
   except
     // lo que no se lee no se trae
   end;
 end;
 
 function CorreRender(const APeticion: TPeticionRender): TRespuestaRender;
-const
-  // el form, su ancestro, el de este y un frame suyo: cada vuelta es un ayudante entero
-  VUELTAS_POR_LO_LEJANO = 3;
 var
   Exe, Nombre, Salida, Fallo: string;
   Codigo: Cardinal;
@@ -2014,7 +2076,13 @@ begin
   var HayBuena := False;
   var CodigoBueno: Cardinal := 0;
   var LoTraido: TArray<string> := [];
-  for var Vuelta := 0 to VUELTAS_POR_LO_LEJANO do
+  // cada vuelta es un ayudante entero con lo que le falto la anterior (la cadena
+  // de ancestros entera la trae FormsLejanos de una vez; otra vuelta es para lo
+  // que solo el ayudante descubre, un frame de un form traido). Sin tope de
+  // vueltas: era 3, y no media nada; las acotan el plazo de la llamada y que no
+  // quede nada nuevo que traer (cada vuelta trae al menos un form del proyecto)
+  var Vuelta := 0;
+  while True do
   begin
     // cada vuelta, con lo que QUEDA del plazo de la llamada: con el entero, las
     // vueltas por lo lejano costaban hasta el doble (forma 7 de la 1.26)
@@ -2055,8 +2123,7 @@ begin
     end;
     // lo que le falto y el proyecto tiene en otra carpeta: otra vuelta con ello, si
     // queda tiempo: el plazo es de la llamada y no de cada vuelta
-    if (Vuelta = VUELTAS_POR_LO_LEJANO) or (APeticion.Convierte <> '') or
-       (Reloj.ElapsedMilliseconds >= PlazoDeRender(APeticion)) then
+    if (APeticion.Convierte <> '') or (Reloj.ElapsedMilliseconds >= PlazoDeRender(APeticion)) then
       Break;
     var Nuevos: TArray<string> := [];
     for var F in FormsLejanos(APeticion, Result.SinLeer + Result.Sustituidas) do
@@ -2068,6 +2135,7 @@ begin
     LoTraido := [];
     for var F in Nuevos do
       LoTraido := LoTraido + [TPath.GetFileName(F)];
+    Inc(Vuelta);
   end;
   Result.Codigo := Codigo;
   Result.MsTotal := Reloj.ElapsedMilliseconds;

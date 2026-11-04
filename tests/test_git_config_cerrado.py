@@ -3,8 +3,8 @@
 Todas las cobayas y los endpoints son propios del arnes; no hay credenciales.
 La latencia sola es guarda: trace2 mide las DOS variables del hijo.
 Desde la 1.19.0 delphi_git no tiene args: las opciones de firma (y de
-Signed-off-by) ni se pueden escribir - la forma vieja contesta GIT-068 sin
-llegar a git, y un nombre de tag con '-' delante es GIT-071 -; el remoto va
+Signed-off-by) ni se pueden escribir - la forma vieja contesta GIT-068 (lo
+mide test_git_argfilter), y un nombre de tag con '-' delante es GIT-071 -; el remoto va
 por su NOMBRE (una URL en la llamada es GIT-049).
 """
 import atexit, base64, hashlib, http.server, json, os, subprocess, threading, time, zipfile
@@ -213,30 +213,18 @@ try:
               mc.es(out,'SR_GIT_REMOTE_HOST_FMT') and len(hits)==n, out[:350])
     open(CFG,'w').write(normal)
     # Las dos decisiones de firma: opciones del agente y ajustes del operador.
-    # 1.19.0: sin args la opcion de firma ni se puede escribir: la forma vieja
-    # contesta GIT-068 sin llegar a git, y en tag la opcion como nombre no es
-    # un nombre (GIT-071). Ni commit ni tag nuevos.
+    # 1.19.0: sin args la opcion de firma ni se puede escribir (la forma vieja,
+    # args, la mide UNA vez test_git_argfilter: GIT-068; aqui habia 26 copias,
+    # revisor de baterias de la 1.27), y en tag la opcion como nombre no es un
+    # nombre (GIT-071). Ni commit ni tag nuevos.
     antes_firma = raw('rev-parse','HEAD').strip()
-    for cmd in ('commit','tag'):
-        for i,flag in enumerate(('-S','-SDUMMY','--gpg-sign','--gpg-sign=DUMMY','--gpg','--g') +
-                                (('-s','-uDUMMY','--local-user=DUMMY','-as','-fs','--si','--sign') if cmd=='tag' else ('-aS','-sS','-nS','-asS','-vsS'))):
-            args = '--allow-empty '+flag if cmd=='commit' else flag+' dummy-sign-'+str(i)
-            out=call(cmd,args,'DUMMY')
-            check(cmd+' args '+flag+': GIT-068, no llega a git', mc.es(out, 'SR_GIT_ARGS_RETIRADO') and
-                  not mc.llego_a_git(out), out[:350])
-            if cmd=='tag':
-                out=call('tag',name=flag,message='DUMMY')
-                check('tag name='+flag+': GIT-071, no es un nombre', mc.es(out, 'SR_GIT_NOMBRE_NO_VALE_FMT') and
-                      not mc.llego_a_git(out), out[:350])
-    check('la firma pedida no hizo nada: HEAD igual y sin tags dummy-sign',
-          raw('rev-parse','HEAD').strip()==antes_firma and 'dummy-sign' not in raw('tag'))
-    # --signoff (y -s, y --sign en commit, su abreviatura) NO firman: solo ponen
-    # "Signed-off-by" y se admitian. 1.19.0: sin args no hay opciones, ni de
-    # firma ni de Signed-off-by: la forma vieja contesta GIT-068 y no hace nada.
-    for flag in ('--signoff','--sign','-s'):
-        out=call('commit','--allow-empty '+flag,'DUMMY signoff')
-        check('commit args '+flag+': GIT-068, nada hecho',mc.es(out,'SR_GIT_ARGS_RETIRADO') and
-              not mc.llego_a_git(out),out[:300])
+    for flag in ('-S','-SDUMMY','--gpg-sign','--gpg-sign=DUMMY','--gpg','--g',
+                 '-s','-uDUMMY','--local-user=DUMMY','-as','-fs','--si','--sign'):
+        out=call('tag',name=flag,message='DUMMY')
+        check('tag name='+flag+': GIT-071, no es un nombre', mc.es(out, 'SR_GIT_NOMBRE_NO_VALE_FMT') and
+              not mc.llego_a_git(out), out[:350])
+    check('la firma pedida no hizo nada: HEAD igual y ningun tag con una opcion por nombre',
+          raw('rev-parse','HEAD').strip()==antes_firma and not any(t.startswith('-') for t in raw('tag').split()))
     # Control positivo (revisor 1.18.0, A1): una S que es un VALOR no es la
     # firma. 1.19.0: sin args, el valor que queda es el mensaje: "-S" en
     # message va por -F y es el texto del commit, sin firma.

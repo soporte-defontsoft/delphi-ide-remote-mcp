@@ -323,12 +323,9 @@ check('git: diff --stat', out.startswith('exit=0') and bool(_stat(_git.stdout))
       (out[:120], _git.stdout[-120:]))
 out = call('delphi_git', {"repo": GIT_REPO, "command": "rebase"})
 check('git: comando fuera de whitelist rechaza', mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_GIT_UNKNOWN_COMMAND_FMT'), out[:120])
-# 1.19.0: sin args, no hay linea donde colar metacaracteres: el cliente con
-# el esquema viejo recibe GIT-068 y nada se hace; y lo que si viaja suelto
-# (una ruta de paths) lo juzgan los jueces de cualquier ruta (el comodin)
-out = call('delphi_git', {"repo": GIT_REPO, "command": "log", "args": "; del *"})
-check('git: args retirado (GIT-068), nada ejecutado',
-      mc.resultado(out) == 'INVALID_PARAM' and mc.es(out, 'SR_GIT_ARGS_RETIRADO') and 'exit=' not in out, out[:120])
+# 1.19.0: sin args, no hay linea donde colar metacaracteres (args, GIT-068: lo
+# mide UNA vez test_git_argfilter); y lo que si viaja suelto (una ruta de
+# paths) lo juzgan los jueces de cualquier ruta (el comodin)
 out = call('delphi_git', {"repo": GIT_REPO, "command": "log", "paths": ["; del *"]})
 check('git: una ruta de paths con metacaracteres la para el juez de rutas (GUARD-024, el comodin)',
       mc.rechazado(out) and mc.tiene(out, 'GUARD-024') and 'exit=' not in out, out[:120])

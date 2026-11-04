@@ -677,6 +677,25 @@ end;
 function RcPathsDenied(const ARc: string): string; forward; // la segunda barrera de build: el lint le pregunta tambien
 function RcNoEsLista(const ARc: string): string; forward; // V54: el .rc de delphi_styles debe ser una lista blanca
 
+{ LOS .rc de una carpeta de estilos, por EL recorredor (no cruza enlaces):
+  los que juzga el lint y de los que build compila uno; y la negativa cuando
+  hay mas de uno. Build compilaba el primero que listaba Windows, sin decirlo,
+  y lint los juzgaba todos (R12 de la 1.27). Un .rc por carpeta es regla de
+  la casa: el IDE no tiene carpeta de estilos, no hay juez al que preguntar. }
+function RcDeLaCarpeta(const ADir: string; out ADenegado: string): TArray<string>;
+begin
+  Result := WalkFiles(ADir, ['*.rc'], False, False);
+  ADenegado := '';
+  if Length(Result) > 1 then
+  begin
+    var Nombres: TArray<string> := [];
+    for var R in Result do
+      Nombres := Nombres + [TPath.GetFileName(R)];
+    TArray.Sort<string>(Nombres);
+    ADenegado := MsgFmt(SR_STYLES_VARIOS_RC_FMT, [Length(Result), string.Join(', ', Nombres)]);
+  end;
+end;
+
 { ---- lint ---- }
 
 function LintStyles(const APath, AProject: string): string;
@@ -1004,8 +1023,18 @@ begin
       end;
     end;
     // 4) .rc entries pointing at files that do not exist. Por EL recorredor:
-    // un .rc que fuese un enlace a fuera se leia detras (medida M1)
-    for F in WalkFiles(Dir, ['*.rc'], False, False) do
+    // un .rc que fuese un enlace a fuera se leia detras (medida M1). Y mas de
+    // uno, la negativa de build (RcDeLaCarpeta, R12 de la 1.27)
+    var VariosRc: string;
+    var LosRc := RcDeLaCarpeta(Dir, VariosRc);
+    if VariosRc <> '' then
+    begin
+      // sin "rc": son varios, y la negativa los nombra
+      Issue := TJSONObject.Create;
+      Issue.AddPair('refused', VariosRc);
+      Rc.AddElement(Issue);
+    end;
+    for F in LosRc do
     begin
       Text := PatchLoadText(F, Enc);
       // EL lector del .rc (Lsp.Styles.LeeRc): cada recurso con su fichero,
@@ -1371,12 +1400,14 @@ begin
   Files := TextStylesIn(Dir);
   if Length(Files) = 0 then
     Exit(MsgFmt(SR_STYLES_NO_TEXT_FMT, [Dir]));
+  // one manifest per styles folder: con mas de uno, se dice y no se compila
+  // nada (RcDeLaCarpeta, el mismo lector del lint)
   Rc := '';
-  for var R in TDirectory.GetFiles(Dir, '*.rc') do
-  begin
-    Rc := R;
-    Break; // one manifest per styles folder
-  end;
+  var LosRc := RcDeLaCarpeta(Dir, Motivo);
+  if Motivo <> '' then
+    Exit(Motivo);
+  if Length(LosRc) = 1 then
+    Rc := LosRc[0];
   Res := '';
   Brcc := '';
   if Rc <> '' then

@@ -103,8 +103,10 @@ function EsquemaDeDireccion(const AToken: string): string;
   carpeta estaba fuera de las raices (V130 de la 1.23.1, medido). }
 function HelperDeDireccion(const AToken: string): string;
 
-{ La direccion que clone le da a git: su message sin blancos alrededor (una
-  pegada con un salto detras). UNA, para la puerta de los hosts (Lsp.Guard)
+{ La direccion que clone le da a git: su message sin blancos alrededor. Un
+  salto de linea no llega nunca a git: la tool niega antes todo message con
+  saltos fuera de commit y tag (GIT-009); el Trim de la puerta, que corre
+  antes, se queda como segunda barrera. UNA, para la puerta de los hosts (Lsp.Guard)
   y para la tool, que la juzgaban cada una a su manera: con los lectores
   leyendo la direccion tal como git la recibe (V168 de la 1.23.1), la puerta
   tiene que juzgar la misma que la tool le pasa. }

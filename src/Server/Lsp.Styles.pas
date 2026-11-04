@@ -1231,8 +1231,7 @@ begin
       end;
       if AOrden <> SC_CHECK then
         Orden := Orden + ' ' + CONVERSOR_SALIDA;
-      Result := RunCapturedEnContenedor(Orden, Etapa, AC, ATimeoutMs, ACodigo, Vencido, phConsola,
-        EntornoSinConfiguracion(['PATH=' + PathHijo]));
+      Result := CorreAyudante(Orden, Etapa, AC, PathHijo, ATimeoutMs, ACodigo, Vencido);
       // su protocolo: uno de otra version se leeria mal y sin ruido. Uno que murio sin
       // decir nada, o por el plazo, sigue con su codigo
       Dijo := '';

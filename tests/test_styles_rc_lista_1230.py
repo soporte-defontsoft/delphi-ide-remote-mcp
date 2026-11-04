@@ -25,6 +25,10 @@ sigue compilando y el .res lleva el mismo recurso.
      cualquier otra negativa suya. MEDIDO: ya era DENIED, nunca INTERNAL
      [ROJO contra el build sin el arreglo: la excepcion sube y sale el mensaje
      suelto, sin la respuesta estructurada del build (rcOk)]
+  L6 (R12 de la 1.27) dos .rc en la carpeta: build lo niega (STYLE-067) sin
+     convertir; antes compilaba el primero que listaba Windows
+  L7 (R12) ...y lint dice lo mismo
+  L8 (control) con uno solo vuelve a compilar
 
 Uso:  python tests/test_styles_rc_lista_1230.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -133,6 +137,26 @@ try:
           # baterias de la 1.27)
           mc.rechazado(r) and mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and not mc.es(r, 'SR_FALLO_INTERNO_FMT')
           and mc.como_json(r).get('rcOk') is False and not os.path.exists(RES), seguro)
+
+    # L6-L8 (R12 de la 1.27): DOS .rc en la carpeta. build compilaba el primero
+    # que listaba Windows, sin decirlo, y lint los juzgaba todos: un .rc por
+    # carpeta, y con mas, la misma negativa en los dos (RcDeLaCarpeta)
+    limpia()
+    pon_rc('BAT RCDATA "Bat.bin.style"\n')
+    OTRO = os.path.join(STY, 'Otro.rc')
+    open(OTRO, 'w', encoding='utf-8').write('BAT RCDATA "Bat.bin.style"\n')
+    r = srv.call('delphi_styles', {'path': STY, 'command': 'build'})
+    check('L6 (R12) dos .rc: build lo niega (STYLE-067) nombrando los dos, sin convertir ni dejar .res',
+          mc.abre(r, 'SR_STYLES_VARIOS_RC_FMT') and 'Bat.Estilos.rc' in r and 'Otro.rc' in r
+          and not os.path.exists(RES) and not os.path.exists(BIN), r[:400])
+    r = srv.call('delphi_styles', {'path': STY, 'command': 'lint'})
+    check('L7 (R12) ...y lint dice lo mismo, entre sus incidencias del .rc',
+          mc.es(r, 'SR_STYLES_VARIOS_RC_FMT') and any(mc.es(e.get('refused', ''), 'SR_STYLES_VARIOS_RC_FMT')
+                                                     for e in mc.como_json(r).get('rcMissingFiles', [])), r[:400])
+    os.remove(OTRO)
+    r = srv.call('delphi_styles', {'path': STY, 'command': 'build'})
+    check('L8 (control) con uno solo vuelve a compilar',
+          mc.como_json(r).get('rcOk') is True and res_lleva(RES, 'BAT'), r[:400])
 finally:
     srv.cierra()
 mc.borra(BASE)

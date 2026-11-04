@@ -20,6 +20,8 @@ queda, y la salida cruda sigue diciendo que fichero fallo.
   C5  la ruta de la casa que el agente nombra le vuelve con su nombre: una
       negativa de la jaula sobre la cache y sobre la carpeta del exe, en su
       forma larga y en la 8.3
+  C10 la temporal del servidor sale como la casa, sin el nombre de su carpeta
+      (J6 de la 1.27)
   C4  la casa DENTRO de una raiz que declaro el operador no se enmascara: es
       del agente ("si le das acceso, tu sabras"), y sale con su unidad
       virtual, que el agente puede devolver
@@ -85,6 +87,16 @@ try:
             check('C5 la jaula niega %s y la repite como %s\\%s (forma %s)' % (sub, nombre, sub, forma[-28:]),
                   mc.rechazado(r) and (nombre + '\\' + sub) in r.replace('\\\\', '\\') and not nombra(r, raiz),
                   (r[:300], nombra(r, raiz)))
+    # C10: la temporal del servidor es la casa, sin su nombre: salia
+    # <server>\__delphi-temp\x por el filtro de salida y (server)\x por los
+    # mensajes del renderizador (J6 de la 1.27: dos nombradores de la casa)
+    TEMP = os.path.join(SRV, mc.TEMPORALES)
+    for forma in {mc.larga(TEMP), mc.corta(TEMP) or mc.larga(TEMP)}:
+        r = srv.call('delphi_read', {'path': os.path.join(forma, 'x.txt')})
+        check('C10 la jaula niega x.txt de la temporal y la repite como <server>\\x.txt, sin su carpeta (forma %s)'
+              % forma[-28:],
+              mc.rechazado(r) and '<server>\\x.txt' in r.replace('\\\\', '\\') and
+              mc.TEMPORALES not in r and not nombra(r, SRV), (r[:300], nombra(r, SRV)))
 finally:
     srv.cierra()
 

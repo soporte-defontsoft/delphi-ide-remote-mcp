@@ -143,13 +143,18 @@ end;
 
 { The SDK Manager's own adb, recorded in the Android .sdk files it writes
   (SDKAdbPath) - those of THIS server's Delphi, never another install's
-  (5-oct-2026); '' when it has no Android SDK configured. }
-function FindAdb: string;
+  (5-oct-2026). '' con AMotivo cuando no hay SDK de Android o cuando el adb
+  que nombra esta en una carpeta donde esta sesion escribe: seria el del
+  agente, lanzado como el servicio. El juicio vive aqui y no en el llamador
+  (revisor del paisaje de la 1.27; la regla del programa por su ruta,
+  ProgramaDelOperador, como PaClientPath). }
+function FindAdb(out AMotivo: string): string;
 var
   Info: TRadStudioInfo;
   F, P: string;
 begin
   Result := '';
+  AMotivo := MsgText(SR_ADB_NO_SDK);
   Info := DiscoverRadStudio;
   if not Info.Found then
     Exit;
@@ -157,7 +162,14 @@ begin
   begin
     P := TagValue(LeeTexto(F, [ltIde]), 'SDKAdbPath');
     if (P <> '') and TFile.Exists(P) then
-      Exit(P);
+    begin
+      Result := ProgramaFueraDelAgente(P);
+      if Result = '' then
+        AMotivo := MsgFmt(SR_ADB_DONDE_ESCRIBE_FMT, [P])
+      else
+        AMotivo := '';
+      Exit;
+    end;
   end;
 end;
 
@@ -338,14 +350,10 @@ begin
   if Sobra <> '' then
     Exit(MsgFmt(SR_ADB_NO_VA_CON_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'devices', Cmd),
       IfThen(Cmd = '', 'devices', Cmd), Suyos]) + VaCon);
-  Adb := FindAdb;
+  var SinAdb: string;
+  Adb := FindAdb(SinAdb);
   if Adb = '' then
-    Exit(MsgText(SR_ADB_NO_SDK));
-  // el adb que nombra el SDK, en una carpeta donde esta sesion escribe, seria
-  // el del agente, lanzado como el servicio: no se lanza (revisor del paisaje
-  // de la 1.27; la regla del programa por su ruta, ProgramaDelOperador)
-  if ProgramaFueraDelAgente(Adb) = '' then
-    Exit(MsgFmt(SR_ADB_DONDE_ESCRIBE_FMT, [Adb]));
+    Exit(SinAdb);
   // a serial goes BEFORE the subcommand (adb -s <serial> <cmd>). The gate
   // already vetted the device token. Entre comillas: un nombre mDNS numerado
   // lleva un blanco ("adb-X (2)._adb-tls-connect._tcp").

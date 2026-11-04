@@ -25,7 +25,9 @@ prueba del despliegue, no del build; la version que contesta sale en una NOTA.
         del mismo nombre y version no se distinguian por nada (28-sep-2026)
     V6 una lectura de verdad de CADA raiz (delphi_list): una en una letra de
        red solo se lee si el servicio la conecto el mismo al arrancar (1.9.0)
-    V7 una escritura de verdad, y su limpieza (delphi_textedit create + delete)
+    V7 una escritura de verdad, y su limpieza (delphi_textedit create + delete),
+       SOLO en la carpeta que nombra DELPHI_MCP_SMOKE_DIR (dentro de una raiz);
+       sin ella, una NOTA y no se mide
 """
 import json
 import os
@@ -137,9 +139,14 @@ else:
                 malas.append('%s: %s' % (raiz, l[:120]))
         check('V6 una lectura de verdad de CADA raiz (delphi_list de las %d)' % len(roots),
               not malas, malas)
-    if roots and escribible:
-        # (la raiz que es una unidad entera viene con su barra: srvn:\)
-        raiz = roots[-1].rstrip('\\')
+    # la escritura, SOLO donde se le diga: escribia en la ultima raiz que diera
+    # produccion, fuera cual fuera (podia ser el repo de verdad). Una escritura en
+    # vivo va al sandbox, y su ruta no va en el repo publico: una variable
+    # (revisor de baterias de la 1.27)
+    HUMO = os.environ.get('DELPHI_MCP_SMOKE_DIR', '').strip()
+    if roots and escribible and HUMO:
+        # como la ensena el servidor (srvd:\...): asi la busca la copia de la papelera
+        raiz = mc.virtual(HUMO.rstrip('\\'))
         f = raiz + '\\__humo-servicio.txt'
         c = call('delphi_textedit', {'path': f, 'create': True,
                                      'content': 'humo\r\n'})
@@ -155,6 +162,9 @@ else:
               mc.abre(c, 'SK_TEXT_CREADO_ENCODING_FINALES_FMT') and not mc.fallo(d) and copia != '' and
               not mc.fallo(pu),
               c[:120] + ' | ' + d[:120] + ' | ' + pu[:120])
+    elif not HUMO:
+        print('NOTA: sin DELPHI_MCP_SMOKE_DIR (una carpeta de una raiz donde escribir) '
+              'V7 no se mide: produccion no se escribe en un sitio que nadie eligio.')
     else:
         print('NOTA: token de solo lectura; V7 no se mide.')
 

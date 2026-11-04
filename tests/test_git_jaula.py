@@ -43,9 +43,9 @@ main repository's, for a linked worktree) - and git runs PINNED to them
       fetch brought its history and push wrote branches in it
   J10 the control: a folder INSIDE the roots is a remote like any other, by
       its name, with an absolute or a relative address
-  J11 since 1.19.0 fetch and push take no options: the old args get GIT-068
-      and do nothing, and an option written in a typed field is refused by
-      that field's judge (remote: GIT-049, ref: GIT-046)
+  J11 since 1.19.0 fetch and push take no options: an option written in a
+      typed field is refused by that field's judge (remote: GIT-049, ref:
+      GIT-046); the old args (GIT-068) are measured once, in test_git_argfilter
   J12 what push SENDS is names: ref takes ONE name of this repository, it
       adds to the remote and never overwrites or deletes what is there.
       Measured 2026-09-29, with --force and --delete already refused by
@@ -87,9 +87,8 @@ main repository's, for a linked worktree) - and git runs PINNED to them
   J19 a UNC of no declared place in paths - also //host, with spaces, after
       a good path, or behind a device prefix - is refused at the entry gate
       before git runs: git opened SMB towards that host with the service's
-      account (21 s measured with a TEST-NET host); the old forms in args
-      (also after --option=) get GIT-068 without running git; an unserved
-      virtual unit is refused by its name (1.18.1)
+      account (21 s measured with a TEST-NET host); an unserved virtual
+      unit is refused by its name (1.18.1)
 
 Usage:  python tests/test_git_jaula.py [path-to-DelphiLspMcp.exe]
 """
@@ -373,18 +372,11 @@ check('J10 un remoto que es una carpeta de DENTRO: push y fetch por su nombre, c
       and refs(MIO) != mio_antes,
       [corto(p, 200) for p in pasos if mc.fallo(p)] or corto(refs(MIO), 300))
 
-# J11 - 1.19.0: fetch y push no toman opciones. La llamada vieja con args
-# recibe GIT-068 y no hace nada (ni la lista negra de antes ni la corta de
-# las que valian); una opcion escrita en un campo con tipo la niega su juez
+# J11 - 1.19.0: fetch y push no toman opciones (la llamada vieja con args,
+# GIT-068, la mide UNA vez test_git_argfilter: revisor de baterias de la 1.27);
+# una opcion escrita en un campo con tipo la niega su juez
 mio_antes = refs(MIO)
 mal = []
-for cmd, args in (('push', '--force origin main'), ('push', '--repo=' + MIO),
-                  ('fetch', '--upload-pack=x origin'), ('fetch', '--recurse-submodules origin'),
-                  ('fetch', '--tags --prune origin'), ('push', '--dry-run --tags origin'),
-                  ('push', '--set-upstream origin por-relativa')):
-    r = g(REPO, command=cmd, args=args)
-    if not mc.abre(r, 'SR_GIT_ARGS_RETIRADO'):
-        mal.append('%s %s: %s' % (cmd, args, corto(r)))
 for cmd, campos, nombre in (('fetch', {'remote': '--upload-pack=x'}, 'SR_GIT_REMOTO_NO_ESTA_FMT'),
                             ('push', {'remote': '--repo=' + MIO}, 'SR_GIT_REMOTO_NO_ESTA_FMT'),
                             ('push', {'remote': 'origin', 'ref': '--force'}, 'SR_GIT_PUSH_NOMBRE_FMT'),
@@ -395,7 +387,7 @@ for cmd, campos, nombre in (('fetch', {'remote': '--upload-pack=x'}, 'SR_GIT_REM
 tras_malas = refs(MIO)
 bien = [g(REPO, command='fetch', remote='origin'),
         g(REPO, command='push', remote='origin', ref='main')]
-check('J11 fetch y push no toman opciones: con args, GIT-068 sin hacer nada; escritas en remote o ref, las '
+check('J11 fetch y push no toman opciones: escritas en remote o ref, las '
       'niega su juez (GIT-049, GIT-046); control: fetch y push por su nombre',
       not mal and tras_malas == mio_antes and not any(mc.fallo(p) for p in bien),
       (mal + [corto(p) for p in bien if mc.fallo(p)])[:4] or corto(tras_malas, 300))
@@ -625,12 +617,10 @@ git('clone', '-q', '--mirror', ENVIO_GIT, ESPEJO, cwd=DENTRO)
 git('branch', '-D', 'copia', cwd=ESPEJO)      # aqui ya no esta; en el remoto, si
 alli = refs(ENVIO_GIT)
 rs = [g(ESPEJO, command='push'), g(ESPEJO, command='push', remote='origin')]
-# 1.19.0: --tags ya no existe; la llamada vieja, GIT-068 sin hacer nada
-rt = g(ESPEJO, command='push', args='--tags origin')
+# (1.19.0: --tags ya no existe)
 check('J16 push sin nombres desde un repo ESPEJO se niega (GIT-048): lo que envia lo decide su '
-      'configuracion, y quitaria del remoto lo que aqui ya no esta (con --tags en args, GIT-068)',
-      all(mc.abre(r, 'SR_GIT_PUSH_CONFIG_FMT') for r in rs) and mc.abre(rt, 'SR_GIT_ARGS_RETIRADO'),
-      [corto(r) for r in rs + [rt]][:3])
+      'configuracion, y quitaria del remoto lo que aqui ya no esta',
+      all(mc.abre(r, 'SR_GIT_PUSH_CONFIG_FMT') for r in rs), [corto(r) for r in rs])
 check('J16 ...y en el remoto sigue todo como estaba', refs(ENVIO_GIT) == alli and 'copia' in alli,
       '%s | antes: %s' % (corto(refs(ENVIO_GIT)), corto(alli)))
 
@@ -667,15 +657,8 @@ for p, que in unc:
     r = g(REPO, command='log', paths=p)
     if not (mc.abre(r, que) and time.time() - t0 < 5):
         malas.append((p, round(time.time() - t0, 1), corto(r, 160)))
-# ...y las formas viejas en args (tambien tras --opcion=): GIT-068, sin que git corra
-for a in ('-- \\\\%s\\s\\x.txt' % HOST, '--output=\\\\%s\\s\\x.txt' % HOST):
-    t0 = time.time()
-    r = g(REPO, command='log', args=a)
-    if not (mc.abre(r, 'SR_GIT_ARGS_RETIRADO') and time.time() - t0 < 5):
-        malas.append((a, round(time.time() - t0, 1), corto(r, 160)))
 check('J19 un UNC de ningun sitio en paths (tambien //host, con espacios, detras de una ruta buena y '
-      '\\\\?\\UNC\\) se niega en la puerta, y en args (tambien tras --opcion=) es GIT-068, sin que git '
-      'abra la red', not malas, malas)
+      '\\\\?\\UNC\\) se niega en la puerta, sin que git abra la red', not malas, malas)
 r = g(REPO, command='log', paths=['srvq:\\x.txt'])
 check('J19 ...y una unidad virtual que no se sirve, en paths, por su nombre (llegaba a git tal cual: GIT-060)',
       mc.abre(r, 'SR_UNIT_UNKNOWN_FMT'), corto(r, 200))

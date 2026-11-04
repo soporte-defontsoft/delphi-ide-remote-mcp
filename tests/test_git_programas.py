@@ -2,7 +2,7 @@
 Los programas testigo solo escriben una marca en otra carpeta del arnes.
 Desde la 1.19.0 delphi_git no tiene args: los remotos van por su NOMBRE (el
 arnes los declara en la config del repo) y el clone con -c de la llamada ni se
-puede escribir (GIT-068, el clone no se hace).
+puede escribir (args, GIT-068: lo mide UNA vez test_git_argfilter).
 """
 import os, http.server, threading, subprocess
 import mcp_cliente as mc
@@ -49,7 +49,7 @@ try:
     remotos={'ssh':'ssh://fixture@127.0.0.1:9/fixture',
              'credencial':'http://127.0.0.1:'+str(http.server_port)+'/fixture',
              'gitproxy':'git://127.0.0.1:9/fixture'}
-    for case in ('fsmonitor','hook','filter','filter-importado','diff-externo','diff-driver','textconv','firma','ssh','credencial','gitproxy','uploadpack','receivepack','clone-config','clone-config-grupo','clone-config-prefijo'):
+    for case in ('fsmonitor','hook','filter','filter-importado','diff-externo','diff-driver','textconv','firma','ssh','credencial','gitproxy','uploadpack','receivepack'):
         marker=os.path.join(FUERA,case+'.txt')
         program=os.path.join(REPO,'.git','hooks','pre-commit' if case=='hook' else 'fixture-'+case)
         script(program,marker,'cat\n' if case.startswith('filter') else 'cat "$1"\n' if case=='textconv' else 'printf "username=fixture\\npassword=fixture-only\\n"\n' if case=='credencial' else '')
@@ -85,12 +85,6 @@ try:
             # 1.19.0: init no tiene opciones (ni --bare): un repo normal sirve de remoto
             srv.call('delphi_git',{'repo':remote,'command':'init'})
             r=git('fetch',remote='fixture') if case=='uploadpack' else git('push',remote='fixture',ref=RAMA)
-        elif case.startswith('clone-config'):
-            flag={'clone-config':'-nc','clone-config-grupo':'-vqnc','clone-config-prefijo':'--conf'}[case]
-            r=srv.call('delphi_git',{'repo':os.path.join(REPO,case),'command':'clone','args':flag+' core.sshCommand='+program.replace('\\','/'),'message':'ssh://fixture@127.0.0.1:9/fixture'})
-            # 1.19.0: el -c de la llamada ni se puede escribir: GIT-068 y el clone no se hace
-            mc.check(case+': args GIT-068, el clone no se hace','GIT-068' in r and not mc.llego_a_git(r)
-                     and not os.path.exists(os.path.join(REPO,case)),r[:400])
         else:r=git('status')
         mc.check(case+': el programa del repo no se activa',not os.path.exists(marker),r[:400])
         # (revisor de baterias, 18-oct-2026) la ausencia del testigo pasaba

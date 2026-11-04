@@ -731,8 +731,29 @@ def idioma_rtl(exe, idioma):
     ('DE', 'FR', 'JA': los rtl370.de/.fr/.ja que instala el IDE junto a
     rtl370.bpl), y se quita al salir. Un Windows es-ES no tiene ES y lee en
     ingles; uno aleman, en aleman (medido el 18-oct-2026 con el ayudante FMX:
-    "Fehler beim Lesen von EditRight.FontColor")."""
+    "Fehler beim Lesen von EditRight.FontColor").
+
+    Es el UNICO sitio donde una bateria escribe en el HKCU real (test_paisaje lo
+    vigila): no hay otro canal (el RTL lo lee de ahi, GetLocaleOverride), un
+    valor por exe con la ruta de la COPIA de la bateria - nunca la del IDE ni la
+    de bds.exe -, y se quita al salir. Al entrar, los que dejo una bateria que
+    murio a medias: bajo RAIZ y con el exe ya borrado."""
     nombre = larga(exe)
+    raiz = os.path.normcase(larga(RAIZ)) + os.sep
+    with winreg.CreateKey(winreg.HKEY_CURRENT_USER, LOCALES_RTL) as k:
+        huerfanos, i = [], 0
+        while True:
+            try:
+                valor = winreg.EnumValue(k, i)[0]
+            except OSError:
+                break
+            if os.path.normcase(valor).startswith(raiz) and not os.path.exists(valor):
+                huerfanos.append(valor)
+            i += 1
+    if huerfanos:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, LOCALES_RTL, 0, winreg.KEY_SET_VALUE) as k:
+            for valor in huerfanos:
+                winreg.DeleteValue(k, valor)
     with winreg.CreateKey(winreg.HKEY_CURRENT_USER, LOCALES_RTL) as k:
         winreg.SetValueEx(k, nombre, 0, winreg.REG_SZ, idioma)
     try:

@@ -105,8 +105,11 @@ try:
           any('STYLE-052' in n for n in negados) and mc.como_json(r).get('clean') is False, (negados, r[:200]))
 
     # ------------------------------------------------------------------ R7
-    open(os.path.join(STY, 'inc.rc'), 'w', encoding='utf-8', newline='\r\n').write('UNO RCDATA "Uno.bin.style"\n')
-    escribe_rc('#include "inc.rc" // el estilo embebido\n')
+    # el incluido en una subcarpeta: dos .rc en la carpeta de estilos son otra
+    # negativa, STYLE-067, que build daria antes (R12 de la 1.27)
+    os.makedirs(os.path.join(STY, 'sub'))
+    open(os.path.join(STY, 'sub', 'inc.rc'), 'w', encoding='utf-8', newline='\r\n').write('UNO RCDATA "Uno.bin.style"\n')
+    escribe_rc('#include "sub\\inc.rc" // el estilo embebido\n')
     r = call('delphi_styles', {'command': 'lint', 'path': STY}, t=180)
     _rc = mc.como_json(r).get('rcMissingFiles') or []
     check('R7 lint: #include con un comentario detras: el fichero es inc.rc, nada falta, y no es una lista (STYLE-056)',

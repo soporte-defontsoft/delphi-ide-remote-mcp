@@ -102,10 +102,11 @@ for d, dirs, fs in os.walk(SAMPLES):
             if os.path.isfile(pas):
                 shutil.copyfile(pas, os.path.splitext(dst)[0] + '.pas')
                 con_pas += 1
-# (sin los .dpr: con ellos el servidor trae los ancestros de otras carpetas, de vuelta en vuelta
-# del ayudante, y medido el 4-nov-2026 resolvio 9 de 52 forms heredados de FireDAC a cambio de
-# 437 -> 765 s; los demas tienen 4 ancestros lejanos y VUELTAS_POR_LO_LEJANO son 3. Esos van a
-# su NOTA, abajo, por su motivo)
+# (sin los .dpr: con ellos el servidor trae los ancestros de otras carpetas, y medido el
+# 4-nov-2026 con las vueltas de entonces costaba 437 -> 765 s. Desde la 1.27 trae la cadena
+# entera de una vez (sin tope de tres vueltas): con las carpetas enteras de esos 52 forms y sus
+# proyectos, quedan 2 sin ancestro (13 con la 1.26), los dos sin un proyecto que liste su
+# unidad; sonda A/B del 4-nov. Aqui siguen a su NOTA, abajo, por su motivo)
 check('corpus: los forms de texto de los Samples (%d)' % len(copiados), len(copiados) > 100, str(len(copiados)))
 check('corpus: con su .pas los que lo tienen (%d)' % con_pas, con_pas > 100, con_pas)
 

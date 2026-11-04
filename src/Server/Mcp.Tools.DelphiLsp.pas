@@ -1727,8 +1727,16 @@ begin
     EffChar, Params.Trigger);
   try
     Items := Resp.FindValue('result.items') as TJSONArray;
+    // sin items (un null o un error del motor), las notas de la posicion y del
+    // trigger viajan igual: eran de la PREGUNTA, no de la respuesta
     if Items = nil then
-      Exit(RenderResult(Resp.Clone as TJSONObject, NoSettingsNote(Settings)));
+    begin
+      var Notas := '';
+      for var N in TArray<string>.Create(AdjNote, TriggerNota) do
+        if N <> '' then
+          Notas := Notas + ' ' + N;
+      Exit(RenderResult(Resp.Clone as TJSONObject, Notas + NoSettingsNote(Settings)));
+    end;
 
     // Order by the LSP sortText (then label): DelphiLSP marks the relevant
     // candidates to sort first, and slicing the top 50 in raw order buried them.

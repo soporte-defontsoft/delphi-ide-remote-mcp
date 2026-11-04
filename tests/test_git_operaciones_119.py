@@ -4,7 +4,7 @@ operacion; por defecto lo nuestro"). Cada comando toma SUS campos y el
 servidor compone la orden eligiendo de lo que git dice: una revision que
 encuentra, un nombre que admite, un remoto del repo, una ruta del repo.
 
-  O1  args: GIT-068, nada hecho
+  O1  (retirado en la 1.27: args, GIT-068, lo mide test_git_argfilter)
   O2  paths como texto suelto: GIT-069
   O3  status con paths
   O4  add + commit; log count=1 format=dated: hash, fecha y asunto
@@ -68,8 +68,7 @@ def g(**kw):
 
 
 try:
-    r = g(command='status', args='--short')
-    check('O1 args: GIT-068 y nada hecho', 'GIT-068' in r and 'exit=' not in r, r[:200])
+    # (O1, args: GIT-068, lo mide UNA vez test_git_argfilter; revisor de baterias de la 1.27)
     r = g(command='status', paths='a.txt')
     check('O2 paths como texto suelto: GIT-069', 'GIT-069' in r, r[:200])
 
