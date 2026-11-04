@@ -38,6 +38,7 @@ the MCP `initialize` response (`serverInfo.version`).
 - `delphi_styles build` with more than one `.rc` in the styles folder refuses and names them (`STYLE-067`), and `lint` says the same: it compiled the first one Windows listed without a word, while `lint` judged them all. One manifest per styles folder, as before.
 - The server's own temporary folder reaches a message as the server's folder, `<server>`, and its name never: the renderer's failures named it `(server)`, and the output filter `<server>\__delphi-temp\...`. One composer for both.
 - `delphi_completion` keeps its notes on the position and the trigger when the engine answers without a list (a `null` or an error): they were about the question and went only with an answer that had items.
+- `delphi_config get-property` and the other readers of a project property for a build (the output path, the SDK, the PAServer profile, the packages, the engine's settings) give the value msbuild fixes where the property is defined: a reference to another property is its value at that point, empty when that one is defined further down. `<X>a</X><P>$(X)</P><X>b</X>` read `P` as the raw `$(X)` where msbuild fixes `a`, because the reader re-expanded the raw text with an expander of its own instead of the value the build gate already computes for each element; it now returns the gate's value, the same judge, with an unknown macro left as `$(X)` for whoever has its table (measured with the msbuild oracle: a reference before the definition is empty, after it the value).
 
 ## [1.26.1] - 2026-11-03
 

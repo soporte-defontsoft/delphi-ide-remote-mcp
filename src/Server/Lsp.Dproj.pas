@@ -4283,6 +4283,7 @@ var
   Mal, Tag: string;
   Elementos: TArray<TElementoXml>;
   V: TArray<TVeredicto>;
+  Expandidos, Dudosos: TArray<string>;
 begin
   Result := '';
   // EL juez de "este grupo se aplica a este build", el de la puerta
@@ -4297,14 +4298,21 @@ begin
   // vacio, como en msbuild (un <Profile Condition="'$(Platform)'=='Win32'">
   // de 5 Samples del IDE se contaba para OSX64 e iOS; MSXML, 17-oct-2026)
   Elementos := ElementosDe(AXml, Mal);
-  V := VeredictosDeElementos(AXml, APlatform, AConfig, Elementos, [], []);
+  // y el MISMO valor que la puerta: VeredictosDeElementos ya expande cada
+  // elemento EN SU PUNTO (ExpandeMacrosDelBuild, como msbuild al fijarlo: la
+  // referencia a una propiedad definida DESPUES vale vacio, la de antes su
+  // valor de entonces, y lo desconocido - de fuera, el IDE, el entorno - queda
+  // escrito como $(X) para quien tenga su tabla). Aqui se re-expandia el valor
+  // CRUDO con un expansor propio (solo la autorreferencia) y
+  // <X>a</X><P>$(X)</P><X>b</X> daba '$(X)' donde msbuild fija 'a' (H8; medido
+  // con el oraculo el 4-nov-2026: ORA_PRE_DEF=[] y ORA_POST=[tarde])
+  V := VeredictosDeElementos(AXml, APlatform, AConfig, Elementos, [], [], Expandidos, Dudosos);
   Tag := LowerCase(ATag);
   // y solo de un PropertyGroup de la raiz: el de un Target o de
   // ProjectExtensions no lo lee msbuild en la pasada (revisor E, 21-oct-2026)
   for var I := 0 to High(Elementos) do
     if (V[I] = vSi) and (Elementos[I].Nombre = Tag) and EsDeGrupoDeLaRaiz(Elementos[I]) then
-      Result := ExpandeMacros(ValorDeTramo(AXml, Elementos[I].Tramo).Trim,
-        [ATag + '=' + Result]); // el ultimo gana, con lo de antes dentro
+      Result := Expandidos[I]; // el ultimo que se aplica gana, el valor que msbuild fija
 end;
 
 function UsadasAntesDeDefinirse(const AXml, ATag, AValor, APlatform, AConfig: string): TArray<string>;

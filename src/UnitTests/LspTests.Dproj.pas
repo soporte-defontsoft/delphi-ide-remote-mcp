@@ -56,6 +56,7 @@ type
     [Test] procedure QuitaConSuLineaSoloSiEstaSola;
     [Test] procedure LaPropiedadEfectivaComoMsbuild;
     [Test] procedure LaPropiedadEfectivaConLoDeAntesDentro;
+    [Test] procedure LaPropiedadEfectivaSeFijaEnSuPunto;
     [Test] procedure LosSelectoresDelProyecto;
     [Test] procedure ElNombradorDeLosGruposConSuClave;
     [Test] procedure ElGrupoDeDespliegueDeLasDosFormas;
@@ -398,6 +399,35 @@ begin
   Assert.AreEqual('RELEASE;W32;BASE;', EffectiveProperty(XML, 'DCC_Define', 'Win32', 'Release'));
   Assert.AreEqual('DEBUG;BASE;', EffectiveProperty(XML, 'DCC_Define', 'Win64', 'Debug'),
     'el grupo de otra plataforma no cuenta');
+end;
+
+// H8 (revision de la 1.22.0, cerrado el 4-nov-2026): msbuild FIJA una propiedad en
+// el punto de su definicion. Una referencia a OTRA propiedad definida DESPUES vale
+// vacio (oraculo: ORA_PRE_DEF=[]); a una de antes, su valor de entonces
+// (ORA_POST=[tarde]). EffectiveProperty re-expandia el valor CRUDO con un expansor
+// propio (solo la autorreferencia) y devolvia '$(X)'; ahora da lo que la puerta
+// fija (AExpandidos de VeredictosDeElementos), el MISMO valor.
+procedure TXmlTextoTests.LaPropiedadEfectivaSeFijaEnSuPunto;
+var
+  XML: string;
+begin
+  XML := '<Project><PropertyGroup>' +
+    '<PG_Base>alfa</PG_Base>' +
+    '<PG_Deriv>$(PG_Base)</PG_Deriv>' +
+    '<PG_Base>beta</PG_Base>' +
+    '<PG_Ant>[$(PG_Tarde)]</PG_Ant>' +
+    '<PG_Tarde>tarde</PG_Tarde>' +
+    '</PropertyGroup></Project>';
+  // hacia atras: PG_Deriv ve PG_Base ya en 'alfa', no el crudo '$(PG_Base)' ni 'beta'
+  Assert.AreEqual('alfa', EffectiveProperty(XML, 'PG_Deriv', 'Win64', 'Debug'));
+  // hacia adelante: PG_Tarde aun no esta definida en ese punto -> vacio
+  Assert.AreEqual('[]', EffectiveProperty(XML, 'PG_Ant', 'Win64', 'Debug'));
+  // la ultima definicion gana
+  Assert.AreEqual('beta', EffectiveProperty(XML, 'PG_Base', 'Win64', 'Debug'));
+  // lo que ningun grupo define queda escrito como $(X), para quien tenga su tabla
+  Assert.AreEqual('$(NoDefinidaJamas)', EffectiveProperty(
+    '<Project><PropertyGroup><PG_Ext>$(NoDefinidaJamas)</PG_Ext></PropertyGroup></Project>',
+    'PG_Ext', 'Win64', 'Debug'), 'lo desconocido se deja como $(X)');
 end;
 
 // La pareja que compilan el IDE y msbuild sin que nadie pida otra: los dos
