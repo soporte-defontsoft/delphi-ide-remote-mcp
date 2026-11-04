@@ -517,6 +517,14 @@ begin
   Assert.AreEqual(CABEZA + '<file name="a.dll" loadFrom="C:\x\a.dll"><comClass clsid="{1}"/></file></assembly>',
     ManifiestoDeClases([Clase('{1}', 'C:\x\a.dll', 'Single'), Clase('{2}', 'C:\y\a.dll', '')]),
     'Single no es un modelo de manifiesto; de dos bibliotecas de igual nombre, la primera');
+  // (1.27) dentro del manifiesto que el ayudante ya lleva, delante de su cierre: lo suyo
+  // (la dependencia de Common Controls 6) se queda; lo sustituia y la borraba
+  Assert.AreEqual('<assembly x="1"><dependency/><file name="a.dll" loadFrom="C:\x\a.dll">' +
+    '<comClass clsid="{1}"/></file></assembly>' + #13#10,
+    ManifiestoDeClases([Clase('{1}', 'C:\x\a.dll', '')], '<assembly x="1"><dependency/></assembly>' + #13#10),
+    'las clases van dentro del manifiesto del ayudante, delante de su cierre');
+  Assert.AreEqual('', ManifiestoDeClases([], '<assembly><dependency/></assembly>'),
+    'sin clases no se compone nada: la copia se queda con el del ayudante');
 end;
 
 procedure TFormRenderTests.ExeDeCadaFramework;

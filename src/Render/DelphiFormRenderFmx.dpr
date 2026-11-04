@@ -22,6 +22,11 @@ uses
   Lsp.AtomosRtl in '..\Server\Lsp.AtomosRtl.pas',
   Lsp.Reparse in '..\Server\Lsp.Reparse.pas';
 
+// el .res del proyecto, como en todo programa del IDE: lleva el manifiesto que
+// su build compone (Common Controls 6, como bds.exe; sin el, un control nativo
+// como un TEdit con ControlType = Platform lanzaba EComponentError: 1.27)
+{$R *.res}
+
 begin
   ExitCode := Main;
 end.

@@ -353,8 +353,9 @@ type
 { El manifiesto con el que un ayudante tiene AClases sin buscarlas en el
   registro: un <file> por biblioteca, con su ruta. De dos bibliotecas de igual
   nombre, la primera: un manifiesto no distingue un <file> de otro por su
-  carpeta. '' si no hay clases. }
-function ManifiestoDeClases(const AClases: TArray<TClaseCom>): string;
+  carpeta. Dentro de ABase, el que el ayudante ya lleva (delante de su cierre:
+  lo suyo se queda), o uno con ellas solas sin el. '' si no hay clases. }
+function ManifiestoDeClases(const AClases: TArray<TClaseCom>; const ABase: string = ''): string;
 
 { EL JUEZ de lo que guarda el IDE (3.11 de la 1.18.0; norma 6: lo que dice un
   juez real se le pregunta): ATexto, un form PROPUESTO para APath (en AEnc),
@@ -1426,7 +1427,40 @@ begin
   end;
 end;
 
-function ManifiestoDeClases(const AClases: TArray<TClaseCom>): string;
+{ El manifiesto que AExe ya lleva (RT_MANIFEST 1), como texto; '' si no lleva o
+  no se lee. El de los ayudantes lo pone su build como el IDE a una aplicacion
+  (default_app.manifest: Common Controls 6, la de bds.exe; 1.27): sin el, un
+  control nativo de FMX (ControlType = Platform) no se creaba. Solo recursos:
+  no se ejecuta nada del exe. }
+function ManifiestoDelExe(const AExe: string): string;
+begin
+  Result := '';
+  var H := LoadLibraryEx(PChar(AExe), 0, LOAD_LIBRARY_AS_DATAFILE);
+  if H = 0 then
+    Exit;
+  try
+    var R := FindResource(H, MakeIntResource(1), RT_MANIFEST);
+    if R = 0 then
+      Exit;
+    var D := LoadResource(H, R);
+    var N := SizeofResource(H, R);
+    if (D = 0) or (N = 0) then
+      Exit;
+    var Bytes: TArray<Byte>;
+    SetLength(Bytes, N);
+    Move(LockResource(D)^, Bytes[0], N);
+    Result := TEncoding.UTF8.GetString(Bytes);
+  finally
+    FreeLibrary(H);
+  end;
+end;
+
+{ El manifiesto de la copia de un ayudante: el suyo (ABase, ManifiestoDelExe) con
+  las clases COM que el contenedor no alcanza DENTRO, delante de su cierre;
+  sin el suyo, un manifiesto con ellas solas. '' si no hay clases. Escribia
+  siempre uno con SOLO las clases, que sustituia al del ayudante y se llevaba
+  su Common Controls 6 (1.27). }
+function ManifiestoDeClases(const AClases: TArray<TClaseCom>; const ABase: string): string;
 
   function SuModelo(const AHilos: string): string;
   begin
@@ -1452,7 +1486,12 @@ begin
         Result := Result + '<comClass clsid="' + XmlEscape(D.Clsid) + '"' + SuModelo(D.Hilos) + '/>';
     Result := Result + '</file>';
   end;
-  if Result <> '' then
+  if Result = '' then
+    Exit;
+  var Cierre := ABase.LastIndexOf('</assembly>');
+  if Cierre >= 0 then
+    Result := ABase.Substring(0, Cierre) + Result + ABase.Substring(Cierre)
+  else
     Result := '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>' +
       '<assembly xmlns="urn:schemas-microsoft-com:asm.v1" manifestVersion="1.0">' + Result + '</assembly>';
 end;
@@ -1555,14 +1594,15 @@ begin
     var Salida: string;
     if not Pregunta(TPath.Combine(ACaja, TPath.GetFileName(AAyudantes[0])), Salida) then
       raise Exception.Create(Salida);
-    var Manifiesto := ManifiestoDeClases(ClasesDeBibliotecaLegible(LeeRespuestaDeRender(Salida).ClasesSinLeer));
-    if Manifiesto = '' then
+    var Clases := ClasesDeBibliotecaLegible(LeeRespuestaDeRender(Salida).ClasesSinLeer);
+    if Length(Clases) = 0 then
       Exit;
-    var Bytes := TEncoding.UTF8.GetBytes(Manifiesto);
     for var A in AAyudantes do
     begin
       var Copia := TPath.Combine(ACaja, TPath.GetFileName(A));
-      PonManifiesto(Copia, Bytes);
+      // dentro del manifiesto que el ayudante ya lleva (el de su build, como el
+      // IDE), no en su lugar: cada uno el suyo
+      PonManifiesto(Copia, TEncoding.UTF8.GetBytes(ManifiestoDeClases(Clases, ManifiestoDelExe(A))));
       // el juez de un manifiesto es Windows, al crear el proceso
       if not Pregunta(Copia, Salida) then
       begin

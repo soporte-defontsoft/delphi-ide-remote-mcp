@@ -1409,7 +1409,10 @@ REGLAS = [
      # el renderizador, otro programa) y el recurso de version de bds.exe. LoadLibraryEx y
      # GetFileVersionInfo piden la ruta, no unos bytes: no caben en LeeBytes (V47 de la 1.23)
      ('Lsp.PackageMap.pas', 'CargaMapa'), ('Lsp.Discovery.pas', 'InfoDelExe'),
-     ('FormRender.Comun.pas', 'IconoPngDeClase')],
+     ('FormRender.Comun.pas', 'IconoPngDeClase'),
+     # ...y el manifiesto de un ayudante del SERVIDOR (junto a su exe, no lo nombra el agente),
+     # leido por Windows como recurso para la copia de la caja: no cabe en LeeBytes (1.27)
+     ('Lsp.FormRender.pas', 'ManifiestoDelExe')],
     'LeeTexto y LeeBytes (Lsp.Patch): LA puerta de leer, con el LUGAR por parametro (jaula, IDE, '
      'casa, temporal, vault), por la ruta REAL y con EL detector. 41 lecturas iban por su cuenta '
      '(inventario del 9-oct-2026, bloque de las puertas de la 1.18.0): el escaner de peligros leia un '
@@ -1630,11 +1633,14 @@ REGLAS = [
      r"TRegEx\.\w+\s*\([^;]*'[^']*</?[A-Za-z(]"
      r"|\b(?:Pos|PosEx|PosMin|IndexOf|LastIndexOf|Contains|StartsWith|EndsWith)\s*\(\s*'</?[A-Za-z]"
      r"|'[^']*</?[A-Za-z]\w*(?:\\s|\(\?:\\s)|\[\^<\]\*",
-     [('Lsp.Docs.pas', '*'), ('Mcp.Tools.DelphiLsp.pas', 'TDelphiCompletionTool.ExecuteWithParams')],
+     [('Lsp.Docs.pas', '*'), ('Mcp.Tools.DelphiLsp.pas', 'TDelphiCompletionTool.ExecuteWithParams'),
+      # el manifiesto de la copia de un ayudante: su UN compositor, que mete las clases COM
+      # delante del cierre del que ya lleva el ayudante (1.27); no es XML de proyecto
+      ('Lsp.FormRender.pas', 'ManifiestoDeClases')],
      'Por Lsp.Dproj (TramosDeEtiqueta, AtributosDeTramo, ValorDeTramo y sus escritores), que '
      'ni siquiera tiene estas formas: busca \'<\' + la etiqueta que le piden. Lsp.Docs lee el '
      'HTML de la ayuda, no XML de proyecto; la completion mira el texto <error> de un detalle '
-     'del motor'),
+     'del motor; el manifiesto de un ayudante lo compone ManifiestoDeClases'),
     # un juez de UTF-8 a mano (V106 de la 1.23.1): LooksUtf8 (Lsp.BuildRunner) miraba la FORMA de las
     # secuencias por sus mascaras y daba por UTF-8 lo que el decodificador rechazaba (sustitutos
     # CESU-8, sobrelargas); el juez es el de la RTL (Lsp.Codificacion.ValidUtf8, IsBufferValid)

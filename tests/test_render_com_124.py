@@ -10,10 +10,16 @@ C5 caeria: la copia ya no necesitaria manifiesto.
 
   C1-C2 VCL: un form con ADO carga entero y el juez lo reordena
   C3    FMX: lo mismo al cargar
-  C4    el ayudante original no se toca: el manifiesto es de la copia de la caja
-  C5    ...y la copia de la caja lo lleva
+  C4    (1.27) los ayudantes llevan el manifiesto que el IDE da a una aplicacion: la dependencia de
+        Common Controls 6 (la que lleva bds.exe) y nada de DPI (la escala que mide el ayudante no cambia)
+  C5    la copia de la caja lleva el manifiesto con esas clases
+  C5b   (1.27) ...y conserva la dependencia: la caja escribia un manifiesto con SOLO las clases y la
+        borraba
+  C6    (1.27) un form FMX con controles nativos (ControlType = Platform: TEdit, TMemo) se dibuja: sin
+        Common Controls 6 el ayudante lanzaba "requires version 4.70 or greater of COMCTL32.DLL"
+        (DSGN-061; el ejemplo Controls de la instalacion, medido el 4-nov-2026)
 
-ROJO contra un build sin el arreglo: C1, C2 y C3.
+ROJO contra un build sin el arreglo: C1, C2 y C3; contra la 1.27 sin el manifiesto: C4, C5b y C6.
 
 Uso:  python tests/test_render_com_124.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -66,19 +72,45 @@ def orden():
     return [l.split()[1].rstrip(':') for l in open(VCL, encoding='ascii') if l.startswith('  object ')]
 
 
-def tiene_manifiesto(ruta):
+def manifiesto(ruta):
+    """El manifiesto (RT_MANIFEST 1) de un exe como texto, '' si no lleva: lo que Windows lee al
+    crear el proceso."""
     k = ctypes.WinDLL('kernel32')
     k.LoadLibraryExW.restype = ctypes.c_void_p
     k.LoadLibraryExW.argtypes = [ctypes.c_wchar_p, ctypes.c_void_p, ctypes.c_uint32]
     k.FindResourceW.restype = ctypes.c_void_p
     k.FindResourceW.argtypes = [ctypes.c_void_p, ctypes.c_void_p, ctypes.c_void_p]
+    k.LoadResource.restype = ctypes.c_void_p
+    k.LoadResource.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
+    k.LockResource.restype = ctypes.c_void_p
+    k.LockResource.argtypes = [ctypes.c_void_p]
+    k.SizeofResource.argtypes = [ctypes.c_void_p, ctypes.c_void_p]
     k.FreeLibrary.argtypes = [ctypes.c_void_p]
     m = k.LoadLibraryExW(ruta, None, 2)
     assert m, ruta
     try:
-        return bool(k.FindResourceW(m, 1, 24))
+        r = k.FindResourceW(m, 1, 24)
+        if not r:
+            return ''
+        return ctypes.string_at(k.LockResource(k.LoadResource(m, r)), k.SizeofResource(m, r)).decode('utf-8', 'replace')
     finally:
         k.FreeLibrary(m)
+
+
+COMCTL6 = 'Microsoft.Windows.Common-Controls'
+
+
+def con_comctl6(texto):
+    return COMCTL6 in texto and 'version="6.0.0.0"' in texto
+
+
+# C6: un form FMX con un TEdit y un TMemo nativos (ControlType = Platform), como el ejemplo Controls
+NATIVO = escribe('UNativo.fmx', "object FormNativo: TFormNativo\n  Left = 0\n  Top = 0\n  Caption = 'N'\n"
+                 '  ClientHeight = 200\n  ClientWidth = 300\n'
+                 "  object Edit1: TEdit\n    ControlType = Platform\n    Position.X = 8\n    Position.Y = 8\n"
+                 "    TabOrder = 0\n    Text = 'Edit1'\n  end\n"
+                 "  object Memo1: TMemo\n    ControlType = Platform\n    Position.X = 8\n    Position.Y = 48\n"
+                 '    TabOrder = 1\n  end\nend\n')
 
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='render-com', t=300)
@@ -99,14 +131,23 @@ try:
     j, r = preview(FMX, 'f.png')
     check('C3 FMX: lo mismo al cargar', j.get('components') == 6 and not j.get('ignored') and
           os.path.exists(os.path.join(JAIL, 'f.png')), r[:500])
+    j, r = preview(NATIVO, 'n.png')
+    check('C6 FMX con controles nativos (ControlType = Platform): se dibuja, sin el DSGN-061 de COMCTL32',
+          j.get('components') == 2 and os.path.exists(os.path.join(JAIL, 'n.png')) and 'COMCTL32' not in r, r[:500])
 finally:
     srv.cierra()
 
-check('C4 los ayudantes de la instalacion no llevan manifiesto: se lo pone la caja a su copia',
-      not any(tiene_manifiesto(a) for a in AYUDANTES), AYUDANTES)
+ORIGINALES = {a: manifiesto(a) for a in AYUDANTES}
+check('C4 los ayudantes de la instalacion llevan el manifiesto del IDE: Common Controls 6, y nada de DPI',
+      all(con_comctl6(t) and 'dpiAware' not in t for t in ORIGINALES.values()),
+      {os.path.basename(a): t[:200] for a, t in ORIGINALES.items()})
 COPIAS = glob.glob(os.path.join(os.path.dirname(EXE), mc.TEMPORALES, 'render-paquetes-*', 'DelphiFormRender*.exe'))
+DE_COPIAS = {c: manifiesto(c) for c in COPIAS}
 check('C5 las copias de la caja llevan el manifiesto con esas clases',
-      len(COPIAS) == 2 and all(tiene_manifiesto(c) for c in COPIAS), COPIAS)
+      len(COPIAS) == 2 and all('comClass' in t for t in DE_COPIAS.values()), COPIAS)
+check('C5b ...y conservan la dependencia de Common Controls 6 de su ayudante',
+      len(COPIAS) == 2 and all(con_comctl6(t) for t in DE_COPIAS.values()),
+      {os.path.basename(c): t[:300] for c, t in DE_COPIAS.items()})
 
 mc.borra(BASE)
 mc.fin('un form con ADO carga y se juzga en el contenedor (V65)')

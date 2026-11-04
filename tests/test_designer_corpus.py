@@ -222,13 +222,12 @@ for motivo, forms in sorted(sin_lector.items()):
 # la bateria salia verde (revisor de baterias de la 1.27)
 PLAZOS = (mc.id_de('SR_RENDER_TIEMPO_FMT'), mc.id_de('SR_DESIGNER_RENDER_TIEMPO_FMT'))
 # ...ni por el propio form, MEDIDO el 4-nov-2026 (y lo mismo en su sitio): un componente que
-# revienta al cargarse aqui (DSGN-061: un AV en vcl370.bpl, un control que pide COMCTL32 4.70)
-# o un literal con una ruta fuera de lo que se lee (DSGN-115, la jaula). Uno nuevo, o con otro
-# id, es rojo; uno que ya se lee, tambien: se quita de aqui (la lista solo encoge)
+# revienta al cargarse aqui (DSGN-061: un AV en vcl370.bpl) o un literal con una ruta fuera de
+# lo que se lee (DSGN-115, la jaula). Uno nuevo, o con otro id, es rojo; uno que ya se lee,
+# tambien: se quita de aqui (la lista solo encoge). Salieron los dos de Controls (un TEdit y un
+# TMemo nativos que pedian COMCTL32 4.70): desde la 1.27 los ayudantes llevan el manifiesto del IDE
 _MD = os.path.join('Object Pascal', 'Multi-Device Samples')
 NO_SE_LEEN = {
-    os.path.join(_MD, 'User Interface', 'Controls', 'Unit1.fmx'): 'SR_DESIGNER_RENDER_FALLO_FMT',
-    os.path.join(_MD, 'User Interface', 'Controls', 'Unit1.LgXhdpiPh.fmx'): 'SR_DESIGNER_RENDER_FALLO_FMT',
     os.path.join('Object Pascal', 'VCL', 'Windows 10 SharingContract', 'Component', 'FormShareComponent.dfm'):
         'SR_DESIGNER_RENDER_FALLO_FMT',
     os.path.join(_MD, 'Device Sensors and Services', 'Address Book', 'Contacts', 'main_u.fmx'):
