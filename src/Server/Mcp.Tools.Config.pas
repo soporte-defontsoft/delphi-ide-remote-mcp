@@ -886,8 +886,8 @@ function SearchPathDenied(const ADproj, APlat, ARaw: string; out AShow: string):
 var
   Proyecto: TDprojInfo;
   Vars: TStringList;
-  Plats, Cfgs, Rutas: TArray<string>;
-  Expanded, Full: string;
+  Plats, Cfgs, Rutas, Definidas: TArray<string>;
+  Expanded, Full, Xml, Enc, Mal: string;
 begin
   AShow := '';
   if ARaw.Trim = '' then
@@ -912,13 +912,27 @@ begin
       // EL lector de la tabla del proyecto, la del build (V205; A2 de la 1.27)
       MacrosDelProyecto(DiscoverRadStudio, TPath.GetDirectoryName(ADproj),
         TPath.GetFileNameWithoutExtension(ADproj), '', '', Vars);
+      // y las PROPIEDADES que el .dproj define, resueltas por EL lector del build
+      // (EffectiveProperty, el de get-property/la puerta): add-searchpath resuelve lo
+      // que la puerta resolvera, no solo las macros del IDE. Una set-property
+      // MiLib=libs y add-searchpath $(MiLib)\comun se negaba (CFG-148, P9); el
+      // entorno del servidor sigue negado a proposito (A10 de la 1.27)
+      Xml := PatchLoadText(ADproj, Enc);
+      Definidas := PropiedadesDefinidas(ElementosDe(Xml, Mal));
     end;
     for var P in Plats do
       for var C in Cfgs do
       begin
         Vars.Values['Platform'] := P;
         Vars.Values['Config'] := C;
-        Expanded := ExpandeMacros(ARaw.Trim, Vars.ToStringArray);
+        // las del IDE/reservadas (en Vars) primero, que ExpandeMacros toma la
+        // primera que da el nombre; luego cada propiedad del .dproj con su valor
+        // para ESTE build (EffectiveProperty), tambien la vacia (un par 'X=', que
+        // Vars.Values borraria al ser '')
+        var Pares := Vars.ToStringArray;
+        for var Nombre in Definidas do
+          Pares := Pares + [Nombre + '=' + EffectiveProperty(Xml, Nombre, P, C)];
+        Expanded := ExpandeMacros(ARaw.Trim, Pares);
         if Expanded.Contains('$(') then
           Exit(MsgFmt(SR_CONFIG_PATH_MACRO_DESCONOCIDA_FMT, [ARaw.Trim]));
         // como msbuild, que expande y DESPUES desescapa (EL desescapador,

@@ -3626,8 +3626,8 @@ const
     '[CFG-148 INVALID_PARAM] "%s" has a macro add-searchpath does not ' +
     'resolve: it knows the IDE''s and msbuild''s - $(BDS), $(BDSLIB), ' +
     '$(Platform), $(Config), $(MSBuildProjectDirectory), the catalogs and ' +
-    'the IDE''s Environment Variables -, not a property the .dproj defines ' +
-    'itself nor the environment of this server. Use a ' +
+    'the IDE''s Environment Variables - and the properties the .dproj ' +
+    'defines itself, not the environment of this server. Use a ' +
     'real path or one of those; a value with any other macro goes as it is ' +
     'with delphi_config set-property name=DCC_UnitSearchPath, and ' +
     'delphi_build judges what it reads.';
