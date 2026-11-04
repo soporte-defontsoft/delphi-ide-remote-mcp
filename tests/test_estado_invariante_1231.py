@@ -22,9 +22,18 @@ is not '.' (this machine: es-ES); E3 is green with both, everywhere.
 
 Usage:  python tests/test_estado_invariante_1231.py [path-to-DelphiLspMcp.exe]
 """
-import os
+import ctypes, os
 import mcp_cliente as mc
 from mcp_cliente import check
+
+# E1/E2 solo DISTINGUEN el arreglo donde el separador decimal del usuario no es '.': lo dice Windows
+# (GetLocaleInfoEx, LOCALE_SDECIMAL del usuario), y si es '.', la bateria lo avisa en vez de contar
+# un verde que no mide nada (revisor de baterias de la 1.27)
+_sep = ctypes.create_unicode_buffer(8)
+SEPARADOR = _sep.value if ctypes.windll.kernel32.GetLocaleInfoEx(None, 0x0E, _sep, 8) else ''
+if SEPARADOR == '.':
+    print("NOTA E1/E2 no discriminan aqui: el separador decimal del usuario ya es '.', y el lector "
+          "del locale daria lo mismo (solo E3 y E4 miden)")
 
 BASE = mc.carpeta('estado1231')
 EXE = mc.copia_exe(BASE, con_render=True)  # el renderizador que acompana al exe bajo prueba

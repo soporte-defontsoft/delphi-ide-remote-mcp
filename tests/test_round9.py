@@ -139,10 +139,13 @@ U = os.path.join(BASE, 'sub')
 os.makedirs(U)
 V = os.path.join(U, 'v.txt')
 open(V, 'wb').write(b'hello auditor3')
-j = J(A.call('delphi_upload', {'path': V, 'chunkbase64': base64.b64encode(b'XYZ').decode(),
-                               'offset': 5}))
+r = A.call('delphi_upload', {'path': V, 'chunkbase64': base64.b64encode(b'XYZ').decode(),
+                             'offset': 5})
+# RECHAZADO por SU regla (UPLOAD-001): solo el fichero intacto pasaba tambien con cualquier
+# otra negativa que no llegara a escribir (revisor de baterias de la 1.27)
 check('F1 offset dentro del fichero: RECHAZADO y el fichero INTACTO',
-      open(V, 'rb').read() == b'hello auditor3', (str(j)[:200], open(V, 'rb').read()))
+      mc.abre(r, 'SR_UPLOAD_OFFSET_INSIDE_FMT') and open(V, 'rb').read() == b'hello auditor3',
+      (r[:200], open(V, 'rb').read()))
 j = J(A.call('delphi_upload', {'path': V, 'chunkbase64': base64.b64encode(b'!').decode(),
                                'offset': 14}))
 check('F1 offset == tamano (append) SI vale', j.get('size') == 15, str(j)[:200])

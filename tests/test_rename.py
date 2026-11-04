@@ -169,7 +169,10 @@ check('references lista el uso del form (designer) con su linea, y lo explica (L
       mc.es(j.get('designerNote') or '', 'SN_REFS_DESIGNER_FMT'), str(j)[:400])
 os.remove(DFM)
 j = J(call('delphi_references', {'path': UCALC, 'line': 4, 'character': 9}))
-check('...y sin el form, references no trae designer', 'designer' not in j, str(j)[:300])
+# (revisor de baterias de la 1.27) `'designer' not in j` pasaba con j={} si references fallaba: la
+# respuesta tiene que ser la de references, con sus usos confirmados
+check('...y sin el form, references no trae designer',
+      len(mc.aciertos(j, 'confirmed')) > 0 and 'designer' not in j, str(j)[:300])
 
 # 6. RTL symbol refused (definition outside the jail): IntToStr usage
 s = open(UCALC, encoding='utf-8-sig').read().replace(

@@ -94,8 +94,14 @@ end
 """
 o = layout('Bien', GOOD)
 check('L1 un form correcto sale limpio', o.get('clean') is True, o)
+# (revisor de baterias de la 1.27) la caja del Grid, no clientWidth/clientHeight: esos los copia del .dfm
+# y pasaban sin resolver nada. El alClient empieza donde acaba la banda de arriba, acaba donde empieza la
+# de abajo y ocupa el ancho entero
+bx = {b['name']: b for b in o.get('boxes', [])}
+g, top, bot = bx.get('Grid', {}), bx.get('PanelTop', {}), bx.get('StatusBar1', {})
 check('L5 Align resuelto: el alClient recibe el hueco que queda',
-      o.get('clientWidth') == 500 and o.get('clientHeight') == 300, o)
+      bool(g and top and bot) and g.get('y') == top.get('y', 0) + top.get('h', -1) and
+      g.get('y', 0) + g.get('h', 0) == bot.get('y') and g.get('x') == 0 and g.get('w') == 500, o)
 check('L7 un TTimer no tiene geometria que juzgar',
       'Timer1' not in all_text(o, 'zeroSize', 'outsideParent', 'overlapping',
                                'clipped', 'sizeNotWritten'), o)

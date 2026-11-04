@@ -141,9 +141,14 @@ try:
           mc.es(r, NEGATIVA) and not os.path.exists(os.path.join(STY, 'Bat.bin.style')) and
           intacto() and not copias_del_secreto(), (r[:300], copias_del_secreto()))
     r = srv.call('delphi_delete', {'path': BORRA})
+    # "guarda el nombre" se mira: en el cajon de lo borrado, borrar.bin sellado y con mas de un nombre
+    # (es el MISMO fichero); antes solo se miraba que no hubiera copia, y un delete que no guardaba nada
+    # pasaba. Y exito es no fallar: not rechazado dejaba pasar un INTERNAL (revisor de baterias de la 1.27)
+    guardado = mc.copias(JAIL, 'borrar.bin', 'CAJON_BORRADOS')
     check('C7 delphi_delete del enlace: la papelera guarda el nombre, no una copia',
-          not mc.rechazado(r) and not os.path.exists(BORRA) and intacto() and not copias_del_secreto(),
-          (r[:300], copias_del_secreto()))
+          not mc.fallo(r) and not os.path.exists(BORRA) and len(guardado) == 1 and
+          os.stat(guardado[0]).st_nlink > 1 and intacto() and not copias_del_secreto(),
+          (r[:300], guardado, copias_del_secreto()))
 finally:
     srv.cierra()
 

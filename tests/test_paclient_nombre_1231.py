@@ -167,11 +167,15 @@ try:
                                  'project': dproj('Ancho' + chr(0xff1b) + 'x')}, t=60)
     check('P6 un punto y coma de ancho completo: PAS-071 (lista blanca)', mc.es(r, 'SR_PACLIENT_NOMBRE_FMT'), r[:200])
 
-    # P7 control: un nombre corriente, con acento, espacio, punto y guion
+    # P7 control: un nombre corriente, con acento, espacio, punto y guion. ...y LLEGA a paclient, como P5:
+    # "no PAS-071" pasaba con cualquier otra negativa o sin respuesta (revisor de baterias de la 1.27)
+    limpia_scratch()
+    corriente = 'Mi Gesti' + chr(0xf3) + 'n-2.1 (v2)'
     r = call('delphi_paserver', {'command': 'remote-run', 'name': PROF, 'timeoutms': 5000,
-                                 'project': dproj('Mi Gesti' + chr(0xf3) + 'n-2.1 (v2)')}, t=60)
-    check('P7 control: acento, espacio, punto, guion y parentesis no se niegan',
-          not mc.es(r, 'SR_PACLIENT_NOMBRE_FMT'), r[:200])
+                                 'project': dproj(corriente)}, t=60)
+    check('P7 control: acento, espacio, punto, guion y parentesis no se niegan (y llega a paclient)',
+          not mc.es(r, 'SR_PACLIENT_NOMBRE_FMT') and ('jobId' in r or os.path.isdir(os.path.join(SCRATCH, corriente))),
+          r[:200])
 
     # Los campos de un .deployproj escrito a mano (BUILD-066). ROJOS contra 4f07b8e: nadie los juzga
     dep = os.path.join(JAIL, 'Dep')

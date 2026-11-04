@@ -599,6 +599,11 @@ try:
           re.search(r"\r\n  object Button1: TButton\r\n    Position\.X = 10\.000000000000000000\r\n"
                     r"    Position\.Y = 10\.000000000000000000\r\n    TabOrder = 0\r\n    Text = 'Button1'\r\n  end",
                     fmx) is not None, fmx[-400:])
+    # (revisor de baterias de la 1.27) el preview de Button1 AQUI, antes de los demas inserts: abajo tenia cinco
+    # componentes encima (todos nacen en 10,10) y sus pixeles oscuros contaban como el texto del boton
+    rect, png = rect_de(FFMX, 'Button1')
+    check('F1 ...y preview lo dibuja en 10,10 con su texto',
+          (rect or '').startswith('10,10,') and oscuros(png) > 5, (rect, oscuros(png)))
     r = dsg(command='insert', path=FFMX, classname='TRectangle')
     check('F1 un TRectangle no lleva Text (su SetName no lo pone)', J(r).get('inserted') == 'Rectangle1' and
           re.search(r"object Rectangle1: TRectangle\r\n(    (?!Text)[^\r\n]*\r\n)*  end", mc.lee(FFMX)) is not None,
@@ -622,9 +627,6 @@ try:
                     mc.lee(FFMX))
           is not None, mc.lee(FFMX)[-300:])
     compila_y_cuadra('F1', FPROJ, FFMX)
-    rect, png = rect_de(FFMX, 'Button1')
-    check('F1 ...y preview lo dibuja en 10,10 con su texto',
-          (rect or '').startswith('10,10,') and oscuros(png) > 5, (rect, oscuros(png)))
     # 3.7 de la 1.18.0 (Hermes, medido): en FMX Left/Top los guarda TComponent
     # (el sitio del ICONO de un no visual): set los escribia, contestaba bien y
     # el control no se movia. Ahora se niega nombrando Position.X/Y, y el lint
@@ -984,7 +986,11 @@ try:
     ACDFM, ACPAS = os.path.join(RDIR, 'UAcento.dfm'), os.path.join(RDIR, 'UAcento.pas')
     check('R17 (de partida) el form y la unidad recien creados llevan BOM (el IDE de esta maquina, en UTF-8)',
           bytes_de(ACDFM).startswith(BOM) and bytes_de(ACPAS).startswith(BOM), bytes_de(ACDFM)[:3])
-    sin_bom = bytes_de(ACDFM)[3:]  # leido ANTES: open('wb') lo vacia
+    # (revisor de baterias de la 1.27) el BOM se quita SI esta: con un IDE en ANSI el creador no lo pone y [3:]
+    # cortaba el principio del form (y de la unidad, abajo). El "(de partida)" de arriba sigue siendo de esta
+    # maquina (pendiente: un juez de la preferencia del IDE)
+    sin_bom = bytes_de(ACDFM)  # leido ANTES: open('wb') lo vacia
+    sin_bom = sin_bom[3:] if sin_bom.startswith(BOM) else sin_bom
     open(ACDFM, 'wb').write(sin_bom)  # como lo guarda el IDE con todo ASCII
     antes_dfm, antes_pas = bytes_de(ACDFM), bytes_de(ACPAS)
     r = dsg(command='insert', path=ACDFM, classname='TLabel', component='LblDirección')
@@ -992,7 +998,7 @@ try:
           mc.abre(r, 'SR_DESIGNER_NOMBRE_SIN_BOM_FMT') and 'UAcento.dfm' in r and
           bytes_de(ACDFM) == antes_dfm and bytes_de(ACPAS) == antes_pas, r[:300])
     open(ACDFM, 'wb').write(BOM + antes_dfm)
-    open(ACPAS, 'wb').write(antes_pas[3:])
+    open(ACPAS, 'wb').write(antes_pas[3:] if antes_pas.startswith(BOM) else antes_pas)
     r = dsg(command='insert', path=ACDFM, classname='TButton')
     check('R17 ...un nombre ASCII entra igual con la unidad sin BOM', J(r).get('inserted') == 'Button1', r[:300])
     # una unidad SOLO ASCII no tiene codificacion que respetar: el nombre la

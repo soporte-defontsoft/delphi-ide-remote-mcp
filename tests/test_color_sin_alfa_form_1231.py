@@ -75,8 +75,11 @@ try:
 
     r = srv.call('delphi_edit', {'path': fmx, 'old': '    Position.X = 10.000000000000000000',
                                  'new': '    Position.X = 20.000000000000000000'}, 300)
+    # que la edicion se hizo: delphi_edit contesta texto, como_json daba {} y 'error' not in {} pasaba con
+    # cualquier respuesta (revisor de baterias de la 1.27)
     check('C3 delphi_edit de otra linea (el color ya estaba): sin DSGN-176',
-          'error' not in mc.como_json(r) and not mc.es(r, NOTA), r[-700:])
+          not mc.fallo(r) and 'Position.X = 20.000000000000000000' in open(fmx, encoding='utf-8-sig').read()
+          and not mc.es(r, NOTA), r[-700:])
 
     escribe(con_color('xFFF7DFC6'))
     i = mc.id_changeset(srv.call('delphi_changeset', {'command': 'begin'}))
@@ -90,7 +93,10 @@ try:
     escribe(ORIGINAL)
     r = srv.call('delphi_edit', {'path': fmx, 'old': '    Size.PlatformDefault = False\n  end',
                                  'new': '    Size.PlatformDefault = False\n    Fill.Color = xFFF7DFC6\n  end'}, 300)
-    check('C5 (control) un color de 8 cifras: sin DSGN-176', not mc.es(r, NOTA), r[-700:])
+    # ...y que se escribio: "sin DSGN-176" pasaba tambien con la edicion negada (revisor de baterias de la 1.27)
+    check('C5 (control) un color de 8 cifras: se escribe, sin DSGN-176',
+          not mc.fallo(r) and 'Fill.Color = xFFF7DFC6' in open(fmx, encoding='utf-8-sig').read()
+          and not mc.es(r, NOTA), r[-700:])
     r = lint(fmx)
     check('C5 ...y el lint CLEAN', limpio(r), r[:600])
 finally:

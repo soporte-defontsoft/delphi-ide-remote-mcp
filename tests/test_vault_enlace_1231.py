@@ -33,6 +33,9 @@ os.makedirs(os.path.join(REF, 'otra'))
 for n in ('AGENTS-VAULT.md', 'MEMORY.md'):
     open(os.path.join(VAULT, n), 'w').write('# x\n')
 open(os.path.join(VAULT, 'secreto.md'), 'w').write('SECRETO del vault\n')
+# el control de E4: la MISMA palabra en una nota de la referencia que NO es del vault, que el search
+# tiene que encontrar (revisor de baterias de la 1.27)
+open(os.path.join(REF, 'otra', 'visible.md'), 'w').write('SECRETO a la vista\n')
 ok = mc.junction(os.path.join(JAIL, 'lnk'), VAULT) and mc.junction(os.path.join(REF, 'otra', 'lnk2'), VAULT)
 check('los enlaces se plantan', ok)
 PUERTO = mc.puerto_libre()
@@ -44,14 +47,23 @@ try:
     cli = mc.Http(PUERTO, TOKEN)
     cli.session('vault-enlace')
     r = cli.call('delphi_read', {'path': os.path.join(VAULT, 'secreto.md')})
-    check('E1 control: el secreto por su ruta, VAULT-002', mc.rechazado(r) and 'SECRETO' not in r, r[:200])
+    # E1-E3 por SU negativa (VAULT-002), la que dice el docstring: rechazado a secas pasaba con la de
+    # la jaula o la de un enlace (revisor de baterias de la 1.27)
+    check('E1 control: el secreto por su ruta, VAULT-002',
+          mc.rechazado(r) and mc.es(r, 'SR_VAULT_NOT_CODE') and 'SECRETO' not in r, r[:200])
     r = cli.call('delphi_read', {'path': os.path.join(JAIL, 'lnk', 'secreto.md')})
-    check('E2 por un enlace de la raiz que apunta al vault: negado', mc.rechazado(r) and 'SECRETO' not in r, r[:200])
+    check('E2 por un enlace de la raiz que apunta al vault: negado',
+          mc.rechazado(r) and mc.es(r, 'SR_VAULT_NOT_CODE') and 'SECRETO' not in r, r[:200])
     r = cli.call('delphi_read', {'path': os.path.join(REF, 'otra', 'lnk2', 'secreto.md')})
     check('E3 por un enlace de la referencia que apunta al vault: negado',
-          mc.rechazado(r) and 'SECRETO' not in r, r[:200])
+          mc.rechazado(r) and mc.es(r, 'SR_VAULT_NOT_CODE') and 'SECRETO' not in r, r[:200])
     r = cli.call('delphi_search', {'root': REF, 'query': 'SECRETO', 'pattern': '*.md'})
-    check('E4 delphi_search en la referencia no encuentra el secreto por el enlace', 'SECRETO' not in r, r[:300])
+    # con su control: la nota que NO es del vault si sale (un search que fallara tampoco traia el
+    # secreto)
+    hits4 = [h['path'].lower() for h in mc.aciertos(r)] if not mc.fallo(r) else []
+    check('E4 delphi_search en la referencia no encuentra el secreto por el enlace',
+          any(p.endswith('visible.md') for p in hits4) and 'SECRETO del vault' not in r and
+          not any(p.endswith('secreto.md') for p in hits4), r[:300])
 finally:
     proc.kill()
 

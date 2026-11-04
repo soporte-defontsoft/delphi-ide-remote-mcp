@@ -72,11 +72,12 @@ def compila(r):
     return mc.como_json(r).get('success') is True
 
 
+SIN = None  # sin modo desarrollador: el salto, por fin(sin_checks=) y no por un rojo de "0 checks" (revisor de baterias de la 1.27)
 try:
     carpeta, proyecto = fixture('fuera')
     link = os.path.join(carpeta, 'Fuera.pas')
     if not puede_symlink(link, os.path.join(FUERA, 'Fuera.pas')):
-        print('NOTA: no se puede crear un symlink de fichero (modo desarrollador apagado): V3 no se mide')
+        SIN = 'no se puede crear un symlink de fichero (modo desarrollador apagado): V3 no se mide'
     else:
         # el .dpr USA Fuera (el symlink) y lo imprime: con el arreglo la puerta
         # niega antes de compilar; SIN el arreglo dcc lo sigue, compila y la
@@ -101,4 +102,4 @@ finally:
     srv.cierra()
 mc.borra(BASE)
 mc.borra(FUERA)
-mc.fin('un symlink de fichero del arbol que sale de las raices lo niega la puerta, V3 de la 1.23')
+mc.fin('un symlink de fichero del arbol que sale de las raices lo niega la puerta, V3 de la 1.23', sin_checks=SIN)

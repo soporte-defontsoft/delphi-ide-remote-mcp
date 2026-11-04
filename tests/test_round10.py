@@ -142,8 +142,9 @@ r = A.call('delphi_create', {'kind': 'unit', 'name': 'MiEmpresa.Datos', 'project
 check('B2 un espacio de nombres PROPIO sigue valiendo, y sin nota', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT')
       and not mc.es(r, 'SN_CREATE_NOMBRE_TAPADO_FMT'), r[:200])
 r = A.call('delphi_create', {'kind': 'project-web', 'name': 'X', 'dir': os.path.join(BASE, 'X')})
+# (revisor de baterias de la 1.27) B4 y P6 con su id: los nombres los traia tambien cualquier eco o nota
 check('B4 un kind de proyecto inventado nombra los que existen',
-      'project-console' in r and 'project-vcl' in r, r[:250])
+      mc.abre(r, 'SR_CREATE_PROJECT_KIND') and 'project-console' in r and 'project-vcl' in r, r[:250])
 
 # ---------------------------------------------------------------- B3: rm ----
 D = os.path.join(BASE, 'paraborrar')
@@ -255,7 +256,7 @@ _r = A.call('delphi_changeset', {'command': 'begin'})
 CID3 = cid_de(_r)
 r = A.call('delphi_changeset', {'command': 'stage', 'id': CID3, 'kind': 'chapuza',
                                  'path': DELTA})
-check('P6 el rechazo de kind incluye delete-line', 'delete-line' in r, r[:200])
+check('P6 el rechazo de kind incluye delete-line', mc.abre(r, 'SR_CHANGESET_KIND') and 'delete-line' in r, r[:200])
 TXT = os.path.join(BASE, 'Nota2.txt')
 open(TXT, 'w', encoding='utf-8').write('esto no es pascal\n')
 r = A.call('delphi_hover', {'path': TXT, 'line': 0, 'character': 1})

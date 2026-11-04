@@ -82,8 +82,12 @@ try:
           and 'Width = 75' in mc.lee(DFM) and 'Height = 25' in mc.lee(DFM)
           and 'ideNote' not in (mc.como_json(r) or {}), (p, r[:400]))
     r = d(command='layout', path=DFM)
-    check('I2 ...y layout no lo da por sin tamano', 'BtnUno' not in str((mc.como_json(r) or {}).get('sizeNotWritten')),
-          r[:400])
+    # (revisor de baterias de la 1.27) `not in str(.get(...))` pasaba con {} o con un error: la lista
+    # sizeNotWritten tiene que ESTAR (layout la compone siempre) y el boton, entre las cajas que midio
+    j = mc.como_json(r)
+    check('I2 ...y layout no lo da por sin tamano',
+          not mc.fallo(r) and isinstance(j.get('sizeNotWritten'), list) and 'BtnUno' not in str(j['sizeNotWritten'])
+          and any(isinstance(b, dict) and b.get('name') == 'BtnUno' for b in j.get('boxes') or []), r[:400])
 
     s.call('delphi_edit', {'path': DFM, 'old': 'TabOrder = 0', 'new': '    TabOrder = 0\n    OnClick = BtnUnoClick'})
     s.call('delphi_edit', {'path': PAS, 'insert': 'metodo', 'inclass': 'TFormMain', 'visibility': 'published',

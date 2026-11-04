@@ -415,8 +415,11 @@ else:
           '|  Simple = 0.400000005960464500' in r and '|  Largo = 1234.567890123457000000' in r, r[:500])
     r = call('delphi_designer', {'command': 'get', 'path': p, 'component': 'FormF'})
     check('V71 get de un binario: los mismos', 'Simple = 0.400000005960464500' in r, r[:400])
-    r = call('delphi_search', {'path': BASE, 'query': 'Simple = 0.400000005960464500'})
-    check('V71 delphi_search los encuentra dentro del binario', 'V71c.dfm' in r, r[:400])
+    # (revisor de baterias de la 1.27) por su parametro (root) y por SUS aciertos: 'V71c.dfm' in r lo cumplia
+    # tambien una nota o un eco que nombrara el fichero sin haberlo encontrado
+    r = call('delphi_search', {'root': BASE, 'query': 'Simple = 0.400000005960464500'})
+    check('V71 delphi_search los encuentra dentro del binario',
+          any(h['path'].lower().endswith('\\v71c.dfm') for h in mc.aciertos(r)), r[:400])
 
     # dos binarios que solo se diferencian en un flotante (mismo tamano, misma
     # cabecera): cada uno con el suyo. La cache del texto va por sus bytes

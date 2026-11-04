@@ -26,7 +26,7 @@ with both.
 
 Usage:  python tests/test_linea_del_motor_1231.py [path-to-DelphiLspMcp.exe]
 """
-import json, os
+import json, os, shutil
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -86,7 +86,16 @@ def opciones(dpr):
 # ---------------------------------------------------------------- L0
 dpr0 = consola('Cero')
 sig, comp, s, c = lo_ensena(dpr0)
-check('L0 control: sin inyeccion, ni signature ni completion ensenan la unidad de fuera', not sig and not comp, (s, c))
+check('L0 control: sin inyeccion, ni signature ni completion ensenan la unidad de fuera',
+      not sig and not comp and not mc.sin_respuesta(s) and not mc.sin_respuesta(c), (s, c))
+# el control de que las sondas VEN: la misma unidad DENTRO de la jaula, junto al .dpr y con su 'in', SI
+# sale en signature y en completion. Sin el, los "no la ensena" de L0-L3 pasaban tambien con dos
+# sondas que no contestaran (revisor de baterias de la 1.27)
+dprd = consola('Dentro')
+shutil.copy(os.path.join(FUERA, 'UFuera.pas'), os.path.dirname(dprd))
+open(dprd, 'wb').write((chr(0xfeff) + (PROGRAMA % 'Dentro').replace('  UFuera;', "  UFuera in 'UFuera.pas';")).encode('utf-8'))
+sig, comp, s, c = lo_ensena(dprd)
+check('L0b control: con UFuera DENTRO de la jaula, signature y completion SI la ensenan', sig and comp, (s, c))
 
 # ---------------------------------------------------------------- L1-L3
 for clave, dpr, comprueba in (
@@ -94,8 +103,9 @@ for clave, dpr, comprueba in (
         ('L2 DCC_Namespace', consola('Nsp', 'DCC_Namespace', 'System;Y ' + INYECCION), 'System'),
         ('L3 FrameworkType', consola('Fwk', framework='None ' + INYECCION), ' -DDEBUG')):
     sig, comp, s, c = lo_ensena(dpr)
-    check('%s con un -U a una carpeta de fuera: signature no ensena su rutina' % clave, not sig, s)
-    check('%s ...ni completion' % clave, not comp, c)
+    # ...con las dos contestando: un timeout tampoco la ensena (revisor de baterias de la 1.27)
+    check('%s con un -U a una carpeta de fuera: signature no ensena su rutina' % clave, not sig and not mc.sin_respuesta(s), s)
+    check('%s ...ni completion' % clave, not comp and not mc.sin_respuesta(c), c)
     o = opciones(dpr)
     check('%s ...y la linea del motor no lleva ese -U (y conserva %s)' % (clave, comprueba.strip()),
           o != '' and INYECCION not in o and comprueba in o, o[:400])

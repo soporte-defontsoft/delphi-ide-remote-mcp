@@ -67,6 +67,15 @@ def opciones(dpr):
     return json.load(open(fab, encoding='utf-8-sig'))['settings'].get('dccOptions', '') if fab else ''
 
 
+# los de siempre, los que dice la instalacion (CodeGear.Common.Targets); que no
+# se copien a mano lo vigila test_paisaje. Leidos antes de A1: su -A lleva los
+# del proyecto DELANTE de estos, y el segundo estaba a mano ('Generics.Collections=')
+rf = mc.raiz_ide(S.call)
+targets = open(os.path.join(rf, 'bin', 'CodeGear.Common.Targets'), encoding='utf-8-sig', errors='replace').read()
+exterior = re.search(r'<UnitAliases>([^<]+)</UnitAliases>', targets).group(1)
+windows = re.search(r"<UnitAliases Condition=\"[^\"]*cWin32Platform[^\"]*\">\$\(UnitAliases\);([^<]+)</UnitAliases>", targets).group(1)
+DE_SIEMPRE = exterior + ';' + windows
+
 # ---------------------------------------------------------------- A1
 dproj1, dpr1 = consola('Al', 'Legacy', 'Legacy=System.SysUtils')
 b = mc.como_json(S.call('delphi_build', {'project': dproj1}, 600)) or {}
@@ -75,8 +84,9 @@ r = hover(dpr1)
 check('A1 hover de IntToStr con uses Legacy (el alias del proyecto): resuelve',
       'IntToStr' in r and not mc.fallo(r) and not mc.es(r, 'SN_LSP_NULL_NOTE'), r[:300])
 o = opciones(dpr1)
+# (revisor de baterias de la 1.27: lo de detras, de los targets de la instalacion, no a mano)
 check('A1 los ajustes fabricados: -A con los del proyecto delante',
-      ' -ALegacy=System.SysUtils;Generics.Collections=' in o, o[:300])
+      re.search(r' -A' + re.escape('Legacy=System.SysUtils;' + DE_SIEMPRE) + r'(\s|$)', o) is not None, o[:300])
 
 # ---------------------------------------------------------------- A2
 dproj2, dpr2 = consola('Sin', 'System.SysUtils', '')
@@ -87,19 +97,16 @@ check('A2 control: con uses System.SysUtils, resuelve', 'IntToStr' in r and not 
 dproj3, dpr3 = consola('Mal', 'System.SysUtils', 'Malo=X -UC:/fuera;Bueno=System.SysUtils')
 hover(dpr3)
 o = opciones(dpr3)
+# ...y el bueno de la misma lista SI llega: sin el, "no llega" pasaba tambien si el servidor dejara de
+# leer DCC_UnitAlias (revisor de baterias de la 1.27)
 check('A3 un alias que no es Nombre=Destino no llega a la linea del motor (ni su -U)',
-      o != '' and '-UC:/fuera' not in o and 'Malo=' not in o, o[:300])
+      o != '' and '-UC:/fuera' not in o and 'Malo=' not in o and ' -ABueno=System.SysUtils;' in o, o[:300])
 
 # ---------------------------------------------------------------- A4 (V160i, 1.25)
-# los de siempre, los que dice la instalacion (CodeGear.Common.Targets); que no
-# se copien a mano lo vigila test_paisaje
-rf = mc.raiz_ide(S.call)
-targets = open(os.path.join(rf, 'bin', 'CodeGear.Common.Targets'), encoding='utf-8-sig', errors='replace').read()
-exterior = re.search(r'<UnitAliases>([^<]+)</UnitAliases>', targets).group(1)
-windows = re.search(r"<UnitAliases Condition=\"[^\"]*cWin32Platform[^\"]*\">\$\(UnitAliases\);([^<]+)</UnitAliases>", targets).group(1)
+# los de siempre (DE_SIEMPRE, leidos arriba de los targets)
 o = opciones(dpr2)
 check('A4 Win32/Win64: -A lleva exactamente lo que dicen los targets',
-      re.search(r' -A' + re.escape(exterior + ';' + windows) + r'(\s|$)', o) is not None, o[:300])
+      re.search(r' -A' + re.escape(DE_SIEMPRE) + r'(\s|$)', o) is not None, o[:300])
 
 S.cierra()
 mc.borra(BASE)

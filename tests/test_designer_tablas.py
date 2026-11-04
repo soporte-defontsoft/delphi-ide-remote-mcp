@@ -225,9 +225,12 @@ def planta(nombre, texto, viejo):
 
 
 FALSA = '# falsa\nC Vcl.StdCtrls:TButton\nP Vcl.StdCtrls:TButton Caption o TCaption\nP Vcl.StdCtrls:TButton Marca o Integer\n'
-vieja = planta('tabla_%s_%s_vcl_aaaaaaaaaaaa_g%d.txt' % (version, build, gen), FALSA, True)
+# Marca solo en la que debe contestar (TablaAnterior: misma build y generacion, la mas reciente); con la
+# misma en las tres, "contesta la de antes" pasaba conteste cual contestase (revisor de baterias de la 1.27)
+OTRA = FALSA.replace('Marca', 'Ajena')
+vieja = planta('tabla_%s_%s_vcl_aaaaaaaaaaaa_g%d.txt' % (version, build, gen), OTRA, True)
 reciente = planta('tabla_%s_%s_vcl_bbbbbbbbbbbb_g%d.txt' % (version, build, gen), FALSA, False)
-nueva = planta('tabla_%s_%s_vcl_cccccccccccc_g%d.txt' % (version, build, gen + 97), FALSA, True)
+nueva = planta('tabla_%s_%s_vcl_cccccccccccc_g%d.txt' % (version, build, gen + 97), OTRA, True)
 otro = planta('tabla_99.0_99.0.1.1_vcl_dddddddddddd_g%d.txt' % gen, FALSA, True)
 srv = mc.Stdio(EXE, env, nombre='dt2')
 call = srv.call
@@ -238,7 +241,11 @@ t0 = time.time()
 while time.time() - t0 < 240 and len([n for n in tablas() if patron.match(n) and 'aaaa' not in n
                                       and 'bbbb' not in n and 'cccc' not in n]) < 2:
     time.sleep(2)
-time.sleep(1)  # la purga va detras de escribir las dos
+# la purga va detras de escribir las dos: se espera a que la haga, con tope, no un segundo fijo
+# (intermitente); si no purga, el tope pasa y los checks de abajo caen (revisor de baterias de la 1.27)
+t0 = time.time()
+while time.time() - t0 < 30 and (vieja in tablas() or otro in tablas()):
+    time.sleep(0.5)
 hay = tablas()
 check('purga: la de otra huella de hace dos horas se borra', vieja not in hay, str(hay)[:500])
 check('purga: la de otra huella de ahora se queda', reciente in hay, str(hay)[:500])

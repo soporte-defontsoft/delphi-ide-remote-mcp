@@ -304,11 +304,16 @@ finally:
     srv2.cierra()
 
 # ------------- servidor B': la raiz y su entrada de solo lectura en dos formas (S4-S5)
-LARGA_SOLO = mc.larga(SOLO)
-check('S4a la carpeta de solo lectura tiene dos formas (8.3 y larga)', LARGA_SOLO.lower() != SOLO.lower(),
-      (SOLO, LARGA_SOLO))
-for nombre, raiz, entrada in (('S4 la raiz en 8.3 y su entrada en largo', SOLO, LARGA_SOLO),
-                              ('S5 la raiz en largo y su entrada en 8.3', LARGA_SOLO, SOLO)):
+# las dos formas, pedidas a Windows: SOLO salia corta solo porque el %TEMP% de esta maquina lo es
+# (la carpeta de un usuario de nombre largo), y S4a era un rojo de entorno donde no; sin 8.3 en el volumen no hay dos formas que
+# medir, y se dice (SKIP, que run_all lista) en vez de dar rojo (revisor de baterias de la 1.27)
+CORTA_SOLO, LARGA_SOLO = mc.corta(SOLO), mc.larga(SOLO)
+FORMAS = (() if not CORTA_SOLO or CORTA_SOLO.lower() == LARGA_SOLO.lower() else
+          (('S4 la raiz en 8.3 y su entrada en largo', CORTA_SOLO, LARGA_SOLO),
+           ('S5 la raiz en largo y su entrada en 8.3', LARGA_SOLO, CORTA_SOLO)))
+if not FORMAS:
+    mc.imprime('SKIP S4/S5: la carpeta de solo lectura no tiene forma 8.3 en este volumen (%s)' % LARGA_SOLO)
+for nombre, raiz, entrada in FORMAS:
     srv2 = mc.Stdio(EXE2, mc.entorno({'DELPHI_MCP_ROOTS': raiz, 'DELPHI_MCP_READONLY_PATHS': entrada}),
                     nombre='ana', t=180)
     try:

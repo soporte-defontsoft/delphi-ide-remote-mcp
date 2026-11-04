@@ -128,7 +128,10 @@ try:
     r = srv.call('delphi_styles', {'path': STY, 'command': 'build'})
     seguro = r[:400].encode('ascii', 'backslashreplace').decode('ascii')  # r lleva el caracter
     check('L5 (revisor V54) caracter fuera de la ANSI: negativa con codigo (EDIT-078) en la respuesta estructurada (rcOk:false)',
-          mc.rechazado(r) and not mc.es(r, 'SR_FALLO_INTERNO_FMT')
+          # el EDIT-078 que dice el nombre del check, por su constante: con rechazado a secas
+          # pasaba un compositor que pusiera '?' y fallara despues por otra cosa (revisor de
+          # baterias de la 1.27)
+          mc.rechazado(r) and mc.es(r, 'SR_EDIT_CARACTERES_NO_CABEN_FMT') and not mc.es(r, 'SR_FALLO_INTERNO_FMT')
           and mc.como_json(r).get('rcOk') is False and not os.path.exists(RES), seguro)
 finally:
     srv.cierra()

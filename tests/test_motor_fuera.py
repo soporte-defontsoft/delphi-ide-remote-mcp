@@ -197,12 +197,12 @@ try:
     # F8 primero (calienta el motor): lo de dentro y la RTL contestan
     r = motor('delphi_definition', {'path': U1, 'line': 5, 'character': 10})
     check('F8 definition de un simbolo de DENTRO: contesta con su ruta',
-          'UDentro.pas' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])
+          not mc.fallo(r) and 'UDentro.pas' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])  # una negativa tambien la nombra (revisor de baterias de la 1.27)
     check('F0 al fabricar los ajustes, la purga quita el intermedio de un escritor muerto y deja el de uno vivo',
           not os.path.exists(VIEJO) and os.path.exists(FRESCO), os.listdir(os.path.dirname(VIEJO)))
     r = motor('delphi_hover', {'path': U1, 'line': 7, 'character': 13})
     check('F8 hover de Length (la RTL, zona de biblioteca APAGADA): contesta su firma',
-          'Length' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])
+          not mc.fallo(r) and 'Length' in r and not mc.es(r, 'SR_LSP_DEF_FUERA_FMT'), r[:300])
 
     r = motor('delphi_definition', {'path': U1, 'line': 8, 'character': 14})
     check('F1 definition de un simbolo de una unit del search path de FUERA: nada de alli, y la nota LSP-037',
@@ -291,7 +291,7 @@ try:
             break
         time.sleep(3)
     check('F8d references de una rutina de la RTL (zona APAGADA): su uso de dentro, no LSP-014',
-          not mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT') and 'UDecl.pas' in r, r[:300])
+          not mc.fallo(r) and not mc.es(r, 'SR_REFS_TARGET_OUTSIDE_FMT') and 'UDecl.pas' in r, r[:300])  # una negativa tambien la nombra (revisor de baterias de la 1.27)
 
     # F6: unos ajustes "del IDE" al lado, que FUNCIONAN y nombran la carpeta de
     # fuera: los que el servidor fabrico para P1 (de su cache), con ese proyecto

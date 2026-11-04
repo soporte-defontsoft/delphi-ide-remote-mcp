@@ -24,7 +24,11 @@ with open(os.path.join(_maindir, 'settings.ini'), 'w') as f:
     f.write('[Server]' + chr(10) + 'Port=%d' % PORT + chr(10) + 'BindIP=127.0.0.1' + chr(10)
             + 'DelphiVersion=37.0' + chr(10) * 2   # pinned to the one install here (of the server since 5-oct-2026)
             + '[Workspace.Op]' + chr(10) + 'Token=%s' % TOKEN + chr(10)
-            + 'Roots=%s' % REPOROOT + chr(10)
+            # el repo, de SOLO LECTURA: este servidor solo lee (delphi_list de src, workspace,
+            # help, installs) y con escritura sobre el repo vivo un guardian que volviera atras
+            # lo tocaria (revisor de baterias de la 1.27). Su raiz escribible, una suya vacia
+            + 'Roots=%s' % mc.carpeta('http-main-raiz') + chr(10)
+            + 'ReadOnlyRoots=%s' % REPOROOT + chr(10)
             + 'AllowTests=1' + chr(10) + 'LibraryZone=1' + chr(10))
 # sin las DELPHI_MCP_* de quien lanza la bateria: el token lo pone el ini
 proc = mc.lanza_http(_mainexe, None, mc.entorno(), espera_en=PORT)   # sin puerto: el del ini
@@ -799,10 +803,15 @@ try:
               json.dumps(srv)[:200])
         # (5-oct-2026: la version fijada que no esta ya no se mide aqui - un
         # servidor sin su Delphi no arranca; test_un_delphi U5)
-        time.sleep(1.5)
+        # (revisor de baterias de la 1.27) dos tramos de 2 s: cada uno MENOR que el plazo (3 s) y los dos
+        # juntos MAYOR. Con uno solo de 1,5 s la sesion seguia viva aunque ninguna peticion la tocara
+        time.sleep(2)
         code, _, body = cli5.post({"jsonrpc": "2.0", "id": 4, "method": "tools/list", "params": {}}, sid5, accept=JSON)
-        check('ttl: cada peticion la toca (1,5 s despues sigue viva)', code == 200 and 'delphi_build' in body,
-              '%s %s' % (code, body[:120]))
+        viva = code == 200 and 'delphi_build' in body
+        time.sleep(2)
+        code, _, body = cli5.post({"jsonrpc": "2.0", "id": 41, "method": "tools/list", "params": {}}, sid5, accept=JSON)
+        check('ttl: cada peticion la toca (2 s + 2 s, mas que el plazo entero, sigue viva)',
+              viva and code == 200 and 'delphi_build' in body, '%s %s' % (code, body[:120]))
         time.sleep(4)
         code, _, body = cli5.post({"jsonrpc": "2.0", "id": 5, "method": "tools/list", "params": {}}, sid5, accept=JSON)
         check('ttl: 4 s sin usarla -> 404 "Session expired" con el plazo',

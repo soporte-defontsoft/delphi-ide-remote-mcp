@@ -44,8 +44,18 @@ end.'''
 ENT = mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_ALLOW_TESTS': '1'})
 
 
+ETAPA = mc.cadena_del_fuente('Server/Lsp.TestRunner.pas', 'TEST_ETAPA_PREFIJO')
+
+
 def copias():
-    return [d for d in os.listdir(TEMP_SRV) if d.startswith('test-')] if os.path.isdir(TEMP_SRV) else []
+    # cualquier etapa de un run que se quede en la casa (su prefijo, del fuente: estaba a mano y con
+    # otro nombre la lista salia vacia) y la carpeta que planta el test, este donde este (revisor de
+    # baterias de la 1.27; la primera version solo miraba 'cerrada': revisor del diff de la cola)
+    if not os.path.isdir(TEMP_SRV):
+        return []
+    etapas = [os.path.join(TEMP_SRV, d) for d in os.listdir(TEMP_SRV)
+              if d.lower().startswith(ETAPA) and os.path.isdir(os.path.join(TEMP_SRV, d))]
+    return etapas + [os.path.join(r, d) for r, ds, _ in os.walk(TEMP_SRV) for d in ds if d.lower() == 'cerrada']
 
 
 try:
@@ -56,8 +66,11 @@ try:
         mc.check('fixture de test creada', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
         open(os.path.join(P, 'CerradaTest.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(PROG)
         r = s.call('delphi_test', {'command': 'run', 'project': os.path.join(P, 'CerradaTest.dproj')}, 600)
-        mc.check('el test corre (crea la carpeta nacida cerrada)',
-                 mc.como_json(r).get('result') == 'pass', (mc.como_json(r).get('outputTail') or r)[:300])
+        # ...y la creo: 'PASS cerrada' sale tambien si CreateDirectory falla, y entonces "no se queda"
+        # pasaba sin haber plantado nada (revisor de baterias de la 1.27)
+        mc.check('el test corre y crea la carpeta nacida cerrada (CERRADA ok)',
+                 mc.como_json(r).get('result') == 'pass' and 'CERRADA ok' in (mc.como_json(r).get('outputTail') or ''),
+                 (mc.como_json(r).get('outputTail') or r)[:300])
         # el barrido de delphi_test (ReclamaArbol + BorraArbol) la quito: casa limpia
         mc.check('la carpeta nacida cerrada NO se queda en la casa tras el run (rojo contra r1222ce)',
                  copias() == [], 'copias: %r' % copias())
@@ -76,7 +89,7 @@ finally:
     # el dueno antes de borrar, para no dejar basura imborrable en la maquina
     import subprocess
     for c in copias():
-        subprocess.run(['icacls', os.path.join(TEMP_SRV, c, 'cerrada'), '/reset'],
+        subprocess.run(['icacls', c, '/reset'],
                        capture_output=True, text=True)
     mc.borra(BASE)
 mc.fin('la casa del servidor recupera y borra una carpeta nacida cerrada (V9)')

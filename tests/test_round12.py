@@ -264,7 +264,9 @@ check('la clase raiz del .dfm tiene que existir en la unit',
 # and the tool is discoverable at all
 # ruta de relleno ABSOLUTA y dentro: la relativa la niega la puerta (GUARD-021)
 r = call('delphi_designer', {'command': 'volar', 'path': os.path.join(BASE, 'x.dfm')})
-check('el error de comando nombra check-binding', 'check-binding' in r, r[:200])
+# (revisor de baterias de la 1.27) con su id (DSGN-001): 'check-binding' lo traia cualquier otra negativa que
+# citara la descripcion de la tool
+check('el error de comando nombra check-binding', mc.abre(r, 'SR_DESIGNER_CMD') and 'check-binding' in r, r[:200])
 
 srv.mata()
 mc.fin('round-12 battery')

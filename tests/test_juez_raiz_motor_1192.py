@@ -64,10 +64,14 @@ def hereda(pas, dfm, base_unit, base_clase, lineas_dfm):
     """El form de delphi_create pasa a heredar de base_clase (uses base_unit) y
     su .dfm recibe lineas_dfm debajo del Caption."""
     clase = next(l for l in mc.lee(pas).splitlines() if l.strip().endswith('= class(TForm)'))
-    s.call('delphi_edit', {'path': pas, 'old': clase, 'new': clase.replace('(TForm)', '(%s)' % base_clase)})
-    s.call('delphi_edit', {'path': pas, 'adduses': base_unit, 'section': 'interface'})
+    r1 = s.call('delphi_edit', {'path': pas, 'old': clase, 'new': clase.replace('(TForm)', '(%s)' % base_clase)})
+    r2 = s.call('delphi_edit', {'path': pas, 'adduses': base_unit, 'section': 'interface'})
     caption = next(l for l in mc.lee(dfm).splitlines() if l.strip().startswith('Caption = '))
-    s.call('delphi_edit', {'path': dfm, 'old': caption, 'new': caption + '\n' + '\n'.join(lineas_dfm)})
+    r3 = s.call('delphi_edit', {'path': dfm, 'old': caption, 'new': caption + '\n' + '\n'.join(lineas_dfm)})
+    # el montaje, comprobado: un paso que fallaba dejaba el form sobre TForm y los R se median en otro
+    # caso (revisor de baterias de la 1.27)
+    check('fixture: %s hereda de %s (clase, uses y lineas del .dfm escritas)' % (os.path.relpath(pas, JAIL), base_clase),
+          not any(mc.fallo(x) for x in (r1, r2, r3)), (r1[:150], r2[:150], r3[:150]))
 
 
 try:
@@ -76,10 +80,12 @@ try:
           all(mc.tabla_lista(r) for _, r in listas), str(listas)[:300])
 
     p = os.path.join(JAIL, 'p')
-    s.call('delphi_create', {'kind': 'project-vcl', 'name': 'P1192', 'dir': p}, t=120)
+    r = s.call('delphi_create', {'kind': 'project-vcl', 'name': 'P1192', 'dir': p}, t=120)
+    check('fixture: el proyecto P1192', not mc.fallo(r), r[:200])  # (revisor de baterias de la 1.27)
     DPR = os.path.join(p, 'P1192.dpr')
     for nombre, texto in (('UA_Base', HOMONIMA), ('UB_Base', REAL)):
-        s.call('delphi_create', {'kind': 'unit', 'name': nombre, 'project': DPR, 'content': texto}, t=120)
+        r = s.call('delphi_create', {'kind': 'unit', 'name': nombre, 'project': DPR, 'content': texto}, t=120)
+        check('fixture: la unidad %s' % nombre, not mc.fallo(r), r[:200])
     PAS = os.path.join(p, 'UMain.pas')
     DFM = os.path.join(p, 'UMain.dfm')
     hereda(PAS, DFM, 'UB_Base', 'TBaseForm', ['  Modo = 1'])
@@ -119,12 +125,14 @@ try:
     s.call('delphi_create', {'kind': 'unit', 'name': 'USoloBase', 'dir': solo, 'content': SOLA}, t=120)
     PAS3 = os.path.join(solo, 'UMain.pas')
     DFM3 = os.path.join(solo, 'UMain.dfm')
-    hereda(PAS3, DFM3, 'USoloBase', 'TBaseS', ['  Zeta = 1'])
+    # ModalResult, que TForm no publica: un juez que llegara a la raiz lo nombraria (R3, R5). Con Zeta sola,
+    # CLEAN salia igual juzgada (Zeta la publica la base) que sin juzgar (revisor de baterias de la 1.27)
+    hereda(PAS3, DFM3, 'USoloBase', 'TBaseS', ['  Zeta = 1', '  ModalResult = mrOK'])
     for f in ('PSolo.dproj', 'PSolo.dpr'):
         r = s.call('delphi_delete', {'path': os.path.join(solo, f)}, t=120)
         assert 'FILE-021' in r, r
     r = lint(DFM3)
-    check('R6 sin .dpr ni .dproj: la raiz no se juzga (sin motor), CLEAN y sin error',
+    check('R6 sin .dpr ni .dproj: la raiz no se juzga (sin motor; ni ModalResult), CLEAN y sin error',
           limpio(r), r[:400])
 finally:
     s.cierra()

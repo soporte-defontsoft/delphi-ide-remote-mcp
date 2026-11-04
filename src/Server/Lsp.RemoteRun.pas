@@ -255,6 +255,10 @@ const
   // la subcarpeta de la casa del servidor de los guiones de remote-run: UNA,
   // estaba a mano en tres sitios (H9 de la revision del paisaje de Fable)
   REMOTERUN_SUB = 'remoterun';
+  // ...y bajo ella, el prefijo de la carpeta de cada comprobacion de la version
+  // del nodo (CarpetaUnica): lo busca la bateria que mira que no se quede (V42 de
+  // la 1.25; estaba a mano aqui y alli, revisor de baterias de la 1.27)
+  REMOTERUN_VER_PREFIJO = 'ver-';
 
 { El paclient que tocaria, sin mirar donde esta: el de DELPHI_MCP_PACLIENT si
   existe, si no el bin\paclient.exe de la instalacion. }
@@ -1159,7 +1163,7 @@ begin
   // (node.ver), asi que con un destino comun la comprobacion de un perfil se
   // llevaba por delante la de otro - dos Linux a la vez y cada uno leyendo el
   // sello del contrario (analisis de concurrencia 2026-09-20).
-  TmpDir := CarpetaUnica(ServerTempDir(REMOTERUN_SUB), 'ver-');
+  TmpDir := CarpetaUnica(ServerTempDir(REMOTERUN_SUB), REMOTERUN_VER_PREFIJO);
   CrearCarpeta(TmpDir);
   try
     // el sello del target: ausente = nodo de antes de los sellos (o ninguno)

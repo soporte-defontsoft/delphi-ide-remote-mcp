@@ -57,8 +57,12 @@ try:
             except Exception:
                 j = {}
             vistos.append((j.get('result'), j.get('exitCode')))
+        # al menos UN corte de los cinco: con los cinco en pass, el all() de los cortados era all([])
+        # y T3 pasaba sin medir nada (revisor de baterias de la 1.27; medido el 23-oct: 10 de 10
+        # cortados con timeoutms=1)
         check('T3 un run dado por cortado fue matado: su exitCode no es el 0 de uno que acabo solo',
               all(res in ('pass', 'timeout') for res, _ in vistos) and
+              any(res == 'timeout' for res, _ in vistos) and
               all(code != 0 for res, code in vistos if res == 'timeout'), vistos)
         # T1/T2: un test que duerme 8 s y un plazo de 2 s, sin carrera
         unidad = [f for f in os.listdir(d) if f.lower().endswith('.pas')][0]

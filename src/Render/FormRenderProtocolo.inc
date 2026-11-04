@@ -7,7 +7,33 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 4;
+  FR_PROTOCOLO_VERSION = 5;
+  // Los interruptores del ayudante, aqui tambien: los compone el servidor
+  // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
+  // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
+  // (R6 del revisor del paisaje de la 1.27); la 5 no cambia ninguno
+  FR_ARG_PATH = '--path';
+  FR_ARG_OUT = '--out';
+  FR_ARG_STYLE = '--style';
+  FR_ARG_COMPONENT = '--component';
+  FR_ARG_BDS = '--bds';
+  FR_ARG_BDSROOT = '--bdsroot';
+  FR_ARG_KNOWNFILE = '--knownfile';
+  FR_ARG_PACKAGES = '--packages';
+  FR_ARG_FIDELITY = '--fidelity';
+  FR_ARG_ROOT = '--root';
+  FR_ARG_STATE = '--state';
+  FR_ARG_NONVISUAL = '--nonvisual';
+  FR_ARG_WRITEBACK = '--writeback';
+  FR_ARG_DROPPED = '--dropped';
+  FR_ARG_CONVERT = '--convert';
+  FR_ARG_UNREADABLE_CLASSES = '--unreadableclasses';
+  FR_ARG_BOXES = '--boxes';
+  FR_ARG_TIMEOUT = '--timeout';
+  FR_ARG_PACKAGES_TIMEOUT = '--packagestimeout';
+  FR_ARG_VERBOSE = '--verbose';
+  FR_ARG_SI = 'on';              // el valor de un interruptor si/no que compone el servidor
+  FR_ARG_NO = 'off';
   FR_CAPTURE = 'CAPTURE=';       // CAPTURE=<ruta del png> (la misma clave que el nodo de escritorio)
   FR_SIZE = 'SIZE=';             // SIZE=<ancho>x<alto> del png
   FR_DPI = 'DPI=';               // DPI=96: el proceso no es consciente del DPI, un pixel = una unidad del dfm

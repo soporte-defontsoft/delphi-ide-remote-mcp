@@ -91,7 +91,10 @@ try:
     b_dpr = glob.glob(os.path.join(B_DIR, '**', 'BuildB.dpr'), recursive=True)
     a_dpr = glob.glob(os.path.join(A_DIR, '**', 'BuildA.dpr'), recursive=True)
     if not a_dpr or not b_dpr:
-        SKIP = 'delphi_create no dejo los proyectos: A=%s B=%s' % (str(ra)[:120], str(rb)[:120])
+        # lo que es un fallo del servidor (delphi_create, el build de A, el upload) es un FAIL, no un salto:
+        # salia SIN CHECKS y en verde. Saltos quedan solo los de la maquina: sin RAD Studio o sin la
+        # secuencia de tiempos (revisor de baterias de la 1.27)
+        check('fixture: delphi_create deja los proyectos A y B', False, 'A=%s B=%s' % (str(ra)[:120], str(rb)[:120]))
     else:
         B_PROJ = b_dpr[0][:-4] + '.dproj'
         A_PROJ = a_dpr[0][:-4] + '.dproj'
@@ -163,9 +166,9 @@ try:
         if falta_rad(ar) or falta_rad(br):
             SKIP = 'no hay RAD Studio en esta maquina'
         elif not compilo(ar):
-            SKIP = 'el build largo A no compilo (fixture): %s' % str(ar)[:200]
+            check('fixture: el build largo A compila', False, str(ar)[:200])
         elif not poison_en_disco:
-            SKIP = 'la inyeccion no entro en el .dproj de B (delphi_upload): %s' % str(r_iny)[:160]
+            check('fixture: la inyeccion entra en el .dproj de B (delphi_upload)', False, str(r_iny)[:160])
         elif a_dur < MIN_A:
             SKIP = ('A compilo en %.1fs (< %.1fs): no retuvo el turno el tiempo necesario; '
                     'sube UNIDADES_A/PROCS_POR_UNIDAD' % (a_dur, MIN_A))

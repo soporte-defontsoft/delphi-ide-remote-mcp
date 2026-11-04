@@ -163,8 +163,14 @@ try:
           todas[:220])
 
     # ------------------------------------------------------------------ S9
+    # en mode=full y con el control al lado: el summary NO ensena los miembros de TCosa ('+3
+    # inside'), asi que la property Larga ni salia y la negativa pasaba sin medir nada. En full
+    # sale su declaracion, entera hasta el read (revisor de baterias de la 1.27)
+    fu9 = sinaviso(call('delphi_symbols', {'path': PAS, 'mode': 'full'}))
+    larga9 = fu9[fu9.find('Larga'):][:200] if 'Larga' in fu9 else fu9[:260]
     check('S9 una linea que es solo comentario no se pega a la firma',
-          'una nota justo en medio' not in todas, todas[:260])
+          'una nota justo en medio' not in fu9 and
+          re.search(r'Larga[^"]*read FNombre', fu9) is not None, larga9)
 
     # ------------------------------------------------------------------ S12
     # un contenedor dice cuantos lleva dentro como lo promete la descripcion
@@ -260,8 +266,10 @@ try:
           r[:240])
     antes = open(PAS, 'rb').read()
     r2 = call('delphi_edit', {'path': PAS, 'old': 'begin\nend;', 'new': 'x'})
+    # negado por SU motivo, el bloque que no esta: cualquier negativa menos la del ancla
+    # multilinea pasaba tambien con una de jaula o de lectura (revisor de baterias de la 1.27)
     check('S10b ...y el gemelo Pascal igual: un bloque (este no esta: negado, nada escrito)',
-          mc.rechazado(r2) and not mc.es(r2, 'SR_PATCH_ANCHOR_MULTILINE')
+          mc.rechazado(r2) and mc.es(r2, 'SR_PATCH_BLOCK_MISSING_FMT') and not mc.es(r2, 'SR_PATCH_ANCHOR_MULTILINE')
           and open(PAS, 'rb').read() == antes, r2[:240])
 finally:
     try:

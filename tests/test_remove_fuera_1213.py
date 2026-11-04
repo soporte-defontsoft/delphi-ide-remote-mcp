@@ -124,15 +124,18 @@ try:
     r = build(dproj)
     check('R4 un search path de FUERA: BUILD-050', mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT'), r[:300])
     r = srv.call('delphi_config', {'project': dproj, 'command': 'remove-searchpath', 'path': FUERA})
+    # (revisor de baterias de la 1.27) `not mc.rechazado` dejaba pasar un INTERNAL: QUITADO es su CFG de exito
     check('R4 remove-searchpath con esa ruta: QUITADO, no GUARD-002',
-          not mc.rechazado(r) and FUERA.lower() not in lee(dproj).lower(), r[:300])
+          mc.abre(r, 'SN_CONFIG_PATH_REMOVED_FMT') and FUERA.lower() not in lee(dproj).lower(), r[:300])
     r = build(dproj)
     check('R4 ...y el build compila', compila(r), detalle(r))
 
     # --- R5: control, add-unit de fuera sigue negado ---
     r = srv.call('delphi_config', {'project': dproj, 'command': 'add-unit', 'path': victima})
+    # (revisor de baterias de la 1.27) negado POR LA JAULA (GUARD-002): `mc.rechazado` lo cumplia cualquier
+    # negativa de add-unit (un parametro, el proyecto)
     check('R5 control: add-unit con una ruta de fuera sigue negado (lo que SI se lee)',
-          mc.rechazado(r) and 'UFuera' not in lee(dpr), r[:300])
+          mc.abre(r, 'SR_JAIL_FMT') and 'UFuera' not in lee(dpr), r[:300])
 finally:
     srv.cierra()
     mc.borra(BASE)

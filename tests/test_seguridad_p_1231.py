@@ -56,7 +56,10 @@ try:
           marca and mc.rechazado(r) and bool(cm) and os.path.exists(cm[0]), (marca, r[:200]))
     otro = os.path.join(cx[0], 'V.pas') if cx else ''
     r = cli.call('delphi_delete', {'path': otro, 'purge': True}, sid=alice)
-    check('P4 control: alice purga lo suyo de dentro de su copia', not os.path.exists(otro), r[:200])
+    # con la copia ENCONTRADA y la purga contestada: sin cx, otro era '' y "no existe" pasaba solo
+    # (revisor de baterias de la 1.27)
+    check('P4 control: alice purga lo suyo de dentro de su copia',
+          bool(cx) and not mc.fallo(r) and not os.path.exists(otro), r[:200])
 finally:
     proc.kill()
 

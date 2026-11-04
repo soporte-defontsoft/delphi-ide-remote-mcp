@@ -95,6 +95,12 @@ try:
         check('K2 A escribio y trae el juicio del lector (el form carga: sin EDIT-127)',
               not mc.fallo(res.get('a', '')) and not mc.es(res.get('a', ''), 'SN_EDIT_AVISO_LECTOR_FMT')
               and b'Left = 153' in open(dfm, 'rb').read(), res.get('a', '')[-400:])
+        # (revisor de baterias de la 1.27) el control de K2: en el MISMO form, un valor que el lector no carga
+        # (Left de DataSource1, que TComponent guarda por codigo y las tablas no juzgan) SI trae EDIT-127; sin
+        # el, "sin EDIT-127" pasaba tambien con un lector que nadie pedia
+        r = cli.call('delphi_edit', {'path': dfm, 'old': '    Left = 153', 'new': "    Left = 'x'"}, t=300)
+        check('K2 control: con un valor que el lector no carga, el mismo edit SI trae EDIT-127',
+              not mc.fallo(r) and mc.es(r, 'SN_EDIT_AVISO_LECTOR_FMT'), r[-400:])
 finally:
     try:
         proc.kill()

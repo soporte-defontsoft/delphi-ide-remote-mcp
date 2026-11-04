@@ -57,7 +57,7 @@ def cs(**kw):
 
 def abre():
     r = cs(command='begin')
-    return mc.como_json(r).get('id') or r.split('CHANGESET ')[1].split(' ')[0]
+    return mc.id_changeset(r)  # por su forma, el lector de la casa: split('CHANGESET ') a mano (revisor de baterias de la 1.27)
 
 
 try:

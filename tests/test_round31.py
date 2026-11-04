@@ -404,15 +404,23 @@ try:
           mc.es(t, 'SR_LIST_IS_FILE_FMT') and 'delphi_read' in t, t[:200])
 
     # ----------------------------------------------------------------- R6
+    # discover de una carpeta que no existe EN la jaula: TestDiscover contesta un OBJETO JSON
+    # con "error" (SR_TEST_NOPATH_FMT). Antes era run sin AllowTests, que se niega en PROSA
+    # (SR_TEST_DISABLED): su {text, ok:false} lo pone la rama de la prosa y la del objeto JSON
+    # no corria nunca (revisor de baterias de la 1.27)
     r = cli.call_msg('delphi_test', {
-        'command': 'run',
-        'project': os.path.join(REPO, 'NoExisteEsteProyecto.dproj')})
+        'command': 'discover',
+        'path': os.path.join(JAIL, 'NoExisteEstaCarpeta')})
     sc = r.get('result', {}).get('structuredContent', {})
+    t6 = mc.texto(r)
+    check('R6 preparacion: la negativa viaja DENTRO de un objeto JSON (su campo error)',
+          t6.lstrip().startswith('{') and mc.abre(t6, 'SR_TEST_NOPATH_FMT') and 'text' not in sc,
+          t6[:200])
     check('R6 una negativa dentro de un objeto JSON no dice ok:true',
           sc.get('ok') is False, json.dumps(sc)[:200])
-    check('R6b y lleva un code legible por maquina',
-          sc.get('code') in ('DENIED', 'NOT_FOUND', 'INVALID_PARAM'),
-          json.dumps(sc)[:200])
+    check('R6b y lleva el code de SU etiqueta (TEST-017 NOT_FOUND), legible por maquina',
+          # la clase, de la etiqueta de SU constante, no a mano (revisor del diff de la cola de la 1.27)
+          sc.get('code') == mc.resultado(mc.catalogo()['SR_TEST_NOPATH_FMT']) != '', json.dumps(sc)[:200])
 
     # ----------------------------------------------------------------- R7
     t = call('delphi_help', {'command': 'tasks'})

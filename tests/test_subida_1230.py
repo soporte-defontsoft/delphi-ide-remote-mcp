@@ -49,6 +49,14 @@ def diagnostics(ruta):
     return t
 
 
+def analizada(t):
+    """El lint CONTESTO, con los ajustes de P (su 'project'): "no es LSP-035" a secas pasaba
+    tambien con otra negativa, un INTERNAL o el in-progress de un motor frio (revisor de baterias
+    de la 1.27)."""
+    j = mc.como_json(t)
+    return 'diagnostics' in j and (j.get('project') or '').lower().endswith('\\p.dproj')
+
+
 try:
     r = srv.call('delphi_create', {'kind': 'project-console', 'name': 'P', 'dir': PROY}, t=120)
     check('fixture: el proyecto P', os.path.exists(DPROJ), r[:300])
@@ -58,9 +66,10 @@ try:
 
     t = diagnostics(honda)
     check('S1 diagnostics de una unidad a 10 carpetas de su proyecto la analiza con sus ajustes, no LSP-035',
-          not mc.es(t, 'SR_LSP_LINT_SIN_AJUSTES_FMT'), t[:300])
+          not mc.es(t, 'SR_LSP_LINT_SIN_AJUSTES_FMT') and analizada(t), t[:300])
     t = diagnostics(corta)
-    check('S2 (guarda) una unidad a 3 carpetas, igual', not mc.es(t, 'SR_LSP_LINT_SIN_AJUSTES_FMT'), t[:300])
+    check('S2 (guarda) una unidad a 3 carpetas, igual',
+          not mc.es(t, 'SR_LSP_LINT_SIN_AJUSTES_FMT') and analizada(t), t[:300])
     t = diagnostics(fuera)
     check('S3 (guarda) a 13 carpetas, fuera del tope: LSP-035 (el tope es uno y se cumple)',
           mc.es(t, 'SR_LSP_LINT_SIN_AJUSTES_FMT'), t[:300])

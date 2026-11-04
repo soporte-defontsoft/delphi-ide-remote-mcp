@@ -44,6 +44,9 @@ try:
           mc.es(r, 'SR_DESIGNER_LAYOUT_FMX_FMT'), r[:300])
     r = srv.call('delphi_designer', {'command': 'layout', 'path': vcl}, t=120)
     check('V2 (guarda) el mismo modulo sin CLASSGROUP es de la VCL: layout lo mide',
+          # "lo mide" se mira: una medida sin error, con su veredicto (clean); solo las dos ausencias
+          # dejaban pasar un INTERNAL o cualquier otra negativa (revisor de baterias de la 1.27)
+          not mc.fallo(r) and 'clean' in mc.como_json(r) and
           not mc.es(r, 'SR_DESIGNER_LAYOUT_FMX_FMT') and not mc.es(r, 'SR_DESIGNER_NOT_FORM'), r[:300])
 finally:
     srv.cierra()

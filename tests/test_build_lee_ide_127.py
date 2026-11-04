@@ -144,7 +144,9 @@ try:
     search_path(srv2, '$(BDS)\\source\\rtl\\common')
     rb = build(srv2)
     check('F6 sin zona de biblioteca: add-searchpath $(BDS)\\source\\rtl\\common negado, y por set-property compila',
-          mc.rechazado(r) and intacto and compila(rb), (r[:300], rb[:300]))
+          # negado por la JAULA (lo nombra el agente), la que dice el docstring: rechazado a secas pasaba
+          # tambien con otra negativa, la de la macro, por ejemplo (revisor de baterias de la 1.27)
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT') and intacto and compila(rb), (r[:300], rb[:300]))
 
     inc = ''
     for d, _, fs in os.walk(os.path.join(RAIZ_IDE, 'source', 'rtl')):
@@ -161,7 +163,7 @@ try:
     antes = lee(DPROJ)
     r = config(srv2, 'add-deployfile', platform='Win64', path=inc)
     check('F8 sin zona de biblioteca: add-deployfile de un fichero de la instalacion negado y el .dproj intacto',
-          mc.rechazado(r) and lee(DPROJ) == antes, r[:300])
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT') and lee(DPROJ) == antes, r[:300])
 
     pon(DPR, DPR_ORIGINAL)
     with open(os.path.join(D, 'Recursos.rc'), 'w', encoding='utf-8') as f:

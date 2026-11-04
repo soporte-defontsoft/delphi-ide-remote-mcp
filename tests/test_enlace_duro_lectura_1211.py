@@ -102,16 +102,19 @@ try:
     r = srv.call('delphi_styles', {'path': STY, 'command': 'build'})
     res = os.path.join(STY, 'Bat.Estilos.res')
     lleva = os.path.exists(res) and b'SECRETO-H2' in open(res, 'rb').read()
-    check('H3 delphi_styles build: el .res no lleva el secreto', not lleva, r[:300])
+    # SU negativa: el .rc nombra un fichero que la puerta de leer niega; con "not lleva" a secas
+    # pasaba un .res que no nacia por cualquier causa (revisor de baterias de la 1.27)
+    check('H3 delphi_styles build: negado por lo que nombra el .rc y el .res no lleva el secreto',
+          mc.es(r, 'SR_STYLES_RC_OUTSIDE_FMT') and not lleva, r[:300])
     COPIA = os.path.join(JAIL, 'copia.txt')
     r = srv.call('delphi_move', {'path': ENL, 'dest': COPIA, 'copy': True})
     check('H4 delphi_move copy=true del enlace: negado y sin copia',
-          mc.rechazado(r) and not os.path.exists(COPIA), r[:300])
+          mc.es(r, NEGATIVA) and not os.path.exists(COPIA), r[:300])  # su id, no cualquier negativa (revisor de baterias de la 1.27)
     r = srv.call('delphi_textedit', {'path': ENL, 'old': SECRETO, 'new': 'PISADO'})
     check('H5 delphi_textedit del enlace: negado y el de fuera intacto',
-          mc.rechazado(r) and open(SEC, 'rb').read() == antes, r[:300])
+          mc.es(r, NEGATIVA) and open(SEC, 'rb').read() == antes, r[:300])  # su id (revisor de baterias de la 1.27)
     r = srv.call('delphi_fetch', {'path': ENL})
-    check('H6 delphi_fetch del enlace: negado', mc.rechazado(r) and 'SECRETO-H2' not in r, r[:300])
+    check('H6 delphi_fetch del enlace: negado', mc.es(r, NEGATIVA) and 'SECRETO-H2' not in r, r[:300])  # su id (revisor de baterias de la 1.27)
     r = srv.call('delphi_read', {'path': DENTRO2})
     if JUEZ:
         check('H7 control: con los dos nombres en la jaula se lee', 'DENTRO-1211' in r, r[:300])

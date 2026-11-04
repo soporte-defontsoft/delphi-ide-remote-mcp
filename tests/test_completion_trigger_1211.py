@@ -15,6 +15,7 @@ T1 es ROJA contra 1.21.0 (pasar su exe como argumento); T2-T4, verdes con las do
 Uso:  python tests/test_completion_trigger_1211.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
+import re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -38,14 +39,22 @@ try:
     con_s = mc.como_json(S.call('delphi_completion', dict(POS, trigger='S'), t=600)) or {}
     con_par = mc.como_json(S.call('delphi_completion', dict(POS, trigger='('), t=600)) or {}
     nota = con_s.get('triggerNote', '')
+    # el trigger y la lista de la nota, leidos con su formato del catalogo (la inversa del que la
+    # compone): '.' in nota salia siempre, el propio mensaje lleva puntos (revisor de baterias de la 1.27)
+    m = re.search(re.escape(mc.catalogo()['SN_COMPLETION_TRIGGER_NO_ES_FMT']).replace('%s', '(.*?)'), nota, re.S)
+    disparos = m.group(2).split() if m else []
     check('T1 trigger "S": triggerNote con lo que anuncia el motor',
-          mc.es(nota, 'SN_COMPLETION_TRIGGER_NO_ES_FMT') and '"S"' in nota and '.' in nota, str(con_s)[:300])
+          mc.es(nota, 'SN_COMPLETION_TRIGGER_NO_ES_FMT') and m is not None and m.group(1) == 'S' and
+          '.' in disparos and 'S' not in disparos, str(con_s)[:300])
     check('T2 ...y la respuesta es la de sin trigger',
           sin.get('total') and con_s.get('total') == sin.get('total') and
           [i.get('label') for i in con_s.get('items', [])] == [i.get('label') for i in sin.get('items', [])],
           (sin.get('total'), con_s.get('total')))
     check('T3 sin trigger, ni nota', sin.get('total') and 'triggerNote' not in sin, str(sin)[:300])
-    check('T4 trigger "(" (uno de los suyos): ni nota', 'triggerNote' not in con_par, str(con_par)[:300])
+    # ...con una respuesta de completion (sus items): un error daba {} y "ni nota" pasaba (revisor de
+    # baterias de la 1.27)
+    check('T4 trigger "(" (uno de los suyos): ni nota',
+          isinstance(con_par.get('items'), list) and 'triggerNote' not in con_par, str(con_par)[:300])
 finally:
     S.cierra()
 

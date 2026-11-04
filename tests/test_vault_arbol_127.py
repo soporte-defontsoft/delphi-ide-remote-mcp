@@ -44,7 +44,10 @@ try:
     cli = mc.Http(PUERTO, TOKEN)
     cli.session('vault-arbol')
     r = cli.call('delphi_read', {'path': os.path.join(X, 'lnk', 'vault', 'secreto.md')})
-    check('A1 control: el secreto por el enlace, negado', mc.rechazado(r) and 'SECRETO' not in r, r[:200])
+    # por SU negativa (VAULT-002, V192): rechazado a secas pasaba con la de la jaula o la de un enlace
+    # (revisor de baterias de la 1.27)
+    check('A1 control: el secreto por el enlace, negado',
+          mc.rechazado(r) and mc.es(r, 'SR_VAULT_NOT_CODE') and 'SECRETO' not in r, r[:200])
 
     Y = os.path.join(JAIL, 'y')
     r = cli.call('delphi_move', {'path': X, 'dest': Y, 'copy': True})

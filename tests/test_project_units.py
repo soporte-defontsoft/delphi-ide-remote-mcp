@@ -102,6 +102,16 @@ try:
     check('view: todas en el .dproj (sin dproj:false)', all('dproj' not in u for u in units.values()), units)
 except Exception as e:
     check('view: parsea', False, '%s | %s' % (e, out[:200]))
+# el control de "sin dproj:false": una unidad SOLO en el .dpr (escrita a mano, en otro proyecto) SI lo
+# lleva; sin el, 'dproj' not in u pasaba igual si el servidor no lo emitiera nunca (revisor de baterias de la 1.27)
+CDIR = os.path.join(BASE, 'Ctl')
+call('delphi_create', {"kind": "project-console", "dir": CDIR, "name": "Ctl"})
+open(os.path.join(CDIR, 'UExtra.pas'), 'w', newline='').write('unit UExtra;\r\ninterface\r\nimplementation\r\nend.\r\n')
+_raw = open(os.path.join(CDIR, 'Ctl.dpr'), 'rb').read()
+open(os.path.join(CDIR, 'Ctl.dpr'), 'wb').write(_raw.replace(b'uses\r\n', b"uses\r\n  UExtra in 'UExtra.pas',\r\n", 1))
+_cu = {u['unit']: u for u in (mc.como_json(call('delphi_config', {"project": os.path.join(CDIR, 'Ctl.dproj'),
+                                                                "section": "units"})).get('units') or [])}
+check('view (control): una unidad que solo esta en el .dpr lleva dproj:false', _cu.get('UExtra', {}).get('dproj') is False, _cu)
 
 # ---- add-unit on an EXISTING .pas written by hand (the agent's usual case) ----
 hand = os.path.join(VDIR, 'UManual.pas')

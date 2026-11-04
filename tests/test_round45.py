@@ -27,9 +27,10 @@ contrato vivo (38 tools, 200 parametros):
   delphi_paserver exe      un fichero de la carpeta desplegada EN EL TARGET
   delphi_config   remotedir  carpeta EN EL TARGET
       -> son rutas, pero de OTRA maquina: nuestra jaula no aplica.
-  delphi_adb_linux project   un NOMBRE (el nodo incluido), no una ruta
   delphi_search   pattern    una MASCARA de fichero
-  delphi_git      args       argumentos libres de git, con su propio filtro
+
+(la lista viva, cada una con su motivo, es EXCLUIDOS; delphi_adb_linux project y
+delphi_git args, que estaban aqui, se retiraron el 22-sep y en la 1.19.0)
 
 Usage:  python tests/test_round45.py [path-to-DelphiLspMcp.exe]
 """

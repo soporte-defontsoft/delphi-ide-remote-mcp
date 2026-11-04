@@ -28,7 +28,9 @@ for perfil, host in HOSTS.items():
 BASE_ENV = {'DELPHI_MCP_ROOTS': RAIZ, 'APPDATA': AD, 'DELPHI_MCP_PACLIENT': STUB, 'MCP_STUB_SCRATCH': SCRATCH,
             'MCP_STUB_LOG': os.path.join(BASE, 'paclient.log'), 'DELPHI_MCP_ALLOW_REMOTE_RUN': '1',
             'DELPHI_MCP_REMOTE_HOSTS': '*'}
-GESTOS = {'tap': {'x': '1', 'y': '1'}, 'type': {'text': 'hola'}, 'key': {'code': '1'}, 'overview': {}}
+# key con un NOMBRE de tecla: con code=1 pasaba la puerta y lo negaba DESK-010 despues, y "pasa la puerta"
+# salia verde sobre esa negativa (revisor de baterias de la 1.27, medido con el log del stub)
+GESTOS = {'tap': {'x': '1', 'y': '1'}, 'type': {'text': 'hola'}, 'key': {'code': 'enter'}, 'overview': {}}
 VER = {'status': {}, 'screenshot': {'out': os.path.join(RAIZ, 'c.png'), 'inline': False}}
 N = [0]
 
@@ -48,14 +50,36 @@ def pide(s, cmd, perfil, args=None, proyecto=''):
     return s.call('delphi_desktop', a, 120)
 
 
+def llamadas_al_stub():
+    """Las lineas del log del paclient de mentira: una por llamada (MCP_STUB_LOG)."""
+    try:
+        with open(BASE_ENV['MCP_STUB_LOG'], encoding='utf-8') as f:
+            return len(f.readlines())
+    except OSError:
+        return 0
+
+
+def pasa(t_y_antes):
+    """Paso la puerta: sin su negativa Y la orden llego al destino (el stub anoto una llamada mas).
+    'No sale la negativa' a secas lo daba tambien un INTERNAL o la negativa de otra puerta antes de
+    esta (revisor de baterias de la 1.27)."""
+    t, antes = t_y_antes
+    return not mc.es(t, NIEGA) and llamadas_al_stub() > antes
+
+
+def pide_contando(s, cmd, perfil, args=None, proyecto=''):
+    antes = llamadas_al_stub()
+    return pide(s, cmd, perfil, args, proyecto), antes
+
+
 s = servidor({'DELPHI_MCP_DESKTOP_HOSTS': HOSTS['actua'] + ', OTRO.example', 'DELPHI_MCP_DESKTOP_VIEW_HOSTS': HOSTS['mira']})
 try:
     for cmd, args in list(VER.items()) + list(GESTOS.items()):
-        t = pide(s, cmd, 'actua', args)
-        check('un host de DesktopAllowedHosts: %s pasa la puerta' % cmd, not mc.es(t, NIEGA), t[:300])
+        ta = pide_contando(s, cmd, 'actua', args)
+        check('un host de DesktopAllowedHosts: %s pasa la puerta' % cmd, pasa(ta), ta[0][:300])
     for cmd, args in VER.items():
-        t = pide(s, cmd, 'mira', args)
-        check('un host de DesktopViewHosts: %s pasa la puerta' % cmd, not mc.es(t, NIEGA), t[:300])
+        ta = pide_contando(s, cmd, 'mira', args)
+        check('un host de DesktopViewHosts: %s pasa la puerta' % cmd, pasa(ta), ta[0][:300])
     for cmd, args in GESTOS.items():
         t = pide(s, cmd, 'mira', args)
         check('un host de DesktopViewHosts: %s se niega' % cmd, mc.es(t, NIEGA) and 'act on' in t and HOSTS['mira'] in t, t[:300])
@@ -79,13 +103,15 @@ for valor in ('McpDesktopNode', 'all', '*'):
 # el comodin de las listas de hosts, como en las otras cuatro
 s = servidor({'DELPHI_MCP_DESKTOP_VIEW_HOSTS': '*'})
 try:
-    check('DesktopViewHosts=*: mira en cualquiera', not mc.es(pide(s, 'status', 'nada'), NIEGA))
+    ta = pide_contando(s, 'status', 'nada')
+    check('DesktopViewHosts=*: mira en cualquiera', pasa(ta), ta[0][:300])
     check('...y sigue sin actuar', mc.es(pide(s, 'tap', 'nada', GESTOS['tap']), NIEGA))
 finally:
     s.cierra()
 s = servidor({'DELPHI_MCP_DESKTOP_HOSTS': '*'})
 try:
-    check('DesktopAllowedHosts=*: actua en cualquiera', not mc.es(pide(s, 'tap', 'nada', GESTOS['tap']), NIEGA))
+    ta = pide_contando(s, 'tap', 'nada', GESTOS['tap'])
+    check('DesktopAllowedHosts=*: actua en cualquiera', pasa(ta), ta[0][:300])
 finally:
     s.cierra()
 
@@ -105,8 +131,8 @@ s = servidor({'DELPHI_MCP_REMOTE_RUN_PROJECTS': P, 'DELPHI_MCP_DESKTOP_HOSTS': H
 try:
     t = pide(s, 'status', 'nada', proyecto=P)
     check('project= en un host sin permiso: se niega', mc.es(t, NIEGA), t[:300])
-    t = pide(s, 'status', 'actua', proyecto=P)
-    check('project= en un host con permiso: pasa la puerta', not mc.es(t, NIEGA), t[:300])
+    ta = pide_contando(s, 'status', 'actua', proyecto=P)
+    check('project= en un host con permiso: pasa la puerta', pasa(ta), ta[0][:300])
     # ...y project= ejecuta ese proyecto en el destino: no es mirar, aunque el comando sea status
     t = pide(s, 'status', 'mira', proyecto=P)
     check('project= en un host de ninguna lista de actuar: se niega', mc.es(t, NIEGA) and 'act on' in t, t[:300])

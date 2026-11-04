@@ -35,6 +35,13 @@ def dpr_texto(ruta):
     return io.open(ruta, encoding='utf-8-sig').read()
 
 
+# (revisor de baterias de la 1.27) "igual" es byte a byte: el texto decodificado (utf-8-sig, modo texto) no ve
+# un BOM quitado ni unos CRLF cambiados
+def dpr_bytes(ruta):
+    with open(ruta, 'rb') as f:
+        return f.read()
+
+
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='delete-lateral', t=300)
 try:
     app = os.path.join(JAIL, 'app')
@@ -52,26 +59,26 @@ try:
     def nombra(r, p):
         return mc.virtual(mc.larga(p)).lower() in (r or '').lower()
 
-    antes = dpr_texto(dpr)
+    antes = dpr_bytes(dpr)
     r = srv.call('delphi_delete', {'path': os.path.join(scratch, 'UDef.pas')}, t=120)
     check('D1 delete de una unidad listada por el .dpr de una carpeta HERMANA: FILE-046 nombra P.dpr',
           mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT') and mc.es(r, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and
           nombra(r, dpr), r[:700])
-    check('D2 ...y el .dpr sigue igual (nada se re-apunta)', dpr_texto(dpr) == antes, dpr_texto(dpr))
+    check('D2 ...y el .dpr sigue igual (nada se re-apunta)', dpr_bytes(dpr) == antes, dpr_texto(dpr))
 
     r = srv.call('delphi_delete', {'path': os.path.join(core, 'UDeep.pas')}, t=120)
     check('D3 una unidad dos niveles abajo (lib\\core), listada por app\\P.dpr: FILE-046 lo nombra, el .dpr igual',
-          mc.es(r, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and nombra(r, dpr) and dpr_texto(dpr) == antes, r[:700])
+          mc.es(r, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and nombra(r, dpr) and dpr_bytes(dpr) == antes, r[:700])
 
     r = srv.call('delphi_move', {'path': os.path.join(scratch, 'UMov.pas'), 'dest': os.path.join(scratch, 'UMov2.pas')},
                  t=120)
     check('M1 move de una unidad listada por el .dpr hermano: MOVE-023 nombra P.dpr',
           mc.abre(r, 'SK_MOVE_MOVIDO_FMT') and mc.es(r, 'SN_REFERENCIAS_CRUZAN_FMT') and nombra(r, dpr), r[:700])
-    check('M2 ...y el .dpr sigue igual', dpr_texto(dpr) == antes, dpr_texto(dpr))
+    check('M2 ...y el .dpr sigue igual', dpr_bytes(dpr) == antes, dpr_texto(dpr))
 
     r = srv.call('delphi_delete', {'path': os.path.join(app, 'UJunto.pas')}, t=120)
     check('C1 control: la unidad junto al .dpr: FILE-046 lo nombra y el .dpr igual',
-          mc.es(r, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and nombra(r, dpr) and dpr_texto(dpr) == antes, r[:500])
+          mc.es(r, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and nombra(r, dpr) and dpr_bytes(dpr) == antes, r[:500])
 finally:
     srv.cierra()
 

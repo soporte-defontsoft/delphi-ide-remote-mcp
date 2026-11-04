@@ -136,4 +136,5 @@ try:
 finally:
     srv.mata()
 
+mc.borra(BASE)  # su carpeta, con sus copias del exe (revisor de baterias de la 1.27)
 mc.fin('identity battery')

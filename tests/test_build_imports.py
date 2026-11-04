@@ -115,11 +115,19 @@ try:
         mc.check('cond: un <Import> %r se niega como UNC (A25, no se debilita)' % forma,
                  mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and
                  'an <Import> from a UNC path' in r, r[:400])
-    # una letra FUERA de las raices NO cae por el deny UNC (se niega por 'fuera')
-    con_import('<Import Project="%s"/>' % ('C:' + bs + 'fuera' + bs + 'x.targets'))
+    # una letra FUERA de las raices NO cae por el deny UNC (se niega por 'fuera'). Un fichero que EXISTE
+    # fuera (FUERA, hermana de BASE), y su negativa afirmada: C:\fuera\x.targets no existia (otra negativa,
+    # la de que no esta) y solo se miraba que no saliera la del UNC, que tambien pasaba con un error
+    # (revisor de baterias de la 1.27)
+    letra = os.path.join(FUERA, 'a25.targets')
+    with open(letra, 'w', encoding='utf-8') as f:
+        f.write('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003"/>')
+    con_import('<Import Project="%s"/>' % escape(letra, {'"': '&quot;'}))
     r = srv.call('delphi_build', {'project': proyecto, 'platform': 'Win64'}, 600)
-    mc.check('cond: un <Import> con letra no cae por el deny UNC (A25)',
-             'an <Import> from a UNC path' not in r, r[:400])
+    mc.check('cond: un <Import> con letra no cae por el deny UNC (A25): se niega por ser de fuera',
+             mc.rechazado(r) and mc.es(r, 'SR_BUILD_HAZARD_FMT') and
+             mc.catalogo()['SF_CFG_HAZARD_IMPORT_FUERA_FMT'].split(' (%s)')[0] in r and
+             mc.catalogo()['SF_CFG_HAZARD_IMPORT_UNC_FMT'].split(' (%s)')[0] not in r, r[:400])
 
     # Un Import de un fichero FUERA de las raices, INOCUO a proposito: la puerta
     # de leer no lo deja leer (bloque de las puertas de la 1.18.0) y el build lo

@@ -13,6 +13,7 @@
 Uso:  python tests/test_nacer_1230.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
+import re
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -56,7 +57,8 @@ try:
     b2 = open(pl, 'rb').read() if os.path.exists(pl) else b''
     b3 = open(pc, 'rb').read() if os.path.exists(pc) else b''
     check('N3 (guarda) eol=lf en los dos create: LF y lo dicen; sin eol, CRLF; eol=cr, negado en los dos',
-          b'\r\n' not in b1 and b'\n' in b1 and 'LF' in r1 and b2 == b'a\nb\n' and 'LF' in r2 and
+          # LF como palabra: 'LF' in r salia tambien de un CRLF (revisor de baterias de la 1.27)
+          b'\r\n' not in b1 and b'\n' in b1 and re.search(r'\bLF\b', r1) and b2 == b'a\nb\n' and re.search(r'\bLF\b', r2) and
           b3 == b'a\r\nb\r\n' and mc.rechazado(r4) and mc.rechazado(r5), (r1[:150], r2[:150], r4[:150], r5[:150]))
 finally:
     srv.cierra()

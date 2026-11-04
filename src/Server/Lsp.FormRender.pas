@@ -561,7 +561,7 @@ begin
   AOrden := '';
   if APeticion.ClasesSinLeer then
   begin
-    AOrden := ComillasSinEscape(AExe) + ' --unreadableclasses';
+    AOrden := ComillasSinEscape(AExe) + ' ' + FR_ARG_UNREADABLE_CLASSES;
     Exit;
   end;
   // un valor vacio no se pasa nunca: el lector de Delphi se salta un "" y
@@ -572,41 +572,41 @@ begin
     APeticion.FicheroPaquetes, APeticion.Soltado) + APeticion.Estados do
     if not ValorDeLaCasaLlega(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V]));
-  AOrden := ComillasSinEscape(AExe) + Arg('--path', APeticion.Path);
+  AOrden := ComillasSinEscape(AExe) + Arg(FR_ARG_PATH, APeticion.Path);
   // el conversor (V71) ni carga ni pinta: los bytes de --path, en --out
   if APeticion.Convierte <> '' then
-    AOrden := AOrden + ' --convert ' + (if APeticion.Convierte = 'text' then 'text' else 'binary') +
-      Arg('--out', APeticion.Salida)
+    AOrden := AOrden + ' ' + FR_ARG_CONVERT + ' ' + (if APeticion.Convierte = 'text' then 'text' else 'binary') +
+      Arg(FR_ARG_OUT, APeticion.Salida)
   // el juez no pinta: sin --out (3.11)
   else if APeticion.Escribe then
-    AOrden := AOrden + ' --writeback on'
+    AOrden := AOrden + ' ' + FR_ARG_WRITEBACK + ' ' + FR_ARG_SI
   else if APeticion.Cajas then
-    AOrden := AOrden + ' --boxes --nonvisual off'
+    AOrden := AOrden + ' ' + FR_ARG_BOXES + ' ' + FR_ARG_NONVISUAL + ' ' + FR_ARG_NO
   else
-    AOrden := AOrden + Arg('--out', APeticion.Salida) +
-      ' --nonvisual ' + (if APeticion.NoVisuales then 'on' else 'off');
+    AOrden := AOrden + Arg(FR_ARG_OUT, APeticion.Salida) +
+      ' ' + FR_ARG_NONVISUAL + ' ' + (if APeticion.NoVisuales then FR_ARG_SI else FR_ARG_NO);
   // el vigia y la fase de los paquetes, del plazo de ESTA peticion
   var Vigia := VigiaDelAyudante(PlazoDeRender(APeticion));
-  AOrden := AOrden + ' --timeout ' + IntToStr(Vigia);
+  AOrden := AOrden + ' ' + FR_ARG_TIMEOUT + ' ' + IntToStr(Vigia);
   if APeticion.Convierte = '' then
-    AOrden := AOrden + ' --packagestimeout ' + IntToStr(Min(ESPERA_DEL_CLIENTE_MS, Vigia));
+    AOrden := AOrden + ' ' + FR_ARG_PACKAGES_TIMEOUT + ' ' + IntToStr(Min(ESPERA_DEL_CLIENTE_MS, Vigia));
   if APeticion.Bds <> '' then
-    AOrden := AOrden + Arg('--bds', APeticion.Bds);
+    AOrden := AOrden + Arg(FR_ARG_BDS, APeticion.Bds);
   if APeticion.RaizBds <> '' then
-    AOrden := AOrden + Arg('--bdsroot', APeticion.RaizBds);
+    AOrden := AOrden + Arg(FR_ARG_BDSROOT, APeticion.RaizBds);
   if APeticion.FicheroPaquetes <> '' then
-    AOrden := AOrden + Arg('--knownfile', APeticion.FicheroPaquetes);
+    AOrden := AOrden + Arg(FR_ARG_KNOWNFILE, APeticion.FicheroPaquetes);
   for var E in APeticion.Estados do
     if E <> '' then
-      AOrden := AOrden + Arg('--state', E);
+      AOrden := AOrden + Arg(FR_ARG_STATE, E);
   if APeticion.Componente <> '' then
-    AOrden := AOrden + Arg('--component', APeticion.Componente);
+    AOrden := AOrden + Arg(FR_ARG_COMPONENT, APeticion.Componente);
   if APeticion.Escribe and (APeticion.Soltado <> '') then
-    AOrden := AOrden + Arg('--dropped', APeticion.Soltado);
+    AOrden := AOrden + Arg(FR_ARG_DROPPED, APeticion.Soltado);
   if (APeticion.Raiz = 'form') or (APeticion.Raiz = 'frame') then
-    AOrden := AOrden + ' --root ' + APeticion.Raiz;
+    AOrden := AOrden + ' ' + FR_ARG_ROOT + ' ' + APeticion.Raiz;
   if APeticion.Estilo <> '' then
-    AOrden := AOrden + Arg('--style', APeticion.Estilo);
+    AOrden := AOrden + Arg(FR_ARG_STYLE, APeticion.Estilo);
 end;
 
 function PartesDeLectura(const AValor: string): TIgnorada;

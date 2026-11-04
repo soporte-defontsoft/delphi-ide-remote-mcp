@@ -63,6 +63,16 @@ try:
     raw('add','.gitattributes','DUMMY.bin',cwd=repos[1]);raw('commit','-qm','DUMMY lfs',cwd=repos[1])
     mc.check('fixture: DUMMY.bin es un fichero LFS',
              'DUMMY.bin' in raw('ls-files',':(attr:filter=lfs)',cwd=repos[1]))
+    # (revisor de baterias de la 1.27) las de metadatos OTRA VEZ, ya con el fichero LFS: arriba, sin el,
+    # el juez salia antes de lfs env y "ninguna lanza lfs env" pasaba por construccion (un
+    # GitMaterializaArbol que dijera True seguia verde); aqui lo lanzaria
+    antes=len(events)
+    for cmd,kw in [('status',{}),('log',{}),('diff',{}),('show',dict(ref='HEAD')),('branch',{})]:
+        out=call(repos[1],cmd,**kw)
+        mc.check('carpeta '+cmd+' con un fichero LFS: sin endpoint',out.startswith('exit=0'),out[:250])
+    events=[json.loads(l) for l in open(TRACE,encoding='utf-8') if l.strip()]
+    mc.check('ninguna orden de metadatos lanza lfs env, tampoco con un fichero LFS en el indice',
+        not any('lfs' in e.get('argv',[]) and 'env' in e.get('argv',[]) for e in events[antes:]))
     antes=len(events)
     out=call(repos[1],'switch',branch='main')
     mc.check('endpoint de carpeta usa puerta de carpeta',out.startswith('exit=0'),out[:250])
@@ -73,7 +83,8 @@ try:
     raw('remote','set-url','origin',url,cwd=repos[0])
     for cmd in ('ls-remote','fetch'):
         out=call(repos[0],cmd,remote='origin')
-        mc.check(cmd+' sigue negando host fuera de GitRemotes',mc.rechazado(out),out[:250])
+        # la de la lista de hosts (GIT-005), no cualquier negativa (revisor de baterias de la 1.27)
+        mc.check(cmd+' sigue negando host fuera de GitRemotes',mc.es(out,'SR_GIT_REMOTE_HOST_FMT'),out[:250])
         mc.check(cmd+' no contacta endpoint excluido',not hits,hits)
     raw('remote','set-url','origin','https://github.com/example/DUMMY.git',cwd=repos[0])
     raw('config','lfs.url',url,cwd=repos[0])

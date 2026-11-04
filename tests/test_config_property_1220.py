@@ -71,6 +71,13 @@ def lee(proyecto):
         return f.read()
 
 
+def bytes_de(ruta):
+    # (revisor de baterias de la 1.27) "byte a byte" es en bytes: lee() decodifica y el modo texto junta los
+    # CRLF, asi que un BOM o unos finales cambiados pasaban por iguales
+    with open(ruta, 'rb') as f:
+        return f.read()
+
+
 def carga_msxml(ruta):
     """True/False si MSXML6 (el cargador del IDE) carga el fichero; None si no hay pywin32."""
     try:
@@ -139,17 +146,19 @@ try:
     check('P3 get-property para Win64 Release = lib', mc.es(r, 'SN_CFG_PROPERTY_GET_FMT') and '= lib.' in r, r[:300])
     r = config(proyecto, 'get-property', name='DCC_UnitSearchPath', platform='Win64', config='Debug')
     check('P3 ...para Win64 Debug no esta, y dice en que grupo esta',
-          mc.es(r, 'SN_CFG_PROPERTY_GET_FMT') and 'not set' in r and "'$(Cfg_2_Win64)'!=''" in r, r[:300])
+          mc.es(r, 'SN_CFG_PROPERTY_GET_FMT') and 'not set' in r and "'$(%s_Win64)'!=''" % CFG_RELEASE in r, r[:300])
     r = config(proyecto, 'remove-searchpath', path='lib', platform='Win64')
     check('P3 ...remove-searchpath de lib para Win64: CFG-022 dice en que grupo esta y que lo quita remove-property',
-          mc.es(r, 'SN_CONFIG_PATH_ABSENT_FMT') and "'$(Cfg_2_Win64)'!=''" in r and 'remove-property' in r, r[:400])
+          mc.es(r, 'SN_CONFIG_PATH_ABSENT_FMT') and "'$(%s_Win64)'!=''" % CFG_RELEASE in r and 'remove-property' in r,
+          r[:400])
     r = config(proyecto, 'remove-searchpath', path='li', platform='Win64')
     check('P3 ...y de li (un trozo de lib, no una entrada): CFG-022 sin la pista de otro grupo',
           mc.es(r, 'SN_CONFIG_PATH_ABSENT_FMT') and 'remove-property' not in r, r[:400])
 
+    crudo = bytes_de(proyecto)
     r = config(proyecto, 'set-property', name='DCC_UnitSearchPath', value='lib', platform='Win64', config='Release')
     check('P4 el mismo valor otra vez: CFG-137', mc.es(r, 'SN_CFG_PROPERTY_YA_FMT'), r[:300])
-    check('P4 ...y el .dproj byte a byte', lee(proyecto) == xml)
+    check('P4 ...y el .dproj byte a byte', lee(proyecto) == xml and bytes_de(proyecto) == crudo)
 
     # la plataforma, declarada como el IDE: no se escribe para una que el proyecto no tiene (A14 de la 1.23)
     config(proyecto, 'add-platform', platform='Android64')
@@ -174,6 +183,7 @@ try:
     check('P5 ...otra vez: CFG-139, nada que quitar', mc.es(r, 'SN_CFG_PROPERTY_NO_ESTABA_FMT'), r[:300])
 
     xml = lee(proyecto)
+    crudo = bytes_de(proyecto)
     negadas = [
         ('sin name', dict(), 'SR_CFG_NEED_NAME'),
         ('un nombre que no es (a<b)', dict(name='a<b', value='x'), 'SR_CFG_NAME_NO_ES_PROPIEDAD_FMT'),
@@ -198,7 +208,7 @@ try:
     check('P6 value no es de get-property', mc.rechazado(r) and mc.es(r, 'SR_CONFIG_NO_ES_DEL_COMANDO_FMT'), r[:300])
     r = config(proyecto, 'remove-property', name='Base_Win64')
     check('P6 remove-property de la estructura: CFG-132', mc.rechazado(r) and mc.es(r, 'SR_CFG_NAME_ES_ESTRUCTURA_FMT'), r[:300])
-    check('P6 ...nada de eso toco el .dproj', lee(proyecto) == xml)
+    check('P6 ...nada de eso toco el .dproj', bytes_de(proyecto) == crudo)
 
     cargado = carga_msxml(proyecto)
     if cargado is None:

@@ -92,7 +92,10 @@ try:
     r = srv.call('delphi_styles', {'command': 'set', 'path': PLANO, 'style': 'fondo', 'prop': 'Fill.Color', 'value': 'fff7dfc5'}, t=120)
     check('T3 V179 un color sin la x: STYLE-050 y su forma', mc.abre(r, 'SR_STYLES_FMX_LO_IGNORARIA_FMT') and mc.es(r, 'SN_STYLES_COLOR_SIN_X'), r[:400])
     r = srv.call('delphi_styles', {'command': 'set', 'path': PLANO, 'style': 'fondo', 'prop': 'Fill.Color', 'value': 'NoEsColor'}, t=120)
-    check('T3b ...a otro valor no se le dice', not mc.es(r, 'SN_STYLES_COLOR_SIN_X'), r[:400])
+    # sobre la MISMA negativa (STYLE-050), la que lleva la pista cuando toca: un set que fallara por
+    # otra cosa tampoco la traia (revisor de baterias de la 1.27)
+    check('T3b ...a otro valor no se le dice',
+          mc.abre(r, 'SR_STYLES_FMX_LO_IGNORARIA_FMT') and not mc.es(r, 'SN_STYLES_COLOR_SIN_X'), r[:400])
 
     # ---- T4
     escribe('fr\\UFr.pas', 'unit UFr;\n\ninterface\n\nuses\n  System.Classes, FMX.Forms, FMX.Controls, FMX.StdCtrls, FMX.Types;\n\ntype\n'
@@ -108,7 +111,12 @@ try:
     FORM = escribe('fo\\UFo.fmx', "object Form2: TForm2\n  Left = 0\n  Top = 0\n  ClientHeight = 100\n  ClientWidth = 100\n"
                    "  object Button1: TButton\n    StyleLookup = 'cardstyle'\n    TabOrder = 0\n    Text = 'B'\n  end\nend\n")
     r = srv.call('delphi_designer', {'command': 'lint', 'path': FORM}, t=240)
-    check('T4b un form corriente con StyleLookup y sin StyleBook: se juzga, no sale DSGN-178', not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT'), r[:400])
+    # con su control: el StyleLookup SE JUZGO (DSGN-175, ningun estilo que el form ve lo define); una
+    # negativa o un lint que no mirara los lookups tampoco traian el DSGN-178 (revisor de baterias
+    # de la 1.27)
+    check('T4b un form corriente con StyleLookup y sin StyleBook: se juzga, no sale DSGN-178',
+          mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT') and not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT'),
+          r[:400])
 
     # ---- T6: edits con occurrence en un form: en que objeto cayo
     DOS = escribe('dos\\UDos.dfm', "object FormDos: TFormDos\n  Left = 0\n  Top = 0\n  Caption = 'D'\n  ClientHeight = 200\n  ClientWidth = 300\n"

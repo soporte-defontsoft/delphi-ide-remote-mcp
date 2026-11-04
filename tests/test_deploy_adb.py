@@ -348,8 +348,12 @@ import re as _re
 _x = open(NDPROJ, encoding='utf-8-sig').read()
 _x = _re.sub(r'\s*<BuildConfiguration Include="[^"]*">.*?</BuildConfiguration>', '', _x, flags=_re.S)
 open(NDPROJ, 'w', encoding='utf-8-sig', newline='').write(_x)
-_v = mc.como_json(srv.call('delphi_config', {"command": "view", "project": NDPROJ}))
-check('fixture A35: el proyecto no declara configuraciones', not (_v.get('configurations') or []), _v.get('configurations'))
+# (revisor de baterias de la 1.27) `not (.get(...) or [])` pasaba con {} (un view que fallara): la lista
+# configurations la compone view siempre (Mcp.Tools.Config), y tiene que estar VACIA
+_rv = srv.call('delphi_config', {"command": "view", "project": NDPROJ})
+_v = mc.como_json(_rv)
+check('fixture A35: el proyecto no declara configuraciones', not mc.fallo(_rv) and _v.get('configurations') == [],
+      _rv[:300])
 out = srv.call('delphi_build', {"project": NDPROJ, "platform": "Linux64", "config": "Otra",
                                 "target": "Deploy", "profile": "mcp-e2e-noprof"}, t=600)
 _mn = open(os.path.join(NDIR, 'DeploySinCfg.deployproj'), encoding='utf-8-sig').read() \
@@ -575,8 +579,10 @@ for malo in ['adb-SERIE-AbCdEf (2)&calc._adb-tls-connect._tcp', 'adb-SERIE-AbCdE
              '-x (2)._adb-tls-connect._tcp', ' (2)._adb-tls-connect._tcp', 'adb-SERIE-AbCdEf (2).x y',
              'adb-SERIE-AbCdEf (2)." -s otro']:
     out = md.call('delphi_adb', {"command": "logcat", "device": malo, "lines": "5"})
+    # (revisor de baterias de la 1.27) con `or SR_ADB_ALLOWLIST_FMT` la lista blanca tapaba la gramatica: ninguno
+    # esta en la lista, asi que sin BadDeviceName seguia verde. Lo niega la GRAMATICA (ADB-018), antes que la lista
     check('V223 lo que no tiene esa forma sigue negado: %r' % malo,
-          mc.rechazado(out) and (mc.es(out, 'SR_ADB_TARGET_FMT') or mc.es(out, 'SR_ADB_ALLOWLIST_FMT')), out[:300])
+          mc.abre(out, 'SR_ADB_TARGET_FMT'), out[:300])
 out = md.call('delphi_adb', {"command": "logcat", "device": 'adb-SERIE-AbCdEf (2)._adb-tls-connect._tcp' + 'x' * 30, "lines": "5"})
 check('V223 el tope de longitud cuenta el nombre entero',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_TARGET_FMT'), out[:300])

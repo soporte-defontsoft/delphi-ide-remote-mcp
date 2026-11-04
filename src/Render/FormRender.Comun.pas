@@ -563,34 +563,34 @@ begin
     while I <= ParamCount do
     begin
       P := ParamStr(I);
-      if P = '--path' then GPeticion.Path := Valor
-      else if P = '--out' then GPeticion.Salida := Valor
-      else if P = '--style' then GPeticion.Estilo := Valor
-      else if P = '--component' then GPeticion.Componente := Valor
-      else if P = '--bds' then GPeticion.Bds := Valor
-      else if P = '--bdsroot' then GPeticion.RaizBds := Valor
-      else if P = '--knownfile' then GPeticion.FicheroPaquetes := Valor
-      else if P = '--packages' then GPeticion.Paquetes := Entre(Valor, ['auto', 'none', 'all'])
-      else if P = '--fidelity' then GPeticion.Fidelidad := Entre(Valor, ['auto', 'window', 'print'])
-      else if P = '--root' then GPeticion.Raiz := Entre(Valor, ['auto', 'form', 'frame'])
-      else if P = '--state' then GPeticion.Estados := GPeticion.Estados + [Valor]
-      else if P = '--nonvisual' then
+      if P = FR_ARG_PATH then GPeticion.Path := Valor
+      else if P = FR_ARG_OUT then GPeticion.Salida := Valor
+      else if P = FR_ARG_STYLE then GPeticion.Estilo := Valor
+      else if P = FR_ARG_COMPONENT then GPeticion.Componente := Valor
+      else if P = FR_ARG_BDS then GPeticion.Bds := Valor
+      else if P = FR_ARG_BDSROOT then GPeticion.RaizBds := Valor
+      else if P = FR_ARG_KNOWNFILE then GPeticion.FicheroPaquetes := Valor
+      else if P = FR_ARG_PACKAGES then GPeticion.Paquetes := Entre(Valor, ['auto', 'none', 'all'])
+      else if P = FR_ARG_FIDELITY then GPeticion.Fidelidad := Entre(Valor, ['auto', 'window', 'print'])
+      else if P = FR_ARG_ROOT then GPeticion.Raiz := Entre(Valor, ['auto', 'form', 'frame'])
+      else if P = FR_ARG_STATE then GPeticion.Estados := GPeticion.Estados + [Valor]
+      else if P = FR_ARG_NONVISUAL then
       begin
-        V := Entre(Valor, ['on', 'off', 'true', 'false', '1', '0']);
-        GPeticion.NoVisuales := (V = 'on') or (V = 'true') or (V = '1');
+        V := Entre(Valor, [FR_ARG_SI, FR_ARG_NO, 'true', 'false', '1', '0']);
+        GPeticion.NoVisuales := (V = FR_ARG_SI) or (V = 'true') or (V = '1');
       end
-      else if P = '--writeback' then
+      else if P = FR_ARG_WRITEBACK then
       begin
-        V := Entre(Valor, ['on', 'off', 'true', 'false', '1', '0']);
-        GPeticion.Escribe := (V = 'on') or (V = 'true') or (V = '1');
+        V := Entre(Valor, [FR_ARG_SI, FR_ARG_NO, 'true', 'false', '1', '0']);
+        GPeticion.Escribe := (V = FR_ARG_SI) or (V = 'true') or (V = '1');
       end
-      else if P = '--dropped' then GPeticion.Soltado := Valor
-      else if P = '--convert' then GPeticion.Convierte := Entre(Valor, ['text', 'binary'])
-      else if P = '--unreadableclasses' then GPeticion.ClasesSinLeer := True
-      else if P = '--boxes' then GPeticion.Cajas := True
-      else if P = '--timeout' then GPeticion.TiempoMs := StrToInt(Valor)
-      else if P = '--packagestimeout' then GPeticion.TiempoPaquetesMs := StrToInt(Valor)
-      else if P = '--verbose' then GPeticion.Verbose := True
+      else if P = FR_ARG_DROPPED then GPeticion.Soltado := Valor
+      else if P = FR_ARG_CONVERT then GPeticion.Convierte := Entre(Valor, ['text', 'binary'])
+      else if P = FR_ARG_UNREADABLE_CLASSES then GPeticion.ClasesSinLeer := True
+      else if P = FR_ARG_BOXES then GPeticion.Cajas := True
+      else if P = FR_ARG_TIMEOUT then GPeticion.TiempoMs := StrToInt(Valor)
+      else if P = FR_ARG_PACKAGES_TIMEOUT then GPeticion.TiempoPaquetesMs := StrToInt(Valor)
+      else if P = FR_ARG_VERBOSE then GPeticion.Verbose := True
       else
         raise ERender.Create(MsgFmt(SR_RENDER_ARG_DESCONOCIDO_FMT, [P]));
       Inc(I);
@@ -598,10 +598,10 @@ begin
     if GPeticion.ClasesSinLeer then
       Exit;
     if GPeticion.Path = '' then
-      raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, ['--path']));
+      raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, [FR_ARG_PATH]));
     // el juez no pinta: sin png
     if (GPeticion.Salida = '') and not GPeticion.Escribe and not GPeticion.Cajas then
-      raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, ['--out']));
+      raise ERender.Create(MsgFmt(SR_RENDER_FALTA_ARG_FMT, [FR_ARG_OUT]));
     if not TFile.Exists(GPeticion.Path) then
       raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [GPeticion.Path]));
     // ...y con una propiedad detras del ultimo punto: Button1.=x llegaba a

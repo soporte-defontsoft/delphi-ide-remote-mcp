@@ -36,7 +36,7 @@ INIT = {"jsonrpc": "2.0", "id": 1, "method": "initialize",
 
 def con_cors(valor, n):
     """Un servidor HTTP con [CORS] Enabled=<valor>: (la cabecera CORS de su
-    respuesta a una peticion con Origin, su log de arranque)."""
+    respuesta a una peticion con Origin, su log de arranque, el status HTTP)."""
     d = os.path.join(BASE, 'cors-%d' % n)
     exe = mc.copia_exe(d)
     with open(os.path.join(d, 'settings.ini'), 'w') as f:
@@ -58,7 +58,7 @@ def con_cors(valor, n):
             proc.kill()
     finally:
         salida.close()
-    return cab, open(ruta, 'rb').read().decode('utf-8', 'replace')
+    return cab, open(ruta, 'rb').read().decode('utf-8', 'replace'), st
 
 
 def zona(extra):
@@ -72,17 +72,21 @@ def zona(extra):
     return bool(ws.get('readableExtra')), ws
 
 
-cab, log = con_cors('false', 1)
-check('S1 [CORS] Enabled=false: sin cabeceras CORS', cab is None, cab)
-cab, log = con_cors('true', 2)
+cab, log, st = con_cors('false', 1)
+# con la respuesta de VERDAD (200): sin ella, un 403 o una peticion que no llego tampoco
+# traian cabeceras (revisor de baterias de la 1.27)
+check('S1 [CORS] Enabled=false: sin cabeceras CORS', st == 200 and cab is None, (st, cab))
+cab, log, st = con_cors('true', 2)
 check('S2 (control) [CORS] Enabled=true: con ellas', cab == 'http://localhost', cab)
-cab, log = con_cors('quizas', 3)
+cab, log, st = con_cors('quizas', 3)
 nota = CAT['SL_GUARD_SINO_ILEGIBLE_FMT'] % ('[CORS] Enabled', 'quizas', '1')
 check('S3 [CORS] Enabled=quizas: el lado cerrado (CORS encendido, valida el Origin) y el log de arranque lo dice',
       cab == 'http://localhost' and nota in log, (cab, log[-600:]))
 hay, ws = zona({'DELPHI_MCP_LIBRARY_ZONE': 'false'})
-check('S4 DELPHI_MCP_LIBRARY_ZONE=false: delphi_workspace sin la zona de biblioteca', not hay,
-      str(ws)[:300])
+# sobre un delphi_workspace que CONTESTO (sus roots): con ws={} tambien "no hay zona"
+# (revisor de baterias de la 1.27)
+check('S4 DELPHI_MCP_LIBRARY_ZONE=false: delphi_workspace sin la zona de biblioteca',
+      'roots' in ws and not hay, str(ws)[:300])
 hay, ws = zona({})
 check('S5 (control) sin la variable, la zona esta (su defecto)', hay, str(ws)[:300])
 

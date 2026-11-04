@@ -69,6 +69,15 @@ try:
     _, m = init('alias-24', 'alias-check')
     check('A1 AuthToken= dentro del workspace autentica (alias de Token=)',
           bool(m and m[0].get('result')), m)
+    # A1b: ...y la sesion queda en SU workspace, con SU raiz: el comentario de A1 prometia la
+    # jaula y solo se miraba que el initialize contestara (revisor de baterias de la 1.27)
+    ca = mc.Http(PORT, 'alias-24', t=60)
+    ca.session('alias-ws')
+    wa = mc.como_json(ca.call('delphi_workspace', {}))
+    raices = wa.get('roots') or []
+    check('A1b ...y la sesion queda en SU workspace (Alias), con su raiz y solo esa',
+          (wa.get('workspace') or '').lower() == 'alias' and len(raices) == 1 and
+          raices[0].rstrip('\\').lower().endswith('\\jail\\alias'), (wa.get('workspace'), raices))
 
     # A2: the misspelled section's token gets 401
     st, _ = init('perdido-24', 'x')

@@ -31,12 +31,16 @@ lector y su linea, y cuando la tabla calla se le pregunta al lector en el lint
   L10 upload ENTERO sin sha256 de un form con el BOM mal transcrito (Hermes,
      hermes-120 de la 1.20: ok:true y nada mas): designerNote con UPLOAD-013
      y lo que dijo el parser (ROJO en 708ed8b)
+  L9b control de L9: en ese mismo form, lo que la edicion trae y el lector no
+     carga SI es su aviso (EDIT-127), y lo de X1 no
   L11 con el lector en ALEMAN (el RTL del ayudante habla el idioma de
      Windows; el servidor partia su mensaje con el ingles, medido el
-     18-oct-2026): el lint dice lo que dijo el lector CON su linea (ROJO en
-     produccion: sin linea)
-  L12 ...y L9 en aleman: lo que se salta la clase sustituida sigue sin ser un
-     aviso del lector (ROJO en produccion: EDIT-127 con X1.Foo)
+     18-oct-2026). Desde V65 de la 1.24 el idioma de un exe no se elige dentro
+     del contenedor: se llama al AYUDANTE a mano y se mide que dice lo que no
+     cargo en aleman y PARTIDO (|Edit1|FontColor|), lo que el lint necesita
+     para ponerle su linea; que el servidor lo lee en cualquier idioma lo mide
+     una unitaria. (El L12 de antes, L9 en aleman, se fue con el: no hay
+     check suyo aqui; revisor de baterias de la 1.27)
 
 Uso:  python tests/test_lector_puertas_120.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -174,6 +178,13 @@ try:
     check('L9 una clase de terceros sustituida: lo que el lector se salta de ella no es un aviso del lector',
           not mc.fallo(e) and not mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT') and 'X1.Foo' not in e
           and b'TabOrder = 1' in open(p, 'rb').read(), e[-600:])
+    # el control de L9: con la clase sustituida, el lector SI sigue avisando de lo que la edicion trae de
+    # verdad (EDIT-127 de Edit1.FontColor), y de X1 no; sin el, "no es un aviso" pasaba tambien con un lector
+    # que no corriera en un form con una clase que no esta (revisor de baterias de la 1.27)
+    p = form('UL9b', otro=TERCEROS)
+    e = srv.call('delphi_edit', {'path': p, 'old': '    TabOrder = 0', 'new': '    TabOrder = 0\r\n' + MALO}, t=240)
+    check('L9b control: en ese form, lo que el lector no carga de verdad SI es su aviso (EDIT-127), y lo de X1 no',
+          not mc.fallo(e) and mc.es(e, 'SN_EDIT_AVISO_LECTOR_FMT') and LECTOR in e and 'X1.Foo' not in e, e[-600:])
 
     # el ayudante que lanza ESTE servidor (copia_exe lo puso a su lado), a mano:
     # el idioma de un exe no se elige dentro del contenedor (V65 de la 1.24). Que

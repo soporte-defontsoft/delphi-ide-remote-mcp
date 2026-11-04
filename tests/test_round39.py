@@ -69,7 +69,10 @@ try:
         # Se afirma el CONTRATO, no la letra: lo que mentia era prometer el
         # digest de una carpeta. Buscar la palabra "carpeta" a secas daria
         # falso positivo con el texto nuevo, que la usa para NEGARLO.
-        if 'each unit in it OFFERS' in d:
+        # La promesa, la del CATALOGO (SP_SYMBOLS_PATH, la de delphi_symbols): un trozo de su frase
+        # en ingles a mano no caia si la frase cambiaba; D2 mira que SI la publica symbols
+        # (revisor de baterias de la 1.27)
+        if mc.catalogo()['SP_SYMBOLS_PATH'] in d:
             mienten.append(t)
     check('D1 ninguna tool de posicion promete el digest de una carpeta',
           not mienten, 'lo siguen prometiendo: %s' % mienten)
@@ -82,7 +85,7 @@ try:
     # ------------------------------------------------------------------ D2
     ds = esquema('delphi_symbols')['parameters']['properties']['path']['description']
     check('D2 ...y delphi_symbols sigue diciendo que SI la acepta',
-          'FOLDER' in ds.upper(), ds[:200])
+          'FOLDER' in ds.upper() and mc.catalogo()['SP_SYMBOLS_PATH'] in ds, ds[:200])
 
     # ------------------------------------------------------------------ D3
     repo = os.path.join(JAIL, 'r')

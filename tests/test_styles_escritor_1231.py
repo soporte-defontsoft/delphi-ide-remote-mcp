@@ -151,6 +151,9 @@ try:
                              "    Fill.Color = xFFF7DFC6\r\n    Stroke.Color = claBlack\r\n"))
     r, j = lint()
     check('S8 (control) 8 cifras y un color con nombre: sin colorsWithoutAlpha',
+          # sobre un lint que CONTESTO y salio limpio (clean, la clave que S7 lee false): con j={}
+          # pasaba tambien (revisor de baterias de la 1.27)
+          j.get('clean') is True and
           'colorsWithoutAlpha' not in j and not mc.es(r, 'SN_STYLES_COLORES_SIN_ALFA_FMT'), r[:600])
     escribe()
     r = pon('Fill.Color', 'xFF7DFC6')

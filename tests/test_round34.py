@@ -227,8 +227,12 @@ try:
         open(f, 'wb').write(ORIG7B)
         r = call(tool, {'path': f, 'edits': json.dumps([
             {'old': '      X := 1;', 'new': '      Z := 1;', 'atline': 4}, RETRY])})
+        # por SU motivo: la occurrence 3, contada sobre el fichero de antes de la tanda, es la linea
+        # 4, y la entrada anterior ya la cambio (EDIT-062); cualquier negativa pasaba (revisor de
+        # baterias de la 1.27)
         check('B7c %s (iii): ...tras una entrada que quita la PROPIA coincidencia: negativa, el fichero intacto' % tool,
-              mc.rechazado(r) and open(f, 'rb').read() == ORIG7B, (r[:300], open(f, 'rb').read()))
+              mc.rechazado(r) and mc.es(r, 'SR_EDIT_LINEA_ESTA_ESE_ANCLA_FMT') and open(f, 'rb').read() == ORIG7B,
+              (r[:300], open(f, 'rb').read()))
         # B7d: el atline de un BLOQUE en una tanda gana (se ignoraba, y con
         # occurrence el bloque se contaba sobre el fichero ya mutado: escribia
         # el PRIMER bloque contestando APPLIED; revisor propio, 9-oct-2026)
@@ -300,7 +304,10 @@ try:
     r2 = call('delphi_edit', {'path': f, 'edits': json.dumps([
         {'old': "    Caption = 'X'", 'new': "    Caption = 'Y'"}])})
     check('B9 un ancla que solo su sangria hacia unica se niega (EDIT-077), suelta y en una tanda, sin tocar nada',
-          mc.es(r, 'SR_EDIT_ANCLA_NO_UNICA_FMT') and mc.rechazado(r2) and open(f, 'rb').read() == ORIG9,
+          # la tanda, por el MISMO motivo que la suelta: con rechazado a secas pasaba cualquier
+          # negativa (revisor de baterias de la 1.27)
+          mc.es(r, 'SR_EDIT_ANCLA_NO_UNICA_FMT') and mc.rechazado(r2) and mc.es(r2, 'SR_EDIT_ANCLA_NO_UNICA_FMT')
+          and open(f, 'rb').read() == ORIG9,
           (r[:200], r2[:200], open(f, 'rb').read()))
     # B10: la sangria fuera y el FINAL tambien (A15 de la 1.23: contaba en el
     # ancla de una linea de Pascal y no en sus bloques ni en delphi_textedit,

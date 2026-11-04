@@ -101,8 +101,21 @@ check('read: cebo de falso positivo intacto',
 
 # search DOES mask its result lines, but must not touch the bait (letter
 # before the drive letter = not a path start)
-out = call('delphi_search', {"root": INSIDE, "query": "refspec"})
-check('search: falso positivo NO enmascarado', 'HEAsrv' not in out, out)
+# pattern *.txt: el cebo vive en contenido.txt, y el juego de Delphi por defecto no lo mira (total 0:
+# el check pasaba sin un solo acierto; revisor de baterias de la 1.27)
+out = call('delphi_search', {"root": INSIDE, "query": "refspec", "pattern": "*.txt"})
+# con su control: el acierto SALE y trae el cebo entero (un search que fallara tampoco traia
+# 'HEAsrv') (revisor de baterias de la 1.27)
+check('search: falso positivo NO enmascarado',
+      'HEAsrv' not in out and not mc.fallo(out) and
+      any(('HEA' + DRIVE + ':\\no-es-ruta') in h.get('text', '') for h in mc.aciertos(out)), out)
+# ...pero el TEXTO de un acierto viaja verbatim desde la 1.0.4 (no pasa por el enmascarador), asi que
+# el limite de la regla (una letra delante de la unidad no abre una ruta) se mide en un texto que SI
+# se enmascara: el eco de una negativa (revisor de baterias de la 1.27)
+out = call('delphi_test', {'command': 'refspec HEA' + DRIVE + ':\\no-es-ruta'})
+check('mascara: una letra pegada delante de la unidad no la abre (el eco sale intacto)',
+      mc.abre(out, 'SR_TEST_CMD_FMT') and ('HEA' + DRIVE + ':\\no-es-ruta') in out and 'HEAsrv' not in out,
+      out[:200])
 
 # ---- delete / blank ------------------------------------------------------
 out = call('delphi_edit', {"path": V_PAS, "old": "procedure Uno;",
@@ -202,7 +215,10 @@ else:
 
 # ---- R3-1: LSP URIs must not leak the real drive (file:///D%3A/...) --------
 out = call('delphi_symbols', {"path": V_PAS})
+# sobre un arbol de simbolos que CONTESTO: una negativa tampoco traia %3A (revisor de baterias
+# de la 1.27)
 check('LSP: la URI no filtra la unidad real (%3A)',
+      not mc.fallo(out) and
       (DRIVE + '%3A') not in out and (DRIVE + '%3a') not in out, out[:200])
 
 # ---- C1-bis: published declaration AFTER the fields, never before ----------
@@ -310,7 +326,10 @@ check('R4-B: readableExtra tambien virtualizado', (DRIVE + ':\\') not in out, ou
 
 # ---- R4-C: list canonicalizes, no '..' echoed back ------------------------
 out = call('delphi_list', {"root": os.path.join(INSIDE, 'sub', '..'), "pattern": "*.pas"})
-check('R4-C: la salida de list no arrastra ".."', '..' not in out, out[:150])
+# sobre un listado que CONTESTO y trae lo de INSIDE: 'sub' no existe, y una negativa tampoco
+# arrastraba '..' (revisor de baterias de la 1.27)
+check('R4-C: la salida de list no arrastra ".."',
+      '..' not in out and any(e['path'].endswith('Dentro.pas') for e in mc.ficheros(out)), out[:150])
 
 # ---- delphi_config: view + add-platform with the VCL/FMX rule -------------
 # Both fixtures are derived from the ONE real project (there is a single one
@@ -595,8 +614,14 @@ check('paserver: platforms distingue local vs remoto',
       and any(not p['buildsLocally'] for p in pf.get('platforms', [])), out[:150])
 # ...y una con su SDK tambien se compila aqui (delphi_build compila contra el SDK en local): Linux64
 # con su SDK salia buildsLocally=false (test completo de Opus de la 1.22.0)
-check('paserver: platforms, la que tiene su SDK se compila aqui (buildsLocally)',
-      all(p['buildsLocally'] for p in pf.get('platforms', []) if 'SDK present' in p.get('status', '')), out[:400])
+# sin ninguna plataforma con SDK, all([]) daba PASS sin mirar nada: entonces se dice y no se
+# cuenta (revisor de baterias de la 1.27)
+_con_sdk = [p for p in pf.get('platforms', []) if 'SDK present' in p.get('status', '')]
+if _con_sdk:
+    check('paserver: platforms, la que tiene su SDK se compila aqui (buildsLocally)',
+          all(p['buildsLocally'] for p in _con_sdk), out[:400])
+else:
+    print('NOTA: paserver platforms sin ninguna plataforma con su SDK en esta maquina: buildsLocally no medido')
 out = call('delphi_paserver', {"command": "profiles"})
 check('paserver: profiles responde', isinstance(mc.como_json(out).get('profiles'), list), out[:120])
 
@@ -665,8 +690,12 @@ if h != -1:
         out = call('delphi_read', {"path": LOCKED})
         # either it fails (the interesting case) or it read anyway; in BOTH
         # cases the real drive letter must not appear
+        # EL lector de la fuga (mc.fuga_de_letra: la letra con cualquier separador y en minuscula),
+        # y que la ruta viajo, enmascarada, o que se leyo: un texto vacio tampoco la traia
+        # (revisor de baterias de la 1.27)
         check('read de fichero bloqueado: la unidad real NO viaja',
-              (DRIVE + ':\\') not in out, out[:200])
+              not mc.fuga_de_letra(out, DRIVE) and
+              ('unit Bloqueado' in out or mc.virtual(DRIVE + ':') in out), out[:200])
     finally:
         ctypes.windll.kernel32.CloseHandle(h)
 
@@ -775,7 +804,10 @@ if VDRV:
                            {"path": mc.virtual(VDRV + ':\\nota.md')},
                            {'DELPHI_MCP_VAULT_PATH': VDRV + ':\\'})
             check('vault en otra unidad: su letra ES una unidad servida',
-                  not mc.es(out, 'SR_UNIT_UNKNOWN_FMT') and mc.resultado(out) not in ('INTERNAL', 'NO_ANSWER'),
+                  # la letra se EXPANDIO y lo que contesta es la regla del vault (las tools de codigo no
+                  # lo tocan): cualquier negativa salvo UNIT_UNKNOWN pasaba tambien con la de la jaula
+                  # (revisor de baterias de la 1.27)
+                  not mc.es(out, 'SR_UNIT_UNKNOWN_FMT') and mc.abre(out, 'SR_VAULT_NOT_CODE'),
                   out)
             check('vault en otra unidad: la letra real no viaja',
                   not mc.fuga_de_letra(out, VDRV), out)

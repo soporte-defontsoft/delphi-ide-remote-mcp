@@ -125,8 +125,11 @@ try:
     # asi que lleva la letra REAL: es exactamente lo que se mira aqui.
     check('L7 el "copia=" del eco de delphi_edit tampoco saca la letra real',
           sin_letra_real(e), e[:300])
+    # sin el 'or already existed' (SF_EDIT_COPIA_YA_EXISTIA, la copia del dia que ya estaba): esa
+    # rama no lleva ruta, y UPath.pas se edita aqui por primera vez, asi que su copia es nueva y
+    # la ruta TIENE que salir; con el or, L7 y L7b pasaban sin ruta (revisor de baterias de la 1.27)
     check('L7b ...y sigue diciendo DONDE quedo la copia',
-          'backup=' in e and (VIRT in e or 'already existed' in e), e[:300])
+          'backup=' in e and VIRT in e, e[:300])
 
     # ------------------------------------------------------------------ L8
     # El nombrador, por los dos lados. La lista de unidades validas de una

@@ -182,7 +182,8 @@ assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r
 r = A.call('delphi_create', {'kind': 'project-fmx', 'name': 'OtroFmx', 'dir': VCLDIR})
 check('#1 colision: RECHAZADO y NADA creado',
       mc.rechazado(r) and mc.es(r, 'SR_CREATE_CLASH_FMT') and not os.path.exists(os.path.join(VCLDIR, 'OtroFmx.dpr')), r[:250])
-check('#1 ...y el mensaje dice que no ha creado nada', mc.es(r, 'SR_CREATE_CLASH_FMT'), r[:250])
+# ('#1 ...y el mensaje dice que no ha creado nada' RETIRADA en la 1.27: repetia la misma
+# condicion, mc.es SR_CREATE_CLASH_FMT, que ya mide el check de arriba; revisor de baterias)
 r = A.call('delphi_create', {'kind': 'form-fmx', 'name': 'UCruzado',
                               'project': os.path.join(VCLDIR, 'ProyVcl.dproj')})
 check('#4 form FMX en un proyecto VCL: RECHAZADO',
@@ -242,7 +243,9 @@ check('#C1 el contenido llega entero y en CRLF', disk.count('\r\n') >= 10 and di
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'UOtra', 'content': 'unit NoCoincide;\nend.\n',
                               'project': os.path.join(PROJ, 'FugaTest.dproj')})
 check('#C1 content cuyo "unit" no casa con el nombre: RECHAZADO',
-      mc.rechazado(r) and mc.es(r, 'SR_CREATE_CONTENT_NAME_FMT') and not os.path.exists(os.path.join(SANO, 'UOtra.pas')), r[:200])
+      # en PROJ, la carpeta del FugaTest.dproj que se nombra: la de SANO no la iba a tener nunca
+      # y la negativa "no la crea" no podia caer (revisor de baterias de la 1.27)
+      mc.rechazado(r) and mc.es(r, 'SR_CREATE_CONTENT_NAME_FMT') and not os.path.exists(os.path.join(PROJ, 'UOtra.pas')), r[:200])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'UCorta', 'content': 'unit UCorta;\ninterface\n',
                               'project': os.path.join(PROJ, 'FugaTest.dproj')})
 check('#C1 content cortado (sin end.): RECHAZADO', mc.rechazado(r) and mc.es(r, 'SR_CREATE_CONTENT_NOEND'), r[:200])
@@ -313,10 +316,15 @@ r = A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dproj'),
 r = A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dproj'),
                               'command': 'remove-platform', 'platform': 'Win32'})
 check('#11 remove-platform funciona con otra habilitada', mc.abre(r, 'SN_CFG_DESHABILITADA_PLATAFORMA_QUEDA_DECLAR_FMT'), r[:200])
+# el .dproj tal cual estaba, bytes y fecha: el mensaje solo no decia que el no-op no escribiera
+# (revisor de baterias de la 1.27)
+_pv = os.path.join(VCLDIR, 'ProyVcl.dproj')
+_antes11 = (open(_pv, 'rb').read(), os.stat(_pv).st_mtime_ns)
 r2 = A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dproj'),
                                'command': 'remove-platform', 'platform': 'Win32'})
 check('#11 repetirlo es idempotente y NO hace copia de un no-op',
-      mc.es(r2, 'SN_CONFIG_PLAT_ALREADY_FMT'), r2[:200])
+      mc.abre(r2, 'SN_CONFIG_PLAT_ALREADY_FMT') and
+      (open(_pv, 'rb').read(), os.stat(_pv).st_mtime_ns) == _antes11, r2[:200])
 r = A.call('delphi_config', {'project': os.path.join(VCLDIR, 'ProyVcl.dproj'),
                               'command': 'remove-platform', 'platform': 'Win64'})
 check('#11 quitar la ULTIMA plataforma: RECHAZADO',
@@ -370,9 +378,12 @@ open(DFM, 'w', encoding='utf-8').write(
     "  end\r\n"
     "end\r\n")
 r = A.call('delphi_designer', {'command': 'lint', 'path': DFM})
+# por SU aviso (DSGN-039): el nombre a secas tambien salia en cualquier negativa que citara el
+# fichero, y "no acusa a TForm1" sobre una negativa no media nada (revisor de baterias de la 1.27)
 check('#15 lint nombra la clase que no conoce',
-      'TNoExisteJamas' in r, r[:300])
-check('#15 ...y no acusa a la clase del propio form', 'TForm1' not in r, r[:300])
+      mc.es(r, 'SN_LINT_UNKNOWN_CLASS_FMT') and 'TNoExisteJamas' in r, r[:300])
+check('#15 ...y no acusa a la clase del propio form',
+      mc.es(r, 'SN_LINT_UNKNOWN_CLASS_FMT') and 'TForm1' not in r, r[:300])
 FMX = os.path.join(BASE, 'Vista.fmx')
 open(FMX, 'w', encoding='utf-8').write(
     "object Vista: TVista\r\n"
@@ -530,7 +541,10 @@ check('#24 ...y los nombres son los de la prosa',
       'classname' in props and 'create' in props, sorted(props))
 
 r = A.call('delphi_help', {'command': 'volar'})
-check('M4 command invalido: los tres validos', 'tasks' in r and 'conventions' in r, r[:200])
+# por SU negativa (SR_HELP_CMD): 'tasks' y 'conventions' salen tambien en la tabla de tasks
+# (revisor de baterias de la 1.27)
+check('M4 command invalido: los tres validos',
+      mc.abre(r, 'SR_HELP_CMD') and 'tasks' in r and 'conventions' in r, r[:200])
 
 # ------------------------------------------------ C2/C4/F2 del campo -------
 # (C2 RETIRADA en la 1.27: aqui no hay repositorio, repos=[] y all() sobre una lista

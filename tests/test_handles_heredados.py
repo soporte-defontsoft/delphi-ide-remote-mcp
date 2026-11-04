@@ -35,4 +35,5 @@ finally:
         h=K.OpenProcess(1,False,pid)
         if h:K.TerminateProcess(h,1);K.CloseHandle(h)
     print('FINAL_PORT',bind_result(port),flush=True)
+mc.borra(base)  # su carpeta, con su copia del exe (revisor de baterias de la 1.27)
 mc.fin('herencia de handles LSP')

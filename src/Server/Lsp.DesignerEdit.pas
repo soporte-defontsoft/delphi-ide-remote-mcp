@@ -2704,10 +2704,11 @@ begin
     Exit;
   // en FMX Left/Top no colocan un control (son el sitio del icono de un no
   // visual, TComponent.DefineProperties): se escribian, se contestaba bien
-  // y no se movia nada (3.7, Hermes). Su sitio es Position.X/Y.
-  if F.EsFmx and MatchText(Prop, ['Left', 'Top']) and F.Tabla.Desciende(ClsId, ID_FMX_CONTROL) then
-    Exit(MsgFmt(SR_DESIGNER_FMX_LEFT_TOP_FMT, [NombreDe(Obj), Prop,
-      IfThen(SameText(Prop, 'Left'), 'Position.X', 'Position.Y')]));
+  // y no se movia nada (3.7, Hermes). Su sitio es Position.X/Y, por LA regla
+  // que tambien pregunta el lint (Lsp.DesignerMeta.SitioFmxDeLeftTop)
+  var SitioFmx := SitioFmxDeLeftTop(F.Tabla, F.EsFmx, ClsId, Prop);
+  if SitioFmx <> '' then
+    Exit(MsgFmt(SR_DESIGNER_FMX_LEFT_TOP_FMT, [NombreDe(Obj), Prop, SitioFmx]));
   // una ruta por una propiedad que en su bloque guarda una referencia
   // (PopupMenu = PopupMenu1): AutoPopup es de PopupMenu1, y el cargador lee
   // la ruta antes de resolver la referencia (3.3 de la 1.18.0, medido:

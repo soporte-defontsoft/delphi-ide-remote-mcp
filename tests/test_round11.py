@@ -80,46 +80,41 @@ r = A.call('delphi_styles', {'command': 'build', 'path': ST}, t=300)
 check('S1 ...y un ..\\..\\ tampoco cuela', mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT'), r[:250])
 
 # ------------------------------------------------------- S2/S3: los perfiles --
-# r11probe es un perfil DE VERDAD, fuera de la jaula: si una pasada anterior
-# murio a medias (matada, sin llegar a su finally) se quedo ahi para siempre.
-# Se quita tambien al EMPEZAR; si no existe, la negativa se ignora.
-A.call('delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
+# Sin tocar lo real (revisor de baterias de la 1.27): un perfil creado de verdad deja su
+# .profile en el APPDATA y su asiento en el HKCU del IDE, y una prueba no los toca (S2 lo hacia
+# con el IDE cerrado). Lo que se mide es la PUERTA del host, contra el paclient de mentira y un
+# APPDATA de prueba: con el host permitido la llamada LLEGA a paclient (su registro lo dice) y
+# el falso no crea el .profile, asi que el servidor no escribe asiento (Mcp.Tools.PAServer: solo
+# con exit 0 y el fichero en disco). El borrado de verdad, con la copia del asiento, lo mide
+# test_get_sdk_1230
 r = A.call('delphi_paserver', {'command': 'add-profile', 'name': 'r11probe',
                                 'host': '198.51.100.9', 'port': '64211',
                                 'password': 'x', 'platform': 'Linux64'}, t=300)
 check('S2 crear un perfil hacia un host no permitido: RECHAZADO',
       mc.rechazado(r) and mc.es(r, 'SR_PASERVER_HOST_DENIED_FMT') and 'RemoteHosts' in r, r[:250])
-B = spawn({'DELPHI_MCP_REMOTE_HOSTS': '198.51.100.9'})
-# r11probe es un perfil DE VERDAD, fuera de la jaula (un .profile en %APPDATA%
-# y su asiento en HKCU): se quita SIEMPRE, pase lo que pase en medio
-created = borrado = False
+AD_R11, _ = mc.appdata_perfil(TOP, 'otro-r11', '192.0.2.1', 'Linux64')
+SCR_R11 = os.path.join(TOP, 'scratch-r11')
+os.makedirs(SCR_R11)
+LOG_R11 = os.path.join(TOP, 'paclient-r11.log')
+B = spawn({'DELPHI_MCP_REMOTE_HOSTS': '198.51.100.9', 'APPDATA': AD_R11,
+           'DELPHI_MCP_PACLIENT': mc.paclient_falso('round11'), 'MCP_STUB_SCRATCH': SCR_R11,
+           'MCP_STUB_LOG': LOG_R11})
 try:
     r = B.call('delphi_paserver', {'command': 'add-profile', 'name': 'r11probe',
                                    'host': '198.51.100.9', 'port': '64211',
                                    'password': 'x', 'platform': 'Linux64'}, t=300)
-    # with the IDE open on the server, paclient cannot save profiles (W0013,
-    # now answered as a clear refusal, PAS-029): eso es un SALTO que se dice, no un
-    # PASS - con el IDE abierto, que aqui es lo normal, S2 salia verde sin crear
-    # nada (revisor de baterias de la 1.27)
-    created = (not mc.fallo(r)) and ('W0013' not in r) and not mc.es(r, 'SR_PASERVER_IDE_OPEN')
+    llamadas = open(LOG_R11, encoding='utf-8').read() if os.path.isfile(LOG_R11) else ''
+    nacidos = [f for _, _, fs in os.walk(AD_R11) for f in fs if f.lower() == 'r11probe.profile']
+    # con el IDE abierto el servidor lo dice antes de llamar (PAS-029): un SALTO que se ve
     if mc.es(r, 'SR_PASERVER_IDE_OPEN'):
-        print('SKIP S2/S3: el IDE esta abierto en esta maquina y paclient no guarda perfiles (PAS-029)')
+        print('SKIP S2 (control): el IDE esta abierto en esta maquina (PAS-029)')
     else:
-        check('S2 con el host permitido, el perfil SI se crea', created, r[:250])
-    if created:
-        r = B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
-        borrado = mc.abre(r, 'SN_PASERVER_PROFILE_REMOVED_FMT')
-        check('S3 y se puede volver a borrar desde aqui', borrado, r[:200])
-    else:
-        print('NOTA: S3 no se mide: el perfil no se llego a crear (%s)' % r[:120])
+        check('S2 con el host permitido la puerta deja pasar: llega a paclient (el de mentira, que no '
+              'crea el perfil) y no nace nada', not mc.es(r, 'SR_PASERVER_HOST_DENIED_FMT') and
+              'r11probe' in llamadas and not nacidos, (r[:250], llamadas[-300:], nacidos))
     r = B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'no-existe-r11'}, t=120)
     check('S3 borrar un perfil que no existe se explica', mc.rechazado(r) and mc.es(r, 'SR_PASERVER_NO_PROFILE_FMT'), r[:200])
 finally:
-    if created and not borrado:
-        try:
-            B.call('delphi_paserver', {'command': 'remove-profile', 'name': 'r11probe'}, t=120)
-        except Exception:
-            pass
     B.mata()
 
 # ------------------------------------------------- R1/R2: el rename honesto --
@@ -240,8 +235,12 @@ for rc, fuera in ((RC_FUERA, True), ('dentro.rc', False)):
         check('S4b un {$R a.res a.rc} con el .rc FUERA de la jaula: no se compila',
               mc.rechazado(r) and mc.es(r, 'SR_BUILD_INCLUDE_OUTSIDE_FMT') and 'FUERA-R11.rc' in r, r[:250])
     else:
+        # (revisor de baterias de la 1.27) `not mc.es(...)` pasaba con cualquier otro fallo (un timeout,
+        # otra negativa): dejarlo pasar es que el build LLEGA a msbuild y contesta con su resultado (aqui
+        # falla, medido: el .rc no es un RcCompile del .dproj y Recurso.res no se genera; da igual, la
+        # puerta ya lo dejo pasar)
         check('S4b ...y con el .rc DENTRO la puerta lo deja pasar',
-              not mc.es(r, 'SR_BUILD_INCLUDE_OUTSIDE_FMT'), r[:250])
+              not mc.fallo(r) and 'success' in J(r) and not mc.es(r, 'SR_BUILD_INCLUDE_OUTSIDE_FMT'), r[:250])
 # lo normal sigue compilando: {$R *.res} y un include de dentro
 open(os.path.join(PF, 'dentro.inc'), 'w', encoding='utf-8', newline='\r\n').write(
     'SECRETO_UNO = 1;\n')
@@ -275,8 +274,10 @@ check('M1 un bloque que no existe se rechaza y se deshace todo (la primera, que 
       mc.abre(r, 'SR_PATCH_EDITS_ROLLED_FMT') and mc.resultado(r) == 'NOT_FOUND' and
       open(BLK, 'rb').read() == antes, r[:200])
 r = A.call('delphi_help', {})
+# (revisor de baterias de la 1.27) 'content' a secas salia en cualquier texto: es el mapa (HELP-005) y
+# su frase de command=tool name=, con el ejemplo de "content" entre comillas
 check('M3 el mapa dice COMO averiguar los parametros de una tool',
-      'command=tool' in r and 'content' in r, r[-400:])
+      mc.abre(r, 'SN_HELP_TASKS') and 'command=tool name=' in r and '"content"' in r, r[-400:])
 r = A.call('delphi_test', {'command': 'run', 'project': 'MiTest'})
 check('C9 un NOMBRE de proyecto se explica como tal, no como jaula',
       mc.es(r, 'SR_TEST_NAME_NOT_PATH_FMT') and 'delphi_projects' in r, r[:250])

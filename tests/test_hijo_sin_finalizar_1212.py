@@ -81,7 +81,10 @@ try:
     # la caja de paquetes hecha: al hacerla, el servidor corre ayudantes de vida corta que
     # H1 tomaria por el renderizador (V65 de la 1.24)
     r = srv.call('delphi_designer', {'command': 'preview', 'path': DFM}, t=120)
-    check('H1 preparacion: la caja de paquetes hecha, el primer preview dibuja', not mc.rechazado(r), r[:300])
+    # dibuja = sin fallo y con su imagen: not rechazado dejaba pasar un DSGN-061 INTERNAL (revisor de
+    # baterias de la 1.27)
+    check('H1 preparacion: la caja de paquetes hecha, el primer preview dibuja',
+          not mc.fallo(r) and mc.como_json(r).get('inlineImage') is True, r[:300])
     # ---- H1: el renderizador muere a media vida, desde fuera
     antes = mc.atomos_rtl_nombres()
     resp = []
@@ -123,7 +126,9 @@ try:
     antes = mc.atomos_rtl_nombres()
     r = srv.call('delphi_designer', {'command': 'preview', 'path': DFM}, t=120)
     check('H2 control: el mismo preview intacto da imagen y no deja atomos',
-          not mc.rechazado(r) and not mc.atomos_rtl_dejados(antes), (r[:200], mc.atomos_rtl_dejados(antes)))
+          # (sin fallo y con imagen, como la preparacion de H1; revisor de baterias de la 1.27)
+          not mc.fallo(r) and mc.como_json(r).get('inlineImage') is True and not mc.atomos_rtl_dejados(antes),
+          (r[:200], mc.atomos_rtl_dejados(antes)))
     time.sleep(0.5)
     check('H2 ...y nada nuevo en el log de hijos sin finalizar',
           not any('without finalizing' in l for l in srv.errores[n_log:]), srv.errores[n_log:][:3])
@@ -165,7 +170,9 @@ try:
     parar[0] = True
     v.join(5)
     check('H3 ninguna ventana de aplicacion visible (WS_EX_APPWINDOW) del renderizador en cinco renders con paquetes',
-          not vistas, (len(vistas), vistas[:4], sorted(pids)))
+          # con algun renderizador VISTO: sin pids, "ninguna ventana" pasaba sin mirar nada (revisor de
+          # baterias de la 1.27)
+          bool(pids) and not vistas, (len(vistas), vistas[:4], sorted(pids)))
 finally:
     srv.cierra()
 

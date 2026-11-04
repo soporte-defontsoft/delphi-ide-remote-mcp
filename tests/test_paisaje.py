@@ -1106,9 +1106,10 @@ REGLAS = [
      [('Lsp.References.pas', 'SkipReason')],
      'EnPapelera y EnTemporal (Lsp.Guard, EnCarpetaLlamada); SkipReason, el de los recorredores'),
     ('la orden del renderizador de forms', r"'[^']*--(?:path|state|component|nonvisual|root|style|bds)\b",
-     [('Lsp.FormRender.pas', 'ComponeOrdenDeRender'), ('FormRender.Comun.pas', 'ParseaArgumentos'),
-      ('FormRender.Textos.pas', '*')],
-     'ComponeOrdenDeRender la escribe y ParseaArgumentos del ayudante la lee (1.17.0)'),
+     # (R6 de la 1.27: los dos lados, por los FR_ARG_* de FormRenderProtocolo.inc; queda el uso)
+     [('FormRender.Textos.pas', '*')],
+     'los FR_ARG_* de FormRenderProtocolo.inc: ComponeOrdenDeRender la escribe y ParseaArgumentos del '
+     'ayudante la lee (1.17.0; a mano en los dos hasta la 1.27, R6)'),
     ('la linea de objeto de un form', r"'(?:object|inherited|inline) '\s*\+",
      # sin casa: ComponeLineaDeObjeto recibe la palabra (AClave) y no la escribe asi
      [],
@@ -2894,10 +2895,11 @@ check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
       re.search(A_MANO, BR + "\n  EventArg := ' /p:PreBuildEvent=';") is not None)
 
 # El protocolo de los renderizadores lleva numero (V25): lo que escriben (las claves de
-# FormRenderProtocolo.inc) y lo que entienden (los argumentos de ParseaArgumentos). Si cambia uno sin
+# FormRenderProtocolo.inc) y lo que entienden (sus argumentos, los FR_ARG_* del mismo .inc desde la 5 -R6 de la
+# 1.27-, y uno que ParseaArgumentos leyera a mano). Si cambia uno sin
 # subirlo, un ayudante viejo y un servidor nuevo se creen iguales. Cambia: sube FR_PROTOCOLO_VERSION y
 # pon aqui el numero y la firma que dice el fallo
-FIRMA_DEL_PROTOCOLO = (4, '69f983c7636e06bf')
+FIRMA_DEL_PROTOCOLO = (5, '025866f8d493e18a')
 
 
 def firma_del_protocolo(inc, comun):

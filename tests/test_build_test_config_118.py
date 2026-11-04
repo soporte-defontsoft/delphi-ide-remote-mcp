@@ -24,8 +24,8 @@ lanzado con cwd en esa carpeta: nada real, nada fuera de mc.RAIZ. Con el arreglo
 no se crea nada (se rechaza antes). Mutante: quitado el arreglo, el fichero
 aparece y la bateria se pone roja.
 
-Margenes amplios; si no hay RAD Studio o delphi_create no deja los proyectos,
-sale SIN_CHECKS (no en falso verde). Limpia su carpeta al acabar.
+Margenes amplios; si no hay RAD Studio sale SIN_CHECKS (no en falso verde); si
+delphi_create no deja los proyectos, FAIL. Limpia su carpeta al acabar.
 
 Uso:  python tests/test_build_test_config_118.py [ruta-al-exe]
 """
@@ -98,7 +98,9 @@ try:
     PSIN, rs = crea('TestSinCfg', True)    # el agujero: sin <BuildConfiguration>
     PCON, rc = crea('TestConCfg', False)   # control: con configuraciones
     if not PSIN or not PCON:
-        SKIP = 'delphi_create no dejo los proyectos: %s %s' % (corto(rs, 80), corto(rc, 80))
+        # que delphi_create no deje los proyectos, o que no salgan como se plantan, es un fallo (del
+        # servidor o del fixture), no un salto: salia SIN CHECKS y en verde (revisor de baterias de la 1.27)
+        check('fixture: delphi_create deja los dos proyectos', False, '%s %s' % (corto(rs, 80), corto(rc, 80)))
     else:
         sin_ok = 'BuildConfiguration Include' not in open(PSIN, encoding='utf-8').read()
         con_ok = 'BuildConfiguration Include' in open(PCON, encoding='utf-8').read()
@@ -109,7 +111,8 @@ try:
         if rad_no(primera):
             SKIP = 'no hay RAD Studio en esta maquina'
         elif not (sin_ok and con_ok):
-            SKIP = 'fixture: TestSinCfg sin configs=%s, TestConCfg con configs=%s' % (sin_ok, con_ok)
+            check('fixture: TestSinCfg sin configuraciones y TestConCfg con ellas', False,
+                  'sin configs=%s, con configs=%s' % (sin_ok, con_ok))
         else:
             # --- lo que se exige de delphi_test ---
             # (revisor de baterias, 18-oct-2026) desde 2an (1.18.2) msbuild va sin

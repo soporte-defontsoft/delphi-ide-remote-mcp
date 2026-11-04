@@ -117,7 +117,9 @@ try:
           and lee(repo, 'vendor/Café.dfm') == 'EN_MAIN', r[:400])
     r = srv.call('delphi_git', {'repo': repo, 'command': 'switch', 'branch': 'b3'})
     check('Q5 switch b3 que solo cambia src/Año.txt (no protegido): se hace',
-          not mc.rechazado(r) and lee(repo, 'src/Año.txt') == 'ANO_B3'
+          # se hace = sin fallo: not rechazado dejaba pasar un INTERNAL o un timeout (revisor de
+          # baterias de la 1.27)
+          not mc.fallo(r) and lee(repo, 'src/Año.txt') == 'ANO_B3'
           and lee(repo, 'vendor/Café.dfm') == 'EN_MAIN', r[:400])
 finally:
     srv.cierra()

@@ -177,7 +177,8 @@ check('carpeta sin tests: total 0 con explicacion', j.get('total') == 0 and mc.e
 r = A.call('delphi_test', {'command': 'run', 'project': VERDE})
 check('sin AllowTests: run RECHAZADO nombrando el interruptor', mc.rechazado(r) and mc.es(r, 'SR_TEST_DISABLED'), r[:250])
 r = A.call('delphi_test', {'command': 'discover', 'path': BASE})
-check('sin AllowTests: discover SI funciona', r.startswith('{'), r[:150])
+# (revisor de baterias de la 1.27) un JSON de error tambien empieza por '{': funciona es sin fallo
+check('sin AllowTests: discover SI funciona', not mc.fallo(r) and r.startswith('{'), r[:150])
 
 # ---- run verde ----
 j = J(B.call('delphi_test', {'command': 'run', 'project': VERDE}, t=900))
@@ -196,7 +197,9 @@ check('suite verde: sin la nota fija TEST-024', 'note' not in j, str(j)[:500])
 # ---- run rojo ----
 j = J(B.call('delphi_test', {'command': 'run', 'project': ROJO}, t=900))
 check('suite roja: result=fail', j.get('result') == 'fail', str(j)[:400])
-check('suite roja: 1 de 2 y el fallo NOMBRADO', j.get('failed') == 1 and any('MAL' in f for f in j.get('failures', [])), str(j)[:350])
+# (revisor de baterias de la 1.27) "de 2" tambien se mira (el total no se comprobaba)
+check('suite roja: 1 de 2 y el fallo NOMBRADO', j.get('total') == 2 and j.get('failed') == 1 and
+      any('MAL' in f for f in j.get('failures', [])), str(j)[:350])
 check('suite roja: exitCode distinto de 0', j.get('exitCode') not in (0, None), str(j)[:200])
 
 # ---- run con un test que lanza ----
@@ -247,7 +250,23 @@ check('un paquete (.dpk) no es un test: TEST-018, no CFG-033 "no es un proyecto"
       mc.es(r, 'SR_TEST_NOTATEST_FMT') and not mc.es(r, 'SR_UNIT_PROJECT_EXT_FMT'), r[:300])
 # ...y uno que NOMBRA DUnitX. (un paquete de ayudas de test) tampoco: KindOf lo daba por test, se compilaba el paquete
 # y se lanzaba su .bpl (error 193; octava pasada de Fable sobre 15c8cab). Un test es un programa
-r = B.call('delphi_create', {'kind': 'unit', 'name': 'DUnitX.AyudasPaq', 'project': os.path.join(BASE, 'PaqT', 'PaqT.dpk')})
+# (revisor de baterias de la 1.27) el montaje con su control: delphi_create NIEGA DUnitX.AyudasPaq (CREATE-010, cuelga
+# de un espacio de la biblioteca; medido), asi que el .dpk no nombraba DUnitX. y el check de abajo era el de arriba
+# otra vez. La unidad nace con un nombre propio y se renombra a mano, como la tendria un paquete que ya existe
+PAQ = os.path.join(BASE, 'PaqT')
+r = B.call('delphi_create', {'kind': 'unit', 'name': 'AyudasPaq', 'project': os.path.join(PAQ, 'PaqT.dpk')})
+for _f, _de, _a in (('PaqT.dpk', b"AyudasPaq in 'AyudasPaq.pas'", b"DUnitX.AyudasPaq in 'DUnitX.AyudasPaq.pas'"),
+                    ('PaqT.dproj', b'Include="AyudasPaq.pas"', b'Include="DUnitX.AyudasPaq.pas"'),
+                    ('AyudasPaq.pas', b'unit AyudasPaq;', b'unit DUnitX.AyudasPaq;')):
+    _p = os.path.join(PAQ, _f)
+    if os.path.isfile(_p):
+        _b = open(_p, 'rb').read()
+        open(_p, 'wb').write(_b.replace(_de, _a))
+if os.path.isfile(os.path.join(PAQ, 'AyudasPaq.pas')):
+    os.rename(os.path.join(PAQ, 'AyudasPaq.pas'), os.path.join(PAQ, 'DUnitX.AyudasPaq.pas'))
+check('fixture: el paquete nombra DUnitX.AyudasPaq (en su contains, y la unidad existe)',
+      "DUnitX.AyudasPaq in 'DUnitX.AyudasPaq.pas'" in mc.lee(os.path.join(PAQ, 'PaqT.dpk')) and
+      'unit DUnitX.AyudasPaq;' in mc.lee(os.path.join(PAQ, 'DUnitX.AyudasPaq.pas')), r[:300])
 r = B.call('delphi_test', {'command': 'run', 'project': os.path.join(BASE, 'PaqT', 'PaqT.dpk')}, t=900)
 check('un paquete que nombra DUnitX. tampoco es un test: TEST-018 sin compilar ni lanzar nada (ROJO contra r1222v)',
       mc.es(r, 'SR_TEST_NOTATEST_FMT') and not os.path.isdir(os.path.join(BASE, 'PaqT', 'Win64')), r[:300])

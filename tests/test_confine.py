@@ -25,6 +25,7 @@ operator's console) is unconfined - the same rule the recoverable trash uses.
 
 Usage:  python tests/test_confine.py [path-to-DelphiLspMcp.exe]
 """
+import base64
 import os
 import mcp_cliente as mc
 from mcp_cliente import check
@@ -104,11 +105,16 @@ try:
     # los mide test_captura_puertas_1182 (C1-C2, F1, E3-E4)
     CAP = os.path.join(base, mc.TEMPORALES, 'alice', 'desktop', 'cap.png')
     os.makedirs(os.path.dirname(CAP), exist_ok=True)
-    open(CAP, 'wb').write(b'\x89PNG\r\n\x1a\n' + b'0' * 64)
+    PNG = b'\x89PNG\r\n\x1a\n' + b'0' * 64
+    open(CAP, 'wb').write(PNG)
     r = a.call('delphi_fetch', {'path': CAP, 'offset': 0})
+    # (revisor de baterias de la 1.27) la clave consumedOnServer no la emite nadie (delphi_fetch no
+    # consume: Mcp.Tools.Workspace no compone 'consumed') y `.get(...) is not True` pasaba con {}. Lo
+    # que mide "se lee" es el trozo entero con SUS bytes; "no se borra", que el fichero siga en disco
+    j = mc.como_json(r)
     check('C7 ON: un png con forma de captura en el workspace se lee, pero no es nuestro y no se borra',
-          mc.como_json(r).get('bytes', 0) > 0 and mc.como_json(r).get('consumedOnServer') is not True and
-          os.path.exists(CAP), r[:300])
+          not mc.fallo(r) and j.get('bytes') == len(PNG) and
+          base64.b64decode(j.get('chunkBase64') or '') == PNG and os.path.exists(CAP), r[:300])
     # V113 de la 1.23.1: el confinamiento por la ruta REAL. alice\lnk, una union
     # a la carpeta de bob, dejaba a alice escribir en ella (medido)
     LNK = os.path.join(base, 'alice', 'lnk')

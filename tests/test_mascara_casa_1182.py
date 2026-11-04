@@ -12,7 +12,9 @@ queda, y la salida cruda sigue diciendo que fichero fallo.
       carpeta real del servidor en ninguna forma (larga, 8.3, ni con su
       unidad virtual)
   C2  una negativa que nombraba la casa (preview sin los renderizadores,
-      DSGN-060): <server>, no la ruta
+      DSGN-060): desde d8b4afe no la nombra, ni como <server>. Ya NO mide el
+      enmascarador (lo miden C1, C5 y C8): mide que esa negativa no la saca
+      (revisor de baterias de la 1.27)
   C3  el CONTENIDO no se enmascara: un fichero del agente que cita la ruta
       real del servidor se lee tal cual (delphi_read)
   C5  la ruta de la casa que el agente nombra le vuelve con su nombre: una

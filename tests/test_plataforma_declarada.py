@@ -96,6 +96,10 @@ try:
     out = srv.call('delphi_build', {'project': V, 'platform': otra}, 900)
     check('Q6 .dproj sin <Platforms>: solo su plataforma por defecto, otra -> BUILD-046',
           mc.es(out, 'SR_BUILD_PLATAFORMA_NO_DECLARADA_FMT'), out[:300])
+    # el control: la por defecto SI compila; sin el, un lector que no diera ninguna activa (Activas nil)
+    # dejaba Q6 verde negandolas todas (revisor de baterias de la 1.27)
+    out = srv.call('delphi_build', {'project': V, 'platform': defecto}, 900)
+    check('Q6 control: ...y su plataforma por defecto compila', J(out).get('success') is True, out[:300])
 finally:
     try: srv.mata()
     except Exception: pass

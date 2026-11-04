@@ -58,7 +58,9 @@ try:
     p1 = unidad('UMain', '\\..\\..\\Evil.fmx')
     r = S.call('delphi_delete', {'path': p1})
     check('V1 borrar un .pas con {$R *.\\..\\..\\Evil.fmx}: el aviso de pareja NO nombra el .fmx de fuera',
-          'Evil' not in r and 'Evil.fmx' not in r, r[:300])
+          # sobre el borrado que OCURRIO (como V3): una negativa tampoco nombraba el .fmx
+          # (revisor de baterias de la 1.27)
+          'Evil' not in r and 'Evil.fmx' not in r and mc.abre(r, 'SK_FILE_BORRADO_PAPELERA_FMT'), r[:300])
 
     # V2 control: una vista legitima dentro de la jaula sigue avisandose
     # V3 (V165b): la misma travesia con '/', que Windows resuelve y ExtractFileName no veia

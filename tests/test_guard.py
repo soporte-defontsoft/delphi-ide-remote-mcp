@@ -4,7 +4,7 @@ refuse paths outside them - reads, edits, scaffolding, builds, git, search.
 
 Usage:  python tests/test_guard.py [path-to-DelphiLspMcp.exe]
 """
-import json, os
+import atexit, json, os
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -56,7 +56,9 @@ check('fuera: read vetado', denied(out), out)
 check('fuera: ...con la pista de la zona (READ-003)', mc.es(out, 'SN_READ_ZONE_HINT'), out)
 out = call('delphi_read', {"path": OUT_PAS + '.'})
 check('fuera con punto final: la anomalia, sin la pista de la zona',
-      mc.rechazado(out) and not denied(out) and not mc.es(out, 'SN_READ_ZONE_HINT'), out)
+      # SU negativa, la del nombre (GUARD-010), no cualquiera (revisor de baterias de la 1.27)
+      mc.abre(out, 'SR_GUARD_NOMBRE_EMPIEZA_TERMINA_PUNTO_FMT') and not denied(out) and
+      not mc.es(out, 'SN_READ_ZONE_HINT'), out)
 out = call('delphi_edit', {"path": OUT_PAS, "old": "unit Fuera;", "new": "x"})
 check('fuera: edit vetado', denied(out), out)
 out = call('delphi_edit', {"path": os.path.join(OUTSIDE, 'Nueva.pas'), "createunit": True})
@@ -112,10 +114,16 @@ _q = chr(39)
 _pub = r'C:\Users\Public\PWNED_guard_test.txt'
 if os.path.exists(_pub):
     os.remove(_pub)
+# si el contenedor fallara y la bateria reventara a mitad, el de C:\Users\Public tambien se va (la
+# limpieza de abajo no esta en un finally; revisor de baterias de la 1.27)
+atexit.register(lambda: os.path.exists(_pub) and os.remove(_pub))
 call('delphi_create', {"kind": "project-console", "dir": os.path.join(INSIDE, 'SbxTest'), "name": "SbxTest"})
 _body = ['program SbxTest;', '{$APPTYPE CONSOLE}', 'uses System.SysUtils, System.IOUtils;', 'begin',
          '  try TFile.WriteAllText(' + _q + _pub + _q + ', ' + _q + 'x' + _q + '); Writeln('
          + _q + 'SYSWRITE-OK' + _q + '); except Writeln(' + _q + 'sys-blocked' + _q + '); end;',
+         # R6-C: lo que habia en out.txt ANTES de escribirlo (el pre-creado, si viajo con la copia)
+         '  try if TFile.Exists(' + _q + 'out.txt' + _q + ') then Writeln(' + _q + 'PREVIO=' + _q +
+         ' + TFile.ReadAllText(' + _q + 'out.txt' + _q + ')); except Writeln(' + _q + 'previo-ilegible' + _q + '); end;',
          '  try TFile.WriteAllText(' + _q + 'out.txt' + _q + ', ' + _q + 'y' + _q + '); Writeln('
          + _q + 'LOCAL-OK' + _q + '); except Writeln(' + _q + 'local-blocked' + _q + '); end;', 'end.']
 open(os.path.join(INSIDE, 'SbxTest', 'SbxTest.dpr'), 'w', encoding='utf-8-sig', newline='').write('\r\n'.join(_body) + '\r\n')
@@ -143,7 +151,10 @@ if sbok:
     check('sandbox: escritura al SISTEMA bloqueada (contenedor)',
           'sys-blocked' in _tail and not os.path.exists(_pub), out[:200])
     check('sandbox: escritura en su propia carpeta permitida', 'LOCAL-OK' in _tail, out[:200])
-    check('R6-C: sobrescribe un fichero MEDIO pre-existente en su cwd', 'LOCAL-OK' in _tail, out[:200])
+    # el programa dice lo que habia ANTES de escribir: con solo LOCAL-OK era el check de arriba, y sin el
+    # fichero pre-creado seguia verde (revisor de baterias de la 1.27)
+    check('R6-C: sobrescribe un fichero MEDIO pre-existente en su cwd',
+          'PREVIO=preexisting-medium-integrity' in _tail and 'LOCAL-OK' in _tail, out[:200])
     check('sandbox: la respuesta declara sandboxed=true', _tj.get('sandboxed') is True, out[:120])
 if os.path.exists(_pub):
     os.remove(_pub)

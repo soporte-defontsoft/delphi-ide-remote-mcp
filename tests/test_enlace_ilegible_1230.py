@@ -118,7 +118,8 @@ try:
           srv.call('delphi_read', {'path': os.path.join(D2, 'existe.txt')}),
           srv.call('delphi_textedit', {'path': os.path.join(D2, 'existe.txt'), 'old': 'hola', 'new': 'adios'})]
     check('E4 (guarda) una carpeta normal que no se puede abrir: crear, leer y editar como siempre',
-          not any(mc.rechazado(r) for r in r4) and '1|hola' in r4[1], [r[:160] for r in r4])
+          # como siempre = sin fallo: not rechazado dejaba pasar un INTERNAL (revisor de baterias de la 1.27)
+          not any(mc.fallo(r) for r in r4) and '1|hola' in r4[1], [r[:160] for r in r4])
 
     r5 = srv.call('delphi_textedit', {'path': os.path.join(J2, 'nuevo.txt'), 'create': True, 'content': 'v4\n'})
     check('E5 (guarda) la misma junction sin ACE: GUARD-001, un enlace que sale',
@@ -206,7 +207,8 @@ else:
             a4 = [asrv.call('delphi_textedit', {'path': os.path.join(AD2, 'nuevo.txt'), 'create': True, 'content': 'n'}),
                   asrv.call('delphi_read', {'path': os.path.join(AD2, 'existe.txt')})]
             check('E9 (guarda) carpeta NORMAL denegada de padre listable: crear y leer como siempre',
-                  not any(mc.rechazado(r) for r in a4) and '1|hola' in a4[1], [r[:160] for r in a4])
+                  # sin fallo, no solo sin negativa (revisor de baterias de la 1.27)
+                  not any(mc.fallo(r) for r in a4) and '1|hola' in a4[1], [r[:160] for r in a4])
     finally:
         if asrv:
             asrv.cierra()

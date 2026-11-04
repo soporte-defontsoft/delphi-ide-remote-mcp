@@ -81,10 +81,12 @@ try:
         return '<PropertyGroup><DCC_UnitSearchPath>%s</DCC_UnitSearchPath></PropertyGroup>' % escape(ruta)
 
     # --- los que la puerta tiene que NEGAR (compilaban leyendo FUERA en la 1.22.0) ---
-    def niega(nombre, payload):
+    # (revisor de baterias de la 1.27) con su id: `mc.rechazado` lo cumplia cualquier otra negativa del build (una
+    # plataforma, un perfil, un .dproj que no se lee), y la puerta de LECTURAS no es la unica que niega aqui
+    def niega(nombre, payload, id_='SR_BUILD_LECTURA_FUERA_FMT'):
         con(payload)
         r = build(proyecto)
-        check(nombre, mc.rechazado(r) and not compila(r), detalle(r))
+        check(nombre, mc.abre(r, id_) and not compila(r), detalle(r))
 
     niega('P1 (H1) search path con "=" antes de la barra: NEGADO (no se salta por clave=valor)',
           usp('k=v\\..\\' + REL))
@@ -99,7 +101,7 @@ try:
     niega('P6 (H4) search path con $(ProjectDir): NEGADO (msbuild lo lee vacio, no la carpeta)',
           usp('$(ProjectDir)' + REL))
     niega('P8 (H12) search path con $( A ) (espacios, A=keep): NEGADO (no se recorta el nombre)',
-          '<PropertyGroup><A>keep</A></PropertyGroup>' + usp('$( A )' + REL))
+          '<PropertyGroup><A>keep</A></PropertyGroup>' + usp('$( A )' + REL), 'SR_BUILD_LECTURA_NO_VERIFICABLE_FMT')
 
     # P9 (regresion del propio 1.22.1): C://x contiene '://'; la regla Contains('://') lo saltaba
     # como URL y dcc lo abria como C:\x, fuera de la jaula (medido 22-oct-2026). Ahora EsEsquemaDeUrl
@@ -123,7 +125,7 @@ try:
     con(usp(REL))
     r = build(proyecto)
     check('C2 control: un search path liso hacia FUERA se NIEGA (BUILD-050 de siempre)',
-          mc.rechazado(r) and not compila(r), detalle(r))
+          mc.abre(r, 'SR_BUILD_LECTURA_FUERA_FMT') and not compila(r), detalle(r))
 finally:
     srv.cierra()
     mc.borra(BASE)

@@ -282,4 +282,5 @@ check('M-3 el create de un .fmx que el parser del IDE no lee: se escribe y CHSET
       mc.es(r, 'SN_DSGN_PARSER_FMT') and os.path.exists(_m3), r[-600:])
 
 srv.mata()
+mc.borra(BASE)  # no se quedaba en la maquina (revisor de baterias de la 1.27)
 mc.fin('changeset battery')

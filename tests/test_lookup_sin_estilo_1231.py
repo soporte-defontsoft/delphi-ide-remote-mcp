@@ -108,7 +108,9 @@ try:
             return next(x for x in f.read().split('\r\n') if texto in x)
 
     def sin_nota(r):
-        return 'error' not in mc.como_json(r) and not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT')
+        # not fallo: con una respuesta de texto como_json daba {} y 'error' not in {} pasaba con cualquiera,
+        # una negativa o ninguna (revisor de baterias de la 1.27)
+        return not mc.fallo(r) and not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT')
 
     con('estiloquenoexiste')
     r = lint(fmx)
@@ -137,8 +139,7 @@ try:
 
     con('estiloquenoexiste', '  object StyleBook1: TStyleBook\r\n    Left = 40\r\n    Top = 40\r\n  end\r\n')
     r = lint(fmx)
-    check('L6 con un TStyleBook en el form: no se juzga (sin DSGN-175)',
-          not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT'), r[:500])
+    check('L6 con un TStyleBook en el form: no se juzga (sin DSGN-175)', sin_nota(r), r[:500])
 
     # V143: lo que la edicion trae
     con('estiloquenoexiste')
@@ -181,7 +182,7 @@ try:
     con('estiloquenoexiste', raiz='  StyleBook = DM.StyleBook1\r\n')
     r = lint(fmx)
     check('L13 StyleBook = DM.StyleBook1 en la raiz: sin DSGN-175 (no es "the form has no StyleBook")',
-          not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT'), r[:500])
+          sin_nota(r), r[:500])
     con('buttonstyle')
     pas = os.path.join(carpeta, 'UMain.pas')
     with open(pas, encoding='utf-8-sig', newline='') as f:
@@ -195,7 +196,7 @@ try:
                 "    StyleLookup = 'devistaquenoexiste'\r\n  end\r\nend\r\n")
     r = lint(vista)
     check('L14 una vista FMX (el StyleBook de su maestro): sin DSGN-175',
-          not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT') and 'devistaquenoexiste' not in r, r[:500])
+          sin_nota(r) and 'devistaquenoexiste' not in r, r[:500])
 
     # un Sample con su StyleBook, del BDSCOMMONDIR que pone el rsvars.bat del IDE (como el corpus)
     SAMPLE_BT = os.path.join(mc.variable_de_rsvars(srv.call, 'BDSCOMMONDIR'), 'Samples', 'Object Pascal',
@@ -232,8 +233,7 @@ try:
           '"inserted":"BotonMarco"' in r.replace(' ', '') and
           not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT'), r[:700])
     r = lint(marco)
-    check('L17 ...y el lint del frame, tampoco', not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT') and
-          'delanfitrion' not in r, r[:500])
+    check('L17 ...y el lint del frame, tampoco', sin_nota(r) and 'delanfitrion' not in r, r[:500])
     estilos_app = os.path.join(carpeta, 'Styles')
     os.makedirs(estilos_app)
     with open(os.path.join(estilos_app, 'Uno.style'), 'w', newline='') as f:
@@ -268,7 +268,10 @@ try:
     con_codigo(os.path.join(bt, 'Unit1.pas'), 'pasdelsample')
     r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos, 'project': bt}, 300)
     faltas = json.dumps(mc.como_json(r).get('lookupsWithoutStyle'))
-    check('L20 el .pas de una form con su StyleBook: no es una falta', 'pasdelsample' not in faltas, faltas)
+    # ...en una respuesta que juzga: la falta de Otro.fmx (L16) sigue en la misma lista; sin ella, "no es
+    # una falta" pasaba con un lint fallido ('null') (revisor de baterias de la 1.27)
+    check('L20 el .pas de una form con su StyleBook: no es una falta',
+          'pasdelsample' not in faltas and 'faltaenotro' in faltas, faltas)
 finally:
     srv.cierra()
     mc.borra(BASE)

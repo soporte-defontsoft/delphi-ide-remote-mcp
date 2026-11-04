@@ -75,10 +75,11 @@ def puede_symlink(link, target):
         return False
 
 
+SIN = None  # sin modo desarrollador: el salto, por fin(sin_checks=) y no por un rojo de "0 checks" (revisor de baterias de la 1.27)
 try:
     link = os.path.join(JAIL, 'enlace.txt')
     if not puede_symlink(link, os.path.join(FUERA, 'secret.txt')):
-        print('NOTA: no se puede crear un symlink de fichero (modo desarrollador apagado): A18-M1 no se mide')
+        SIN = 'no se puede crear un symlink de fichero (modo desarrollador apagado): A18-M1 no se mide'
     else:
         st, cm = borra_cs(link)
         # el STAGE lo niega por GUARD-001 (el enlace real sale): afirmarlo, no
@@ -114,4 +115,4 @@ finally:
     s.cierra()
 mc.borra(BASE)
 mc.borra(FUERA)
-mc.fin('changeset delete no copia el destino de un enlace, A18-M1 de la 1.23')
+mc.fin('changeset delete no copia el destino de un enlace, A18-M1 de la 1.23', sin_checks=SIN)

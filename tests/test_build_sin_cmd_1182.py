@@ -69,7 +69,9 @@ try:
     r = srv.call('delphi_create', {'kind': 'project-console', 'dir': d, 'name': 'Sonda2an'})
     hit = glob.glob(os.path.join(d, '**', 'Sonda2an.dproj'), recursive=True)
     if not hit:
-        SKIP = 'delphi_create no dejo el proyecto: %s' % r[:200]
+        # que delphi_create no deje el proyecto es un fallo del servidor, no un salto: salia SIN CHECKS y
+        # en verde (revisor de baterias de la 1.27)
+        check('fixture: delphi_create deja el proyecto de la sonda', False, r[:200])
     else:
         dproj = hit[0]
         raw = open(dproj, 'rb').read()

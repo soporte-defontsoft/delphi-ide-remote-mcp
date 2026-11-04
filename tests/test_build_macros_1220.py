@@ -214,9 +214,12 @@ try:
     r = build(proyecto)
     # GUARDA, no roja: ya se negaba (BUILD-051 sobre <A>, cuyo valor escrito no es un nombre simple); se queda por
     # si el valor de A dejara de juzgarse escrito
+    # ...por lo que juzga: la de A no verificable (BUILD-051, hoy) o, si A se leyera vacia como msbuild, la de
+    # leer de fuera (BUILD-050). Cualquier negativa la daba por buena (revisor de baterias de la 1.27)
     check('X15 A=$( Config ) en el search path: msbuild la lee vacia y llega a FUERA; la puerta no la da por '
           'Release: se niega',
-          mc.rechazado(r) and not compila(r), r[:300])
+          (mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_NO_VERIFICABLE_FMT') and '<A>' in r) or lectura_fuera(r),
+          r[:300])
 
     # X16 una carpeta con $( en su nombre, de punta a punta: msbuild la lee tal cual (medido el 3-nov-2026 con msbuild:
     # DIR=[...\Mide$(Config)x]) y la salida se buscaba en MideReleasex (C17 del cierre de la 1.26; su roja, la de

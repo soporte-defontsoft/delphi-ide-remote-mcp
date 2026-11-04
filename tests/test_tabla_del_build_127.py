@@ -70,7 +70,8 @@ try:
     r = config('add-searchpath', platform='Win64', path='$(BDSLIB)\\$(Platform)\\release')
     rb = build()
     check('T1 add-searchpath $(BDSLIB)\\$(Platform)\\release y delphi_build Win64 Release: compila',
-          not mc.rechazado(r) and '$(BDSLIB)\\$(Platform)\\release' in lee() and compila(rb), (r[:200], rb[:300]))
+          # T1, T3, T4: not mc.fallo, no not rechazado, que deja pasar un INTERNAL (revisor de baterias de la 1.27)
+          not mc.fallo(r) and '$(BDSLIB)\\$(Platform)\\release' in lee() and compila(rb), (r[:200], rb[:300]))
 
     with open(DPROJ, 'w', encoding='utf-8-sig', newline='') as f:
         f.write(ORIGINAL)
@@ -87,13 +88,13 @@ try:
         os.makedirs(os.path.join(D, 'lib', c))
     r = config('add-searchpath', platform='Win64', path='lib\\$(Config)')
     check('T3 add-searchpath platform=Win64 lib\\$(Config) con lib\\Debug y lib\\Release: aceptado',
-          not mc.rechazado(r) and 'lib\\$(Config)' in lee(), r[:300])
+          not mc.fallo(r) and 'lib\\$(Config)' in lee(), r[:300])
 
     for p in ('Win32', 'Win64'):
         os.makedirs(os.path.join(D, 'lib', p))
     r = config('add-searchpath', path='lib\\$(Platform)')
     check('T4 add-searchpath sin plataforma lib\\$(Platform) con lib\\Win32 y lib\\Win64: aceptado',
-          not mc.rechazado(r) and 'lib\\$(Platform)' in lee(), r[:300])
+          not mc.fallo(r) and 'lib\\$(Platform)' in lee(), r[:300])
 
     antes = lee()
     r = config('add-searchpath', platform='Win64', path='nada\\$(Platform)\\$(Config)')
@@ -102,10 +103,21 @@ try:
           'nada\\Win64\\Debug' in r.replace('\\\\', '\\') and 'nada\\Win64\\Release' in r.replace('\\\\', '\\') and
           lee() == antes, r[:300])
 
-    r = config('add-searchpath', platform='Win64', path='$(APPDATA)\\x')
+    # el valor de APPDATA, con una MARCA unica: 'roaming' a secas no salia con un APPDATA que no lo
+    # llevara, y la respuesta va enmascarada. Un servidor aparte, para no tocar el entorno de los
+    # builds de arriba (revisor de baterias de la 1.27)
+    MARCA = 'appdata-marca-t6-127'
+    APPDATA6 = os.path.join(BASE, MARCA)
+    os.makedirs(APPDATA6)
+    srv6 = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': APPDATA6}), nombre='tabla-127-t6', t=120)
+    try:
+        r = srv6.call('delphi_config', {'project': DPROJ, 'command': 'add-searchpath', 'platform': 'Win64',
+                                        'path': '$(APPDATA)\\x'})
+    finally:
+        srv6.cierra()
     check('T6 $(APPDATA)\\x: CFG-148, sin el valor de APPDATA, manda a set-property, el .dproj intacto',
           mc.rechazado(r) and mc.es(r, 'SR_CONFIG_PATH_MACRO_DESCONOCIDA_FMT') and 'set-property' in r and
-          'roaming' not in r.lower() and lee() == antes, r[:300])
+          MARCA not in r.lower() and lee() == antes, r[:300])
 finally:
     srv.cierra()
 

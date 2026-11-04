@@ -71,12 +71,13 @@ check('guarda: create en el .git NORMAL (atajo del segmento .git): NEGADO',
 OK1 = os.path.join(WORK, 'nuevo.txt')
 r = crea(OK1)
 check('guarda: un fichero del ARBOL DE TRABAJO (no metadato) SI se escribe',
-      not mc.rechazado(r) and os.path.isfile(OK1), r[:250])
+      not mc.fallo(r) and os.path.isfile(OK1), r[:250])  # sin fallo, no solo sin negativa (revisor de baterias de la 1.27)
 
 # ===== control FUERA de las raices =====
 r = crea(os.path.join(OUT, 'x.txt'))
 check('control: create FUERA de las raices: negado',
-      mc.rechazado(r) and not os.path.exists(os.path.join(OUT, 'x.txt')), r[:250])
+      # la de la jaula (GUARD-002), no cualquier negativa (revisor de baterias de la 1.27)
+      mc.es(r, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(OUT, 'x.txt')), r[:250])
 check('la victima de fuera sigue intacta', os.listdir(VIC) == ['v.txt'], os.listdir(VIC))
 
 srv.cierra()

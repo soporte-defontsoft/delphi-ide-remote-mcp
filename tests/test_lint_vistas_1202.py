@@ -197,7 +197,7 @@ try:
     escribe(os.path.join(PR, 'UDm.dfm'), DFM_DM)
     r = dsg({'command': 'lint', 'path': os.path.join(PR, 'UDm.dfm')})
     check('R1 un modulo de datos .dfm de un proyecto FMX (su CLASSGROUP): Source/Destination de FMX, no "no carga"',
-          not mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT') and 'Source' not in r, r[:400])
+          not mc.fallo(r) and not mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT') and 'Source' not in r, r[:400])  # un lint que contesta (revisor de baterias de la 1.27)
     escribe(os.path.join(PR, 'UDm.pas'), PAS_DM % 'Vcl.Controls.TControl')
     r = dsg({'command': 'lint', 'path': os.path.join(PR, 'UDm.dfm')})
     check('R1b control: el mismo con el grupo de la VCL: el aviso de Source (el marco lo dice la marca)',
@@ -216,7 +216,7 @@ try:
     escribe(os.path.join(PR, 'UTresD.fmx'), FMX_3D % '')
     r = dsg({'command': 'lint', 'path': os.path.join(PR, 'UTresD.fmx')})
     check('R2 una raiz TForm3D (UsingDesignCamera, que su form no tiene): no "no carga"',
-          not mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT'), r[:400])
+          not mc.fallo(r) and not mc.es(r, 'SN_DESIGNER_LINT_BAD_FMT'), r[:400])  # un lint que contesta (revisor de baterias de la 1.27)
     escribe(os.path.join(PR, 'UTresD.fmx'), FMX_3D % '  Colorr = claBlack\n')
     r = dsg({'command': 'lint', 'path': os.path.join(PR, 'UTresD.fmx')})
     check('R2b control: una propiedad que TForm3D no tiene sigue siendo un aviso',

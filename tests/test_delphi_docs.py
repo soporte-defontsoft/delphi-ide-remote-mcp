@@ -135,8 +135,10 @@ try:
         sin_ayuda = 'esta maquina no tiene la ayuda de RAD Studio instalada (ni en el registro ni en el disco)'
     else:
         # D0
+        # (revisor de baterias de la 1.27) "se encuentra" es una busqueda que contesta con resultados: `not abre(
+        # SIN_AYUDA)` pasaba con cualquier otro error o un timeout
         check('D0 la ayuda que el IDE registra se encuentra (%d en el disco, mirado sin el servidor)'
-              % len(en_disco), not mc.abre(primera, 'SR_DOCS_SIN_AYUDA_FMT'), primera[:200])
+              % len(en_disco), not mc.fallo(primera) and len(ids_de(primera)) > 0, primera[:200])
         # D1
         lista = cli.request('tools/list')
         tools = {x['name']: x for x in ((lista or {}).get('result') or {}).get('tools', [])}

@@ -48,9 +48,13 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='evidente1230
 try:
     # --- E1, E1b -------------------------------------------------------------------
     # el juez de "no hay perfil del IDE para Win64": el registro que ve este servidor
+    # la version, la de la instalacion activa del servidor bajo prueba (su delphi_installs), no '37.0' a
+    # mano: en otro Delphi se miraba la clave de otro y E1 se media con un perfil que si estaba
+    # (revisor de baterias de la 1.27; como test_deploy_remotehost)
+    VER = mc.instalacion_activa(srv.call).get('version', '')
     import winreg
     try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Embarcadero\BDS\37.0\RemoteProfiles') as k:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Embarcadero\BDS\%s\RemoteProfiles' % VER) as k:
             del_ide = winreg.QueryValueEx(k, 'Default_Win64')[0]
     except OSError:
         del_ide = ''

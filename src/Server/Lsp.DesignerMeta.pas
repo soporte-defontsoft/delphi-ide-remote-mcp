@@ -268,6 +268,13 @@ function LlegaALaHoja(M: TMetaTable; const AClase, ARuta: string): Boolean;
   si no esta, nada. '' si no. La dice el juez (JuzgaPropiedad: set, insert,
   el lint) y la mira la parecida de set. }
 function PistaDelOtroMarco(M: TMetaTable; const AClase, ARuta: string): string;
+{ EL sitio de un control FMX que AProp pide por Left o Top: Position.X o
+  Position.Y; '' si no es eso (la VCL, otra propiedad, o una clase que no es
+  un TControl FMX: en un no visual Left/Top son el sitio de su icono, que
+  guarda TComponent). Lo preguntan set (DSGN-118) y el lint
+  (SF_DSGN_FMX_LEFT_TOP_FMT); lo decidian los dos (3.7 de la 1.18.0, Hermes;
+  R9 del revisor del paisaje de la 1.27). }
+function SitioFmxDeLeftTop(M: TMetaTable; AIsFmx: Boolean; const AClase, AProp: string): string;
 { Si la ruta ALhs (PopupMenu.AutoPopup) pasa por una propiedad de clase que
   en el bloque de su objeto guarda una REFERENCIA a otro componente (ARefs:
   Lsp.DesignerBin.ReferenciasDeObjeto): esa propiedad (APrefijo) y el
@@ -1199,6 +1206,13 @@ begin
   JuzgaRuta(M, AClase, ARuta, '', Hoja, Result, False);
 end;
 
+function SitioFmxDeLeftTop(M: TMetaTable; AIsFmx: Boolean; const AClase, AProp: string): string;
+begin
+  Result := '';
+  if AIsFmx and MatchText(AProp, ['Left', 'Top']) and M.Desciende(AClase, ID_FMX_CONTROL) then
+    Result := IfThen(SameText(AProp, 'Left'), 'Position.X', 'Position.Y');
+end;
+
 function PistaDelOtroMarco(M: TMetaTable; const AClase, ARuta: string): string;
 var
   Falta: TFaltaTabla;
@@ -1952,10 +1966,10 @@ begin
               Continue;
             // en FMX Left/Top no colocan un control: los guarda TComponent, el
             // sitio del icono de un no visual (3.7 de la 1.18.0, Hermes)
-            if AIsFmx and MatchText(Lhs, ['Left', 'Top']) and M.Desciende(Cur, ID_FMX_CONTROL) then
+            var SitioFmx := SitioFmxDeLeftTop(M, AIsFmx, Cur, Lhs);
+            if SitioFmx <> '' then
             begin
-              Warn(MsgFmt(SF_DSGN_FMX_LEFT_TOP_FMT,
-                [Lhs, IfThen(SameText(Lhs, 'Left'), 'Position.X', 'Position.Y')]));
+              Warn(MsgFmt(SF_DSGN_FMX_LEFT_TOP_FMT, [Lhs, SitioFmx]));
               Continue;
             end;
             // una ruta por una propiedad que en este bloque guarda una

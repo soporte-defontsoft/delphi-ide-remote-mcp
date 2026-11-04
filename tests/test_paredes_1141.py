@@ -117,6 +117,10 @@ try:
         t = llama('delphi_diagnostics', {'path': UFUERA}, 180)
     check('P3 (guarda) una unidad sin registrar JUNTO a un proyecto se analiza con sus ajustes: E2029, no LSP-035',
           'E2029' in t and not mc.es(t, 'SR_LSP_LINT_SIN_AJUSTES_FMT'), '%s | %s' % (r[:150], t[:400]))
+    # el control de P2: con ajustes el motor SI arranca, y la sonda lo ve; sin el, "ningun hijo" pasaba
+    # tambien con una sonda que no encontrara ninguno (revisor de baterias de la 1.27)
+    check('P2 control: tras P3 (con ajustes) hay un DelphiLSP hijo del servidor, y la sonda lo ve',
+          mc.hijos_lsp(proc.pid) != [], mc.hijos_lsp(proc.pid))
 
     # ---------------------------------------------------------------- P4
     DPROJ = os.path.join(PROY, 'Proy.dproj')
@@ -184,4 +188,5 @@ finally:
 proc.wait(10)
 salida.close()
 
+mc.borra(BASE)  # no se quedaba en la maquina (revisor de baterias de la 1.27)
 mc.fin('paredes 1.14.1 battery')

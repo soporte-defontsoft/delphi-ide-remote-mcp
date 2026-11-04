@@ -65,8 +65,10 @@ try:
           not mc.rechazado(r) and 'backup' in r.lower() and open(nuevo).read() == 'dos\n', r[:400])
     dentro = os.path.join(ps, 'Win32', 'x.txt')
     r = sube(srv, dentro, b'x\n')
+    # por SU negativa (WS-007): cualquier rechazo, la jaula o un parametro, la daba por artefacto (revisor
+    # de baterias de la 1.27)
     check('A5 control: un Win32 DEBAJO de la raiz sigue siendo artefacto (upload negado)',
-          mc.rechazado(r) and not os.path.exists(dentro), r[:300])
+          mc.abre(r, 'SR_WS_RUTA_ARTEFACTOS_IDE_HISTORY') and not os.path.exists(dentro), r[:300])
 
     pr = os.path.join(JAIL, 'PR')
     srv.call('delphi_create', {'kind': 'project-console', 'name': 'PR', 'dir': pr}, t=120)

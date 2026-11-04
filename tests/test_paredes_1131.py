@@ -275,4 +275,5 @@ finally:
 proc.wait(10)
 salida.close()
 
+mc.borra(BASE)  # no se quedaba en la maquina (revisor de baterias de la 1.27)
 mc.fin('paredes 1.13.1 battery')

@@ -314,4 +314,6 @@ check('D4g el perfil con la condicion de Win32 NO es el de OSX64',
       'OSX64' in plats and plats['OSX64'].get('profile') == '' and plats['OSX64'].get('profileSource') == 'none',
       plats.get('OSX64'))
 
+S.cierra()
+mc.borra(BASE)  # no se quedaba en la maquina (revisor de baterias de la 1.27)
 mc.fin('auditoria 1.20.1 (D4 set-output y el analisis del .dproj y .deployproj, D8 removeuses en .dpr, D3)')

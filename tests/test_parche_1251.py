@@ -78,9 +78,11 @@ while time.time() < fin and not rpid:
     rpid = mc.renderizador_hijo_de(s.p.pid)
     time.sleep(0.002)
 suspendido = bool(rpid) and mc.suspende(rpid)
-time.sleep(52)
-if suspendido:
-    mc.reanuda(rpid)
+try:
+    time.sleep(52)
+finally:  # un renderizador suspendido no se queda asi si la bateria se corta aqui (revisor de baterias de la 1.27)
+    if suspendido:
+        mc.reanuda(rpid)
 hilo.join(300)
 r = resp[0] if resp else ''
 dt = time.time() - t0
@@ -136,7 +138,8 @@ r = d(command='preview', path=AUTO, maxwidth=100)
 r2 = d(command='lint', path=AUTO)
 check('C4 preview y lint no culpan del ciclo al codigo de un componente',
       mc.es(r, 'SR_RENDER_FRAME_CICLICO_FMT') and mc.es(r2, 'SR_RENDER_FRAME_CICLICO_FMT') and
-      not mc.es(r, 'SN_DESIGNER_PREVIEW_IGNORADAS_NO_CONFIRMADAS_FMT') and 'the code of a' not in r2,
+      not mc.es(r, 'SN_DESIGNER_PREVIEW_IGNORADAS_NO_CONFIRMADAS_FMT') and
+      mc.catalogo()['SF_DSGN_LECTOR_DEL_CODIGO_FMT'].split('): ', 1)[1][:40] not in r2,  # del catalogo, no en ingles a mano
       (r[:300], r2[:300]))
 
 # ---- I: insert no cierra un ciclo
@@ -168,10 +171,19 @@ check('I2 UUno en UDos cerraria el ciclo: DSGN-186 con la cadena y nada escrito'
 r = d(command='insert', path=AUTO, classname='TButton')
 check('I4 un control en un form que ya tiene el ciclo se inserta, sin DSGN-186',
       not mc.es(r, 'SR_DESIGNER_INSERT_FRAME_CICLICO_FMT') and not mc.rechazado(r) and 'Button1' in open(AUTO, encoding='utf-8', errors='replace').read(), r[:300])
-check('N1 ese insert escribe, y su nota no dice que no escribio', 'Nothing was written' not in r, r[:900])
+# su DSGN-145, y sin la frase de "nada escrito" del catalogo: 'Nothing was written' not in r, a mano, pasaba
+# tambien sin la nota (revisor de baterias de la 1.27)
+NADA_ESCRITO = mc.catalogo()['SF_DESIGNER_ORDEN_NADA_ESCRITO'].strip()[:40]
+# ...ni ninguna otra del catalogo que lo diga: el trozo de UNA dejaba pasar las demas (revisor del
+# diff de la cola de la 1.27); que la frase siga en el catalogo es parte del check
+FRASE_NADA = 'Nothing was written'
+CON_FRASE = [n for n, t in mc.catalogo().items() if FRASE_NADA in t]
+check('N1 ese insert escribe, y su nota (DSGN-145) no dice que no escribio',
+      mc.es(r, 'SN_DESIGNER_ULTIMO_SIN_JUEZ_FMT') and NADA_ESCRITO not in r and len(CON_FRASE) > 1 and
+      FRASE_NADA not in r, (r[:900], len(CON_FRASE)))
 antes = open(AUTO, 'rb').read()
 r = d(command='set', path=AUTO, component='Button1', index=1)
-check('N2 set index= sin poder preguntar el orden niega y lo dice', mc.rechazado(r) and 'Nothing was written' in r and open(AUTO, 'rb').read() == antes, r[:400])
+check('N2 set index= sin poder preguntar el orden niega y lo dice', mc.rechazado(r) and NADA_ESCRITO in r and open(AUTO, 'rb').read() == antes, r[:400])
 r = s.call('delphi_edit', {'path': AUTO, 'old': '  inline Dentro: TAuto\r\n    Left = 0\r\n    Top = 0\r\n  end', 'new': ''})
 r2 = d(command='lint', path=AUTO)
 check('I5 el ciclo se quita con delphi_edit y lint ya no lo ve',

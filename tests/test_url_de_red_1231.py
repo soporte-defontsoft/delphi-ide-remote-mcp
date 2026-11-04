@@ -23,7 +23,7 @@ con git 2.53 (`git ls-remote`, ssh falso):
 
   U6 clone de "https://<permitido>/x" (con comillas): la tool lo niega como direccion que no es
      de red (ROJA contra b48699c: pasaba y git contestaba "protocol '"https' is not supported")
-  U7 (guarda) clone de " https://<permitido>/x" y de "https://<permitido>/x\n" (blancos
+  U7 (guarda) clone de " https://<permitido>/x" y de "https://<permitido>/x \t" (blancos
      alrededor, una direccion pegada): clone se los quita (UrlDeClone) y git recibe la que se
      juzgo, asi que lo intenta git; la puerta de los hosts juzga ESA, no la del message (con los
      lectores sin recortar, el salto de detras la hacia ilegible)
@@ -66,15 +66,19 @@ srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_GIT_REMOTE
                nombre='url-de-red', t=120)
 try:
     r = srv.call('delphi_git', {'command': 'clone', 'repo': os.path.join(JAIL, 'c1'), 'message': PERMITIDA})
+    # U1, U3 y U7: que LLEGO a git (mc.llego_a_git), no solo que no salieran dos negativas: cualquier
+    # otra (jaula, INTERNAL, un timeout) pasaba tambien (revisor de baterias de la 1.27)
     check('U1 clone de HTTPS://<permitido>: lo intenta git (no lo niega la tool)',
-          not mc.es(r, 'SR_GIT_CLONE_URLS_ACCEPTED') and not mc.es(r, 'SR_GIT_REMOTE_HOST_FMT'), r[:400])
+          not mc.es(r, 'SR_GIT_CLONE_URLS_ACCEPTED') and not mc.es(r, 'SR_GIT_REMOTE_HOST_FMT')
+          and mc.llego_a_git(r), r[:400])
     r = srv.call('delphi_git', {'command': 'clone', 'repo': os.path.join(JAIL, 'c2'), 'message': AJENA})
     check('U2 clone de HTTPS://<no permitido>: la puerta de los hosts', mc.es(r, 'SR_GIT_REMOTE_HOST_FMT'),
           r[:400])
     rp = repo_con_remoto('r1', PERMITIDA)
     r = srv.call('delphi_git', {'command': 'fetch', 'repo': rp, 'remote': 'origin'})
     check('U3 fetch de un remoto HTTPS://<permitido>: lo intenta git (no es ilegible)',
-          not mc.es(r, 'SR_GIT_REMOTO_ILEGIBLE_FMT') and not mc.es(r, 'SR_GIT_REMOTE_HOST_FMT'), r[:400])
+          not mc.es(r, 'SR_GIT_REMOTO_ILEGIBLE_FMT') and not mc.es(r, 'SR_GIT_REMOTE_HOST_FMT')
+          and mc.llego_a_git(r), r[:400])
     ra = repo_con_remoto('r2', AJENA)
     r = srv.call('delphi_git', {'command': 'fetch', 'repo': ra, 'remote': 'origin'})
     check('U4 ...y uno HTTPS://<no permitido>: la puerta de los hosts', mc.es(r, 'SR_GIT_REMOTE_HOST_FMT'),
@@ -90,11 +94,14 @@ try:
                                 'message': '"https://127.0.0.1:1/x.git"'})
     check('U6 clone de una direccion con comillas: no es de red como la lee git (la tool la niega)',
           mc.es(r, 'SR_GIT_CLONE_URLS_ACCEPTED'), r[:400])
-    for clave, url in (('U7a', ' https://127.0.0.1:1/x.git'), ('U7b', 'https://127.0.0.1:1/x.git\n')):
+    # U7b con blancos DETRAS y no con un salto: el salto lo niega antes SR_GIT_MESSAGE_LINES (GIT-009,
+    # un message de clone no lleva saltos), y U7b pasaba por esa otra negativa sin llegar a los
+    # lectores; con llego_a_git se vio (revisor de baterias de la 1.27)
+    for clave, url in (('U7a', ' https://127.0.0.1:1/x.git'), ('U7b', 'https://127.0.0.1:1/x.git \t')):
         r = srv.call('delphi_git', {'command': 'clone', 'repo': os.path.join(JAIL, clave), 'message': url})
         check('%s (guarda) clone de %r: lo intenta git con la que se juzgo (ni la puerta ni la tool lo niegan)'
               % (clave, url), not mc.es(r, 'SR_GIT_CLONE_URLS_ACCEPTED') and not mc.es(r, 'SR_GIT_REMOTE_HOST_FMT')
-              and not mc.es(r, 'SR_GIT_REMOTE_AMBIGUA_FMT'), r[:400])
+              and not mc.es(r, 'SR_GIT_REMOTE_AMBIGUA_FMT') and mc.llego_a_git(r), r[:400])
     for clave, que, url in (('U8', 'un remote-helper que empieza por cifra (1x::foo)', '1x::foo'),
                             ('U9', 'una direccion con comillas', '"https://127.0.0.1:1/x.git"'),
                             ('U10a', 'un :// detras de host:ruta (git: protocol 192.0.2.9:x)',

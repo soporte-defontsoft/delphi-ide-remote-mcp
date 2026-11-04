@@ -41,6 +41,9 @@ def search_path(clave):
         return ''
 
 
+# el "(registered in: X)" de cada carpeta, leido con su formato del catalogo (la inversa del que lo
+# compone, SF_COMP_REGISTRADO_EN_FMT): la regex estaba a mano dos veces (revisor de baterias de la 1.27)
+REGISTRADO = re.escape(mc.catalogo()['SF_COMP_REGISTRADO_EN_FMT'].split('   ', 1)[1]).replace('%s', '([^)]*)')
 ANDROID32 = search_path('Android32')
 if not ANDROID32:
     # un salto que se dice: con sys.exit(0) y 0 checks, run_all la pintaba ROJA sin el
@@ -63,10 +66,10 @@ try:
     check('L2 platform=Android: $(Platform) vale Android (lib\\android\\release, ningun lib\\Android32)',
           'lib\\android\\release' in r.lower() and '\\lib\\android32' not in r.lower(), r[:600])
     check('L3 platform=Android: nada de su propia clave sale como de otra plataforma (registered in: Android32)',
-          not any('Android32' in e for e in re.findall(r'\(registered in: ([^)]*)\)', r)), r[:900])
+          not any('Android32' in e for e in re.findall(REGISTRADO, r)), r[:900])
     r = srv.call('delphi_components', {'filter': 'LockBox'})
     check('L4 filter: las plataformas por su nombre (Android), no por la clave del registro (Android32)',
-          'Android64' in r and not any('Android32' in e for e in re.findall(r'\(registered in: ([^)]*)\)', r))
+          'Android64' in r and re.findall(REGISTRADO, r) and not any('Android32' in e for e in re.findall(REGISTRADO, r))
           and 'Android,' in r.replace('Android64', ''), r[-700:])
     r = srv.call('delphi_components', {'platform': 'Win64'})
     check('L5 control: platform=Win64 da sus carpetas, con lib\\Win64\\Release',

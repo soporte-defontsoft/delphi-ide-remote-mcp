@@ -716,4 +716,5 @@ ok, err = build_ok(DPROJ)
 check('C17b ...y el proyecto COMPILA', ok, err)
 
 srv.cierra()
+mc.borra(BASE)  # su carpeta, con su copia del exe (revisor de baterias de la 1.27)
 mc.fin('lector-clases battery')

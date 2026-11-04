@@ -61,6 +61,9 @@ try:
           "UFicha in 'David''s units\\UFicha.pas'" in dpr and ok, (r[:200], dpr, err))
     r = cfg(command='remove-unit', project=DPROJ, path=os.path.join(DIR, 'UFicha.pas'))
     check('D2 remove-unit de esa: fuera del .dpr y del .dproj, y el aviso nombra el fichero',
+          # el aviso es el de la unidad quitada con su fichero en disco (CFG-054): un error que citara
+          # la ruta tambien traia 'UFicha.pas' (revisor de baterias de la 1.27)
+          mc.abre(r, 'SN_UNIT_REMOVED_FMT') and
           'UFicha' not in mc.lee(DPR) and 'UFicha' not in mc.lee(DPROJ) and 'UFicha.pas' in r, r[:300])
 
     # --- D3 ---------------------------------------------------------------------

@@ -414,6 +414,9 @@ const
   // y la lista misma: 100.000 ficheros de un byte la inundaban (revision de
   // la 1.11.0); los que no caben se cuentan
   TOPE_DE_ENTRADAS = 500;
+  // el prefijo de la etapa de cada run en la casa (CarpetaUnica): lo busca la
+  // bateria que mira que no se quede ninguna (revisor de baterias de la 1.27)
+  TEST_ETAPA_PREFIJO = 'test-';
 
 type
   ETopeDeCopia = class(Exception);
@@ -561,7 +564,7 @@ begin
   ATimedOut := False;
   AFicheros := nil;
   ARecortado := False;
-  Etapa := CarpetaUnica(ServerTempDir, 'test-');
+  Etapa := CarpetaUnica(ServerTempDir, TEST_ETAPA_PREFIJO);
   Err := AbreEtapa(Etapa, False, AC);
   if Err <> 0 then
   begin

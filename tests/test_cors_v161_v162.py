@@ -55,8 +55,10 @@ def post_origin(port, origin):
 base, port, proc = instancia('v162', '[CORS]\nEnabled=1\nAllowedOrigins=http://a;http://b\n')
 try:
     code, body = post_origin(port, 'http://b')
+    # (revisor de baterias de la 1.27) `code != 403` pasaba con un 500, un 401 o cualquier otra negativa:
+    # admitido es el initialize contestado, 200 con su result
     check('C1 (V162) AllowedOrigins con ; : un Origin de la lista (http://b) se admite, no 403',
-          code != 403, '%s %s' % (code, body[:120]))
+          code == 200 and bool(mc.como_json(body).get('result')), '%s %s' % (code, body[:120]))
     code, body = post_origin(port, 'http://evil.example')
     check('C2 control: un Origin que NO esta en la lista -> 403',
           code == 403, '%s %s' % (code, body[:120]))
@@ -69,6 +71,11 @@ try:
     code, body = post_origin(port, 'http://evil.example')
     check('C3 (V161) [CORS] Enabled ilegible se lee CERRADO (valida el Origin): un Origin ajeno -> 403',
           code == 403, '%s %s' % (code, body[:120]))
+    # (revisor de baterias de la 1.27) el control de C3: el 403 es la validacion del Origin, no un
+    # servidor que lo niega todo con ese ini - el Origin de la lista SI entra
+    code, body = post_origin(port, 'http://localhost')
+    check('C3b control: con el mismo Enabled ilegible, el Origin de la lista (http://localhost) se admite',
+          code == 200 and bool(mc.como_json(body).get('result')), '%s %s' % (code, body[:120]))
 finally:
     proc.kill()
 

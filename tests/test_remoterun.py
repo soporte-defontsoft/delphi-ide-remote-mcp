@@ -106,7 +106,10 @@ check('A4 un salto de linea dentro de un argumento: RUN-026, sin lanzar nada',
 # 2b) revisor del paisaje de la 1.27: el paclient que tocaria esta en una carpeta donde la sesion escribe (aqui
 # su raiz): no se lanza, y lo dice (RUN-027) - antes decia que la instalacion no trae paclient
 _dentro = os.path.join(BASE, 'paclient-dentro.cmd')
-shutil.copy(STUB, _dentro)
+# (revisor de baterias de la 1.27) un paclient INERTE que deja una marca si alguien lo lanza: el check miraba
+# solo el codigo, y una puerta que dijera RUN-027 DESPUES de lanzarlo seguia verde
+_marca = os.path.join(BASE, 'paclient-dentro.lanzado')
+open(_dentro, 'w', newline='').write('@echo lanzado> "%s"\r\n' % _marca)
 env_dentro = dict(env); env_dentro['DELPHI_MCP_PACLIENT'] = _dentro
 srv_dentro = mc.Stdio(EXE, env_dentro, nombre='pac-dentro')
 try:
@@ -114,8 +117,8 @@ try:
                                             'exe': PROJNAME + '.exe', 'timeoutms': 20000})
 finally:
     srv_dentro.cierra()
-check('RUN-027 un paclient en una carpeta de la jaula no se lanza, y se dice', mc.es(r, 'SR_PACLIENT_DONDE_ESCRIBE_FMT'),
-      r[:300])
+check('RUN-027 un paclient en una carpeta de la jaula no se lanza, y se dice',
+      mc.es(r, 'SR_PACLIENT_DONDE_ESCRIBE_FMT') and not os.path.exists(_marca), (r[:300], os.path.exists(_marca)))
 
 # 3) happy path
 # exe=<nombre simple> de la MISMA carpeta de despliegue (en Linux el binario

@@ -84,8 +84,13 @@ try:
 
     # ------------------------------------------------------------------ T2
     # sobre un listado que SI trae la papelera: vacio tambien "no tenia .by"
+    # ...y con las marcas EN DISCO: sin ellas, T2 ("no se cuelan") y T6 ("se barren") pasaban
+    # sin medir nada (revisor de baterias de la 1.27)
+    marcas = [x for r_, d_, f_ in os.walk(os.path.join(PROY, mc.PAPELERA)) for x in f_
+              if mc.es_marca_dueno(x) and 'UFicha' in x]
     check('T2 no se cuelan los marcadores .by',
-          bool(enpap) and not any(mc.es_marca_dueno(p) for p in rutas), str(rutas)[:300])
+          bool(enpap) and bool(marcas) and not any(mc.es_marca_dueno(p) for p in rutas),
+          'marcas en disco %s | %s' % (marcas, str(rutas)[:300]))
 
     # ------------------------------------------------------------------ T7
     sin = json.loads(call('delphi_list', {'root': PROY}))
@@ -139,7 +144,8 @@ try:
     for r_, d_, f_ in os.walk(os.path.join(PROY, mc.PAPELERA)):
         quedan += [x for x in f_ if mc.es_marca_dueno(x)]
     check('T6 los marcadores .by de lo restaurado se barren',
-          not any('UFicha' in x for x in quedan), str(quedan)[:240])
+          bool(marcas) and not any('UFicha' in x for x in quedan),
+          'antes %s | quedan %s' % (marcas, str(quedan)[:240]))
 
     # ------------------------------------------------------------------ T8
     # Se edita UMain.pas y se restaura: eso deja una copia "previa al

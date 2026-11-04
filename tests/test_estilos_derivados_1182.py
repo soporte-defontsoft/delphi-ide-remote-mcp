@@ -230,6 +230,8 @@ try:
               'negado y el .res NO lo lleva',
               (mc.abre(r, 'SR_STYLES_RC_OUTSIDE_FMT') or mc.abre(r, 'SR_STYLES_RC_NO_LISTA_FMT')) and not entra,
               (r[:200], entra))
+    else:  # el salto se dice (revisor de baterias de la 1.27)
+        print('NOTA H1 no se mide: no hay %s con contenido que reconocer en el .res' % PUBLICO)
 
     # S15: el CONTENEDOR, solo: un absoluto a un fichero de la PROPIA carpeta -
     # la barrera lo deja (esta dentro) y brcc32, que solo ve la copia de la
@@ -297,7 +299,9 @@ try:
     if hay_enlace:
         r = build(srv)
         check('S8 un .style enlazado a uno de fuera: la puerta de leer lo niega y su binario no nace',
-              mc.rechazado(r) and not os.path.exists(os.path.join(STY, 'Fuera.bin.style')), r[:300])
+              # la de la jaula (un enlace que sale), no cualquier negativa (revisor de baterias de la 1.27)
+              (mc.es(r, 'SR_JAIL_LINK_FMT') or mc.es(r, 'SR_JAIL_FMT')) and
+              not os.path.exists(os.path.join(STY, 'Fuera.bin.style')), r[:300])
         os.remove(ENLACE)  # el enlace, no lo de detras
     else:
         print('NOTA S8 no se mide: esta cuenta no puede crear un enlace de FICHERO (privilegio o modo '

@@ -40,17 +40,21 @@ def barra(p):
 
 try:
     r = S.call('delphi_edit', {'path': barra(U), 'old': 'implementation', 'new': 'implementation\n\n// B1'})
-    check('B1 delphi_edit con D:/ escribe', not mc.rechazado(r) and '// B1' in open(U, encoding='utf-8-sig').read(), r[:300])
+    # B1-B4: not mc.fallo, no not rechazado (que deja pasar un INTERNAL) (revisor de baterias de la 1.27)
+    check('B1 delphi_edit con D:/ escribe', not mc.fallo(r) and '// B1' in open(U, encoding='utf-8-sig').read(), r[:300])
     r = S.call('delphi_textedit', {'path': barra(T), 'old': 'dos', 'new': 'dos B2'})
-    check('B2 delphi_textedit con D:/ escribe', not mc.rechazado(r) and 'dos B2' in open(T, encoding='utf-8').read(), r[:300])
+    check('B2 delphi_textedit con D:/ escribe', not mc.fallo(r) and 'dos B2' in open(T, encoding='utf-8').read(), r[:300])
     NUEVA = os.path.join(JAIL, 'sub', 'UNueva.pas')
     r = S.call('delphi_edit', {'path': barra(NUEVA), 'createunit': True})
-    check('B3 createunit con D:/ crea el fichero donde dice', not mc.rechazado(r) and os.path.isfile(NUEVA), r[:300])
+    check('B3 createunit con D:/ crea el fichero donde dice', not mc.fallo(r) and os.path.isfile(NUEVA), r[:300])
     r = S.call('delphi_edit', {'path': mc.virtual(mc.larga(U)).replace('\\', '/'), 'old': '// B1', 'new': '// B4'})
-    check('B4 la unidad virtual con / escribe tambien', not mc.rechazado(r) and '// B4' in open(U, encoding='utf-8-sig').read(), r[:300])
+    check('B4 la unidad virtual con / escribe tambien', not mc.fallo(r) and '// B4' in open(U, encoding='utf-8-sig').read(), r[:300])
     r = S.call('delphi_textedit', {'path': barra(os.path.join(FUERA, 'x.txt')), 'create': True, 'content': 'x'})
     check('B5 control: con / FUERA de la jaula sigue negada como fuera',
-          mc.rechazado(r) and not os.path.exists(os.path.join(FUERA, 'x.txt')) and not mc.es(r, 'SR_SUSTITUCION_CARPETA_REAL_FMT'), r[:300])
+          # COMO FUERA, la jaula (GUARD-002, SR_JAIL_FMT) que dice el docstring: rechazado a secas pasaba
+          # con cualquier negativa (revisor de baterias de la 1.27)
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(FUERA, 'x.txt'))
+          and not mc.es(r, 'SR_SUSTITUCION_CARPETA_REAL_FMT'), r[:300])
     r = S.call('delphi_read', {'path': barra(U)})
     check('B6 control: delphi_read con / lee', 'unit UBarra' in r, r[:300])
 finally:

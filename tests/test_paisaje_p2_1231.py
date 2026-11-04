@@ -88,14 +88,21 @@ try:
     open(inc, 'w', newline='').write('{$DEFINE X}\r\n')
     dpk = os.path.join(JAIL, 'Pk.dpk')
     open(dpk, 'w', newline='').write('package Pk;\r\n\r\nrequires\r\n  rtl;\r\n\r\nend.\r\n')
-    for f in (inc, dpk):
+    # el control: un .txt SI lo niega cada una, por el mismo juez; sin el, "no LSP-017" pasaba con cualquier
+    # otra respuesta, y con ninguna (revisor de baterias de la 1.27)
+    txt = os.path.join(JAIL, 'Nota.txt')
+    open(txt, 'w', newline='').write('nada\r\n')
+    for f in (inc, dpk, txt):
         nombre = os.path.basename(f)
         for tool, args in (('delphi_diagnostics', {'path': f}), ('delphi_symbols', {'path': f}),
                            ('delphi_references', {'path': f, 'line': 0, 'character': 1}),
                            ('delphi_rename_symbol', {'path': f, 'line': 0, 'character': 1, 'newname': 'Otro'})):
             r = call(tool, args, 300)
-            check('Y6 %s acepta %s como fuente (no LSP-NOT_SOURCE)' % (tool, nombre),
-                  not mc.es(r, 'SR_LSP_NOT_SOURCE_FMT'), r[:200])
+            if f == txt:
+                check('Y6 control: %s niega %s (LSP-017)' % (tool, nombre), mc.es(r, 'SR_LSP_NOT_SOURCE_FMT'), r[:200])
+            else:
+                check('Y6 %s acepta %s como fuente (no LSP-NOT_SOURCE)' % (tool, nombre),
+                      not mc.sin_respuesta(r) and not mc.es(r, 'SR_LSP_NOT_SOURCE_FMT'), r[:200])
 finally:
     srv.cierra()
 

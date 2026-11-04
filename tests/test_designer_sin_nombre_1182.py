@@ -97,18 +97,19 @@ try:
           mc.rechazado(r) and 'DSGN-136' in r and 'TTimer' in r and open(HERM, 'rb').read() == T_HERM,
           (r[:300], orden(HERM)))
     open(HERM, 'wb').write(T_HERM)
+    # N3-N5: exito es no fallar; not mc.rechazado dejaba pasar un INTERNAL (revisor de baterias de la 1.27)
     r = dsg(HERM, {'component': 'Button2', 'before': 'Button1'})
     check('N3 control: Button2 delante de Button1 con el TTimer sin nombre al lado: se escribe',
-          not mc.rechazado(r) and orden(HERM) == ['object Button2: TButton', 'object Button1: TButton',
+          not mc.fallo(r) and orden(HERM) == ['object Button2: TButton', 'object Button1: TButton',
                                                   'object TTimer'], (r[:300], orden(HERM)))
     r = dsg(HIJAT, {'component': 'Timer1', 'index': 1})
     check('N4 el ancestro con un TTimer sin nombre: Timer1 el primero de la hija se escribe (sin #2 fantasma)',
-          not mc.rechazado(r) and '#2' not in r and
+          not mc.fallo(r) and '#2' not in r and
           orden(HIJAT) == ['object Timer1: TTimer', 'object TTimer'], (r[:300], orden(HIJAT)))
     r = dsg(ANID, {'component': 'Button2', 'before': 'Button1'})
     t = open(ANID, encoding='utf-8').read()
     check('N5 un TTimer sin nombre anidado a mano en el panel: Button2 delante de Button1 se escribe',
-          not mc.rechazado(r) and t.index('object Button2') < t.index('object Button1'), r[:300])
+          not mc.fallo(r) and t.index('object Button2') < t.index('object Button1'), r[:300])
 finally:
     srv.cierra()
 

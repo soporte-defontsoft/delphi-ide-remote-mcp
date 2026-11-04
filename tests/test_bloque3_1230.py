@@ -37,8 +37,12 @@ try:
     dfms = [f for f in os.listdir(vcl) if f.endswith('.dfm')]
     dfm = os.path.join(vcl, dfms[0]) if dfms else ''
     r = srv.call('delphi_designer', {'command': 'get', 'path': dfm, 'component': 'NoEsta'}, t=120)
+    # los nombres del form, el del propio form leido del .dfm: 'NoEsta' era solo el eco de lo pedido
+    # (revisor de baterias de la 1.27)
+    m = re.match(r'\s*(?:object|inherited)\s+(\w+)', lee(dfm)) if dfm else None
     check('C1 get de un componente que no esta: DSGN-078, con los nombres del form',
-          mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'NoEsta' in r, r[:300])
+          mc.rechazado(r) and mc.es(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'NoEsta' in r and
+          m is not None and m.group(1) in r, (m and m.group(1), r[:300]))
 
     r = srv.call('delphi_create', {'kind': 'form-vcl', 'name': 'UBegin', 'formname': 'Begin', 'project': dpr},
                  t=120)
@@ -49,6 +53,13 @@ try:
     con = os.path.join(JAIL, 'C')
     srv.call('delphi_create', {'kind': 'project-console', 'name': 'PC', 'dir': con}, t=120)
     dproj = os.path.join(con, 'PC.dproj')
+    # la nota, del catalogo (sin etiqueta: es un trozo); y su control, la misma consola SIN
+    # VerInfo_IncludeVerInfo, donde SI sale: sin el, "no lo dice" pasaba con cualquier respuesta, y
+    # not rechazado dejaba pasar un timeout (revisor de baterias de la 1.27)
+    NOTA_VI = mc.catalogo()['SF_CFG_VERSION_NO_INCLUIDA'][:60]
+    r = srv.call('delphi_config', {'command': 'set-version', 'project': dproj, 'version': '1.2.3.3'})
+    check('C3a (control) set-version en la consola sin VerInfo_IncludeVerInfo: dice que no se incluye',
+          mc.abre(r, 'SN_CONFIG_VERSION_OK_FMT') and NOTA_VI in r, r[:400])
     x = lee(dproj)
     m = re.search(r"<PropertyGroup Condition=\"'\$\(Base\)'!=''\">", x)
     x = x[:m.end()] + '\r\n        <VerInfo_IncludeVerInfo>yes</VerInfo_IncludeVerInfo>' + x[m.end():]
@@ -56,7 +67,7 @@ try:
         f.write(x)
     r = srv.call('delphi_config', {'command': 'set-version', 'project': dproj, 'version': '1.2.3.4'})
     check('C3 set-version con VerInfo_IncludeVerInfo=yes (verdad para msbuild): no dice que no se incluye',
-          not mc.rechazado(r) and 'does not include the version' not in r, r[:400])
+          mc.abre(r, 'SN_CONFIG_VERSION_OK_FMT') and NOTA_VI not in r, r[:400])
 
     srv.call('delphi_config', {'command': 'set-output', 'project': dproj, 'output': 'bin'})
     r = srv.call('delphi_config', {'command': 'set-output', 'project': dproj, 'output': 'none'})

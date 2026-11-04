@@ -934,7 +934,10 @@ _notas = CRLF.join(['unit UNotas;', '', 'interface', '', 'implementation', '', '
                     'Historial: v1', '']).encode('ascii')
 open(PASN, 'wb').write(_notas)
 out = call('delphi_edit', {"path": PASN, "edits": [{"old": "interface", "new": "interface"}]})
+# (revisor de baterias de la 1.27) los dos "no avisa" pasaban con cualquier error: la tanda contesto, y con
+# su UNCHANGED (EDIT-114)
 check('end.: una tanda que no escribe nada en un fichero con notas tras el end. no avisa',
+      mc.abre(out, 'SN_PATCH_EDITS_SIN_CAMBIOS_FMT') and
       not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA') and not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT')
       and open(PASN, 'rb').read() == _notas, out[:300])
 out = call('delphi_edit', {"path": PASN, "old": "interface", "new": "interface\n// una nota"})
@@ -1256,7 +1259,8 @@ for _be, _nom, _enc, _codec, _bom in ((False, 'U32LE.pas', 'utf32-le', 'utf-32-l
     check('%s: delphi_read la reconoce por su BOM (encoding=%s, eol=CRLF) y la decodifica, fuera del plano basico tambien' % (_enc, _enc),
           'encoding=%s' % _enc in _out and 'eol=CRLF' in _out and "A = 'Caña \U0001F600';" in _out, _out[:300])
     _out = call('delphi_search', {'root': _p, 'query': 'Caña'})
-    check('%s: delphi_search la lee (no es binario)' % _enc, '"total":1' in _out, _out[:300])
+    # (revisor de baterias de la 1.27) '"total":1' casaba tambien con 10..19: el total leido
+    check('%s: delphi_search la lee (no es binario)' % _enc, mc.como_json(_out).get('total') == 1, _out[:300])
     _out = call('delphi_edit', {'path': _p, 'old': "  B = 'x';", 'new': "  B = 'Acción';"})
     _b = open(_p, 'rb').read()
     check('%s: delphi_edit escribe con SU codificacion, BOM incluido, y lo no tocado byte a byte' % _enc,
@@ -1292,7 +1296,7 @@ _out = call('delphi_read', {'path': _roto})
 check('ida y vuelta: un BOM de UTF-8 con el cuerpo roto se LEE (no SYS-006) y lo dice (READ-007)',
       mc.es(_out, 'SN_READ_BYTES_NO_VUELVEN_FMT') and 'T = 1;' in _out and not mc.fallo(_out), _out[:300])
 _out = call('delphi_search', {'root': _roto, 'query': 'T = 1'})
-check('ida y vuelta: ...y se BUSCA (no SYS-006)', '"total":1' in _out, _out[:300])
+check('ida y vuelta: ...y se BUSCA (no SYS-006)', mc.como_json(_out).get('total') == 1, _out[:300])
 _intacto_tras('delphi_edit en un BOM de UTF-8 con el cuerpo roto', _roto, _ROTO,
               call('delphi_edit', {'path': _roto, 'old': '  T = 1;', 'new': '  T = 2;'}))
 _rotot = os.path.join(DIR, 'roto.txt')
@@ -1413,12 +1417,14 @@ check('ida y vuelta: delete + create de un fichero roto: el preview no niega el 
 # borraba, movia a P un fichero en UTF-8 con BOM y lo editaba otra vez dejaba P
 # en CP1252 - transcodificaba un fichero que SI tenia codificacion. Desde la B de
 # la 1.19.2 una unidad no se mueve por changeset (CHSET-033: el move suelto le
-# dejaba la cabecera, el form y los proyectos mal), asi que el camino del move es
-# el de un fichero de TEXTO: el origen es el mismo (OrigenDeLaLlamada, en el
-# escritor de todos, PatchSaveText)
-_pm, _qm = os.path.join(DIR, 'movp.txt'), os.path.join(DIR, 'movq.txt')
-open(_pm, 'wb').write(b"P\r\n  X = 1;\r\n  T = 1;\r\n")
-_QM = b'\xef\xbb\xbf' + ("Q\r\n  S = 'gestión';\r\n  T = 1;\r\n").encode('utf-8')
+# dejaba la cabecera, el form y los proyectos mal)... (revisor de baterias de la
+# 1.27) y con .txt el check no media nada: EncAlEscribir (Lsp.Patch) sale antes
+# de OrigenDeLaLlamada para lo que no es un FUENTE. Desde la 1.23 (V19, CHSET-033
+# retirado) una unidad se mueve por changeset como el operador: vuelven a ser .pas
+_pm, _qm = os.path.join(DIR, 'movp.pas'), os.path.join(DIR, 'movq.pas')
+open(_pm, 'wb').write(b"unit movp;\r\n\r\ninterface\r\n\r\nconst\r\n  X = 1;\r\n  T = 1;\r\n\r\nimplementation\r\n\r\nend.\r\n")
+_QM = b'\xef\xbb\xbf' + ("unit movq;\r\n\r\ninterface\r\n\r\nconst\r\n  S = 'gestión';\r\n  T = 1;\r\n\r\n"
+                         "implementation\r\n\r\nend.\r\n").encode('utf-8')
 open(_qm, 'wb').write(_QM)
 _cid = mc.id_changeset(call('delphi_changeset', {'command': 'begin'}))
 call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'edit', 'path': _pm, 'old': '  X = 1;', 'new': '  X = 2;'})
@@ -1440,9 +1446,21 @@ _out = call('delphi_edit', {'path': _ua, 'edits': json.dumps([
 if not _IDE_PREFIERE_UTF8:
     print('NOTA: el check del unico acento no distingue aqui: con el IDE en ANSI el codigo viejo tambien daba '
           'CP1252 (lo mide LspTests.Encodings.EncAlEscribirConservaLaCodificacionDelOrigen)')
+# (revisor de baterias de la 1.27) GUARDA: sin el origen de la llamada tambien sale CP1252 (AnsiSinAmbiguedad
+# elige la ANSI para un ASCII que pasa a tener una o con tilde). Lo que lo distingue es el gemelo de abajo
 check('origen: una tanda que quita el unico acento y pone otro deja el fichero en CP1252 (acababa en UTF-8 sin BOM)',
       open(_ua, 'rb').read() == _UA.replace(b"'\xe9'", b"'e'").replace(b"'x'", b"'Descripci\xf3n'"),
       (_out[:300], open(_ua, 'rb').read()[:80]))
+# ...el gemelo que SI mide el origen: el mismo en UTF-8 SIN BOM. Sin recordar lo de antes de la llamada, la
+# segunda entrada lo ve ASCII y AnsiSinAmbiguedad lo pasa a CP1252; con el origen, se queda en UTF-8 sin BOM
+_u8a = os.path.join(DIR, 'UUnAcentoU8.pas')
+_U8A = _UA.replace(b'UUnAcento', b'UUnAcentoU8').replace(b"'\xe9'", "'é'".encode('utf-8'))
+open(_u8a, 'wb').write(_U8A)
+_out = call('delphi_edit', {'path': _u8a, 'edits': json.dumps([
+    {'old': "  A = 'é';", 'new': "  A = 'e';"}, {'old': "  B = 'x';", 'new': "  B = 'Descripción';"}])})
+check('origen: ...y en un UTF-8 sin BOM, la misma tanda lo deja en UTF-8 sin BOM (no en la ANSI que elige un ASCII)',
+      open(_u8a, 'rb').read() == _U8A.replace("'é'".encode('utf-8'), b"'e'").replace(
+          b"'x'", "'Descripción'".encode('utf-8')), (_out[:300], open(_u8a, 'rb').read()[:80]))
 
 # EDIT-080 solo cuando el fichero NO tenia codificacion: un UTF-8 con BOM y
 # solo ASCII ya tiene una (Measure no cuenta el BOM y decia "era ASCII puro")

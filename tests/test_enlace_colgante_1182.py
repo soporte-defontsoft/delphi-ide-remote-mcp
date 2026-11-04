@@ -92,7 +92,8 @@ if SKIP is None:
         r = op.call('delphi_textedit', {'path': os.path.join(JU, 'q.txt'), 'create': True, 'content': 'q'})
         dt = time.time() - t0
         check('K6 una junction a un UNC: crear a traves de ella se niega sin ir a la red (< 5 s)',
-              mc.rechazado(r) and dt < 5, ('%.1f s' % dt, r[:300]))
+              # la de la jaula, como K3, no cualquier negativa (revisor de baterias de la 1.27)
+              (mc.es(r, 'SR_JAIL_FMT') or mc.es(r, 'SR_JAIL_LINK_FMT')) and dt < 5, ('%.1f s' % dt, r[:300]))
     finally:
         try:
             proc.kill()

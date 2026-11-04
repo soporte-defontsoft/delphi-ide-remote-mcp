@@ -30,10 +30,13 @@ try:
     ZIP = os.path.join(JAIL, 'dist.zip')
     r = srv.call('delphi_package', {'dir': DIST, 'outfile': ZIP})
     check('K1 una carpeta de la referencia empaquetada en un zip de la jaula: el zip se hace',
-          not mc.rechazado(r) and os.path.isfile(ZIP), r[:300])
+          not mc.fallo(r) and os.path.isfile(ZIP), r[:300])
     ZIP2 = os.path.join(REF, 'dist.zip')
     r = srv.call('delphi_package', {'dir': DIST, 'outfile': ZIP2})
-    check('K2 (guarda) el zip en la referencia: negado y sin zip', mc.rechazado(r) and not os.path.exists(ZIP2), r[:300])
+    # por SU negativa, la de una referencia (GUARD-016, alli no se escribe): rechazado a secas pasaba con
+    # cualquiera; y K1 con not fallo, no not rechazado (revisor de baterias de la 1.27)
+    check('K2 (guarda) el zip en la referencia: negado y sin zip',
+          mc.rechazado(r) and mc.es(r, 'SR_REFERENCE_ROOT_FMT') and not os.path.exists(ZIP2), r[:300])
 finally:
     srv.cierra()
 

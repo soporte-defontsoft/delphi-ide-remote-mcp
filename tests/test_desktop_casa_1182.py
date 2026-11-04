@@ -28,6 +28,7 @@ carpeta del agente en nuestra casa.
       en su casa, con el tamano de la ventana; si el Zorin no tiene ninguna
       ventana con rectangulo, NOTA
   D4  control de la jaula: un out= fuera de las raices se sigue negando
+  D4c el mismo, sin destino (la jaula del out= va antes de nada remoto): se mide siempre
   D4b confinado y con out= en SU carpeta: se coloca alli (el out= es del
       agente y lo juzga la jaula, no la casa: colocarlo con el lugar de la
       casa lo negaria)
@@ -111,6 +112,12 @@ try:
     r0 = srv.call('delphi_desktop', {'command': 'screenshot', 'profile': 'zz-no-existe', 'inline': False}, t=60)
     check('D0c inline=false sin out= por stdio, sin destino: CAPT-012 ANTES de la puerta de control remoto (2ai)',
           mc.abre(r0, 'SR_CAPTURE_SIN_SALIDA'), r0[:300])
+    # D4c: la jaula del out= va ANTES de nada remoto (GestoEnElTarget): se mide siempre, sin destino; D4,
+    # abajo, solo corria con el Zorin pedido y vivo (revisor de baterias de la 1.27)
+    r0 = srv.call('delphi_desktop', {'command': 'screenshot', 'profile': 'zz-no-existe',
+                                     'out': os.path.join(SOLO, 'x.png')}, t=60)
+    check('D4c sin destino: un out= fuera de las raices lo niega la jaula (GUARD-002), sin dejar nada',
+          mc.abre(r0, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(SOLO, 'x.png')), r0[:300])
     # contra el Zorin, que recibiria el nodo de ESTE servidor, solo si se pide (V52)
     pedido = mc.destino_real_pedido()
     st = srv.call('delphi_desktop', {'command': 'status', 'profile': PERFIL}, t=120) if pedido else ''
@@ -135,13 +142,14 @@ try:
         # D4: el out= es del agente y lo juzga la jaula, como siempre
         r = captura(srv, out=os.path.join(SOLO, 'x.png'))
         check('D4 control de la jaula: un out= fuera de las raices se sigue negando, sin dejar nada',
-              mc.rechazado(r) and not os.path.exists(os.path.join(SOLO, 'x.png')), r[:300])
+              # la de la jaula (GUARD-002), no cualquier negativa (revisor de baterias de la 1.27)
+              mc.es(r, 'SR_JAIL_FMT') and not os.path.exists(os.path.join(SOLO, 'x.png')), r[:300])
 finally:
     srv.cierra()
 
 if not pedido:
     print('NOTA no se mide contra el Zorin: una bateria no despliega su nodo en un destino real salvo que '
-          'se le pida (%s=1, V52); solo D0c' % mc.DESTINO_REAL)
+          'se le pida (%s=1, V52); solo D0c y D4c' % mc.DESTINO_REAL)
     mc.fin('desktop casa 1182', sin_checks='destino real no pedido (%s)' % mc.DESTINO_REAL)
 if not vivo:
     print('NOTA el Zorin (%s, %s) no contesta: la bateria no mide nada. %s' % (PERFIL, HOST, st[:200]))

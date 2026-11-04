@@ -31,6 +31,10 @@ try:
         ORIGINAL = f.read()
     assert '<Import Project=' in ORIGINAL, ORIGINAL[:200]
     marca = os.path.join(carpeta, 'marca.txt')
+    # control de "no corre": la orden de cada evento, ejecutada a mano, SI deja la marca; sin el, "sin
+    # marca" pasaba tambien con una orden que no podia escribirla (revisor de baterias de la 1.27)
+    mc.consola('cmd /c echo x > "%s"' % marca)
+    check('control: la orden del evento, si corre, deja la marca', os.path.exists(marca), marca)
 
     def con(eventos):
         """El .dproj del IDE con un grupo de eventos delante del primer Import: cada evento

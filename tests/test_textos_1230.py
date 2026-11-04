@@ -116,7 +116,9 @@ try:
     r = srv.call('delphi_config', {'command': 'add-searchpath', 'project': DPROJ,
                                    'path': '%2E%2E\\%2E%2E\\fuera'})
     check('T6 ...%2E%2E\\%2E%2E\\fuera (FUERA de las raices, y existe): la jaula lo niega, nada escrito',
-          mc.rechazado(r) and not mc.abre(r, 'SR_CONFIG_PATH_MISSING_FMT')
+          # por la JAULA, la que dice el nombre (SR_JAIL_FMT): cualquier negativa menos MISSING
+          # pasaba tambien con la de sus caracteres (revisor de baterias de la 1.27)
+          mc.rechazado(r) and mc.es(r, 'SR_JAIL_FMT') and not mc.abre(r, 'SR_CONFIG_PATH_MISSING_FMT')
           and open(DPROJ, 'rb').read() == a, r[:400])
     r = srv.call('delphi_config', {'command': 'add-searchpath', 'project': DPROJ, 'path': 'lib1%3B..\\..\\fuera'})
     check('T7 ...un %3B (el ";" que parte la lista de msbuild): negado por sus caracteres, nada escrito',
@@ -182,8 +184,11 @@ try:
     # RemoteProfiles\Default_<plataforma>. view decia profileSource none; el juez del valor,
     # el mismo registro que ve este servidor (el mismo contexto que esta bateria)
     import winreg
+    # la version, la de la instalacion que usa el servidor (delphi_installs), no '37.0' a mano: con
+    # otra activa se leia el perfil de otro IDE (revisor de baterias de la 1.27)
+    VER = mc.instalacion_activa(srv.call).get('version', '')
     try:
-        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Embarcadero\BDS\37.0\RemoteProfiles') as k:
+        with winreg.OpenKey(winreg.HKEY_CURRENT_USER, r'Software\Embarcadero\BDS\%s\RemoteProfiles' % VER) as k:
             del_ide = winreg.QueryValueEx(k, 'Default_Linux64')[0]
     except OSError:
         del_ide = ''
@@ -208,6 +213,9 @@ try:
               'no "Missing profile name"' % del_ide,
               mc.rechazado(r) and 'Missing profile name' not in r and 'RemoteHosts' in r
               and 'the profile the IDE keeps for Linux64' in r, r[:600])
+    else:
+        # el salto se VE, no pasa callado (revisor de baterias de la 1.27)
+        print('NOTA: T12 no medido: el IDE de esta maquina no tiene perfil por defecto para Linux64')
 finally:
     srv.cierra()
     print('atomos RTL nuevos de procesos muertos:', mc.atomos_rtl_dejados(antes_atomos))

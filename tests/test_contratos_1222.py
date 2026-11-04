@@ -402,8 +402,10 @@ try:
           and (open(dproj, 'rb').read(), open(dmani, 'rb').read()) == antes, r[:300])
     r = srv.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'Win64',
                                    'path': externo, 'config': 'Nada'}, 240)
+    # (revisor de baterias de la 1.27) rechazado + 'Release' lo cumplia otra negativa que citara la config:
+    # es la de ConfigDelBuild (Lsp.Dproj), con la lista de las que declara
     check('DF5 una config que el proyecto no declara: negada con las que declara, nada escrito',
-          mc.rechazado(r) and 'Release' in r
+          mc.abre(r, 'SR_TEST_CONFIG_FMT') and 'Release' in r
           and (open(dproj, 'rb').read(), open(dmani, 'rb').read()) == antes, r[:300])
     r = srv.call('delphi_config', {'project': dproj, 'command': 'view', 'section': 'deploy'}, 240)
     vista = (mc.como_json(r).get('deployFiles') or {}).get('Win64', [])
@@ -627,7 +629,9 @@ try:
         r2 = com.call('delphi_adb', {'command': 'logcat', 'device': 'CUALQUIERA123'}, 90)
         check('W1 GitRemotes=* y AdbAllowedDevices=*: el comodin vale como en RemoteHosts (ROJO: la lista los'
               ' negaba por su host y su dispositivo)',
-              not mc.es(r1, 'SR_GIT_REMOTE_HOST_FMT') and 'maquina-que-no-existe' in r1
+              # (revisor de baterias de la 1.27) y la orden LLEGO a git: SR_GIT_REMOTE_OFF_FMT tambien cita el
+              # host y pasaba (mutante Lsp.Args GitRemoteDenied `if Allowed = ''` -> `if True`)
+              not mc.es(r1, 'SR_GIT_REMOTE_HOST_FMT') and mc.llego_a_git(r1) and 'maquina-que-no-existe' in r1
               # y en positivo: la orden LLEGO a adb (un "not in" solo pasaba con cualquier otra negativa;
               # quinta ronda de Fable)
               and not mc.es(r2, 'SR_ADB_ALLOWLIST_FMT') and mc.llego_a_adb(r2), (r1[:300], r2[:300]))

@@ -105,10 +105,12 @@ try:
     texto = lee(DFM)
     check('F6 ...to-text lo deja como el IDE: end> pegado', not mc.fallo(r) and b'      end>\r\n' in texto and
           b'      >\r\n' not in texto, r[:250])
+    # los set de F6/F8/F9: exito es no fallar; not mc.rechazado dejaba pasar un INTERNAL (revisor de
+    # baterias de la 1.27)
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'StatusBar1',
                                  'prop': 'Height', 'value': '20'})
     texto = lee(DFM)
-    check('F6 ...y set cambia el Height que habia, uno solo', not mc.rechazado(r) and
+    check('F6 ...y set cambia el Height que habia, uno solo', not mc.fallo(r) and
           texto.count(b'    Height = 20\r\n') == 1 and b'    Height = 19\r\n' not in texto, r[:250])
     r = call('delphi_designer', {'command': 'lint', 'path': DFM})
     check('F6 ...y lint: CLEAN', mc.abre(r, 'SN_DESIGNER_LINT_OK_FMT'), r[:250])
@@ -120,7 +122,7 @@ try:
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'StatusBar1',
                                  'prop': 'Height', 'value': '40'})
     texto = lee(DFM)
-    check('F8 set Height con dos: queda la que guarda el IDE, una, con el valor nuevo', not mc.rechazado(r) and
+    check('F8 set Height con dos: queda la que guarda el IDE, una, con el valor nuevo', not mc.fallo(r) and
           texto.count(b'    Height = 40\r\n') == 1 and b'    Height = 20' not in texto and
           b'    Height = 30' not in texto, r[:250])
     check('F8 ...y su previous es el que contaba, el ultimo (30)', '"previous":"30"' in r.replace(' ', ''), r[:250])
@@ -136,7 +138,7 @@ try:
     check('F9 ...y tree lee la raiz como el IDE', not mc.fallo(r) and 'StatusBar1' in r, r[:250])
     r = call('delphi_designer', {'command': 'set', 'path': DFM, 'component': 'StatusBar1',
                                  'prop': 'Height', 'value': '12'})
-    check('F9 ...y set la edita', not mc.rechazado(r) and b'    Height = 12\r\n' in lee(DFM), r[:250])
+    check('F9 ...y set la edita', not mc.fallo(r) and b'    Height = 12\r\n' in lee(DFM), r[:250])
 
     # ------------------------------------------------------------------ F7
     ESTILOS = os.path.join(JAIL, 'estilos')

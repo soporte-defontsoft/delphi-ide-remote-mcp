@@ -49,7 +49,9 @@ PORT_GUI = mc.puerto_libre()
 PORT_TERM = mc.puerto_libre()
 
 # La jaula es el repo de verdad: las tools de LSP necesitan un proyecto real
-# para tener algo que decir. Esta bateria SOLO LEE - no edita nada aqui.
+# para tener algo que decir. Esta bateria SOLO LEE - no edita nada aqui -, y el
+# repo va de SOLO LECTURA: con escritura sobre el repo vivo, un guardian que
+# volviera atras lo tocaria (revisor de baterias de la 1.27, como round31 R1)
 open(os.path.join(BASE, 'settings.ini'), 'w').write('\n'.join([
     '[Server]',
     'Port=%d' % PORT_GUI,
@@ -57,7 +59,8 @@ open(os.path.join(BASE, 'settings.ini'), 'w').write('\n'.join([
     '',
     '[Workspace.Bandeja]',
     'Token=%s' % TOK,
-    'Roots=%s;%s' % (REPO, BASE),
+    'Roots=%s' % BASE,
+    'ReadOnlyRoots=%s' % REPO,
     '',
 ]))
 
@@ -179,8 +182,13 @@ try:
           'ninguno: T5b no estaria midiendo nada')
     subprocess.run(['taskkill', '/F', '/PID', str(gui.pid)],
                    capture_output=True, timeout=60)
-    time.sleep(3)
-    vivos = [p for p in hijos if vivo(p)]
+    # se ESPERA a que se vayan (hasta 15 s), no un sleep de 3 a ojo: con la maquina cargada un hijo que
+    # tardaba en irse daba un rojo falso (revisor de baterias de la 1.27)
+    for _ in range(15):
+        vivos = [p for p in hijos if vivo(p)]
+        if not vivos:
+            break
+        time.sleep(1)
     check('T5b cerrada a lo bruto no deja DelphiLSP huerfanos',
           not vivos, 'siguen vivos: %s' % vivos)
 except NoArranca:

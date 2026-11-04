@@ -9,11 +9,18 @@ VICTIM = os.path.join(BASE, 'victima')
 os.makedirs(MINE)
 os.makedirs(VICTIM)
 MARK = 'UJaulaVictima'
+# la unidad suelta de dentro (se crea abajo): la victima la LISTA por su ruta absoluta, para que el
+# .dproj de fuera la sirviera de verdad si un recorredor cruzara el enlace; sin eso (solo un
+# DCCReference, sin .dpr) no la servia ni cruzando y la ausencia de abajo no podia fallar (revisor
+# del diff de la cola de la 1.27)
+SUELTA = os.path.join(MINE, 'suelta')
+USUELTA = os.path.join(SUELTA, 'USuelta.pas')
 files = {
     MARK + '.pas': 'unit ' + MARK + ';\ninterface\nuses ULocal;\nimplementation\nprocedure Otra; begin Saludo; end;\nend.\n',
     'JaulaVictimaTests.dpr': 'program JaulaVictimaTests;\n{$APPTYPE CONSOLE}\nbegin end.\n',
     'JaulaVictima.dfm': 'object JaulaVictima: TForm\n  OnClick = Saludo\nend\n',
     'JaulaVictima.dproj': '<Project><ItemGroup><DCCReference Include="USuelta.pas" /></ItemGroup></Project>',
+    'JaulaVictima.dpr': "program JaulaVictima;\nuses\n  USuelta in '%s';\nbegin end.\n" % USUELTA,
 }
 for n, t in files.items():
     open(os.path.join(VICTIM, n), 'w', encoding='utf-8').write(t)
@@ -49,18 +56,31 @@ try:
         check(tool + ': responde sin nombres ni contenido de fuera, y con lo de dentro (%s)' % LO_LOCAL[tool],
               not mc.sin_respuesta(r) and not mc.fallo(r) and LO_LOCAL[tool] in r and
               MARK not in r and 'JaulaVictima' not in r and 'MARCA_PRIVADA' not in r, r)
-    SUELTA = os.path.join(MINE, 'suelta')
     os.makedirs(SUELTA)
-    USUELTA = os.path.join(SUELTA, 'USuelta.pas')
     open(USUELTA, 'w').write('unit USuelta;\ninterface\nimplementation\nend.\n')
     ESPIA = os.path.join(SUELTA, 'enlace')
     check('fixture proyecto enlazado para unidad suelta', mc.junction(ESPIA, VICTIM))
+    # (revisor de baterias de la 1.27) el .dproj local de la raiz esta ENCIMA de suelta\ y la servia: la
+    # respuesta era la misma con el de fuera tomado o no (symbols no nombra el proyecto), y la ausencia no
+    # podia fallar. Apartado, lo que se mide es que el de fuera NO la sirve: LSP-021 (ningun .dproj la sirve)
+    DPROJ_LOCAL = os.path.join(MINE, 'JaulaLocal.dproj')
+    os.rename(DPROJ_LOCAL, DPROJ_LOCAL + '.aparte')
     try:
+        try:
+            r = srv.call('delphi_symbols', {'path': USUELTA})
+            check('unidad suelta no expone el nombre del proyecto de fuera, ni la sirve (LSP-021)',
+                  not mc.fallo(r) and not mc.sin_respuesta(r) and 'JaulaVictima' not in r and
+                  mc.es(r, 'SN_LSP_NO_SETTINGS_WARNING'), r)
+        finally:
+            os.rmdir(ESPIA)
+        # el control: un .dproj de DENTRO que la lista SI la sirve, y el aviso se va
+        open(os.path.join(SUELTA, 'SueltaLocal.dproj'), 'w').write(
+            '<Project><ItemGroup><DCCReference Include="USuelta.pas" /></ItemGroup></Project>')
         r = srv.call('delphi_symbols', {'path': USUELTA})
-        check('unidad suelta no expone el nombre del proyecto de fuera', not mc.fallo(r) and
-              not mc.sin_respuesta(r) and 'JaulaVictima' not in r, r)
+        check('control: con un .dproj de dentro que la lista, sin LSP-021',
+              not mc.fallo(r) and not mc.sin_respuesta(r) and not mc.es(r, 'SN_LSP_NO_SETTINGS_WARNING'), r)
     finally:
-        os.rmdir(ESPIA)
+        os.rename(DPROJ_LOCAL + '.aparte', DPROJ_LOCAL)
     check('victima intacta tras las tools',
           sorted(os.listdir(VICTIM)) == sorted(files) and all(open(os.path.join(VICTIM, n), 'rb').read() == t
                                                    for n, t in before.items()))

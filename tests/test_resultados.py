@@ -1781,7 +1781,8 @@ try:
           open(DPR131, 'rb').read() == ANT131 and mc.es(t, 'SN_REFERENCIAS_A_LO_BORRADO_FMT') and
           mc.es(t, 'SN_REFERENCIAS_ILEGIBLES_FMT') and 'Lk131.dproj (' in t, t[-600:])
 
-    # E132 un \\?\UNC\ leido de un .dpr no se resuelve en el disco (21 s de SMB)
+    # E132 un \\?\UNC\ leido de un .dpr no se resuelve en el disco (21 s de SMB). El host, de mentira:
+    # TEST-NET-1 (era 10.255.255.1, una red privada que puede existir; revisor de baterias de la 1.27)
     D132 = os.path.join(JAIL, 'e132')
     res, sc, t = llama('delphi_create', {'kind': 'project-console', 'name': 'Unc132', 'dir': D132})
     DPR132 = os.path.join(D132, 'Unc132.dpr')
@@ -1789,7 +1790,7 @@ try:
     llama('delphi_create', {'kind': 'unit', 'name': 'ULocal', 'project': DPROJ132})
     txt132 = open(DPR132, encoding='utf-8-sig').read()
     open(DPR132, 'w').write(txt132.replace(
-        'uses', "uses\n  ULejos in '\\\\?\\UNC\\10.255.255.1\\share\\a~1\\ULejos.pas',", 1))
+        'uses', "uses\n  ULejos in '\\\\?\\UNC\\192.0.2.1\\share\\a~1\\ULejos.pas',", 1))
     t0 = time.time()
     res, sc, t = llama('delphi_move', {'path': os.path.join(D132, 'ULocal.pas'),
                                        'dest': os.path.join(D132, 'ULocal2.pas')})

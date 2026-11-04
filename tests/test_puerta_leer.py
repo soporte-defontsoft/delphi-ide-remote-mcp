@@ -161,6 +161,10 @@ try:
     R4 = {}
     for m in ('m4a', 'm4b', 'm4c', 'p4a', 'p4b', 'p4c'):
         R4[m] = call('delphi_move', {'path': os.path.join(MINE, m), 'dest': os.path.join(MINE, 'sub4', m)})
+    # (revisor de baterias de la 1.27) los "no sale en la nota" de abajo pasaban con un move que fallara
+    # (una respuesta de error no lleva la nota): los seis movieron de verdad
+    check('L4 fixture: los seis delphi_move movieron', all(mc.abre(R4[m], 'SK_MOVE_MOVIDO_FMT') for m in R4),
+          {m: R4[m][:200] for m in R4 if not mc.abre(R4[m], 'SK_MOVE_MOVIDO_FMT')})
     NOTA23, NOTA21 = mc.id_de('SN_REFERENCIAS_CRUZAN_FMT'), mc.id_de('SN_REUBICA_NO_LLEGA_FMT')
     ids4 = {m: [i for i in mc.ids(r) if i in (NOTA23, NOTA21)] for m, r in R4.items()}
     check('L4 un {$I} que sale de la raiz no sale en la nota, exista lo de fuera (m4a) o no (m4b)',

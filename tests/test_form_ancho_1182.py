@@ -58,17 +58,19 @@ def lee(p, cod):
 
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='form-ancho', t=120)
+# exito es no fallar: not mc.rechazado dejaba pasar un INTERNAL despues de escribir (revisor de
+# baterias de la 1.27)
 try:
     p = par('UW1', 'utf16')
     r = srv.call('delphi_edit', {'path': p, 'old': "  Caption = 'Ancho'", 'new': "  Caption = 'Ancho1'"})
     check('W1 delphi_edit sobre un .dfm UTF-16: escribe y dice DSGN-121',
-          not mc.rechazado(r) and "'Ancho1'" in lee(p, 'utf16') and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT'), r[:400])
+          not mc.fallo(r) and "'Ancho1'" in lee(p, 'utf16') and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT'), r[:400])
 
     p = par('UW2', 'utf16')
     r = srv.call('delphi_edit', {'path': p, 'edits': [{'old': "  Caption = 'Ancho'", 'new': "  Caption = 'Ancho2'"},
                                                      {'old': '  Left = 0', 'new': '  Left = 4'}]})
     check('W2 la tanda (edits) sobre un .dfm UTF-16: escribe y dice DSGN-121, una vez',
-          not mc.rechazado(r) and "'Ancho2'" in lee(p, 'utf16') and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT') and
+          not mc.fallo(r) and "'Ancho2'" in lee(p, 'utf16') and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT') and
           r.count('UW2.dfm is a text form') == 1, r[:400])
 
     p = par('UW3', 'utf16')
@@ -78,18 +80,18 @@ try:
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid})
     check('W3 delphi_changeset que edita un .dfm UTF-16: escribe y dice DSGN-121, una vez',
-          not mc.rechazado(r) and "'Ancho3'" in lee(p, 'utf16') and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT') and
+          not mc.fallo(r) and "'Ancho3'" in lee(p, 'utf16') and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT') and
           r.count('UW3.dfm is a text form') == 1, r[:400])
 
     p = par('UW4', 'utf32')
     r = srv.call('delphi_edit', {'path': p, 'old': "  Caption = 'Ancho'", 'new': "  Caption = 'Ancho4'"})
     check('W4 delphi_edit sobre un .dfm UTF-32: escribe y dice DSGN-121',
-          not mc.rechazado(r) and "'Ancho4'" in lee(p, 'utf32') and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT'), r[:400])
+          not mc.fallo(r) and "'Ancho4'" in lee(p, 'utf32') and mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT'), r[:400])
 
     p = par('UW5', 'utf8bom')
     r = srv.call('delphi_edit', {'path': p, 'old': "  Caption = 'Ancho'", 'new': "  Caption = 'Ancho5'"})
     check('W5 el control: delphi_edit sobre un .dfm UTF-8 con BOM NO dice DSGN-121',
-          not mc.rechazado(r) and "'Ancho5'" in lee(p, 'utf8bom') and not mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT'), r[:400])
+          not mc.fallo(r) and "'Ancho5'" in lee(p, 'utf8bom') and not mc.es(r, 'SN_DSGN_FORM_ANCHO_FMT'), r[:400])
 
     p = par('UW6', 'utf16')
     r = srv.call('delphi_designer', {'path': p, 'command': 'set', 'component': 'FormW', 'prop': 'Caption',
@@ -103,7 +105,7 @@ try:
                                                      {'old': '  Left = 0', 'new': '  Left = 4'},
                                                      {'old': '  Top = 0', 'new': '  Top = 4'}]})
     check('W7 una tanda de 3 entradas con avisos *** (el parser) sobre un .dfm UTF-16: la nota UNA vez',
-          not mc.rechazado(r) and "'Ancho7" in lee(p, 'utf16') and r.count('***') >= 1 and
+          not mc.fallo(r) and "'Ancho7" in lee(p, 'utf16') and r.count('***') >= 1 and
           r.count('UW7.dfm is a text form') == 1, (r.count('***'), r.count('UW7.dfm is a text form'), r[:600]))
 
     # W8 dos forms con el mismo nombre en dos carpetas, en un changeset: dos notas
@@ -122,7 +124,7 @@ try:
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid})
     check('W8 un changeset con a\\Unit1.dfm y b\\Unit1.dfm (UTF-16): DOS notas, una por carpeta',
-          not mc.rechazado(r) and r.count('Unit1.dfm is a text form') == 2 and
+          not mc.fallo(r) and r.count('Unit1.dfm is a text form') == 2 and
           all(any((sub + '\\Unit1.dfm: ') in L and 'is a text form' in L for L in r.split('\n'))
               for sub in ('a', 'b')), r[:800])
 
@@ -136,7 +138,7 @@ try:
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid})
     check('W9 un changeset de 2 pasos con avisos *** (el parser) sobre un .dfm UTF-16: la nota UNA vez',
-          not mc.rechazado(r) and "'Ancho9" in lee(p, 'utf16') and r.count('***') >= 1 and
+          not mc.fallo(r) and "'Ancho9" in lee(p, 'utf16') and r.count('***') >= 1 and
           r.count('UW9.dfm is a text form') == 1, (r.count('***'), r.count('UW9.dfm is a text form'), r[:800]))
 finally:
     srv.cierra()

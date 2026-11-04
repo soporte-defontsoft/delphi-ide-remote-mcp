@@ -14,7 +14,7 @@ needs more of that desktop than a test does.
 
 With the 1.11.1 fix (Lsp.Sandbox.ConcedeAPaquetes grants the AC ACE to the
 server's window station and desktop before launching) the test runs and stays
-confined. The mutant that removes the grant (muta_111.py sin_concede_paquetes)
+confined. The mutant that removes the grant (skip Lsp.Sandbox.ConcedeAPaquetes before launching; muta_111.py is gone)
 makes this battery red with 0xC0000142 - which also proves the desktop is
 genuinely restricted (it does not pass for the wrong reason).
 

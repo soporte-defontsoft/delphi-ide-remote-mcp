@@ -67,7 +67,10 @@ try:
         c = json.loads(t3) if t3.startswith('{') else {}
         check('V39 un offset mas alla del final: lista vacia, hasMore false', c.get('results') == [] and c.get('hasMore') is False, t3[:200])
         t4 = call('delphi_docs', {'command': 'search', 'query': 'TStringList', 'limit': 99})
-        check('V39 limit sigue con su tope de 25', json.loads(t4).get('shown', 0) <= 25, t4[:200])
+        # el tope, no 'como mucho': <= 25 pasaba con limit ignorado (10 por defecto) o con 0 (revisor de
+        # baterias de la 1.27). Con mas de 25 resultados, 25 justos
+        d4 = json.loads(t4)
+        check('V39 limit sigue con su tope de 25', d4.get('total', 0) > 25 and d4.get('shown') == 25, t4[:200])
 
     # V44 - delphi_search: contexto
     d = json.loads(call('delphi_search', {'root': os.path.join(RAIZ, 'UNo.pas'), 'query': 'AGUJA', 'context': 2}))
@@ -142,9 +145,12 @@ try:
     t = git('log', grep='aguja')
     check('V45 log grep: por el mensaje, sin distinguir mayusculas', 'Primero con AGUJA' in t and 'Segundo' not in t, t[:300])
     t = git('log', grep='AG.JA')
-    check('V45 log grep es texto, no una expresion', 'Primero' not in t, t[:300])
+    # git contesto (exit=0): "no sale Primero" pasaba tambien con la orden negada (revisor de baterias de la 1.27)
+    check('V45 log grep es texto, no una expresion',
+          mc.llego_a_git(t) and not mc.fallo(t) and 'Primero' not in t, t[:300])
     t = git('log', grep='x" --output=fuera.txt "')
-    check('V45 log grep con comillas sigue siendo un solo argumento', not os.path.exists(os.path.join(REPO, 'fuera.txt')), t[:300])
+    check('V45 log grep con comillas sigue siendo un solo argumento',
+          mc.llego_a_git(t) and not mc.fallo(t) and not os.path.exists(os.path.join(REPO, 'fuera.txt')), t[:300])
     t = git('status', grep='x')
     check('V45 grep no va con otro comando', mc.es(t, 'SR_GIT_NO_VA_CON_COMANDO_FMT'), t[:200])
     # add action=update
@@ -386,7 +392,9 @@ try:
     j = renombra('Otro')
     check('V132b un metodo no entra en el ambito de nadie: sin RENAME-023', not mc.es(' '.join(j.get('blockers', [])), 'SR_RENAME_CAMBIA_DESTINO_FMT') and j.get('applicable') is True, str(j)[:500])
     j = renombra('Oculto')
-    check('V132b una rutina solo de implementation tampoco', not mc.es(' '.join(j.get('blockers', [])), 'SR_RENAME_CAMBIA_DESTINO_FMT'), str(j)[:500])
+    # aplicable, como el metodo: sin respuesta, "sin RENAME-023" pasaba igual (revisor de baterias de la 1.27)
+    check('V132b una rutina solo de implementation tampoco',
+          not mc.es(' '.join(j.get('blockers', [])), 'SR_RENAME_CAMBIA_DESTINO_FMT') and j.get('applicable') is True, str(j)[:500])
     j = renombra('MarcarNuevo', 'NombreLibre')
     check('V132b un nombre que nadie usa: aplicable', j.get('applicable') is True and 'retargeted' not in j, str(j)[:500])
     # sin las dos que cambian, el rename es aplicable y compila: los demas siguen con su destino
@@ -450,8 +458,10 @@ try:
     i, c = donde(UDEF, 'procedure Larga', 'Larga')
     j = mc.como_json(call('delphi_references', {'path': UDEF, 'line': i, 'character': c}, t=240))
     textos = json.dumps(j.get('confirmed', ''))
+    # el homonimo rechazado, por su clave de verdad: 'rejectedCount' no lo emite el servidor (Lsp.References
+    # escribe rejectedHomonyms) y get(..., 1) lo daba siempre por bueno (revisor de baterias de la 1.27)
     check('V224 references confirma la llamada, y no la de otra unidad',
-          'UDef.Larga' in textos and 'UOtra.Larga' not in textos and j.get('rejectedCount', 1) >= 1, str(j)[:500])
+          'UDef.Larga' in textos and 'UOtra.Larga' not in textos and j.get('rejectedHomonyms', 0) >= 1, str(j)[:500])
     i, c = donde(UUSA, 'UDef.Larga', 'Larga')
     j = mc.como_json(call('delphi_rename_symbol', {'path': UUSA, 'line': i, 'character': c, 'newname': 'LargaNueva'}, t=240))
     rej = json.dumps(j.get('lookalikes', ''))
@@ -545,6 +555,8 @@ shutil.copytree(os.path.join(os.path.dirname(HERE), 'node'), os.path.join(SRV, '
 SCRATCH = os.path.join(BASE, 'scratch')
 os.makedirs(SCRATCH)
 STUB = mc.paclient_falso('capacidades_125')  # el de la casa (revisor de baterias de la 1.27)
+REMOTERUN_SUB = mc.cadena_del_fuente('Server/Lsp.RemoteRun.pas', 'REMOTERUN_SUB')
+REMOTERUN_VER = mc.cadena_del_fuente('Server/Lsp.RemoteRun.pas', 'REMOTERUN_VER_PREFIJO')
 LOG = os.path.join(BASE, 'paclient.log')
 for perfil in ('caido', 'otro', 'vivo'):
     ad, host = mc.appdata_perfil(BASE, perfil, '127.0.0.1')
@@ -588,8 +600,9 @@ try:
     check('V42 sin conexion no se intenta subir el nodo: UNA espera de paclient, no dos',
           len(pet) == 1 and pet[0].startswith('--get='), pet)
     check('V42 la carpeta de esa comprobacion no se queda en la casa',
-          not glob.glob(os.path.join(SRV, mc.TEMPORALES, 'remoterun', 'ver-*')),
-          glob.glob(os.path.join(SRV, mc.TEMPORALES, 'remoterun', '*')))
+          # sus nombres, del fuente (mc.cadena_del_fuente): a mano no caian si cambiaban
+          not glob.glob(os.path.join(SRV, mc.TEMPORALES, REMOTERUN_SUB, REMOTERUN_VER + '*')),
+          glob.glob(os.path.join(SRV, mc.TEMPORALES, REMOTERUN_SUB, '*')))
     r = uno.call('delphi_desktop', {'command': 'tap', 'profile': 'caido', 'x': '1', 'y': '1'}, 120)
     check('V42 un gesto contra ese destino: su negativa, con lo que dijo paclient', mc.es(r, 'SR_FETCHTARGET_FAIL_FMT') and 'E0003' in r, r[:300])
 

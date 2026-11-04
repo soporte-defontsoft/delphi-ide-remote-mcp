@@ -60,8 +60,10 @@ try:
     check('D1 definition de la llamada: el cuerpo de Saluda en UComun (linea0 4)',
           f1 == 'UComun.pas' and l1 == 4, str(j1)[:300])
     f2, l2, j2 = destino('implementation')
+    # (revisor de baterias de la 1.27) con D1 caido, dos respuestas vacias eran "iguales" (('', None)): el destino
+    # es el de D1, en UComun
     check('D2 kind=implementation = definition, no el metodo que contiene la llamada',
-          (f2, l2) == (f1, l1) and f2 != 'UsoZ.pas', str(j2)[:300])
+          (f2, l2) == (f1, l1) and f2 == 'UComun.pas', str(j2)[:300])
     f3, l3, j3 = destino('declaration')
     check('D3 kind=declaration: la de la interface de UComun (linea0 2)',
           f3 == 'UComun.pas' and l3 == 2, str(j3)[:300])

@@ -10,8 +10,9 @@ and each client's notification queue is bounded (200, oldest first).
 
   L1  warming two DIFFERENT projects concurrently is parallel, not serial
       (wall for both together well under two sequential warms)
-  L2  the settings cache does not go stale: touching the .dproj (add a search
-      path) re-fabricates and the LSP keeps answering on the next call
+  L2  touching the .dproj (add a search path) leaves the LSP answering on the
+      next call (que la cache se invalida lo miden J1/J2 de
+      test_json_nuestro_1202: symbols contesta sin ajustes)
   L3  the warm client answers symbols correctly after all of it
 
 Usage:  python tests/test_round19.py [path-to-DelphiLspMcp.exe]
@@ -103,8 +104,10 @@ try:
     os.makedirs(sub)
     r = cli.call('delphi_config', {'project': dpr['WarmA'][:-4] + '.dproj',
                                    'command': 'add-searchpath', 'path': sub})
+    # solo ADDED: la carpeta es nueva, y PRESENT es justo un .dproj que NO se toco (revisor de
+    # baterias de la 1.27)
     check('L2 add-searchpath toca el .dproj',
-          mc.abre(r, 'SN_CONFIG_PATH_ADDED_FMT') or mc.abre(r, 'SN_CONFIG_PATH_PRESENT_FMT'), r[:160])
+          mc.abre(r, 'SN_CONFIG_PATH_ADDED_FMT'), r[:160])
     r = cli.call('delphi_symbols', {'path': dpr['WarmA']})
     # (revisor de baterias, 18-oct-2026) symbols contesta SIN ajustes: esto no ve
     # si la cache se invalido - eso lo miden J1/J2 de test_json_nuestro_1202, con

@@ -95,7 +95,8 @@ try:
     P = consola('PBloq', 'F2039Demo', cuerpo='  NoExiste := 1;\r\n')
     j = compila(P, 'normal')
     check('un E2003 en una carpeta F2039Demo: sin reintentos ni nota de binario abierto',
-          j.get('success') is False and 'lockedRetries' not in j and 'lockedOutputNote' not in j, str(j)[:400])
+          j.get('success') is False and any('E2003' in e for e in j.get('errors') or []) and
+          'lockedRetries' not in j and 'lockedOutputNote' not in j, str(j)[:400])  # su E2003, no otro fallo (revisor de baterias de la 1.27)
 
     # lo que no es ASCII, tal cual lo dijo dcc
     P = consola('PAcc', 'Acc', "{$MESSAGE WARN 'año y acción'}\r\n")

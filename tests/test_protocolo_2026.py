@@ -113,8 +113,10 @@ try:
           st == 200 and sin_sesion(h) and len(r.get('tools', [])) > 10 and r.get('resultType') == 'complete' and
           r.get('ttlMs', -1) >= 0 and r.get('cacheScope') == 'private', str(r)[:300])
     st2, _, m2 = cli.moderna('tools/list')
+    # (revisor de baterias de la 1.27) dos listas vacias eran "el mismo orden": la segunda trae las tools
+    nombres2 = [t['name'] for t in resultado(m2).get('tools', [])]
     check('T2 tools/list en orden determinista',
-          [t['name'] for t in r.get('tools', [])] == [t['name'] for t in resultado(m2).get('tools', [])])
+          len(nombres2) > 10 and [t['name'] for t in r.get('tools', [])] == nombres2, '%s %s' % (st2, str(m2)[:200]))
     st, h, m = cli.moderna('tools/call', args)
     r = resultado(m)
     check('T3 tools/call sin sesion: resultType, serverInfo y su contenido',
@@ -134,7 +136,11 @@ try:
           st == 404 and error(m).get('code') == -32601, '%s %s' % (st, m))
     # un error de la TOOL no es un error del protocolo: su 200 de siempre
     st, h, m = cli.moderna('tools/call', {'name': 'delphi_read', 'arguments': {'path': os.path.join(BASE, 'no.txt')}})
-    check('T9 lo que niega una tool sigue siendo un 200', st == 200, '%s %s' % (st, m))
+    # (revisor de baterias de la 1.27) el 200 solo no decia que la tool NEGO: un exito tambien es 200. Es
+    # una negativa de la tool, dentro del result (isError), no un error del protocolo
+    check('T9 lo que niega una tool sigue siendo un 200',
+          st == 200 and not error(m) and resultado(m).get('isError') is True and mc.rechazado(mc.texto(m)),
+          '%s %s' % (st, m))
 
     # I - identidad: el nombre de cada peticion, nunca el operador
     def llama(nombre, tool, argumentos):

@@ -70,7 +70,9 @@ try:
     r = srv.call('delphi_config', {'command': 'remove-searchpath', 'project': dproj, 'platform': 'Android64',
                                    'path': lib})
     check('P2 (guarda) quitar si: remove-searchpath con una plataforma no declarada no se niega por eso',
-          not mc.es(r, 'SR_BUILD_PLATAFORMA_NO_DECLARADA_FMT'), r[:200])
+          mc.abre(r, 'SN_CONFIG_PATH_ABSENT_FMT') and not mc.es(r, 'SR_BUILD_PLATAFORMA_NO_DECLARADA_FMT'), r[:200])
+    # ...llega al comando: su respuesta es la de quitar una ruta que no esta (SN_CONFIG_PATH_ABSENT_FMT); "no BUILD-046" pasaba con
+    # cualquier otra negativa o sin respuesta (revisor de baterias de la 1.27)
 
     textos = {}
     for cmd, args in [('add-platform', {}), ('remove-platform', {}), ('add-searchpath', {'path': lib}),

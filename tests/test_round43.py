@@ -59,7 +59,11 @@ PORT = mc.puerto_libre()
 # unico que mide esta bateria. El dispositivo y el proyecto remoto son
 # ficticios: no hace falta que existan, porque la ruta se comprueba ANTES de
 # salir a buscarlos - y eso tambien es parte del contrato.
-DEV = '127.0.0.1:5555'
+# De TEST-NET-1 (192.0.2.1), no 127.0.0.1:5555: esa es la direccion de adb por TCP de un
+# emulador o una VM con el puerto reenviado, y W5b-W5d llegan a adb de verdad: con uno
+# conectado ahi, la bateria capturaba SU pantalla. adb no conecta solo (-s sin connect), asi
+# que la negativa es la misma y al momento (revisor de baterias de la 1.27)
+DEV = '192.0.2.1:5555'
 open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     '[Server]', 'BindIP=127.0.0.1', '',
     '[Workspace.R43]', 'Token=%s' % TOK, 'Roots=%s' % JAIL,

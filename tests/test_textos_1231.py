@@ -64,7 +64,10 @@ try:
     check('X4 un fichero con extension a un dest sin ella: MOVE-025 (V139)',
           mc.es(r, 'SN_MOVE_DESTINO_SIN_EXTENSION_FMT') and 'UMain.fmx' in r, r[:400])
     r = srv.call('delphi_move', {'path': fmx, 'dest': os.path.join(JAIL, 'otra.fmx'), 'copy': True})
-    check('X4 ...y no con un dest con extension', not mc.es(r, 'SN_MOVE_DESTINO_SIN_EXTENSION_FMT'), r[:300])
+    # sobre la copia que OCURRIO: una negativa tampoco traia MOVE-025 (revisor de baterias de la 1.27)
+    check('X4 ...y no con un dest con extension',
+          not mc.fallo(r) and os.path.isfile(os.path.join(JAIL, 'otra.fmx')) and
+          not mc.es(r, 'SN_MOVE_DESTINO_SIN_EXTENSION_FMT'), r[:300])
 
     # la misma cola bajo una unidad que no se sirve (q no es la del sandbox de las baterias)
     letra = os.path.splitdrive(JAIL)[0][0].lower()

@@ -94,6 +94,13 @@ r = call('delphi_workspace', {})
 check('M5b no se enmascara de mas: la respuesta normal sigue siendo JSON '
       'valido y sin srvsrv',
       'srvsrv' not in r and r.lstrip().startswith('{'), r[:200])
+# M5b no lleva ningun "<letra>: " que la regla pudiera tapar, asi que pasaba sin ella. El control:
+# una negativa que ECHOA una letra con dos puntos y un espacio detras, que no es una unidad
+# (Lsp.Mascara, forma B2: tras los dos puntos un espacio o un digito se deja) (revisor de
+# baterias de la 1.27)
+r = call('delphi_test', {'command': 'opcion C: haz esto'})
+check('M5c una letra con dos puntos y un ESPACIO detras no es una unidad: el eco sale intacto',
+      mc.abre(r, 'SR_TEST_CMD_FMT') and 'opcion C: haz esto' in r and 'srvc:' not in r, r[:200])
 
 # M6 (1.10.0): dentro de un JSON cada barra va doble, asi que \\x es UNA barra
 # (una ruta que cuelga de la raiz de la unidad) y la ruta de red es \\\\host.

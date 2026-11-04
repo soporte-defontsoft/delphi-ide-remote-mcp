@@ -742,18 +742,21 @@ def idioma_rtl(exe, idioma):
             winreg.DeleteValue(k, nombre)
 
 
-def raiz_del_ide(bds='37.0'):
+def raiz_del_ide(bds=None):
     """La carpeta del IDE sin la barra final, leida del registro: lo que el
-    servidor le dice al renderizador con --bdsroot."""
+    servidor le dice al renderizador con --bdsroot. Sin bds, la de la version
+    activa (version_activa)."""
+    bds = bds or version_activa()
     with winreg.OpenKey(winreg.HKEY_CURRENT_USER, 'Software\\Embarcadero\\BDS\\%s' % bds) as k:
         return winreg.QueryValueEx(k, 'RootDir')[0].rstrip('\\')
 
 
-def juez_en_idioma(render, form, idioma, bds='37.0'):
+def juez_en_idioma(render, form, idioma, bds=None):
     """Lo que dice el renderizador RENDER, lanzado a mano y con su RTL en ese
     idioma, al cargar FORM como lo juzga el servidor. A mano: el idioma de un
     exe se elige en HKCU (idioma_rtl), que dentro del contenedor no se lee y
     alli no llegaria; dentro habla el de Windows (V65 de la 1.24)."""
+    bds = bds or version_activa()
     with idioma_rtl(render, idioma):
         p = subprocess.run([render, '--path', form, '--writeback', 'on', '--timeout', '120000', '--bds', bds,
                             '--bdsroot', raiz_del_ide(bds)], capture_output=True, timeout=240,
@@ -1209,7 +1212,7 @@ def host_de_perfil(nombre):
     """El host de un perfil REAL del IDE, leido de su .profile (solo esa clave:
     el fichero lleva la contrasena del PAServer). Una direccion de la red no se
     escribe en una bateria: el repo es publico."""
-    p = os.path.join(os.environ['APPDATA'], 'Embarcadero', 'BDS', '37.0', nombre + '.profile')
+    p = os.path.join(os.environ['APPDATA'], 'Embarcadero', 'BDS', version_activa(), nombre + '.profile')
     with open(p, encoding='utf-8-sig') as f:
         m = re.search(r'<Profile_host>([^<]+)</Profile_host>', f.read())
     return m.group(1) if m else ''
@@ -1322,6 +1325,26 @@ def instalacion_activa(call):
     mano en seis baterias, y otras cinco componian Program Files (r5-L4)."""
     return next((i for i in (como_json(call('delphi_installs', {})) or {}).get('installs', [])
                  if i.get('active')), {})
+
+
+_VERSION_ACTIVA = []
+
+
+def version_activa():
+    """La version de la instalacion que usa el servidor ('37.0'), preguntada UNA vez por
+    bateria a un servidor de prueba (delphi_installs, instalacion_activa): para quien la
+    necesita antes de arrancar el suyo o sin servidor. '37.0' iba a mano por defecto en
+    raiz_del_ide, juez_en_idioma y host_de_perfil (P5 del revisor del paisaje de la 1.27,
+    que solo se habia hecho en las baterias). '' si no hay instalacion."""
+    if not _VERSION_ACTIVA:
+        base = carpeta('version-activa-%d' % os.getpid())
+        s = Stdio(copia_exe(base), entorno({'DELPHI_MCP_ROOTS': base}), nombre='version-activa', t=120)
+        try:
+            _VERSION_ACTIVA.append(str(instalacion_activa(s.call).get('version', '')))
+        finally:
+            s.cierra()
+        borra(base)
+    return _VERSION_ACTIVA[0]
 
 
 def raiz_de_instalacion(inst):
@@ -1537,6 +1560,18 @@ def entero_del_fuente(rel, nombre):
     if not m:
         raise RuntimeError('la constante %s no esta en %s' % (nombre, rel))
     return int(m.group(1))
+
+
+def cadena_del_fuente(rel, nombre):
+    """La constante de TEXTO NOMBRE de un fuente del servidor, rel desde src, por EL lector de
+    constantes Pascal (constantes): el gemelo de entero_del_fuente para un nombre de carpeta o
+    un prefijo que una bateria busca (revisor de baterias de la 1.27: capacidades_125 V42
+    llevaba 'remoterun' a mano). Una que no esta es un fallo de la BATERIA."""
+    with open(os.path.join(REPO, 'src', *rel.split('/')), encoding='utf-8-sig') as fh:
+        v = constantes(fh.read()).get(nombre)
+    if v is None:
+        raise RuntimeError('la constante %s no esta en %s' % (nombre, rel))
+    return v
 
 
 def id_de(nombre):

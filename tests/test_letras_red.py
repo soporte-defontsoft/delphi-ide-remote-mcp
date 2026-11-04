@@ -480,7 +480,9 @@ check('U6 (control) el vault del entorno se lee en el modo local abierto',
 local({'DELPHI_MCP_ROOTS': JAIL2, 'DELPHI_MCP_VAULT_PATH': VAULTDIR, 'DELPHI_MCP_READONLY_ROOTS': UNC_ENTORNO},
       'lr-vault-cerrado', JAIL2, vault=True)
 check('U6 ...y en el modo local cerrado no se lee: no hay vault',
-      'SECRETO-LR' not in ULTIMO['vault'] and mc.fallo(ULTIMO['vault']), ULTIMO['vault'][:200])
+      # su negativa, no "cualquier fallo": mc.fallo pasaba con el servidor caido (G5 del revisor de
+      # baterias de la 1.27). El modo cerrado no tiene vault (Lsp.Settings.VaultPath)
+      'SECRETO-LR' not in ULTIMO['vault'] and mc.abre(ULTIMO['vault'], 'SR_VAULT_UNSET'), ULTIMO['vault'][:200])
 
 t, _ = local({'DELPHI_MCP_TOKEN': 'unc-lr'}, 'lr-token-cerrado', JAIL2)
 check('U7 un cliente local con el token de un workspace CERRADO queda cerrado (no lee la maquina)',

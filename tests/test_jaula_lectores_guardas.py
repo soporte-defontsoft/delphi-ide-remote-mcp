@@ -25,9 +25,14 @@ check('fixture junction a victima de fuera', mc.junction(LINK, OUT))
 try:
     STYLE = os.path.join(MINE, 'Local.style')
     open(STYLE, 'w').write("object Local: TLayout\n StyleName = 'local'\nend\n")
+    # (revisor de baterias de la 1.27) el control: un form de DENTRO con un lookup que el estilo no tiene SI
+    # sale en lookupsWithoutStyle; sin el, "no muestra nombres de fuera" pasaba con un lint que no miraba nada
+    open(os.path.join(MINE, 'ULocalGuarda.fmx'), 'w', encoding='utf-8-sig', newline='').write(
+        "object F: TForm\r\n  object B: TButton\r\n    StyleLookup = 'LocalGuardaLookup'\r\n  end\r\nend\r\n")
     r = srv.call('delphi_styles', {'command': 'lint', 'path': STYLE, 'project': MINE})
-    check('Styles: filtro previo no muestra nombres de fuera', not mc.fallo(r) and
-          not mc.sin_respuesta(r) and 'JaulaVictima' not in r, r)
+    check('Styles: filtro previo no muestra nombres de fuera, y si los de dentro', not mc.fallo(r) and
+          not mc.sin_respuesta(r) and 'JaulaVictima' not in r and
+          'LocalGuardaLookup' in str(mc.como_json(r).get('lookupsWithoutStyle')), r)
     DELETE = os.path.join(MINE, 'borrar')
     os.makedirs(DELETE)
     DLINK = os.path.join(DELETE, 'enlace')

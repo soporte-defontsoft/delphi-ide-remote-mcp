@@ -442,4 +442,5 @@ check('I12c search wholeword: "Col" no es una palabra entera dentro de %s (y %s 
       j.get('total') == 0 and j2.get('total') == 1, (str(j)[:200], str(j2)[:200]))
 
 srv.cierra()
+mc.borra(BASE)  # su carpeta, con su copia del exe (revisor de baterias de la 1.27)
 mc.fin('identificadores battery')

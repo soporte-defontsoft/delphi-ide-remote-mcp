@@ -331,4 +331,5 @@ try:
 finally:
     srv.cierra()
 
+mc.borra(BASE)  # no se quedaba en la maquina (revisor de baterias de la 1.27)
 mc.fin('listas 1.15.0 battery')

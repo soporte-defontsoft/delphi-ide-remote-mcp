@@ -262,8 +262,8 @@ try:
     # desktop is the one behind a PAServer profile, Linux or Windows), so two
     # captures at once need a live target. The per-profile lock that names
     # each capture by its profile is the same code round 30 exercises.
-    skip('G escritorio x2', 'delphi_desktop local retirado en 1.0.16: el '
-         'escritorio va por perfil PAServer y no hay destino en la bateria')
+    # (sin skip: un SKIP fijo de algo retirado no es un salto, es ruido en la lista de lo que no se
+    # midio de run_all, y tapaba los de verdad; revisor de baterias de la 1.27)
 
     # ---------------------------------------------------------------- H ----
     # A build while the exe of that same project is running. GBuildLock
@@ -359,5 +359,6 @@ try:
 finally:
     proc.kill()
 
+mc.borra(WORK)  # no se quedaba en la maquina (revisor de baterias de la 1.27)
 print('\n%d SKIP' % SKIPPED)
 mc.fin('bateria de concurrencia')

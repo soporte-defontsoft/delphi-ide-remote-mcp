@@ -98,6 +98,10 @@ def lista(subclave):
 
 
 quedan = [n for n in lista('Known Packages') if n not in set(lista('Disabled Packages'))]
+# (revisor de baterias de la 1.27) sin ningun conocido desactivado en el IDE de esta maquina, "menos Disabled
+# Packages" no se mide (las dos cuentas son la misma, y quitar `if not EsBplDesactivado` seguiria verde): se dice
+if len(quedan) == len(lista('Known Packages')):
+    print('NOTA: E1 no distingue aqui: ningun paquete de Known Packages esta en Disabled Packages en esta maquina')
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='render-desactivado', t=300)
 try:
     r = srv.call('delphi_designer', {'command': 'preview', 'path': FORM, 'out': os.path.join(JAIL, 'o.png')}, t=240)

@@ -46,11 +46,18 @@ with open(LOG, 'w') as _log:
 
 
 def init(tok):
-    """HTTP status of an initialize with that Bearer, and the session id."""
-    st, h, _ = mc.Http(PORT, tok).post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
+    """HTTP status of an initialize with that Bearer, the session id and the body."""
+    st, h, body = mc.Http(PORT, tok).post({"jsonrpc": "2.0", "id": 1, "method": "initialize", "params": {
         "protocolVersion": mc.PROTOCOLO, "capabilities": {},
         "clientInfo": {"name": "inidup", "version": "1"}}})
-    return st, (None if st >= 400 else h.get('Mcp-Session-Id'))
+    return st, (None if st >= 400 else h.get('Mcp-Session-Id')), body
+
+
+def cerrado(tok):
+    """(es el 403 del workspace CERRADO, detalle): el 403 con SU motivo, SYS-034; con el codigo a secas
+    pasaba el 403 de otra puerta (revisor de baterias de la 1.27)."""
+    st, _, body = init(tok)
+    return st == 403 and mc.es(body, 'SR_SYS_WORKSPACE_CERRADO_FMT'), (st, body[:200])
 
 
 def workspace_name(tok, sid):
@@ -65,12 +72,12 @@ def workspace_name(tok, sid):
 
 try:
     # el token bueno de un workspace CERRADO: 403 SYS-034 (J9 de la 1.18.2; era 401)
-    check('D1 token compartido: el primero 403 (cerrado)', init('t-uno')[0] == 403, init('t-uno'))
-    check('D2 Token = ReadOnlyToken: 403 (cerrado)', init('t-tres')[0] == 403, init('t-tres'))
-    check('D3 clave repetida en la seccion: 403 (cerrado)', init('t-cuatro')[0] == 403, init('t-cuatro'))
-    check('D4 seccion repetida: 403 (cerrado) con el primer token', init('t-cinco')[0] == 403, init('t-cinco'))
-    check('D4 seccion repetida: 401 con el segundo token', init('t-cinco-bis')[0] == 401, init('t-cinco-bis'))
-    code, sid = init('t-limpio')
+    check('D1 token compartido: el primero 403 SYS-034 (cerrado)', *cerrado('t-uno'))
+    check('D2 Token = ReadOnlyToken: 403 SYS-034 (cerrado)', *cerrado('t-tres'))
+    check('D3 clave repetida en la seccion: 403 SYS-034 (cerrado)', *cerrado('t-cuatro'))
+    check('D4 seccion repetida: 403 SYS-034 (cerrado) con el primer token', *cerrado('t-cinco'))
+    check('D4 seccion repetida: 401 con el segundo token', init('t-cinco-bis')[0] == 401, init('t-cinco-bis')[:2])
+    code, sid, _ = init('t-limpio')
     check('D5 el workspace limpio entra', code == 200 and sid, (code, sid))
     if sid:
         check('D5 y se llama Limpio', workspace_name('t-limpio', sid) == 'Limpio', '')
@@ -85,4 +92,5 @@ check('D6 arranque: nombra Token = ReadOnlyToken', any('[Workspace.Tres]' in l a
 check('D6 arranque: nombra la clave repetida', any('[Workspace.Cuatro] repeats the key Roots' in l for l in avisos), avisos)
 check('D6 arranque: nombra la seccion repetida', any('[Workspace.Cinco] appears TWICE' in l for l in avisos), avisos)
 
+mc.borra(BASE)  # su carpeta, con su copia del exe (revisor de baterias de la 1.27)
 mc.fin('ini duplicados')
