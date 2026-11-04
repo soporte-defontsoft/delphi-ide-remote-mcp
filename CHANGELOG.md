@@ -57,6 +57,7 @@ the MCP `initialize` response (`serverInfo.version`).
 - A change to an IDE registry key that did not exist when the server started (the first `BDSPLATFORMSDKSDIR` override, the first platform SDK, the Editor or Library keys), or that was deleted and created again, is picked up without restarting the server: the watch on such a key was never set.
 - A file's fingerprint is its UTC write time as the file system keeps it: a change of the machine's time zone no longer renames the default-style cache and the render package box. Both are rebuilt once after upgrading.
 - `delphi_designer lint` and the warnings of a form write (`EDIT-127`, `EDIT-131`) say why the IDE's form reader was asked: for a form whose only part no table judges is an inline frame, `lint` said "0 line(s) hold a property the class stores by code" (measured), and a write said it was asked about a property. With lines the tables cannot judge, the text is the same as before.
+- Upgrading: the form renderers speak protocol 5 (their switches are composed and read from one file, `FormRenderProtocolo.inc`). A renderer of an earlier version left next to this server says so (`DSGN-184`) instead of being misread: deploy the server and both renderers together, as the release zip ships them.
 
 ## [1.26.1] - 2026-11-03
 

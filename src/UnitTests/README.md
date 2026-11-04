@@ -15,7 +15,7 @@ area:
 | `LspTests.Pascal` | The Pascal lexer: directives that are real (never inside a comment or a string), and a brace comment with another brace inside. |
 | `LspTests.Foto` | The undo of every all-or-nothing write (`TFotoDeFicheros`): it puts back what the operation wrote, never overwrites or deletes what someone else changed afterwards, and deletes a file the operation created. The runner gives itself a jail (its own folder) when nobody gives it one, so the undo is measured wherever it runs. |
 | `LspTests.Log` | The bounded line buffer shared by the log on disk and the tray window (`TBuzonDeLineas`): it stops at `LOG_BUF_CAP`, counts what did not fit and says it once, last, when collected; lines that could not be written go back in front of the newer ones. |
-| `LspTests.Motor` | The DelphiLSP engines: how one stops with another alive, and the settings made from a `.dproj`. |
+| `LspTests.Motor` | The DelphiLSP engines: how one stops with another alive, and the settings made from a `.dproj`; the environment a child gets (one value per name); and the containers' slots: one run after another reuses its slot, two alive take two, a stage left behind retires its slot, one another process holds is not taken. |
 | `LspTests.Rutas` | The jail's path rules: its readers, the gates for reading and for writing, the form a place was declared in, the sweep of the output masker, the profile asked of the list, a move as an operator does it. |
 | `LspTests.RutasOrdinal` | Paths compared as the disk compares them, with NTFS as the judge: two names it treats as different entries are never taken for the same one. |
 | `LspTests.LetrasDeRed` | The network drive letters the server connects for itself, on a simulated machine; the final backslash of a root; the cleaning of a temporary folder. |
@@ -25,16 +25,19 @@ area:
 | `LspTests.FormRender` | What launches nothing of the renderers: the reader as the inverse of `FormRenderProtocolo.inc`, the composed command line and the non-visual criterion. |
 | `LspTests.Regex` | The agent's regular expressions: an engine that gives up is not "no match". |
 | `LspTests.AtomosRtl` | The global atoms a killed VCL/FMX process leaves behind: those are removed, and those of a live process stay. |
-| `LspTests.Vigia` | The watcher of a registry key, the judge of "the IDE's configuration changed", on a test key of its own. |
+| `LspTests.Vigia` | The watcher of a registry key, the judge of "the IDE's configuration changed", on a test key of its own - also one that does not exist yet (its birth is a change) or is deleted and created again. |
 | `LspTests.ReclamaArbol` | A folder a test left closed in the server's house: reclaimed only there, as one object, and then deleted. |
 | `LspTests.RestauraEnlaceDuro` | The undo of a path too long for a temporary beside it: it refuses a hard link instead of writing in place. |
 
 It links the engine units from `../Server` (search path) and the vendored MCP
 plumbing from `../../vendor`. It does **not** ship. It runs in every regression:
-`tests/test_engine_dunitx.py` executes it through `delphi_test run` with the
-whole repo as jail, so the tool that runs tests is measured on a real suite each
-release. By hand: `delphi_test command=run project=<this .dproj>` (needs
-`AllowTests=1` in the workspace), or the IDE.
+`tests/test_engine_dunitx.py` runs its logic fixtures through `delphi_test run`
+(in the test container) and the whole suite directly, with the whole repo as
+jail, so the tool that runs tests is measured on a real suite each release; what
+a machine cannot measure says so (`NOTA no se mide`, `LspTests.Comun.NoSeMide`)
+and reaches `run_all`'s notes. By hand: `delphi_test command=run project=<this
+.dproj>` with `filter` set to the logic fixtures the battery lists (`PURAS`;
+needs `AllowTests=1`), or the whole suite from the IDE.
 
 Adding a fixture: `delphi_create kind=unit` with a `[TestFixture]` class and
 `TDUnitX.RegisterTestFixture` in its `initialization`; the battery's minimum

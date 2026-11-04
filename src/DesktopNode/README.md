@@ -38,10 +38,10 @@ is identical: coordinates are pixels OF THE CAPTURE and the node answers with
 | `Mld.Captura.pas` | The eyes, part two: write the PNG **by hand** (no ImageMagick, no external tools). The writer is SHARED: X11 and a Windows DIB both hand over BGR pixels |
 | `Mld.Eis.pas` | The hands: input injection through libei, fed by the descriptor D-Bus negotiated |
 | `Mld.Teclado.pas` | The keymap the desktop really has: which key gives each character directly, and which dead key plus base letter composes the rest (`í` = dead_acute + `i`), from Unicode's canonical decomposition |
-| `Mld.X11.pas` | The eyes, part one: enumerate windows via libX11 at runtime (replaces xdotool — one dependency fewer) |
+| `Mld.X11.pas` | The eyes, part one: enumerate windows via libX11 at runtime (replaces xdotool — one dependency fewer), each title as the application sets it (`_NET_WM_NAME` in UTF-8, else `WM_NAME` as Latin-1) |
 | `Mld.Win.pas` | Windows: eyes (GDI capture of the virtual desktop), hands (`SendInput`: click, Unicode typing, key combos) and the window list, with DPI awareness asked for at runtime |
 | `Mld.Sesion.pas` | The ONE detector of this user's graphical session (logind, then the user's own sockets), shared with the launcher (`src/RunJob`) |
-| `Mld.Textos.pas` | The node's message catalog (`NODE-NNN`) |
+| `Mld.Textos.pas` | The message catalog of the node and the launcher (`NODE-NNN`, `JOB-NNN`) |
 | `NodeProtocolo.inc` | The words of its output, the orders the server gives it, and the launcher's `___ENV=` / `___RC=` lines: one file, included by the node, the launcher and the server |
 
 **It only answers the server.** Both builds require a key that the MCP server

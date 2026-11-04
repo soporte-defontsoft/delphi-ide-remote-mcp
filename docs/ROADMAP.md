@@ -74,7 +74,7 @@ Status page as of 2026-11-03 (current release v1.26.1; 42 tools).
 
 Stabilizing what is there, not adding to it:
 
-- Working from Linux: the desktop node on KDE Plasma. Measured in 1.27: the capture works through the desktop portal; the window list, the screen scale and the hands go through GNOME's own interfaces (Mutter's, and the name of its Xwayland authorization) and have to learn Plasma's. An FMX app deployed to Linux without the IDE's deploy files was measured end to end through PAServer in 1.27
+- Working from Linux: the desktop node on KDE Plasma. Measured in 1.27: the capture works through the desktop portal; the window list finds its X authorization by the name Mutter gives it (it works with the session's `XAUTHORITY`), and the screen scale and the hands go through GNOME's own interfaces (Mutter's); the three have to learn Plasma's. An FMX app deployed to Linux without the IDE's deploy files was measured end to end through PAServer in 1.27
 - The designer: what it already does, measured where it is not yet (preview at other DPIs and from the tray)
 - The jail measured, not only declared: the protections that need a privilege measured in the suite, and fewer rules of our own where a real judge can answer
 - Dead code by symbol, with the engine as the judge: what nothing in a file or a project references (uses, types, routines, fields), and what is used by name (RTTI, forms) told apart
@@ -85,7 +85,7 @@ Stabilizing what is there, not adding to it:
 
 ## Parked (the operator keeps them on the list, not now)
 
-- The designer beyond `insert` / `set` / `delete` (events, collections, non-visual components), and the defaults a component's constructor sets, read from its source (`preview` already draws them - it builds the real control - but `layout` lists such a control under `sizeNotWritten`)
+- The designer beyond `insert` / `set` / `delete` (events, collections, non-visual components), and the defaults a component's constructor sets, read from its source (`preview` already draws them - it builds the real control - and since 1.27 `layout` judges the box the renderer measured; only without the renderer does it list such a control under `sizeNotWritten`)
 
 ## Declined by the operator (do not re-propose)
 

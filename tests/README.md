@@ -8,13 +8,17 @@ an MCP client would (stdio JSON-RPC or HTTP), plus the release gate:
   and prints one summary line, `== N baterias | N checks OK | N fallos | N baterias
   rojas | N notas ==`, then what batteries say they did NOT measure (NOTA/SKIP).
   `-k <substring>` runs only the matching ones; a battery that measured nothing
-  and says nothing counts as red.
+  and says nothing counts as red. With the built exe it refuses to start while a
+  binary is older than its sources; a battery that prints a `FAIL` line is red
+  whatever its exit code, and one still running after 30 minutes is stopped and
+  counts as red.
 - `release_check.py` — the gate: version sources agree, the exe embeds the
   version, docs are coherent, `skills/SKILL.md` ends with the mark of the
   version whose contract was reviewed, the regression is green, and it packages the
   release zip with its SHA-256. `--skip-regression` only packages again right
   after a full run of it passed (as a release does after its commit), never in
-  place of that full run.
+  place of that full run: it checks that the last full run's `regression.log` is
+  green and newer than the exe.
 - `rendertests_manual.py` — the manual battery of the form renderers
   (`src/Render/Pruebas`), run from the user's session after touching a renderer
   and before every release; a red pass keeps its output in `release-out`.

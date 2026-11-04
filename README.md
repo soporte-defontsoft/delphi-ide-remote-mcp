@@ -25,7 +25,7 @@ AI agents working on Delphi codebases are usually limited to text search (grep).
 
 **The showpiece: your app on a real Linux desktop, seen and driven from the agent.** Deploy to a GNOME machine through PAServer, launch it with `remote-run` (the program is not killed when the call returns — a window is meant to stay up), and then `delphi_desktop` brings the **whole desktop back as a PNG**, presses the exact pixel you measured, types into your app, walks its windows. Beyond PAServer itself there are no prerequisites and nothing to install by hand on the target: it executes what this server sends, and the tiny helper node — **shipped inside this release** — deploys and updates itself on first use. It is the same eyes-and-hands idea `delphi_adb` gives you on Android — pointed at a Linux desktop. Today it speaks GNOME (Zorin and Fedora, measured live). And the node itself is the proof of the whole premise: **it was developed entirely through this server** — an AI agent on the other end of the MCP wrote it, compiled it, deployed it and debugged it against the live targets, without ever sitting at the Windows machine. This repo dogfoods its own tools.
 
-**And the same eyes and hands on a Windows desktop - including the server's own.** Since 1.0.16 there is ONE desktop tool, `delphi_desktop`, and the machine is a parameter: the PAServer profile. Point it at a Linux, at a Windows with PAServer, or at this very server when a PAServer runs in its user session (`windows-local`, 127.0.0.1): same node, same gestures, same permissions (`AllowRemoteRun`, `RemoteHosts` and, per host, `DesktopAllowedHosts` to see and act or `DesktopViewHosts` only to see). Every remote execution - Linux or Windows - goes through ONE mechanism: a job file (the binary, the output file, then one argument per line) and a native launcher (`node\McpRunJob`, `node\McpRunJob.exe`) that PAServer starts; there is no shell in the path, so an agent's arguments reach the program as argv, untouched on Linux and, on Windows, as Delphi's `ParamStr` reads them (one it cannot receive - with a double quote, or empty - is refused first: `RUN-025`). The old name, `delphi_adb_linux`, no longer exists.
+**And the same eyes and hands on a Windows desktop - including the server's own.** Since 1.0.16 there is ONE desktop tool, `delphi_desktop`, and the machine is a parameter: the PAServer profile. Point it at a Linux, at a Windows with PAServer, or at this very server when a PAServer runs in its user session (`windows-local`, 127.0.0.1): same node, same gestures, same permissions (`AllowRemoteRun`, `RemoteHosts` and, per host, `DesktopAllowedHosts` to see and act or `DesktopViewHosts` only to see). Every remote execution - Linux or Windows - goes through ONE mechanism: a job file (the binary, the output file, then one argument per line) and a native launcher (`node\McpRunJob`, `node\McpRunJob.exe`) that PAServer starts; there is no shell in the path, so an agent's arguments reach the program as argv, untouched on Linux and, on Windows, as Delphi's `ParamStr` reads them (one it cannot receive - with a double quote, or empty - is refused first: `RUN-025`; one with a line break or a NUL, on any target: `RUN-026`). The old name, `delphi_adb_linux`, no longer exists.
 
 ## Use cases
 
@@ -196,8 +196,8 @@ finds its commits there and is the one that stops the engines.
 of those causes it is — there is no process or handle listing here, by the same decision.
 
 **"What about my third-party packages — Boss, GetIt, submodules?"** Search paths are first-class:
-`delphi_config command=add-searchpath` edits them **per platform**, several folders in one call (`paths`; Delphi keeps unit search paths
-per platform, not per Debug/Release configuration), `delphi_config command=view` reports what a
+`delphi_config command=add-searchpath` edits them **per platform** (or for all), several folders in one call (`paths`; a search path
+of one Debug/Release configuration goes with `set-property`), `delphi_config command=view` reports what a
 project resolves against, `delphi_components` lists what is installed in the IDE, and the library
 read zone lets an agent read RTL/VCL and component sources without any write rights. A failed
 build reports `missingUnits` with the folders that do hold each unit — *though it looks through
@@ -275,8 +275,9 @@ target on first use and keeps current by itself: its compiled binaries ship in `
 sources - exactly what runs on your machine, and how - are in [`src/DesktopNode/`](src/DesktopNode/README.md).
 **On Linux it speaks GNOME only today** (measured live on Zorin 18 and Fedora), and it needs
 nothing installed there. On KDE Plasma (measured on Fedora in 1.27) the capture works, through the
-same desktop portal and with the capture permission that machine already kept, but the window list,
-the screen scale and the hands do not: they go through GNOME's own interfaces.
+same desktop portal and with the capture permission that machine already kept, and the window list
+does when PAServer runs inside the session with its `XAUTHORITY` (on its own the node only finds
+GNOME's); the screen scale and the hands do not: they go through GNOME's own interfaces.
 
 **What a desktop profile gives.** `delphi_desktop` drives the target's desktop as the user PAServer
 runs as: everything a person sitting at that keyboard can do, opening a terminal and typing in it

@@ -122,12 +122,12 @@ it. With no name, each request of that protocol is a stranger to the one before.
   loop: edit -> diagnostics -> build -> **test** -> commit. `filter` takes
   what DUnitX matches - a fixture by its full name or the start of it
   (`Unit.TFixture`), a test by its full name (`Unit.TFixture.Method`) - and
-  no wildcards, several separated by commas (one with a double quote is refused: `TEST-037`); one that ran nothing says so (`filterNote`).
+  no wildcards, several separated by commas (one with a double quote or a control character, a tab included, is refused: `TEST-037`); one that ran nothing says so (`filterNote`).
 - `delphi_diagnostics` is the quick check and `delphi_build` the real one.
   The answer names the project it linted with (`project`).
 - It needs `AllowTests=1` declared in YOUR workspace on the server. Without
   it `discover` works and `run` says so - that is a switch, not a bug.
-- The test runs in a Windows container on a COPY of its output folder: it
+- The test runs in a Windows container on a COPY of its output folder (what this session can read of it): it
   sees that folder and, besides it, only what Windows gives every container
   (its own temp, the system files), and has no network. Write tests of
   LOGIC; a data file a test reads goes in the output folder, a project
@@ -153,7 +153,8 @@ it. With no name, each request of that protocol is a stranger to the one before.
   `delphi_references` lists the lines of the form files that name it as
   well (`designer`) - the ones a rename blocks on (`RENAME-019`); a
   component of the form is renamed with `delphi_designer command=set
-  prop=Name`.
+  prop=Name`; the form itself (its Name, class and global variable) is
+  renamed in the IDE.
 - If `applicable=true`, repeat the same call with `mode=apply`: the tool
   writes it through the changeset engine (all files or none, a backup of
   each) and answers with the commit. Then `delphi_build`. If false, the
@@ -203,7 +204,10 @@ it. With no name, each request of that protocol is a stranger to the one before.
   `preview` refuses (`DSGN-183`, a note): the form stays valid, but neither
   it nor the other forms of its folder preview until that value changes.
 - `RENDER-027` (the IDE's design packages still loading) or `DSGN-185` (an
-  edit judged too slowly, nothing written): repeat the same call. An
+  edit judged too slowly, nothing written): repeat the same call. A write
+  that ends with `EDIT-131` (or a `lint` with `DSGN-154`) is on disk, but
+  the IDE's reader did not confirm the form loads - `DSGN-188` when the
+  call had used up the client's time: run `delphi_designer lint` on it. An
   antivirus checking packages it has not seen takes that long once, and the
   repeat goes on from there. A `RENDER-027` that stops twice on the same
   package names a package that hangs while it loads: tell the operator which
@@ -247,7 +251,7 @@ it. With no name, each request of that protocol is a stranger to the one before.
   come from a StyleBook that cannot be read is not judged
   (`formsWithAStyleBook`, `STYLE-057`).
 - After editing styles: `command=build path=<Styles folder>` (text ->
-  `.bin.style` -> `.res`), then `delphi_build target=Build`: the app embeds
+  `.bin.style` -> `.res`; one `.rc` per styles folder, else `STYLE-067`), then `delphi_build target=Build`: the app embeds
   the binary form; the text form loads but does not resolve `StyleLookup`.
 - `delphi_search pattern=*.style` (or `*.ini`, `*.md`) searches files
   outside the Delphi set.
@@ -270,8 +274,9 @@ it. With no name, each request of that protocol is a stranger to the one before.
   args=... timeoutms=...`. It returns `exitCode` and the program's output (a
   long one as its last 400 lines, at most 64K characters, with
   `outputTruncated` and `RUN-023`). On a Windows target an argument reaches
-  the program as Delphi's `ParamStr` reads it: one with a double quote or a
-  NUL, or an empty one, is refused before anything runs (`RUN-025`).
+  the program as Delphi's `ParamStr` reads it: one with a double quote, or
+  an empty one, is refused before anything runs (`RUN-025`); on any target,
+  so is one with a line break or a NUL (`RUN-026`).
   You never give a remote path: the server runs what THAT project deployed
   and nothing else on that machine (a script in the same folder is refused
   too - only native binaries).
@@ -365,7 +370,8 @@ in frame. Do the gesture you came for and nothing else.
   MSBuild classifies them (warnings and hints only with `verbosity=normal` or `verbose`: the default `quiet` does not ask for them). `target=Deploy` on Android builds the
   full `.apk`, or the `.aab` for a store build of Android64
   (`BT_BuildType=AppStore`; `BUILD-064`: it does not install on a device). The
-  server generates the deployment manifest if missing.
+  server generates the deployment manifest if missing, and adds the project
+  output to a configuration it does not list (`BUILD-014`).
   It is compile-only and its gate is a whitelist: an element a build does
   not understand, a task, free compiler options or a foreign `<Import>`
   is refused by name (`BUILD-017`), and what the build reads through the
@@ -412,7 +418,9 @@ in frame. Do the gesture you came for and nothing else.
   Linux, `.dylib` on macOS, `.dll` on Windows - OBR's `libzbar`, for
   instance) needs that file shipped with the binary:
   `delphi_config command=add-deployfile platform=<one> path=<the .so>`
-  (found under the component's `Library\<platform>\` folder), then
+  (found under the component's `Library\<platform>\` folder; it is for ONE
+  configuration - `config=`, else the active one - and a Deploy of another
+  goes without it and says so, `BUILD-068`), then
   `delphi_build target=Deploy`. The file lands next to the binary on the
   target; `view` lists the deployment entries. If you run the binary by
   hand instead, put the library next to it (`LD_LIBRARY_PATH=.`).

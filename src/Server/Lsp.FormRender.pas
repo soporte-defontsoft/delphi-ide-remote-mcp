@@ -1563,8 +1563,8 @@ end;
   que este lee y nada mas. Sin ellas un form con un TADOQuery perdia el
   componente y el juez del orden no lo juzgaba. Que clases, lo dice el contenedor
   (--unreadableclasses); si el manifiesto vale, Windows al crear el proceso. Si
-  algo falla, esta generacion de la caja se queda sin manifiesto (con su aviso en
-  el log), que es solo perder esas clases. }
+  algo falla, la copia vuelve a ser la del ayudante, con su propio manifiesto y
+  sin esas clases (con su aviso en el log), que es solo perder esas clases. }
 procedure DaSusClasesAlContenedor(const ACaja, APath: string; const AAyudantes: TArray<string>);
 const
   PREGUNTA_TIEMPO_MS = 30000;

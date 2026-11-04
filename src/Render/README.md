@@ -33,6 +33,11 @@ one Delphi version (the `370` BPLs), like the server since 1.14.0.
 - Where the IDE is (`--bdsroot`) and which packages it may load (`--knownfile`,
   one path per line). The server reads them from the IDE's registry and tells
   it: inside its container the renderer cannot read the registry.
+- Its manifest, built in as the IDE builds an application's (`default_app.manifest`:
+  Common Controls 6, the dependency `bds.exe` has, and no DPI awareness, so 1 pixel
+  stays 1 form unit). Without it a native FMX control (`ControlType = Platform`)
+  cannot be created; with it VCL previews are drawn with the Windows theme, as
+  the IDE's designer shows them.
 - Nothing else. The standard palette (Standard, Additional, Win32, Dialogs,
   WinX, action bands, samples) is registered from the renderer's own `uses`,
   as the IDE does with the form it creates. Every other class — data
@@ -45,7 +50,10 @@ one Delphi version (the `370` BPLs), like the server since 1.14.0.
 
 The design code of a package reads and writes whatever a form asks it to, so
 the server always runs the renderer inside an AppContainer with no
-capabilities, one per call, with its Job Object, and never outside one: if the
+capabilities, one per run - under the first free of the server's 64 slots,
+since Windows keeps an entry per container name for the whole logon session
+(with every slot taken a run gets a name of its own) -, with its Job Object,
+and never outside one: if the
 container cannot be prepared nothing is drawn (`DSGN-177`). Measured: from
 there it opens nothing of the workspace roots, of the server's folder, of the
 user's profile or of a mapped drive, and it has no network. Windows and the two
@@ -57,7 +65,9 @@ answer must not say whether a file exists.
 What it needs travels to it:
 
 - **The folder of the call**, in the server's home: the form, its siblings of
-  the same type and their units, what a form literal names below the form's
+  the same type and their units, the forms of the project in other folders that
+  a run reports missing (an ancestor with its whole chain at once, or a frame)
+  with their units, what a form literal names below the form's
   folder if the session can read it (up to 64 MiB: a `TAnimate`'s `.avi`), and a
   style file. The renderer's answer is translated back to the real paths, and
   the folder goes when the call ends. A component that opens a file by its FULL
@@ -77,9 +87,10 @@ What it needs travels to it:
   `Recordset`, `Error`). Without them a form with a `TADOQuery` loses the
   component. When the box is made the renderer is asked which keys it cannot open
   (`--unreadableclasses`); the server reads those keys and gives the classes
-  whose DLL the container reads to the box's copy of the renderers, in their
-  manifest, and Windows judges that manifest by starting them. If any of this
-  fails the copy keeps no manifest and the server logs it: those components stay
+  whose DLL the container reads to the box's copy of the renderers, inside the
+  manifest each one already carries, and Windows judges that manifest by starting
+  them. If any of this fails the copy keeps only its own manifest and the server
+  logs it: those components stay
   out of the form, reported in `ignored`. The code of the class still runs inside
   the container, with what the container reads and nothing else.
 
@@ -119,7 +130,11 @@ DelphiFormRender*   --path <form> --boxes [--packages ...] [--bds] [--bdsroot] [
   line as `WRITTEN=`. Its siblings (frames, ancestors) and its `.pas` are read
   from next to `--path`: the server copies them there, with the proposal in
   the place of the real form.
-  `delphi_designer` `insert` and `set` ask it before writing; `--dropped` names
+  `delphi_designer` `insert` and `set` ask it before writing, and `lint` and a
+  form written by `delphi_edit`, `delphi_changeset` or `delphi_upload` ask it
+  after, each with what is left of the 50 s a client waits, counted from the
+  start of the call: its watchdog fires when that is up, and with nothing left
+  it is not started (`DSGN-185`, `DSGN-188`, `EDIT-131`); `--dropped` names
   the control just dropped, which gets what the designer gives it (alignment,
   tab order).
 - `--convert text|binary`: no load and no paint: the bytes of `--path` converted
@@ -145,7 +160,7 @@ DelphiFormRender*   --path <form> --boxes [--packages ...] [--bds] [--bdsroot] [
   (`TX = class(TFrame)`); a frame is rendered inside a form of its size, as
   the designer shows it.
 - `inline` frames are built from their own `.dfm`/`.fmx` found by class name
-  in the form's folder, then the form's `inherited` overrides are applied;
+  among the files of the call, then the form's `inherited` overrides are applied;
   an `inherited` form is read after its ancestors (chain from the `.pas`).
   An FMX view (`<unit>.<View>.fmx`, whose class no `.pas` declares) is read
   on top of its master (`<unit>.fmx`) when the master's `.pas` declares it
@@ -239,7 +254,8 @@ initialization included; the file can trigger that load, it cannot choose or add
 for icons and platform styles are opened as data: nothing of theirs runs. TReader creates
 registered classes only; an unknown class becomes a labelled substitute. Its input comes from
 the server through its read gate, copied to the folder of the call: the form, its sibling .pas
-and .dfm/.fmx files in the same folder (links are skipped), a style file.
+and .dfm/.fmx files in the same folder, the ancestors and frames the project keeps in other
+folders (links are skipped), a style file.
 
 What a hostile file CAN do is feed bad values and binary blobs (pictures, image lists,
 collections) to the loaded classes and crash or stall the renderer. That is why it runs as a
@@ -298,8 +314,8 @@ and `lint` and a form edit ask this same reader about any form holding an inline
   server, against hand-made forms written into its jail - inherited forms,
   inline frames, crops, view states, styles, non-visuals, inline delivery,
   the refusals - checked by PIXEL.
-- **`LspTests.FormRender`** in `src/UnitTests` (every `run_all`, through
-  `delphi_test`): what launches nothing - the reader as the inverse of
+- **`LspTests.FormRender`** in `src/UnitTests` (every `run_all`, in the whole
+  suite `test_engine_dunitx` runs directly): what launches nothing - the reader as the inverse of
   `FormRenderProtocolo.inc`, the composed command line and its refusals, and
   the non-visual criterion of `FormRender.Comun`.
 - **`Pruebas/RenderTests.dproj`**, MANUAL, outside `run_all`: DUnitX that

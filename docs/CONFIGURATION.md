@@ -136,7 +136,7 @@ declared).
 Everything else is already separate per folder: settings, logs, `__delphi-temp`, mailbox,
 reports, and the presence mark that decides the startup purges. What two servers share is the
 cache under `%LOCALAPPDATA%\DelphiLspMcp`: the engine configurations and the designer tables
-carry the Delphi version in their file names, every cache file is written whole, and the
+carry the Delphi version in their file names, the platform default style the designer judges against carries the fingerprint of the converter that produced it, every cache file is written whole, and the
 designer tables are generated under a lock shared by every process - so each server finds its
 own version's files. One tool shares its converter on purpose: `delphi_styles` converts styles
 with the one shipped with the server (`DelphiStyleConvert.exe`, built with RAD Studio 13's
@@ -156,7 +156,7 @@ package it has not seen under those signatures, up to about 10 s each (measured 
 4-core VM with 4 GB and 41 third-party packages: 86 to 110 s once, 1.6 s afterwards). Then the
 answer is `RENDER-027`, with how many packages were loaded and the one it was on. What it checked stays checked, so the
 same call repeated goes on from there (measured 2026-11-02: 50 s and then 17 to 20 s, against 69 s
-in one go). The rest is in `src/Render/README.md`.
+in one go). The IDE's form reader, when it judges an edit or a `lint`, gets only what is left of 50 s from the start of the call: an edit not yet written answers `DSGN-185`, and a write already on disk or a `lint` says the reader was not asked (`DSGN-188`). The rest is in `src/Render/README.md`.
 
 RAD Studio 13.1 and 13.2 are both BDS 37.0: one replaces the other, they never sit side by
 side. For that, one machine (or VM) per version, each with its own server - the same model,
@@ -428,7 +428,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   learn whether it works. The test runs in a Windows container (an AppContainer) of its
   own, created for that run and deleted with its answer (its name is a slot of the server that a
   later run reuses, since Windows keeps an entry per distinct container for the whole logon
-  session; two runs at the same time never share one), on a COPY of its output folder in
+  session; two runs at the same time never share one), on a COPY of its output folder (what this session can read of it) in
   the server's own temp: it reads and writes that copy and, besides it, only what Windows
   gives every container (its own temp folder, deleted with it, and the system files under
   Windows and Program Files) — no other file of the machine, no network, no network drive —
@@ -672,7 +672,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   server does not serve leaves as `srv0:` - it says there is a path and not where - and
   is refused by name if it comes back. The letters served are those of each workspace's own places (until 1.9.0 they were worked out once, with the workspace of the first call). (It was `srvx:` until 1.0.13, which is exactly what
   a genuinely served `X:` drive masks to.)
-- **Library read zone** (off unless the workspace declares `LibraryZone=1`; re-read when the IDE's Library Path or its Environment Variables change - the server asks Windows to signal those registry keys - so a component registered while the server runs is readable from the next call, no restart (since 1.21.4); absent, reads are confined to the roots exactly
+- **Library read zone** (off unless the workspace declares `LibraryZone=1`; re-read when the IDE's Library Path or its Environment Variables change, a key created after the server started included - the server asks Windows to signal those registry keys - so a component registered while the server runs is readable from the next call, no restart (since 1.21.4); absent, reads are confined to the roots exactly
   like writes): READING tools (read/search/list/fetch/LSP navigation) additionally
   accept, for **this server's Delphi**, its installation directory, the Library Search Path
   of **every registered platform** (Win, Linux64, macOS, Android, iOS…) and the **GetIt
