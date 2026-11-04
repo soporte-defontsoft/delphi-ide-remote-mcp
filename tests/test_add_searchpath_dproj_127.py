@@ -86,6 +86,43 @@ try:
     r = config(proyecto, 'add-searchpath', path=r'$(MI_VAR_SRV)\x', platform='Win64')
     check('P4 control (A10): una variable del entorno del servidor sigue negada con CFG-148',
           mc.rechazado(r) and mc.es(r, 'SR_CONFIG_PATH_MACRO_DESCONOCIDA_FMT'), r[:300])
+
+    # --- P9 punto 1 (revision de la principal): el valor se lee EN EL PUNTO donde add-searchpath
+    # escribe (el final del grupo de la plataforma, AnadeAlGrupo), NO el valor final del build. Si
+    # una propiedad se define en un grupo POSTERIOR (una config), msbuild lee "" en ese punto.
+    carpeta2 = os.path.join(BASE, 'fix2')
+    srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fix2', 'dir': carpeta2})
+    p2 = os.path.join(carpeta2, 'Fix2.dproj')
+    os.makedirs(os.path.join(carpeta2, 'libs', 'comun'))  # existe: sin el arreglo, add la acepta
+    # MiLib SOLO en los grupos de configuracion (Debug y Release), que van DESPUES del grupo base
+    # de la plataforma donde add-searchpath escribe
+    config(p2, 'set-property', name='MiLib', value='libs', config='Debug')
+    config(p2, 'set-property', name='MiLib', value='libs', config='Release')
+    r = config(p2, 'add-searchpath', path=r'$(MiLib)\comun', platform='Win64')
+    check('P5 (punto 1) MiLib definida solo en grupos de config (despues del de escritura): '
+          'add-searchpath lo NIEGA, no acepta libs\\comun (msbuild lee "" en ese punto; ROJA '
+          'contra 11d9594, que daba el valor final)', mc.rechazado(r), r[:300])
+
+    # el arbitro, el build: con DCC_UnitSearchPath=$(MiLib)\comun en el grupo base (donde escribe
+    # add) y MiLib en una config (despues), Win64 Debug NO encuentra la unit de libs\comun -el
+    # build lee '\comun', MiLib vale "" ahi-, aunque la carpeta exista: el punto de evaluacion es ese
+    carpeta3 = os.path.join(BASE, 'fix3')
+    srv.call('delphi_create', {'kind': 'project-console', 'name': 'Fix3', 'dir': carpeta3})
+    p3 = os.path.join(carpeta3, 'Fix3.dproj')
+    os.makedirs(os.path.join(carpeta3, 'libs', 'comun'))
+    open(os.path.join(carpeta3, 'libs', 'comun', 'Ajena.pas'), 'w', encoding='utf-8').write(
+        'unit Ajena;\r\ninterface\r\nimplementation\r\nend.\r\n')
+    dpr3 = os.path.join(carpeta3, 'Fix3.dpr')
+    with open(dpr3, encoding='utf-8-sig') as f:
+        fuente3 = f.read()
+    with open(dpr3, 'w', encoding='utf-8-sig', newline='') as f:
+        f.write(fuente3.replace('uses', 'uses\r\n  Ajena,', 1))
+    config(p3, 'set-property', name='MiLib', value='libs', config='Debug')
+    config(p3, 'set-property', name='DCC_UnitSearchPath', value=r'$(MiLib)\comun', platform='Win64')
+    r = srv.call('delphi_build', {'project': p3, 'platform': 'Win64', 'config': 'Debug'}, 600)
+    check('P6 (punto 1, arbitro) la puerta del build (segunda barrera) lee "" en el punto: niega '
+          'Win64 Debug con BUILD-050 ($(MiLib)\\comun = \\comun, fuera de la jaula), no compila',
+          not compila(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT'), mc.como_json(r).get('firstError') or r[:400])
 finally:
     srv.cierra()
     mc.borra(BASE)

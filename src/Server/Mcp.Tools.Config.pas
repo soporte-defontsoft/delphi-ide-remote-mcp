@@ -883,11 +883,19 @@ end;
   A2 de la 1.27). Returns '' when fine, else the refusal. AShow is the
   resolved path for messages (the first one that exists). }
 function SearchPathDenied(const ADproj, APlat, ARaw: string; out AShow: string): string;
+const
+  SONDA = '__McpSondaRuta';
 var
   Proyecto: TDprojInfo;
   Vars: TStringList;
-  Plats, Cfgs, Rutas, Definidas: TArray<string>;
-  Expanded, Full, Xml, Enc, Mal: string;
+  Plats, Cfgs, Rutas: TArray<string>;
+  Expanded, Full, Xml, Enc, Mal, Resuelto: string;
+  Elementos: TArray<TElementoXml>;
+  Expandidos, Dudosos: TArray<string>;
+  Veredictos: TArray<TVeredicto>;
+  G: TGrupoXml;
+  Falta: TFaltaDeGrupo;
+  IdxSonda: Integer;
 begin
   AShow := '';
   if ARaw.Trim = '' then
@@ -899,6 +907,7 @@ begin
   Plats := [''];
   Cfgs := [''];
   Rutas := nil;
+  IdxSonda := -1;
   Vars := TStringList.Create;
   try
     if ARaw.Contains('$(') then
@@ -909,30 +918,45 @@ begin
       Proyecto.SusBuilds(Plats, Cfgs);
       if APlat <> '' then
         Plats := [APlat];
-      // EL lector de la tabla del proyecto, la del build (V205; A2 de la 1.27)
+      // EL lector de la tabla del IDE/msbuild, la del build (V205; A2 de la 1.27)
       MacrosDelProyecto(DiscoverRadStudio, TPath.GetDirectoryName(ADproj),
         TPath.GetFileNameWithoutExtension(ADproj), '', '', Vars);
-      // y las PROPIEDADES que el .dproj define, resueltas por EL lector del build
-      // (EffectiveProperty, el de get-property/la puerta): add-searchpath resuelve lo
-      // que la puerta resolvera, no solo las macros del IDE. Una set-property
-      // MiLib=libs y add-searchpath $(MiLib)\comun se negaba (CFG-148, P9); el
-      // entorno del servidor sigue negado a proposito (A10 de la 1.27)
+      // y lo que el .dproj define, por EL MISMO juez que la puerta y EN EL PUNTO
+      // donde el build lo lee: se compone en memoria el .dproj tal como
+      // add-searchpath lo va a escribir -una sonda con el valor crudo al FINAL del
+      // grupo (AnadeAlGrupo, donde add pone el DCC_UnitSearchPath; el grupo lo
+      // asegura AseguraGrupoDelBuild, el mismo de add)- y en
+      // cada build se lee el Expandidos de ESA sonda (VeredictosDeElementos, la
+      // funcion de H8). Asi $(MiLib) vale lo que msbuild fija en ESE punto (una
+      // definicion de mas abajo vale '', no su valor final; punto 1), una propiedad
+      // del .dproj gana a una variable de entorno pero no a una reservada (el Busca
+      // de la puerta; punto 2) y es UNA evaluacion por build (punto 3). El entorno
+      // del servidor sigue negado a proposito (A10 de la 1.27)
       Xml := PatchLoadText(ADproj, Enc);
-      Definidas := PropiedadesDefinidas(ElementosDe(Xml, Mal));
+      if AseguraGrupoDelBuild(Xml, APlat, '', G, Falta) then
+        AnadeAlGrupo(Xml, G, XmlElemento(SONDA, ARaw.Trim));
+      Elementos := ElementosDe(Xml, Mal);
+      for var I := 0 to High(Elementos) do
+        if SameText(Elementos[I].Nombre, SONDA) then
+        begin
+          IdxSonda := I;
+          Break;
+        end;
     end;
     for var P in Plats do
       for var C in Cfgs do
       begin
         Vars.Values['Platform'] := P;
         Vars.Values['Config'] := C;
-        // las del IDE/reservadas (en Vars) primero, que ExpandeMacros toma la
-        // primera que da el nombre; luego cada propiedad del .dproj con su valor
-        // para ESTE build (EffectiveProperty), tambien la vacia (un par 'X=', que
-        // Vars.Values borraria al ser '')
-        var Pares := Vars.ToStringArray;
-        for var Nombre in Definidas do
-          Pares := Pares + [Nombre + '=' + EffectiveProperty(Xml, Nombre, P, C)];
-        Expanded := ExpandeMacros(ARaw.Trim, Pares);
+        // la sonda resuelta en su punto por EL juez de la puerta (las propiedades
+        // del documento, como msbuild las fija ahi); el IDE/reservadas, despues
+        Resuelto := ARaw.Trim;
+        if IdxSonda >= 0 then
+        begin
+          Veredictos := VeredictosDeElementos(Xml, P, C, Elementos, [], [], Expandidos, Dudosos);
+          Resuelto := Expandidos[IdxSonda];
+        end;
+        Expanded := ExpandeMacros(Resuelto, Vars.ToStringArray);
         if Expanded.Contains('$(') then
           Exit(MsgFmt(SR_CONFIG_PATH_MACRO_DESCONOCIDA_FMT, [ARaw.Trim]));
         // como msbuild, que expande y DESPUES desescapa (EL desescapador,
