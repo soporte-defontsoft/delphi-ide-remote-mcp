@@ -327,8 +327,8 @@ REGLAS = [
     # changeset - que escribia un .dproj SIN BOM - y los de las dos tools de edicion); A21 de la 1.23. La
     # respuesta de delphi_create la nombra, no la elige
     ('la codificacion de un fichero nuevo elegida a mano', r"\bNewFileEncName\b",
-     [('Lsp.Patch.pas', 'EncDeFicheroNuevo'), ('Lsp.Scaffold.pas', 'CreateDelphiProject')],
-     'EncDeFicheroNuevo (Lsp.Patch, A21 de la 1.23)'),
+     [('Lsp.Deteccion.pas', 'EncDeFicheroNuevo'), ('Lsp.Scaffold.pas', 'CreateDelphiProject')],
+     'EncDeFicheroNuevo (Lsp.Deteccion, A21 de la 1.23)'),
     # el salto que pide el agente traducido a mano: cinco SameText(..., 'lf') en los dos create (S1, A38)
     ('el salto que pide el agente traducido a mano', r"(?i)SameText\([^;]*Eol[^;]*'lf'\s*\)",
      [('Lsp.Lineas.pas', 'SaltoPedido')],
@@ -1190,13 +1190,13 @@ REGLAS = [
      # desde M2 de la 1.18.2 FormParaElParser, que pasaba un UTF-16 a UTF-8 para el parser -
      # se pago en A28 de la 1.23: el IDE no carga ese form, y el parser lo lee tal cual. El
      # de la ayuda se fue en r5: pregunta BomUtf8En y CodecDeCharset)
-     'EL detector (DetectEnc, en Lsp.Patch) y el BOM de los codecs (BomUtf8En lo lee, EncodeText lo '
+     'EL detector (DetectEnc, en Lsp.Deteccion) y el BOM de los codecs (BomUtf8En lo lee, EncodeText lo '
      'escribe): nadie mas mira unos bytes para decidir que son (24-sep-2026: dos detectores; 1.18.0: '
-     'los codecs salen a Lsp.Codificacion y la decision se queda en Patch). KindDeBom es GRAMATICA '
+     'los codecs salen a Lsp.Codificacion y la decision se queda en Patch; desde la 1.28, en Lsp.Deteccion). KindDeBom es GRAMATICA '
      'PROPIA declarada (norma 6 del paisaje): el juez de la RTL, TEncoding.GetBufferEncoding, no '
      'conoce UTF-32, y su BOM de LE empieza como el de UTF-16 LE'),
     ('UTF-8 estricto preguntado a mano', r'\b(?:ValidUtf8|IsBufferValid)\s*\(',
-     [('Lsp.Patch.pas', 'DetectEnc'),
+     [('Lsp.Deteccion.pas', 'DetectEnc'),
       # el juez de la RTL (TEncoding.UTF8.IsBufferValid) en UN sitio
       ('Lsp.Codificacion.pas', 'ValidUtf8'),
       # la salida de un HIJO por su tuberia: UTF-8 o la pagina de la consola (TPaginaDelHijo), otra
@@ -1211,7 +1211,7 @@ REGLAS = [
       # los DOS escritores (con la regla de ida y vuelta y la del primer caracter no
       # ASCII), la creacion de una unit nueva y la medida de un cuerpo de varios bytes
       ('Lsp.Patch.pas', 'DoEdit'), ('Lsp.Patch.pas', 'PatchSaveText'),
-      ('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.Patch.pas', 'Measure'),
+      ('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.Deteccion.pas', 'Measure'),
       # la puerta de escribir: el texto que COMPONE el servidor, en la codificacion
       # de su formato (un .job, una nota del vault, un .sdk), con la de ida y vuelta
       ('Lsp.Patch.pas', 'EscribeTexto'),

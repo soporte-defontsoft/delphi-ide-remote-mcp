@@ -290,7 +290,8 @@ uses
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.NetDrives,
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.Deteccion;
 
 function SymChildren(const ANode: TJSONObject): TJSONArray;
 var

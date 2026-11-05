@@ -67,7 +67,8 @@ uses
   System.Generics.Collections,
   Lsp.Discovery,
   Lsp.ConfigFabricator,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Deteccion;
 
 const
   CRLF = #13#10;

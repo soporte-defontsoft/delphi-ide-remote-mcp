@@ -155,7 +155,8 @@ uses
   Lsp.Lineas in 'Lsp.Lineas.pas',
   Lsp.Extensiones in 'Lsp.Extensiones.pas',
   Lsp.RegistroDelIde in 'Lsp.RegistroDelIde.pas',
-  Lsp.Papelera in 'Lsp.Papelera.pas';
+  Lsp.Papelera in 'Lsp.Papelera.pas',
+  Lsp.Deteccion in 'Lsp.Deteccion.pas';
 
 {$R *.res}
 

@@ -115,7 +115,8 @@ uses
   System.Masks,
   Lsp.Lineas,
   Lsp.Extensiones,
-  Lsp.Papelera;
+  Lsp.Papelera,
+  Lsp.Deteccion;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin
