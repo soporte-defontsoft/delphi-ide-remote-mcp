@@ -4339,13 +4339,21 @@ const
     'alpha is 00 or nearly so, the color invisible or nearly.';
   { %3:s de STYLE-058 cuando el valor es un color (x...) }
   SF_STYLES_COLOR_8_CIFRAS = ' A color takes its 8 hex digits, AARRGGBB: with fewer, ' + SF_COLOR_SIN_ALFA;
-  { %0:s: la propiedad; %1:s: el valor; %2:s: '' o SF_STYLES_NO_GUARDADA_QUITADA }
+  { %0:s: la propiedad; %1:s: el valor; %2:s: SF_STYLES_NO_GUARDADA_SIN_ESCRIBIR
+    o SF_STYLES_NO_GUARDADA_QUITADA. Lo que dice el juez, el escritor antes y
+    despues: el objeto sale como ya sale del fichero. Decia "el valor que ya da
+    su clase" tambien cuando el valor lo tenia el FICHERO en otras propiedades
+    (Width = 120 con Size.Width = 120 ya escrito; Hermes, completo de la
+    1.27.0): los dos casos dan el mismo objeto escrito, y una lista de nombres
+    que los separase imitaria al juez }
   SN_STYLES_NO_GUARDADA_FMT =
-    '[STYLE-059] With %0:s = %1:s the object ends with the value its class ' +
-    'already gives (its default, or where the class clamps that value): ' +
-    'FMX''s own writer (the IDE''s) does not store it, so it is not in the ' +
-    'file%2:s.';
-  SF_STYLES_NO_GUARDADA_QUITADA = ' (the line it had was removed)';
+    '[STYLE-059] With %0:s = %1:s, FMX''s own writer (the IDE''s) writes ' +
+    'this object as it already writes it from the file: the value stays ' +
+    'where its class leaves it (its default, a clamp, an Align) or where ' +
+    'the file already holds it in other properties (Width in Size.Width), ' +
+    'so %0:s is not stored%2:s.';
+  SF_STYLES_NO_GUARDADA_SIN_ESCRIBIR = ': nothing was written and no backup was taken';
+  SF_STYLES_NO_GUARDADA_QUITADA = ': the line it had was removed';
   { %0:s: la propiedad; %1:s: el valor dado; %2:s: lo que el escritor guarda
     por ella ('Size.Width = 100.0...'; varias con '; '). Una stored False
     (Width de FMX) decia STYLE-059 y quitaba la linea (V173b de la 1.23.1,

@@ -559,7 +559,8 @@ begin
     begin
       // el valor que ya da su clase: el escritor no lo guarda, y no se escribe
       if not WasThere then
-        Exit(MsgFmt(SN_STYLES_NO_GUARDADA_FMT, [AProp.Trim, AValue.Trim, '']));
+        Exit(MsgFmt(SN_STYLES_NO_GUARDADA_FMT, [AProp.Trim, AValue.Trim,
+          MsgText(SF_STYLES_NO_GUARDADA_SIN_ESCRIBIR)]));
       Doc.Reparsea;
       O := Doc.Resolve(AStyle, AChild, Err);
       if O <> nil then

@@ -50,6 +50,13 @@ V173h y V173i (29-oct, revisor del disenador #8 y #9), rojas contra 6334404:
   S17 (control) el mismo set con Align = Client: el tamano lo pone la alineacion y el escritor
       guarda 50 (medido): STYLE-059 sigue siendo la respuesta ("donde la clase deja el valor")
 
+Completo de Hermes de la 1.27.0 (B12b de la 1.28), roja contra d99170d:
+  S20 Width = 120 cuando el fichero YA tiene Size.Width = 120 (sin Align): el escritor deja el
+      objeto como lo deja el fichero. STYLE-059 decia "el valor que ya da su clase", y el 120 era
+      del FICHERO; ahora dice las dos razones (la clase, u otras propiedades del fichero) y que no
+      se escribio nada, y el fichero queda intacto. Los dos casos dan el mismo objeto escrito: el
+      texto dice lo que el juez mide, sin lista de nombres que los separe
+
 Uso:  python tests/test_styles_escritor_1231.py [ruta-a-DelphiLspMcp.exe]
 """
 import os
@@ -248,6 +255,15 @@ try:
     check('S19 el mismo valor que ya tiene: STYLE-069 UNCHANGED, sin la frase del escritor, y el fichero sin reescribir',
           mc.es(r, 'SN_STYLES_SIN_CAMBIOS_FMT') and 'not as' not in r and lee() == ORIGINAL and
           os.path.getmtime(STYLE) == antes, (r[:500], lee()))
+    # B12b: el valor que ya tiene el FICHERO en otra propiedad (Size.Width), no el de la clase
+    S20 = ORIGINAL.replace("    Align = Client\r\n", "").replace("Size.Width = 50.", "Size.Width = 120.")
+    escribe(S20)
+    antes = os.path.getmtime(STYLE)
+    r = pon('Width', '120')
+    check('S20 (B12b) Width = 120 con Size.Width = 120 ya escrito: STYLE-059 dice que no se escribio nada, '
+          'y el fichero intacto y sin reescribir',
+          mc.es(r, 'SN_STYLES_NO_GUARDADA_FMT') and mc.catalogo()['SF_STYLES_NO_GUARDADA_SIN_ESCRIBIR'] in r and
+          lee() == S20 and os.path.getmtime(STYLE) == antes, (r[:500], lee()))
 finally:
     srv.cierra()
     mc.borra(BASE)
