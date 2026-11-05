@@ -231,6 +231,23 @@ try:
     check('S17 (control) con Align = Client el escritor guarda 50: STYLE-059 y Size.Width sigue en 50',
           mc.es(r, 'SN_STYLES_NO_GUARDADA_FMT') and 'Size.Width = 50.000000000000000000' in lee(),
           (r[:500], lee()))
+
+    # completo de Hermes de la 1.27.0: un set que deja el fichero como estaba decia STYLE-011
+    # CHANGED y lo reescribia igual (Size.Height = 30 de un hijo con Align = Contents, que el
+    # escritor guarda 26). Ni se escribe ni se copia: la fecha del fichero no se mueve
+    escribe()
+    antes = os.path.getmtime(STYLE)
+    r = pon('Size.Height', '30')
+    check('S18 lo que el escritor guarda como ya estaba (Align = Client: 50): STYLE-069 UNCHANGED, sin CHANGED, '
+          'el fichero intacto y sin reescribir, y dice como lo guarda (50, no 30)',
+          mc.es(r, 'SN_STYLES_SIN_CAMBIOS_FMT') and not mc.es(r, 'SN_STYLES_PROP_SET_FMT') and
+          lee() == ORIGINAL and os.path.getmtime(STYLE) == antes and
+          'as 50.000000000000000000, not as 30' in r, (r[:500], lee()))
+    # (xFFFFFFFF no vale: el escritor lo guarda claWhite y eso SI cambia el fichero, medido)
+    r = pon('HitTest', 'False')
+    check('S19 el mismo valor que ya tiene: STYLE-069 UNCHANGED, sin la frase del escritor, y el fichero sin reescribir',
+          mc.es(r, 'SN_STYLES_SIN_CAMBIOS_FMT') and 'not as' not in r and lee() == ORIGINAL and
+          os.path.getmtime(STYLE) == antes, (r[:500], lee()))
 finally:
     srv.cierra()
     mc.borra(BASE)

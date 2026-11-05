@@ -524,6 +524,7 @@ begin
     end;
     // como lo guarda el escritor de FMX, el del IDE (V141 de la 1.23.1)
     var Nota := '';
+    var ComoElEscritor := False;
     if not AJuicio.Preguntado then
       Nota := MsgText(SN_STYLES_SIN_ESCRITOR)
     else if (not AJuicio.Guarda) and (Length(AJuicio.EnOtras) > 0) then
@@ -580,6 +581,7 @@ begin
         var Habia: Boolean;
         if O <> nil then
           Line := Doc.SetProp(O, AProp.Trim, AJuicio.Valor, Habia);
+        ComoElEscritor := True;
         Nota := MsgFmt(SN_STYLES_GUARDADA_COMO_FMT, [AProp.Trim, AJuicio.Valor, AValue.Trim,
           // la pista de las 8 cifras, si las que dio el agente son menos: por LA
           // gramatica (EsColorSinAlfa); se miraba si lo GUARDADO empezaba por x, y
@@ -588,6 +590,17 @@ begin
       end;
       if not WasThere then
         ColocaComoElEscritor(AJuicio.Orden, AProp.Trim);
+    end;
+    // un set que deja el fichero como estaba (el mismo valor, o el escritor de FMX
+    // guarda el que ya habia): ni se escribe ni se copia, y no se dice CHANGED
+    // (Hermes, completo de la 1.27.0)
+    if Doc.TextoDe(Doc.Lines) = Doc.TextoDe(Doc.Leidas) then
+    begin
+      var Como := '';
+      if ComoElEscritor then
+        Como := MsgFmt(SF_STYLES_SIN_CAMBIOS_GUARDA_FMT, [AProp.Trim, AJuicio.Valor, AValue.Trim]);
+      Exit(MsgFmt(SN_STYLES_SIN_CAMBIOS_FMT, [LineaCitada(Line), AStyle, IfThen(AChild <> '', '/' + AChild, ''),
+        TPath.GetFileName(Doc.Path), Como]));
     end;
     Result := Doc.Guarda;
     if Result <> '' then

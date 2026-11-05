@@ -8,6 +8,10 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- `delphi_styles set` no longer answers `STYLE-011 CHANGED` when the file stays as it was: the same value, or one that FMX's own writer stores as what was already there. It said CHANGED and wrote the same bytes (found by Hermes' full test of 1.27.0: `Size.Height = 30` of a child with `Align = Contents`, which the writer stores as 26). It now answers `STYLE-069 UNCHANGED`, writes nothing and takes no backup, as `delphi_edit` (`EDIT-113`) and `delphi_changeset` (`CHSET-029`) do, and says how the writer stores the value when it is not the one given.
+
 ## [1.27.0] - 2026-11-05
 
 A minor version about what the server starts and how long a client waits. Every

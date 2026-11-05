@@ -4297,6 +4297,19 @@ const
   SN_STYLES_GUARDADA_COMO_FMT =
     '[STYLE-058] FMX''s own writer (the IDE''s) stores %0:s as %1:s, not as ' +
     '%2:s: written its way, which is the value FMX loads.%3:s';
+  { un set que deja el fichero como estaba: el mismo valor, o el que guarda el
+    escritor de FMX es el que ya habia. Decia STYLE-011 CHANGED y reescribia lo
+    mismo (Hermes, completo de la 1.27.0: Size.Height = 30 de un hijo con Align =
+    Contents, que el escritor guarda 26). Como EDIT-113 y CHSET-029. %0:s: la
+    linea; %1:s: el estilo; %2:s: '/hijo' o ''; %3:s: el fichero; %4:s: '' o
+    SF_STYLES_SIN_CAMBIOS_GUARDA_FMT }
+  SN_STYLES_SIN_CAMBIOS_FMT =
+    '[STYLE-069] UNCHANGED: %0:s (style %1:s%2:s, %3:s) is what the file ' +
+    'already says, so nothing was written and no backup was taken.%4:s';
+  { %0:s: la propiedad; %1:s: como la guarda el escritor; %2:s: lo que se dio }
+  SF_STYLES_SIN_CAMBIOS_GUARDA_FMT =
+    ' FMX''s own writer (the IDE''s) stores %0:s as %1:s, not as %2:s: the ' +
+    'value FMX loads.';
   { LA explicacion de un color de menos de 8 cifras: la comparten la pista de
     STYLE-058, STYLE-061 y DSGN-176 (V152 y V154 de la 1.23.1) }
   SF_COLOR_SIN_ALFA =
