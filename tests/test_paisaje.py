@@ -174,7 +174,7 @@ REGLAS = [
      'revisor de cierre de la 1.18.2: cinco sitios lo hacian a mano y el juicio de lo escrito leia un '
      'binario como texto y no juzgaba nada)'),
     ('la nota de codificacion de un form a mano', r"(?<!function )\b(?:NotaDeFormAncho|NotaDeUtf8SinBomDe)\s*\(",
-     [('Lsp.Patch.pas', 'NotaDeCodificacionDeForm')],
+     [('Lsp.JuicioDeForms.pas', 'NotaDeCodificacionDeForm')],
      'NotaDeCodificacionDeForm: LA nota de codificacion de un form (ancho, DSGN-121, o UTF-8 sin BOM, '
      'READ-009) para lint, los escritores del disenador, preview y el lint de delphi_edit/tanda/changeset '
      '(W9 del revisor de cierre de la 1.18.2: tres emisores, dos sin READ-009)'),
@@ -1013,7 +1013,7 @@ REGLAS = [
      'TMetaTable.CadenaDe: la cadena de una clase hasta su raiz, con su tope (revision de la 1.17.0: '
      'cada pregunta de la tabla la recorria a mano)'),
     ('el designer de una unidad', r"(?:ChangeExtension|ChangeFileExt)\s*\([^;]*'\.(?:dfm|fmx)'\)", [],
-     'DesignersDeUnidad (Lsp.Patch), la inversa de UnidadDeDesigner (2.2 de la 1.18.0: cinco a mano)'),
+     'DesignersDeUnidad (Lsp.JuicioDeForms), la inversa de UnidadDeDesigner (2.2 de la 1.18.0: cinco a mano)'),
     ('las extensiones de un proyecto a mano', r"\[\s*'\.dp(?:r|k|roj)'(?:\s*,\s*'\.dp(?:r|k|roj)')+\s*\]",
      [('Lsp.Dproj.pas', 'EsFuentePrincipal')],
      'EsFuentePrincipal (.dpr/.dpk) y EsProyectoOSuFuente (.dproj o su fuente principal), junto a '
@@ -1263,8 +1263,8 @@ REGLAS = [
      # de la funcion bajo la que cae la constante)
      r"^(?!\s*DESIGNER_EXTS\s*:).*'\*?\.(?:dfm|fmx)'\s*,\s*'\*?\.(?:dfm|fmx)'|"
      r"(?:MatchText|TieneExtension)\s*\([^;]*\bDESIGNER_EXTS\s*\)|\bin\s+DESIGNER_EXTS\b",
-     [('Lsp.Extensiones.pas', 'EsRutaDeDesigner'), ('Lsp.Patch.pas', 'DesignersDeUnidad')],
-     'DESIGNER_EXTS, EsRutaDeDesigner (Lsp.Extensiones) y DesignersDeUnidad (Lsp.Patch): la lista estaba escrita a mano en '
+     [('Lsp.Extensiones.pas', 'EsRutaDeDesigner'), ('Lsp.JuicioDeForms.pas', 'DesignersDeUnidad')],
+     'DESIGNER_EXTS, EsRutaDeDesigner (Lsp.Extensiones) y DesignersDeUnidad (Lsp.JuicioDeForms): la lista estaba escrita a mano en '
      'nueve sitios, y el detector necesita saber si un fichero es un form (4.1 de la 1.18.0)'),
     ('la extension de un estilo a mano',
      # la pregunta "es un .style?" sobre la extension de una ruta; una mascara

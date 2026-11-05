@@ -247,7 +247,7 @@ uses
   Lsp.References,
   Lsp.Listas, // TPagina, TPorCarpeta y el organizador de listas de ficheros
   Lsp.Guard,
-  Lsp.Patch,
+  Lsp.JuicioDeForms,
   Lsp.ShaCache,
   Lsp.Base64,     // BytesToBase64 / Base64ToBytes: el codificador de la casa
   Lsp.Dproj,      // RutasDeBusqueda: el search path de un .dproj, resuelto

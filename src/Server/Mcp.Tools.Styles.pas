@@ -75,7 +75,7 @@ uses
   Lsp.Guard,
   Lsp.Discovery,
   Lsp.BuildRunner,
-  Lsp.Patch,
+  Lsp.JuicioDeForms,
   Lsp.ProjectUnits,
   Lsp.References,   // SkipIdeArtifacts: el filtro compartido de artefactos
   Lsp.Listas,       // AgrupaPorFichero: los avisos por carpeta y fichero

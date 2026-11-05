@@ -377,7 +377,7 @@ uses
   System.RegularExpressions,
   System.Generics.Collections,
   System.Character,
-  Lsp.Patch,
+  Lsp.JuicioDeForms,
   Lsp.Texts,
   Lsp.Guard,
   System.Generics.Defaults,

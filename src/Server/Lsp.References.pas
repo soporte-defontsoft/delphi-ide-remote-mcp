@@ -197,7 +197,6 @@ uses
   Lsp.ProjectUnits,
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
-  Lsp.Patch, // LeeTexto: la puerta de leer
   Lsp.ConfigFabricator, // MotorPuedeEnsenar: EL juez de "fuera" de lo que dice el motor
   Lsp.Settings,
   Lsp.Rutas,            // EsRutaAbsoluta: LA regla de ruta completa
@@ -206,7 +205,8 @@ uses
   Lsp.Casa,
   Lsp.Lineas,
   Lsp.Extensiones,
-  Lsp.Puertas;
+  Lsp.Puertas,
+  Lsp.JuicioDeForms;
 
 function IdentifierAt(const ALineText: string; ACol: Integer; out AInicio: Integer): string;
 var

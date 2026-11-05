@@ -69,7 +69,8 @@ uses
   Lsp.ConfigFabricator,
   Lsp.Lineas,
   Lsp.Deteccion,
-  Lsp.Puertas;
+  Lsp.Puertas,
+  Lsp.JuicioDeForms;
 
 const
   CRLF = #13#10;

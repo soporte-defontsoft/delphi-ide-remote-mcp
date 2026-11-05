@@ -133,7 +133,8 @@ uses
   System.StrUtils, // IfThen: la lista de modos de ModosQueNoCombinan
   Lsp.Pascal,      // SinMayusculas: EL pliegue de lo que no es una ruta
   MCPServer.Registration,
-  Lsp.FormRender;  // EmpiezaLaEspera: el reloj de lo que espera el cliente
+  Lsp.FormRender,  // EmpiezaLaEspera: el reloj de lo que espera el cliente
+  Lsp.JuicioDeForms;
 
 { TDelphiReadTool }
 

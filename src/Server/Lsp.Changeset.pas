@@ -93,7 +93,8 @@ uses
   Lsp.Extensiones,
   Lsp.Papelera,
   Lsp.Deteccion,
-  Lsp.Puertas;
+  Lsp.Puertas,
+  Lsp.JuicioDeForms;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);

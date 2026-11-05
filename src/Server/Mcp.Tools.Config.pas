@@ -132,7 +132,7 @@ uses
   Lsp.Dproj,
   Lsp.BuildRunner,
   Lsp.ProjectUnits,
-  Lsp.Patch,
+  Lsp.JuicioDeForms,
   Lsp.Regex,
   Lsp.TodoONada,
   Lsp.Rutas,

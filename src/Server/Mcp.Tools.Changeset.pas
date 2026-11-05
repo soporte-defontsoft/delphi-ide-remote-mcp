@@ -80,7 +80,7 @@ uses
   MCPServer.Serializer,
   Lsp.Guard,
   Lsp.Mascara, // MaskDriveText: la ruta delante de cada aviso, como el commit
-  Lsp.Patch,   // AvisosDelLector: el lector del IDE, fuera del cerrojo
+  Lsp.JuicioDeForms, // AvisosDelLector: el lector del IDE, fuera del cerrojo
   Lsp.Pascal,  // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.TextEdit, // NotaDeEstiloFmx: lo que FMX dice de un .style, fuera del cerrojo
   Lsp.Json,     // ListaJson: las ops, desenvueltas si llegaron dos veces codificadas
