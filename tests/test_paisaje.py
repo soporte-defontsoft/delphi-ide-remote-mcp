@@ -188,7 +188,8 @@ REGLAS = [
      'autorizacion de X la dice el juez de la sesion, Mld.Sesion)'),
     ('listar ficheros o carpetas sin saber si se dejo', r"TDirectory\.(?:GetFiles|GetDirectories)\s*\(",
      [(u, '*') for u in ('Lsp.BuildRunner.pas', 'Lsp.Casa.pas', 'Lsp.DesignerMetaGen.pas',
-                         'Lsp.Discovery.pas', 'Lsp.Guard.pas', 'Lsp.LogSink.pas', 'Lsp.PackageMap.pas',
+                         'Lsp.Discovery.pas', 'Lsp.Guard.pas', 'Lsp.LogSink.pas', 'Lsp.Mudanzas.pas',
+                         'Lsp.PackageMap.pas',
                          'Lsp.Patch.pas', 'Lsp.ProjectUnits.pas', 'Lsp.Session.pas', 'Lsp.Styles.pas',
                          'Mcp.Tools.Messages.pas', 'Mcp.Tools.PAServer.pas',
                          'Mcp.Tools.Report.pas', 'Mcp.Tools.Styles.pas', 'Mcp.Tools.Vault.pas',
@@ -1837,7 +1838,7 @@ REGLAS = [
     ('una ruta leida resuelta a mano', r'\bTPath\.IsPathRooted\s*\(',
      [# re-apuntar en una mudanza: solo lo escrito relativo a la carpeta (lo demas lo nombra
       # RutasQueYaNoLlegan)
-      ('Lsp.ProjectUnits.pas', 'RutaReapuntada'), ('Lsp.ProjectUnits.pas', 'RutasQueYaNoLlegan'),
+      ('Lsp.Mudanzas.pas', 'RutaReapuntada'), ('Lsp.Mudanzas.pas', 'RutasQueYaNoLlegan'),
       # un $I relativo se busca ademas por las carpetas; el completo o a medias, por RutaDesde
       ('Lsp.DesignerMetaGen.pas', 'TGenerador.TextoDeInclude'),
       # el nombre a secas de delphi_test (TEST-...) y la rama de ReadOnlyPaths tras su juez

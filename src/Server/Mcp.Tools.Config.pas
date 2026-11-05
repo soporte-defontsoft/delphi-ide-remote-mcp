@@ -143,7 +143,8 @@ uses
   Lsp.NetDrives,
   Lsp.Lineas,
   Lsp.Extensiones,
-  Lsp.Puertas;
+  Lsp.Puertas,
+  Lsp.Mudanzas;
 
 constructor TDelphiConfigTool.Create;
 begin

@@ -158,7 +158,8 @@ uses
   Lsp.Papelera in 'Lsp.Papelera.pas',
   Lsp.Deteccion in 'Lsp.Deteccion.pas',
   Lsp.Puertas in 'Lsp.Puertas.pas',
-  Lsp.JuicioDeForms in 'Lsp.JuicioDeForms.pas';
+  Lsp.JuicioDeForms in 'Lsp.JuicioDeForms.pas',
+  Lsp.Mudanzas in 'Lsp.Mudanzas.pas';
 
 {$R *.res}
 
