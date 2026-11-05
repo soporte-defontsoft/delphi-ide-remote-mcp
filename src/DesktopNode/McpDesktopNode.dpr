@@ -209,6 +209,18 @@ begin
           Writeln(MsgFmt(SR_NODE_NO_ENVIAR_TECLA_FMT, [Escritorio.Error]));
       end;
     end
+    else if (Orden = NODO_ORDEN_ARRASTRA) and (Args >= 5) then
+    begin
+      { pulsa, se mueve y suelta: la barra de titulo mueve una ventana, su
+        borde o su esquina la redimensiona }
+      Hizo := Escritorio.Arrastrar(StrToIntDef(Arg(2), -1), StrToIntDef(Arg(3), -1),
+        StrToIntDef(Arg(4), -1), StrToIntDef(Arg(5), -1));
+      if Hizo then
+        Writeln(MsgFmt(SK_NODE_ARRASTRADO_FMT, [StrToIntDef(Arg(2), -1), StrToIntDef(Arg(3), -1),
+          StrToIntDef(Arg(4), -1), StrToIntDef(Arg(5), -1)]))
+      else
+        Writeln(MsgFmt(SR_NODE_NO_PUDE_ARRASTRAR_FMT, [Escritorio.Error]));
+    end
     else if Orden = NODO_ORDEN_ALTAB then
     begin
       Hizo := Escritorio.Combinacion([TeclaPorNombre('alt'), TeclaPorNombre('tab')]);
@@ -588,6 +600,18 @@ begin
                 IfThen(Args > 2, MsgFmt(SF_NODE_CON_MODIFICADORES_FMT, [Args - 2]), '')]))
             else
               Writeln(MsgFmt(SR_NODE_NO_ENVIAR_TECLA_FMT, [Manos.Error]));
+          end
+          else if (Orden = NODO_ORDEN_ARRASTRA) and (Args >= 5) then
+          begin
+            { pulsa, se mueve en pasos y suelta: la barra de titulo mueve una
+              ventana, su borde o su esquina la redimensiona }
+            Hizo := Manos.Arrastrar(StrToIntDef(Arg(2), -1), StrToIntDef(Arg(3), -1),
+              StrToIntDef(Arg(4), -1), StrToIntDef(Arg(5), -1));
+            if Hizo then
+              Writeln(MsgFmt(SK_NODE_ARRASTRADO_FMT, [StrToIntDef(Arg(2), -1), StrToIntDef(Arg(3), -1),
+                StrToIntDef(Arg(4), -1), StrToIntDef(Arg(5), -1)]))
+            else
+              Writeln(MsgFmt(SR_NODE_NO_PUDE_ARRASTRAR_FMT, [Manos.Error]));
           end
           else if Orden = NODO_ORDEN_ALTAB then
           begin

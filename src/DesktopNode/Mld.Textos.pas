@@ -75,6 +75,13 @@ const
   SR_NODE_NO_PUDE_PULSAR_FMT =
     '  [NODE-015 DENIED] Could not click: %s';
 
+  SK_NODE_ARRASTRADO_FMT =
+    '  [NODE-048] DRAGGED from pixel (%d,%d) to (%d,%d) of the screenshot ' +
+    '(pressed, moved and released)';
+
+  SR_NODE_NO_PUDE_ARRASTRAR_FMT =
+    '  [NODE-049 DENIED] Could not drag: %s';
+
   SR_NODE_EXCEPCION_FMT =
     '[NODE-046 INTERNAL] The node failed: %s: %s';
 

@@ -2689,7 +2689,9 @@ const
     'the operator sets them, and a refusal names the missing one.';
   SP_ADBLINUX_COMMAND =
     'screenshot (default: the whole desktop as a PNG) | tap (press at x,y ' +
-    'measured on that screenshot) | type (write "text"; with x,y it ' +
+    'measured on that screenshot) | drag (press at x,y, move to tox,toy and ' +
+    'release: a window''s title bar moves it, its edge or corner resizes ' +
+    'it) | type (write "text"; with x,y it ' +
     'presses there first and pays the startup once (tap + type pays it ' +
     'twice). Typed means the keys were SENT: nothing checks ' +
     'where the focus was, so read the screenshot each answer brings) | key ' +
@@ -2708,11 +2710,17 @@ const
     'when you develop the node itself (deployed with delphi_build ' +
     'target=Deploy).';
   SP_ADBLINUX_X =
-    'tap/type: horizontal pixel measured on the screenshot this tool ' +
+    'tap/type/drag: horizontal pixel measured on the screenshot this tool ' +
     'returned (pass its frame too and the server converts)';
   SP_ADBLINUX_Y =
-    'tap/type: vertical pixel measured on the screenshot this tool ' +
+    'tap/type/drag: vertical pixel measured on the screenshot this tool ' +
     'returned (pass its frame too and the server converts)';
+  SP_DESKTOP_TOX =
+    'drag: horizontal pixel where it releases, on the same screenshot (and ' +
+    'frame) as x';
+  SP_DESKTOP_TOY =
+    'drag: vertical pixel where it releases, on the same screenshot (and ' +
+    'frame) as y';
   SP_ADBLINUX_MODIFIERS =
     'key OPTIONAL: keys held while it is pressed, comma separated - ctrl, ' +
     'shift, alt, super (Ctrl+K on Linux: code=37 modifiers=ctrl; Alt+F4 on ' +
@@ -2941,8 +2949,8 @@ const
     'a..z.';
 
   SR_ADBLINUX_CMD =
-    '[DESK-011 INVALID_PARAM] command must be screenshot, tap, type, key, ' +
-    'overview or status.';
+    '[DESK-011 INVALID_PARAM] command must be screenshot, tap, drag, type, ' +
+    'key, overview or status.';
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa), como en
     delphi_adb: aqui se ignoraba en silencio, y sin command la llamada es una
     captura - siete key/tap/type de un agente con command FUERA de sus
@@ -2953,7 +2961,7 @@ const
     'be ignored). Nothing was done: %s takes %s.%s%s';
   SF_DESKTOP_SIN_COMANDO =
     ' "command" did not arrive, and without it the call is a screenshot ' +
-    '(the default): send command=tap, type, key or overview with the gesture.';
+    '(the default): send command=tap, drag, type, key or overview with the gesture.';
   SR_ADBLINUX_NEEDPROFILE =
     '[DESK-012 INVALID_PARAM] "profile" is missing: the PAServer profile of the ' +
     'machine whose desktop you want (delphi_paserver command=profiles ' +
@@ -2961,6 +2969,10 @@ const
   SR_ADBLINUX_NEEDXY =
     '[DESK-013 INVALID_PARAM] tap needs x and y, measured on the screenshot ' +
     'that command=screenshot returns.';
+  SR_DESKTOP_DRAG_NEEDXY =
+    '[DESK-026 INVALID_PARAM] drag needs x,y (where it presses) and tox,toy ' +
+    '(where it releases), measured on the screenshot that command=screenshot ' +
+    'returns.';
   SR_ADBLINUX_NEEDCODE =
     '[DESK-014 INVALID_PARAM] key needs "code", the Linux code of the key ' +
     '(Escape 1, Tab 15, Enter 28).';

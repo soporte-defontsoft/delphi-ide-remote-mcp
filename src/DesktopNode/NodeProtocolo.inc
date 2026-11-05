@@ -32,6 +32,7 @@
   NODO_ORDEN_TEXTO = 'texto';          // texto <texto>: teclea donde este el foco
   NODO_ORDEN_TECLA = 'tecla';          // tecla [modificadores] <tecla>
   NODO_ORDEN_ALTAB = 'altab';          // Alt+Tab (desde la consola del nodo)
+  NODO_ORDEN_ARRASTRA = 'arrastra';    // arrastra x1 y1 x2 y2: pulsa, se mueve y suelta
   { Y la salida de un TRABAJO del lanzador (src\RunJob): la escribe
     McpRunJob y la lee Lsp.RemoteRun. Estaban a mano en diecinueve sitios
     del lanzador y dos del servidor (28-sep-2026). }

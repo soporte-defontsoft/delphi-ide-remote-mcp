@@ -39,12 +39,21 @@ type
     procedure MedirPantalla;
     function ComponerPorVentanas(ADestino: HDC): Integer;
     function EnviarEntradas(var AEntradas: array of TInput): Boolean;
+    { El pixel de la captura en el 0..65535 de SendInput, y si cae en ella
+      (si no, el motivo en Error): lo miran Pulsar y Arrastrar. }
+    function Absolutas(AX, AY: Integer; out AAbsX, AAbsY: Integer): Boolean;
+    { UNA entrada del raton: AFlags dice si mueve (MOVER_ABS), baja o sube. }
+    function Raton(AAbsX, AAbsY: Integer; AFlags: DWORD): Boolean;
   public
     constructor Create;
     { Captura el escritorio virtual completo en ARuta (PNG). }
     function Capturar(const ARuta: string): Boolean;
     { Pulsa en el pixel (AX, AY) DE LA CAPTURA. }
     function Pulsar(AX, AY: Integer): Boolean;
+    { Arrastra como una mano: pulsa en (AX1,AY1) DE LA CAPTURA, se mueve en
+      pasos hasta (AX2,AY2) y suelta alli. El destino se mira ANTES de
+      pulsar, y el boton se suelta siempre. }
+    function Arrastrar(AX1, AY1, AX2, AY2: Integer): Boolean;
     { Escribe texto donde este el foco (Unicode, acentos incluidos). }
     function Escribir(const ATexto: string): Boolean;
     { Pulsa una combinacion: se mantienen pulsadas todas y se sueltan al
@@ -418,6 +427,72 @@ begin
       [Enviadas, Length(AEntradas), SysErrorMessage(GetLastError)]);
 end;
 
+function TEscritorioWin.Absolutas(AX, AY: Integer; out AAbsX, AAbsY: Integer): Boolean;
+begin
+  AAbsX := 0;
+  AAbsY := 0;
+  Result := (AX >= 0) and (AY >= 0) and (AX < FAncho) and (AY < FAlto);
+  if not Result then
+  begin
+    FError := MsgFmt(SF_NODE_PIXEL_FUERA_CAPTURA_FMT, [AX, AY, FAncho, FAlto]);
+    Exit;
+  end;
+  { SendInput habla en un sistema de 0..65535 sobre el escritorio virtual,
+    no en pixeles. La conversion es esta y solo esta. }
+  AAbsX := Round(AX * 65535 / Max(FAncho - 1, 1));
+  AAbsY := Round(AY * 65535 / Max(FAlto - 1, 1));
+end;
+
+const
+  { mover el raton a un punto absoluto del escritorio virtual }
+  MOVER_ABS = MOUSEEVENTF_MOVE or MOUSEEVENTF_ABSOLUTE or MOUSEEVENTF_VIRTUALDESK;
+
+function TEscritorioWin.Raton(AAbsX, AAbsY: Integer; AFlags: DWORD): Boolean;
+var
+  E: array[0..0] of TInput;
+begin
+  FillChar(E, SizeOf(E), 0);
+  E[0].Itype := INPUT_MOUSE;
+  E[0].mi.dx := AAbsX;
+  E[0].mi.dy := AAbsY;
+  E[0].mi.dwFlags := AFlags;
+  Result := EnviarEntradas(E);
+end;
+
+function TEscritorioWin.Arrastrar(AX1, AY1, AX2, AY2: Integer): Boolean;
+const
+  { en pasos, como una mano: Windows empieza un arrastre cuando el puntero se
+    mueve con el boton abajo, no con un salto }
+  PASOS = 20;
+var
+  X1, Y1, X2, Y2: Integer;
+begin
+  FError := '';
+  Result := False;
+  // el destino ANTES de pulsar: fuera de la captura, el boton quedaria abajo
+  if not Absolutas(AX1, AY1, X1, Y1) or not Absolutas(AX2, AY2, X2, Y2) then
+    Exit;
+  if not Raton(X1, Y1, MOVER_ABS) then
+    Exit;
+  Sleep(120);
+  if not Raton(X1, Y1, MOUSEEVENTF_LEFTDOWN) then
+    Exit;
+  try
+    Sleep(150);
+    for var I := 1 to PASOS do
+    begin
+      if not Raton(X1 + Round((X2 - X1) * I / PASOS), Y1 + Round((Y2 - Y1) * I / PASOS), MOVER_ABS) then
+        Exit;
+      Sleep(15);
+    end;
+    Sleep(100);
+    Result := True;
+  finally
+    // se suelta SIEMPRE, donde este: un boton abajo dejaria el raton del operador arrastrando
+    Raton(0, 0, MOUSEEVENTF_LEFTUP);
+  end;
+end;
+
 function TEscritorioWin.Pulsar(AX, AY: Integer): Boolean;
 var
   E: array[0..2] of TInput;
@@ -425,22 +500,14 @@ var
   AbsX, AbsY: Integer;
 begin
   FError := '';
-  if (AX < 0) or (AY < 0) or (AX >= FAncho) or (AY >= FAlto) then
-  begin
-    FError := MsgFmt(SF_NODE_PIXEL_FUERA_CAPTURA_FMT,
-      [AX, AY, FAncho, FAlto]);
+  if not Absolutas(AX, AY, AbsX, AbsY) then
     Exit(False);
-  end;
-  { SendInput habla en un sistema de 0..65535 sobre el escritorio virtual,
-    no en pixeles. La conversion es esta y solo esta. }
-  AbsX := Round(AX * 65535 / Max(FAncho - 1, 1));
-  AbsY := Round(AY * 65535 / Max(FAlto - 1, 1));
   FillChar(E, SizeOf(E), 0);
   for I := 0 to High(E) do
     E[I].Itype := INPUT_MOUSE;
   E[0].mi.dx := AbsX;
   E[0].mi.dy := AbsY;
-  E[0].mi.dwFlags := MOUSEEVENTF_MOVE or MOUSEEVENTF_ABSOLUTE or MOUSEEVENTF_VIRTUALDESK;
+  E[0].mi.dwFlags := MOVER_ABS;
   E[1].mi.dwFlags := MOUSEEVENTF_LEFTDOWN;
   E[2].mi.dwFlags := MOUSEEVENTF_LEFTUP;
   Result := EnviarEntradas(E);

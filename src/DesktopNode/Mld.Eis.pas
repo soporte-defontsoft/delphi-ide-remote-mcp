@@ -42,6 +42,12 @@ type
     function Resolver: Boolean;
     procedure Atender(AEvento: Pointer; ATipo: Integer);
     procedure Emitir(ADisp: Pointer);
+    { El punto de la captura en coordenadas logicas, y si cae en la pantalla
+      (si no, el motivo en Error): lo miran Mover y Arrastrar. }
+    function EnPantalla(AX, AY: Double; out ALx, ALy: Double): Boolean;
+    { Baja o sube un boton donde este el puntero: Pulsar hace las dos,
+      Arrastrar las separa. }
+    procedure Boton(ABoton: Cardinal; APulsado: Boolean);
   public
     constructor Create;
     destructor Destroy; override;
@@ -57,6 +63,12 @@ type
     { Pulsa en un punto medido sobre la captura del escritorio. El boton
       izquierdo es BTN_LEFT=272, codigo de Linux: el 1 de X11 no vale. }
     function Pulsar(AX, AY: Double; ABoton: Cardinal = 272): Boolean;
+    { Arrastra como una mano: pulsa en (AX1,AY1), se mueve en pasos hasta
+      (AX2,AY2) y suelta alli; los dos puntos, medidos sobre la captura. La
+      barra de titulo de una ventana la mueve, su borde o su esquina la
+      redimensiona. El destino se mira ANTES de pulsar, y el boton se suelta
+      siempre. }
+    function Arrastrar(AX1, AY1, AX2, AY2: Double; ABoton: Cardinal = 272): Boolean;
     { Teclas en codigos EVDEV (Escape 1, Tab 15, Enter 28, Alt izq 56).
       Ojo: NO son los keycodes de X11, que van 8 unidades por encima. }
     function Tecla(ACodigo: Cardinal; APulsada: Boolean): Boolean;
@@ -342,6 +354,18 @@ begin
       BoolToStr(FTeclado <> nil, True)]);
 end;
 
+function TManos.EnPantalla(AX, AY: Double; out ALx, ALy: Double): Boolean;
+begin
+  if FEscala <= 0 then
+    FEscala := 1.0;
+  ALx := AX / FEscala;
+  ALy := AY / FEscala;
+  Result := (ALx >= 0) and (ALy >= 0) and (ALx < FRegion.Ancho) and (ALy < FRegion.Alto);
+  if not Result then
+    FError := MsgFmt(SF_NODE_CAE_FUERA_PANTALLA_FMT,
+      [FormatFloat('0', AX), FormatFloat('0', AY), FormatFloat('0.00', FEscala), FRegion.Ancho, FRegion.Alto]);
+end;
+
 function TManos.Mover(AX, AY: Double): Boolean;
 var
   Lx, Ly: Double;
@@ -352,16 +376,8 @@ begin
     FError := MsgText(SF_NODE_CANAL_NO_ESTA_LISTO);
     Exit;
   end;
-  if FEscala <= 0 then
-    FEscala := 1.0;
-  Lx := AX / FEscala;
-  Ly := AY / FEscala;
-  if (Lx < 0) or (Ly < 0) or (Lx >= FRegion.Ancho) or (Ly >= FRegion.Alto) then
-  begin
-    FError := MsgFmt(SF_NODE_CAE_FUERA_PANTALLA_FMT,
-      [FormatFloat('0', AX), FormatFloat('0', AY), FormatFloat('0.00', FEscala), FRegion.Ancho, FRegion.Alto]);
+  if not EnPantalla(AX, AY, Lx, Ly) then
     Exit;
-  end;
   EiEmpezar(FPuntero, FSecuencia);
   Inc(FSecuencia);
   EiMover(FPuntero, Lx, Ly);
@@ -378,14 +394,10 @@ begin
 end;
 
 
-function TManos.Pulsar(AX, AY: Double; ABoton: Cardinal = 272): Boolean;
+procedure TManos.Boton(ABoton: Cardinal; APulsado: Boolean);
 var
   Disp: Pointer;
 begin
-  Result := False;
-  if not Mover(AX, AY) then
-    Exit;
-  Sleep(120);
   { El boton viaja por el dispositivo que TIENE esa capacidad; si el
     escritorio no creo uno aparte, sirve el mismo del puntero. }
   Disp := FBoton;
@@ -393,18 +405,59 @@ begin
     Disp := FPuntero;
   EiEmpezar(Disp, FSecuencia);
   Inc(FSecuencia);
-  EiBoton(Disp, ABoton, True);
+  EiBoton(Disp, ABoton, APulsado);
   EiCuadro(Disp, Microsegundos);
   EiParar(Disp);
   Bombear;
+end;
+
+function TManos.Pulsar(AX, AY: Double; ABoton: Cardinal = 272): Boolean;
+begin
+  Result := False;
+  if not Mover(AX, AY) then
+    Exit;
+  Sleep(120);
+  Boton(ABoton, True);
   Sleep(80);
-  EiEmpezar(Disp, FSecuencia);
-  Inc(FSecuencia);
-  EiBoton(Disp, ABoton, False);
-  EiCuadro(Disp, Microsegundos);
-  EiParar(Disp);
-  Bombear;
+  Boton(ABoton, False);
   Result := True;
+end;
+
+function TManos.Arrastrar(AX1, AY1, AX2, AY2: Double; ABoton: Cardinal = 272): Boolean;
+const
+  { en pasos, como una mano: un escritorio no empieza un arrastre con un
+    salto, sino cuando el puntero se mueve con el boton abajo }
+  PASOS = 20;
+var
+  Lx, Ly: Double;
+begin
+  Result := False;
+  if not FListo then
+  begin
+    FError := MsgText(SF_NODE_CANAL_NO_ESTA_LISTO);
+    Exit;
+  end;
+  // el destino ANTES de pulsar: fuera de la pantalla, el boton quedaria abajo
+  if not EnPantalla(AX2, AY2, Lx, Ly) then
+    Exit;
+  if not Mover(AX1, AY1) then
+    Exit;
+  Sleep(120);
+  Boton(ABoton, True);
+  try
+    Sleep(150);
+    for var I := 1 to PASOS do
+    begin
+      if not Mover(AX1 + (AX2 - AX1) * I / PASOS, AY1 + (AY2 - AY1) * I / PASOS) then
+        Exit;
+      Sleep(15);
+    end;
+    Sleep(100);
+    Result := True;
+  finally
+    // se suelta SIEMPRE: un boton abajo dejaria el raton del operador arrastrando
+    Boton(ABoton, False);
+  end;
 end;
 
 { Pide al escritorio su mapa de teclado, UNA vez. libei lo entrega como un

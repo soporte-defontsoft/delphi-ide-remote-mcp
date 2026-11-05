@@ -2441,6 +2441,18 @@ try:
     res, sc, t = llama('delphi_desktop', {'command': 'key', 'profile': 'e168-no-existe', 'code': '1'})
     check('E168 ...y key con lo suyo pasa la guarda (lo para el destino, no DESK-025)',
           bool(t) and not mc.abre(t, 'SR_DESKTOP_NO_VA_CON_COMANDO_FMT'), t[:200])
+    # drag (1.28): pide sus DOS puntos, y tox/toy no van con otro gesto
+    rechazo('E168 delphi_desktop drag sin tox,toy: DESK-026', 'delphi_desktop',
+            {'command': 'drag', 'profile': 'e168-no-existe', 'x': '10', 'y': '10'}, 'INVALID_PARAM',
+            'SR_DESKTOP_DRAG_NEEDXY')
+    rechazo('E168 delphi_desktop tap con tox: DESK-025', 'delphi_desktop',
+            {'command': 'tap', 'profile': 'e168-no-existe', 'x': '10', 'y': '10', 'tox': '20'}, 'INVALID_PARAM',
+            'SR_DESKTOP_NO_VA_CON_COMANDO_FMT')
+    res, sc, t = llama('delphi_desktop', {'command': 'drag', 'profile': 'e168-no-existe', 'x': '10', 'y': '10',
+                                          'tox': '20', 'toy': '20'})
+    check('E168 ...y drag con sus dos puntos pasa la guarda (lo para el destino, no DESK-025 ni DESK-026)',
+          bool(t) and not mc.abre(t, 'SR_DESKTOP_NO_VA_CON_COMANDO_FMT') and not mc.abre(t, 'SR_DESKTOP_DRAG_NEEDXY'),
+          t[:200])
     # ...y en help, docs y report, las ultimas de varios comandos sin la guarda: se
     # tragaban name con conventions, offset con search, title con list (20-oct-2026)
     rechazo('E168 delphi_help conventions con name: HELP-009', 'delphi_help',

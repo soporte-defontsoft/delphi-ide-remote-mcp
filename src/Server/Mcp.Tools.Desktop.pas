@@ -43,6 +43,8 @@ type
     FProject: string;
     FX: string;
     FY: string;
+    FToX: string;
+    FToY: string;
     FCode: string;
     FModifiers: string;
     FText: string;
@@ -73,6 +75,10 @@ type
     property X: string read FX write FX;
     [SchemaDescription(SP_ADBLINUX_Y)]
     property Y: string read FY write FY;
+    [SchemaDescription(SP_DESKTOP_TOX)]
+    property ToX: string read FToX write FToX;
+    [SchemaDescription(SP_DESKTOP_TOY)]
+    property ToY: string read FToY write FToY;
     [SchemaDescription(SP_ADBLINUX_CODE)]
     property Code: string read FCode write FCode;
     [SchemaDescription(SP_ADBLINUX_MODIFIERS)]
@@ -299,7 +305,7 @@ var
   end;
 begin
   Cmd := ComandoDeEscritorio(Params.Command);
-  if not MatchStr(Cmd, ['screenshot', 'tap', 'type', 'key', 'overview', 'status']) then
+  if not MatchStr(Cmd, ['screenshot', 'tap', 'drag', 'type', 'key', 'overview', 'status']) then
     Exit(MsgText(SR_ADBLINUX_CMD));
 
   { "out" es una ruta LOCAL que elige QUIEN LLAMA -donde baja la captura del
@@ -359,6 +365,19 @@ begin
     if FP <> '' then
       Exit(FP);
     Args := Args + [IntToStr(PX), IntToStr(PY)];
+  end
+  else if Cmd = 'drag' then
+  begin
+    if (Params.X.Trim = '') or (Params.Y.Trim = '') or (Params.ToX.Trim = '') or (Params.ToY.Trim = '') then
+      Exit(MsgText(SR_DESKTOP_DRAG_NEEDXY));
+    // los dos puntos, de la MISMA imagen: un frame convierte los dos
+    var QX, QY: Integer;
+    var FD := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
+    if FD = '' then
+      FD := FramePoint(Params.Frame, Params.ToX, Params.ToY, QX, QY);
+    if FD <> '' then
+      Exit(FD);
+    Args := Args + [NODO_ORDEN_ARRASTRA, IntToStr(PX), IntToStr(PY), IntToStr(QX), IntToStr(QY)];
   end
   else if Cmd = 'type' then
   begin
@@ -767,11 +786,13 @@ begin
   var Sobra := ParametroQueNoVa(Cmd, [
       'screenshot', 'out region window inline maxwidth',
       'tap', 'x y frame out inline maxwidth',
+      'drag', 'x y tox toy frame out inline maxwidth',
       'type', 'text x y frame out inline maxwidth',
       'key', 'code modifiers out inline maxwidth',
       'overview', 'out inline maxwidth',
       'status', ''],
-    ['x', Params.X, '', 'y', Params.Y, '', 'frame', Params.Frame, '',
+    ['x', Params.X, '', 'y', Params.Y, '', 'tox', Params.ToX, '', 'toy', Params.ToY, '',
+     'frame', Params.Frame, '',
      'code', Params.Code, '', 'modifiers', Params.Modifiers, '', 'text', Params.Text, '',
      'out', Params.Out_, '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), ''], Suyos, VaCon);
