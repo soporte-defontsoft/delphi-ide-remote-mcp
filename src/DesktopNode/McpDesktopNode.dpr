@@ -324,6 +324,8 @@ var
   Manos: TManos;
   Pantallas: TArray<TPantalla>;
   Escala: Double;
+  EscalaDelEscritorio: Boolean; // la dijo el escritorio (Mutter); si no, se mide
+  CapW, CapH: Integer;
   Captura, RutaSesion, RutaSc, Stream: string;
   Descriptor, ObjX, ObjY: Integer;
   Orden, Frase: string;
@@ -454,6 +456,7 @@ begin
 
       Writeln(MsgText(SN_NODE_PANTALLA_ESCALA_CAPTURA));
       Escala := 1.0;
+      EscalaDelEscritorio := False;
       { CERO monitores es el escritorio de una sesion remota cuyo cliente se
         ha ido (GNOME Remote Desktop: la pantalla ERA ese cliente): el
         portal contesta "code 2" a secas y no hay donde pulsar. Medido en el
@@ -468,6 +471,7 @@ begin
           Exit;
         end;
         Escala := Pantallas[0].Escala;
+        EscalaDelEscritorio := True;
         Writeln(MsgFmt(SN_NODE_ESCRITORIO_DICE_ESCALA_FMT, [FormatFloat('0.00', Escala)]));
       end
       else
@@ -504,6 +508,18 @@ begin
           begin
             Writeln(MsgFmt(SN_NODE_CANAL_NO_LISTO_FMT, [Manos.Error]));
             Exit;
+          end;
+          { Sin la escala de Mutter (Plasma no tiene su API) se MIDE: la captura
+            esta en pixeles y la region de EIS en coordenadas logicas, y la
+            conversion que hace el nodo es justo la que hay entre las dos (en
+            el Fedora con Plasma al 125%, xdg_output dio 1536 de ancho logico
+            para una captura de 1920; 4-nov-2026). }
+          if not EscalaDelEscritorio and (Manos.Region.Ancho > 0) and
+             TamanoPng(Captura, CapW, CapH) then
+          begin
+            Manos.Escala := CapW / Manos.Region.Ancho;
+            Writeln(MsgFmt(SN_NODE_ESCALA_MEDIDA_FMT,
+              [CapW, Manos.Region.Ancho, FormatFloat('0.00', Manos.Escala)]));
           end;
           Writeln(MsgFmt(SN_NODE_LISTAS_PANTALLA_LOGICA_FMT,
             [Manos.Region.Ancho, Manos.Region.Alto, FormatFloat('0.00', Manos.Escala)]));

@@ -10,6 +10,7 @@
 interface
 
 uses
+  System.Classes,
   Mld.Dyn;
 
 type
@@ -22,12 +23,33 @@ type
     Principal: Boolean;
   end;
 
+  (* Un valor de una llamada: un argumento suelto (Clave vacia) o una entrada
+     del diccionario de opciones a{sv} que piden el portal y Mutter. *)
+  TValorDBus = record
+    Clave: string;
+    Tipo: Char;        // 's' cadena, 'o' ruta de objeto, 'u' entero sin signo
+    Texto: string;
+    Num: Cardinal;
+    class function Cadena(const AClave, AValor: string): TValorDBus; static;
+    class function Ruta(const AValor: string): TValorDBus; static;
+    class function Entero(const AClave: string; AValor: Cardinal): TValorDBus; static;
+  end;
+
   TConexionBus = class
   private
     FLib: TLibreria;
     FConn: Pointer;
     FError: string;
+    FSuscrito: Boolean;   // ya se pidieron al bus las respuestas del portal
+    FPorPortal: Boolean;  // las manos van por el portal estandar, no por Mutter
     function Resolver: Boolean;
+    function Suscribir: Boolean;
+    function EsperarRespuesta(const APeticion: string; AMs: Integer;
+      out ACodigo: Cardinal; AResultados: TStringList): Boolean;
+    function PedirAlPortal(const AIface, AMetodo: string;
+      const APrevios, AOpciones: array of TValorDBus; AMs: Integer;
+      const ANegadoFmt, ACalladoFmt: string; AResultados: TStringList): Boolean;
+    function PrepararCanalPortal(out ASesion: string): Boolean;
   public
     constructor Create;
     destructor Destroy; override;
@@ -44,11 +66,30 @@ type
     function Llamar(const ADestino, ARuta, AIface, AMetodo: string;
       const AArgs: array of string; out ARespuesta: Pointer): Boolean;
     function PrimeraCadena(AResp: Pointer; out AValor: string): Boolean;
+    { El PRIMER valor de la respuesta como lista de cadenas (as), suelta o
+      dentro de un variant (una propiedad llega asi): el gemelo de
+      PrimeraCadena para listas. ListarServicios la leia a mano. }
+    function ListaDeCadenas(AResp: Pointer; out ALista: TArray<string>): Boolean;
+    { El entorno que el gestor de usuario de systemd da a lo que arranca: el
+      que la sesion grafica le importa al empezar (DISPLAY, WAYLAND_DISPLAY,
+      XAUTHORITY...), lo que contesta systemctl --user show-environment. Es el
+      juez del entorno grafico de ESTE usuario: GNOME y Plasma lo escriben, y
+      cada uno con su propio fichero de autorizacion de X. False si no
+      contesta (sin systemd de usuario), con el motivo en Error. }
+    function EntornoDelGestor(out AEntorno: TArray<string>): Boolean;
     function ProbarSesion(out ARuta, AId: string): Boolean;
     function AdmiteDescriptores: Boolean;
-    function LlamarOpciones(const ADestino, ARuta, AIface, AMetodo: string;
-      AUsaCadena: Boolean; const ACadena, AClave, AValorTexto: string;
-      AValorNum: Cardinal; ATipoValor: Char; out ARespuesta: Pointer): Boolean;
+    (* Una llamada con sus argumentos sueltos (APrevios) y, detras, su
+       diccionario de opciones a{sv} (AOpciones, las que sean): EL
+       componedor de las llamadas al portal y a Mutter. *)
+    function LlamarConOpciones(const ADestino, ARuta, AIface, AMetodo: string;
+      const APrevios, AOpciones: array of TValorDBus; AMs: Integer;
+      out ARespuesta: Pointer): Boolean;
+    { La sesion de las manos. ELIGE EL BUS: si el escritorio ofrece la API de
+      Mutter (GNOME), por ella, como siempre; si no (Plasma), por el portal
+      estandar de escritorio remoto, que pide permiso una vez y con su token
+      no vuelve a preguntar. AbrirCanal y CerrarSesion siguen el camino
+      elegido aqui. }
     function PrepararCanal(out ARutaRd, ARutaSc, AStream: string): Boolean;
     procedure CerrarSesion(const ARuta: string);
     function AbrirCanal(const ARuta: string; out ADescriptor: Integer): Boolean;
@@ -70,7 +111,10 @@ implementation
 
 uses
   System.SysUtils,
+  System.StrUtils,
+  System.IOUtils,
   System.Diagnostics,
+  Posix.SysStat,
   Mld.Textos;
 
 { Declarada aqui porque CapturarEscritorio la usa antes de su sitio. }
@@ -94,6 +138,31 @@ const
   DBUS_TYPE_DICT_ENTRY = Ord('e');
   { DBusMessageIter es opaco; 128 bytes sobran para su tamano real (72). }
   TAM_ITER = 128;
+  { el portal de escritorio (xdg-desktop-portal) y el de escritorio remoto }
+  PORTAL = 'org.freedesktop.portal.Desktop';
+  RUTA_PORTAL = '/org/freedesktop/portal/desktop';
+  PORTAL_RD = 'org.freedesktop.portal.RemoteDesktop';
+  { la API propia de GNOME: si el bus la ofrece, las manos van por ella }
+  MUTTER_RD = 'org.gnome.Mutter.RemoteDesktop';
+  { lo que espera una llamada con opciones, y una respuesta del portal: en el
+    Start de las manos sale el dialogo de permiso la primera vez, y alguien
+    tiene que aceptarlo delante de la pantalla }
+  MS_LLAMADA = 60000;
+  { lo que esperan las manos cada respuesta del portal. La primera vez en una
+    maquina, Start espera a que alguien acepte el dialogo, que se va con la
+    sesion cuando el nodo se rinde: medido el 5-nov-2026, un humano delante
+    tardo 14,7 s y con 25 s "se fue demasiado rapido". Y con el despliegue y
+    la captura la respuesta tiene que caber en el minuto de un cliente (con 60 s
+    el cliente se rindio a los 60 y el servidor contesto a los 62). Con el
+    token, Start contesta en 13 ms. }
+  MS_RESPUESTA_MANOS = 40000;
+  { SelectDevices: teclado (1) y puntero (2); el permiso dura hasta que el
+    usuario lo quite (persist_mode 2), y el portal da un token para no
+    volver a preguntar }
+  TECLADO_Y_PUNTERO = 3;
+  PERSISTIR_HASTA_REVOCAR = 2;
+  { la cadena vacia de C: un PAnsiChar de '' es nil, y libdbus no lo acepta }
+  CERO: AnsiChar = #0;
 
 type
   { struct DBusError de dbus/dbus-errors.h: dos cadenas, un campo de bits y
@@ -166,6 +235,98 @@ begin
     Result := ''
   else
     Result := string(UTF8String(A));
+end;
+
+class function TValorDBus.Cadena(const AClave, AValor: string): TValorDBus;
+begin
+  Result := Default(TValorDBus);
+  Result.Clave := AClave;
+  Result.Tipo := 's';
+  Result.Texto := AValor;
+end;
+
+class function TValorDBus.Ruta(const AValor: string): TValorDBus;
+begin
+  Result := Default(TValorDBus);
+  Result.Tipo := 'o';
+  Result.Texto := AValor;
+end;
+
+class function TValorDBus.Entero(const AClave: string; AValor: Cardinal): TValorDBus;
+begin
+  Result := Default(TValorDBus);
+  Result.Clave := AClave;
+  Result.Tipo := 'u';
+  Result.Num := AValor;
+end;
+
+{ Anade AValor (sin su clave) en AIter con su tipo. libdbus copia lo que
+  recibe, asi que la cadena puede morir al volver. }
+function AnadeBasico(AIter: Pointer; const AValor: TValorDBus): Boolean;
+var
+  U: UTF8String;
+  Pc: MarshaledAString;
+  Num: Cardinal;
+begin
+  if AValor.Tipo = 'u' then
+  begin
+    Num := AValor.Num;
+    Exit(DbusIterAppend(AIter, DBUS_TYPE_UINT32, @Num));
+  end;
+  U := UTF8String(AValor.Texto);
+  if U = '' then
+    Pc := MarshaledAString(@CERO)
+  else
+    Pc := MarshaledAString(PAnsiChar(U));
+  if AValor.Tipo = 'o' then
+    Result := DbusIterAppend(AIter, DBUS_TYPE_OBJECT_PATH, @Pc)
+  else
+    Result := DbusIterAppend(AIter, DBUS_TYPE_STRING, @Pc);
+end;
+
+{ EL sitio del token de las manos del portal: fuera de la carpeta del nodo,
+  que cada despliegue reescribe, en el estado de ESTE usuario
+  (XDG_STATE_HOME, o ~/.local/state). Solo el nodo lo escribe y lo lee. }
+function FicheroDelToken: string;
+var
+  Base: string;
+begin
+  Base := GetEnvironmentVariable('XDG_STATE_HOME');
+  if Base = '' then
+    Base := GetEnvironmentVariable('HOME') + '/.local/state';
+  Result := Base + '/mcp-desktop-node/remote-desktop.token';
+end;
+
+{ El token que dio el portal la ultima vez; '' si no hay (entonces pregunta). }
+function TokenDeLasManos: string;
+begin
+  Result := '';
+  try
+    if TFile.Exists(FicheroDelToken) then
+      Result := TFile.ReadAllText(FicheroDelToken).Trim;
+  except
+    Result := '';
+  end;
+end;
+
+{ Guarda el token nuevo, solo para ESTE usuario (la carpeta 0700, el fichero
+  0600): con el, la proxima sesion no pregunta. Si no se puede, la proxima
+  vez el portal vuelve a preguntar: no es un fallo de ahora. }
+procedure GuardaTokenDeLasManos(const AToken: string);
+var
+  Carpeta: string;
+begin
+  if AToken = '' then
+    Exit;
+  try
+    Carpeta := ExtractFileDir(FicheroDelToken);
+    ForceDirectories(Carpeta);
+    chmod(MarshaledAString(PAnsiChar(UTF8String(Carpeta))), $1C0); // 0700
+    TFile.WriteAllText(FicheroDelToken, AToken, TEncoding.ASCII);
+    chmod(MarshaledAString(PAnsiChar(UTF8String(FicheroDelToken))), $180); // 0600
+  except
+    // sin token guardado la proxima vez se pregunta: no se para por eso
+  end;
 end;
 
 constructor TConexionBus.Create;
@@ -273,70 +434,73 @@ end;
 
 function TConexionBus.ListarServicios(out ALista: TArray<string>): Boolean;
 var
-  Err: TDBusError;
-  Msg, Resp: Pointer;
-  Iter, Sub: array[0..TAM_ITER - 1] of Byte;
-  Cadena: MarshaledAString;
-  Acc: TArray<string>;
+  Resp: Pointer;
 begin
   ALista := nil;
-  FError := '';
   Result := False;
-  if FConn = nil then
-  begin
-    FError := MsgText(SF_NODE_NO_HAY_CONEXION_BUS);
+  if not Llamar('org.freedesktop.DBus', '/org/freedesktop/DBus', 'org.freedesktop.DBus',
+    'ListNames', [], Resp) then
     Exit;
-  end;
-  Msg := DbusMsgNew('org.freedesktop.DBus', '/org/freedesktop/DBus',
-    'org.freedesktop.DBus', 'ListNames');
-  if Msg = nil then
-  begin
-    FError := MsgText(SF_NODE_NO_CONSTRUIR_MENSAJE);
-    Exit;
-  end;
-  FillChar(Err, SizeOf(Err), 0);
-  DbusErrorInit(@Err);
   try
-    Resp := DbusEnviarYEsperar(FConn, Msg, 5000, @Err);
-    if DbusErrorIsSet(@Err) then
-    begin
-      FError := Format('%s: %s', [Texto(Err.Nombre), Texto(Err.Mensaje)]);
-      Exit;
-    end;
-    if Resp = nil then
-    begin
-      FError := MsgText(SF_NODE_BUS_NO_RESPONDIO);
-      Exit;
-    end;
-    try
-      FillChar(Iter, SizeOf(Iter), 0);
-      FillChar(Sub, SizeOf(Sub), 0);
-      if not DbusIterInit(Resp, @Iter) then
-      begin
-        FError := MsgText(SF_NODE_RESPUESTA_SIN_ARGUMENTOS);
-        Exit;
-      end;
-      if DbusIterTipo(@Iter) <> DBUS_TYPE_ARRAY then
-      begin
-        FError := MsgText(SF_NODE_ESPERABA_ARRAY_CADENAS);
-        Exit;
-      end;
-      DbusIterEntrar(@Iter, @Sub);
-      while DbusIterTipo(@Sub) = DBUS_TYPE_STRING do
-      begin
-        Cadena := nil;
-        DbusIterLeer(@Sub, @Cadena);
-        Acc := Acc + [Texto(Cadena)];
-        DbusIterSiguiente(@Sub);
-      end;
-      ALista := Acc;
-      Result := True;
-    finally
-      DbusMsgUnref(Resp);
-    end;
+    Result := ListaDeCadenas(Resp, ALista);
   finally
-    DbusErrorFree(@Err);
-    DbusMsgUnref(Msg);
+    DbusMsgUnref(Resp);
+  end;
+end;
+
+function TConexionBus.ListaDeCadenas(AResp: Pointer; out ALista: TArray<string>): Boolean;
+var
+  It, Vr, Sub: array[0..TAM_ITER - 1] of Byte;
+  Lista: Pointer;
+  Pc: MarshaledAString;
+begin
+  ALista := nil;
+  Result := False;
+  FillChar(It, SizeOf(It), 0);
+  if not DbusIterInit(AResp, @It) then
+  begin
+    FError := MsgText(SF_NODE_RESPUESTA_SIN_ARGUMENTOS);
+    Exit;
+  end;
+  Lista := @It;
+  if DbusIterTipo(@It) = DBUS_TYPE_VARIANT then
+  begin
+    FillChar(Vr, SizeOf(Vr), 0);
+    DbusIterEntrar(@It, @Vr);
+    Lista := @Vr;
+  end;
+  if DbusIterTipo(Lista) <> DBUS_TYPE_ARRAY then
+  begin
+    FError := MsgText(SF_NODE_ESPERABA_ARRAY_CADENAS);
+    Exit;
+  end;
+  FillChar(Sub, SizeOf(Sub), 0);
+  DbusIterEntrar(Lista, @Sub);
+  while DbusIterTipo(@Sub) = DBUS_TYPE_STRING do
+  begin
+    Pc := nil;
+    DbusIterLeer(@Sub, @Pc);
+    ALista := ALista + [Texto(Pc)];
+    DbusIterSiguiente(@Sub);
+  end;
+  Result := True;
+end;
+
+function TConexionBus.EntornoDelGestor(out AEntorno: TArray<string>): Boolean;
+const
+  SD = 'org.freedesktop.systemd1';
+var
+  Resp: Pointer;
+begin
+  AEntorno := nil;
+  Result := False;
+  if not Llamar(SD, '/org/freedesktop/systemd1', 'org.freedesktop.DBus.Properties', 'Get',
+    [SD + '.Manager', 'Environment'], Resp) then
+    Exit;
+  try
+    Result := ListaDeCadenas(Resp, AEntorno);
+  finally
+    DbusMsgUnref(Resp);
   end;
 end;
 
@@ -541,7 +705,7 @@ end;
 
 function TConexionBus.ProbarSesion(out ARuta, AId: string): Boolean;
 const
-  RD = 'org.gnome.Mutter.RemoteDesktop';
+  RD = MUTTER_RD;
 var
   Resp: Pointer;
 begin
@@ -641,16 +805,15 @@ begin
   Result := (FConn <> nil) and DbusPuedeEnviar(FConn, DBUS_TYPE_UNIX_FD);
 end;
 
-function TConexionBus.LlamarOpciones(const ADestino, ARuta, AIface, AMetodo: string;
-  AUsaCadena: Boolean; const ACadena, AClave, AValorTexto: string;
-  AValorNum: Cardinal; ATipoValor: Char; out ARespuesta: Pointer): Boolean;
+function TConexionBus.LlamarConOpciones(const ADestino, ARuta, AIface, AMetodo: string;
+  const APrevios, AOpciones: array of TValorDBus; AMs: Integer;
+  out ARespuesta: Pointer): Boolean;
 var
   Err: TDBusError;
   Msg: Pointer;
   It, Arr, Ent, Vari: array[0..TAM_ITER - 1] of Byte;
-  UD, UR, UI, UM, UC, UK, UV, UF: UTF8String;
+  UD, UR, UI, UM, UK, UF: UTF8String;
   Pc: MarshaledAString;
-  Num: Cardinal;
 begin
   ARespuesta := nil;
   FError := '';
@@ -672,14 +835,12 @@ begin
   try
     FillChar(It, SizeOf(It), 0);
     DbusIterInitAppend(Msg, @It);
-    if AUsaCadena then
-    begin
-      UC := UTF8String(ACadena);
-      Pc := MarshaledAString(PAnsiChar(UC));
-      if UC = '' then
-        Pc := MarshaledAString(PAnsiChar(UTF8String(#0)));
-      DbusIterAppend(@It, DBUS_TYPE_STRING, @Pc);
-    end;
+    for var P in APrevios do
+      if not AnadeBasico(@It, P) then
+      begin
+        FError := MsgText(SF_NODE_NO_ANADIR_ARGUMENTO);
+        Exit;
+      end;
     FillChar(Arr, SizeOf(Arr), 0);
     UF := UTF8String('{sv}');
     if not DbusIterAbrir(@It, DBUS_TYPE_ARRAY, MarshaledAString(PAnsiChar(UF)), @Arr) then
@@ -687,29 +848,17 @@ begin
       FError := MsgText(SF_NODE_NO_ABRIR_DICCIONARIO);
       Exit;
     end;
-    if ATipoValor <> #0 then
+    for var O in AOpciones do
     begin
       FillChar(Ent, SizeOf(Ent), 0);
       DbusIterAbrir(@Arr, DBUS_TYPE_DICT_ENTRY, nil, @Ent);
-      UK := UTF8String(AClave);
+      UK := UTF8String(O.Clave);
       Pc := MarshaledAString(PAnsiChar(UK));
       DbusIterAppend(@Ent, DBUS_TYPE_STRING, @Pc);
       FillChar(Vari, SizeOf(Vari), 0);
-      if ATipoValor = 'u' then
-      begin
-        UF := UTF8String('u');
-        DbusIterAbrir(@Ent, DBUS_TYPE_VARIANT, MarshaledAString(PAnsiChar(UF)), @Vari);
-        Num := AValorNum;
-        DbusIterAppend(@Vari, DBUS_TYPE_UINT32, @Num);
-      end
-      else
-      begin
-        UF := UTF8String('s');
-        DbusIterAbrir(@Ent, DBUS_TYPE_VARIANT, MarshaledAString(PAnsiChar(UF)), @Vari);
-        UV := UTF8String(AValorTexto);
-        Pc := MarshaledAString(PAnsiChar(UV));
-        DbusIterAppend(@Vari, DBUS_TYPE_STRING, @Pc);
-      end;
+      UF := UTF8String(O.Tipo);
+      DbusIterAbrir(@Ent, DBUS_TYPE_VARIANT, MarshaledAString(PAnsiChar(UF)), @Vari);
+      AnadeBasico(@Vari, O);
       DbusIterCerrar(@Ent, @Vari);
       DbusIterCerrar(@Arr, @Ent);
     end;
@@ -717,7 +866,7 @@ begin
     FillChar(Err, SizeOf(Err), 0);
     DbusErrorInit(@Err);
     try
-      ARespuesta := DbusEnviarYEsperar(FConn, Msg, 60000, @Err);
+      ARespuesta := DbusEnviarYEsperar(FConn, Msg, AMs, @Err);
       if DbusErrorIsSet(@Err) then
       begin
         FError := Format('%s: %s', [Texto(Err.Nombre), Texto(Err.Mensaje)]);
@@ -735,18 +884,232 @@ begin
   end;
 end;
 
+{ Las respuestas del portal llegan como SENAL Response sobre el objeto de
+  peticion: hay que pedir al bus que las entregue ANTES de llamar, o se
+  pierden. Una vez por conexion. }
+function TConexionBus.Suscribir: Boolean;
+var
+  Err: TDBusError;
+  U: UTF8String;
+begin
+  if FSuscrito then
+    Exit(True);
+  Result := False;
+  FillChar(Err, SizeOf(Err), 0);
+  DbusErrorInit(@Err);
+  try
+    U := UTF8String('type=''signal'',interface=''org.freedesktop.portal.Request''');
+    DbusAnadirFiltro(FConn, MarshaledAString(PAnsiChar(U)), @Err);
+    if DbusErrorIsSet(@Err) then
+    begin
+      FError := MsgFmt(SF_NODE_NO_SUSCRIBIRME_RESPUESTA_FMT, [Texto(Err.Mensaje)]);
+      Exit;
+    end;
+  finally
+    DbusErrorFree(@Err);
+  end;
+  FSuscrito := True;
+  Result := True;
+end;
+
+{ La senal Response de APeticion, hasta AMs: su codigo (0 bien, 1 el usuario
+  lo cancelo, 2 otra cosa) y sus resultados como clave=valor (los de tipo
+  cadena, ruta de objeto y entero sin signo). False si no llego. Lo que llega
+  de otras peticiones se tira, como hacia la captura. }
+function TConexionBus.EsperarRespuesta(const APeticion: string; AMs: Integer;
+  out ACodigo: Cardinal; AResultados: TStringList): Boolean;
+var
+  Msg: Pointer;
+  Reloj: TStopwatch;
+  It, Arr, Ent, Vari: array[0..TAM_ITER - 1] of Byte;
+  Clave: string;
+  Pc: MarshaledAString;
+  Num: Cardinal;
+begin
+  ACodigo := 2;
+  AResultados.Clear;
+  Result := False;
+  Reloj := TStopwatch.StartNew;
+  while Reloj.ElapsedMilliseconds < AMs do
+  begin
+    DbusLeerEscribir(FConn, 200);
+    Msg := DbusSacarMensaje(FConn);
+    if Msg = nil then
+      Continue;
+    try
+      if (Texto(DbusMsgRuta(Msg)) <> APeticion) or
+         (Texto(DbusMsgMiembro(Msg)) <> 'Response') then
+        Continue;
+      Result := True;
+      FillChar(It, SizeOf(It), 0);
+      if not DbusIterInit(Msg, @It) then
+        Exit;
+      if DbusIterTipo(@It) = DBUS_TYPE_UINT32 then
+        DbusIterLeer(@It, @ACodigo);
+      DbusIterSiguiente(@It);
+      if DbusIterTipo(@It) <> DBUS_TYPE_ARRAY then
+        Exit;
+      FillChar(Arr, SizeOf(Arr), 0);
+      DbusIterEntrar(@It, @Arr);
+      while DbusIterTipo(@Arr) = DBUS_TYPE_DICT_ENTRY do
+      begin
+        FillChar(Ent, SizeOf(Ent), 0);
+        DbusIterEntrar(@Arr, @Ent);
+        Pc := nil;
+        DbusIterLeer(@Ent, @Pc);
+        Clave := Texto(Pc);
+        DbusIterSiguiente(@Ent);
+        if DbusIterTipo(@Ent) = DBUS_TYPE_VARIANT then
+        begin
+          FillChar(Vari, SizeOf(Vari), 0);
+          DbusIterEntrar(@Ent, @Vari);
+          case DbusIterTipo(@Vari) of
+            DBUS_TYPE_STRING, DBUS_TYPE_OBJECT_PATH:
+              begin
+                Pc := nil;
+                DbusIterLeer(@Vari, @Pc);
+                AResultados.Values[Clave] := Texto(Pc);
+              end;
+            DBUS_TYPE_UINT32:
+              begin
+                Num := 0;
+                DbusIterLeer(@Vari, @Num);
+                AResultados.Values[Clave] := UIntToStr(Num);
+              end;
+          end;
+        end;
+        DbusIterSiguiente(@Arr);
+      end;
+      Exit;
+    finally
+      DbusMsgUnref(Msg);
+    end;
+  end;
+end;
+
+{ Una peticion al portal de escritorio y su respuesta, con los resultados en
+  AResultados. False si no se pudo pedir, si el portal la nego (ANegadoFmt,
+  con su codigo) o si se quedo callado AMs (ACalladoFmt, con AMs); el motivo,
+  en Error. }
+function TConexionBus.PedirAlPortal(const AIface, AMetodo: string;
+  const APrevios, AOpciones: array of TValorDBus; AMs: Integer;
+  const ANegadoFmt, ACalladoFmt: string; AResultados: TStringList): Boolean;
+var
+  Resp: Pointer;
+  Peticion: string;
+  Codigo: Cardinal;
+begin
+  Result := False;
+  if FConn = nil then
+  begin
+    FError := MsgText(SF_NODE_NO_HAY_CONEXION_BUS);
+    Exit;
+  end;
+  if not Suscribir then
+    Exit;
+  if not LlamarConOpciones(PORTAL, RUTA_PORTAL, AIface, AMetodo, APrevios, AOpciones,
+    MS_LLAMADA, Resp) then
+  begin
+    // que paso del portal fallo: sin el nombre, tres pasos daban el mismo error
+    FError := MsgFmt(SF_NODE_PASO_DEL_PORTAL_FMT, [AMetodo, FError]);
+    Exit;
+  end;
+  try
+    if not PrimeraCadena(Resp, Peticion) then
+    begin
+      FError := MsgText(SF_NODE_PORTAL_SIN_OBJETO_PETICION);
+      Exit;
+    end;
+  finally
+    DbusMsgUnref(Resp);
+  end;
+  if not EsperarRespuesta(Peticion, AMs, Codigo, AResultados) then
+  begin
+    FError := MsgFmt(SF_NODE_PASO_DEL_PORTAL_FMT, [AMetodo, MsgFmt(ACalladoFmt, [AMs])]);
+    Exit;
+  end;
+  if Codigo <> 0 then
+  begin
+    FError := MsgFmt(SF_NODE_PASO_DEL_PORTAL_FMT, [AMetodo, MsgFmt(ANegadoFmt, [Codigo])]);
+    Exit;
+  end;
+  Result := True;
+end;
+
+{ Las manos por el portal estandar: CreateSession -> SelectDevices (teclado y
+  puntero, el permiso persistente y el token de la ultima vez) -> Start, que
+  la primera vez saca el dialogo de permiso, y su token nuevo se guarda.
+  Medido en el Fedora 44 con Plasma 6.8 (4-nov-2026): RemoteDesktop v2, un
+  dialogo con "no volver a preguntar", y con el token la segunda sesion no
+  pregunta. }
+function TConexionBus.PrepararCanalPortal(out ASesion: string): Boolean;
+var
+  Res: TStringList;
+  Opciones: TArray<TValorDBus>;
+  Token: string;
+begin
+  ASesion := '';
+  Result := False;
+  Res := TStringList.Create;
+  try
+    // session_handle_token es obligatorio: sin el, xdg-desktop-portal 1.22.1 no
+    // contesta un error, ABORTA (assertion session->token != NULL; medido en el
+    // Fedora 44 el 5-nov-2026, dos volcados). Basta uno fijo: la ruta de la sesion
+    // lleva ademas el nombre unico de esta conexion
+    if not PedirAlPortal(PORTAL_RD, 'CreateSession', [],
+      [TValorDBus.Cadena('session_handle_token', 'mcpnode')], MS_RESPUESTA_MANOS,
+      SF_NODE_PORTAL_MANOS_NEGO_FMT, SF_NODE_PORTAL_MANOS_CALLADO_FMT, Res) then
+      Exit;
+    ASesion := Res.Values['session_handle'];
+    if ASesion = '' then
+    begin
+      FError := MsgText(SF_NODE_CREATESESSION_NO_DEVOLVIO_RUTA);
+      Exit;
+    end;
+    Opciones := [TValorDBus.Entero('types', TECLADO_Y_PUNTERO),
+      TValorDBus.Entero('persist_mode', PERSISTIR_HASTA_REVOCAR)];
+    Token := TokenDeLasManos;
+    if Token <> '' then
+      Opciones := Opciones + [TValorDBus.Cadena('restore_token', Token)];
+    if not PedirAlPortal(PORTAL_RD, 'SelectDevices', [TValorDBus.Ruta(ASesion)], Opciones,
+      MS_RESPUESTA_MANOS, SF_NODE_PORTAL_MANOS_NEGO_FMT, SF_NODE_PORTAL_MANOS_CALLADO_FMT, Res) then
+      Exit;
+    if not PedirAlPortal(PORTAL_RD, 'Start', [TValorDBus.Ruta(ASesion), TValorDBus.Cadena('', '')], [],
+      MS_RESPUESTA_MANOS, SF_NODE_PORTAL_MANOS_NEGO_FMT, SF_NODE_PORTAL_MANOS_CALLADO_FMT, Res) then
+      Exit;
+    GuardaTokenDeLasManos(Res.Values['restore_token']);
+    Result := True;
+  finally
+    Res.Free;
+    if not Result and (ASesion <> '') then
+    begin
+      // cerrar la sesion es otra llamada, que deja Error vacio: el motivo es el de antes
+      var Motivo := FError;
+      CerrarSesion(ASesion);
+      FError := Motivo;
+    end;
+  end;
+end;
+
 function TConexionBus.PrepararCanal(out ARutaRd, ARutaSc, AStream: string): Boolean;
 const
-  RD = 'org.gnome.Mutter.RemoteDesktop';
+  RD = MUTTER_RD;
   SC = 'org.gnome.Mutter.ScreenCast';
 var
   Resp: Pointer;
   Id: string;
+  Servicios: TArray<string>;
 begin
   ARutaRd := '';
   ARutaSc := '';
   AStream := '';
   Result := False;
+  // ELIGE EL BUS (David, 5-nov-2026): la API de Mutter donde el escritorio la
+  // ofrece (GNOME: medido, sin dialogo); donde no (Plasma), el portal. Si no
+  // se puede listar el bus, Mutter, como siempre.
+  FPorPortal := ListarServicios(Servicios) and not MatchStr(MUTTER_RD, Servicios);
+  if FPorPortal then
+    Exit(PrepararCanalPortal(ARutaRd));
   if not Llamar(RD, '/org/gnome/Mutter/RemoteDesktop', RD, 'CreateSession', [], Resp) then
     Exit;
   try
@@ -770,8 +1133,8 @@ begin
   finally
     DbusMsgUnref(Resp);
   end;
-  if not LlamarOpciones(SC, '/org/gnome/Mutter/ScreenCast', SC, 'CreateSession',
-    False, '', 'remote-desktop-session-id', Id, 0, 's', Resp) then
+  if not LlamarConOpciones(SC, '/org/gnome/Mutter/ScreenCast', SC, 'CreateSession',
+    [], [TValorDBus.Cadena('remote-desktop-session-id', Id)], MS_LLAMADA, Resp) then
     Exit;
   try
     if not PrimeraCadena(Resp, ARutaSc) then
@@ -782,8 +1145,8 @@ begin
   finally
     DbusMsgUnref(Resp);
   end;
-  if not LlamarOpciones(SC, ARutaSc, SC + '.Session', 'RecordMonitor',
-    True, '', '', '', 0, #0, Resp) then
+  if not LlamarConOpciones(SC, ARutaSc, SC + '.Session', 'RecordMonitor',
+    [TValorDBus.Cadena('', '')], [], MS_LLAMADA, Resp) then
     Exit;
   try
     PrimeraCadena(Resp, AStream);
@@ -794,20 +1157,23 @@ begin
 end;
 
 procedure TConexionBus.CerrarSesion(const ARuta: string);
-const
-  RD = 'org.gnome.Mutter.RemoteDesktop';
 var
   Resp: Pointer;
 begin
   if ARuta = '' then
     Exit;
-  if Llamar(RD, ARuta, RD + '.Session', 'Stop', [], Resp) then
+  if FPorPortal then
+  begin
+    if Llamar(PORTAL, ARuta, 'org.freedesktop.portal.Session', 'Close', [], Resp) then
+      DbusMsgUnref(Resp);
+  end
+  else if Llamar(MUTTER_RD, ARuta, MUTTER_RD + '.Session', 'Stop', [], Resp) then
     DbusMsgUnref(Resp);
 end;
 
 function TConexionBus.AbrirCanal(const ARuta: string; out ADescriptor: Integer): Boolean;
 const
-  RD = 'org.gnome.Mutter.RemoteDesktop';
+  RD = MUTTER_RD;
   TODOS_LOS_DISPOSITIVOS = 7;
 var
   Resp: Pointer;
@@ -815,12 +1181,22 @@ var
 begin
   ADescriptor := -1;
   Result := False;
-  if not Llamar(RD, ARuta, RD + '.Session', 'Start', [], Resp) then
-    Exit;
-  DbusMsgUnref(Resp);
-  if not LlamarOpciones(RD, ARuta, RD + '.Session', 'ConnectToEIS',
-    False, '', 'device-types', '', TODOS_LOS_DISPOSITIVOS, 'u', Resp) then
-    Exit;
+  if FPorPortal then
+  begin
+    // la sesion ya se arranco (Start, en PrepararCanalPortal): el socket de EIS
+    if not LlamarConOpciones(PORTAL, RUTA_PORTAL, PORTAL_RD, 'ConnectToEIS',
+      [TValorDBus.Ruta(ARuta)], [], MS_LLAMADA, Resp) then
+      Exit;
+  end
+  else
+  begin
+    if not Llamar(RD, ARuta, RD + '.Session', 'Start', [], Resp) then
+      Exit;
+    DbusMsgUnref(Resp);
+    if not LlamarConOpciones(RD, ARuta, RD + '.Session', 'ConnectToEIS',
+      [], [TValorDBus.Entero('device-types', TODOS_LOS_DISPOSITIVOS)], MS_LLAMADA, Resp) then
+      Exit;
+  end;
   try
     FillChar(It, SizeOf(It), 0);
     if not DbusIterInit(Resp, @It) then
@@ -844,128 +1220,40 @@ begin
 end;
 
 function TConexionBus.CapturarEscritorio(out AFichero: string; AMs: Integer): Boolean;
-const
-  PORTAL = 'org.freedesktop.portal.Desktop';
 var
-  Resp, Msg: Pointer;
-  Peticion: string;
-  U: UTF8String;
-  Err: TDBusError;
-  Reloj: TStopwatch;
-  It, Arr, Ent, Vari: array[0..TAM_ITER - 1] of Byte;
-  Clave, Uri: string;
-  Pc: MarshaledAString;
-  Codigo: Cardinal;
+  Res: TStringList;
+  Uri: string;
 begin
   AFichero := '';
   Result := False;
   FError := '';
-  if FConn = nil then
-  begin
-    FError := MsgText(SF_NODE_NO_HAY_CONEXION_BUS);
-    Exit;
-  end;
-  { La respuesta llega como SEÑAL sobre el objeto de peticion: hay que pedir
-    que el bus nos la entregue ANTES de llamar, o se pierde. }
-  FillChar(Err, SizeOf(Err), 0);
-  DbusErrorInit(@Err);
-  U := UTF8String('type=''signal'',interface=''org.freedesktop.portal.Request''');
-  DbusAnadirFiltro(FConn, MarshaledAString(PAnsiChar(U)), @Err);
-  if DbusErrorIsSet(@Err) then
-  begin
-    FError := MsgFmt(SF_NODE_NO_SUSCRIBIRME_RESPUESTA_FMT, [Texto(Err.Mensaje)]);
-    DbusErrorFree(@Err);
-    Exit;
-  end;
-  DbusErrorFree(@Err);
-  { opciones vacias: 'interactive' vale falso por defecto, que es lo que
-    queremos - nadie va a pulsar nada. }
-  if not LlamarOpciones(PORTAL, '/org/freedesktop/portal/desktop',
-    'org.freedesktop.portal.Screenshot', 'Screenshot',
-    True, '', '', '', 0, #0, Resp) then
-    Exit;
+  { Opciones vacias: 'interactive' vale falso por defecto, que es lo que
+    queremos - nadie va a pulsar nada. Un silencio del portal NO es un fallo
+    del nodo: medido en Zorin 18 el 19-sep, el journal decia "Failed to show
+    access dialog: timeout". El portal quiso pedir permiso, no pudo pintar su
+    dialogo -sesion remota, pantalla bloqueada- y no devolvio ni respuesta ni
+    error. Quien lee esto es un agente que no ve esa pantalla: hay que
+    decirle QUE PEDIR (SF_NODE_PORTAL_QUEDO_CALLADO_FMT), porque reintentar
+    no arregla nada. }
+  Res := TStringList.Create;
   try
-    if not PrimeraCadena(Resp, Peticion) then
-    begin
-      FError := MsgText(SF_NODE_PORTAL_SIN_OBJETO_PETICION);
+    if not PedirAlPortal('org.freedesktop.portal.Screenshot', 'Screenshot',
+      [TValorDBus.Cadena('', '')], [], AMs, SF_NODE_PORTAL_RECHAZO_CAPTURA_FMT,
+      SF_NODE_PORTAL_QUEDO_CALLADO_FMT, Res) then
       Exit;
-    end;
+    Uri := Res.Values['uri'];
   finally
-    DbusMsgUnref(Resp);
+    Res.Free;
   end;
-  Reloj := TStopwatch.StartNew;
-  while Reloj.ElapsedMilliseconds < AMs do
+  if Uri = '' then
   begin
-    DbusLeerEscribir(FConn, 200);
-    Msg := DbusSacarMensaje(FConn);
-    if Msg = nil then
-      Continue;
-    try
-      if (Texto(DbusMsgRuta(Msg)) <> Peticion) or
-         (Texto(DbusMsgMiembro(Msg)) <> 'Response') then
-        Continue;
-      FillChar(It, SizeOf(It), 0);
-      if not DbusIterInit(Msg, @It) then
-        Continue;
-      Codigo := 1;
-      if DbusIterTipo(@It) = DBUS_TYPE_UINT32 then
-        DbusIterLeer(@It, @Codigo);
-      if Codigo <> 0 then
-      begin
-        FError := MsgFmt(SF_NODE_PORTAL_RECHAZO_CAPTURA_FMT, [Codigo]);
-        Exit;
-      end;
-      DbusIterSiguiente(@It);
-      if DbusIterTipo(@It) <> DBUS_TYPE_ARRAY then
-      begin
-        FError := MsgText(SF_NODE_RESPUESTA_SIN_RESULTADOS);
-        Exit;
-      end;
-      FillChar(Arr, SizeOf(Arr), 0);
-      DbusIterEntrar(@It, @Arr);
-      Uri := '';
-      while DbusIterTipo(@Arr) = DBUS_TYPE_DICT_ENTRY do
-      begin
-        FillChar(Ent, SizeOf(Ent), 0);
-        DbusIterEntrar(@Arr, @Ent);
-        Pc := nil;
-        DbusIterLeer(@Ent, @Pc);
-        Clave := Texto(Pc);
-        DbusIterSiguiente(@Ent);
-        if (Clave = 'uri') and (DbusIterTipo(@Ent) = DBUS_TYPE_VARIANT) then
-        begin
-          FillChar(Vari, SizeOf(Vari), 0);
-          DbusIterEntrar(@Ent, @Vari);
-          if DbusIterTipo(@Vari) = DBUS_TYPE_STRING then
-          begin
-            Pc := nil;
-            DbusIterLeer(@Vari, @Pc);
-            Uri := Texto(Pc);
-          end;
-        end;
-        DbusIterSiguiente(@Arr);
-      end;
-      if Uri = '' then
-      begin
-        FError := MsgText(SF_NODE_RESPUESTA_SIN_DIRECCION);
-        Exit;
-      end;
-      AFichero := DesdeUri(Uri);
-      Result := AFichero <> '';
-      if not Result then
-        FError := MsgFmt(SF_NODE_NO_ENTIENDO_DIRECCION_FMT, [Uri]);
-      Exit;
-    finally
-      DbusMsgUnref(Msg);
-    end;
+    FError := MsgText(SF_NODE_RESPUESTA_SIN_DIRECCION);
+    Exit;
   end;
-  { Un silencio del portal NO es un fallo del nodo: medido en Zorin 18 el
-    19-sep, el journal decia "Failed to show access dialog: timeout". El
-    portal quiso pedir permiso, no pudo pintar su dialogo -sesion remota,
-    pantalla bloqueada- y no devolvio ni respuesta ni error. Quien lee esto
-    es un agente que no ve esa pantalla: hay que decirle QUE PEDIR, porque
-    reintentar no arregla nada. }
-  FError := MsgFmt(SF_NODE_PORTAL_QUEDO_CALLADO_FMT, [AMs]);
+  AFichero := DesdeUri(Uri);
+  Result := AFichero <> '';
+  if not Result then
+    FError := MsgFmt(SF_NODE_NO_ENTIENDO_DIRECCION_FMT, [Uri]);
 end;
 
 function DesdeUri(const AUri: string): string;

@@ -141,6 +141,10 @@ const
   SN_NODE_NO_LEER_ESCALA_FMT =
     '  [NODE-031] Could not read the scale, assuming 1.00: %s';
 
+  SN_NODE_ESCALA_MEDIDA_FMT =
+    '  [NODE-047] The desktop does not say its scale; measured: a screenshot ' +
+    '%d px wide over a logical screen %d wide gives %s';
+
   SN_NODE_LAS_MANOS =
     '[NODE-032] -- 3. the hands --';
 
@@ -260,9 +264,6 @@ const
   SF_NODE_NO_HAY_CONEXION_BUS =
     'no connection to the bus';
 
-  SF_NODE_BUS_NO_RESPONDIO =
-    'the bus did not answer';
-
   SF_NODE_RESPUESTA_SIN_ARGUMENTOS =
     'reply without arguments';
 
@@ -308,11 +309,12 @@ const
   SF_NODE_PORTAL_SIN_OBJETO_PETICION =
     'the portal returned no request object';
 
+  { el paso del portal que fallo (CreateSession, SelectDevices, Start...) y el error }
+  SF_NODE_PASO_DEL_PORTAL_FMT =
+    'the portal failed at %s: %s';
+
   SF_NODE_PORTAL_RECHAZO_CAPTURA_FMT =
     'the portal refused the screenshot (code %d)';
-
-  SF_NODE_RESPUESTA_SIN_RESULTADOS =
-    'the reply carries no results';
 
   SF_NODE_RESPUESTA_SIN_DIRECCION =
     'the reply does not carry the file URI';
@@ -327,6 +329,21 @@ const
     'locked). Ask the operator to grant screen capture ONCE on that ' +
     'machine, sitting in front of the screen; after that this works ' +
     'silently';
+
+  { las manos por el portal de escritorio remoto (Plasma); %d, su codigo:
+    1 es que el usuario cancelo, 2 que acabo de otra forma }
+  SF_NODE_PORTAL_MANOS_NEGO_FMT =
+    'the desktop portal refused remote control (code %d: 1 is the operator ' +
+    'denying or closing its permission dialog). Ask the operator to accept ' +
+    'the remote control request on that screen, ticking that it should not ' +
+    'ask again: the node keeps that permission';
+
+  SF_NODE_PORTAL_MANOS_CALLADO_FMT =
+    'the desktop portal stayed silent for %d ms when asked for remote ' +
+    'control: most likely its permission dialog is waiting on that screen ' +
+    'and nobody accepted it. Ask the operator to accept it ONCE, sitting in ' +
+    'front of the screen and ticking that it should not ask again; the node ' +
+    'keeps that permission and does not ask any more';
 
   // Textos que estaban en linea en Mld.Eis.pas (el resto, 27-sep-2026)
   SF_NODE_DESCRIPTOR_INVALIDO =
@@ -395,9 +412,11 @@ const
     'could not read the X11 window tree';
 
   SF_NODE_XWAYLAND_SIN_AUTORIZACION =
-    'There is a Wayland session but I cannot find the Xwayland ' +
-    'authorization (.mutter-Xwaylandauth.*). Ask the operator to open ' +
-    'some application in that session, or check that Xwayland is active.';
+    'There is a Wayland session but I cannot find its Xwayland ' +
+    'authorization: the session gave none to the user''s systemd manager ' +
+    '(XAUTHORITY in systemctl --user show-environment) and there is no ' +
+    '.mutter-Xwaylandauth.* either. Ask the operator to open some ' +
+    'application in that session, or check that Xwayland is active.';
 
   SF_NODE_SESION_SIN_CONECTAR =
     'There is a graphical session, but I could not connect to it.';

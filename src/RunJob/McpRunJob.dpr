@@ -62,6 +62,8 @@ uses
   Posix.Fcntl,
   Posix.Signal,
   Mld.Sesion in '..\DesktopNode\Mld.Sesion.pas', // EL detector, el mismo que el nodo
+  Mld.Dyn in '..\DesktopNode\Mld.Dyn.pas',
+  Mld.DBus in '..\DesktopNode\Mld.DBus.pas', // el juez de Mld.Sesion: el entorno que la sesion dio a systemd
 {$ENDIF}
   System.SysUtils,
   System.IOUtils,
@@ -270,7 +272,7 @@ end;
   ___ENV= con el mismo formato que lee el servidor: <1|0>|<lo anadido>. }
 function CompletaEntornoGrafico: string;
 var
-  Runtime, Anadido, Mejor, Ignorado: string;
+  Runtime, Anadido: string;
   Sesion: TSesionGrafica;
 begin
   Anadido := '';
@@ -301,14 +303,12 @@ begin
     PonEntorno('DISPLAY', Sesion.Display);
     Anadido := Anadido + ' DISPLAY';
   end;
-  if (Entorno('DISPLAY') <> '') and (Entorno('XAUTHORITY') = '') then
+  // la de la sesion, por su juez: la de Plasma es xauth_*, y sin ella una app
+  // FMX moria (exit 134); la mas reciente de mutter era la de GNOME
+  if (Entorno('DISPLAY') <> '') and (Entorno('XAUTHORITY') = '') and (Sesion.Xauthority <> '') then
   begin
-    Mejor := XauthorityMasReciente(Runtime, Ignorado);
-    if Mejor <> '' then
-    begin
-      PonEntorno('XAUTHORITY', Mejor);
-      Anadido := Anadido + ' XAUTHORITY';
-    end;
+    PonEntorno('XAUTHORITY', Sesion.Xauthority);
+    Anadido := Anadido + ' XAUTHORITY';
   end;
   // un DISPLAY heredado de una sesion que ya se cerro no es un entorno
   Result := LineaEnv(Sesion.Hay and

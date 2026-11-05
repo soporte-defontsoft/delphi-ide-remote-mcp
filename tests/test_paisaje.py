@@ -180,11 +180,12 @@ REGLAS = [
      '(W9 del revisor de cierre de la 1.18.2: tres emisores, dos sin READ-009)'),
     ('listar una carpeta sin saber si se dejo', r"TDirectory\.GetFileSystemEntries\s*\(",
      [('Lsp.Guard.pas', 'EntradasDeCarpeta'),
-      ('Mld.Sesion.pas', 'PrimerSocketPropio'), ('Mld.X11.pas', 'TOjos.Diagnostico')],
+      ('Mld.Sesion.pas', 'PrimerSocketPropio')],
      'EntradasDeCarpeta: la RTL da por VACIA una carpeta que Windows no deja listar (FindFirst falla y '
      'WalkThroughDirectory no dice nada): la puerta de los metadatos la pasaba, la copia la copiaba vacia '
      'contestando COPIED y la purga borraba a medias (2g de la 1.18.x). El nodo de Linux, aparte: alli no '
-     'hay FindFirstFile y sus dos usos toleran el vacio'),
+     'hay FindFirstFile y su uso tolera el vacio (el otro, el diagnostico de los ojos, se fue el 5-nov-2026: la '
+     'autorizacion de X la dice el juez de la sesion, Mld.Sesion)'),
     ('listar ficheros o carpetas sin saber si se dejo', r"TDirectory\.(?:GetFiles|GetDirectories)\s*\(",
      [(u, '*') for u in ('Lsp.BuildRunner.pas', 'Lsp.Casa.pas', 'Lsp.DesignerMetaGen.pas',
                          'Lsp.Discovery.pas', 'Lsp.Guard.pas', 'Lsp.LogSink.pas', 'Lsp.PackageMap.pas',
@@ -1404,6 +1405,8 @@ REGLAS = [
      ('Mld.Sesion.pas', 'SesionGrafica'), ('McpDesktopNode.dpr', 'EjecutarLinux'),
      ('McpRunJob.dpr', 'LanzarYVigilar'), ('McpDesktopNode.dpr', 'TamanoPng'),
      ('McpRunJob.dpr', 'EsBinarioNativo'), ('McpRunJob.dpr', 'Arrancar'),
+     # el token de las manos del portal, estado del NODO en el destino (B9 de la 1.28)
+     ('Mld.DBus.pas', 'TokenDeLasManos'),
      # lo de la INSTALACION del IDE, por la ruta que da su RootDir (el registro), no el
      # agente: los BPL de su bin como DATOS (el mapa de paquetes; el icono de una clase en
      # el renderizador, otro programa) y el recurso de version de bds.exe. LoadLibraryEx y
@@ -1482,6 +1485,9 @@ REGLAS = [
       ('FormRender.Comun.pas', 'ConvierteComoElIde'),
       ('McpRunJob.dpr', 'EscribePid'), ('McpRunJob.dpr', 'LanzarYVigilar'),
       ('McpRunJob.dpr', 'Anade'), ('McpRunJob.dpr', 'Arrancar'),
+      # el token de las manos del portal: estado del NODO en el destino, fuera de la carpeta
+      # que cada despliegue reescribe (B9 de la 1.28)
+      ('Mld.DBus.pas', 'GuardaTokenDeLasManos'),
       ('DelphiStyleConvert.dpr', 'Convert'), ('DelphiStyleConvert.dpr', 'Defaults')],
      'EscribeTexto y EscribeBytes (Lsp.Patch): LA puerta de escribir, con el LUGAR por parametro '
      '(jaula, IDE, casa, temporal, vault), entero o nada y con la copia que pida el lugar. 18 '
@@ -1536,7 +1542,9 @@ REGLAS = [
      '(CopiaArbol); las funciones de arbol de la RTL no pertenecen al servidor (CLAUDE.md)'),
     ('crear una carpeta sin la puerta',
      r"\bForceDirectories\s*\(|\bCreateDir\s*\(|TDirectory\.CreateDirectory\s*\(|\bCreateDirectory\w*\s*\(",
-     [('Lsp.Guard.pas', 'CrearCarpeta')],
+     [('Lsp.Guard.pas', 'CrearCarpeta'),
+      # un programa que NO es el servidor: la carpeta del estado del nodo en el destino (B9 de la 1.28)
+      ('Mld.DBus.pas', 'GuardaTokenDeLasManos')],
      'CrearCarpeta (Lsp.Guard): crear una carpeta tolerando la carrera, detras de la puerta de quien la '
      'pide; otra que la creara por su cuenta seria otra puerta'),
     # (V19 de la 1.23) la marca hace que la entrada juzgue la CARPETA de la ruta y no la ruta: solo

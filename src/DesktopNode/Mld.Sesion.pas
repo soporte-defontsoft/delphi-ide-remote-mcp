@@ -19,7 +19,15 @@
   suyos. Si no se puede mirar, se da por buena: mas vale probar el portal
   que negar una sesion que existe. El Id (el nombre del fichero) es lo que
   login1 pide por GetSession para decir si ESA sesion esta bloqueada: el
-  fichero no trae el bloqueo (medido en Zorin 18 el 14-oct-2026). }
+  fichero no trae el bloqueo (medido en Zorin 18 el 14-oct-2026).
+
+  El ENTORNO grafico (DISPLAY, WAYLAND_DISPLAY, XAUTHORITY) lo dice un juez:
+  el que la sesion le da al gestor de usuario de systemd al empezar (GNOME y
+  Plasma lo escriben; es lo que contesta systemctl --user show-environment).
+  Los sockets y el .mutter-Xwaylandauth.* mas reciente eran adivinanzas de
+  GNOME: en Plasma la autorizacion es xauth_*, y una app FMX lanzada por un
+  PAServer nacido antes de la sesion moria sin ella (exit 134; Fedora 44 con
+  Plasma 6.8, 4-nov-2026). Quedan para cuando el gestor no contesta. }
 
 interface
 
@@ -29,6 +37,8 @@ type
     Tipo: string;            // 'wayland' o 'x11' ('' si no se sabe)
     Display: string;         // el X de ESTE usuario: ':0', ':10'... ('' si no hay)
     WaylandDisplay: string;  // 'wayland-0'... ('' si no hay)
+    Xauthority: string;      // el fichero de autorizacion de X para XAUTHORITY ('' si no hay)
+    NoPudeMirar: string;     // lo que impidio buscar esa autorizacion en la carpeta de ejecucion
     Motivo: string;          // si no hay: por que, en palabras para el operador
     Id: string;              // el id de logind de la sesion ('3'); '' si no la dio logind
     Usuario: string;         // el nombre de ESTE usuario, para los motivos
@@ -39,15 +49,8 @@ type
   autorizacion de Xwayland. }
 function RuntimeDelUsuario: string;
 
-const
-  { La autorizacion de Xwayland de mutter: cambia de sufijo en cada inicio de sesion }
-  MASCARA_XWAYLANDAUTH = '.mutter-Xwaylandauth.*';
-
-{ El fichero de autorizacion de X para ponerlo en XAUTHORITY: el mas reciente de
-  Xwayland en ARuntime, o el ~/.Xauthority de siempre. '' si no hay. Lo que impida
-  mirar ARuntime, en AError. El nodo y el lanzador lo buscaban cada uno. }
-function XauthorityMasReciente(const ARuntime: string; out AError: string): string;
-
+{ La sesion grafica de ESTE usuario y su entorno: DISPLAY, WAYLAND_DISPLAY y
+  la autorizacion de X, por el juez de la cabecera. }
 function SesionGrafica: TSesionGrafica;
 
 implementation
@@ -58,6 +61,7 @@ uses
   System.Classes,
   Posix.Unistd,
   Posix.SysStat,
+  Mld.DBus,
   Mld.Textos;
 
 function RuntimeDelUsuario: string;
@@ -67,6 +71,13 @@ begin
     Result := '/run/user/' + IntToStr(getuid);
 end;
 
+const
+  { La autorizacion de Xwayland de mutter: cambia de sufijo en cada inicio de sesion }
+  MASCARA_XWAYLANDAUTH = '.mutter-Xwaylandauth.*';
+
+{ La adivinanza de la autorizacion de X para cuando el juez no contesta: el
+  fichero mas reciente de Xwayland de mutter en ARuntime, o el ~/.Xauthority de
+  siempre. '' si no hay. Lo que impida mirar ARuntime, en AError. }
 function XauthorityMasReciente(const ARuntime: string; out AError: string): string;
 var
   Mas: TDateTime;
@@ -116,24 +127,62 @@ begin
     Result := 'uid ' + IntToStr(getuid);
 end;
 
+{ El entorno que la sesion le dio al gestor de usuario de systemd (el juez de
+  la cabecera), en AEntorno como CLAVE=valor: se lee con Values, como los
+  ficheros de logind. Nada si el gestor no contesta. }
+procedure LeeEntornoDeLaSesion(AEntorno: TStringList);
+var
+  Bus: TConexionBus;
+  Lineas: TArray<string>;
+begin
+  Bus := TConexionBus.Create;
+  try
+    if Bus.Conectar and Bus.EntornoDelGestor(Lineas) then
+      AEntorno.AddStrings(Lineas);
+  finally
+    Bus.Free;
+  end;
+end;
+
 function SesionGrafica: TSesionGrafica;
 const
   SESIONES = '/run/systemd/sessions';
 var
-  L: TStringList;
+  L, Juez: TStringList;
   MiUid, Tipo, Estado, Mejor: string;
   ConUid: Boolean;
 begin
   Result := Default(TSesionGrafica);
   Result.Usuario := NombreDelUsuario;
   MiUid := IntToStr(getuid);
+  // EL juez del entorno grafico (la cabecera): lo que dice, manda
+  Juez := TStringList.Create;
   try
-    // los sockets de ESTE usuario dan el WAYLAND_DISPLAY y el DISPLAY que
-    // poner (logind no dice el X de una sesion wayland con Xwayland)
-    Result.WaylandDisplay := PrimerSocketPropio(RuntimeDelUsuario, 'wayland-*');
-    var X := PrimerSocketPropio('/tmp/.X11-unix', 'X*');
-    if X <> '' then
-      Result.Display := ':' + X.Substring(1);
+    try
+      LeeEntornoDeLaSesion(Juez);
+    except
+      Juez.Clear; // sin libdbus o sin bus: se adivina, como antes
+    end;
+    Result.WaylandDisplay := Juez.Values['WAYLAND_DISPLAY'];
+    Result.Display := Juez.Values['DISPLAY'];
+    Result.Xauthority := Juez.Values['XAUTHORITY'];
+  finally
+    Juez.Free;
+  end;
+  // sin el: la autorizacion de Xwayland mas reciente de mutter, o ~/.Xauthority
+  if Result.Xauthority = '' then
+    Result.Xauthority := XauthorityMasReciente(RuntimeDelUsuario, Result.NoPudeMirar);
+  try
+    // sin el juez, los sockets de ESTE usuario dan el WAYLAND_DISPLAY y el
+    // DISPLAY que poner (logind no dice el X de una sesion wayland con Xwayland)
+    if Result.WaylandDisplay = '' then
+      Result.WaylandDisplay := PrimerSocketPropio(RuntimeDelUsuario, 'wayland-*');
+    if Result.Display = '' then
+    begin
+      var X := PrimerSocketPropio('/tmp/.X11-unix', 'X*');
+      if X <> '' then
+        Result.Display := ':' + X.Substring(1);
+    end;
     ConUid := False;
     if TDirectory.Exists(SESIONES) then
     begin

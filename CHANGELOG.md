@@ -8,6 +8,14 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- `delphi_desktop` on a Linux target with KDE Plasma. The hands (`tap`, `type`, `key`, `overview`) go through the standard remote desktop portal where the desktop does not offer GNOME's own interface, which keeps its path: the node chooses by what the session bus offers, not by a list of desktops. The first time on a machine the desktop asks the operator once - accept it, ticking that it should not ask again - and the node keeps that permission for the target's user, outside the folder every deploy rewrites (`~/.local/state/mcp-desktop-node`); later sessions do not ask (measured on Fedora 44 with Plasma 6.8: the first answer took the operator 14.7 s, the next ones 13 ms). If nobody accepts it within 40 s the answer says what to ask the operator for. Where the desktop does not say its scale, the node measures it: the screenshot's width over the logical screen's (`NODE-047`; 1.25 at 125%, measured).
+
+### Fixed
+
+- A program `delphi_paserver remote-run` starts on Linux when PAServer runs outside the graphical session gets the session's X authorization, read from what the session gave the user's systemd manager (what `systemctl --user show-environment` shows). It was guessed with GNOME's file name, and on KDE Plasma, whose file is `xauth_*`, an FMX app died with "Authorization required" (exit 134): measured on Fedora 44 with a PAServer started without the session's environment, with the 1.27.1 launcher and with the new one. The desktop node takes the same for its window list, and its diagnosis no longer says that a Plasma session has no Xwayland authorization.
+
 ## [1.27.1] - 2026-11-05
 
 A patch for what Hermes' full test of 1.27.0 found. `delphi_styles set` no longer answers

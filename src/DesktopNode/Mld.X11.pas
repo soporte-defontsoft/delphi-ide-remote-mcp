@@ -6,7 +6,7 @@
 
   Dos lecciones del campo (18-sep) van incrustadas aqui:
    - PAServer NO hereda DISPLAY ni XAUTHORITY, asi que el nodo se las pone
-     solo: ':0' y el fichero .mutter-Xwaylandauth.* mas reciente.
+     solo: las de la sesion grafica, por su juez (Mld.Sesion).
    - Los dialogos de una aplicacion FMX son ventanas SIN NOMBRE. Buscarlas por
      titulo NO las encuentra: hay que enumerar por PROCESO. Por eso se lee
      _NET_WM_PID de cada ventana. }
@@ -161,27 +161,29 @@ end;
 
 procedure TOjos.PrepararEntorno;
 var
-  Mejor, Motivo: string;
+  S: TSesionGrafica;
   U, N: UTF8String;
 begin
+  if (GetEnvironmentVariable('DISPLAY') <> '') and (GetEnvironmentVariable('XAUTHORITY') <> '') then
+    Exit;
+  S := SesionGrafica;
   if GetEnvironmentVariable('DISPLAY') = '' then
   begin
     N := Cadena('DISPLAY');
     // el X de ESTE usuario (no siempre es :0: un xrdp es :10)
-    U := Cadena(SesionGrafica.Display);
+    U := Cadena(S.Display);
     if U = '' then
       U := Cadena(':0');
     setenv(MarshaledAString(PAnsiChar(N)), MarshaledAString(PAnsiChar(U)), 1);
   end;
   if GetEnvironmentVariable('XAUTHORITY') <> '' then
     Exit;
-  Mejor := XauthorityMasReciente(RuntimeDelUsuario, Motivo);
-  if Motivo <> '' then
-    FError := MsgFmt(SF_NODE_NO_PUDE_MIRAR_FMT, [RuntimeDelUsuario, Motivo]);
-  if Mejor <> '' then
+  if S.NoPudeMirar <> '' then
+    FError := MsgFmt(SF_NODE_NO_PUDE_MIRAR_FMT, [RuntimeDelUsuario, S.NoPudeMirar]);
+  if S.Xauthority <> '' then
   begin
     N := Cadena('XAUTHORITY');
-    U := Cadena(Mejor);
+    U := Cadena(S.Xauthority);
     setenv(MarshaledAString(PAnsiChar(N)), MarshaledAString(PAnsiChar(U)), 1);
   end;
 end;
@@ -388,18 +390,15 @@ end;
 function TOjos.Diagnostico: string;
 var
   S: TSesionGrafica;
-  HayXauth: Boolean;
 begin
   S := SesionGrafica;
   if not S.Hay then
     Exit(S.Motivo);
-  try
-    HayXauth := Length(TDirectory.GetFileSystemEntries(RuntimeDelUsuario, MASCARA_XWAYLANDAUTH)) > 0;
-  except
-    on E: Exception do
-      Exit(MsgFmt(SF_NODE_NO_PUDE_MIRAR_FMT, [RuntimeDelUsuario, E.Message]));
-  end;
-  if (S.WaylandDisplay <> '') and not HayXauth then
+  if S.NoPudeMirar <> '' then
+    Exit(MsgFmt(SF_NODE_NO_PUDE_MIRAR_FMT, [RuntimeDelUsuario, S.NoPudeMirar]));
+  // la autorizacion la dice la sesion (su juez); se miraba solo la de mutter,
+  // y en Plasma, que tiene la suya (xauth_*), se decia que no habia ninguna
+  if (S.WaylandDisplay <> '') and (S.Xauthority = '') then
     Exit(MsgText(SF_NODE_XWAYLAND_SIN_AUTORIZACION));
   Result := MsgText(SF_NODE_SESION_SIN_CONECTAR);
 end;
