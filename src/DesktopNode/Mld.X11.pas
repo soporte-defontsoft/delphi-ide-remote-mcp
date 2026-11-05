@@ -406,10 +406,20 @@ begin
           Dec(V.Ancho, Marco[0] + Marco[1]);
           Dec(V.Alto, Marco[2] + Marco[3]);
         end;
+        { Una ventana TRANSPARENTE del todo no se ve aunque X11 la de por
+          visible: el puente de video de Xwayland en Plasma
+          (xwaylandvideobridge) salia en la lista, 800x450 en medio de la
+          pantalla, y en la captura no habia nada (medido el 5-nov-2026 en el
+          Fedora con Plasma). Lo dice la propia ventana en
+          _NET_WM_WINDOW_OPACITY (0 = transparente, $FFFFFFFF = opaca), el
+          juez que aplica el compositor; sin ella, opaca. Gemela de las
+          encapotadas de Windows (DWMWA_CLOAKED, Mld.Win). }
+        var Opacidad := Cardinales(P^, '_NET_WM_WINDOW_OPACITY', 1);
+        var Transparente := (Length(Opacidad) = 1) and (Opacidad[0] = 0);
         { Sin nombre no es una ventana para quien mira (un menu, un tooltip).
           Y la ventana GUARDIA de Mutter lleva nombre ("mutter guard window",
           medido 24-sep) pero no es de nadie: sin PID y tapando la raiz entera. }
-        if (V.Titulo <> '') and not ((V.Pid = 0) and (V.X = 0) and (V.Y = 0) and
+        if (V.Titulo <> '') and not Transparente and not ((V.Pid = 0) and (V.X = 0) and (V.Y = 0) and
            (V.Ancho = RaizW) and (V.Alto = RaizH)) then
           AVentanas := AVentanas + [V];
       end;

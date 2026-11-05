@@ -26,7 +26,8 @@ type
   TVentanaWin = record
     Handle: HWND;
     Titulo: string;
-    X, Y, Ancho, Alto: Integer;
+    X, Y, Ancho, Alto: Integer;  { lo que SE VE, sin el borde invisible }
+    Entera: TRect;               { la ventana entera, como la pinta PrintWindow }
   end;
 
   TEscritorioWin = class
@@ -386,8 +387,8 @@ begin
     begin
       FillChar(Info, SizeOf(Info), 0);
       Info.bmiHeader.biSize := SizeOf(TBitmapInfoHeader);
-      Info.bmiHeader.biWidth := Lista[I].Ancho;
-      Info.bmiHeader.biHeight := -Lista[I].Alto;
+      Info.bmiHeader.biWidth := Lista[I].Entera.Width;
+      Info.bmiHeader.biHeight := -Lista[I].Entera.Height;
       Info.bmiHeader.biPlanes := 1;
       Info.bmiHeader.biBitCount := 32;
       Info.bmiHeader.biCompression := BI_RGB;
@@ -398,9 +399,12 @@ begin
       try
         Previo := SelectObject(DCV, Bmp);
         try
+          { PrintWindow pinta la ventana ENTERA; a su sitio va solo lo que
+            se ve, sin la franja de su borde invisible }
           if PrintWindow(Lista[I].Handle, DCV, PW_RENDERFULLCONTENT) and
              BitBlt(ADestino, Lista[I].X, Lista[I].Y, Lista[I].Ancho,
-               Lista[I].Alto, DCV, 0, 0, SRCCOPY) then
+               Lista[I].Alto, DCV, Lista[I].X - Lista[I].Entera.Left,
+               Lista[I].Y - Lista[I].Entera.Top, SRCCOPY) then
             Inc(Result);
         finally
           SelectObject(DCV, Previo);
@@ -610,7 +614,7 @@ end;
 function RecogerVentana(AHandle: HWND; ADato: LPARAM): BOOL; stdcall;
 var
   Buf: array[0..511] of Char;
-  R: TRect;
+  R, Vista: TRect;
   V: TVentanaWin;
 begin
   Result := True;
@@ -624,12 +628,28 @@ begin
     Exit;
   V.Handle := AHandle;
   V.Titulo := Buf;
+  { Lo que SE VE: desde Vista el rectangulo de una ventana incluye su borde
+    invisible, el de redimensionar, y una maximizada salia en (-9,-9) y 18
+    px mas ancha que la pantalla (medido el 5-nov-2026 a 125%). El juez es
+    el DWM, DWMWA_EXTENDED_FRAME_BOUNDS, en pixeles fisicos como todo en
+    este nodo (consciente de DPI por monitor); sin DWM, el rectangulo
+    entero. Gemelo de _GTK_FRAME_EXTENTS en Mld.X11. }
+  Vista := R;
+  try
+    if not Succeeded(DwmGetWindowAttribute(AHandle, DWMWA_EXTENDED_FRAME_BOUNDS,
+         @Vista, SizeOf(Vista))) or not IntersectRect(Vista, Vista, R) then
+      Vista := R;
+  except
+    Vista := R;
+  end;
   { En coordenadas de LA CAPTURA: el escritorio virtual puede empezar en
     negativo si hay un monitor a la izquierda del principal. }
-  V.X := R.Left - GIzq;
-  V.Y := R.Top - GSup;
-  V.Ancho := R.Right - R.Left;
-  V.Alto := R.Bottom - R.Top;
+  V.Entera := R;
+  V.Entera.Offset(-GIzq, -GSup);
+  V.X := Vista.Left - GIzq;
+  V.Y := Vista.Top - GSup;
+  V.Ancho := Vista.Right - Vista.Left;
+  V.Alto := Vista.Bottom - Vista.Top;
   GLista.Add(V);
 end;
 

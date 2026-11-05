@@ -2690,8 +2690,9 @@ const
   SP_ADBLINUX_COMMAND =
     'screenshot (default: the whole desktop as a PNG) | tap (press at x,y ' +
     'measured on that screenshot) | drag (press at x,y, move to tox,toy and ' +
-    'release: a window''s title bar moves it, its edge or corner resizes ' +
-    'it) | type (write "text"; with x,y it ' +
+    'release: a window''s title bar moves it; to resize, press 3 px past ' +
+    'its right/bottom edge in "windows" (corner: x+w+3, y+h+3) - ' +
+    'inside, the press goes to the app) | type (write "text"; with x,y it ' +
     'presses there first and pays the startup once (tap + type pays it ' +
     'twice). Typed means the keys were SENT: nothing checks ' +
     'where the focus was, so read the screenshot each answer brings) | key ' +
@@ -2713,14 +2714,12 @@ const
     'tap/type/drag: horizontal pixel measured on the screenshot this tool ' +
     'returned (pass its frame too and the server converts)';
   SP_ADBLINUX_Y =
-    'tap/type/drag: vertical pixel measured on the screenshot this tool ' +
-    'returned (pass its frame too and the server converts)';
+    'tap/type/drag: vertical pixel, measured as x';
   SP_DESKTOP_TOX =
     'drag: horizontal pixel where it releases, on the same screenshot (and ' +
     'frame) as x';
   SP_DESKTOP_TOY =
-    'drag: vertical pixel where it releases, on the same screenshot (and ' +
-    'frame) as y';
+    'drag: vertical pixel where it releases, as tox';
   SP_ADBLINUX_MODIFIERS =
     'key OPTIONAL: keys held while it is pressed, comma separated - ctrl, ' +
     'shift, alt, super (Ctrl+K on Linux: code=37 modifiers=ctrl; Alt+F4 on ' +
@@ -2731,7 +2730,8 @@ const
     'ctrl, shift, alt and super (comma-separated).';
   SP_ADBLINUX_CODE =
     'key. Linux target: the evdev key code (NOT an X11 keycode): Escape 1, ' +
-    'Tab 15, Enter 28, left Alt 56, Super 125. Windows target: the key ' +
+    'Tab 15, Enter 28, Backspace 14, Delete 111, left Alt 56, Super 125. ' +
+    'Windows target: the key ' +
     'NAME - escape, enter, tab, space, backspace, delete, home, end, up, ' +
     'down, left, right, super, alt, ctrl, shift, f1..f12, or a letter a..z. ' +
     'The other kind is refused.';
@@ -2920,9 +2920,9 @@ const
     '[DESK-008] This capture was taken 0.8 s after asking the desktop for ' +
     'its overview of all the windows (Super on GNOME; KWin''s Overview on ' +
     'KDE Plasma, where Super opens the launcher), which OPENS it - or closes ' +
-    'it if it was already open: the image says which. In the overview each ' +
-    'window is drawn REDUCED with its application icon below it (with two windows they show ' +
-    'almost at real size, side by side). Press on one to bring it to the ' +
+    'it if it was already open: the image says which. Each desktop draws ' +
+    'it its own way (GNOME: every window reduced, its icon below; Plasma: ' +
+    'the windows spread out under a row of virtual desktops). Press on one to bring it to the ' +
     'front and leave the overview, or key code=1 (Escape) to close it ' +
     'without choosing. The "windows" list of this answer carries the REAL ' +
     'positions of the windows (the X11 ones), not where the overview ' +
