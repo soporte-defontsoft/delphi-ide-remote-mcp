@@ -1504,6 +1504,24 @@ begin
   end;
 end;
 
+{ El comentario - no una directiva, que no es de nadie - que empieza
+  detras del ';' de una clausula (AFin, su posicion en ATexto), en su misma
+  linea tras blancos: su inicio y su largo. AUnaLinea: solo si acaba en esa
+  linea (un // siempre; una llave puede seguir). LA pregunta de los tres que
+  lo miran: la edicion en su sitio de una compacta (UsesCompacta), el
+  escritor (ReplaceUses: es de la ULTIMA entrada, 11.3) y el eco
+  (ClausulaReleida, B16 de la 1.28); estaba escrita dos veces. }
+function ComentarioTrasElCierre(const ATexto: string; AFin: Integer; AUnaLinea: Boolean;
+  out AIni, ALargo: Integer): Boolean;
+begin
+  AIni := AFin + 1;
+  while (AIni <= Length(ATexto)) and CharInSet(ATexto[AIni], [' ', #9]) do
+    Inc(AIni);
+  ALargo := CommentLen(ATexto, AIni);
+  Result := (ALargo > 0) and not AbreDirectiva(ATexto, AIni) and
+    (not AUnaLinea or (Copy(ATexto, AIni, ALargo).IndexOfAny([#10, #13]) < 0));
+end;
+
 { Una clausula COMPACTA - alguna linea con varias units, sin comentarios ni
   directivas, solo identificadores - editada EN SU SITIO: las que se van
   salen con su coma (y la linea que se queda vacia, con ellas) y las nuevas
@@ -1540,10 +1558,8 @@ begin
   // original (11.3): editada en su sitio, la compacta lo dejaba tras la nueva
   // ('SysUtils, Classes; // para Format') o con otra si quitaba la suya.
   // ReplaceUses ya sabe de quien es (revisor de version de la 1.18.0, medido)
-  var PC := U.EndPos + 1;
-  while (PC <= Length(Dpr)) and CharInSet(Dpr[PC], [' ', #9]) do
-    Inc(PC);
-  if (CommentLen(Dpr, PC) > 0) and not AbreDirectiva(Dpr, PC) then
+  var PC, LC: Integer;
+  if ComentarioTrasElCierre(Dpr, U.EndPos, False, PC, LC) then
     Exit;
   // las que se quedan, en su orden; detras, solo nuevas
   SetLength(Quedan, Length(U.Entries));
@@ -1667,6 +1683,30 @@ var
     Result := string.Join(#10, Quedan);
   end;
 
+  // AEntrada sin el // AComentario de una entrada QUITADA, cuando no queda
+  // ninguna detras de ella: en una linea suya o, si no la tiene, pegado
+  // detras del codigo de una linea (PegaALaAnterior pega ahi la primera
+  // linea que arrastra, que es de la quitada si la que queda no lleva uno
+  // propio). Una linea suya primero: si la que queda lleva uno propio con el
+  // mismo texto, ese es el pegado y no se toca
+  function SinComentarioDeQuitada(const AEntrada, AComentario: string): string;
+  begin
+    var Lineas := SplitToLines(AEntrada);
+    for var L := 0 to High(Lineas) do
+      if Lineas[L].Trim = AComentario then
+        Exit(SinLinea(AEntrada, AComentario));
+    for var L := 0 to High(Lineas) do
+    begin
+      var T := Lineas[L].TrimRight;
+      if T.EndsWith(AComentario) and (T.Trim <> AComentario) then
+      begin
+        Lineas[L] := Copy(T, 1, Length(T) - Length(AComentario)).TrimRight;
+        Exit(string.Join(#10, Lineas));
+      end;
+    end;
+    Result := AEntrada;
+  end;
+
   // el hueco que habia en la clausula ORIGINAL entre un separador de ASeps y
   // el comentario //; False si ese comentario no iba detras de uno. Un
   // separador DE CODIGO y un // DE VERDAD, segun el lexico: el mismo texto
@@ -1773,15 +1813,33 @@ begin
   end;
   // el // que iba detras de la coma de una entrada QUITADA se va con ella
   // (11.3): viajaba al principio de la siguiente, detras de lo que la
-  // quitada le deja pegado (EntriesWithout: su prefijo), y se quita ahi
-  for var K := 1 to High(U.Entries) do
-    if (Mapa[K] >= 0) and (Mapa[K - 1] = -1) then
+  // quitada le deja pegado (EntriesWithout: su prefijo), y se quita ahi. El
+  // de CADA quitada: con varias seguidas, el de las de delante viajaba de
+  // prefijo en prefijo hasta la primera que se queda, o, si se iban las
+  // ultimas, detras de la ultima que queda (PegaALaAnterior), y quedaba
+  // huerfano o con otra duena (B16 de la 1.28, medido el 5-nov-2026)
+  var UltimaQueQueda := -1;
+  for var K := 0 to High(U.Entries) do
+    if Mapa[K] >= 0 then
+      UltimaQueQueda := K;
+  for var J := 0 to High(U.Entries) - 1 do
+    if (Mapa[J] = -1) and (UltimaQueQueda >= 0) then
     begin
-      var Suyo := PrimeraLinea(U.Entries[K]);
+      // detras de SU coma, la que la sigue (la J + 1), no de cualquiera
+      var Suyo := PrimeraLinea(U.Entries[J + 1]);
       var HS: string;
-      // detras de SU coma, la de la quitada (la K), no de cualquiera
-      if Suyo.StartsWith('//') and TrasLaComa(K, Suyo, HS) then
+      if not (Suyo.StartsWith('//') and TrasLaComa(J + 1, Suyo, HS)) then
+        Continue;
+      if J < UltimaQueQueda then
+      begin
+        // en el prefijo de la primera que se queda detras
+        var K := J + 1;
+        while Mapa[K] = -1 do
+          Inc(K);
         Entradas[Mapa[K]] := SinLinea(Entradas[Mapa[K]], Suyo);
+      end
+      else
+        Entradas[Mapa[UltimaQueQueda]] := SinComentarioDeQuitada(Entradas[Mapa[UltimaQueQueda]], Suyo);
     end;
   // el comentario que va DETRAS del ; final, en su misma linea, es de la
   // ULTIMA entrada original, y queda fuera de la clausula: con una unit
@@ -1792,14 +1850,9 @@ begin
   // entrada se fue, se va con ella, como el de una quitada de en medio (11.3;
   // hasta el 10-oct-2026 se quedaba en una linea suya)
   var Resto := U.EndPos + 1;   // desde donde sigue el texto de detras
-  var PosCom := U.EndPos + 1;
-  while (PosCom <= Length(Dpr)) and CharInSet(Dpr[PosCom], [' ', #9]) do
-    Inc(PosCom);
-  var LargoCom := CommentLen(Dpr, PosCom);
+  var PosCom, LargoCom: Integer;
   // (una directiva no es un comentario de nadie: {$ o (*$ no viaja)
-  if (LargoCom > 0) and (Length(U.Entries) > 0) and
-     (Copy(Dpr, PosCom, LargoCom).IndexOfAny([#10, #13]) < 0) and
-     not AbreDirectiva(Dpr, PosCom) then
+  if ComentarioTrasElCierre(Dpr, U.EndPos, True, PosCom, LargoCom) and (Length(U.Entries) > 0) then
   begin
     // la que corresponde a la ultima original, no por su texto: el de una
     // entrada lleva delante el comentario de la anterior, que quitar esa
@@ -2990,7 +3043,17 @@ begin
   end;
   U := FindUses(Text, PosSec);
   if U.Found then
-    Result := Copy(Text, U.StartPos, U.EndPos - U.StartPos + 1);
+  begin
+    // con el comentario que la ultima entrada lleva detras del ;, en su
+    // misma linea (11.3): sigue en el disco y es parte de lo que quedo. La
+    // copia acababa en el ; y el eco lo daba por perdido (B16 de la 1.28,
+    // medido el 5-nov-2026)
+    var Fin := U.EndPos;
+    var PC, LC: Integer;
+    if ComentarioTrasElCierre(Text, U.EndPos, True, PC, LC) then
+      Fin := PC + LC - 1;
+    Result := Copy(Text, U.StartPos, Fin - U.StartPos + 1);
+  end;
 end;
 
 { La OTRA seccion de ASec (interface <-> implementation) y su clausula uses

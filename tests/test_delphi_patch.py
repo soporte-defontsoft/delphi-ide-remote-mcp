@@ -690,6 +690,44 @@ out = call('delphi_edit', {"path": TODO, "removeuses": "UB"})
 _src = open(TODO, 'rb').read().decode('ascii')
 check('removeuses: la nota de linea propia con el texto de otro // se queda (11.3, por SU coma)',
       mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and _src.count('// TODO') == 2 and 'UB' not in _src, _src)
+# VARIAS quitadas SEGUIDAS en una llamada: el // de cada una se va con ella (11.3). Solo
+# se limpiaba el de la inmediatamente anterior a la que se queda; el de las de delante
+# viajaba pegado a la siguiente (EntriesWithout) y quedaba huerfano dentro del uses, o
+# detras del ; si eran las ultimas (B16 de la 1.28, medido el 5-nov-2026 al quitar
+# Winapi.ActiveX y Winapi.msxml de Lsp.Patch). La de delante conserva el suyo (control)
+for _nombre, _usos, _quita, _queda, _fuera in (
+        ('SeguidasMedio', ['  UA, // de UA', '  UB, // de UB', '  UC, // de UC', '  UD;'], 'UB;UC',
+         'uses\r\n  UA, // de UA\r\n  UD;\r\n', ('// de UB', '// de UC')),
+        ('SeguidasTres', ['  UA,', '  UB, // de UB', '  UC, // de UC', '  UD, // de UD', '  UE;'], 'UB;UC;UD',
+         'uses\r\n  UA,\r\n  UE;\r\n', ('// de UB', '// de UC', '// de UD')),
+        # las ultimas, y la que queda sin // propio: el de la primera quitada viajaba
+        # hasta su linea (PegaALaAnterior pega ahi la primera que arrastra) - 'UB; // de UC'
+        ('SeguidasFinalSinPropio', ['  UA,', '  UB,', '  UC, // de UC', '  UD;'], 'UC;UD',
+         'uses\r\n  UA,\r\n  UB;\r\n\r\nend.', ('// de UC',)),
+        ('SeguidasFinal', ['  UA,', '  UB, // de UB', '  UC, // de UC', '  UD; // de UD'], 'UC;UD',
+         'uses\r\n  UA,\r\n  UB; // de UB\r\n\r\nend.', ('// de UC', '// de UD'))):
+    _p = os.path.join(DIR, _nombre + '.pas')
+    open(_p, 'wb').write(CRLF.join(['unit %s;' % _nombre, '', 'interface', '', 'implementation', '', 'uses']
+                                   + _usos + ['', 'end.', '']).encode('ascii'))
+    out = call('delphi_edit', {"path": _p, "removeuses": _quita})
+    _src = open(_p, 'rb').read().decode('ascii')
+    check('removeuses de varias seguidas (%s): el // de cada quitada se va con ella (11.3, B16)' % _nombre,
+          mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and _queda in _src and not any(c in _src for c in _fuera),
+          _src)
+# ...y el eco de la clausula dice lo que quedo en el disco: el // de la nueva ultima, que
+# va detras del ;, no salia en la respuesta (la copia acababa en el ;) y parecia perdido
+check('removeuses: el eco ensena el // que la ultima lleva detras del ; (B16)',
+      'UB; // de UB' in out, out)
+# y en un .dpr, por su propio camino (RemoveUsesFromProgram), lo mismo
+_p = os.path.join(DIR, 'SeguidasPrograma.dpr')
+open(_p, 'wb').write(CRLF.join(['program SeguidasPrograma;', '', 'uses', '  System.SysUtils,',
+                                '  Winapi.Windows,', '  Winapi.ActiveX, // de ActiveX', '  Winapi.msxml, // de msxml',
+                                '  System.Classes;', '', 'begin', 'end.', '']).encode('ascii'))
+out = call('delphi_edit', {"path": _p, "removeuses": "Winapi.ActiveX;Winapi.msxml"})
+_src = open(_p, 'rb').read().decode('ascii')
+check('removeuses de varias seguidas en un .dpr: el // de cada quitada se va con ella (11.3, B16)',
+      mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and 'uses\r\n  System.SysUtils,\r\n  Winapi.Windows,\r\n'
+      '  System.Classes;\r\n' in _src and '// de ActiveX' not in _src and '// de msxml' not in _src, _src)
 # una clausula COMPACTA con un // detras del ;: es de la ULTIMA entrada (11.3).
 # Editada en su sitio, el // quedaba tras la nueva ('UB, UC; // de UB') o con la
 # que quedaba si se quitaba la suya (revisor de version de la 1.18.0, medido)
