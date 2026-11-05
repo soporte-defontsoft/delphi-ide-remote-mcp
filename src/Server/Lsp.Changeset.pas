@@ -216,11 +216,6 @@ begin
   Result := LineasDelTexto(PatchLoadText(APath, Enc));
 end;
 
-function LineCountOf(const APath: string): Integer;
-begin
-  Result := Length(LineasDeFichero(APath)); // como delphi_read
-end;
-
 function KindName(K: TOpKind): string;
 begin
   case K of

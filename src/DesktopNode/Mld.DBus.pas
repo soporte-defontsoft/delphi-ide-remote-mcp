@@ -56,10 +56,6 @@ type
     { Abre libdbus y se engancha al bus de sesion, o al de SISTEMA con
       ADeSistema (ahi vive login1). False deja el motivo en Error. }
     function Conectar(ADeSistema: Boolean = False): Boolean;
-    { El nombre unico que el bus asigna a esta conexion (p.ej. ':1.123'):
-      la prueba de que la conexion es real y esta viva. }
-    function NombreUnico: string;
-    function Conectada: Boolean;
     property Error: string read FError;
     function ListarServicios(out ALista: TArray<string>): Boolean;
     function LeerPantallas(out APantallas: TArray<TPantalla>): Boolean;
@@ -88,8 +84,6 @@ type
       usuario puede cambiar (alli Super abre el lanzador: medido el 5-nov-2026
       en el Fedora 44 con Plasma 6.8). False si no contesta, el motivo en Error. }
     function VistaDeVentanasKde: Boolean;
-    function ProbarSesion(out ARuta, AId: string): Boolean;
-    function AdmiteDescriptores: Boolean;
     (* Una llamada con sus argumentos sueltos (APrevios) y, detras, su
        diccionario de opciones a{sv} (AOpciones, las que sean): EL
        componedor de las llamadas al portal y a Mutter. *)
@@ -190,7 +184,6 @@ type
   TDbusErrorFree = procedure(AErr: Pointer); cdecl;
   TDbusErrorIsSet = function(AErr: Pointer): LongBool; cdecl;
   TDbusBusGet = function(ATipo: Integer; AErr: Pointer): Pointer; cdecl;
-  TDbusBusGetUniqueName = function(AConn: Pointer): MarshaledAString; cdecl;
   TDbusSetExitOnDisconnect = procedure(AConn: Pointer; ASalir: LongBool); cdecl;
   TDbusMsgNew = function(ADestino, ARuta, AIface, AMetodo: MarshaledAString): Pointer; cdecl;
   TDbusEnviarYEsperar = function(AConn, AMsg: Pointer; AMs: Integer;
@@ -203,7 +196,6 @@ type
   TDbusIterSiguiente = function(AIter: Pointer): LongBool; cdecl;
   TDbusIterInitAppend = procedure(AMsg, AIter: Pointer); cdecl;
   TDbusIterAppend = function(AIter: Pointer; ATipo: Integer; AVal: Pointer): LongBool; cdecl;
-  TDbusPuedeEnviar = function(AConn: Pointer; ATipo: Integer): LongBool; cdecl;
   TDbusIterAbrir = function(AIter: Pointer; ATipo: Integer;
     AFirma: MarshaledAString; ASub: Pointer): LongBool; cdecl;
   TDbusIterCerrar = function(AIter, ASub: Pointer): LongBool; cdecl;
@@ -219,7 +211,6 @@ var
   DbusErrorFree: TDbusErrorFree;
   DbusErrorIsSet: TDbusErrorIsSet;
   DbusBusGet: TDbusBusGet;
-  DbusBusGetUniqueName: TDbusBusGetUniqueName;
   DbusSetExitOnDisconnect: TDbusSetExitOnDisconnect;
   DbusMsgNew: TDbusMsgNew;
   DbusEnviarYEsperar: TDbusEnviarYEsperar;
@@ -231,7 +222,6 @@ var
   DbusIterSiguiente: TDbusIterSiguiente;
   DbusIterInitAppend: TDbusIterInitAppend;
   DbusIterAppend: TDbusIterAppend;
-  DbusPuedeEnviar: TDbusPuedeEnviar;
   DbusIterAbrir: TDbusIterAbrir;
   DbusIterCerrar: TDbusIterCerrar;
   DbusAnadirFiltro: TDbusAnadirFiltro;
@@ -353,11 +343,6 @@ begin
   inherited;
 end;
 
-function TConexionBus.Conectada: Boolean;
-begin
-  Result := FConn <> nil;
-end;
-
 function TConexionBus.Resolver: Boolean;
 
   function Uno(const ASimbolo: string; out ADir: Pointer): Boolean;
@@ -371,7 +356,6 @@ begin
     Uno('dbus_error_free', Pointer(@DbusErrorFree)) and
     Uno('dbus_error_is_set', Pointer(@DbusErrorIsSet)) and
     Uno('dbus_bus_get', Pointer(@DbusBusGet)) and
-    Uno('dbus_bus_get_unique_name', Pointer(@DbusBusGetUniqueName)) and
     Uno('dbus_connection_set_exit_on_disconnect', Pointer(@DbusSetExitOnDisconnect)) and
     Uno('dbus_message_new_method_call', Pointer(@DbusMsgNew)) and
     Uno('dbus_connection_send_with_reply_and_block', Pointer(@DbusEnviarYEsperar)) and
@@ -383,7 +367,6 @@ begin
     Uno('dbus_message_iter_next', Pointer(@DbusIterSiguiente)) and
     Uno('dbus_message_iter_init_append', Pointer(@DbusIterInitAppend)) and
     Uno('dbus_message_iter_append_basic', Pointer(@DbusIterAppend)) and
-    Uno('dbus_connection_can_send_type', Pointer(@DbusPuedeEnviar)) and
     Uno('dbus_message_iter_open_container', Pointer(@DbusIterAbrir)) and
     Uno('dbus_message_iter_close_container', Pointer(@DbusIterCerrar)) and
     Uno('dbus_bus_add_match', Pointer(@DbusAnadirFiltro)) and
@@ -434,13 +417,6 @@ begin
     eso por su cuenta. }
   DbusSetExitOnDisconnect(FConn, False);
   Result := True;
-end;
-
-function TConexionBus.NombreUnico: string;
-begin
-  if FConn = nil then
-    Exit('');
-  Result := Texto(DbusBusGetUniqueName(FConn));
 end;
 
 function TConexionBus.ListarServicios(out ALista: TArray<string>): Boolean;
@@ -739,38 +715,6 @@ begin
   Result := True;
 end;
 
-function TConexionBus.ProbarSesion(out ARuta, AId: string): Boolean;
-const
-  RD = MUTTER_RD;
-var
-  Resp: Pointer;
-begin
-  ARuta := '';
-  AId := '';
-  Result := False;
-  if not Llamar(RD, '/org/gnome/Mutter/RemoteDesktop', RD, 'CreateSession', [], Resp) then
-    Exit;
-  try
-    if not PrimeraCadena(Resp, ARuta) then
-    begin
-      FError := MsgText(SF_NODE_CREATESESSION_SIN_RUTA_SESION);
-      Exit;
-    end;
-  finally
-    DbusMsgUnref(Resp);
-  end;
-  if Llamar(RD, ARuta, 'org.freedesktop.DBus.Properties', 'Get',
-    [RD + '.Session', 'SessionId'], Resp) then
-  try
-    PrimeraCadena(Resp, AId);
-  finally
-    DbusMsgUnref(Resp);
-  end;
-  if Llamar(RD, ARuta, RD + '.Session', 'Stop', [], Resp) then
-    DbusMsgUnref(Resp);
-  Result := True;
-end;
-
 function TConexionBus.PrimerBooleano(AResp: Pointer; out AValor: Boolean): Boolean;
 var
   It, Sub: array[0..TAM_ITER - 1] of Byte;
@@ -834,11 +778,6 @@ begin
   finally
     DbusMsgUnref(Resp);
   end;
-end;
-
-function TConexionBus.AdmiteDescriptores: Boolean;
-begin
-  Result := (FConn <> nil) and DbusPuedeEnviar(FConn, DBUS_TYPE_UNIX_FD);
 end;
 
 function TConexionBus.LlamarConOpciones(const ADestino, ARuta, AIface, AMetodo: string;

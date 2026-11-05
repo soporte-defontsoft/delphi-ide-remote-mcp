@@ -30,8 +30,6 @@ type
     // el texto no cierra su <Project>: un upload cortado o una edicion a
     // medias (DprojIncompleto); lo que se lea de el es de un fichero a medias
     Incompleto: Boolean;
-    function HasConfig(const AName: string): Boolean;
-    function HasPlatform(const AName: string): Boolean;
     { La plataforma que compilan el IDE y msbuild mientras nadie pide otra: la
       que el proyecto tiene por defecto, y Win32 si no dice ninguna. }
     function PlataformaPorDefecto: string;
@@ -1933,26 +1931,6 @@ begin
 end;
 
 { TDprojInfo }
-
-function TDprojInfo.HasConfig(const AName: string): Boolean;
-var
-  C: string;
-begin
-  for C in Configs do
-    if SameText(C, AName) then
-      Exit(True);
-  Result := False;
-end;
-
-function TDprojInfo.HasPlatform(const AName: string): Boolean;
-var
-  P: TDprojPlatform;
-begin
-  for P in Platforms do
-    if SameText(P.Name, AName) then
-      Exit(True);
-  Result := False;
-end;
 
 function TDprojInfo.PlataformaPorDefecto: string;
 begin

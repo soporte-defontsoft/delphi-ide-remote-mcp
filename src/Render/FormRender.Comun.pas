@@ -324,7 +324,6 @@ function LeeConLosPaquetes(var ACargador: TCargador; const ANuevo: TFunc<TCargad
   saltan. ACargados/AConocidos para PACKAGES=. Solo carga una vez. }
 procedure CargaPaquetesDelIde(out ACargados, AConocidos: Integer);
 function RaizDelIde(const ABds: string): string;
-function PaquetesCargados: Boolean;
 { La ventana de aplicacion que se le da a FMX en vez de la suya. Sin ella FMX
   se crea una (TFMAppClass: WS_EX_APPWINDOW, VISIBLE y ACTIVADA, en
   TPlatformWin.CreateAppHandle) en cuanto alguien pide Application.Handle -
@@ -1306,11 +1305,6 @@ begin
   finally
     Unidades.Free;
   end;
-end;
-
-function PaquetesCargados: Boolean;
-begin
-  Result := GPaquetesCargados;
 end;
 
 var

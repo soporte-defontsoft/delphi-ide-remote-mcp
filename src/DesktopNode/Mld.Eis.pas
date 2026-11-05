@@ -32,7 +32,6 @@ type
     FListo: Boolean;
     FRegion: TRegion;
     FEscala: Double;
-    FNombreAsiento: string;
     FSecuencia: Cardinal;
     FError: string;
     FMapa: TMapaTeclado;
@@ -41,7 +40,6 @@ type
     procedure MirarMapa;
     function Resolver: Boolean;
     procedure Atender(AEvento: Pointer; ATipo: Integer);
-    procedure Emitir(ADisp: Pointer);
     { El punto de la captura en coordenadas logicas, y si cae en la pantalla
       (si no, el motivo en Error): lo miran Mover y Arrastrar. }
     function EnPantalla(AX, AY: Double; out ALx, ALy: Double): Boolean;
@@ -84,7 +82,6 @@ type
     property Escala: Double read FEscala write FEscala;
     property Listo: Boolean read FListo;
     property Region: TRegion read FRegion;
-    property NombreAsiento: string read FNombreAsiento;
     property Error: string read FError;
     { Con que teclea: la distribucion que entrego el escritorio, o por que
       se ha quedado con la tabla fija. Para que el eco lo DIGA. }
@@ -107,7 +104,6 @@ const
   CAP_TECLADO = 4;
   CAP_BOTON = 32;
   { enum ei_event_type }
-  EV_CONECTADO = 1;
   EV_ASIENTO = 3;
   EV_DISPOSITIVO = 5;
   EV_REANUDADO = 8;
@@ -124,7 +120,6 @@ type
   TEiEventoTipo = function(AEv: Pointer): Integer; cdecl;
   TEiEventoAsiento = function(AEv: Pointer): Pointer; cdecl;
   TEiEventoDisp = function(AEv: Pointer): Pointer; cdecl;
-  TEiAsientoNombre = function(AAs: Pointer): MarshaledAString; cdecl;
   TEiDispNombre = function(AD: Pointer): MarshaledAString; cdecl;
   TEiDispRegion = function(AD: Pointer; AIdx: NativeUInt): Pointer; cdecl;
   TEiRegionVal = function(AR: Pointer): Cardinal; cdecl;
@@ -155,7 +150,6 @@ var
   EiEventoTipo: TEiEventoTipo;
   EiEventoAsiento: TEiEventoAsiento;
   EiEventoDisp: TEiEventoDisp;
-  EiAsientoNombre: TEiAsientoNombre;
   EiDispNombre: TEiDispNombre;
   EiDispRegion: TEiDispRegion;
   EiRegionX, EiRegionY, EiRegionAncho, EiRegionAlto: TEiRegionVal;
@@ -217,7 +211,6 @@ begin
     Uno('ei_event_get_type', Pointer(@EiEventoTipo)) and
     Uno('ei_event_get_seat', Pointer(@EiEventoAsiento)) and
     Uno('ei_event_get_device', Pointer(@EiEventoDisp)) and
-    Uno('ei_seat_get_name', Pointer(@EiAsientoNombre)) and
     Uno('ei_device_get_name', Pointer(@EiDispNombre)) and
     Uno('ei_device_get_region', Pointer(@EiDispRegion)) and
     Uno('ei_region_get_x', Pointer(@EiRegionX)) and
@@ -234,11 +227,6 @@ begin
     Uno('ei_device_frame', Pointer(@EiCuadro));
 end;
 
-procedure TManos.Emitir(ADisp: Pointer);
-begin
-  { reservado para la fase de emision de eventos }
-end;
-
 procedure TManos.Atender(AEvento: Pointer; ATipo: Integer);
 var
   Disp, Reg: Pointer;
@@ -248,7 +236,6 @@ begin
     EV_ASIENTO:
       begin
         FAsiento := EiEventoAsiento(AEvento);
-        FNombreAsiento := Texto(EiAsientoNombre(FAsiento));
         { Pedir las capacidades: sin esto el escritorio no crea dispositivos. }
         EiAsientoLigar(FAsiento, CAP_PUNTERO, CAP_ABSOLUTO, CAP_TECLADO,
           CAP_BOTON, 0);

@@ -53,7 +53,6 @@ procedure SetThreadIdentityByRequest(const AName: string); // HTTP sin sesion: e
 procedure SetThreadIdentity(const AName: string); // stdio: one process, one name
 procedure ClearThreadIdentity;
 function CurrentAgent: string;               // '' = unknown
-function CurrentAgentOr(const ADefault: string): string;
 { EL "es mio": ANombre (el dueno de una copia de la papelera, la carpeta bajo
   una raiz) es el agente de esta llamada, como NTFS compara dos nombres: el
   del agente es ASCII (NombreDeAgente) y SameText, que solo pliega ASCII, dice
@@ -317,14 +316,6 @@ end;
 function CurrentAgent: string;
 begin
   Result := TCurrentAgent;
-end;
-
-function CurrentAgentOr(const ADefault: string): string;
-begin
-  if TCurrentAgent <> '' then
-    Result := TCurrentAgent
-  else
-    Result := ADefault;
 end;
 
 function EsDelAgente(const ANombre: string): Boolean;

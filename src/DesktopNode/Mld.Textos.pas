@@ -291,9 +291,6 @@ const
   SF_NODE_NO_ANADIR_ARGUMENTO =
     'could not add an argument';
 
-  SF_NODE_CREATESESSION_SIN_RUTA_SESION =
-    'CreateSession returned no session path';
-
   SF_NODE_NO_ABRIR_DICCIONARIO =
     'could not open the dictionary';
 

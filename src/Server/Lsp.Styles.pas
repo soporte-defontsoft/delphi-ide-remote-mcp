@@ -111,9 +111,6 @@ type
       lector del IDE). }
     property Leidas: TArray<string> read FLeidas;
     property Path: string read FPath;
-    { True si el fichero en disco es un .dfm BINARIO leido al vuelo como texto
-      (Lsp.DesignerBin): se lee entero, no se guarda (ver Guarda). }
-    property BinaryOnDisk: Boolean read FBinaryOnDisk;
     { Top-level styles (children of the container) - the ones StyleLookup
       resolves. }
     function Styles: TArray<TStyleObj>;

@@ -198,7 +198,6 @@ type
     function DefinitionResolved(const AUri: string; ALine, ACharacter: Integer;
       out APending: Boolean): TJSONObject;
     function Declaration(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
-    function Implementation_(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
     function SignatureHelp(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
     function DocumentSymbols(const AUri: string): TJSONObject;
     function Completion(const AUri: string; ALine, ACharacter: Integer;
@@ -955,12 +954,6 @@ end;
 function TLspClient.Declaration(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
 begin
   Result := RequestWithRetry('textDocument/declaration', ParamsDePosicion(AUri, ALine, ACharacter), 30000);
-  PosicionesDelMotor(Result, AUri);
-end;
-
-function TLspClient.Implementation_(const AUri: string; ALine, ACharacter: Integer): TJSONObject;
-begin
-  Result := RequestWithRetry('textDocument/implementation', ParamsDePosicion(AUri, ALine, ACharacter), 30000);
   PosicionesDelMotor(Result, AUri);
 end;
 

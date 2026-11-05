@@ -124,9 +124,6 @@ begin
     TFindDialog, TReplaceDialog, TPageSetupDialog, TTaskDialog, TFileOpenDialog, TFileSaveDialog]);
 end;
 
-const
-  PW_CLIENTONLY = 1;
-
 { Sesion 0: la ventana nunca "es visible" (IsWindowVisible False con
   WS_VISIBLE puesto) y el EDIT y el COMBOBOX nativos callan su texto en
   WM_PRINTCLIENT. El impresor lo dibuja con la fuente del control en el

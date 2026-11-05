@@ -85,8 +85,6 @@ type
       something that thread will come back to must keep it. }
     property WriterLeft: Boolean read FWriterLeft;
     property OnMessage: TLspMessageEvent read FOnMessage write FOnMessage;
-    property Running: Boolean read FRunning;
-    property ExePath: string read FExePath;
   end;
 
 implementation

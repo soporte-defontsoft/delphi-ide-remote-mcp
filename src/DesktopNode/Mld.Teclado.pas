@@ -44,7 +44,6 @@ type
     destructor Destroy; override;
     { ATexto: el mapa XKB tal como lo entrega el escritorio (acabado en #0). }
     function Cargar(ATexto: Pointer): Boolean;
-    function Buscar(ACaracter: Cardinal; out APulsacion: TPulsacion): Boolean;
     { Las pulsaciones que dan un caracter: una si el teclado lo tiene directo,
       DOS si sale por tecla muerta (la muerta y luego la base: "´" + "i" =
       "í"), como lo teclea una persona en un teclado espanol. False si no
@@ -166,11 +165,6 @@ end;
 function TMapaTeclado.Cuantas: Integer;
 begin
   Result := FTeclas.Count;
-end;
-
-function TMapaTeclado.Buscar(ACaracter: Cardinal; out APulsacion: TPulsacion): Boolean;
-begin
-  Result := FTeclas.TryGetValue(ACaracter, APulsacion);
 end;
 
 function TMapaTeclado.Cargar(ATexto: Pointer): Boolean;

@@ -388,13 +388,6 @@ function PublicaElUsuario(const APropias: TArray<TPropiedadDelUsuario>; const AN
 function HojaDelUsuario(M: TMetaTable; const AProp: TPropiedadDelUsuario; const AValor: string;
   out AHoja: TPropRec; out AJuzgado: Boolean): string;
 
-{ Las propiedades que publican las clases del USUARIO en la cadena de la raiz
-  del form ADesigner (.dfm/.fmx): su .pas por el nombrador (UnidadDeDesigner)
-  y el juez de la raiz. Para que preview diga de una 'ignored' de la raiz que
-  es suya, no un error. Vacio sin .pas, sin tabla o sin cadena. Nunca lanza. }
-function PublicadasPorElUsuario(const ADesigner, AClaseRaiz: string;
-  AIsFmx: Boolean): TArray<TPropiedadDelUsuario>;
-
 type
   { Lo que el LECTOR del IDE (el renderizador: lee la raiz en su form, o en su
     frame) no ve de la RAIZ de un designer: la clase juez de la raiz
@@ -451,7 +444,7 @@ uses
   Lsp.PascalDecl, // EL lector de clases: la raiz y sus bases
   Lsp.Pascal,
   Lsp.Herencia, // LA cadena de ancestros por el motor (la base de la raiz)
-  Lsp.DesignerForma, // UnidadDeDesigner: el .pas de un designer (PublicadasPorElUsuario)
+  Lsp.DesignerForma, // UnidadDeDesigner: el .pas de un designer (RaizParaElLector)
   Lsp.Args,
   Lsp.Listas; // ExtractoDeLinea: la cita de una linea en una respuesta
 
@@ -1812,12 +1805,6 @@ begin
   if R.Juez = '' then
     Exit(R.Desconocida <> '');
   Result := R.Tabla.ClaseDeNombre(ASustituto, Sustituto) and LaTiene(R.Juez) and not LaTiene(Sustituto);
-end;
-
-function PublicadasPorElUsuario(const ADesigner, AClaseRaiz: string;
-  AIsFmx: Boolean): TArray<TPropiedadDelUsuario>;
-begin
-  Result := RaizParaElLector(ADesigner, AClaseRaiz, AIsFmx).Propias;
 end;
 
 function LintConTabla(M: TMetaTable; const AIsFmx: Boolean;

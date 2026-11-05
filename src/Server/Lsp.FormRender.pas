@@ -273,7 +273,7 @@ function LineaDeLoLeido(AFicheros: TFicherosDelForm; const AI: TIgnorada; out AD
 function LeidoEnElForm(const AFichero, AForm: string): Boolean;
 
 { Si lo que el lector se salto (AI) es una propiedad de la RAIZ (ARaizNombre)
-  que publica una clase del USUARIO (APublicadas: PublicadasPorElUsuario): el
+  que publica una clase del USUARIO (APublicadas: las Propias de RaizParaElLector): el
   renderizador no carga las clases del usuario y no la conoce, asi que no es
   un error del form (DSGN-152); ASuya, cual. EL juicio de preview, que dice
   cuales son, y de LoQueNoCargo, que no las da por lo que no carga. }
