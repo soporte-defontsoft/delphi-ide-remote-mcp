@@ -2696,7 +2696,7 @@ const
     'twice). Typed means the keys were SENT: nothing checks ' +
     'where the focus was, so read the screenshot each answer brings) | key ' +
     '(one key: Linux code on a Linux target, key NAME on a Windows one) | ' +
-    'overview (when one window covers another - Linux: the Super overview ' +
+    'overview (when one window covers another - Linux: the desktop''s overview ' +
     'brings every window into view; Windows: only a fresh capture with the ' +
     'windows list) | ' +
     'status (is the desktop reachable, and what to ask for if not)';
@@ -2917,10 +2917,11 @@ const
     segundo overview la cerro y esto decia que estaba abierta (Opus sobre la
     1.22.2, u). Quien lo sabe es GNOME Shell (OverviewActive): eso, a la 1.24 }
   SN_DESKTOP_OVERVIEW_LINUX =
-    '[DESK-008] This capture was taken 0.8 s after pressing Super, which ' +
-    'OPENS the activities overview - or closes it if it was already open: ' +
-    'the image says which. In the overview each window is drawn REDUCED ' +
-    'with its application icon below it (with two windows they show ' +
+    '[DESK-008] This capture was taken 0.8 s after asking the desktop for ' +
+    'its overview of all the windows (Super on GNOME; KWin''s Overview on ' +
+    'KDE Plasma, where Super opens the launcher), which OPENS it - or closes ' +
+    'it if it was already open: the image says which. In the overview each ' +
+    'window is drawn REDUCED with its application icon below it (with two windows they show ' +
     'almost at real size, side by side). Press on one to bring it to the ' +
     'front and leave the overview, or key code=1 (Escape) to close it ' +
     'without choosing. The "windows" list of this answer carries the REAL ' +

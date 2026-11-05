@@ -77,6 +77,17 @@ type
       cada uno con su propio fichero de autorizacion de X. False si no
       contesta (sin systemd de usuario), con el motivo en Error. }
     function EntornoDelGestor(out AEntorno: TArray<string>): Boolean;
+    { Si el bus de la sesion ofrece ANombre: se ELIGE por lo que ofrece el bus,
+      no por una lista de escritorios (las manos, la vista de ventanas). Si no
+      se puede listar, False. }
+    function OfreceServicio(const ANombre: string): Boolean;
+    { Si el bus ofrece los atajos globales de KDE (kglobalaccel): Plasma. }
+    function OfreceAtajosDeKde: Boolean;
+    { La vista de todas las ventanas de KDE Plasma: la accion Overview de
+      KWin, pedida por su NOMBRE a kglobalaccel y no por su atajo, que el
+      usuario puede cambiar (alli Super abre el lanzador: medido el 5-nov-2026
+      en el Fedora 44 con Plasma 6.8). False si no contesta, el motivo en Error. }
+    function VistaDeVentanasKde: Boolean;
     function ProbarSesion(out ARuta, AId: string): Boolean;
     function AdmiteDescriptores: Boolean;
     (* Una llamada con sus argumentos sueltos (APrevios) y, detras, su
@@ -484,6 +495,31 @@ begin
     DbusIterSiguiente(@Sub);
   end;
   Result := True;
+end;
+
+function TConexionBus.OfreceServicio(const ANombre: string): Boolean;
+var
+  Servicios: TArray<string>;
+begin
+  Result := ListarServicios(Servicios) and MatchStr(ANombre, Servicios);
+end;
+
+const
+  KDE_ATAJOS = 'org.kde.kglobalaccel';
+
+function TConexionBus.OfreceAtajosDeKde: Boolean;
+begin
+  Result := OfreceServicio(KDE_ATAJOS);
+end;
+
+function TConexionBus.VistaDeVentanasKde: Boolean;
+var
+  Resp: Pointer;
+begin
+  Result := Llamar(KDE_ATAJOS, '/component/kwin', KDE_ATAJOS + '.Component', 'invokeShortcut',
+    ['Overview'], Resp);
+  if Result then
+    DbusMsgUnref(Resp);
 end;
 
 function TConexionBus.EntornoDelGestor(out AEntorno: TArray<string>): Boolean;
@@ -1108,6 +1144,7 @@ begin
   // ofrece (GNOME: medido, sin dialogo); donde no (Plasma), el portal. Si no
   // se puede listar el bus, Mutter, como siempre.
   FPorPortal := ListarServicios(Servicios) and not MatchStr(MUTTER_RD, Servicios);
+  // (no OfreceServicio: si el bus no se deja listar, Mutter, y aquel diria que no lo ofrece)
   if FPorPortal then
     Exit(PrepararCanalPortal(ARutaRd));
   if not Llamar(RD, '/org/gnome/Mutter/RemoteDesktop', RD, 'CreateSession', [], Resp) then

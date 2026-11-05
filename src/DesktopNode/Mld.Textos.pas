@@ -146,7 +146,8 @@ const
     '  [NODE-030] The desktop says its scale is %s';
 
   SN_NODE_NO_LEER_ESCALA_FMT =
-    '  [NODE-031] Could not read the scale, assuming 1.00: %s';
+    '  [NODE-031] The desktop does not give its scale here (%s): the hands ' +
+    'measure it from the screenshot';
 
   SN_NODE_ESCALA_MEDIDA_FMT =
     '  [NODE-047] The desktop does not say its scale; measured: a screenshot ' +
@@ -169,6 +170,10 @@ const
 
   SK_NODE_SUPER_ENVIADO =
     '  [NODE-037] SUPER sent: overview of all the windows';
+
+  SK_NODE_VISTA_KWIN_PEDIDA =
+    '  [NODE-050] OVERVIEW asked of KWin by its name (KDE Plasma, where Super ' +
+    'opens the launcher): all the windows side by side';
 
   SR_NODE_NO_ABRIR_VISTA_FMT =
     '  [NODE-038 DENIED] Could not open the overview: %s';

@@ -542,14 +542,27 @@ begin
           if Orden = NODO_ORDEN_VENTANAS then
           begin
             { Cuando varias ventanas se tapan, no vale con pulsar: hay que
-              pedirle al escritorio que las ensene TODAS. La tecla Super abre
-              la vista de actividades con cada ventana en miniatura, y
-              entonces vuelve a ser un clic sobre algo visible. }
-            Hizo := Manos.Combinacion([125]);
-            if Hizo then
-              Writeln(MsgText(SK_NODE_SUPER_ENVIADO))
+              pedirle al escritorio que las ensene TODAS, y entonces vuelve a
+              ser un clic sobre algo visible. Se ELIGE por el bus: en GNOME la
+              tecla Super abre la vista de actividades; en KDE Plasma Super
+              abre el LANZADOR (medido el 5-nov-2026) y la vista es la accion
+              Overview de KWin, pedida por su nombre. }
+            if Bus.OfreceAtajosDeKde then
+            begin
+              Hizo := Bus.VistaDeVentanasKde;
+              if Hizo then
+                Writeln(MsgText(SK_NODE_VISTA_KWIN_PEDIDA))
+              else
+                Writeln(MsgFmt(SR_NODE_NO_ABRIR_VISTA_FMT, [Bus.Error]));
+            end
             else
-              Writeln(MsgFmt(SR_NODE_NO_ABRIR_VISTA_FMT, [Manos.Error]));
+            begin
+              Hizo := Manos.Combinacion([125]);
+              if Hizo then
+                Writeln(MsgText(SK_NODE_SUPER_ENVIADO))
+              else
+                Writeln(MsgFmt(SR_NODE_NO_ABRIR_VISTA_FMT, [Manos.Error]));
+            end;
           end
           else if (Orden = NODO_ORDEN_ESCRIBE) and (Args >= 4) then
           begin
