@@ -950,16 +950,16 @@ end;
   credentials involved, so a failure here is ALWAYS network/NAT/firewall. }
 
 
-function TcpProbe(const AHost: string; APuerto: Integer): string;
+{ La ruta TCP a AHost:APuerto, marcada de verdad (5 s como mucho): True si
+  conecta, o False y AMotivo (el de Indy); AMs, lo que tardo. La de
+  test-connection sin perfil y la del perfil que no conecto (B12c de la 1.28). }
+function SondaTcp(const AHost: string; APuerto: Integer; out AMotivo: string; out AMs: Int64): Boolean;
 var
   Client: TIdTCPClient;
-  Return: TJSONObject;
   SW: TStopwatch;
-  Ok: Boolean;
-  Err: string;
 begin
-  Ok := False;
-  Err := '';
+  Result := False;
+  AMotivo := '';
   SW := TStopwatch.StartNew;
   Client := TIdTCPClient.Create(nil);
   try
@@ -968,22 +968,33 @@ begin
     Client.ConnectTimeout := 5000;
     try
       Client.Connect;
-      Ok := True;
+      Result := True;
       Client.Disconnect;
     except
       on E: Exception do
-        Err := E.Message;
+        AMotivo := E.Message;
     end;
   finally
     Client.Free;
   end;
   SW.Stop;
+  AMs := SW.ElapsedMilliseconds;
+end;
+
+function TcpProbe(const AHost: string; APuerto: Integer): string;
+var
+  Return: TJSONObject;
+  Ok: Boolean;
+  Err: string;
+  Ms: Int64;
+begin
+  Ok := SondaTcp(AHost, APuerto, Err, Ms);
   Return := TJSONObject.Create;
   try
     Return.AddPair('host', AHost);
     Return.AddPair('port', IntToStr(APuerto));
     Return.AddPair('tcpReachable', TJSONBool.Create(Ok));
-    Return.AddPair('elapsedMs', TJSONNumber.Create(SW.ElapsedMilliseconds));
+    Return.AddPair('elapsedMs', TJSONNumber.Create(Ms));
     if Ok then
       Return.AddPair('note', MsgText(SN_PASERVER_TCP_OK))
     else
@@ -1060,6 +1071,42 @@ begin
     Result := Result + MsgText(SN_PAS_TAMBIEN_CARPETA_VACIA_SDKS);
 end;
 
+{ El puerto de un perfil: el que dice su Profile_port, o el de un PAServer
+  al que nadie da otro (PASERVER_PUERTO) si no lo dice. Lo piden reseat y
+  test-connection. }
+function PuertoDelPerfil(const ACampos: TCamposDePerfil): Integer;
+begin
+  Result := StrToIntDef(ACampos.Puerto.Trim, PASERVER_PUERTO);
+end;
+
+{ Por que no conecto un perfil: la ruta TCP a SU host y puerto, medida con
+  la sonda de test-connection sin perfil. Sin ruta, PAS-028 (que mirar, en
+  orden); con ruta, PAS-072: lo que nego es el PAServer o el perfil, y
+  paclientOutput dice que. Contestaba connected:false sin codigo ni consejo
+  (Hermes, 5-nov-2026, con el Zorin apagado; B12c de la 1.28). Un perfil que
+  ya no se lee no anade nada: paclientOutput es lo que hay. }
+procedure PorQueNoConecto(const AVersion, AProfName: string; AReturn: TJSONObject);
+var
+  Campos: TCamposDePerfil;
+  Motivo, Err: string;
+  Ms: Int64;
+begin
+  if not CamposDePerfilListado(AVersion, AProfName, Campos, Motivo) or (Campos.Host.Trim = '') then
+    Exit;
+  var Puerto := PuertoDelPerfil(Campos);
+  var Ok := SondaTcp(Campos.Host.Trim, Puerto, Err, Ms);
+  AReturn.AddPair('host', Campos.Host.Trim);
+  AReturn.AddPair('port', IntToStr(Puerto));
+  AReturn.AddPair('tcpReachable', TJSONBool.Create(Ok));
+  if Ok then
+    AReturn.AddPair('note', MsgFmt(SN_PASERVER_PERFIL_RUTA_OK_FMT, [Campos.Host.Trim, Puerto]))
+  else
+  begin
+    AReturn.AddPair('reason', Err);
+    AReturn.AddPair('note', MsgText(SN_PASERVER_TCP_FAIL));
+  end;
+end;
+
 function TestConnection(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
@@ -1092,7 +1139,9 @@ begin
     Return.AddPair('connected', TJSONBool.Create(ExitCode = 0));
     Return.AddPair('paclientOutput', Output.Trim);
     if ExitCode = 0 then
-      Return.AddPair('note', MsgText(SN_PASERVER_CONNECTED));
+      Return.AddPair('note', MsgText(SN_PASERVER_CONNECTED))
+    else
+      PorQueNoConecto(Info.Version, ProfName, Return);
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -1725,7 +1774,7 @@ begin
             [Nombre, IfThen(Plat = '', 'platform', 'host')])];
           Continue;
         end;
-        Puerto := StrToIntDef(Campos.Puerto, PASERVER_PUERTO);
+        Puerto := PuertoDelPerfil(Campos);
         Pwd := Campos.Password; { ya viene cifrada: se copia tal cual }
         // un asiento que no se pudo escribir se dice con lo demas que no se
         // sembro (la puerta del registro lanza: V10)

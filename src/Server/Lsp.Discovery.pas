@@ -255,6 +255,14 @@ type
   end;
 function CamposDePerfil(const AXml: string): TCamposDePerfil;
 
+{ Los campos de un perfil QUE EL IDE LISTA, de su fichero (el que compone
+  RutaDePerfil): True y ACampos, o False y AMotivo (no existe / no se lee).
+  HostDePerfil y PlataformaDePerfil lo leian cada una a mano, y
+  test-connection necesita el host y el puerto del perfil que no conecto
+  (B12c de la 1.28). }
+function CamposDePerfilListado(const AVersion, AName: string; out ACampos: TCamposDePerfil;
+  out AMotivo: string): Boolean;
+
 { EL host (Profile_host) de un perfil, leido del MISMO fichero que compone
   RutaDePerfil, y solo de un perfil que el IDE LISTA (PerfilDelIde: lo que
   no esta en la lista no existe). La version con AMotivo dice por que no hay
@@ -1542,25 +1550,36 @@ begin
   Result := RutaDePerfil(AVersion, Nombre);
 end;
 
-function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string;
+function CamposDePerfilListado(const AVersion, AName: string; out ACampos: TCamposDePerfil;
+  out AMotivo: string): Boolean;
 var
-  Ruta, Xml: string;
+  Ruta: string;
 begin
+  ACampos := Default(TCamposDePerfil);
   AMotivo := '';
-  Result := '';
   Ruta := FicheroDePerfilListado(AVersion, AName);
   if (Ruta = '') or not TFile.Exists(Ruta) then
   begin
     AMotivo := MsgFmt(SR_PROFILE_NO_EXISTE_FMT, [AName.Trim]);
-    Exit;
+    Exit(False);
   end;
   try
-    Xml := LeeTexto(Ruta, [ltIde]);
+    ACampos := CamposDePerfil(LeeTexto(Ruta, [ltIde]));
   except
     AMotivo := MsgFmt(SR_PROFILE_NO_LEIDO_FMT, [AName.Trim]);
-    Exit;
+    Exit(False);
   end;
-  Result := CamposDePerfil(Xml).Host;
+  Result := True;
+end;
+
+function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string;
+var
+  Campos: TCamposDePerfil;
+begin
+  Result := '';
+  if not CamposDePerfilListado(AVersion, AName, Campos, AMotivo) then
+    Exit;
+  Result := Campos.Host;
   if Result = '' then
     AMotivo := MsgFmt(SR_PROFILE_SIN_HOST_FMT, [AName.Trim]);
 end;
@@ -1574,17 +1593,14 @@ end;
 
 function PlataformaDePerfil(const AVersion, AName: string): string;
 var
-  Ruta: string;
+  Campos: TCamposDePerfil;
+  Motivo: string;
 begin
-  Result := '';
-  Ruta := FicheroDePerfilListado(AVersion, AName);
-  if (Ruta = '') or not TFile.Exists(Ruta) then
-    Exit;
-  try
-    Result := CamposDePerfil(LeeTexto(Ruta, [ltIde])).Plataforma.Trim;
-  except
-    Result := ''; // un .profile que no se lee no es de ninguna plataforma
-  end;
+  // un .profile que no existe o no se lee no es de ninguna plataforma
+  if CamposDePerfilListado(AVersion, AName, Campos, Motivo) then
+    Result := Campos.Plataforma.Trim
+  else
+    Result := '';
 end;
 
 function PerfilesDePlataforma(const AVersion, APlatform: string): TArray<string>;

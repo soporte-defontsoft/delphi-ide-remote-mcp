@@ -2661,6 +2661,16 @@ const
     'published/forwarded on the reachable host (and then use THAT host ' +
     'ip here); firewalls on both sides allow the port.';
 
+  { test-connection con un perfil que NO conecto, cuando la sonda de la ruta
+    (la de test-connection sin perfil) llega al host y puerto del perfil: lo
+    que fallo no es la red. Decia connected:false y la salida de paclient,
+    sin codigo ni consejo (Hermes, 5-nov-2026, con el Zorin apagado: ese caso
+    es PAS-028). %s: el host; %d: el puerto }
+  SN_PASERVER_PERFIL_RUTA_OK_FMT =
+    '[PAS-072] The route is there: %s:%d answers on TCP, so what refused ' +
+    'is the PAServer itself or this profile, not the network - ' +
+    'paclientOutput carries paclient''s own error.';
+
   // ---------------------------------------------------------------------
   // delphi_adb (Android devices hanging off THIS server's machine/network)
   // ---------------------------------------------------------------------

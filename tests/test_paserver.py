@@ -16,7 +16,7 @@ become REAL profiles, and paclient writes to the real profile folder whatever
 APPDATA says (measured 9-oct-2026: Location: ...\\Roaming\\...). Point 7.2 of
 the 1.18.0 list, the rule of the destructive mutant.
 """
-import atexit, json, time, os, socket, glob
+import atexit, json, time, os, socket, glob, threading
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -269,6 +269,33 @@ if not ide_open:
         check('get-sdk con el PAServer apagado: FETCH-004 DENIED con E0003, no la culpa a la distro',
               mc.rechazado(out2) and mc.es(out2, 'SR_FETCHTARGET_FAIL_FMT') and 'E0003' in out2,
               out2[:300])
+        # B12c de la 1.28: el porque, MEDIDO - la ruta TCP al host y puerto del perfil. Contestaba
+        # connected:false sin codigo ni consejo (Hermes, 5-nov-2026, con el Zorin apagado)
+        check('B12c perfil sin ruta: PAS-028 con la ruta medida (tcpReachable false, su host, su puerto y el motivo)',
+              mc.es(d.get('note', ''), 'SN_PASERVER_TCP_FAIL') and d.get('tcpReachable') is False
+              and d.get('host') == '127.0.0.1' and d.get('port') == DEAD_PORT and d.get('reason'), out[:400])
+        # ...y con la ruta abierta y sin PAServer detras (un oyente que acepta y cierra): lo que nego no
+        # es la red, PAS-072
+        oyente = socket.socket()
+        oyente.bind(('127.0.0.1', int(DEAD_PORT)))
+        oyente.listen(5)
+
+        def acepta():
+            while True:
+                try:
+                    c, _ = oyente.accept()
+                    c.close()
+                except OSError:
+                    return
+        threading.Thread(target=acepta, daemon=True).start()
+        try:
+            out3 = srv.call('delphi_paserver', {"command": "test-connection", "name": PROF_NAME}, t=120)
+        finally:
+            oyente.close()
+        d3 = mc.como_json(out3)
+        check('B12c perfil con ruta y sin PAServer: connected false, tcpReachable true y PAS-072 (no es la red)',
+              d3.get('connected') is False and d3.get('tcpReachable') is True
+              and mc.es(d3.get('note', ''), 'SN_PASERVER_PERFIL_RUTA_OK_FMT'), out3[:500])
     except Exception:
         check('test-connection: parsea', False, out[:300])
 
