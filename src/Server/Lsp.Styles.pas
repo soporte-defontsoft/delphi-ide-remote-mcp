@@ -23,7 +23,7 @@ interface
 
 uses
   System.SysUtils, System.Classes, System.JSON, System.Generics.Collections,
-  Lsp.Patch, // TLugaresDeTexto: donde puede leer quien compila un .rc
+  Lsp.Puertas, // TLugaresDeTexto: donde puede leer quien compila un .rc
   Lsp.DesignerBin; // EL lector de las lineas de un designer de texto (LineasDeForm)
 
 type

@@ -170,7 +170,7 @@ uses
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Guard,
-  Lsp.Patch,   // DecodeSourceBytes y ReescrituraDenegada: el lector de la casa y la regla de sus escritores
+  Lsp.Puertas, // DecodeSourceBytes y ReescrituraDenegada: el lector de la casa y la regla de sus escritores
   Lsp.Codificacion, // DecodeBytes y TEncKind: los bytes ya leidos, en su codificacion
   Mcp.Vault.Session,
   Lsp.NetDrives,

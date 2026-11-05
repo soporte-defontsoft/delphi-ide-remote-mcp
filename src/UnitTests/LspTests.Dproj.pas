@@ -103,7 +103,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
-  Lsp.Dproj, Lsp.Patch, Lsp.Discovery;
+  Lsp.Dproj, Lsp.Puertas, Lsp.Discovery;
 
 const
   RUTA = 'C:\Proyecto\App.dproj';

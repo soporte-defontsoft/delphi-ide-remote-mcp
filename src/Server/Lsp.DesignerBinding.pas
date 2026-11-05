@@ -77,7 +77,8 @@ uses
   Lsp.ProjectUnits, // ResolutorDeUnidades: EL juez de "es la misma unidad" (V79)
   Lsp.Json,
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.Puertas;
 
 const
   // la FORMA de una linea de evento - Prop = Metodo, y Prop = sin manejador -;

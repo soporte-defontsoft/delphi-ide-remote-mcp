@@ -612,7 +612,7 @@ uses
   // LeeTexto: la puerta de leer. Sus lugares del IDE (Lsp.Lugares.LugaresDelIde)
   // salen de aqui, por el registro y lo descubierto, sin leer ningun fichero:
   // si los midiese leyendo por la puerta, se preguntaria a si misma
-  Lsp.Patch,
+  Lsp.Puertas,
   Lsp.Settings, // ServerDelphiVersion: la version que fija el settings.ini
   Lsp.Rutas,    // RutaDesde: EL resolutor de una ruta leida
   Lsp.Pascal,

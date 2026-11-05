@@ -270,7 +270,8 @@ uses
   Lsp.FormRender, // EmpiezaLaEspera: el reloj de lo que espera el cliente
   Lsp.Lineas,
   Lsp.Extensiones,
-  Lsp.Papelera;
+  Lsp.Papelera,
+  Lsp.Puertas;
 
 const
   // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo

@@ -90,7 +90,8 @@ uses
   Lsp.Codificacion,
   Lsp.ProcessLaunch,
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.Puertas;
 
 constructor TDelphiStylesTool.Create;
 begin

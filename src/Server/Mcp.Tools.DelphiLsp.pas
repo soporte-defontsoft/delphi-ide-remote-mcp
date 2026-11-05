@@ -154,7 +154,8 @@ uses
   Lsp.Mascara,
   Lsp.Rutas,
   Lsp.ProjectUnits,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Puertas;
 
 const
   MAX_COMPLETION_ITEMS = 50;

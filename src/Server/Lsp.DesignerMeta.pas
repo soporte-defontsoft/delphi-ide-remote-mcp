@@ -447,7 +447,8 @@ uses
   Lsp.DesignerForma, // UnidadDeDesigner: el .pas de un designer (RaizParaElLector)
   Lsp.Args,
   Lsp.Listas, // ExtractoDeLinea: la cita de una linea en una respuesta
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Puertas;
 
 type
   TJubilada = record

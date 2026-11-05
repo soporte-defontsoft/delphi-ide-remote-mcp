@@ -136,7 +136,7 @@ uses
   System.Generics.Defaults,
   System.SyncObjs,
   System.Diagnostics,
-  Lsp.Patch,
+  Lsp.Puertas,
   Lsp.Texts,
   Lsp.ErrorMode,
   Lsp.PackageMap,

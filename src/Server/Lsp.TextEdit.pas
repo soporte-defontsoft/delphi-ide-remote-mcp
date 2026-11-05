@@ -67,7 +67,8 @@ uses
   Lsp.Styles,       // IgnoradoPorFmx: lo que FMX hace con un .style escrito
   Lsp.Lineas,
   Lsp.Extensiones,
-  Lsp.Deteccion;
+  Lsp.Deteccion,
+  Lsp.Puertas;
 
 // Las extensiones de otras tools (fuentes y designers de delphi_edit, los de
 // proyecto del IDE / delphi_create) son las listas del motor: SOURCE_EXTS,

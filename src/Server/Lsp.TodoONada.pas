@@ -107,7 +107,7 @@ uses
   System.IOUtils,
   Lsp.Texts,
   Lsp.Codificacion,     // BytesIguales, el comparador
-  Lsp.Patch,            // EscribeBytes: el escritor atomico de la jaula, para devolver
+  Lsp.Puertas,          // EscribeBytes: el escritor atomico de la jaula, para devolver
   Lsp.Guard,            // las puertas de escritura y los escritores que deshacen
   Lsp.ShaCache;         // DiskStamp: la huella de la foto, la de todos
 

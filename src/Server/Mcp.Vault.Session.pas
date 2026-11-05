@@ -57,7 +57,7 @@ uses
   System.IOUtils,
   System.Classes,
   Lsp.Mascara,
-  Lsp.Patch,   // LeeTexto: la puerta de leer, con el vault como lugar
+  Lsp.Puertas, // LeeTexto: la puerta de leer, con el vault como lugar
   Lsp.Texts,
   Mcp.Vault.Seed,
   Lsp.Settings,

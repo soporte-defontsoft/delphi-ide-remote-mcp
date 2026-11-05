@@ -56,7 +56,7 @@ uses
   System.Types,
   Lsp.Guard,
   Lsp.Texts,
-  Lsp.Patch,          // EscribeTexto: la puerta de escribir
+  Lsp.Puertas,        // EscribeTexto: la puerta de escribir
   Lsp.Codificacion,   // ekUtf8
   Lsp.NetDrives;      // CrearCarpeta: crear la carpeta tolerando la carrera
 

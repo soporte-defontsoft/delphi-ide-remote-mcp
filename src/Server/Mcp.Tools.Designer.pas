@@ -155,7 +155,8 @@ uses
   Lsp.Rutas,
   Lsp.Mascara,
   Lsp.Lineas,
-  Lsp.Papelera;
+  Lsp.Papelera,
+  Lsp.Puertas;
 
 const
   MAX_PROPS = 400;

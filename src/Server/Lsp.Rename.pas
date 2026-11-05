@@ -56,7 +56,7 @@ uses
   System.Generics.Collections,
   Lsp.References,
   Lsp.ProjectUnits,
-  Lsp.Patch,
+  Lsp.Puertas,
   Lsp.Changeset,
   Lsp.Guard,
   Lsp.Session,

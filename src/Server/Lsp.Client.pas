@@ -279,7 +279,7 @@ function SymChildren(const ANode: TJSONObject): TJSONArray;
 implementation
 
 uses
-  Lsp.Patch,
+  Lsp.Puertas,
   Lsp.DesignerBin,
   System.StrUtils,
   MCPServer.Logger,

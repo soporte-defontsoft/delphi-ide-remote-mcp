@@ -69,7 +69,7 @@ uses
   Lsp.Guard,
   Lsp.RemoteRun, // MotivoSinCaptura
   Lsp.Texts,
-  Lsp.Patch,     // ColocaContenido con su lugar (2i)
+  Lsp.Puertas,   // ColocaContenido con su lugar (2i)
   Lsp.Casa,
   Vcl.Imaging.jpeg, // las imagenes en linea que no caben en PNG
   System.StrUtils,

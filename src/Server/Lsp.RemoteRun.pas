@@ -232,7 +232,7 @@ uses
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
   Lsp.BuildRunner,
   Lsp.Discovery,
-  Lsp.Patch,     // LeeTexto/EscribeTexto: las puertas, con el temporal como lugar
+  Lsp.Puertas,   // LeeTexto/EscribeTexto: las puertas, con el temporal como lugar
   Lsp.Codificacion, // ekUtf8
   Lsp.Texts,
   Lsp.NetDrives,

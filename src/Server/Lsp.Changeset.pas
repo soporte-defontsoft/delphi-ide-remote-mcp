@@ -92,7 +92,8 @@ uses
   Lsp.Lineas,
   Lsp.Extensiones,
   Lsp.Papelera,
-  Lsp.Deteccion;
+  Lsp.Deteccion,
+  Lsp.Puertas;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);

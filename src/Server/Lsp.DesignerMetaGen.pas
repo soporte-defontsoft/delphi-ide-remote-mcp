@@ -284,7 +284,8 @@ uses
   Lsp.NetDrives,        // NotaAlLog
   Lsp.Texts,
   Lsp.Casa,             // ServerCacheDir (EscribeEnCasaDelServidor vive en Lsp.Patch)
-  Lsp.Rutas;            // RutaDesde: EL resolutor de una ruta leida de un fichero
+  Lsp.Rutas,            // RutaDesde: EL resolutor de una ruta leida de un fichero
+  Lsp.Puertas;
 
 var
   // el servidor se cierra: el generador lo mira entre unidad y unidad

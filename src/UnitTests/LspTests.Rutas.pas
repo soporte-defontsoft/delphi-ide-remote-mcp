@@ -288,7 +288,7 @@ uses
   Lsp.Guard,
   Lsp.Casa,
   Lsp.Lugares,
-  Lsp.Patch,          // las puertas de leer y de escribir
+  Lsp.Puertas,        // las puertas de leer y de escribir
   Lsp.Codificacion,   // ekUtf8Bom
   Lsp.Discovery,      // la instalacion del IDE
   Lsp.Rutas,          // EsRutaAbsoluta, RutaDesde

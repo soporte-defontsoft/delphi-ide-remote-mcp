@@ -139,7 +139,7 @@ uses
   MCPServer.Logger,
   Lsp.BuildRunner,
   Lsp.Guard,
-  Lsp.Patch,     // EscribeTexto: la puerta de escribir, con el temporal como lugar
+  Lsp.Puertas,   // EscribeTexto: la puerta de escribir, con el temporal como lugar
   Lsp.Codificacion, // ekUtf8
   Lsp.NetDrives,
   Lsp.Sandbox,

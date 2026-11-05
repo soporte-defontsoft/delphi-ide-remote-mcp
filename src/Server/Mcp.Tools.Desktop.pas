@@ -122,7 +122,7 @@ uses
   Lsp.Imagen,
   Mcp.Tools.PAServer,
   Lsp.InlineImages, // DeliverCapture: como se entrega una captura, la misma en toda tool
-  Lsp.Patch,        // ColocaProducto / ColocaContenido: la captura bajada o su recorte, sobre el out=
+  Lsp.Puertas,      // ColocaProducto / ColocaContenido: la captura bajada o su recorte, sobre el out=
   Lsp.RemoteRun,
   Lsp.Dproj,     // DprojDe: un .dpr vale por su .dproj, como en delphi_build
   Lsp.Discovery, // PerfilConSuNombre: el perfil con el nombre del IDE

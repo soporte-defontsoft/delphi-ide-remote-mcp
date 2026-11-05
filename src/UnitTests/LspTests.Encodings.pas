@@ -116,7 +116,8 @@ uses
   Lsp.Lineas,
   Lsp.Extensiones,
   Lsp.Papelera,
-  Lsp.Deteccion;
+  Lsp.Deteccion,
+  Lsp.Puertas;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin

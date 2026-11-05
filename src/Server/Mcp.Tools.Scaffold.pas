@@ -58,7 +58,7 @@ uses
   System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,     // ParametroQueNoVa: lo que no va con el kind se dice
-  Lsp.Patch,     // EnterFileEdit / LeaveFileEdit: el cerrojo de escritura
+  Lsp.Puertas,   // EnterFileEdit / LeaveFileEdit: el cerrojo de escritura
   Lsp.Pascal,    // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Scaffold;
 

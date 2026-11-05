@@ -99,7 +99,7 @@ uses
   Lsp.Texts,
   Lsp.Files,
   Lsp.InlineImages, // ClearAttachedImages / WrapWithAttachedImages
-  Lsp.Patch,        // OlvidaOrigenes: los bytes de antes de la llamada
+  Lsp.Puertas,      // OlvidaOrigenes: los bytes de antes de la llamada
   Mcp.Tools.Messages,
   Mcp.Vault.Session,
   Mcp.Vault.Seed,

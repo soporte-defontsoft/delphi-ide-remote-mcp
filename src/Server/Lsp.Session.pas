@@ -263,7 +263,7 @@ uses
   MCPServer.Logger,
   Lsp.Texts,
   Lsp.ShaCache, // DiskStamp: one composer of the disk fingerprint
-  Lsp.Patch, // LeeTexto: la puerta de leer
+  Lsp.Puertas, // LeeTexto: la puerta de leer
   Lsp.Settings,
   Lsp.Dproj,         // BuscaEnCarpeta: que proyecto sirve a una unidad
   Lsp.ProjectUnits,  // ProyectoListaUnidad, la otra mitad

@@ -515,7 +515,7 @@ uses
   Lsp.Texts,
   Lsp.DesignerBin,
   Lsp.Casa,         // ServerDir: la carpeta del exe del servidor
-  Lsp.Patch,        // EscribeTexto: la puerta de escribir, la propuesta del juez
+  Lsp.Puertas,      // EscribeTexto: la puerta de escribir, la propuesta del juez
   Lsp.Codificacion, // EncKindOf
   Lsp.Discovery,    // DiscoverRadStudio: el Delphi del servidor
   Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante; HuellaDeFichero,

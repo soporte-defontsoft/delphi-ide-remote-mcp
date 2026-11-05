@@ -126,7 +126,7 @@ uses
   Lsp.Casa,
   Lsp.Settings,
   Lsp.ProcessLaunch, // TrocearArgs / EnComillas
-  Lsp.Patch, // LeeTexto/EscribeTexto: las puertas, con el IDE como lugar
+  Lsp.Puertas, // LeeTexto/EscribeTexto: las puertas, con el IDE como lugar
   Lsp.Codificacion, // ekUtf8Bom
   Lsp.Args,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta

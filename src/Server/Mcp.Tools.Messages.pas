@@ -67,7 +67,7 @@ uses
   System.StrUtils,
   System.Generics.Collections,
   MCPServer.Registration,
-  Lsp.Patch,   // LeeTexto: la puerta de leer, con la casa como lugar
+  Lsp.Puertas, // LeeTexto: la puerta de leer, con la casa como lugar
   Lsp.Casa,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Identidad;

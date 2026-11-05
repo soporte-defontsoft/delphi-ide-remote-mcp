@@ -47,7 +47,7 @@ uses
   System.IOUtils,
   System.Win.Registry, // EscribeClaveDelIde: la puerta del registro del IDE
   Winapi.Windows,
-  Lsp.Patch,           // LugarDeEscrituraDenegado, BorraFichero: la casa por su puerta
+  Lsp.Puertas,         // LugarDeEscrituraDenegado, BorraFichero: la casa por su puerta
   Lsp.Guard,           // CrearCarpeta
   Lsp.Casa,            // CopiaDelIde, CopiasDelIde, FicheroDeClaveDelIde: el nombrador de las copias
   Lsp.Discovery,       // ClaveDelIde: la clave del IDE

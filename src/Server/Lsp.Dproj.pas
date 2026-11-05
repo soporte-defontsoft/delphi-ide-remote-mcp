@@ -1258,7 +1258,7 @@ uses
   System.Generics.Collections,
   System.Generics.Defaults, // TIStringComparer: las banderas del build por nombre, sin distinguir mayusculas
   Lsp.Texts,
-  Lsp.Patch, // LeeTexto: la puerta de leer (el .dproj y sus Import, en la jaula)
+  Lsp.Puertas, // LeeTexto: la puerta de leer (el .dproj y sus Import, en la jaula)
   Lsp.Rutas, // RutaDesde: EL resolutor de una ruta leida de un fichero
   System.Character,
   Lsp.NetDrives,

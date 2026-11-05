@@ -103,7 +103,7 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.RegularExpressions,
-  Lsp.Patch,        // EscribeTexto, LeeTexto: la marca de dueno por las puertas
+  Lsp.Puertas,      // EscribeTexto, LeeTexto: la marca de dueno por las puertas
   Lsp.Codificacion, // ekUtf8
   Lsp.Guard,        // las puertas de escribir, CrearCarpeta, EnPapelera, PurgeOldBackups
   Lsp.Casa,         // TrashDayDir, CarpetaDePapelera, MarcaDeDueno: las carpetas de la casa

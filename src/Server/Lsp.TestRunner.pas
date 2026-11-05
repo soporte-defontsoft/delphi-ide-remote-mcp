@@ -57,7 +57,7 @@ uses
   Lsp.BuildRunner,
   Lsp.References,
   Lsp.Listas, // AgrupaPorCarpeta: los proyectos de tests por carpeta
-  Lsp.Patch,
+  Lsp.Puertas,
   Lsp.Pascal, // DirectivasPascal: el lector de directivas
   Lsp.Sandbox, // la jaula: un contenedor por ejecucion
   Lsp.Texts,

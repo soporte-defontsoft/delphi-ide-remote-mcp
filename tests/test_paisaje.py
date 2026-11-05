@@ -169,7 +169,7 @@ REGLAS = [
      'FicherosDePerfilesDelIde: LA lista de esa carpeta, por mascara (PerfilesDelIde y SdksDelIde eran '
      'el mismo cuerpo dos veces: W2 del 16-oct, V34 de la 1.23)'),
     ('leer un designer binario a mano', r"(?<!function )DesignerFileToText\s*\(",
-     [('Lsp.Patch.pas', 'TextoDeDesigner')],
+     [('Lsp.Puertas.pas', 'TextoDeDesigner')],
      'TextoDeDesigner: EL texto de un designer, binario o de texto, por la puerta de leer (W4 del '
      'revisor de cierre de la 1.18.2: cinco sitios lo hacian a mano y el juicio de lo escrito leia un '
      'binario como texto y no juzgaba nada)'),
@@ -404,7 +404,7 @@ REGLAS = [
       ('Lsp.Args.pas', 'NombreDeMensajeGit'),         # el fichero -F de un commit
       ('Lsp.Changeset.pas', 'ChangesetBegin'),        # la cola del id, que es la capacidad
       ('Lsp.Identidad.pas', 'IdentidadPropia'),       # la identidad de una sesion sin nombre
-      ('Lsp.Patch.pas', 'TemporalDeSustitucion'),     # el intermedio de una escritura atomica
+      ('Lsp.Puertas.pas', 'TemporalDeSustitucion'),     # el intermedio de una escritura atomica
       ('Lsp.FormRender.pas', 'CajaDePaquetes')],      # la caja que se llena al lado y entra de un renombre
      'CarpetaUnica (Lsp.Casa, forma 11 de la 1.26): la carpeta nueva de una operacion, ADentroDe\\<prefijo><8 hex>'),
     # el "es mio" a mano: el agente de la llamada comparado con un dueno de la papelera o con la carpeta bajo una
@@ -504,7 +504,7 @@ REGLAS = [
      [# la rotacion de nuestro log, en su misma carpeta
       ('Lsp.LogSink.pas', 'CierraBloque'),
       # un temporal NUESTRO a su destino, que puede estar en otro volumen
-      ('Lsp.Patch.pas', 'Coloca')],
+      ('Lsp.Puertas.pas', 'Coloca')],
      'RenombraConReintentos (Lsp.Guard) con 0: renombra o falla, nunca copia. El comentario de '
      'MueveArbol daba por hecho que MoveFile a secas no copia, y es verdad de una carpeta; MezclaArbol, '
      'la papelera y delphi_move mueven ficheros'),
@@ -715,7 +715,7 @@ REGLAS = [
     ('la huella de un fichero fuera de su casa', r'\bGetFileAttributesEx\b',
      [('Lsp.ShaCache.pas', '*'),
       # la fecha de CREACION de lo que se sustituye, para devolversela tras el renombre: no es una huella
-      ('Lsp.Patch.pas', 'SustituyePorRenombre')],
+      ('Lsp.Puertas.pas', 'SustituyePorRenombre')],
      'Lsp.ShaCache: HuellaDeFichero (tamano y fecha sin abrir el fichero; de un enlace, lo suyo o lo de '
      'detras) y DiskStamp (su texto, el unico: para comparar con otra, o para un nombre con '
      'HuellaParaNombre); otra lectura es otro formato de huella'),
@@ -1210,14 +1210,14 @@ REGLAS = [
      [('Lsp.Codificacion.pas', '*'),
       # los DOS escritores (con la regla de ida y vuelta y la del primer caracter no
       # ASCII), la creacion de una unit nueva y la medida de un cuerpo de varios bytes
-      ('Lsp.Patch.pas', 'DoEdit'), ('Lsp.Patch.pas', 'PatchSaveText'),
+      ('Lsp.Patch.pas', 'DoEdit'), ('Lsp.Puertas.pas', 'PatchSaveText'),
       ('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.Deteccion.pas', 'Measure'),
       # la puerta de escribir: el texto que COMPONE el servidor, en la codificacion
       # de su formato (un .job, una nota del vault, un .sdk), con la de ida y vuelta
-      ('Lsp.Patch.pas', 'EscribeTexto'),
+      ('Lsp.Puertas.pas', 'EscribeTexto'),
       # la decision del escritor: como se LEERIAN los bytes ANSI de un fuente
       # sin codificacion (LecturaCambiada); no escribe nada
-      ('Lsp.Patch.pas', 'EncAlEscribir'),
+      ('Lsp.Puertas.pas', 'EncAlEscribir'),
       # el texto de un form en los bytes que se le dan al parser del IDE, para
       # PREGUNTARLE si lo lee (9.B de la 1.18.0) o para que lea en UTF-8 el texto
       # de un form ancho que to-text convierte (A28 de la 1.23); no escribe nada.
@@ -1231,9 +1231,9 @@ REGLAS = [
      'del primer caracter no ASCII (David, 9-oct-2026): se escribe por PatchSaveText o DoEdit'),
     ('la regla de ida y vuelta preguntada a mano',
      r'\bBytesVuelvenIgual\s*\(|\bSR_EDIT_BYTES_NO_VUELVEN_FMT\b|\bSR_EDIT_SE_LEERIA_DISTINTO_FMT\b',
-     [('Lsp.Patch.pas', 'ReescrituraDenegada'),
+     [('Lsp.Puertas.pas', 'ReescrituraDenegada'),
       # su lado de la escritura: lo que se escribe se lee igual (EDIT-122)
-      ('Lsp.Patch.pas', 'LecturaCambiada'),
+      ('Lsp.Puertas.pas', 'LecturaCambiada'),
       # delphi_read la pregunta para AVISAR (READ-007), no para escribir
       ('Lsp.Patch.pas', 'NotaDeIdaYVuelta'),
       # una URI del motor: si sus bytes se leen SIN perdida; la lectura laxa daria
@@ -1374,7 +1374,7 @@ REGLAS = [
       ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'), ('Lsp.Settings.pas', 'BytesDelIni'),
       # LA puerta (LeeBytes, y su trozo LeeTrozoDeBytes: V80 de la 1.23.1) y el
       # decodificador que usan ella y LeeTexto, tras la puerta
-      ('Lsp.Patch.pas', 'LeeBytes'), ('Lsp.Patch.pas', 'LeeTrozoDeBytes'), ('Lsp.Patch.pas', 'TextoDeFichero'),
+      ('Lsp.Puertas.pas', 'LeeBytes'), ('Lsp.Puertas.pas', 'LeeTrozoDeBytes'), ('Lsp.Puertas.pas', 'TextoDeFichero'),
       # (RepoOf leia .git\HEAD a mano: desde la 1.22.2 la rama la da git, RamaDelRepo)
      # BYTES de la jaula que la tool ya comprobo (la descarga). La captura y su recorte ya
      # van por la puerta (1.18.2, 2b), y el trozo de delphi_fetch por LeeTrozoDeBytes, la
@@ -1408,7 +1408,7 @@ REGLAS = [
      ('Lsp.DesignerForma.pas', 'PrimerosBytes'),
      # el MOTOR de edicion de la jaula: lo que la tool ya paso por la puerta de la jaula
      # (delphi_read, delphi_edit, delphi_textedit, delphi_changeset, el disenador)
-     ('Lsp.Patch.pas', 'RelecturaDe'), ('Lsp.Patch.pas', 'PatchSaveText'),
+     ('Lsp.Puertas.pas', 'RelecturaDe'), ('Lsp.Puertas.pas', 'PatchSaveText'),
      ('Lsp.Patch.pas', 'ReadNumbered'), ('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.Patch.pas', 'DoEdit'),
      ('Lsp.TextEdit.pas', 'DoCreate'), ('Lsp.TextEdit.pas', 'DoEditLine'),
      ('Lsp.Changeset.pas', 'FingerprintBytes'), ('Lsp.DesignerEdit.pas', 'NombreQueLaCodificacionNoLleva'),
@@ -1433,7 +1433,7 @@ REGLAS = [
      # ...y el manifiesto de un ayudante del SERVIDOR (junto a su exe, no lo nombra el agente),
      # leido por Windows como recurso para la copia de la caja: no cabe en LeeBytes (1.27)
      ('Lsp.FormRender.pas', 'ManifiestoDelExe')],
-    'LeeTexto y LeeBytes (Lsp.Patch): LA puerta de leer, con el LUGAR por parametro (jaula, IDE, '
+    'LeeTexto y LeeBytes (Lsp.Puertas): LA puerta de leer, con el LUGAR por parametro (jaula, IDE, '
      'casa, temporal, vault), por la ruta REAL y con EL detector. 41 lecturas iban por su cuenta '
      '(inventario del 9-oct-2026, bloque de las puertas de la 1.18.0): el escaner de peligros leia un '
      'Import de fuera de las raices y, limpio, el build lo cargaba de alli; un buzon que era una union '
@@ -1454,13 +1454,13 @@ REGLAS = [
     r"TFile\.Open\s*\([^;]*\b(?:faWrite|faReadWrite|fmCreateNew|fmOpenOrCreate|fmTruncate|fmAppend)\b",
      [# LA puerta (EscribeBytes) y los escritores de la jaula que ya preguntan la suya:
       # el atomico, el de productos, la copia diaria y la sellada de la papelera
-      ('Lsp.Patch.pas', 'EscribeBytes'), ('Lsp.Patch.pas', 'CopiaAntesDePisar'),
-      ('Lsp.Patch.pas', 'AtomicWrite'),
+      ('Lsp.Puertas.pas', 'EscribeBytes'), ('Lsp.Puertas.pas', 'CopiaAntesDePisar'),
+      ('Lsp.Puertas.pas', 'AtomicWrite'),
       # el renombre que insiste ante un lector de un instante (antes en linea en
       # SustituyePorRenombre; la caja de paquetes del render lo llama tambien)
-      ('Lsp.Guard.pas', 'RenombraConReintentos'), ('Lsp.Patch.pas', 'Coloca'),
+      ('Lsp.Guard.pas', 'RenombraConReintentos'), ('Lsp.Puertas.pas', 'Coloca'),
       # la fecha de creacion de lo que el escritor ACABA de sustituir
-      ('Lsp.Patch.pas', 'PonFechaDeCreacion'),
+      ('Lsp.Puertas.pas', 'PonFechaDeCreacion'),
       # la reserva del nombre de un informe, tras la puerta sobre su carpeta con el
       # nombre mas largo (CREATE_NEW: no pisa nada)
       ('Mcp.Tools.Report.pas', 'ReservarNombre'),
@@ -1506,7 +1506,7 @@ REGLAS = [
       # que cada despliegue reescribe (B9 de la 1.28)
       ('Mld.DBus.pas', 'GuardaTokenDeLasManos'),
       ('DelphiStyleConvert.dpr', 'Convert'), ('DelphiStyleConvert.dpr', 'Defaults')],
-     'EscribeTexto y EscribeBytes (Lsp.Patch): LA puerta de escribir, con el LUGAR por parametro '
+     'EscribeTexto y EscribeBytes (Lsp.Puertas): LA puerta de escribir, con el LUGAR por parametro '
      '(jaula, IDE, casa, temporal, vault), entero o nada y con la copia que pida el lugar. 18 '
      'escritores iban por su cuenta (inventario del 9-oct-2026): el vault escribia encima, sin '
      'temporal; la semilla del vault, los informes, los mensajes de git y los .job sin puerta; '
@@ -1516,8 +1516,8 @@ REGLAS = [
      r"\bRemoveDirectory\w*\s*\(|\bBorraLoNuestro\s*\(|\bBorraNombre\s*\(",
      [# LA puerta de borrar fuera de la jaula (BorraFichero) y los temporales que los
       # escritores acaban de dejar (el suyo, la copia que no se llego a usar)
-      ('Lsp.Patch.pas', 'BorraFichero'), ('Lsp.Patch.pas', 'EscribeBytes'),
-      ('Lsp.Patch.pas', 'SustituyePorRenombre'), ('Lsp.Patch.pas', 'Coloca'),
+      ('Lsp.Puertas.pas', 'BorraFichero'), ('Lsp.Puertas.pas', 'EscribeBytes'),
+      ('Lsp.Puertas.pas', 'SustituyePorRenombre'), ('Lsp.Puertas.pas', 'Coloca'),
       # la jaula: su borrado de lo que la operacion acaba de dejar, sus recorredores
       # (no cruzan enlaces; la puerta antes), la papelera y el deshacer
       # BorraNombre: borra un NOMBRE sin tocar los atributos del fichero (un enlace
@@ -1544,7 +1544,7 @@ REGLAS = [
       # programas que NO son el servidor: lo suyo, en el destino o en el temporal
       ('McpDesktopNode.dpr', 'RecogerCaptura'), ('McpRunJob.dpr', 'BorraPid'),
       ('McpRunJob.dpr', 'LanzarYVigilar')],
-     'BorraFichero (Lsp.Patch): LA puerta de borrar fuera de la jaula, con el LUGAR (casa, temporal, '
+     'BorraFichero (Lsp.Puertas): LA puerta de borrar fuera de la jaula, con el LUGAR (casa, temporal, '
      'vault, IDE con copia); en la jaula, la papelera. Los temporales de remote-run y de git, el buzon y '
      'las purgas de la cache del disenador borraban con TFile.Delete o DeleteFile por su cuenta: detras '
      'de una union, fuera (revisor de P3, 9-oct-2026)'),
@@ -1583,7 +1583,7 @@ REGLAS = [
      r"TFile\.Set(?:CreationTime|LastWriteTime|LastAccessTime)\w*\s*\(",
      [('Lsp.Guard.pas', 'QuitaSoloLectura'), ('Lsp.Guard.pas', 'BorraArbolDentro'),
       ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
-      ('Lsp.Patch.pas', 'PonFechaDeCreacion')],
+      ('Lsp.Puertas.pas', 'PonFechaDeCreacion')],
      'Cambiar un atributo o una fecha ESCRIBE: los de hoy van detras de la puerta de su operacion (el +R '
      'de lo propio, restaurar una foto, la fecha de creacion de lo que el escritor acaba de sustituir); '
      'uno nuevo se revisa aqui'),
@@ -2730,7 +2730,7 @@ REGLAS_PY = [
     # tenian sus comprobaciones de ausencia por mc, y el barrido de sus ~45 lineas
     # restantes, apuntado para la 1.19.0, se hizo el 18-oct-2026: las dos ultimas)
     ('el intermedio del escritor atomico a mano', r"delphi-patch-tmp", [],
-     'mc.TEMPORAL_SUSTITUCION_EXT, leido de TEMPORAL_DE_SUSTITUCION_EXT (Lsp.Patch)'),
+     'mc.TEMPORAL_SUSTITUCION_EXT, leido de TEMPORAL_DE_SUSTITUCION_EXT (Lsp.Puertas)'),
     ('la carpeta de las copias del IDE a mano', r"""(['"])ide-copias\1""", [],
      'mc.IDE_COPIAS, leido de IDE_COPIAS_SUB (Lsp.Casa)'),
     # (revisor del 2af de la 1.18.2: seis baterias componian la casa de capturas)

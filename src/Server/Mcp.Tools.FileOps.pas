@@ -72,7 +72,7 @@ uses
   System.StrUtils,
   MCPServer.Registration,
   Lsp.Guard,
-  Lsp.Patch,
+  Lsp.Puertas,
   Lsp.ProjectUnits,
   Lsp.NetDrives,
   Lsp.Rutas,

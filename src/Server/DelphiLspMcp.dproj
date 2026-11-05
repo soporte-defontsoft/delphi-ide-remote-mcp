@@ -259,6 +259,7 @@
         <DCCReference Include="Lsp.RegistroDelIde.pas"/>
         <DCCReference Include="Lsp.Papelera.pas"/>
         <DCCReference Include="Lsp.Deteccion.pas"/>
+        <DCCReference Include="Lsp.Puertas.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

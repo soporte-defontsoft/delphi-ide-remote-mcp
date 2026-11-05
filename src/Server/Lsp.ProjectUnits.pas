@@ -397,7 +397,8 @@ uses
   Lsp.Discovery,        // UnidadesDeLaBiblioteca: la que existe tal cual
   Lsp.Session,          // FindDproj: el proyecto de un fuente
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.Puertas;
 
 { TUnitInfo }
 

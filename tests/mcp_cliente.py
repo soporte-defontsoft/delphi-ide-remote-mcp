@@ -145,7 +145,7 @@ def _papelera():
                                                   'IDE_COPIAS_SUB', 'CAPTURAS_SUB', 'DESCARGA_PREFIJO')),
                                 ('Lsp.Papelera.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
                                                       'CAJON_SUSTITUIDOS', 'CAJON_CORRUPTOS')),
-                                ('Lsp.Patch.pas', ('TEMPORAL_DE_SUSTITUCION_EXT',))):
+                                ('Lsp.Puertas.pas', ('TEMPORAL_DE_SUSTITUCION_EXT',))):
             with open(os.path.join(REPO, 'src', 'Server', unidad),
                       encoding='utf-8-sig', errors='replace') as fh:
                 t = fh.read()

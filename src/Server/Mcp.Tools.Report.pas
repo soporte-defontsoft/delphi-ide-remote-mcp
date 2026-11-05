@@ -80,7 +80,7 @@ uses
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
-  Lsp.Patch,      // EscribeTexto: la puerta de escribir, con la casa como lugar
+  Lsp.Puertas,    // EscribeTexto: la puerta de escribir, con la casa como lugar
   Lsp.Codificacion, // ekUtf8Bom
   Lsp.Listas,     // TListaDeFicheros: el organizador de las listas de ficheros
   Lsp.Casa,

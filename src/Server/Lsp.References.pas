@@ -205,7 +205,8 @@ uses
   Lsp.Listas,
   Lsp.Casa,
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.Puertas;
 
 function IdentifierAt(const ALineText: string; ACol: Integer; out AInicio: Integer): string;
 var
