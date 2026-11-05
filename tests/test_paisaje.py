@@ -606,6 +606,12 @@ REGLAS = [
      'absoluta le pone la barra delante'),
     # el numero que adb pone a un nombre mDNS repetido: adb no tiene una orden que lo diga, asi
     # que es gramatica nuestra, UNA; la puerta y la lista del workspace preguntan lo mismo (V223)
+    # lo que FMX pinta de un control: FMX no lo da hecho (su UpdateRect es lo que REPINTA, y un TShape lo
+    # agranda por su trazo), asi que la regla de su pintado - quien recorta a sus hijos y por su ClipRect -
+    # es gramatica nuestra copiada de la suya, UNA (B11 de la 1.28)
+    ('quien recorta lo que pinta FMX', r'\bClipChildren\s+or\b[^;]*SmallSizeControl',
+     [('FormRender.Fmx.pas', 'LoQuePinta')],
+     'LoQuePinta (FormRender.Fmx): la regla de TControl.PaintAndClipChild, con lo que dicen los controles vivos'),
     ('el numero de un nombre mDNS de adb leido a mano', r"Pos\(\s*'\)\.'",
      [('Lsp.Settings.pas', 'DispositivoSinNumeroMdns')],
      'DispositivoSinNumeroMdns (Lsp.Settings): lo leen BadDeviceName y AdbTargetAllowed'),
@@ -2216,6 +2222,8 @@ PLANTADO = {
     # la del lint de estilos (Mcp.Tools.Styles.LintStyles) hasta el 28-oct-2026
     'un StyleLookup de un form leido a mano':
         "  if not (SameText(Prop, 'StyleLookup') and LeeLiteralDeForm(Valor, Lookup)) then Continue;",
+    # una segunda copia de la regla del pintado de FMX (B11 de la 1.28)
+    'quien recorta lo que pinta FMX': '  if P.ClipChildren or TControlCrack(P).SmallSizeControl then',
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -2947,7 +2955,9 @@ check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
 # 1.27-, y uno que ParseaArgumentos leyera a mano). Si cambia uno sin
 # subirlo, un ayudante viejo y un servidor nuevo se creen iguales. Cambia: sube FR_PROTOCOLO_VERSION y
 # pon aqui el numero y la firma que dice el fallo
-FIRMA_DEL_PROTOCOLO = (6, '443b2e79b175fc08')  # la 6: --set (B2 de la 1.28)
+FIRMA_DEL_PROTOCOLO = (7, '443b2e79b175fc08')  # la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11)
+# (un campo nuevo en el VALOR de una clave no cambia la firma, que mira claves y argumentos: ese
+# numero se sube a mano, y el lector exige los campos de su version: BOX= de ocho no se lee)
 
 
 def firma_del_protocolo(inc, comun):

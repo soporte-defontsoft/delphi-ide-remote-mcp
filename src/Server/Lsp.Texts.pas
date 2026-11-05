@@ -12502,12 +12502,22 @@ const
     'x %d: it sticks out and that part is not visible';
   { ...y en FMX: un contenedor NO recorta a sus hijos salvo con ClipChildren, y
     el renderizador lo dibuja entero por fuera (dirigido de Hermes de la 1.27,
-    medido con un TButton fuera de un TPanel). Lo que de verdad se ve lo sabria el
-    renderizador, con los controles vivos: 1.28. Mismos argumentos. }
+    medido con un TButton fuera de un TPanel). Lo que de verdad se pinta lo dice
+    la clase con los controles vivos (B11 de la 1.28: su UpdateRect y su
+    AbsoluteClipRect): entera, se dibuja por encima; nada o un trozo, lo cortan.
+    Mismos argumentos; el recortado, cuatro mas: lo pintado. }
   SF_DSGN_OCUPA_SE_SALE_FMX_FMT =
     '%s: %s (%s) spans from (%d,%d) to (%d,%d), and "%s" is only %d ' +
-    'x %d: it sticks out, and FMX draws that part over what is around it ' +
-    'unless a container clips its children (ClipChildren)';
+    'x %d: it sticks out and nothing clips it (no container with ' +
+    'ClipChildren, nor the form): FMX draws that part over what is around it';
+  SF_DSGN_OCUPA_SE_SALE_RECORTADA_FMX_FMT =
+    '%s: %s (%s) spans from (%d,%d) to (%d,%d), and "%s" is only %d ' +
+    'x %d: it sticks out, and only (%d,%d)-(%d,%d) of it is drawn - a ' +
+    'container that clips its children (ClipChildren) or the form cuts the rest';
+  SF_DSGN_OCUPA_SE_SALE_NADA_FMX_FMT =
+    '%s: %s (%s) spans from (%d,%d) to (%d,%d), and "%s" is only %d ' +
+    'x %d: it is outside, and none of it is drawn - a container that clips ' +
+    'its children (ClipChildren) or the form leaves it out';
 
   SF_DSGN_AMBOS_ALCLIENT_FMT =
     '%s (%s) and %s (%s) are both alClient in "%s": the VCL ' +

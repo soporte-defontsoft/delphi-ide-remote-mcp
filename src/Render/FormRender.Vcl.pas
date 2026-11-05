@@ -408,7 +408,7 @@ procedure RespondeCajas(AForm: TForm; ARaiz: TComponent; ACargador: TCargador);
         var Fichero := ACargador.EscritoEn(C, EnFichero);
         RespondeCaja(Ruta, ACargador.ClaseEscrita(C, ARaiz),
           (if (APadre = AForm) or (APadre = ARaiz) then '' else RutaDeComponente(ARaiz, APadre)),
-          P.X, P.Y, C.Width, C.Height, C.Visible, '', Fichero, EnFichero);
+          P.X, P.Y, C.Width, C.Height, C.Visible, '', Fichero, EnFichero, '');
       end;
       if C is TWinControl then
         De(TWinControl(C));

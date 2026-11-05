@@ -496,6 +496,41 @@ _sale = [t for t in (j.get('outsideParent') or []) if t.startswith('Sale:')]
 check('V74i FMX: lo que se sale no se da por invisible: FMX lo dibuja salvo ClipChildren',
       _sale and 'not visible' not in _sale[0] and 'ClipChildren' in _sale[0], _sale or (j.get('outsideParent') if j else r[:300]))
 
+# B11 de la 1.28: lo que se VE de lo que se sale lo dice FMX con los controles vivos (UpdateRect, lo que
+# repinta de cada control: su caja cortada por cada antecesor que recorta a sus hijos, y AbsoluteClipRect,
+# por el form), no una regla del texto. Un TLayout con ClipChildren corta a Cortado a medias y deja fuera a
+# Fuera; Borde se sale del form. ROJA contra la 1.27.1: los tres "FMX draws that part over what is around it"
+os.makedirs(os.path.join(BASE, 'recorte'))
+p_rec = os.path.join(BASE, 'recorte', 'C.fmx')
+open(p_rec, 'w', newline='').write(
+    'object F: TF\n  ClientHeight = 300\n  ClientWidth = 400\n'
+    '  object Corta: TLayout\n    ClipChildren = True\n    Position.X = 50.000000000000000000\n'
+    '    Position.Y = 60.000000000000000000\n    Size.Width = 100.000000000000000000\n'
+    '    Size.Height = 100.000000000000000000\n    Size.PlatformDefault = False\n'
+    + rect_fmx('Cortado', 80, 10, 50, 20) + rect_fmx('Fuera', 150, 10, 30, 20) + '  end\n'
+    + rect_fmx('Borde', 380, 10, 50, 20).replace('    ', '  ', 1).replace('\n    ', '\n  ') + 'end\n')
+r = call({'command': 'layout', 'path': p_rec})
+j = json.loads(r) if r.startswith('{') else {}
+
+
+def dibujado(avisos, empieza):
+    # el (x1,y1)-(x2,y2) que el aviso dice dibujado; None si no lo dice
+    for t in avisos or []:
+        if t.startswith(empieza):
+            m = re.search(r'only \((-?\d+),(-?\d+)\)-\((-?\d+),(-?\d+)\) of it is drawn', t)
+            return tuple(int(v) for v in m.groups()) if m else None
+    return None
+
+
+_av = j.get('outsideParent') or []
+check('V74j FMX con ClipChildren: de Cortado solo se dibuja (80,10)-(100,30) de "Corta", y no dice que se dibuje '
+      'por encima', dibujado(_av, 'Cortado:') == (80, 10, 100, 30) and
+      not any(t.startswith('Cortado:') and 'over what is around it' in t for t in _av), _av or r[:400])
+check('V74k FMX con ClipChildren: de Fuera no se dibuja nada',
+      any(t.startswith('Fuera:') and 'none of it is drawn' in t for t in _av), _av or r[:400])
+check('V74l FMX: lo que se sale del FORM lo corta el form: de Borde solo (380,10)-(400,30)',
+      dibujado(_av, 'Borde:') == (380, 10, 400, 30), _av or r[:400])
+
 # (en su carpeta: el renderizador juzga los hermanos del form, y aqui los hay truncados a proposito)
 os.makedirs(os.path.join(BASE, 'paginas'))
 o = layout('paginas\\Paginas', "object FPag: TFPag\n  ClientWidth = 400\n  ClientHeight = 300\n  object PageControl1: TPageControl\n    Align = alClient\n    Width = 400\n    Height = 300\n    object TabSheet1: TTabSheet\n      Caption = 'A'\n      object B: TButton\n        Left = 8\n        Top = 8\n        Width = 75\n        Height = 25\n        TabOrder = 0\n      end\n    end\n  end\nend\n")

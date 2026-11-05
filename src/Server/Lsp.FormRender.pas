@@ -147,6 +147,11 @@ type
     // el fichero que lo escribe (el de un frame en linea o un ancestro, si es ahi)
     // y su ruta desde la raiz de ese fichero (1.26)
     Fichero, EnFichero: string;
+    // lo que FMX pinta de su caja, en las del form: lo que dejan los que recortan a
+    // sus hijos (ClipChildren) y el form, dicho por la clase (B11 de la 1.28). La
+    // VCL no lo mide: ConPintada = False
+    ConPintada: Boolean;
+    PinX, PinY, PinW, PinH: Integer;
   end;
 
   TRespuestaRender = record
@@ -821,11 +826,12 @@ begin
     else if Es(FR_BOX) then
     begin
       // <ruta>|<clase>|<padre>|<x>,<y>,<ancho>,<alto>|<visible>|<contenido>|<fichero>|<ruta en
-      // el fichero>: ni un nombre ni una ruta llevan '|'
+      // el fichero>|<pintada>: ni un nombre ni una ruta llevan '|'
       Trozos := V.Split(['|']);
-      if Length(Trozos) = 8 then
+      if Length(Trozos) = 9 then
       begin
-        var Caja: TCajaDeRender;
+        // a cero: lo que un campo vacio no dice (el contenido, lo pintado en la VCL) no queda al azar
+        var Caja := Default(TCajaDeRender);
         if LeeCuatroEnteros(Trozos[3], Caja.X, Caja.Y, Caja.W, Caja.H) then
         begin
           Caja.Ruta := Trozos[0];
@@ -835,6 +841,7 @@ begin
           Caja.EnContenido := LeeCuatroEnteros(Trozos[5], Caja.CX, Caja.CY, Caja.CW, Caja.CH);
           Caja.Fichero := Trozos[6];
           Caja.EnFichero := Trozos[7];
+          Caja.ConPintada := LeeCuatroEnteros(Trozos[8], Caja.PinX, Caja.PinY, Caja.PinW, Caja.PinH);
           Result.Cajas := Result.Cajas + [Caja];
         end;
       end;

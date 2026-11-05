@@ -256,7 +256,7 @@ function ListaClasesSinLeer: Integer;
 function RutaDeComponente(ARaiz, AComp: TComponent): string;
 { EL escritor de BOX=, el que lee Lsp.FormRender.LeeRespuestaDeRender }
 procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean;
-  const AContenido, AFichero, AEnFichero: string);
+  const AContenido, AFichero, AEnFichero, APintada: string);
 { Los escritores de ROOT=, PACKAGES=, RECT=, SIZE= y MS=, los que lee
   Lsp.FormRender.LeeRespuestaDeRender: cada renderizador los escribia a mano, y
   si uno deriva el lector deja los campos vacios sin decir nada (P7 del revisor). }
@@ -638,10 +638,10 @@ begin
 end;
 
 procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean;
-  const AContenido, AFichero, AEnFichero: string);
+  const AContenido, AFichero, AEnFichero, APintada: string);
 begin
-  Responde(FR_BOX, Format('%s|%s|%s|%s|%d|%s|%s|%s', [ARuta, AClase, APadre, MedidasEnTexto(AX, AY, AAncho, AAlto),
-    Ord(AVisible), AContenido, AFichero, AEnFichero]));
+  Responde(FR_BOX, Format('%s|%s|%s|%s|%d|%s|%s|%s|%s', [ARuta, AClase, APadre, MedidasEnTexto(AX, AY, AAncho, AAlto),
+    Ord(AVisible), AContenido, AFichero, AEnFichero, APintada]));
 end;
 
 procedure RespondeRaiz(const ANombre, AClase: string; AEsFrame: Boolean);

@@ -7,7 +7,7 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 6; // la 6: --set (B2 de la 1.28)
+  FR_PROTOCOLO_VERSION = 7; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11)
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
@@ -89,7 +89,10 @@
                                  // <fichero>|<ruta en el fichero> (repetible; --boxes): cada control, donde queda de
                                  // verdad, en coordenadas del form (V74, V24); <contenido>, x,y,ancho,alto de donde esta
                                  // si no es su padre (un TTabItem), o vacio; <fichero>, el que lo escribe - el de un
-                                 // frame en linea o un ancestro, si es ahi - y su ruta desde la raiz de ese (1.26)
+                                 // frame en linea o un ancestro, si es ahi - y su ruta desde la raiz de ese (1.26);
+                                 // |<pintada>: x,y,ancho,alto de lo que FMX pinta de su caja (FormRender.Fmx.LoQuePinta:
+                                 // lo que dejan los que recortan a sus hijos, por su ClipRect, y el form), vacio en la
+                                 // VCL, que no lo mide (B11 de la 1.28)
   FR_UNREADABLE_CLASS = 'UNREADABLECLASS='; // UNREADABLECLASS=<clsid> (repetible; --unreadableclasses): una clase
                                  // COM cuya clave InprocServer32 no se deja leer desde el contenedor
   FR_MS = 'MS=';                 // MS=<carga>,<pintado> en milisegundos

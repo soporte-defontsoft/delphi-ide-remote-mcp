@@ -818,10 +818,18 @@ begin
   Assert.AreEqual('solo el texto', R.Parada.Texto);
   Assert.AreEqual('', R.Parada.Fichero);
   // BOX=: el fichero que escribe el control y su ruta en el (1.26)
-  R := LeeRespuestaDeRender(FR_BOX + 'Marco1.Edit1|TEdit|Marco1|18,18,121,23|1||C:\w\UMarco.dfm|Edit1'#13#10);
-  Assert.AreEqual<NativeInt>(1, Length(R.Cajas), 'BOX= con sus ocho campos');
+  R := LeeRespuestaDeRender(FR_BOX + 'Marco1.Edit1|TEdit|Marco1|18,18,121,23|1||C:\w\UMarco.dfm|Edit1|'#13#10);
+  Assert.AreEqual<NativeInt>(1, Length(R.Cajas), 'BOX= con sus nueve campos');
   Assert.AreEqual('C:\w\UMarco.dfm', R.Cajas[0].Fichero);
   Assert.AreEqual('Edit1', R.Cajas[0].EnFichero);
+  Assert.IsFalse(R.Cajas[0].ConPintada, 'sin lo pintado (la VCL no lo mide)');
+  // ...y lo que FMX pinta de la caja (B11 de la 1.28)
+  R := LeeRespuestaDeRender(FR_BOX + 'Cortado|TRectangle|Corta|130,70,50,20|1||C:\w\C.fmx|Cortado|130,70,20,20'#13#10);
+  Assert.IsTrue(R.Cajas[0].ConPintada, 'con lo pintado');
+  Assert.AreEqual(20, R.Cajas[0].PinW, 'su ancho pintado');
+  // el BOX= de antes (ocho campos) es de otro protocolo: no se lee
+  R := LeeRespuestaDeRender(FR_BOX + 'Marco1.Edit1|TEdit|Marco1|18,18,121,23|1||C:\w\UMarco.dfm|Edit1'#13#10);
+  Assert.AreEqual<NativeInt>(0, Length(R.Cajas), 'BOX= de ocho campos');
   R := LeeRespuestaDeRender(FR_IGNORED + 'mensaje sin partes'#13#10);
   Assert.AreEqual('mensaje sin partes', R.Ignoradas[0].Texto, 'IGNORED=, igual');
 end;

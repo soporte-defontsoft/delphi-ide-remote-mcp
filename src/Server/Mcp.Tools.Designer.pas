@@ -949,12 +949,22 @@ begin
           Max(0, C.X + C.W - PX)]))
       else if not SameText(Al, 'alCustom') then
       begin
-        // "no se ve" es de la VCL; FMX no recorta salvo ClipChildren (dirigido de Hermes, 1.27)
-        var SeSale := SF_DSGN_OCUPA_SE_SALE_FMT;
-        if AFmx then
-          SeSale := SF_DSGN_OCUPA_SE_SALE_FMX_FMT;
-        AOutside.Add(MsgFmt(SeSale, [C.Ruta, C.Clase, Donde(C), C.X - PX, C.Y - PY,
-          C.X - PX + C.W, C.Y - PY + C.H, Padre.Ruta, PW, PH]));
+        // "no se ve" es de la VCL; en FMX, lo que la clase dice que pinta de la caja
+        // (ConPintada, B11 de la 1.28): entera, se dibuja por encima de lo de alrededor; nada
+        // o un trozo, lo cortan los que recortan a sus hijos o el form (dirigido de Hermes, 1.27)
+        var Formato := SF_DSGN_OCUPA_SE_SALE_FMT;
+        if AFmx and C.ConPintada and ((C.PinW = 0) or (C.PinH = 0)) then
+          Formato := SF_DSGN_OCUPA_SE_SALE_NADA_FMX_FMT
+        else if AFmx and C.ConPintada and
+                ((C.PinX <> C.X) or (C.PinY <> C.Y) or (C.PinW <> C.W) or (C.PinH <> C.H)) then
+          Formato := SF_DSGN_OCUPA_SE_SALE_RECORTADA_FMX_FMT
+        else if AFmx then
+          Formato := SF_DSGN_OCUPA_SE_SALE_FMX_FMT;
+        // los mismos argumentos para los cuatro; el recortado usa ademas los cuatro ultimos,
+        // lo pintado en las del padre que nombra
+        AOutside.Add(MsgFmt(Formato, [C.Ruta, C.Clase, Donde(C), C.X - PX, C.Y - PY,
+          C.X - PX + C.W, C.Y - PY + C.H, Padre.Ruta, PW, PH,
+          C.PinX - PX, C.PinY - PY, C.PinX - PX + C.PinW, C.PinY - PY + C.PinH]));
         AFuera := AFuera + [C.Ruta];
       end;
     end;

@@ -44,7 +44,7 @@ type
   TSustituto = class(TRectangle)
   end;
 
-  // Realign y GetTabStopController son protegidos: los del juez son los de FMX
+  // Realign, GetTabStopController y SmallSizeControl son protegidos: los del juez son los de FMX
   TFormCrack = class(TCustomForm);
   TControlCrack = class(TControl);
 
@@ -313,6 +313,30 @@ begin
         end;
 end;
 
+{ LO QUE FMX PINTA de la caja de AControl, en las del form (B11 de la 1.28): la
+  regla de su pintado (FMX.Controls, TControl.PaintInternal y su PaintAndClipChild):
+  cada antecesor que recorta a sus hijos - ClipChildren, o SmallSizeControl - corta
+  lo que pintan por SU ClipRect (virtual: lo dice su clase), y el form por su area
+  (AbsoluteClipRect). Gramatica nuestra que copia la de FMX, que no la da hecha: su
+  UpdateRect es lo que REPINTA, y un TShape lo agranda por su trazo despues de
+  cortarlo (TShape.DoGetUpdateRect: medido, 1 px de mas). UNA, aqui (test_paisaje).
+  Quien recorta y por donde lo dicen los controles vivos, no una lista de clases. }
+function LoQuePinta(AControl: TControl): TRectF;
+begin
+  Result := AControl.AbsoluteClipRect;
+  var P := AControl.ParentControl;
+  while P <> nil do
+  begin
+    if P.ClipChildren or TControlCrack(P).SmallSizeControl then
+    begin
+      var R := P.ClipRect;
+      Result := TRectF.Intersect(Result,
+        TRectF.Create(P.LocalToAbsolute(R.TopLeft), P.LocalToAbsolute(R.BottomRight)));
+    end;
+    P := P.ParentControl;
+  end;
+end;
+
 { Donde queda cada control del form ya pintado, en coordenadas del form: lo que
   resuelve FMX, que un texto no dice (V74 de la 1.24). Lo que no se guarda es de la
   presentacion de un control, no del form, pero se baja por ello: un TTabItem, un
@@ -340,8 +364,12 @@ procedure RespondeCajas(AForm: TForm; ARaiz: TComponent; ACargador: TCargador);
           // y donde esta escrito: el de dentro de un frame, en el fichero del frame
           var EnFichero: string;
           var Fichero := ACargador.EscritoEn(C, EnFichero);
+          // y lo que FMX pinta de ella (LoQuePinta, B11 de la 1.28; dirigido de Hermes de la
+          // 1.27: un aviso decia "no se ve" y el preview lo dibujaba entero)
+          var Pintada := LoQuePinta(C);
           RespondeCaja(Ruta, ACargador.ClaseEscrita(C, ARaiz), ARutaPadre,
-            Round(RF.Left), Round(RF.Top), Round(RF.Width), Round(RF.Height), C.Visible, Dentro, Fichero, EnFichero);
+            Round(RF.Left), Round(RF.Top), Round(RF.Width), Round(RF.Height), C.Visible, Dentro, Fichero, EnFichero,
+            MedidasEnTexto(Round(Pintada.Left), Round(Pintada.Top), Round(Pintada.Width), Round(Pintada.Height)));
           De(C, Ruta, nil);
         end
         else
