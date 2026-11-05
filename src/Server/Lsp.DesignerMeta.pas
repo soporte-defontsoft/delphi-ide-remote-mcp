@@ -1063,9 +1063,7 @@ var
 begin
   Result := [];
   if ADic.TryGetValue(ClaveDeIdentificador(ATypeId), S) then
-    for var X in S.Split([',']) do
-      if X.Trim <> '' then
-        Result := Result + [X.Trim];
+    Result := Recortados(S.Split([',']));
 end;
 
 { EL juicio del VALOR de una hoja (la propiedad final, por su TPropRec) con lo

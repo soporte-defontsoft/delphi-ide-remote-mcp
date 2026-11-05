@@ -741,7 +741,9 @@ var
   begin
     var Ruta := MaskDriveText('', AForm);
     for var V in ConStyleBookF do
-      if SameText(V.Value, Ruta) then
+      // LA igualdad de dos rutas, la de NTFS (SameFileName): SameText solo pliega
+      // ASCII (C14 del cierre de la 1.28)
+      if SameFileName(V.Value, Ruta) then
         Exit;
     ConStyleBookF.Add(Ruta);
   end;

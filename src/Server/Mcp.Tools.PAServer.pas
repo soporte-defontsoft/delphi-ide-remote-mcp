@@ -849,7 +849,7 @@ end;
 function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
-  PaClient, ProfName, Host, Plat, P, Output, ProfileFile: string;
+  PaClient, ProfName, Host, Plat, Output, ProfileFile: string;
   AvisoDup: string;
   Puerto: Integer;
   ExitCode: Cardinal;
@@ -869,11 +869,12 @@ begin
   if Result <> '' then
     Exit;
   Puerto := PuertoDeLaLlamada(Params);
-  // the gate already refused anything outside PACLIENT_PLATFORMS; this loop
-  // just restores paclient's exact casing (and applies the default).
-  Plat := PLATAFORMA_DE_GETSDK;
-  for P in PACLIENT_PLATFORMS do
-    if SameText(P, Params.Platform.Trim) then Plat := P;
+  // the gate already refused anything outside PACLIENT_PLATFORMS with this very
+  // judge (PlataformaDePaclient, C4); here it gives paclient's exact casing, and
+  // an empty platform takes the default.
+  Plat := PlataformaDePaclient(Params.Platform.Trim);
+  if Plat = '' then
+    Plat := PLATAFORMA_DE_GETSDK;
   PaClient := FindPaClient(Info);
   if PaClient = '' then Exit(PaclientQueFalta(MsgText(SR_PASERVER_NO_PACLIENT)));
   // Un nombre existente NUNCA se pisa (lo pudo crear el IDE u otro agente

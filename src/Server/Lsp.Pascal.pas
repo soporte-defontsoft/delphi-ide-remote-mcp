@@ -287,6 +287,11 @@ function ClaveDeIdentificador(const S: string): string;
 // A-Z (GESTORIA con su I acentuada no era gestoria). Medido el 28-oct-2026
 // con LCMapStringEx (V108 de la 1.23.1).
 function SinMayusculas(const S: string): string;
+// Los trozos de AL recortados (Trim), sin los que quedan vacios: lo que de una
+// lista escrita a mano - un Split, unas lineas, unas mascaras que dio el agente -
+// entra en una lista de verdad. Estaba escrito a mano ocho veces (C8 del cierre
+// de la 1.28, del revisor del paisaje de la 1.27).
+function Recortados(const AL: array of string): TArray<string>;
 // ANombre es un fichero de ACarpeta (ruta completa) con ESE nombre, y nada mas,
 // como lo resuelve Windows (GetFullPathName, por ExpandFileName): ni separador,
 // ni unidad, ni stream, ni '..', ni lo que Windows recorta. EL juez de "es un
@@ -438,6 +443,14 @@ function SinMayusculas(const S: string): string;
 begin
   // LCMapString con LOCALE_INVARIANT y sin casing de ningun idioma
   Result := S.ToLowerInvariant;
+end;
+
+function Recortados(const AL: array of string): TArray<string>;
+begin
+  Result := [];
+  for var S in AL do
+    if S.Trim <> '' then
+      Result := Result + [S.Trim];
 end;
 
 function EsNombreSueltoEn(const ACarpeta, ANombre: string): Boolean;

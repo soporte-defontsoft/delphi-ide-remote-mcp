@@ -456,11 +456,13 @@ try:
           not os.path.exists(perfil) and len(nuevas) == 1 and
           open(os.path.join(copias, nuevas[0]), 'rb').read() == antes and mc.es(out, 'SN_PAS_COPIA_DEL_IDE_FMT'),
           (nuevas, out[:300]))
-    # las copias que dejo ESTA bateria, fuera: la cache de las baterias dura entre corridas
-    for f in os.listdir(copias):
-        if f.endswith(('-limpio.sdk', '-zzpurga.sdk', '-zzp3perfil.profile')):
-            os.remove(os.path.join(copias, f))
 finally:
     srv.mata()
+    # las copias que dejo ESTA bateria, fuera: la cache de las baterias dura entre corridas. En el finally
+    # (V48 de la 1.23, C15 del cierre de la 1.28): una corrida que moria a medias las dejaba
+    if 'copias' in globals() and os.path.isdir(copias):
+        for f in os.listdir(copias):
+            if f.endswith(('-limpio.sdk', '-zzpurga.sdk', '-zzp3perfil.profile')):
+                os.remove(os.path.join(copias, f))
 
 mc.fin('bateria de SDK')

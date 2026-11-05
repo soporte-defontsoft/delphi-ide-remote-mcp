@@ -188,6 +188,17 @@ check('gate: plataforma desconocida rechazada',
       mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PLATFORM_FMT') and 'paclient' in out,
       out[:200])
 
+# C4 del cierre (1.28): un caracter que la comparacion del LOCALE iguala a uno ASCII en el mismo sitio (U+02E3,
+# la x volada: 'Linu' + U+02E3 + '64'; de 6 a 15 asi por plataforma, medido con CompareString) pasaba la puerta
+# (MatchText: AnsiSameText, que iguala las longitudes y luego pregunta al locale) y add-profile no encontraba la
+# plataforma (SameText, ordinal): el perfil nacia con la de por defecto en vez de negarse. Un caracter de mas
+# (U+00AD, el guion blando) NO pasaba: la RTL compara antes las longitudes (medido). ROJA contra e1d16de: el
+# falso se llamaba (el centinela de abajo lo dice tambien)
+out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME, "host": "127.0.0.1",
+                                   "platform": 'Linu' + chr(0x2E3) + '64', "password": "x"})
+check('gate: una plataforma con un caracter que el locale iguala a una letra (U+02E3) se rechaza, no se toma '
+      'la de por defecto', mc.rechazado(out) and mc.es(out, 'SR_PASERVER_PLATFORM_FMT'), out[:200])
+
 out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAME,
                                    "host": "127.0.0.1", "password": 'has"quote'})
 check('gate: password con comillas rechazada',

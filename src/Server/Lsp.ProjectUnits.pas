@@ -1469,10 +1469,7 @@ var
   end;
 
 begin
-  L := [];
-  for var S in SplitToLines(AEntrada) do
-    if S.Trim <> '' then
-      L := L + [S.Trim];
+  L := Recortados(SplitToLines(AEntrada));
   Result := (Length(L) >= 3) and SoloDirectiva(L[0], cdAbre) and
     SoloDirectiva(L[High(L)], cdCierra);
 end;
@@ -3207,10 +3204,7 @@ var
 begin
   if not TieneExtension(APasPath, EXTS_CON_USES) then
     Exit(MsgFmt(SR_ADDUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
-  Names := [];
-  for Nombre in ANames do
-    if Nombre.Trim <> '' then
-      Names := Names + [Nombre.Trim];
+  Names := Recortados(ANames);
   if Length(Names) = 0 then
     Exit(MsgText(SR_ADDUSES_NEED_NAMES));
   for Nombre in Names do
@@ -3357,10 +3351,7 @@ var
 begin
   if not TieneExtension(APasPath, EXTS_CON_USES) then
     Exit(MsgFmt(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
-  Names := [];
-  for Nombre in ANames do
-    if Nombre.Trim <> '' then
-      Names := Names + [Nombre.Trim];
+  Names := Recortados(ANames);
   if Length(Names) = 0 then
     Exit(MsgText(SR_REMOVEUSES_NEED_NAMES));
   for Nombre in Names do
@@ -4819,10 +4810,7 @@ end;
 
 function NombresDeUnidades(const ALista: string): TArray<string>;
 begin
-  Result := [];
-  for var N in ALista.Split([';', ',', ' ', #9], TStringSplitOptions.ExcludeEmpty) do
-    if N.Trim <> '' then
-      Result := Result + [N.Trim];
+  Result := Recortados(ALista.Split([';', ',', ' ', #9]));
 end;
 
 end.

@@ -814,19 +814,8 @@ end;
   un &amp; no separa), sin blancos ni vacias. Cada una sigue escrita:
   XmlUnescape da su valor. }
 function SplitPaths(const AList: string): TArray<string>;
-var
-  L: TList<string>;
-  P: string;
 begin
-  L := TList<string>.Create;
-  try
-    for P in TrozosEscritos(AList) do
-      if P.Trim <> '' then
-        L.Add(P.Trim);
-    Result := L.ToArray;
-  finally
-    L.Free;
-  end;
+  Result := Recortados(TrozosEscritos(AList));
 end;
 
 { Los caracteres que no caben en una ruta de delphi_config: los de control,

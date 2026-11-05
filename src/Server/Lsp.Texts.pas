@@ -8713,7 +8713,9 @@ const
     '[CHSET-025] COMMIT COMPLETE: %d operations applied to %d files. ' +
     'This is what changed:'#10 +
     '%s'#10 +
-    'The per-file backups in __delphi-patch still exist as always.';
+    'What an operation edited or deleted has its backup in __delphi-patch, as ' +
+    'always; a move is a rename and keeps its content (no copy), and a created ' +
+    'file had nothing before it.';
 
   // ---- delphi_components ----
 
@@ -12277,10 +12279,13 @@ const
     '%s in the numbers and %s in the keys';
 
   { view: la version es la del build por defecto; otros builds del proyecto
-    (otra plataforma u otra configuracion) llevan otra (C16 de la 1.26) }
+    (otra plataforma u otra configuracion) llevan otra (C16 de la 1.26), o la
+    clave esta escrita dos veces: el build toma la PRIMERA, la que lee view
+    (C3 del cierre de la 1.28, medido en el exe) }
   SF_CFG_VERSION_EN_OTROS_FMT =
-    '%s written for other platforms or configurations of this project (version is the ' +
-    'default build''s; set-version writes the same one in all of them)';
+    '%s also written in this project - for another platform or configuration, or the ' +
+    'same key written twice (version is what the default build takes: its first key, ' +
+    'measured; set-version writes the same one everywhere)';
 
   { set-version en un proyecto que no incluye la version en sus binarios: el
     build no mete el recurso (medido el 17-oct-2026: sin IncludeVerInfo el exe

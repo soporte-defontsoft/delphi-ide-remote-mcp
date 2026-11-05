@@ -978,7 +978,7 @@ finally:
 
 print('NOTA el tiempo limite (RENDER-007 / DSGN-062) no se mide aqui: el servidor no deja pedir uno corto; '
       'lo midio la bateria DUnitX del ayudante (rc 3)')
-print('NOTA un hermano .dfm/.pas que sea un ENLACE de fichero (el ayudante no lo lee: FormRender.Comun.EsEnlace) '
-      'no se mide: esta cuenta no puede crear symlinks (privilegio o modo desarrollador), como K16b')
+# un hermano .dfm/.pas que sea un ENLACE de fichero (el ayudante no lo lee: FormRender.Comun.EsEnlace) lo mide
+# test_render_enlaces_118, que fabrica sus symlinks (C21 del cierre de la 1.28: era una NOTA incondicional)
 mc.borra(BASE)
 mc.fin('designer preview')

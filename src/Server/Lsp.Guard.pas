@@ -1828,7 +1828,8 @@ begin
     if not TryStrToInt(V, N) or (N < 1) or (N > 65535) then
       Exit(MsgFmt(SR_PASERVER_PORT_FMT, [V]));
   V := ArgStr(AArguments, 'platform').Trim;
-  if (V <> '') and not MatchText(V, PACLIENT_PLATFORMS) then
+  // EL juez de la plataforma, el mismo con el que add-profile la toma (C4)
+  if (V <> '') and (PlataformaDePaclient(V) = '') then
     Exit(MsgFmt(SR_PASERVER_PLATFORM_FMT, [V, PaclientPlatformsList]));
   // la contrasena va a la linea de paclient, un programa Delphi: EL juez de los
   // valores nuestros (ValorDeLaCasaLlega: su ParamStr la recibe entera, sin

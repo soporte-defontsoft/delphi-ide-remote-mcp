@@ -636,7 +636,7 @@ end;
 function TDelphiListTool.ExecuteWithParams(const Params: TDelphiListParams): string;
 var
   Return: TJSONObject;
-  F, Mask, Root, Reason: string;
+  F, Root, Reason: string;
   Masks: TArray<string>;
   Entry: TJSONObject;
   ShownTrash, ShownMarcas: Integer;
@@ -773,10 +773,7 @@ begin
   try
     // Un paseo con todas las mascaras: cada fichero sale UNA vez aunque dos
     // mascaras casen con el ("*;*.pas") o la papelera lo vea dos veces
-    var Limpias: TArray<string> := [];
-    for Mask in Masks do
-      if Mask.Trim <> '' then
-        Limpias := Limpias + [Mask.Trim];
+    var Limpias := Recortados(Masks);
       for F in WalkFiles(Root, Limpias, Params.IncludeTrash) do
       begin
         // The vault is the vault_* tools' business, even when it sits inside a

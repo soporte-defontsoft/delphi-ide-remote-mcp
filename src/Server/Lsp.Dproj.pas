@@ -778,6 +778,14 @@ function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string;
 { Las plataformas de paclient, para los mensajes que las ensenan: las de
   PACLIENT_PLATFORMS, la misma lista que valida (estaban copiadas a mano). }
 function PaclientPlatformsList: string;
+{ ...y LA de la lista que es AValor, con su grafia (Linux64), o '' si no es
+  ninguna: sin mayusculas y ORDINAL (SameText: solo pliega ASCII). La puerta
+  (Lsp.Guard.PAServerArgDenied) la juzgaba con MatchText - el locale, que da por
+  igual 'Linu' + U+02E3 + '64', la x volada - y add-profile la buscaba con
+  SameText: la puerta la aprobaba, add-profile no la encontraba y el perfil
+  nacia con la plataforma por defecto (C4 del cierre de la 1.28, medido: de 6 a
+  15 caracteres asi por plataforma). Un juez para los dos. }
+function PlataformaDePaclient(const AValor: string): string;
 
 type
   { El sistema de una plataforma de Delphi: lo que decide la extension del
@@ -1256,7 +1264,8 @@ uses
   Lsp.Rutas, // RutaDesde: EL resolutor de una ruta leida de un fichero
   System.Character,
   Lsp.NetDrives,
-  Lsp.Sandbox;
+  Lsp.Sandbox,
+  Lsp.Pascal;
 
 { El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
   entre comillas: un Condition="'$(A)'>'1'" no la cierra. 0 si no hay. }
@@ -2059,6 +2068,14 @@ end;
 function PaclientPlatformsList: string;
 begin
   Result := string.Join(', ', PACLIENT_PLATFORMS);
+end;
+
+function PlataformaDePaclient(const AValor: string): string;
+begin
+  for var P in PACLIENT_PLATFORMS do
+    if SameText(P, AValor) then
+      Exit(P);
+  Result := '';
 end;
 
 function NombreDeConfigNoValido(const AConfig: string): Boolean;
@@ -3191,10 +3208,7 @@ end;
 
 function TrozosDeLista(const AValor: string): TArray<string>;
 begin
-  Result := [];
-  for var T in AValor.Split([';']) do
-    if T.Trim <> '' then
-      Result := Result + [T.Trim];
+  Result := Recortados(AValor.Split([';']));
 end;
 function DeployGroupCondition(const APlatform: string; const AConfig: string): string;
 begin
