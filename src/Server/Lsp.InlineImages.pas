@@ -92,7 +92,7 @@ uses
   Lsp.Imagen,   // EscalaPngBytes y CabeEnLineaBytes: escalar y caber, en memoria
   Lsp.Png,      // TamanoPngBytes: LA cabecera de un PNG, la del nodo tambien
   Lsp.Puertas,  // LeeBytes: la puerta de leer, con LUGARES_DE_UNA_CAPTURA
-  Lsp.Guard,    // CapturaConsumible / IsAgentCapture / ConsumeAgentCapture
+  Lsp.Capturas, // CapturaConsumible / IsAgentCapture / ConsumeAgentCapture
   Lsp.Files,    // DownloadLinkFor: el enlace, el mismo que da delphi_fetch
   Lsp.Texts;
 

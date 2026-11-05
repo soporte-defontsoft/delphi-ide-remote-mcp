@@ -157,7 +157,8 @@ uses
   Lsp.Lineas,
   Lsp.Papelera,
   Lsp.Puertas,
-  Lsp.JuicioDeForms;
+  Lsp.JuicioDeForms,
+  Lsp.Capturas;
 
 const
   MAX_PROPS = 400;

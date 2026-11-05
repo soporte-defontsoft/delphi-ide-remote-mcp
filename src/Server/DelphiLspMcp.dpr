@@ -160,7 +160,8 @@ uses
   Lsp.Puertas in 'Lsp.Puertas.pas',
   Lsp.JuicioDeForms in 'Lsp.JuicioDeForms.pas',
   Lsp.Mudanzas in 'Lsp.Mudanzas.pas',
-  Lsp.ClausulaUses in 'Lsp.ClausulaUses.pas';
+  Lsp.ClausulaUses in 'Lsp.ClausulaUses.pas',
+  Lsp.Capturas in 'Lsp.Capturas.pas';
 
 {$R *.res}
 

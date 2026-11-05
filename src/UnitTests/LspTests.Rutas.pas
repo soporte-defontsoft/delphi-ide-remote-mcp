@@ -305,7 +305,8 @@ uses
   Lsp.TextoDelNodo,
   System.Classes,
   System.Types,
-  LspTests.Comun;
+  LspTests.Comun,
+  Lsp.Capturas;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;

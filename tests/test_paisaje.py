@@ -1389,7 +1389,7 @@ REGLAS = [
       # EXCLUSIVA (CreateFile GENERIC_READ, sin compartir, borrado al cerrar) y lectura
       # por el handle de lo que su nombrador ya juzgo (CapturaConsumible); hermano de
       # ConsumeAgentCapture (2am de la 1.18.2: MoveFile daba TRUE a varios GET a la vez)
-      ('Lsp.Guard.pas', 'ReclamaCaptura'),
+      ('Lsp.Capturas.pas', 'ReclamaCaptura'),
       # programas que NO son el servidor: los renderizadores y el conversor leen lo que
       # el servidor ya paso por su puerta; el nodo y el lanzador corren en el destino
       ('FormRender.Comun.pas', 'Cabecera'),
@@ -1525,7 +1525,7 @@ REGLAS = [
       # duro de fuera los compartia: 11-oct y 20-oct-2026); su TFile.Delete es el
       # respaldo donde el sistema de ficheros no conoce la disposicion Ex
       ('Lsp.Guard.pas', 'BorraNombre'),
-      ('Lsp.Guard.pas', 'BorraLoNuestro'), ('Lsp.Guard.pas', 'ConsumeAgentCapture'),
+      ('Lsp.Guard.pas', 'BorraLoNuestro'), ('Lsp.Capturas.pas', 'ConsumeAgentCapture'),
       ('Lsp.Guard.pas', 'BorraArbolDentro'), ('Lsp.Guard.pas', 'VaciaDesechable'),
       ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
       # LA de quitar una carpeta VACIA, con los reintentos (C30 de la 1.28: estaba a pelo en seis;

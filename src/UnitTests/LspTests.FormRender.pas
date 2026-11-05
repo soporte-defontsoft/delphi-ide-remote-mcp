@@ -76,7 +76,8 @@ uses
   FormRender.Comun, // del ayudante (src\Render): el escritor del protocolo y lo que no crea ventanas
   Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=
   Lsp.Casa,
-  Lsp.DesignerMeta; // RaizDeDiseno: lo que es la raiz para el IDE, con una tabla dada
+  Lsp.DesignerMeta, // RaizDeDiseno: lo que es la raiz para el IDE, con una tabla dada
+  Lsp.Capturas;
 
 type
   // el "control" del framework para NoVisualesDe, sin VCL ni FMX

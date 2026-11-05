@@ -73,7 +73,8 @@ uses
   Lsp.Casa,
   Vcl.Imaging.jpeg, // las imagenes en linea que no caben en PNG
   System.StrUtils,
-  System.Math;
+  System.Math,
+  Lsp.Capturas;
 
 function PngDe(W, H: Integer): TArray<Byte>;
 var

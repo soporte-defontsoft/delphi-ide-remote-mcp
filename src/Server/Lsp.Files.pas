@@ -61,7 +61,8 @@ uses
   Lsp.Guard,
   Lsp.Texts,
   Lsp.ShaCache,
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.Capturas;
 
 const
   // los dos parametros de la ruta: los escribe DownloadLinkFor y los lee

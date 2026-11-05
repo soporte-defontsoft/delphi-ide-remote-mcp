@@ -129,7 +129,8 @@ uses
   Lsp.Pascal,    // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Casa,
   Lsp.TextoDelNodo,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Capturas;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
 function ParseRegion(const ATexto: string; out X, Y, W, H: Integer): Boolean;

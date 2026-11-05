@@ -360,7 +360,8 @@ uses
   Lsp.Extensiones,
   Lsp.RegistroDelIde, // GuardaCopiaDelIde: la copia de un fichero del IDE antes de pisarlo
   Lsp.Papelera,       // BackupFile, GuardaContenidoActual: las copias de la jaula
-  Lsp.Deteccion;      // DetectEnc, EncDeFicheroNuevo: EL detector de codificacion
+  Lsp.Deteccion,      // DetectEnc, EncDeFicheroNuevo: EL detector de codificacion
+  Lsp.Capturas;
 
 var
   GLock: TCriticalSection;

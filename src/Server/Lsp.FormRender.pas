@@ -528,7 +528,8 @@ uses
   Lsp.Pascal,
   Lsp.Mascara,
   Lsp.PascalDecl,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Capturas;
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}
