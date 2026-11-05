@@ -2862,7 +2862,7 @@ const
     'out= is only for saving it in a folder of YOURS in the project.';
 
   SP_CAPTURE_FRAME =
-    'tap (and type, on delphi_desktop): the "frame" of the screenshot you ' +
+    'tap (and type, drag on delphi_desktop): the "frame" of the screenshot you ' +
     'measured on, verbatim; x,y are then pixels of THAT image and the ' +
     'server converts them (inline scale, crop origin, device display). ' +
     'Without it, capture pixels.';

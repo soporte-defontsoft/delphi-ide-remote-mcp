@@ -604,7 +604,7 @@ Android devices for remote development: phones/tablets hang off THIS server (USB
 | `lines` | string | optional | logcat: how many recent lines (default 300, max 5000; 0 = the default). An inline answer carries at most the newest 400 - for more, pass out=\<file.txt> and read it in ranges. |
 | `inline` | boolean | optional | screenshot, default true: the capture comes IN this answer as an image scaled to maxwidth; no file is kept. false = a one-use download link (no vision, or you want the bytes); over stdio there is none: use out=. |
 | `maxwidth` | integer | optional | Inline only: the widest the image travels (0 = 1280); a wider capture is scaled down, a narrower one never enlarged. Divide what you measure on it by the answer's inlineScale for capture pixels, or pass its frame to tap. |
-| `frame` | string | optional | tap (and type, on delphi_desktop): the "frame" of the screenshot you measured on, verbatim; x,y are then pixels of THAT image and the server converts them (inline scale, crop origin, device display). Without it, capture pixels. |
+| `frame` | string | optional | tap (and type, drag on delphi_desktop): the "frame" of the screenshot you measured on, verbatim; x,y are then pixels of THAT image and the server converts them (inline scale, crop origin, device display). Without it, capture pixels. |
 <!-- /contract -->
 
 Since 1.3.1 `screenshot` is delivered like `delphi_desktop`'s (same helper): the
@@ -641,7 +641,7 @@ The desktop of the machine behind a PAServer profile (a Linux or Windows target,
 | `window` | string | optional | screenshot OPTIONAL: part of a window title; the capture is cropped to the first window of "windows" whose title contains it (case-insensitive), with origin {x,y} like region, plus the whole list (a dialog outside the crop still shows there). A native Wayland window has no rectangle: use region. Not with region. |
 | `inline` | boolean | optional | Default true: the capture (a screenshot, an overview, or the one each gesture returns) comes IN this answer as an image scaled to maxwidth; no file is kept. false = a one-use download link (no vision, or you want the bytes); over stdio there is none: use out=. |
 | `maxwidth` | integer | optional | Inline only: the widest the image travels (0 = 1280); a wider capture is scaled down, a narrower one never enlarged. Divide what you measure on it by the answer's inlineScale for capture pixels, or pass its frame to tap or type. |
-| `frame` | string | optional | tap (and type, on delphi_desktop): the "frame" of the screenshot you measured on, verbatim; x,y are then pixels of THAT image and the server converts them (inline scale, crop origin, device display). Without it, capture pixels. |
+| `frame` | string | optional | tap (and type, drag on delphi_desktop): the "frame" of the screenshot you measured on, verbatim; x,y are then pixels of THAT image and the server converts them (inline scale, crop origin, device display). Without it, capture pixels. |
 <!-- /contract -->
 
 Since 1.3.1 a screenshot is **one step**: the image travels in the same answer
