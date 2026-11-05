@@ -268,6 +268,7 @@ uses
   Lsp.Dproj,         // BuscaEnCarpeta: que proyecto sirve a una unidad
   Lsp.ProjectUnits,  // ProyectoListaUnidad, la otra mitad
   Lsp.Rutas,
+  Lsp.Pascal,        // ClaveDeIdentificador: el nombre de una unidad en el mapa
   Lsp.References;    // WalkBajoLaRaiz: el paseo de un arbol de codigo
 
 type
@@ -307,6 +308,14 @@ type
     // the disk stamp of its settings file when it was last given to the
     // engine (under FDocLock, set at creation before the client is public)
     FSettingsStamp: string;
+    // la fuente principal del proyecto de sus ajustes, su sello y la huella de
+    // su mapa de unidades (MapaDeUnidades) cuando arranco el motor (C32 de la
+    // 1.28): el motor fija a que fichero va cada unidad al CARGAR el proyecto y
+    // no lo vuelve a mirar - ni con los ajustes otra vez, ni con
+    // didChangeWatchedFiles, ni con el .dpr abierto: medido con el motor a pelo
+    // el 5-nov -, asi que si el mapa cambia GetClient lo rehace. Bajo FTables de
+    // la sesion; '' = no se mira
+    FFuente, FSelloFuente, FMapa: string;
     function Refresh(const AExceptKey, AStrictKey: string): Boolean;
     { The engine with the settings of NOW: when their file changed since it
       was last given (its stamp), it is given again -
@@ -1387,6 +1396,33 @@ begin
   end;
 end;
 
+{ LA huella del mapa de unidades de un proyecto (C32 de la 1.28): que fichero
+  abre dcc por cada unidad del in '...' de su fuente principal, por EL lector
+  (Lsp.ProjectUnits.LecturasDelIn), sin el orden. '' si no se lee o no se sabe
+  lo que lee dcc: entonces no se rehace nada. }
+function MapaDeUnidades(const AFuente: string): string;
+var
+  Unidades, Escritas, Rutas: TArray<string>;
+begin
+  Result := '';
+  try
+    if LecturasDelIn(AFuente, Unidades, Escritas, Rutas) <> '' then
+      Exit;
+    var L := TStringList.Create;
+    try
+      for var I := 0 to High(Unidades) do
+        L.Add(ClaveDeIdentificador(Unidades[I]) + '=' + ClaveDeRuta(Rutas[I]));
+      L.Sort;
+      // (una marca tambien sin unidades: '' es "no se sabe")
+      Result := L.Text + '#';
+    finally
+      L.Free;
+    end;
+  except
+    Result := '';
+  end;
+end;
+
 function TLspSession.GetClient(const AFullPath: string; ALinter: Boolean;
   out ASettingsUsed, AClientKey, ARootDir: string): TLspClient;
 begin
@@ -1400,6 +1436,58 @@ begin
   // and freed before it leaves FBuilding (nobody else ever had it).
   var Dead: TLspClient := nil;
   var Old: TArray<TLspClient> := nil;
+  // C32 de la 1.28: un motor vivo cuyo proyecto cambio el in '...' de su fuente
+  // principal - lo que fijo al cargarlo - se rehace, fuera como uno muerto. El
+  // disco se pregunta SIN el cerrojo de las tablas, y se saca con el si sigue
+  // siendo el mismo y nadie esta en el: uno ocupado sigue hasta la proxima
+  begin
+    var Visto: TLspClient := nil;
+    var FuenteVista, SelloVisto, MapaVisto: string;
+    FTables.Enter;
+    try
+      if FClients.TryGetValue(AClientKey, Visto) then
+      begin
+        FuenteVista := TSessionClient(Visto).FFuente;
+        SelloVisto := TSessionClient(Visto).FSelloFuente;
+        MapaVisto := TSessionClient(Visto).FMapa;
+      end;
+    finally
+      FTables.Leave;
+    end;
+    if (Visto <> nil) and (FuenteVista <> '') and (MapaVisto <> '') then
+    begin
+      var SelloHoy := DiskStamp(FuenteVista);
+      if (SelloHoy <> SelloVisto) and HasStamp(SelloHoy) then
+      begin
+        var MapaHoy := MapaDeUnidades(FuenteVista);
+        FTables.Enter;
+        try
+          var Ahora: TLspClient;
+          if FClients.TryGetValue(AClientKey, Ahora) and (Ahora = Visto) then
+          begin
+            // el mismo mapa (otro cambio del .dpr), o no se sabe: solo el sello
+            if (MapaHoy = '') or (MapaHoy = MapaVisto) then
+              TSessionClient(Visto).FSelloFuente := SelloHoy
+            else if not Visto.Busy then
+            begin
+              Old := TakeRetired(False);
+              Dead := TakeOut(AClientKey);
+            end;
+          end;
+        finally
+          FTables.Leave;
+        end;
+        if Dead <> nil then
+        begin
+          TLogger.Info(MsgFmt(SL_LSP_MAPA_CAMBIO_FMT, [AClientKey, FuenteVista]));
+          FreeClients(Old);
+          StopAll([Dead]);
+          Dead := nil;
+          Old := nil;
+        end;
+      end;
+    end;
+  end;
   FTables.Enter;
   try
     if FClients.TryGetValue(AClientKey, Result) then
@@ -1434,11 +1522,20 @@ begin
   // lock (it opens the settings file) and only HERE, for an engine that has
   // to be built: it was read and parsed on every request, warm or not.
   var Held := ARootDir;
+  var Fuente := '';
   if ASettingsUsed <> '' then
   begin
-    var Proj := ProjectOfSettings(ASettingsUsed);
-    if Proj <> '' then
-      Held := ExtractFileDir(Proj);
+    Fuente := ProjectOfSettings(ASettingsUsed);
+    if Fuente <> '' then
+      Held := ExtractFileDir(Fuente);
+  end;
+  // (C32) el mapa de unidades que el motor va a fijar, con el sello ANTES de leerlo
+  var SelloFuente := '';
+  var Mapa := '';
+  if Fuente <> '' then
+  begin
+    SelloFuente := DiskStamp(Fuente);
+    Mapa := MapaDeUnidades(Fuente);
   end;
   // (settings that name a folder that was never there deny nothing)
   var HeldWasThere := DirectoryExists(Held);
@@ -1490,6 +1587,9 @@ begin
       begin
         FClients.Add(AClientKey, Fresh);
         FHeldFolders.AddOrSetValue(AClientKey, HeldReal);
+        TSessionClient(Fresh).FFuente := Fuente;
+        TSessionClient(Fresh).FSelloFuente := SelloFuente;
+        TSessionClient(Fresh).FMapa := Mapa;
         Result := Fresh;
         Fresh := nil; // registered: it is the table's now
         // [Server] MaxEngines: pasado el tope, sale el menos usado de los que

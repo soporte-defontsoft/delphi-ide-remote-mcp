@@ -710,6 +710,14 @@ const
     'lsp: ENGINE %s stopped by the server: MaxEngines=%d reached, and it ' +
     'was the least recently used one; it makes room for %s';
 
+  { C32 de la 1.28: el motor fija a que fichero va cada unidad al cargar el
+    proyecto y no lo vuelve a mirar (medido a pelo); si el in '...' de la fuente
+    principal cambia, se rehace. %s: el motor; %s: la fuente principal. }
+  SL_LSP_MAPA_CAMBIO_FMT =
+    'lsp: ENGINE %s stopped by the server: the units %s lists by in ''...'' ' +
+    'changed, and an engine fixes them when it loads the project; the next ' +
+    'request starts another';
+
   { El servicio sin la ventana que RunService le da a la aplicacion de la
     VCL (30-sep-2026): sin ella el bucle principal no recibe el WM_QUIT del
     marco de servicios y el proceso no se va al parar. }
