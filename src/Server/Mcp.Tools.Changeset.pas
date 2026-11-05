@@ -85,7 +85,8 @@ uses
   Lsp.TextEdit, // NotaDeEstiloFmx: lo que FMX dice de un .style, fuera del cerrojo
   Lsp.Json,     // ListaJson: las ops, desenvueltas si llegaron dos veces codificadas
   Lsp.Changeset,
-  Lsp.FormRender; // EmpiezaLaEspera: el reloj de lo que espera el cliente
+  Lsp.FormRender, // EmpiezaLaEspera: el reloj de lo que espera el cliente
+  Lsp.Extensiones;
 
 constructor TDelphiChangesetTool.Create;
 begin

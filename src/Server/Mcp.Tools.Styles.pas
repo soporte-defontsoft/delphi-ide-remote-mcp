@@ -89,7 +89,8 @@ uses
   Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
   Lsp.Codificacion,
   Lsp.ProcessLaunch,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Extensiones;
 
 constructor TDelphiStylesTool.Create;
 begin

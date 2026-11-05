@@ -396,7 +396,8 @@ uses
   Lsp.ConfigFabricator, // AmbitosDelProyecto y los del compilador: el juez de un uses
   Lsp.Discovery,        // UnidadesDeLaBiblioteca: la que existe tal cual
   Lsp.Session,          // FindDproj: el proyecto de un fuente
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Extensiones;
 
 { TUnitInfo }
 

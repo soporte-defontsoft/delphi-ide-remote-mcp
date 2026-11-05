@@ -268,7 +268,8 @@ uses
   Lsp.Sandbox,
   Lsp.Json,
   Lsp.FormRender, // EmpiezaLaEspera: el reloj de lo que espera el cliente
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Extensiones;
 
 const
   // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo

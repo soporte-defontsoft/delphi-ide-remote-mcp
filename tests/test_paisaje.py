@@ -237,8 +237,8 @@ REGLAS = [
      [('Lsp.Settings.pas', 'EsComodinDeLista')],
      'EsComodinDeLista (Lsp.Settings, 1.22.2; censo de Fable R18, David: "comodin para todas")'),
     ('el manifiesto de despliegue a mano', r"'\.deployproj'",
-     [('Lsp.Patch.pas', '*')],
-     'EXT_MANIFIESTO, EsManifiesto y ManifiestoDe (Lsp.Patch, 1.22.2): tres compositores y tres '
+     [('Lsp.Extensiones.pas', '*')],
+     'EXT_MANIFIESTO, EsManifiesto y ManifiestoDe (Lsp.Extensiones, 1.22.2): tres compositores y tres '
      'reconocedores lo escribian a mano en el build, la mudanza y config'),
     # tambien con la barra delante ('\__delphi-temp\', la forma de los saltos de Lsp.References): esa no la
     # veia y una tercera copia asi entraba sin que nadie la viera (P10 de la revision de Opus 5.5). Sin
@@ -431,8 +431,8 @@ REGLAS = [
     # (delphi_edit, delphi_textedit, delphi_changeset) y la del changeset solo negaba editar: un create de un
     # .dproj se escribia (C4 del revisor del paisaje del cierre de la 1.26)
     ('la negativa de un fichero de proyecto a mano', r'\bSR_EDIT_FICHERO_DE_PROYECTO_FMT\b',
-     [('Lsp.Patch.pas', 'ProyectoDenegado')],
-     'ProyectoDenegado (Lsp.Patch): EL juez de las tres puertas que escriben texto'),
+     [('Lsp.Extensiones.pas', 'ProyectoDenegado')],
+     'ProyectoDenegado (Lsp.Extensiones): EL juez de las tres puertas que escriben texto'),
     # los nombres de gobierno del vault a mano: estaban en cuatro sitios y la puerta de escritura conocia
     # tres - VAULT-INSTRUCTIONS.md, las instrucciones de TODOS los clientes, lo creaba un agente (V191)
     ('un fichero de gobierno del vault nombrado a mano',
@@ -1252,8 +1252,8 @@ REGLAS = [
      r"(?:MatchText|TieneExtension)\s*\([^;]*\bSOURCE_EXTS\s*\)|\bin\s+SOURCE_EXTS\b",
      # (la deuda de delphi_references -*.pas, *.dpr e *.inc SIN .dpk- se pago en el punto 8
      # de la 1.18.2: recorre MascarasDe(SOURCE_EXTS))
-     [('Lsp.Patch.pas', 'EsRutaDeFuente')],
-     'EsRutaDeFuente (Lsp.Patch): la lista estaba escrita a mano en cinco sitios, y el escritor '
+     [('Lsp.Extensiones.pas', 'EsRutaDeFuente')],
+     'EsRutaDeFuente (Lsp.Extensiones): la lista estaba escrita a mano en cinco sitios, y el escritor '
      'necesita saber si un fichero lo lee dcc (4.1 de la 1.18.0)'),
     ('las extensiones de un designer a mano',
      # la lista, como extensiones o como mascaras y en cualquier orden - salvo
@@ -1263,15 +1263,15 @@ REGLAS = [
      # de la funcion bajo la que cae la constante)
      r"^(?!\s*DESIGNER_EXTS\s*:).*'\*?\.(?:dfm|fmx)'\s*,\s*'\*?\.(?:dfm|fmx)'|"
      r"(?:MatchText|TieneExtension)\s*\([^;]*\bDESIGNER_EXTS\s*\)|\bin\s+DESIGNER_EXTS\b",
-     [('Lsp.Patch.pas', 'EsRutaDeDesigner'), ('Lsp.Patch.pas', 'DesignersDeUnidad')],
-     'DESIGNER_EXTS, EsRutaDeDesigner y DesignersDeUnidad (Lsp.Patch): la lista estaba escrita a mano en '
+     [('Lsp.Extensiones.pas', 'EsRutaDeDesigner'), ('Lsp.Patch.pas', 'DesignersDeUnidad')],
+     'DESIGNER_EXTS, EsRutaDeDesigner (Lsp.Extensiones) y DesignersDeUnidad (Lsp.Patch): la lista estaba escrita a mano en '
      'nueve sitios, y el detector necesita saber si un fichero es un form (4.1 de la 1.18.0)'),
     ('la extension de un estilo a mano',
      # la pregunta "es un .style?" sobre la extension de una ruta; una mascara
      # ('*.style') o el nombre de un producto ('.bin.style') son otras
      r"GetExtension\s*\([^;]*'\.style'",
-     [('Lsp.Patch.pas', 'EsRutaDeEstilo')],
-     'EsRutaDeEstilo (Lsp.Patch): estaba comparada a mano en Lsp.TextEdit y Mcp.Tools.Styles, y el '
+     [('Lsp.Extensiones.pas', 'EsRutaDeEstilo')],
+     'EsRutaDeEstilo (Lsp.Extensiones): estaba comparada a mano en Lsp.TextEdit y Mcp.Tools.Styles, y el '
      'escritor necesita saber si un texto lo lee TParser (M4 de la 1.23)'),
     ('los nombres de un trabajo remoto a mano',
      # run-<job>[.exe], run-<job>.job, <job>.out, <job>.pid, <job>.wait.<pid>.exe: los
@@ -1294,8 +1294,8 @@ REGLAS = [
      # (18-oct-2026). Una comparacion con '.groupproj' sola (es un grupo?) es otra pregunta
      r"^(?!\s*PROJECT_EXTS\s*:).*'\*?\.(?:dproj|groupproj)'\s*,\s*'\*?\.(?:dproj|groupproj)'|"
      r"(?:MatchText|TieneExtension)\s*\([^;]*\bPROJECT_EXTS\s*\)|\bin\s+PROJECT_EXTS\b",
-     [('Lsp.Patch.pas', 'EsRutaDeProyecto')],
-     'EsRutaDeProyecto (Lsp.Patch): lo que lleva delphi_config y ni delphi_edit, ni delphi_textedit, '
+     [('Lsp.Extensiones.pas', 'EsRutaDeProyecto')],
+     'EsRutaDeProyecto (Lsp.Extensiones): lo que lleva delphi_config y ni delphi_edit, ni delphi_textedit, '
      'ni el changeset escriben'),
     ('una cadena ASCII preguntada a mano', r'\bOrd\s*\(\s*\w+\s*\)\s*>\s*127\b',
      [('Lsp.Codificacion.pas', 'IsAscii')],

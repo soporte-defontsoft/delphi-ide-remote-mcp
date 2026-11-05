@@ -154,7 +154,8 @@ uses
   Lsp.Rutas,
   Lsp.NombresDeTrabajo,
   Lsp.Listas,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Extensiones;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).

@@ -89,7 +89,8 @@ uses
   Lsp.ShaCache,
   Lsp.NetDrives,
   Lsp.DesignerBin,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Extensiones;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);

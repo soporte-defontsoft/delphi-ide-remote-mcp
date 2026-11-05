@@ -113,7 +113,8 @@ uses
   Lsp.References,
   Lsp.NombresDeTrabajo,
   System.Masks,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Extensiones;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin

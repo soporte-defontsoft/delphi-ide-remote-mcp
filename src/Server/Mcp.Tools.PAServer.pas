@@ -132,7 +132,8 @@ uses
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Rutas,
   Lsp.NombresDeTrabajo,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Extensiones;
 
 const
   { La plataforma de los SDK que trae get-sdk y que este servidor registra,

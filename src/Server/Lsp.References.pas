@@ -204,7 +204,8 @@ uses
   Lsp.Herencia,         // LA cadena de ancestros por el motor (TCadenaPorElMotor)
   Lsp.Listas,
   Lsp.Casa,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Extensiones;
 
 function IdentifierAt(const ALineText: string; ACol: Integer; out AInicio: Integer): string;
 var

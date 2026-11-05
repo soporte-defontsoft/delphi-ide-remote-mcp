@@ -152,7 +152,8 @@ uses
   Lsp.AtomosRtl in 'Lsp.AtomosRtl.pas',
   Lsp.Reparse in 'Lsp.Reparse.pas',
   Lsp.TextoDelNodo in 'Lsp.TextoDelNodo.pas',
-  Lsp.Lineas in 'Lsp.Lineas.pas';
+  Lsp.Lineas in 'Lsp.Lineas.pas',
+  Lsp.Extensiones in 'Lsp.Extensiones.pas';
 
 {$R *.res}
 

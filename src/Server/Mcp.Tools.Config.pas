@@ -141,7 +141,8 @@ uses
   Lsp.DesignerForma, // DesignersDeUnidad, EsDesignerFmx: de que marco es
   Lsp.Pascal,        // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.NetDrives,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Extensiones;
 
 constructor TDelphiConfigTool.Create;
 begin

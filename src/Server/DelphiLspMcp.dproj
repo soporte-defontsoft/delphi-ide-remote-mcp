@@ -255,6 +255,7 @@
         <DCCReference Include="Lsp.Reparse.pas"/>
         <DCCReference Include="Lsp.TextoDelNodo.pas"/>
         <DCCReference Include="Lsp.Lineas.pas"/>
+        <DCCReference Include="Lsp.Extensiones.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
