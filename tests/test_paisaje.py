@@ -1515,24 +1515,21 @@ REGLAS = [
       ('Lsp.Guard.pas', 'BorraNombre'),
       ('Lsp.Guard.pas', 'BorraLoNuestro'), ('Lsp.Guard.pas', 'ConsumeAgentCapture'),
       ('Lsp.Guard.pas', 'BorraArbolDentro'), ('Lsp.Guard.pas', 'VaciaDesechable'),
-      ('Lsp.Guard.pas', 'QuitaCarpetasCreadas'), ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
-      # la carpeta del origen que la mezcla acaba de vaciar (RemoveDir: solo vacia)
-      ('Lsp.Guard.pas', 'MezclaArbol'),
+      ('Lsp.Changeset.pas', 'ApplyOneConAvisos'),
+      # LA de quitar una carpeta VACIA, con los reintentos (C30 de la 1.28: estaba a pelo en seis;
+      # QuitaCarpetasCreadas, MezclaArbol, RecogeVacias, BorrarNucleo y RemoveProfile ya la llaman)
+      ('Lsp.Guard.pas', 'QuitaCarpetaConReintentos'),
       ('Lsp.TodoONada.pas', 'TFotoDeFicheros.Restaura'),
       # la copia recien hecha que no se uso y su marca: UNA, en Lsp.Guard desde la 1.23 (vivia en
       # FileOps y Lsp.Patch la escribia a mano: H7 de la revision del paisaje de Fable)
       ('Lsp.Guard.pas', 'QuitaMarcaDeDueno'), ('Lsp.Guard.pas', 'QuitaCopiaDeSeguridad'),
-      ('Mcp.Tools.FileOps.pas', 'BorraDeVerdad'), ('Mcp.Tools.FileOps.pas', 'RecogeVacias'),
-      ('Mcp.Tools.FileOps.pas', 'BorrarNucleo'), ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
+      ('Mcp.Tools.FileOps.pas', 'BorraDeVerdad'), ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
       # la cuarentena de una subida y el zip a medias de delphi_package: de la jaula,
       # lo que esa misma operacion dejo
       ('Mcp.Tools.Workspace.pas', 'SubirNucleo'),
       ('Mcp.Tools.Workspace.pas', 'TDelphiPackageTool.ExecuteWithParams'),
       # el log poda sus bloques viejos (C5)
       ('Lsp.LogSink.pas', 'Poda'),
-      # la carpeta VACIA que paclient deja en la de SDKs del IDE: RemoveDir solo se lleva
-      # una vacia (o un enlace, como enlace), nunca lo de dentro
-      ('Mcp.Tools.PAServer.pas', 'RemoveProfile'),
       # programas que NO son el servidor: lo suyo, en el destino o en el temporal
       ('McpDesktopNode.dpr', 'RecogerCaptura'), ('McpRunJob.dpr', 'BorraPid'),
       ('McpRunJob.dpr', 'LanzarYVigilar')],

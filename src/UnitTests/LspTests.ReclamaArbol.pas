@@ -72,6 +72,10 @@ type
     [TearDown] procedure Limpia;
     [Test] procedure UnFicheroAbiertoDentroRebotaConCincoYSeReintenta;
     [Test] procedure UnDestinoQueExisteNoSeReintenta;
+    // QuitaCarpetaConReintentos (C30 de la 1.28): una carpeta vacia que otro
+    // tiene abierta sin compartir el borrado rebota con 32; soltada a los 200 ms,
+    // el helper la quita (sin el bucle, rebotaba y se quedaba)
+    [Test] procedure UnaCarpetaVaciaRetenidaUnInstanteSeQuita;
   end;
 
 implementation
@@ -84,7 +88,8 @@ uses
   Winapi.AclAPI,        // GetNamedSecurityInfoW
   Lsp.Guard,            // ReclamaArbol, BorraArbol, EntradasDeCarpeta, EsEnlace
   Lsp.Casa,             // ServerTempDir, FragmentoUnico
-  LspTests.FormRender;  // CreaUnion
+  LspTests.FormRender,  // CreaUnion
+  System.Classes;
 
 const
   SDDL_REVISION_1 = 1;
@@ -397,7 +402,7 @@ end;
 
 procedure TRenombraConReintentosTests.Limpia;
 begin
-  for var D in TArray<string>.Create(Carpeta('nueva'), Carpeta('caja')) do
+  for var D in TArray<string>.Create(Carpeta('nueva'), Carpeta('caja'), Carpeta('vacia')) do
     if DirectoryExists(D) then
     begin
       if FileExists(TPath.Combine(D, 'a.bpl')) then
@@ -451,6 +456,36 @@ begin
     'un destino que existe no se renombra');
   Assert.AreEqual(Integer(ERROR_ALREADY_EXISTS), Integer(Codigo), 'y Windows dice 183');
   Assert.IsTrue(GetTickCount64 - T0 < 100, 'sin reintentos: ' + UIntToStr(GetTickCount64 - T0) + ' ms');
+end;
+
+procedure TRenombraConReintentosTests.UnaCarpetaVaciaRetenidaUnInstanteSeQuita;
+var
+  Codigo: Cardinal;
+  H: THandle;
+  Suelta: TThread;
+begin
+  ForceDirectories(Carpeta('vacia'));
+  // el lector de un instante: la carpeta abierta SIN compartir el borrado
+  H := CreateFile(PChar(Carpeta('vacia')), GENERIC_READ, FILE_SHARE_READ or FILE_SHARE_WRITE, nil,
+    OPEN_EXISTING, FILE_FLAG_BACKUP_SEMANTICS, 0);
+  Assert.IsTrue(H <> INVALID_HANDLE_VALUE, 'se abre la carpeta: ' + SysErrorMessage(GetLastError));
+  // ...que la suelta a los 200 ms, mientras el helper insiste
+  Suelta := TThread.CreateAnonymousThread(
+    procedure
+    begin
+      Sleep(200);
+      CloseHandle(H);
+    end);
+  Suelta.FreeOnTerminate := False;
+  Suelta.Start;
+  try
+    Assert.IsTrue(QuitaCarpetaConReintentos(Carpeta('vacia'), Codigo),
+      'se quita al soltarse: ' + SysErrorMessage(Codigo));
+    Assert.IsFalse(DirectoryExists(Carpeta('vacia')), 'y ya no esta');
+  finally
+    Suelta.WaitFor;
+    Suelta.Free;
+  end;
 end;
 
 initialization

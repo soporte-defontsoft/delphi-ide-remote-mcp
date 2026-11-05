@@ -182,6 +182,17 @@ function MotivoDeRenombre(const APath: string; ACodigo: Cardinal): string;
 function RenombraConReintentos(const AOrigen, ADestino: string; AFlags: Cardinal;
   out ACodigo: Cardinal): Boolean;
 
+{ LA de quitar una carpeta VACIA (RemoveDirectory: con algo dentro no se va, y
+  de un enlace quita el enlace, nunca lo de detras), con LA politica de
+  reintentos (ConReintentos): un lector de un instante - el indexador, un
+  antivirus, un clone que acaba de soltarla - la hace rebotar con 32 y se
+  quedaba (V45 de la 1.27, medido). Estaba asi en un sitio y a pelo en seis
+  (C30 de la 1.28: el borrado de una carpeta vacia de delphi_delete contestaba
+  que no se dejaba, la mezcla y el borrador de arboles lanzaban). True si la
+  quito; si no, ACodigo trae el de Windows del ultimo intento. Solo sobre una
+  ruta que la puerta acaba de aprobar. }
+function QuitaCarpetaConReintentos(const ACarpeta: string; out ACodigo: Cardinal): Boolean;
+
 { La pregunta de la puerta de leer sobre los OTROS nombres de un fichero (un
   enlace duro: GUARD-041/042), para quien lee sus BYTES por su cuenta - las
   copias de la papelera, la de un move, la de una carpeta -. ReadPathDenied
@@ -3525,8 +3536,9 @@ begin
     // RemoveDir sobre un junction/symlink de directorio elimina el punto
     // de reanalisis y jamas toca lo que hay al otro lado.
     SetFileAttributes(PChar(ADir), FILE_ATTRIBUTE_NORMAL);
-    if not RemoveDir(ADir) then
-      RaiseLastOSError;
+    var CodigoEnlace: Cardinal;
+    if not QuitaCarpetaConReintentos(ADir, CodigoEnlace) then
+      RaiseLastOSError(CodigoEnlace);
     Exit;
   end;
   // La RTL limpiaba atributos antes de borrar (los objetos de un .git
@@ -3541,7 +3553,9 @@ begin
   for E in TDirectory.GetDirectories(ADir) do
     BorraArbolDentro(E);
   SetFileAttributes(PChar(ADir), FILE_ATTRIBUTE_NORMAL);
-  TDirectory.Delete(ADir, False);
+  var Codigo: Cardinal;
+  if not QuitaCarpetaConReintentos(ADir, Codigo) then
+    RaiseLastOSError(Codigo);
 end;
 
 function CarpetasDesechables: TArray<string>;
@@ -4607,9 +4621,10 @@ procedure MezclaArbol(const AOrigen, ADestino: string; var AHechos: TArray<TPaso
         Anota(E, N);
       end;
     end;
-    // vacia ya: RemoveDir solo quita una carpeta vacia
-    if not RemoveDir(O) then
-      RaiseLastOSError;
+    // vacia ya: QuitaCarpetaConReintentos solo quita una carpeta vacia
+    var CodigoVacia: Cardinal;
+    if not QuitaCarpetaConReintentos(O, CodigoVacia) then
+      RaiseLastOSError(CodigoVacia);
     Anota(O, '');
   end;
 
@@ -5331,12 +5346,7 @@ begin
       // abierta y rebota con 32 (V45 de la 1.27, medido: un clone fallido
       // dejaba la suya, y un segundo despues se podia quitar)
       var Err: Cardinal;
-      var Carpeta := D;
-      if not ConReintentos(
-        function: Boolean
-        begin
-          Result := RemoveDir(Carpeta);
-        end, Err) then
+      if not QuitaCarpetaConReintentos(D, Err) then
       begin
         // no esta vacia (otro dejo algo) o no se puede: se queda, y el log
         // dice por que
@@ -5487,6 +5497,15 @@ begin
     function: Boolean
     begin
       Result := MoveFileEx(PChar(AOrigen), PChar(ADestino), AFlags);
+    end, ACodigo);
+end;
+
+function QuitaCarpetaConReintentos(const ACarpeta: string; out ACodigo: Cardinal): Boolean;
+begin
+  Result := ConReintentos(
+    function: Boolean
+    begin
+      Result := RemoveDir(ACarpeta);
     end, ACodigo);
 end;
 

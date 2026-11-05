@@ -1067,7 +1067,8 @@ begin
   // carpetas huerfanas de perfiles de prueba en la maquina del operador.
   // RemoveDir solo se lleva una carpeta vacia; si tiene algo, se queda.
   var Huerfana := TPath.Combine(IdeSdksDir(Info.Version), ProfName);
-  if TDirectory.Exists(Huerfana) and RemoveDir(Huerfana) then
+  var CodigoHuerfana: Cardinal;
+  if TDirectory.Exists(Huerfana) and QuitaCarpetaConReintentos(Huerfana, CodigoHuerfana) then
     Result := Result + MsgText(SN_PAS_TAMBIEN_CARPETA_VACIA_SDKS);
 end;
 

@@ -540,7 +540,8 @@ begin
     EsLaPapelera := IsBackupRoot(P);
     // un ENLACE no es una carpeta vacia: RemoveDir lo quitaria tenga lo que
     // tenga detras (revision de la 1.9.0). Ahi se para
-    if EsEnlace(P) or not RemoveDir(P) then
+    var Codigo: Cardinal;
+    if EsEnlace(P) or not QuitaCarpetaConReintentos(P, Codigo) then
       Break;
     if EsLaPapelera then
       Break;
@@ -799,11 +800,10 @@ begin
       // la carpeta esta VACIA (se comprobo arriba): no hay +R de ficheros que
       // quitar, y un recorrido soAllDirectories aqui solo cruzaba junctions sin
       // nada que hacer (2e de la 1.18.2). El +R de una carpeta no impide borrarla.
-      try
-        TDirectory.Delete(Params.Path, False);
-      except
-        // fall through to the honest report below
-      end;
+      // con LA politica de reintentos: un lector de un instante la hacia
+      // rebotar, y la respuesta decia que no se dejaba quitar (C30 de la 1.28)
+      var Codigo: Cardinal;
+      QuitaCarpetaConReintentos(Params.Path, Codigo); // the honest report is below
     finally
       YaNoSeQuita(Params.Path);
     end;
