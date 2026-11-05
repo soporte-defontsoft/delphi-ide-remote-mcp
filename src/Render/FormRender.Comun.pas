@@ -53,6 +53,12 @@ type
     // juez lo deja como lo deja el disenador al soltarlo (FMX: el ultimo de
     // la lista de tabulacion de su padre, V72)
     Soltado: string;
+    // --set Comp.Prop=Valor (repetible), con --writeback: lo que puso el agente,
+    // aplicado sobre el form YA CARGADO (AplicaEstado), como el IDE lo pone desde
+    // el Inspector. Leido con el form, el componente estaba en csReading y su
+    // clase no hacia lo suyo: FMX no sacaba de StyledSettings lo que se cambiaba
+    // y el estilo lo tapaba (B2 de la 1.28, medido)
+    Puestas: TArray<string>;
     // --convert text|binary: EL conversor del IDE, sin cargar el form (V71):
     // los bytes de --path en la otra forma, escritos en --out
     Convierte: string;
@@ -586,6 +592,7 @@ begin
         GPeticion.Escribe := (V = FR_ARG_SI) or (V = 'true') or (V = '1');
       end
       else if P = FR_ARG_DROPPED then GPeticion.Soltado := Valor
+      else if P = FR_ARG_SET then GPeticion.Puestas := GPeticion.Puestas + [Valor]
       else if P = FR_ARG_CONVERT then GPeticion.Convierte := Entre(Valor, ['text', 'binary'])
       else if P = FR_ARG_UNREADABLE_CLASSES then GPeticion.ClasesSinLeer := True
       else if P = FR_ARG_BOXES then GPeticion.Cajas := True

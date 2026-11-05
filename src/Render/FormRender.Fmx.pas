@@ -482,6 +482,11 @@ begin
       // con el form como lo tiene el disenador (V68, V72)
       if GPeticion.Escribe then
       begin
+        // lo que puso el agente, sobre el form YA cargado, como el Inspector del
+        // IDE: su clase hace lo suyo (FMX saca de StyledSettings lo cambiado,
+        // TTextSettingsInfo.DoTextChanged fuera de csReading; B2 de la 1.28)
+        for var S in GPeticion.Puestas do
+          AplicaEstado(Cargador, Raiz, S);
         ComoLoTieneElDisenador(F, Raiz);
         EscribeComoElIde(Raiz);
         Exit;

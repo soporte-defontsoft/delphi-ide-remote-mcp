@@ -544,6 +544,10 @@ begin
       // el juez de lo que guarda el IDE (3.11): escrito por TWriter, sin pintar
       if GPeticion.Escribe then
       begin
+        // lo que puso el agente, sobre el form YA cargado, como el Inspector del
+        // IDE: su clase hace lo suyo fuera de la lectura (B2 de la 1.28, como FMX)
+        for var S in GPeticion.Puestas do
+          AplicaEstado(Cargador, Raiz, S);
         // el SOLTADO, el ultimo del tabulador de su padre, lo que hace soltarlo en el
         // disenador (--dropped). Un control lo es ya al leerlo, pero un frame inline
         // salia con 0, repetido, porque se crea antes de tener padre (1-nov-2026)

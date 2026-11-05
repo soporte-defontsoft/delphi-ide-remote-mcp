@@ -162,7 +162,8 @@ uses
   Lsp.FormRender,      // ComoLoEscribeElIde: el juez del orden entre hermanos (3.11)
   Lsp.Args,
   Winapi.Windows,
-  Lsp.Listas;          // ExtractoDeLinea: la cita de una linea en una respuesta
+  Lsp.Listas,          // ExtractoDeLinea: la cita de una linea en una respuesta
+  Lsp.ProcessLaunch;
 
 const
   // (las identidades de la tabla, ID_VCL_CONTROL y las demas: Lsp.DesignerMeta)
@@ -1854,6 +1855,53 @@ function ConLasPropiedadesDelIde(var F: TFormEnEdicion; const ALineas: TArray<st
     Result := Copy(ALineas, 0, De) + Antes + Puestas + Copy(ALineas, A + 1, MaxInt);
   end;
 
+  // lo puesto que va al objeto YA CARGADO (--set, Lsp.FormRender.JuezDelIde),
+  // como lo pone el Inspector del IDE: leido con el form, su componente estaba
+  // en csReading y su clase no hacia lo suyo - FMX no sacaba de StyledSettings
+  // el color o el tamano puesto, y el estilo lo tapaba (B2 de la 1.28, medido en
+  // TTextSettingsInfo.DoTextChanged). ASueltas: Componente.Propiedad=Valor de las
+  // de UNA linea con un valor que no es una cadena ni un bloque (los conjuntos,
+  // los numeros, los identificadores: lo que el ayudante pone por RTTI) y que
+  // viaja en la orden; el resultado, el texto SIN sus lineas ('' si no hay).
+  // Lo demas se sigue leyendo con el form
+  function AlObjetoCargado(ADoc: TStyleDoc; AObj: TStyleObj; out ASueltas: TArray<string>): string;
+  var
+    De, A: Integer;
+    Fuera: TArray<Integer>;
+    Lineas: TArray<string>;
+  begin
+    Result := '';
+    ASueltas := [];
+    Fuera := [];
+    for var Rg in ADoc.Propiedades(AObj, De, A) do
+    begin
+      if (Rg.Ini <> Rg.Fin) or not MatchText(Rg.Prop, APuestas) then
+        Continue;
+      var Hay: Boolean;
+      var Valor := ADoc.ValorDe(AObj, Rg.Prop, Hay).Trim;
+      if not Hay or (Valor = '') or CharInSet(Valor[1], ['''', '#', '(', '<', '{']) then
+        Continue;
+      var Puesta := ANomObj + '.' + Rg.Prop + '=' + Valor;
+      if not ValorDeLaCasaLlega(Puesta) then
+        Continue;
+      ASueltas := ASueltas + [Puesta];
+      Fuera := Fuera + [Rg.Ini];
+    end;
+    if Length(ASueltas) = 0 then
+      Exit;
+    Lineas := [];
+    for var I := 0 to High(ADoc.Lines) do
+    begin
+      var Sale := False;
+      for var X in Fuera do
+        if X = I then
+          Sale := True;
+      if not Sale then
+        Lineas := Lineas + [ADoc.Lines[I]];
+    end;
+    Result := F.Doc.TextoDe(Lineas);
+  end;
+
 var
   Doc, DocE: TStyleDoc;
   O, OE: TStyleObj;
@@ -1897,7 +1945,19 @@ begin
       Motivo := MsgFmt(SF_DESIGNER_IDE_HEREDADO_FMT, [ANomObj])
     else
     begin
-      R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj, F.JuzgandoDesde);
+      var Sueltas: TArray<string>;
+      var AlJuez := AlObjetoCargado(Doc, O, Sueltas);
+      if Length(Sueltas) > 0 then
+      begin
+        R := PropiedadesComoLasEscribeElIde(F.Dfm, AlJuez, F.Doc.Encoding, ANomObj, F.JuzgandoDesde, Sueltas);
+        // una que su ayudante no pudo poner sobre el objeto cargado (un evento, una
+        // referencia de otro modulo): el juicio de siempre, leida con el form. Sin
+        // tiempo, JuezDelIde contesta sin lanzar nada
+        if R.Error <> '' then
+          R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj, F.JuzgandoDesde);
+      end
+      else
+        R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj, F.JuzgandoDesde);
       // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
       F.LeidoPorElJuez := F.LeidoPorElJuez + R.Leidos;
       if R.Fallo <> '' then

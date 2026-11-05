@@ -7,7 +7,7 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 5;
+  FR_PROTOCOLO_VERSION = 6; // la 6: --set (B2 de la 1.28)
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
@@ -23,6 +23,10 @@
   FR_ARG_FIDELITY = '--fidelity';
   FR_ARG_ROOT = '--root';
   FR_ARG_STATE = '--state';
+  // --set Componente.Propiedad=Valor (repetible), con --writeback: lo que puso el
+  // agente, aplicado sobre el form YA CARGADO antes de escribirlo, como el IDE lo
+  // pone en el componente desde el Inspector (B2 de la 1.28)
+  FR_ARG_SET = '--set';
   FR_ARG_NONVISUAL = '--nonvisual';
   FR_ARG_WRITEBACK = '--writeback';
   FR_ARG_DROPPED = '--dropped';

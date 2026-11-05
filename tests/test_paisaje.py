@@ -2947,7 +2947,7 @@ check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
 # 1.27-, y uno que ParseaArgumentos leyera a mano). Si cambia uno sin
 # subirlo, un ayudante viejo y un servidor nuevo se creen iguales. Cambia: sube FR_PROTOCOLO_VERSION y
 # pon aqui el numero y la firma que dice el fallo
-FIRMA_DEL_PROTOCOLO = (5, '025866f8d493e18a')
+FIRMA_DEL_PROTOCOLO = (6, '443b2e79b175fc08')  # la 6: --set (B2 de la 1.28)
 
 
 def firma_del_protocolo(inc, comun):

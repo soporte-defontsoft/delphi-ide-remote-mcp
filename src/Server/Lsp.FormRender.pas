@@ -79,6 +79,11 @@ type
     // con Escribe, el que se acaba de soltar (insert, set parent=): el juez lo
     // deja como el disenador al soltarlo (FMX: el ultimo de su tabulador, V72)
     Soltado: string;
+    // con Escribe, Componente.Propiedad=Valor que el ayudante aplica sobre el form
+    // YA cargado antes de escribirlo (--set), como el Inspector del IDE: lo que
+    // puso el agente, que leido con el form no hacia lo que hace su clase
+    // (B2 de la 1.28). Lo pone JuezDelIde
+    Puestas: TArray<string>;
     // EL conversor del IDE (V71): text (binario -> texto) o binary (texto ->
     // binario), los bytes de Path escritos en Salida; sin form ni paquetes.
     // Lo pone ConversionDelIde
@@ -403,7 +408,7 @@ function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: str
   sustituyo, salto o no leyo; Fallo si no se pudo preguntar. ADesde, el de
   ComoLoEscribeElIde. }
 function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string;
-  ADesde: UInt64 = 0): TRespuestaRender;
+  ADesde: UInt64 = 0; const APuestas: TArray<string> = nil): TRespuestaRender;
 
 { Los colores sin alfa del form FMX APath con el texto ATexto (en AEnc): los
   candidatos de la gramatica (Lsp.Styles.CandidatosSinAlfa) que no estaban
@@ -601,7 +606,7 @@ begin
   // juez de los nuestros (ValorDeLaCasaLlega); --dropped no estaba (A4 de la 1.27)
   for var V in TArray<string>.Create(APeticion.Path, APeticion.Salida,
     APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.RaizBds,
-    APeticion.FicheroPaquetes, APeticion.Soltado) + APeticion.Estados do
+    APeticion.FicheroPaquetes, APeticion.Soltado) + APeticion.Estados + APeticion.Puestas do
     if not ValorDeLaCasaLlega(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V, CaracterQueNoLlega(V)])); // y CUAL, como TEST-037 (B7)
   AOrden := ComillasSinEscape(AExe) + Arg(FR_ARG_PATH, APeticion.Path);
@@ -635,6 +640,10 @@ begin
     AOrden := AOrden + Arg(FR_ARG_COMPONENT, APeticion.Componente);
   if APeticion.Escribe and (APeticion.Soltado <> '') then
     AOrden := AOrden + Arg(FR_ARG_DROPPED, APeticion.Soltado);
+  if APeticion.Escribe then
+    for var P in APeticion.Puestas do
+      if P <> '' then
+        AOrden := AOrden + Arg(FR_ARG_SET, P);
   if (APeticion.Raiz = 'form') or (APeticion.Raiz = 'frame') then
     AOrden := AOrden + ' ' + FR_ARG_ROOT + ' ' + APeticion.Raiz;
   if APeticion.Estilo <> '' then
@@ -2360,7 +2369,7 @@ end;
   otros 75 (R4 del revisor del paisaje de la 1.27, medido). }
 function JuezDelIde(const APath, ATexto, AEnc: string; const AComponente: string = '';
   const ASoltado: string = ''; const AUnidad: string = ''; ADesde: UInt64 = 0;
-  AYaEscrito: Boolean = False): TRespuestaRender;
+  AYaEscrito: Boolean = False; const APuestas: TArray<string> = nil): TRespuestaRender;
 var
   Pet: TPeticionRender;
   Dir, Cand: string;
@@ -2415,6 +2424,7 @@ begin
     Pet.Escribe := True;
     Pet.Componente := AComponente; // con el, tambien su orden (ORDER=)
     Pet.Soltado := ASoltado;
+    Pet.Puestas := APuestas;
     Pet.PlazoMs := Plazo;
     if AUnidad <> '' then
       Pet.UnidadPropuesta := TPath.Combine(Dir, TPath.GetFileName(UnidadDeDesigner(APath)));
@@ -2471,9 +2481,9 @@ begin
 end;
 
 function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string;
-  ADesde: UInt64): TRespuestaRender;
+  ADesde: UInt64; const APuestas: TArray<string>): TRespuestaRender;
 begin
-  Result := JuezDelIde(APath, ATexto, AEnc, AComponente, '', '', ADesde);
+  Result := JuezDelIde(APath, ATexto, AEnc, AComponente, '', '', ADesde, False, APuestas);
 end;
 
 function ColoresSinAlfaDeForm(const APath, ATexto, AEnc, AAntes: string;

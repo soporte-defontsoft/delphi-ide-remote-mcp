@@ -33,6 +33,15 @@ TabOrder = 0 junto al 0 del heredado (la VCL da 1).
      sigue sin ella tras un set (solo el que se suelta entra en el tabulador:
      FMX no mete en el de un control al que lee sin ella, y el IDE tampoco se
      la pone; el form si mete a sus hijos al leer, TCommonCustomForm.DoAddObject)
+  S1 (B2 de la 1.28) set TextSettings.Font.Size=24 y FontColor=claRed en un
+     TLabel: StyledSettings escrito SIN Size ni FontColor, como lo deja el IDE
+     (lo puesto va al objeto YA CARGADO: FMX lo saca en
+     TTextSettingsInfo.DoTextChanged, fuera de csReading). Leido con el form,
+     set decia OK y no habia StyledSettings: el estilo lo tapaba (roja contra
+     f3938de, medido en produccion el 5-nov)
+  S2 ...y la preview lo pinta ROJO (el estilo lo pintaba negro)
+  S3 control: un set de una cadena (Text, por la lectura de siempre) no anade
+     StyledSettings
 
 Uso:  python tests/test_designer_fmx_1231.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -238,6 +247,29 @@ try:
     p = props(F, 'BtnSinTab')
     check('T2 control: uno escrito sin TabOrder sigue sin el tras un set (solo el soltado entra)',
           not mc.fallo(r) and p.get('Text') == "'Otro'" and 'TabOrder' not in p, (p, r[:400]))
+
+    # B2 de la 1.28: StyledSettings, como lo deja el IDE
+    r = d(command='insert', path=F, classname='TLabel', component='LblTitulo', parent='PnlAbajo')
+    r = d(command='set', path=F, component='LblTitulo',
+          props='TextSettings.Font.Size=24;TextSettings.FontColor=claRed')
+    p = props(F, 'LblTitulo')
+    ss = p.get('StyledSettings', '')
+    check('S1 set Font.Size y FontColor de un TLabel: StyledSettings SIN Size ni FontColor, como el IDE',
+          not mc.fallo(r) and ss.startswith('[') and 'Size' not in ss and 'FontColor' not in ss
+          and p.get('TextSettings.FontColor') == 'claRed', (p, r[:500]))
+    png = os.path.join(FMX, 'LblTitulo.png')
+    r = d(command='preview', path=F, component='LblTitulo', out=png)
+    rojos = 0
+    if os.path.isfile(png):
+        ancho, alto, pixel = mc.png_pixeles(png)
+        for y in range(alto):
+            for x in range(ancho):
+                rr, gg, bb = pixel(x, y)
+                if rr > 180 and gg < 80 and bb < 80:
+                    rojos += 1
+    check('S2 ...y la preview lo pinta ROJO (el estilo lo pintaba negro)', rojos > 10, (rojos, r[:300]))
+    check('S3 control: el set de una cadena (T2, por la lectura de siempre) no anade StyledSettings',
+          'StyledSettings' not in props(F, 'BtnSinTab'), props(F, 'BtnSinTab'))
 
     # V69: la unidad que registra la presentacion estilada (hecho U de la tabla)
     PAS = os.path.join(FMX, 'UMain.pas')

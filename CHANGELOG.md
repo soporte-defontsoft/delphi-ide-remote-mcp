@@ -19,6 +19,8 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- `delphi_designer set` (and `insert` with `props`) on FMX now does what the IDE does when a property is changed in the Object Inspector. `TextSettings.Font.Size=24`, bold or `FontColor=claRed` on a label answered OK, wrote the lines and changed nothing on screen: the value stayed in `StyledSettings`, so the style won (measured on a new form: the preview drew it small and black). FMX takes a changed setting out of `StyledSettings` only when it is changed on the LOADED component, not while the form is read (`TTextSettingsInfo.DoTextChanged`, measured), and the agent's value was read with the form. It is now applied on the loaded form, as the Inspector does, and then the IDE's writer stores it - `StyledSettings` included - so the class does its own work and no list of properties stands in for it. Values that are text or a block (a string, a collection, binary data) are still read with the form, and if the renderer cannot set one the judge runs the way it did. The renderers' protocol goes to 6.
+
 - `delphi_desktop`'s `windows` on Linux no longer lists a window that is fully transparent. On KDE Plasma, Xwayland's video bridge (`xwaylandvideobridge`) showed as an 800x450 window in the middle of the screen where the capture showed nothing (found by Hermes' test of Plasma; measured on Fedora 44 with Plasma 6.8). The node reads what the window declares in `_NET_WM_WINDOW_OPACITY`, which the compositor applies, as it already left out the windows Windows cloaks.
 
 - `delphi_desktop`'s `code` names the evdev codes of Backspace (14) and Delete (111): an agent pressed 127, which is Compose, believing it was Delete (Hermes' test of Plasma).
