@@ -498,7 +498,6 @@ uses
   Lsp.Dproj,        // XmlEscape: las rutas del manifiesto de la caja
   Lsp.Guard,
   Lsp.BuildRunner,  // RunCapturedEnContenedor: el lanzador de los programas externos
-  Lsp.TodoONada,    // HuellaDeFichero: la generacion de la caja de paquetes
   Lsp.ProjectUnits, // RaizDeDesigner: a que raiz llega la unidad de un designer
   Lsp.DesignerForma, // UnidadDeDesigner
   Lsp.Texts,
@@ -507,7 +506,8 @@ uses
   Lsp.Patch,        // EscribeTexto: la puerta de escribir, la propuesta del juez
   Lsp.Codificacion, // EncKindOf
   Lsp.Discovery,    // DiscoverRadStudio: el Delphi del servidor
-  Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante
+  Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante; HuellaDeFichero,
+                    // DiskStamp y HuellaParaNombre: el tamano de lo junto y el nombre de la caja de paquetes
   Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
   Lsp.NetDrives,    // PrefijoSinBarra y ConBarrasDeWindows: la forma de una ruta del IDE
   Lsp.Listas,
@@ -1329,7 +1329,7 @@ var
        (ReadPathDenied(Ruta) = '') and not EsEnlace(Ruta) then
     begin
       var Tam: Int64;
-      var Fecha: TDateTime;
+      var Fecha: UInt64;
       // un programa no es lo que un form lee: el ayudante no carga nada que no sea del IDE.
       // Su cabecera son 2 bytes: se leia el fichero entero, hasta el tope (revisor del
       // paisaje de la 1.27, menores)
@@ -1804,19 +1804,17 @@ begin
       for var D in PathDelServidor do
         if not LoLeeElContenedor(D) and (Length(Lista(D, '*.bpl')) > 0) then
           MiraCarpeta(D);
-      // la generacion: nombre, tamano y fecha de lo que lleva
+      // la generacion: nombre y huella (DiskStamp) de lo que lleva
       Claves := Fuentes.Keys.ToArray;
       TArray.Sort<string>(Claves);
       var Sello := '';
       for var K in Claves do
       begin
-        var Tam: Int64;
-        var Fecha: TDateTime;
-        if HuellaDeFichero(Fuentes[K], Tam, Fecha) then
-          Sello := Sello + K + '|' + IntToStr(Tam) + '|' + FloatToStr(Fecha) + #10;
+        var Huella := DiskStamp(Fuentes[K]);
+        if HasStamp(Huella) then
+          Sello := Sello + K + '|' + Huella + #10;
       end;
-      ACaja := ServerTempDir(PREFIJO_CAJA_DE_PAQUETES +
-        PrincipioDeTexto(Sha256DeBytes(TEncoding.UTF8.GetBytes(Sello)), 16));
+      ACaja := ServerTempDir(PREFIJO_CAJA_DE_PAQUETES + HuellaParaNombre(Sello));
       System.TMonitor.Enter(GCajaDePaquetes);
       try
         if not TDirectory.Exists(ACaja) then

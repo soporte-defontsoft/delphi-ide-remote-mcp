@@ -14,15 +14,6 @@ unit Lsp.TodoONada;
 
 interface
 
-{ Tamano y fecha de escritura de un fichero SIN abrirlo (GetFileAttributesEx,
-  la llamada de DiskStamp): se leen aunque otro proceso lo tenga abierto sin
-  compartir, y de un enlace, los suyos. False si no esta. La fecha, en UTC:
-  la que guarda el sistema de ficheros. La usan la foto de los
-  escritores y la de la carpeta de un test, y la huella de lo que nombra una
-  cache (la del estilo por defecto, la caja de paquetes). }
-function HuellaDeFichero(const ARuta: string; out ATam: Int64;
-  out AFecha: TDateTime): Boolean;
-
 type
   { LA FOTO de unos ficheros ANTES de tocarlos, y su vuelta atras: el "todo
     o nada" de la tanda de edits, del commit de un changeset y de
@@ -40,10 +31,10 @@ type
     FAnotado: TArray<Boolean>;
     FExisteNuestro: TArray<Boolean>;
     FNuestros: TArray<TArray<Byte>>;
-    // tamano y fecha de la foto: se leen aunque otro proceso tenga el fichero
-    // abierto sin compartir, y dicen si cambio cuando los bytes no se pueden leer
-    FTam: TArray<Int64>;
-    FFecha: TArray<TDateTime>;
+    // la huella de la foto (Lsp.ShaCache.DiskStamp, la de un enlace la SUYA): se
+    // lee aunque otro proceso tenga el fichero abierto sin compartir, y dice si
+    // cambio cuando los bytes no se pueden leer
+    FSello: TArray<string>;
     // de una ruta que no existia: la primera carpeta que SI existia por
     // encima (lo que la operacion cree debajo, el deshacer lo quita si vacio)
     FAncestro: TArray<string>;
@@ -117,32 +108,8 @@ uses
   Lsp.Texts,
   Lsp.Codificacion,     // BytesIguales, el comparador
   Lsp.Patch,            // EscribeBytes: el escritor atomico de la jaula, para devolver
-  Lsp.Guard;            // las puertas de escritura y los escritores que deshacen
-
-{ Tamano y fecha de escritura de un fichero SIN abrirlo: se leen aunque otro
-  proceso lo tenga abierto sin compartir. False si no esta. }
-function HuellaDeFichero(const ARuta: string; out ATam: Int64;
-  out AFecha: TDateTime): Boolean;
-var
-  Data: TWin32FileAttributeData;
-  ST: TSystemTime;
-begin
-  ATam := -1;
-  AFecha := 0;
-  Result := GetFileAttributesEx(PChar(ARuta), GetFileExInfoStandard, @Data);
-  if Result then
-  begin
-    ATam := Int64(Data.nFileSizeHigh) shl 32 or Data.nFileSizeLow;
-    // la del disco tal cual, en UTC. TSearchRec.TimeStamp (la de antes) la
-    // pasa a local por la zona de la maquina (SystemTimeToTzSpecificLocalTime,
-    // por la fecha del fichero: el cambio de hora no la mueve, medido el
-    // 4-nov-2026), pero la mueven otra zona o sus reglas, y la hora repetida de
-    // octubre da la misma local a dos instantes. Como DiskStamp (Lsp.ShaCache)
-    // y la huella de las tablas del disenador
-    if FileTimeToSystemTime(Data.ftLastWriteTime, ST) then
-      AFecha := SystemTimeToDateTime(ST);
-  end;
-end;
+  Lsp.Guard,            // las puertas de escritura y los escritores que deshacen
+  Lsp.ShaCache;         // DiskStamp: la huella de la foto, la de todos
 
 procedure TFotoDeFicheros.Toma(const ARutas: array of string);
 var
@@ -154,8 +121,7 @@ begin
   SetLength(FAnotado, Length(ARutas));
   SetLength(FExisteNuestro, Length(ARutas));
   SetLength(FNuestros, Length(ARutas));
-  SetLength(FTam, Length(ARutas));
-  SetLength(FFecha, Length(ARutas));
+  SetLength(FSello, Length(ARutas));
   SetLength(FAncestro, Length(ARutas));
   SetLength(FAjeno, Length(ARutas));
   SetLength(FAtrib, Length(ARutas));
@@ -174,7 +140,7 @@ begin
       if FExistian[I] then
       begin
         FBytes[I] := TFile.ReadAllBytes(ARutas[I]);
-        HuellaDeFichero(ARutas[I], FTam[I], FFecha[I]);
+        FSello[I] := DiskStamp(ARutas[I], ehSuyo);
       end
       else
       begin
@@ -257,11 +223,8 @@ var
   end;
 
   function MismaHuella(AIx: Integer): Boolean;
-  var
-    T: Int64;
-    D: TDateTime;
   begin
-    Result := HuellaDeFichero(FRutas[AIx], T, D) and (T = FTam[AIx]) and (D = FFecha[AIx]);
+    Result := HasStamp(FSello[AIx]) and (DiskStamp(FRutas[AIx], ehSuyo) = FSello[AIx]);
   end;
 
   { UNA ruta de la foto: '' si esta como en la foto (o volvio); si no, el

@@ -708,6 +708,17 @@ REGLAS = [
      'Lsp.ShaCache: CachedFileSha256 (el de un fichero, con su cache por fecha y tamano) y Sha256DeBytes '
      '(el de unos bytes, para quien no puede fiarse de esa cache): un THashSHA2 montado a mano es otro '
      'formato de huella y otro lector del disco'),
+    # la huella de un fichero en disco (tamano y fecha) se LEE en Lsp.ShaCache y se escribe en UN texto:
+    # eran dos lectores de la misma llamada con el enlace al reves (Lsp.TodoONada y DiskStamp) y cinco
+    # textos a mano - la caja de paquetes, la cache del estilo, la foto de la carpeta de un test (C30 de
+    # la 1.28, 5-nov-2026)
+    ('la huella de un fichero fuera de su casa', r'\bGetFileAttributesEx\b',
+     [('Lsp.ShaCache.pas', '*'),
+      # la fecha de CREACION de lo que se sustituye, para devolversela tras el renombre: no es una huella
+      ('Lsp.Patch.pas', 'SustituyePorRenombre')],
+     'Lsp.ShaCache: HuellaDeFichero (tamano y fecha sin abrir el fichero; de un enlace, lo suyo o lo de '
+     'detras) y DiskStamp (su texto, el unico: para comparar con otra, o para un nombre con '
+     'HuellaParaNombre); otra lectura es otro formato de huella'),
     # LEER la clave del IDE vive en sus lectores (Lsp.Discovery: IdeConfigValue, IdeSubclaves...);
     # Mcp.Tools.PAServer abria la clave a mano dos veces (V83 de la 1.23.1). La fila de
     # escribir el registro, arriba, solo mira escrituras
@@ -1985,6 +1996,7 @@ PLANTADO = {
     'lanzar un programa': "  Out := RunCapturedIn('\"' + Exe + '\" algo', Dir, 1000, C);",
     'escribir el registro': "  R := TRegistry.Create(KEY_WRITE);",
     'el SHA-256 fuera de su casa': "  H := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);",
+    'la huella de un fichero fuera de su casa': "  if GetFileAttributesEx(PChar(F), GetFileExInfoStandard, @D) then X := 1;",
     'la clave del IDE leida sin su lector': "  if R.OpenKeyReadOnly(ClaveDelIde(AVersion, 'PlatformSDKs')) then",
     'partir en lineas a mano': "  for L in AOutput.Split([#13#10, #10]) do X := 1;",
     'la clave de una ruta real a mano': "  Vistos.Add(LowerCase(RealPath(Sub)));",

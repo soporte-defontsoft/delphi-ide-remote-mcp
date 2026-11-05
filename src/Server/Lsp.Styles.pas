@@ -490,7 +490,7 @@ uses
   Lsp.ProcessLaunch,
   Lsp.Sandbox,      // el contenedor del conversor de estilos
   Lsp.FormRender,   // CajaDeLosAyudantes: la caja desde la que corre
-  Lsp.TodoONada,    // HuellaDeFichero: la del conversor, en el nombre de su cache
+  Lsp.ShaCache,     // DiskStamp y HuellaParaNombre: la huella del conversor, en el nombre de su cache
   MCPServer.Logger,
   Lsp.Listas;
 
@@ -1568,15 +1568,16 @@ begin
 end;
 
 function CacheDelEstiloPorDefecto: string;
-var
-  Tam: Int64;
-  Fecha: TDateTime;
 begin
   Result := '';
-  if (StyleConverterExe = '') or not HuellaDeFichero(StyleConverterExe, Tam, Fecha) then
+  if StyleConverterExe = '' then
     Exit;
-  Result := ServerCacheDir(TPath.Combine(CACHE_ESTILOS_SUB, NombreDeCacheDelEstilo(
-    Format('%x-%s', [Tam, FormatDateTime('yyyymmddhhnnss', Fecha)]))));
+  // la huella del conversor (DiskStamp, la de todos) hecha nombre: la escribia a
+  // mano, tamano en hex y fecha al segundo (C30 de la 1.28)
+  var Huella := DiskStamp(StyleConverterExe);
+  if not HasStamp(Huella) then
+    Exit;
+  Result := ServerCacheDir(TPath.Combine(CACHE_ESTILOS_SUB, NombreDeCacheDelEstilo(HuellaParaNombre(Huella))));
 end;
 
 { Las caches de conversores anteriores (y la vieja sin clave): ya no las lee

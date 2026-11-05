@@ -19,22 +19,50 @@ function CachedFileSha256(const APath: string): string;
 function FileSha256(const APath: string): string;
 function Sha256DeBytes(const ABytes: TArray<Byte>): string;
 
-{ The disk fingerprint of a file - last write time and size - in ONE call
-  (GetFileAttributesEx opens no handle: a file another process holds
-  exclusively still gives its stamp, and a network share pays one round trip
-  instead of two). STAMP_GONE when the file is not there; STAMP_UNKNOWN when
-  it is there but cannot be asked (a folder, access denied...). One composer
-  for its readers - this cache, and the LSP session's document tables and
-  settings cache - which were two twins with two sentinels (first review of
-  1.7.8). A LINK to a file is asked the way it always was, through the link:
-  the one call answers with the link's own date and size 0, which do not
-  move when the file it points to is edited (second review of 1.7.9; read in
-  the RTL, not measured here: this account cannot create a link). }
+type
+  { Que se mide de un ENLACE a un fichero: lo SUYO - su propia entrada, con su
+    fecha y tamano 0, que no se mueven cuando se edita lo de detras - o lo de
+    DETRAS, el fichero al que lleva. }
+  TEnlaceEnLaHuella = (ehSuyo, ehDetras);
+
+{ LA lectura de la huella de un fichero en disco: su tamano y su fecha de
+  escritura (FILETIME, UTC, en ticks de 100 ns tal cual) SIN abrirlo
+  (GetFileAttributesEx: un fichero que otro proceso tiene sin compartir da la
+  suya, y un recurso de red paga una ida y vuelta en vez de dos). De un enlace,
+  lo que diga AEnlace: lo de detras se pregunta por un handle que solo pide
+  ATRIBUTOS, que ninguna comparticion niega. False si no esta, si es una
+  carpeta o si no se deja preguntar (un enlace roto). La leen DiskStamp, que la
+  compone en texto, y quien necesita el numero (la foto de los escritores, los
+  topes de bytes). Eran dos lecturas de la misma llamada con el enlace al reves
+  (esta vivia en Lsp.TodoONada), y la de DiskStamp preguntaba lo de detras por
+  la RTL: la fecha de lo de detras con el tamano del ENLACE (0), y con lo de
+  detras retenido sin compartir, 0|0 - medido en C30 de la 1.28 (LspTests.Huella),
+  donde el comentario decia "leido en la RTL, no medido". }
+function HuellaDeFichero(const ARuta: string; out ATam: Int64; out AFecha: UInt64;
+  AEnlace: TEnlaceEnLaHuella = ehSuyo): Boolean;
+
+{ The disk fingerprint of a file as TEXT - last write time and size, as
+  HuellaDeFichero reads them - for whoever compares it with an earlier one or
+  puts it in a name. STAMP_GONE when the file is not there; STAMP_UNKNOWN when
+  it is there but cannot be asked (a folder, access denied, a broken link...).
+  One composer for its readers - this cache, the LSP session's document tables
+  and settings cache, the snapshot of the writers (Lsp.TodoONada), the folder
+  of a test (Lsp.TestRunner), the names of the package box and of the default
+  style cache - which were two twins with two sentinels (first review of
+  1.7.8) and then five texts by hand (C30 de la 1.28). A LINK to a file gives,
+  by default, the stamp of the file it points to (AEnlace = ehDetras). }
 const
   STAMP_GONE = '';
   STAMP_UNKNOWN = '?';
-function DiskStamp(const APath: string): string;
+function DiskStamp(const APath: string; AEnlace: TEnlaceEnLaHuella = ehDetras): string;
 function HasStamp(const AStamp: string): Boolean;
+
+{ Un texto - una huella, la lista de lo que lleva una caja - hecho trozo de un
+  nombre de fichero: los 16 primeros hex del SHA-256 de su UTF-8. Lo usan los
+  nombres que dependen de una huella (la caja de paquetes de los renderizadores
+  y la cache del estilo por defecto, que escribia la suya a mano en otra forma:
+  C30 de la 1.28). }
+function HuellaParaNombre(const ATexto: string): string;
 
 { The stamp of a FOLDER: its last write time, which Windows moves when an
   entry is created, deleted or renamed inside it (not when a file inside is
@@ -74,25 +102,69 @@ begin
     Result := STAMP_UNKNOWN;
 end;
 
-function DiskStamp(const APath: string): string;
+type
+  // lo que contesta la lectura: esta, no esta, o esta y no se deja (DiskStamp
+  // los distingue: Lsp.Session suelta un documento que no esta y conserva uno
+  // que no se deja preguntar)
+  TLecturaDeHuella = (lhEsta, lhNoEsta, lhNoSeDeja);
+
+function LeeHuella(const ARuta: string; AEnlace: TEnlaceEnLaHuella; out ATam: Int64;
+  out AFecha: UInt64): TLecturaDeHuella;
 var
   Data: TWin32FileAttributeData;
+  Info: TByHandleFileInformation;
+  H: THandle;
 begin
-  if GetFileAttributesEx(PChar(APath), GetFileExInfoStandard, @Data) then
+  ATam := -1;
+  AFecha := 0;
+  if not GetFileAttributesEx(PChar(ARuta), GetFileExInfoStandard, @Data) then
+    Exit(if SelloSinAtributos = STAMP_GONE then lhNoEsta else lhNoSeDeja);
+  if (Data.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
+    Exit(lhNoSeDeja); // a folder has a date, but it is not a file
+  if (AEnlace = ehDetras) and ((Data.dwFileAttributes and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
   begin
-    if (Data.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY) <> 0 then
-      Exit(STAMP_UNKNOWN); // a folder has a date, but it is not a file
-    if (Data.dwFileAttributes and FILE_ATTRIBUTE_REPARSE_POINT) <> 0 then
-      try
-        Exit(FloatToStr(TFile.GetLastWriteTimeUtc(APath)) + '|' + IntToStr(TFile.GetSize(APath)));
-      except
-        Exit(STAMP_UNKNOWN);
-      end;
-    Result := UIntToStr((UInt64(Data.ftLastWriteTime.dwHighDateTime) shl 32) or Data.ftLastWriteTime.dwLowDateTime)
-      + '|' + UIntToStr((UInt64(Data.nFileSizeHigh) shl 32) or Data.nFileSizeLow);
-  end
+    // lo de detras: abrir un enlace lo sigue, y un handle que solo pide
+    // ATRIBUTOS no choca con ninguna comparticion (lo de detras retenido da la
+    // suya). Lo que no se abre (un enlace roto) o es una carpeta no se deja: el
+    // enlace ESTA
+    H := CreateFile(PChar(ARuta), FILE_READ_ATTRIBUTES,
+      FILE_SHARE_READ or FILE_SHARE_WRITE or FILE_SHARE_DELETE, nil, OPEN_EXISTING,
+      FILE_FLAG_BACKUP_SEMANTICS, 0);
+    if H = INVALID_HANDLE_VALUE then
+      Exit(lhNoSeDeja);
+    try
+      if not GetFileInformationByHandle(H, Info) or
+         ((Info.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY) <> 0) then
+        Exit(lhNoSeDeja);
+      ATam := Int64((UInt64(Info.nFileSizeHigh) shl 32) or Info.nFileSizeLow);
+      AFecha := (UInt64(Info.ftLastWriteTime.dwHighDateTime) shl 32) or Info.ftLastWriteTime.dwLowDateTime;
+    finally
+      CloseHandle(H);
+    end;
+    Exit(lhEsta);
+  end;
+  ATam := Int64((UInt64(Data.nFileSizeHigh) shl 32) or Data.nFileSizeLow);
+  AFecha := (UInt64(Data.ftLastWriteTime.dwHighDateTime) shl 32) or Data.ftLastWriteTime.dwLowDateTime;
+  Result := lhEsta;
+end;
+
+function HuellaDeFichero(const ARuta: string; out ATam: Int64; out AFecha: UInt64;
+  AEnlace: TEnlaceEnLaHuella): Boolean;
+begin
+  Result := LeeHuella(ARuta, AEnlace, ATam, AFecha) = lhEsta;
+end;
+
+function DiskStamp(const APath: string; AEnlace: TEnlaceEnLaHuella): string;
+var
+  Tam: Int64;
+  Fecha: UInt64;
+begin
+  case LeeHuella(APath, AEnlace, Tam, Fecha) of
+    lhEsta: Result := UIntToStr(Fecha) + '|' + UIntToStr(UInt64(Tam));
+    lhNoEsta: Result := STAMP_GONE;
   else
-    Result := SelloSinAtributos;
+    Result := STAMP_UNKNOWN;
+  end;
 end;
 
 function FolderStamp(const APath: string): string;
@@ -122,6 +194,11 @@ begin
   if Length(ABytes) > 0 then
     H.Update(ABytes[0], Length(ABytes));
   Result := H.HashAsString;
+end;
+
+function HuellaParaNombre(const ATexto: string): string;
+begin
+  Result := Copy(Sha256DeBytes(TEncoding.UTF8.GetBytes(ATexto)), 1, 16);
 end;
 
 function FileSha256(const APath: string): string;

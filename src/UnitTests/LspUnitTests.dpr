@@ -34,7 +34,8 @@ uses
   LspTests.ReclamaArbol in 'LspTests.ReclamaArbol.pas',
   LspTests.RutasOrdinal in 'LspTests.RutasOrdinal.pas',
   LspTests.RestauraEnlaceDuro in 'LspTests.RestauraEnlaceDuro.pas',
-  LspTests.Comun in 'LspTests.Comun.pas';
+  LspTests.Comun in 'LspTests.Comun.pas',
+  LspTests.Huella in 'LspTests.Huella.pas';
 
 var
   Runner: ITestRunner;

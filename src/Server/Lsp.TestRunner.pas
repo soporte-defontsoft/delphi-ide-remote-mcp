@@ -66,7 +66,7 @@ uses
   MCPServer.Logger,
   Lsp.Rutas,
   Lsp.Casa,
-  Lsp.TodoONada,
+  Lsp.ShaCache, // DiskStamp y HuellaDeFichero: la foto de la carpeta y lo que se copia
   Lsp.ProcessLaunch,
   Lsp.Args;
 
@@ -421,8 +421,8 @@ const
 type
   ETopeDeCopia = class(Exception);
 
-{ La foto de la carpeta del contenedor: ruta relativa -> tamano y fecha,
-  leidos sin abrir nada (HuellaDeFichero, la de la foto de los escritores).
+{ La foto de la carpeta del contenedor: ruta relativa -> su huella (DiskStamp,
+  la de la foto de los escritores), leida sin abrir nada.
   Sin cruzar enlaces: si el test planta uno, ni se sigue ni se lee. }
 function FotoDe(const ADir: string): TDictionary<string, string>;
 var
@@ -434,16 +434,13 @@ begin
   RecorreSinEnlaces(ADir,
     procedure(const APath: string)
     var
-      Tam: Int64;
-      Fecha: TDateTime;
-      Rel: string;
+      Huella, Rel: string;
     begin
-      // uno que no se deja mirar no esta en la foto; la clave, su trozo bajo
-      // la carpeta (TrozoBajo)
-      if not TDirectory.Exists(APath) and HuellaDeFichero(APath, Tam, Fecha) and
-         TrozoBajo(Base, APath, Rel) then
-        Foto.AddOrSetValue(Rel,
-          IntToStr(Tam) + '|' + FormatDateTime('yyyymmddhhnnsszzz', Fecha));
+      // uno que no se deja mirar (una carpeta tampoco) no esta en la foto; la
+      // clave, su trozo bajo la carpeta (TrozoBajo)
+      Huella := DiskStamp(APath, ehSuyo);
+      if HasStamp(Huella) and TrozoBajo(Base, APath, Rel) then
+        Foto.AddOrSetValue(Rel, Huella);
     end);
   Result := Foto;
 end;
@@ -492,7 +489,13 @@ begin
       // listas de ficheros) y '.' es esa carpeta, que se borra con la llamada.
       // Era una lista plana de otra forma, la unica (11.2 de la 1.18.0)
       O.AddPair('path', TPath.Combine('.', N));
-      Tam := StrToInt64Def(PrimerTrozo(Despues[N], ['|']), 0);
+      // el tamano, de LA lectura (HuellaDeFichero): la huella de la foto es un
+      // texto para COMPARAR y no se desmonta - se tomaba su primer trozo, y al
+      // pasar a DiskStamp el tamano salio con la fecha (medido en C30 de la
+      // 1.28: test_delphi_test_contenedor K3)
+      var Fecha: UInt64;
+      if not HuellaDeFichero(TPath.Combine(ADir, N), Tam, Fecha, ehSuyo) then
+        Tam := 0;
       O.AddPair('size', TJSONNumber.Create(Tam));
       // sin contenido, y por que: lo que ya no cabe ni se lee
       if Tam > TOPE_DE_LECTURA then
@@ -580,7 +583,7 @@ begin
         function(const APath: string): Boolean
         var
           Tam: Int64;
-          Fecha: TDateTime;
+          Fecha: UInt64;
         begin
           // ni las carpetas del servidor (EsCarpetaDesechable: con MatchText,
           // el locale, una que NTFS separa tampoco se copiaba), ni los .dcu
@@ -597,8 +600,7 @@ begin
           // ultimo, por lo que va a copiar de verdad
           // (un enlace que se sigue copia lo de DETRAS: se cuenta eso, no
           // la entrada del enlace, que mide 0)
-          if not Result and HuellaDeFichero(
-            IfThen(EsEnlace(APath), RealPath(APath), APath), Tam, Fecha) then
+          if not Result and HuellaDeFichero(APath, Tam, Fecha, ehDetras) then
           begin
             Inc(Copiado, Tam);
             if Copiado > TOPE_COPIA then

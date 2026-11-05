@@ -196,6 +196,7 @@
         <DCCReference Include="LspTests.RutasOrdinal.pas"/>
         <DCCReference Include="LspTests.RestauraEnlaceDuro.pas"/>
         <DCCReference Include="LspTests.Comun.pas"/>
+        <DCCReference Include="LspTests.Huella.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

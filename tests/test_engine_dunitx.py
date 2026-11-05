@@ -12,7 +12,7 @@ test's own folder), and the whole suite is run directly by the battery.
 
 Usage:  python tests/test_engine_dunitx.py [path-to-DelphiLspMcp.exe]
 """
-import json, os, re, subprocess
+import json, os, re, shutil, subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -138,6 +138,26 @@ MIN_TESTS = 253  # 1.24: +2 LspTests.ReclamaArbol (RenombraConReintentos: una ca
 check('suite entera: al menos %d tests, todos pasados (hay %s)' % (MIN_TESTS, j.get('total')),
       j.get('total', 0) >= MIN_TESTS and j.get('passed') == j.get('total'), str(j)[:300])
 check('suite entera: exitCode 0', r.returncode == 0, salida[-300:])
+
+# LspTests.Huella (C30 de la 1.28) planta un ENLACE SIMBOLICO junto al exe. Desde la carpeta de salida
+# del repo (src\UnitTests\Win64\Debug) Windows lo niega con 1314 aunque Developer Mode lo admita: el
+# mismo binario con otro nombre, o con otra carpeta actual, tambien; copiado a otra carpeta no, ni Python
+# en esa misma (medido el 5-nov-2026; la causa no esta medida). Arriba solo diria NOTA: se corre ademas
+# desde una COPIA del exe en la carpeta de esta bateria, donde se mide - y si ahi tampoco, su NOTA lo dice.
+COPIA = os.path.join(BASE, 'huella')
+os.makedirs(COPIA, exist_ok=True)
+EXE_COPIA = os.path.join(COPIA, os.path.basename(EXE_SUITE))
+shutil.copy2(EXE_SUITE, EXE_COPIA)
+r = subprocess.run([EXE_COPIA, '--run:LspTests.Huella'], cwd=COPIA, capture_output=True, timeout=120,
+                   env=mc.entorno({'DELPHI_MCP_ROOTS': COPIA}))
+salida = (r.stdout + r.stderr).decode('utf-8', 'replace')
+for _l in salida.splitlines():
+    if _l.startswith('NOTA no se mide'):
+        print('NOTA huella: ' + _l[len('NOTA '):])
+check('la huella de un fichero (LspTests.Huella), desde una copia fuera de la carpeta de salida: '
+      'corre y 0 fallos (%s tests)' % cuenta('Found'),
+      cuenta('Found') > 0 and cuenta('Failed') == 0 and cuenta('Errored') == 0 and r.returncode == 0,
+      salida[-1500:])
 
 srv.cierra()  # salida limpia: suelta el exe y la carpeta se puede borrar
 mc.borra(BASE)
