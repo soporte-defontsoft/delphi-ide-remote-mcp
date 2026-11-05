@@ -455,7 +455,8 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   acting on a desktop is a permission of its own, by the host of the profile:
   `DesktopAllowedHosts` sees and acts (`tap`, `type`, `key`, `overview`), `DesktopViewHosts`
   only sees (`screenshot`, `status`), and `RemoteHosts` is still needed too (`RUN-020` when
-  it is missing). Empty, no desktop; `*` is any host. `McpDesktopNode` or `all` in
+  it is missing). Empty, no desktop - and `tools/list` does not announce `delphi_desktop`
+  to that workspace (1.28; `delphi_help` says it is missing and which key opens it); `*` is any host. `McpDesktopNode` or `all` in
   `RemoteRunProjects` no longer grant it. Looking leaves traces of the server on
   the target: it deploys or updates the node there, uploads and deletes a job file and its
   launcher, and the node writes the capture it hands back.
@@ -485,7 +486,9 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   what `tools/list` advertises — the whole list is ~26k tokens of schemas (measured in 1.27:
   `coder` ~25k, `reader` ~7k), which a client that loads it at once pays in context. Listing only:
   hidden tools stay callable, permissions live in the layers above. A workspace can carry its
-  own `Profile=`.
+  own `Profile=`. Apart from the profile, `delphi_adb` and `delphi_desktop` are announced
+  only where the workspace declares somewhere for them to go (`AdbAllowedDevices`;
+  `DesktopAllowedHosts` or `DesktopViewHosts`): about 10 KB less of `tools/list` elsewhere.
 - **`VaultPath=` / `VaultReadOnly=` (per workspace)**: optional persistent memory for
   agents (a folder of Markdown notes) — each workspace declares its own, and two workspaces
   may remember in *different* vaults. Read-only by default; writes, when enabled, are
@@ -562,7 +565,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   workspace's list are refused at **both** access levels, every device-addressing command
   must name its `device` explicitly (an implicit target could be an unlisted device that
   happens to be the only one attached) — and, like every list since v0.98, **absent means
-  NO devices**, never unrestricted. A screenshot writes a file with a name of its own under
+  NO devices**, never unrestricted - and then `tools/list` does not announce `delphi_adb` to that workspace (1.28; it stays callable and refuses, and `delphi_help` says why). A screenshot writes a file with a name of its own under
   `/sdcard/` and removes it whatever happens, so two captures of one device at once each get their own.
 - **`[Server] DelphiVersion`**: the ONE RAD Studio this server uses - the BDS version number
   (`37.0` = RAD Studio 13, `23.0` = 12 Athens, `22.0` = 11 Alexandria), and only from here.

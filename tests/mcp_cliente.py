@@ -1357,6 +1357,14 @@ def sin_respuesta(t):
     return t == SIN_TIMEOUT or t.startswith(SIN_CONTENIDO) or t.startswith(SIN_RPC)
 
 
+# delphi_adb y delphi_desktop se anuncian solo donde se declara A DONDE ir (B10 de la 1.28): una bateria
+# que mide la superficie ENTERA los declara, con nombres que no existen en ninguna parte (nunca se llega a
+# ellos). En el entorno del modo local, y en la seccion [Workspace.*] de un settings.ini (lineas del ini)
+DESTINOS_DECLARADOS = {'DELPHI_MCP_ADB_DEVICES': 'baterias-sin-dispositivo',
+                       'DELPHI_MCP_DESKTOP_VIEW_HOSTS': 'baterias-sin-host'}
+DESTINOS_DECLARADOS_INI = 'AdbAllowedDevices=baterias-sin-dispositivo\nDesktopViewHosts=baterias-sin-host\n'
+
+
 def entorno(extra=None):
     """El entorno de un servidor de prueba: el de esta maquina SIN las
     DELPHI_MCP_* de quien lanza la bateria -una jaula, un token o una lista

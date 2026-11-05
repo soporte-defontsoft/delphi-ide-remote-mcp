@@ -29,6 +29,10 @@ def tools_list(exe=None):
         env['DELPHI_MCP_ROOTS'] = base
         env['DELPHI_MCP_VAULT_PATH'] = vault
         env['DELPHI_MCP_VAULT_READONLY'] = '0'  # full surface: the 3 write tools too
+        # ...and delphi_adb / delphi_desktop, announced only where a target is declared (B10 of 1.28):
+        # names that exist nowhere, enough for tools/list and never reached (nothing is called here)
+        env['DELPHI_MCP_ADB_DEVICES'] = 'livetools-sin-dispositivo'
+        env['DELPHI_MCP_DESKTOP_VIEW_HOSTS'] = 'livetools-sin-host'
         proc = subprocess.Popen([copia], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
         q = queue.Queue()

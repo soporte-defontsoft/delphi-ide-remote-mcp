@@ -31,7 +31,9 @@ with open(os.path.join(_maindir, 'settings.ini'), 'w') as f:
             # lo tocaria (revisor de baterias de la 1.27). Su raiz escribible, una suya vacia
             + 'Roots=%s' % mc.carpeta('http-main-raiz') + chr(10)
             + 'ReadOnlyRoots=%s' % REPOROOT + chr(10)
-            + 'AllowTests=1' + chr(10) + 'LibraryZone=1' + chr(10))
+            + 'AllowTests=1' + chr(10) + 'LibraryZone=1' + chr(10)
+            # el contrato ENTERO: delphi_adb y delphi_desktop se anuncian con un destino (B10 de la 1.28)
+            + mc.DESTINOS_DECLARADOS_INI)
 # sin las DELPHI_MCP_* de quien lanza la bateria: el token lo pone el ini
 proc = mc.lanza_http(_mainexe, None, mc.entorno(), espera_en=PORT)   # sin puerto: el del ini
 
@@ -248,7 +250,9 @@ try:
         # named workspaces exist, and tokenless requests answer 401
         f.write('[Server]\nPort=%d\nBindIP=127.0.0.1\n\n'
                 '[Workspace.Op]\nToken=%s\nReadOnlyToken=%s\nRoots=%s\nAllowTests=1\n'
-                % (RO_PORT, TOKEN, RO_TOKEN, tmpdir3))
+                % (RO_PORT, TOKEN, RO_TOKEN, tmpdir3)
+                # el anuncio de TODAS: adb y desktop, con un destino declarado (B10 de la 1.28)
+                + mc.DESTINOS_DECLARADOS_INI)
     proc3 = mc.lanza_http(exe3, None, mc.entorno(), espera_en=RO_PORT)
     try:
         URL = 'http://127.0.0.1:%d/mcp' % RO_PORT

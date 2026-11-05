@@ -617,6 +617,8 @@ Android devices for remote development: phones/tablets hang off THIS server (USB
 | `frame` | string | optional | tap (and type, drag on delphi_desktop): the "frame" of the screenshot you measured on, verbatim; x,y are then pixels of THAT image and the server converts them (inline scale, crop origin, device display). Without it, capture pixels. |
 <!-- /contract -->
 
+Announced in `tools/list` only where the workspace declares a device (`AdbAllowedDevices`, 1.28): elsewhere every call would be refused, so it is left out, stays callable (the call says what is missing) and `delphi_help` says why.
+
 Since 1.3.1 `screenshot` is delivered like `delphi_desktop`'s (same helper): the
 image inline in the answer, or file + `download` with `inline=false`, always with
 a `frame`; `tap` with `frame=` converts to DISPLAY pixels, so `tapScale` no longer
@@ -653,6 +655,8 @@ The desktop of the machine behind a PAServer profile (a Linux or Windows target,
 | `maxwidth` | integer | optional | Inline only: the widest the image travels (0 = 1280); a wider capture is scaled down, a narrower one never enlarged. Divide what you measure on it by the answer's inlineScale for capture pixels, or pass its frame to tap or type. |
 | `frame` | string | optional | tap (and type, drag on delphi_desktop): the "frame" of the screenshot you measured on, verbatim; x,y are then pixels of THAT image and the server converts them (inline scale, crop origin, device display). Without it, capture pixels. |
 <!-- /contract -->
+
+Announced in `tools/list` only where the workspace declares a desktop host (`DesktopAllowedHosts` or `DesktopViewHosts`, 1.28): elsewhere every call would be refused, so it is left out, stays callable (the call says what is missing) and `delphi_help` says why.
 
 Since 1.3.1 a screenshot is **one step**: the image travels in the same answer
 (an MCP `image` content item, scaled to `maxwidth`, 1280 by default) and its temp

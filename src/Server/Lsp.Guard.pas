@@ -93,8 +93,10 @@ uses
   System.JSON;
 
 type
-  { POR QUE tools/list deja fuera una tool (moNinguna = la anuncia). }
-  TMotivoOculta = (moNinguna, moSinVault, moVaultLectura, moCredencialLectura, moPerfil);
+  { POR QUE tools/list deja fuera una tool (moNinguna = la anuncia).
+    moSinDestino: delphi_adb o delphi_desktop sin nada declarado a donde ir. }
+  TMotivoOculta = (moNinguna, moSinVault, moVaultLectura, moCredencialLectura, moPerfil,
+    moSinDestino);
 
 { La regla de lo que tools/list anuncia, con su motivo: delphi_help lo dice
   (un agente contaba 37 tools donde la documentacion dice 42 y creyo que se
@@ -5549,6 +5551,15 @@ begin
   if N.StartsWith('vault_') and (AccesoDeTool(N).Acceso = atEscritura) and
      not VaultModoEscritura then
     Exit(moVaultLectura);
+  // delphi_adb y delphi_desktop, solo donde el workspace declara a DONDE
+  // (AdbAllowedDevices; DesktopAllowedHosts o DesktopViewHosts): sin nada toda
+  // llamada se niega, y eran ~10 KB de cada tools/list (B10 de la 1.28, medido
+  // en superficie-tools-1-27). Como el vault: siguen llamables y la llamada
+  // dice que falta; delphi_help dice que no estan y por que.
+  if SameText(N, 'delphi_adb') and not HayDispositivosAdb then
+    Exit(moSinDestino);
+  if SameText(N, 'delphi_desktop') and not HayHostsDeEscritorio then
+    Exit(moSinDestino);
   // A una credencial de SOLO LECTURA no se le anuncian las tools enteras de
   // escritura: la puerta se las niega siempre (LecturaDenegada) y solo
   // ocupaban sitio. Las mixtas se quedan, sus lecturas valen (David,

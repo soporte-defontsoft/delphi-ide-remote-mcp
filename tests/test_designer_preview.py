@@ -504,7 +504,8 @@ def png(nombre):
 
 
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='preview', t=180)
+# P3b mira el esquema de delphi_desktop y delphi_adb: se anuncian con un destino declarado (B10 de la 1.28)
+srv = mc.Stdio(EXE, mc.entorno(dict({'DELPHI_MCP_ROOTS': JAIL}, **mc.DESTINOS_DECLARADOS)), nombre='preview', t=180)
 call = srv.call
 
 

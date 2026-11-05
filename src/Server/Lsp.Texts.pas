@@ -5069,6 +5069,17 @@ const
   { La credencial de solo lectura: tools/list no le anuncia las tools enteras
     de escritura (Lsp.Guard.ToolHiddenFromList), y la tabla de arriba se las
     nombraria igual (6-oct-2026). }
+  { delphi_adb y delphi_desktop sin nada declarado a donde ir (Lsp.Guard,
+    moSinDestino; B10 de la 1.28): no se anuncian, y se dice cual y por que.
+    Lleva [las de abajo, separadas por coma]. }
+  SF_HELP_TASKS_SIN_DESTINO_FMT =
+    #10#10'NOT IN tools/list HERE, this workspace declares nowhere for them to ' +
+    'go: %s. Only the operator declares that, in the server''s settings; a ' +
+    'call is refused until then.';
+  SF_HELP_SIN_DESTINO_ADB =
+    'delphi_adb (no Android device: AdbAllowedDevices)';
+  SF_HELP_SIN_DESTINO_DESKTOP =
+    'delphi_desktop (no desktop host: DesktopAllowedHosts or DesktopViewHosts)';
   SF_HELP_TASKS_SOLO_LECTURA =
     #10#10'YOUR CREDENTIAL IS READ-ONLY: the tools that only write are not ' +
     'announced to you (they would refuse), and the mixed ones answer only ' +

@@ -77,7 +77,9 @@ with open(os.path.join(EXEDIR, 'settings.ini'), 'w') as f:
     f.write('\n'.join([
         '[Workspace.Pared]', 'Token=%s' % TOKEN,
         'Roots=%s;%s;%s' % (JAIL, RAIZ_FALTA, LOCAL_NO),
-        'ReadOnlyRoots=%s' % RAIZ_REF, '']))
+        'ReadOnlyRoots=%s' % RAIZ_REF,
+        # W9 lee la descripcion de delphi_desktop del tools/list vivo: se anuncia con un destino declarado
+        mc.DESTINOS_DECLARADOS_INI]))
 
 # git sin la config global ni la del sistema de esta maquina: una
 # safe.directory de quien corre la bateria no cambia lo que se mide

@@ -21,8 +21,9 @@ EXE = mc.copia_exe(BASE)
 VAULT = os.path.join(BASE, 'vault'); os.makedirs(VAULT)
 open(os.path.join(VAULT, 'MEMORY.md'), 'w').write('# MEMORY\n')
 
-env = mc.entorno({'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_VAULT_PATH': VAULT,
-                  'DELPHI_MCP_VAULT_READONLY': '0'})  # full surface: the 3 write tools too   # vault tools registered: FULL surface
+env = mc.entorno(dict({'DELPHI_MCP_ROOTS': BASE, 'DELPHI_MCP_VAULT_PATH': VAULT,
+                       'DELPHI_MCP_VAULT_READONLY': '0'},  # full surface: the 3 write tools too   # vault tools registered: FULL surface
+                      **mc.DESTINOS_DECLARADOS))  # ...and delphi_adb / delphi_desktop, announced with a target (B10 of 1.28)
 srv = mc.Stdio(EXE, env, nombre='docs', t=60)
 resp = srv.request('tools/list', {})
 TOOLS = sorted(t['name'] for t in resp['result']['tools'])

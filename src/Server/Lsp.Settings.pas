@@ -340,6 +340,13 @@ function DispositivoSinNumeroMdns(const ATarget: string): string;
   solo ve; ausentes = ninguno, y hacen falta ademas de RemoteHosts, que dice a
   donde llega un perfil y no que se puede hacer alli (V90 de la 1.25). }
 function DesktopHostAllowed(const AHost: string; AActua: Boolean): Boolean;
+{ Si esta sesion tiene ALGUN destino declarado: para delphi_adb, AdbAllowedDevices
+  de su workspace (DELPHI_MCP_ADB_DEVICES en el modo local); para delphi_desktop,
+  DesktopAllowedHosts o DesktopViewHosts. Sin ninguno, tools/list no la anuncia
+  (MotivoToolOculta, B10 de la 1.28): toda llamada se negaria. Por lo DECLARADO,
+  sin mirar la red, como el vault. }
+function HayDispositivosAdb: Boolean;
+function HayHostsDeEscritorio: Boolean;
 
 { Las raices de ESCRITURA de todos los workspaces declarados, en el orden
   del settings.ini, y las del modo local de lanzamiento: lo que entra en la
@@ -2050,17 +2057,52 @@ end;
   negotiates and a USB serial is listed as-is. Ausente o vacia = NINGUN
   dispositivo: cada workspace declara la suya con AdbAllowedDevices= y lo
   que no se declara no existe (v0.98; antes fallaba abierto). }
+{ Las listas de ESTA sesion: las de su workspace, o las globales del modo local.
+  EL lector de cada una: los jueces de abajo y el anuncio de tools/list }
+function ListaAdbDeLaSesion: TArray<string>;
+begin
+  LoadSecurity;
+  if HasActiveWS then
+    Result := ActiveWS.AdbDevices
+  else
+    Result := GAdbDevices;
+end;
+
+procedure HostsDeEscritorioDeLaSesion(out AActua, AVe: TArray<string>);
+begin
+  LoadSecurity;
+  if HasActiveWS then
+  begin
+    AActua := ActiveWS.DesktopHosts;
+    AVe := ActiveWS.DesktopViewHosts;
+  end
+  else
+  begin
+    AActua := GDesktopHosts;
+    AVe := GDesktopViewHosts;
+  end;
+end;
+
+function HayDispositivosAdb: Boolean;
+begin
+  Result := Length(ListaAdbDeLaSesion) > 0;
+end;
+
+function HayHostsDeEscritorio: Boolean;
+var
+  Actua, Ve: TArray<string>;
+begin
+  HostsDeEscritorioDeLaSesion(Actua, Ve);
+  Result := (Length(Actua) > 0) or (Length(Ve) > 0);
+end;
+
 function AdbTargetAllowed(const ATarget: string): Boolean;
 var
   Lista: TArray<string>;
   Host: string;
   P: Integer;
 begin
-  LoadSecurity;
-  if HasActiveWS then
-    Lista := ActiveWS.AdbDevices
-  else
-    Lista := GAdbDevices;
+  Lista := ListaAdbDeLaSesion;
   Host := ATarget;
   P := Pos(':', ATarget);
   if P > 0 then
@@ -2073,17 +2115,7 @@ function DesktopHostAllowed(const AHost: string; AActua: Boolean): Boolean;
 var
   Actua, Ve: TArray<string>;
 begin
-  LoadSecurity;
-  if HasActiveWS then
-  begin
-    Actua := ActiveWS.DesktopHosts;
-    Ve := ActiveWS.DesktopViewHosts;
-  end
-  else
-  begin
-    Actua := GDesktopHosts;
-    Ve := GDesktopViewHosts;
-  end;
+  HostsDeEscritorioDeLaSesion(Actua, Ve);
   Result := NombreEnLaLista(AHost.Trim, Actua) or (not AActua and NombreEnLaLista(AHost.Trim, Ve));
 end;
 

@@ -39,7 +39,8 @@ def start(etiqueta, extra_env):
     # v0.98: o workspace o nada (los perfiles de [Tools] siguen siendo
     # fontaneria global y entran por el entorno igual que antes)
     with open(os.path.join(base, 'settings.ini'), 'w') as _f:
-        _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, base))
+        # el censo ENTERO: delphi_adb y delphi_desktop se anuncian con un destino declarado (B10 de la 1.28)
+        _f.write('[Workspace.Bateria]\nToken=%s\nRoots=%s\n' % (TOKEN, base) + mc.DESTINOS_DECLARADOS_INI)
     # espera a que ESCUCHE (antes un sleep fijo de 2,3 s: con la maquina
     # cargada la puerta de release salio roja por eso, 26-sep-2026)
     proc = mc.lanza_http(exe, port, env)

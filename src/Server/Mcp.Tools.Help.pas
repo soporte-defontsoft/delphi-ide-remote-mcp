@@ -81,6 +81,16 @@ begin
       Result := Result + [T];
 end;
 
+{ Por que no se anuncia una tool sin nada declarado a donde ir (moSinDestino):
+  la clave que la abre. }
+function SinDestinoDe(const ATool: string): string;
+begin
+  if SameText(ATool, 'delphi_adb') then
+    Result := MsgText(SF_HELP_SIN_DESTINO_ADB)
+  else
+    Result := MsgText(SF_HELP_SIN_DESTINO_DESKTOP);
+end;
+
 { One tool in full: what tools/list would say about it, alone. }
 function OneTool(const AName: string): string;
 var
@@ -131,6 +141,9 @@ begin
       Exit(MsgFmt(SR_HELP_TOOL_NO_DISPONIBLE_FMT, [N, MsgText(SF_HELP_TASKS_SIN_VAULT)]));
     moVaultLectura:
       Exit(MsgFmt(SR_HELP_TOOL_NO_DISPONIBLE_FMT, [N, MsgText(SF_HELP_TASKS_VAULT_LECTURA)]));
+    moSinDestino:
+      Exit(MsgFmt(SR_HELP_TOOL_NO_DISPONIBLE_FMT, [N, MsgFmt(SF_HELP_TASKS_SIN_DESTINO_FMT,
+        [SinDestinoDe(N)])]));
   end;
   Tool := TMCPRegistry.CreateTool(N);
   Ret := TJSONObject.Create;
@@ -193,9 +206,14 @@ begin
         Result := Result + MsgText(SF_HELP_TASKS_VAULT_LECTURA);
     end;
     var PorPerfil := '';
+    var SinDestino := '';
     for var T in TMCPRegistry.GetToolNames do
-      if MotivoToolOculta(T) = moPerfil then
-        PorPerfil := PorPerfil + IfThen(PorPerfil <> '', ', ', '') + T;
+      case MotivoToolOculta(T) of
+        moPerfil: PorPerfil := PorPerfil + IfThen(PorPerfil <> '', ', ', '') + T;
+        moSinDestino: SinDestino := SinDestino + IfThen(SinDestino <> '', ', ', '') + SinDestinoDe(T);
+      end;
+    if SinDestino <> '' then
+      Result := Result + MsgFmt(SF_HELP_TASKS_SIN_DESTINO_FMT, [SinDestino]);
     if PorPerfil <> '' then
       Result := Result + MsgFmt(SF_HELP_TASKS_PERFIL_FMT, [PorPerfil]);
   end
