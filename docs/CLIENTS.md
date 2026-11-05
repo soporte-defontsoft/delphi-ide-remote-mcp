@@ -133,5 +133,11 @@ VM).
   `clientInfo` too (it is your identity), and the headers `MCP-Protocol-Version`,
   `Mcp-Method` and, on what names a tool or resource, `Mcp-Name`.
 
+What this server offers is TOOLS. `prompts/list` has one prompt, `vault`, and only where
+a workspace declares a vault; `resources/list` is empty. When a client shows tools called
+`get_prompt`, `list_prompts`, `list_resources` or `read_resource`, they are that client's
+own bridge to `prompts/*` and `resources/*`, not tools of this server: `delphi_help`
+lists the server's.
+
 The test batteries under `tests/` are minimal working MCP clients in plain
 Python stdlib — use them as reference implementations for both transports.

@@ -5095,8 +5095,11 @@ const
     '[HELP-006] HOUSE RULES (they apply to every tool)'#10#10 +
     '1. PATHS. The server''s drives travel VIRTUAL: srvd:, srvc:... Use ' +
     'them as they are in any path parameter; they only exist inside this ' +
-    'MCP and never resolve on your disk. You will never receive a real ' +
-    'drive letter.'#10#10 +
+    'MCP and never resolve on your disk. What the server SAYS never carries ' +
+    'a real drive letter; the CONTENT of a file (delphi_read, a delphi_search ' +
+    'hit) travels exactly as it is, with the letters it holds. An answer ' +
+    'names a file as you wrote its path: Windows does not tell upper from ' +
+    'lower case, and the name on disk keeps its own (delphi_list shows it).'#10#10 +
     '2. THE JAIL. Writing, only inside the "roots" that delphi_workspace ' +
     'reports. Reading, also in the library zone (RTL/VCL/FMX sources, ' +
     'components, SDK): look yes, touch no. Anything outside is always ' +
@@ -5105,7 +5108,10 @@ const
     'line, copied literally from what you just read, and it has to be ' +
     'unique; if it appears twice, narrow it down with "atline". Never ' +
     'rewrite a whole file to change three lines: if the anchor fails, ' +
-    'the file stays as it was and the answer tells you why.'#10#10 +
+    'the file stays as it was and the answer tells you why. In a batch ' +
+    '(edits) the entries apply in order: a one-line anchor without ' +
+    '"occurrence" is looked for in the file as the earlier entries left it; ' +
+    '"occurrence" counts on the file as it was before the batch.'#10#10 +
     '4. BACKUPS. Every tool that writes leaves a copy in the __delphi-patch ' +
     'trash next to the file, BEFORE touching it. An EDIT keeps one copy ' +
     'per day and file: the version before the first change of the day, ' +
@@ -5123,7 +5129,8 @@ const
     'comes out with one line ending, as the IDE writes it). Do not convert a ' +
     'file in passing; if you need a character that does not fit in its ' +
     'codepage, use the Pascal literal (#$2714) OUTSIDE the quotes, ' +
-    'concatenated.'#10#10 +
+    'concatenated. accents= in the header of a read or an edit counts the ' +
+    'BYTES above 127, not the characters: an ' + #$00F1 + ' in UTF-8 is two.'#10#10 +
     '6. SEVERAL FILES AT ONCE: delphi_changeset. Stack (stage), look ' +
     '(preview), apply (commit). Either everything goes in or nothing ' +
     'does, and if something fails halfway, what was already done is ' +
@@ -5154,7 +5161,9 @@ const
     'course. INTERNAL = I broke inside or a piece of my installation is ' +
     'missing; that is ALWAYS my failure, report it with delphi_report. A ' +
     'success declares no outcome. The same four codes are in ' +
-    'structuredContent.code.'#10#10 +
+    'structuredContent.code. A tagged note (a warning, an advice) comes in ' +
+    '"note" or in the field of the answer it is about (lint, designer, ' +
+    'readerNote, pageNote...): read the whole answer, not one field.'#10#10 +
     '12. WHO YOU ARE. You identify yourself with clientInfo.name: once, in ' +
     'the handshake, and the server binds it to your session; or, in protocol ' +
     '2026-07-28, which has none, in each request (your client does it). ' +
@@ -5185,7 +5194,16 @@ const
     'written twice is a helper with parameters, and a FORMAT (a name, a ' +
     'path, a key) has ONE function that writes it and one that reads it; ' +
     '(e) a diagnosis is a theory until it is measured: measure the cause ' +
-    'before changing code for it.';
+    'before changing code for it.'#10#10 +
+    '15. WHAT IS CUT, AND HOW YOU KNOW. A number above the maximum of its ' +
+    'parameter (timeoutms, maxresults, limit...) is taken as that maximum: ' +
+    'the description of the parameter says which. A list cut by its cap ' +
+    'says so (pageNote, truncated, notShown); most give the next page ' +
+    '(offset), and the ones that have no page (delphi_symbols of a folder, ' +
+    'the info of delphi_designer, the files of delphi_test, ' +
+    'delphi_components) are narrowed with their filter or a smaller path. ' +
+    'A long line quoted in a warning is cut at 120 characters and ends in ' +
+    '"...": delphi_read gives it whole.';
 
   // ---- delphi_test ----
 
@@ -8864,7 +8882,7 @@ const
     'Optional short STABLE id (e.g. "hermes"): your reports get a folder ' +
     'of that name. Letters, digits, dashes; the rest is normalized away.';
   SP_REPORT_COMMAND =
-    'report (default) | list (newest first) | read (one, by name)';
+    'report (default) | list (newest first, per folder) | read (one, by name)';
   SP_REPORT_NAME =
     'command=read: <dir>\<name> as list shows it';
 
@@ -8922,7 +8940,9 @@ const
 
   SN_REPORT_LISTA =
     '[REPORT-011] command=read name=<dir>\<name> reads one whole; nothing ' +
-    'is moved or deleted. Only your workspace''s reports are here.';
+    'is moved or deleted. Only your workspace''s reports are here, every ' +
+    'agent''s, in one page: the mailbox''s own folder first, then each ' +
+    'agent''s folder by name, each one newest first.';
 
   SN_REPORT_LEIDO_FMT =
     '[REPORT-010] %s, %d characters (it stays where it was):'#10#10'%s';

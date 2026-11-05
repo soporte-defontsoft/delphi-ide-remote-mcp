@@ -10,7 +10,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Required column**: every schema carries its real `required` list (the same one `delphi_help command=tool` returns); the table below says the same — the rest are optional and have sensible defaults, as their descriptions note.
 
 
-> **Parameter aliases.** Some spellings are accepted as aliases and mapped to the declared name when it is absent: `vault_search query|filter` → `pattern`, `delphi_list filter|mask` → `pattern`, `delphi_components pattern|query` → `filter`, `delphi_read startline|endline` → `fromline|toline`, `delphi_search text` → `query`, `delphi_build configuration|command` → `config|target`. The declared name always wins.
+> **Parameter aliases.** Some spellings are accepted as aliases and mapped to the declared name when it is absent - all of them (the table is `ApplyArgAliases` in `Lsp.Guard`): `delphi_list path|dir|filter|mask` → `root|root|pattern|pattern`, `delphi_projects path` → `root`, `delphi_search path|text` → `root|query`, `delphi_read from|to|startline|endline` → `fromline|toline|fromline|toline`, `delphi_edit` and `delphi_textedit to|endline` → `toline`, `delphi_config unit|file` → `path`, `delphi_designer class` → `classname`, `delphi_components pattern|query` → `filter`, `delphi_paserver name` → `profile`, `delphi_build configuration|command` → `config|target`, `delphi_report body|text` → `message`, `vault_search query|filter` → `pattern`, `vault_read linecount` → `limit`. An alias sent WITH its declared name: the same value is dropped, a different one is refused naming both.
 
 ## Index
 
@@ -48,6 +48,8 @@ Document symbol tree of a Delphi unit (classes, methods, properties, sections) w
 | `mode` | string | optional | For a FILE only: summary = the skeleton (each section with its members and line; containers say how many they hold) \| full = the LSP tree with its ranges, minus what repeats. Empty = full if the tree is small, summary if large (a summary says so, and how big the full one was). |
 | `filter` | string | optional | For a file: only the symbols whose name contains this (case-insensitive), with kind, declaration as written (decl), line and container. Ignores mode. The cheap way to find a method without the whole tree. |
 <!-- /contract -->
+
+**Limits of a folder's digest (hand-written).** At most 300 declarations per unit and about 24,000 characters in all (`truncated` says so) - there is no next page: narrow it with a smaller folder, or ask one file with `filter`. A declaration is joined up to its end, but a `const` whose value starts on the line after its `=` is cut at the `=`; each entry says its container (`of`), not its section (interface or implementation).
 
 **Since v1.0.7 each symbol also carries `decl`: the declaration as it is WRITTEN IN THE SOURCE.** DelphiLSP's `name` is not a name, it is a rendered signature, and it is lossy — `function Alta(const A: string; B: Integer = 0): Boolean` comes back as `Alta(const A: string; B: Integer)` and `FBuffer: array [0..7] of Byte` as `FBuffer: Byte`. The tree, the kinds and the lines are still the language server's; only the way a declaration is written is read from the file.
 
@@ -216,6 +218,8 @@ List Delphi files under a directory recursively (sources and project files, or a
 | `maxresults` | integer | optional | Entries PER PAGE (default and cap 500). |
 | `offset` | integer | optional | Skip the first N entries of the FULL list: pass the previous answer's nextOffset; walking it until hasMore=false reaches every entry. |
 <!-- /contract -->
+
+`byFolder` (in a page that does not hold everything; `delphi_projects` too) is a list of strings `"<folder> = <n>"`, the folder relative to `root`. `LIST-001` (nothing to list) does not tell a folder that only holds build output (Win32, Debug, dcu...) from one with nothing that matches the mask: `dirs=true` shows its subfolders.
 
 What it does not show is counted BY REASON (1.5.0, one counter shared with `delphi_search`): `hidden` is the total, and each reason that is not zero gets its field - `hiddenBuildArtifacts` (Win32/Win64/Debug/Release/dcu/__history/__recovery/__pycache__: pass that folder as root to see it), `hiddenServerTemp` (the server's `__delphi-temp`: never shown, not even with includetrash), `hiddenGitInternals` (.git), `hiddenTrash` (`__delphi-patch`: includetrash shows it) and, in dirs mode only, `hiddenToolFolders` (.vs, .github, .idea...). The `note` says what each one is and how to see it. Until 1.5.0 the server temp was counted as a build folder, with the advice to pass it as root.
 
@@ -486,6 +490,8 @@ TESTS: the difference between "it compiles" and "it works". discover (path = a f
 | `nobuild` | boolean | optional | run optional: true = run the binary that already exists, without building first (by default it builds: running an old binary is lying). |
 <!-- /contract -->
 
+**The container's limits (hand-written).** At most 128 processes at once and 3 GB of memory for each; there is no limit for the job as a whole nor for the CPU, and the run is cut at its timeout. It confines a test of LOGIC, it is not a sandbox against a hostile binary: running tests is the operator's choice, `AllowTests` in each workspace.
+
 **`run` answer (hand-written).** `total`, `passed`, `failed`, the failing lines, `exitCode`, `durationMs` and a bounded tail of what the runner printed; `verdictFrom: counts | exitCode` says where the verdict came from (DUnitX's own summary, or the plain PASS/FAIL + ExitCode convention of a hand-written console runner) and never guesses.
 
 ### `delphi_package`
@@ -532,6 +538,8 @@ See and manage a project's build configurations and target PLATFORMS. view (read
 | `value` | string | optional | set-property: the text the property takes, one line, as the IDE would write it. Judged when that build reads it, like the rest of the .dproj (outside your roots and the IDE's library: BUILD-050). |
 <!-- /contract -->
 
+`set-output` changes where the PROJECT builds; it does not touch the `.deployproj`, and a deploy entry already written for that configuration keeps the old path (a Deploy only adds entries for a configuration that has none).
+
 **`view` fields (hand-written).** The summary carries the framework, the build configurations, the enabled platforms, `defaultConfig` and `defaultPlatform` (what `delphi_build` and `delphi_test` build without `config=` / `platform=`; `set-active` changes them) and `remoteTargets`: each enabled remote platform with the `sdk` and the PAServer `profile` it builds and deploys with and where each comes from (`sdkSource` / `profileSource`: `project`, IDE default, or none - with the command that fixes it); `section=platforms` carries the same four fields on every remote platform. `set-sdk` writes the `PlatformSDK` property (the one the IDE writes from Project Options); `set-version` touches the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys only - Android and iOS numbering is a different thing and is not touched.
 
 ### `delphi_paserver`
@@ -558,6 +566,8 @@ The bridge for building and running on OTHER platforms (Linux, macOS) through PA
 | `active` | string | optional | get-sdk optional: "yes" makes it the ACTIVE SDK of the platform (the bold entry of the IDE SDK Manager, used by projects that declare none). Default: nothing is touched - what a project builds with belongs to the project (delphi_config set-sdk) or to you. |
 | `timeoutms` | integer | optional | remote-run: max milliseconds to wait for the program (default 30000, max 300000) |
 <!-- /contract -->
+
+`profiles` lists the profiles by NAME, with the SDKs; it does not show the host of each one - a run or a deploy that uses a profile names the host it reaches (`RUN-020`).
 
 **Why `reseat` exists (hand-written).** `add-profile` writes the `.profile` file AND the twin seat the IDE keeps in the registry (`RemoteProfiles\<name>`); the IDE builds its Connection Profile Manager list from that key and reads it at startup, so a profile created while the IDE runs appears at its next start. A profile on disk that the IDE does not list is repaired by `command=reseat`: it walks the `.profile` files and writes the missing seats, reading each encrypted password from its own file (no PAServer, no password needed; measured 2026-09-20: two invisible profiles, one `reseat`, both listed). `paclient`, MSBuild and every tool here read the `.profile` FILES, with or without a seat. `get-sdk` registers the SDK for `delphi_build` and in the IDE's SDK Manager (path table from that install's own `Linux64.defaultsdkpaths`).
 
@@ -682,6 +692,8 @@ What this server's RAD Studio has INSTALLED to program with: the component/desig
 | `platform` | string | optional | Optional: a platform (Win32\|Win64\|Linux64\|Android64\|OSX64\|iOSDevice64...) to see instead ITS Library Search Path, expanded, plus the component roots other platforms register and it lacks - where to look when a build there fails with F2613 (then delphi_config add-searchpath to the Source folder). |
 <!-- /contract -->
 
+All the packages come in one answer, with no page: `filter` (part of a name) or `platform` narrows it.
+
 ### `delphi_rename_symbol`
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
@@ -733,6 +745,10 @@ FORMS AND COMPONENTS, structured - never guess what a class publishes or what a 
 | `after` | string | optional | set optional: put the component just AFTER this sibling (its Name), alone - the same check as before. |
 | `index` | integer | optional | set optional: the component's position among its siblings in the file, 1 = the first, alone - the same check as before. The file order is the z-order (a later one is drawn on top; an inherited form counts only what its own file writes); TabOrder is the keyboard order. |
 <!-- /contract -->
+
+**A named constant in a value (hand-written).** An integer property takes the names its type registers for the IDE (`RegisterIntegerConsts`: colors, cursors...). Any other named constant - `mrOk` in `ModalResult` - is refused with `DSGN-093`, which does not say its number: `delphi_hover` on the constant in the code gives it (`mrOk` = 1).
+
+**`preview` runs in a container (hand-written).** A form with a literal that names something under Windows or Program Files is refused by its text (`DSGN-115`), whether it exists or not, and a `TFileListBox` lists the call's own staging folder, not its `Directory`.
 
 A value the framework tables cannot judge - a property a class stores by code
 (`DefineProperties`: `FontColor` on an FMX `TEdit`, the `Explicit*` of a VCL
@@ -833,6 +849,8 @@ FMX STYLES of a project, by StyleName: the text .style files (what the Bitmap St
 | `filter` | string | optional | view optional: substring the StyleName must contain |
 | `delete` | boolean | optional | set: true = remove the property instead of setting it |
 <!-- /contract -->
+
+**`lint` limits (hand-written).** It judges each style file on its own: it does not compare the `StyleName`s between the themes of one application. `rcMissingFiles` carries the `.rc` entries whose file is missing AND the ones the server refused to read, each with `refused` (`STYLE-052`, `STYLE-056`, `STYLE-067`). A folder with no text `.style` at all is refused whole (`STYLE-008`) before its `.rc` files are looked at.
 
 The server ships `DelphiStyleConvert.exe` next to its own exe for `build` and for the platform default style names used by `lint`.
 
@@ -936,7 +954,7 @@ Report a problem, limitation or suggestion about THIS MCP server to its maintain
 | `kind` | string | optional | Optional: bug \| limitation \| suggestion \| question (default: bug) |
 | `from` | string | optional | Optional: who reports (agent/model, project) |
 | `agent` | string | optional | Optional short STABLE id (e.g. "hermes"): your reports get a folder of that name. Letters, digits, dashes; the rest is normalized away. |
-| `command` | string | optional | report (default) \| list (newest first) \| read (one, by name) |
+| `command` | string | optional | report (default) \| list (newest first, per folder) \| read (one, by name) |
 | `name` | string | optional | command=read: \<dir>\\<name> as list shows it |
 <!-- /contract -->
 
