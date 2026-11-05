@@ -23,6 +23,14 @@ const
   // cancels the read. Public: a stop that takes this long is how a test
   // tells that somebody else held the pipe (LspTests.Motor).
   READER_EOF_WAIT_MS = 1000;
+  // How long a stopped engine gets to leave by itself - EOF on its stdin, then
+  // the wait for its process - before it is ended.
+  EXIT_GRACE_MS = 2000;
+  // How long a stop waits for what has no work left - a process just ended,
+  // the reader with its read cancelled, the thread that asked for shutdown
+  // (StopEngine, Lsp.Client) -: a closing bound; what does not end in it is
+  // left behind, and said. Three 3000 were written by hand (C30 de la 1.28).
+  CLOSE_WAIT_MS = 3000;
 
 type
   TLspMessageEvent = reference to procedure(const AJson: string);
@@ -217,19 +225,19 @@ begin
     // Closing the child's stdin signals EOF; give it a moment, then force.
     // A writer stuck in the pipe (an engine that stopped reading) holds the
     // lock: ending the process breaks the pipe and lets that writer go.
-    if not CloseStdIn(2000) then
+    if not CloseStdIn(EXIT_GRACE_MS) then
     begin
       TerminateProcess(FProcInfo.hProcess, 1);
       Matado := True;
     end;
-    if WaitForSingleObject(FProcInfo.hProcess, 2000) = WAIT_TIMEOUT then
+    if WaitForSingleObject(FProcInfo.hProcess, EXIT_GRACE_MS) = WAIT_TIMEOUT then
     begin
       TerminateProcess(FProcInfo.hProcess, 1);
       Matado := True;
       // TerminateProcess only ASKS. What the process held - its current
       // directory, the reason an engine is stopped before its folder moves -
       // is released when it has really ended.
-      WaitForSingleObject(FProcInfo.hProcess, 3000);
+      WaitForSingleObject(FProcInfo.hProcess, CLOSE_WAIT_MS);
     end;
     // what it ended with is kept: the handle is closed below
     FEnded := GetExitCodeProcess(FProcInfo.hProcess, FExitCode) and (FExitCode <> STILL_ACTIVE);
@@ -246,7 +254,7 @@ begin
     if WaitForSingleObject(FReader.Handle, READER_EOF_WAIT_MS) = WAIT_TIMEOUT then
     begin
       CancelIoEx(FChildStdOutRead, nil);
-      if WaitForSingleObject(FReader.Handle, 3000) = WAIT_TIMEOUT then
+      if WaitForSingleObject(FReader.Handle, CLOSE_WAIT_MS) = WAIT_TIMEOUT then
       begin
         // Left behind, with the handle it reads from: a leaked thread and a
         // leaked handle, never a hung server. It delivers nothing more (the

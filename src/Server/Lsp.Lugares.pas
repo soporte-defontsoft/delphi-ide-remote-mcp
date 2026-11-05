@@ -248,19 +248,18 @@ var
   // y la recargan los hilos de las peticiones (no se libera: como GDrvLock
   // en Lsp.Mascara, lo usan hilos que aun contestan y se va con el proceso)
   GLibCandado: TObject;
-  GLibLoaded: Boolean = False;
   GLibRoots: TArray<string>;
-  // los vigias de las claves del IDE que la componen: Windows senala su
-  // evento cuando el IDE las escribe (se van con el proceso, como el cerrojo)
-  GLibVigias: TArray<TVigiaDeClave>;
+  // LA cache vigilada (Lsp.Discovery): los vigias de las claves del IDE que la
+  // componen, que Windows senala cuando el IDE las escribe (se van con el
+  // proceso, como el cerrojo)
+  GLibCache: TCacheVigilada;
   GLibGeneracion: Integer = 0; // sube en cada carga
   // los lugares del IDE: se miden una vez (las puertas los preguntan por cada
   // fichero, y IdeSdksDir lee el registro) y otra cuando Windows dice que el IDE
-  // cambio las claves de la carpeta de los SDK (GIdeVigias; B9 de la 1.27); los
+  // cambio las claves de la carpeta de los SDK (GIdeCache; B9 de la 1.27); los
   // sysroots, por llamada
   GIdeCandado: TObject;
-  GIdeVigias: TArray<TVigiaDeClave>;
-  GIdeLoaded: Boolean = False;
+  GIdeCache: TCacheVigilada;
   GIdeInstalacion: string;      // la instalacion: solo para leer
   GIdeLugares: TArray<string>;  // datos del usuario y SDK: leer y escribir
   GLibLugaresLoaded: Boolean = False;
@@ -339,25 +338,15 @@ end;
 
 { The read-only library zone: RAD Studio installation + IDE Library Search
   Path directories (installed components), canonicalized. Cached, and
-  reloaded when Windows says the IDE's keys changed (GLibVigias). }
+  reloaded when Windows says the IDE's keys changed (GLibCache). }
 function LibraryRoots: TArray<string>;
-var
-  Info: TRadStudioInfo;
 begin
   TMonitor.Enter(GLibCandado);
   try
-    if not GLibLoaded then
-    begin
-      // los vigias ANTES de la primera lectura: un cambio que llegue
-      // mientras se lee sale en la siguiente pregunta
-      Info := DiscoverRadStudio;
-      if Info.Found then
-        GLibVigias := VigiasDeLaBiblioteca(Info.Version);
-    end;
-    if (not GLibLoaded) or CambioAlgunaClave(GLibVigias) then
+    if GLibCache.TocaCargar(VigiasDeLaBiblioteca) then
     begin
       CargaLaBiblioteca;
-      GLibLoaded := True;
+      GLibCache.Cargada := True;
       GLibLugaresLoaded := False; // la forma larga se rehace de esta carga
       Inc(GLibGeneracion);
     end;
@@ -890,13 +879,10 @@ begin
   Info := DiscoverRadStudio;
   TMonitor.Enter(GIdeCandado);
   try
-    // los vigias ANTES de la primera lectura: un cambio que llegue mientras se
-    // lee sale en la siguiente pregunta (como la biblioteca)
-    if not GIdeLoaded and Info.Found and (GIdeVigias = nil) then
-      GIdeVigias := VigiasDeLaCarpetaDeSdks(Info.Version);
-    if (not GIdeLoaded) or CambioAlgunaClave(GIdeVigias) then
+    // LA cache vigilada (Lsp.Discovery), como la biblioteca
+    if GIdeCache.TocaCargar(VigiasDeLaCarpetaDeSdks) then
     begin
-      // en locales, y las globales al final: otro hilo que ya viese GIdeLoaded
+      // en locales, y las globales al final: otro hilo que ya viese la cache cargada
       // no se encuentra la instalacion a medio calcular (revisor de P3)
       Lugares := nil;
       Instalacion := '';
@@ -913,7 +899,7 @@ begin
       end;
       GIdeInstalacion := Instalacion;
       GIdeLugares := Lugares;
-      GIdeLoaded := True;
+      GIdeCache.Cargada := True;
     end;
     Result := GIdeLugares;
     if not AParaEscribir and (GIdeInstalacion <> '') then

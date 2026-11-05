@@ -144,6 +144,9 @@ function VigiasDeLaBiblioteca(const AVersion: string): TArray<TVigiaDeClave>;
   lugares del IDE, Lsp.Lugares): vivia lo que el proceso (B9 del revisor del
   paisaje de la 1.27), como la biblioteca hasta la 1.21.4. }
 function VigiasDeLaCarpetaDeSdks(const AVersion: string): TArray<TVigiaDeClave>;
+{ El vigia de la clave Editor del IDE, donde vive su codificacion por defecto
+  (IdeDefaultUtf8: lo cachea Lsp.Patch.IdeWantsUtf8). }
+function VigiasDelEditor(const AVersion: string): TArray<TVigiaDeClave>;
 { Si Windows senalo el evento desde la ultima pregunta: True UNA vez por
   cambio, y REARMADA antes de contestar, para que un cambio que llegue
   mientras quien pregunta recarga salga en la siguiente pregunta. Sin vigia,
@@ -152,6 +155,27 @@ function CambioLaClave(var AVigia: TVigiaDeClave): Boolean;
 function CambioAlgunaClave(var AVigias: TArray<TVigiaDeClave>): Boolean;
 { Cierra la clave y el evento; queda sin vigia (dos veces no hace nada). }
 procedure SueltaVigia(var AVigia: TVigiaDeClave);
+
+type
+  { Los vigias de una cache, de la version de la instalacion activa: los de
+    arriba (VigiasDeLaBiblioteca, VigiasDeLaCarpetaDeSdks, VigiasDelEditor). }
+  TArmaVigias = reference to function(const AVersion: string): TArray<TVigiaDeClave>;
+
+  { LA cache que vigila claves del IDE (C30 de la 1.28: el protocolo estaba
+    escrito tres veces - la zona de biblioteca y los lugares del IDE en
+    Lsp.Lugares, la codificacion por defecto en Lsp.Patch): los vigias se
+    arman ANTES de la primera lectura, para que un cambio que llegue mientras
+    se lee salga en la siguiente pregunta, y toca cargar si nunca se cargo o si
+    Windows dijo que alguna clave cambio (consumida y rearmada). Quien la usa la
+    pregunta bajo SU candado y pone Cargada al acabar de cargar. Sin instalacion
+    no hay vigias: lo cargado vive lo que el proceso. }
+  TCacheVigilada = record
+    Cargada: Boolean;
+    Vigias: TArray<TVigiaDeClave>;
+    function TocaCargar(const AArma: TArmaVigias): Boolean;
+    { Cierra los vigias (al acabar el proceso). }
+    procedure Suelta;
+  end;
 
 { The IDE's configured default encoding for new/saved files (Tools > Options
   > Editor), read from the Editor\DefaultFileFilter value of that install
@@ -1390,6 +1414,29 @@ begin
   for var I := 0 to High(AVigias) do
     if CambioLaClave(AVigias[I]) then
       Result := True;
+end;
+
+function TCacheVigilada.TocaCargar(const AArma: TArmaVigias): Boolean;
+begin
+  if not Cargada and (Vigias = nil) then
+  begin
+    var Info := DiscoverRadStudio;
+    if Info.Found then
+      Vigias := AArma(Info.Version);
+  end;
+  Result := (not Cargada) or CambioAlgunaClave(Vigias);
+end;
+
+procedure TCacheVigilada.Suelta;
+begin
+  for var I := 0 to High(Vigias) do
+    SueltaVigia(Vigias[I]);
+  Vigias := nil;
+end;
+
+function VigiasDelEditor(const AVersion: string): TArray<TVigiaDeClave>;
+begin
+  Result := [VigilaClaveDelIde(AVersion, 'Editor')];
 end;
 
 procedure SueltaVigia(var AVigia: TVigiaDeClave);

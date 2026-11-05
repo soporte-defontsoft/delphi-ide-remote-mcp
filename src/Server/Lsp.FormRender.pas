@@ -2062,15 +2062,10 @@ begin
   Result := '';
   try
     var U := LeeFuentePascal(LeeTexto(UnidadDeDesigner(AForm.Designer), [ltJaula]));
-    var Mapa := TDictionary<string, string>.Create;
     try
-      AnotaAncestros(U, Mapa);
-      if Mapa.TryGetValue(ClaveDeIdentificador(AForm.Clase), Result) then
-        Result := UltimoTrozo(Result)
-      else
-        Result := '';
+      // el mismo que el renderizador (AncestroDeClase): C30 de la 1.28
+      Result := AncestroSimple(U, AForm.Clase);
     finally
-      Mapa.Free;
       U.Free;
     end;
   except

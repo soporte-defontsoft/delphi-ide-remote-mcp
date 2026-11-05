@@ -223,6 +223,13 @@ function RutinasDeUnBloque(const ACodigo: string): TArray<string>;
   del mismo nombre. }
 procedure AnotaAncestros(const AUnidad: TUnidadPas; AMapa: TDictionary<string, string>);
 
+{ El ancestro de AClase en AUnidad por su nombre simple (Vcl.Forms.TForm ->
+  TForm, UltimoTrozo); '' si la unidad no la declara o desciende de TObject. Una
+  clase de la unidad gana a una anidada del mismo nombre (TUnidadPas.Clase). Lo
+  preguntan el renderizador (el ancestro de una raiz) y el servidor
+  (AncestroDelForm): eran dos caminos para lo mismo (C30 de la 1.28). }
+function AncestroSimple(const AUnidad: TUnidadPas; const AClase: string): string;
+
 { LA cadena de ancestros: AClase, su ancestro, el de este... por AMapa. Para en
   una clase sin ancestro escrito (desciende de TObject), en un ciclo o a los
   ATope eslabones; y en el primero que AMapa no tiene, que va el ultimo y deja
@@ -2134,6 +2141,14 @@ begin
     Exit;
   Result := TRegEx.Replace(M.Groups[1].Value, PATRON_PARAMS_GENERICOS, '');
   Result := UltimoTrozo(TRegEx.Replace(Result, '\s', ''));
+end;
+
+function AncestroSimple(const AUnidad: TUnidadPas; const AClase: string): string;
+begin
+  Result := '';
+  var T := AUnidad.Clase(AClase);
+  if T <> nil then
+    Result := UltimoTrozo(T.Ancestro);
 end;
 
 procedure AnotaAncestros(const AUnidad: TUnidadPas; AMapa: TDictionary<string, string>);

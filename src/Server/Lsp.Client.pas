@@ -506,7 +506,7 @@ begin
   // the one that asked wrote on a thread of its own (Ask): with
   // the process gone its write has returned, whatever it was waiting for
   if Asker <> nil then
-    if WaitForSingleObject(Asker.Handle, 3000) = WAIT_OBJECT_0 then
+    if WaitForSingleObject(Asker.Handle, CLOSE_WAIT_MS) = WAIT_OBJECT_0 then
       Asker.Free;
     // else left behind, as the transport leaves a reader: a leaked thread,
     // never a server that does not come back. It waits for the transport's

@@ -1216,9 +1216,8 @@ threadvar
   TVecesEnCerrojo: Integer;
 
 var
-  GIdeUtf8Loaded: Boolean = False;
   GIdeUtf8: Boolean = False;
-  GIdeUtf8Vigia: TVigiaDeClave;
+  GIdeUtf8Cache: TCacheVigilada; // LA cache vigilada (Lsp.Discovery): la clave Editor
   GIdeUtf8Candado: TObject;
 
 { The IDE's configured default encoding (registry, active install), cached
@@ -1233,14 +1232,10 @@ begin
   TMonitor.Enter(GIdeUtf8Candado);
   try
     Info := DiscoverRadStudio;
-    // el vigia ANTES de la primera lectura: un cambio que llegue mientras se
-    // lee sale en la siguiente pregunta
-    if (not GIdeUtf8Loaded) and Info.Found then
-      GIdeUtf8Vigia := VigilaClaveDelIde(Info.Version, 'Editor');
-    if (not GIdeUtf8Loaded) or CambioLaClave(GIdeUtf8Vigia) then
+    if GIdeUtf8Cache.TocaCargar(VigiasDelEditor) then
     begin
       GIdeUtf8 := Info.Found and IdeDefaultUtf8(Info.Version);
-      GIdeUtf8Loaded := True;
+      GIdeUtf8Cache.Cargada := True;
     end;
     Result := GIdeUtf8;
   finally
@@ -6765,7 +6760,7 @@ initialization
   GIdeUtf8Candado := TObject.Create;
 
 finalization
-  SueltaVigia(GIdeUtf8Vigia);
+  GIdeUtf8Cache.Suelta;
   GIdeUtf8Candado.Free;
   GLock.Free;
 

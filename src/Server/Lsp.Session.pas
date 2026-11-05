@@ -900,8 +900,11 @@ var
 
   function YaEsta(const AKey: string): Boolean;
   begin
+    // por igualdad EXACTA, la del diccionario del que salen (FClients,
+    // FHeldFolders): con SameText dos claves que solo difieren en mayusculas
+    // eran una, y la segunda se quedaba sin parar (C30 de la 1.28)
     for var X in Keys do
-      if SameText(X, AKey) then
+      if X = AKey then
         Exit(True);
     Result := False;
   end;

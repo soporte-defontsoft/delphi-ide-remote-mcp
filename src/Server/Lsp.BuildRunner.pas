@@ -464,6 +464,12 @@ function RunCore(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   AContenedor: PContenedor; out AExitCode: Cardinal;
   out ATimedOut: Boolean; const AEntorno: string = '';
   APagina: TPaginaDelHijo = phConsola): string;
+const
+  // lo que se espera a que el hijo acabe de salir una vez leida su salida, y a
+  // su hilo principal (o a uno matado por su plazo): plazos de cierre, no de
+  // trabajo (eran cuatro literales: C30 de la 1.28)
+  ESPERA_SALIDA_MS = 10000;
+  ESPERA_CIERRE_MS = 5000;
 var
   SA: TSecurityAttributes;
   ReadH, WriteH: THandle;
@@ -653,17 +659,17 @@ begin
     until False;
     if not TimedOut then
     begin
-      WaitForSingleObject(PI.hProcess, 10000);
+      WaitForSingleObject(PI.hProcess, ESPERA_SALIDA_MS);
       // y su hilo, como abajo: lo que dejo se juzga con el hilo terminado
-      WaitForSingleObject(PI.hThread, 5000);
+      WaitForSingleObject(PI.hThread, ESPERA_CIERRE_MS);
     end
     else
     begin
       // que muera, el hilo tambien: el proceso se senala antes de que su hilo
       // principal deje de contestar STILL_ACTIVE (medido el 19-oct-2026), y
       // la guarda de Lsp.AtomosRtl lo tomaria por vivo. Sus atomos, abajo
-      WaitForSingleObject(PI.hProcess, 5000);
-      WaitForSingleObject(PI.hThread, 5000);
+      WaitForSingleObject(PI.hProcess, ESPERA_CIERRE_MS);
+      WaitForSingleObject(PI.hThread, ESPERA_CIERRE_MS);
     end;
     if not GetExitCodeProcess(PI.hProcess, AExitCode) then
       AExitCode := DWORD(-1);

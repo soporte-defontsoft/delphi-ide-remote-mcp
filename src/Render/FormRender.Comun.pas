@@ -1078,9 +1078,8 @@ begin
   // la manda el servidor con --root (revision de la 1.17.0)
   var U := LeeFuentePascal(TextoDeUnidadAnotada(Pas, ALeidos));
   try
-    var T := U.Clase(AClase);
-    if T <> nil then
-      Result := T.Ancestro.Substring(T.Ancestro.LastIndexOf('.') + 1);
+    // el mismo que el servidor (AncestroDelForm): C30 de la 1.28
+    Result := AncestroSimple(U, AClase);
   finally
     U.Free;
   end;
