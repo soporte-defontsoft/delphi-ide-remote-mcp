@@ -75,7 +75,8 @@ uses
   Lsp.Pascal,
   Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
   Lsp.ProjectUnits, // ResolutorDeUnidades: EL juez de "es la misma unidad" (V79)
-  Lsp.Json;
+  Lsp.Json,
+  Lsp.Lineas;
 
 const
   // la FORMA de una linea de evento - Prop = Metodo, y Prop = sin manejador -;

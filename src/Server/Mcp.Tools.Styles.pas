@@ -88,7 +88,8 @@ uses
   Lsp.Sandbox,
   Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
   Lsp.Codificacion,
-  Lsp.ProcessLaunch;
+  Lsp.ProcessLaunch,
+  Lsp.Lineas;
 
 constructor TDelphiStylesTool.Create;
 begin

@@ -151,7 +151,8 @@ uses
   Lsp.Herencia in 'Lsp.Herencia.pas',
   Lsp.AtomosRtl in 'Lsp.AtomosRtl.pas',
   Lsp.Reparse in 'Lsp.Reparse.pas',
-  Lsp.TextoDelNodo in 'Lsp.TextoDelNodo.pas';
+  Lsp.TextoDelNodo in 'Lsp.TextoDelNodo.pas',
+  Lsp.Lineas in 'Lsp.Lineas.pas';
 
 {$R *.res}
 

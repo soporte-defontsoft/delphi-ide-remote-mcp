@@ -64,7 +64,8 @@ uses
   Lsp.Pascal,
   Lsp.Rutas, // ClaveDeRuta: la clave de una ruta
   Lsp.Json,
-  Lsp.Listas;
+  Lsp.Listas,
+  Lsp.Lineas;
 
 function RenamePreview(const AFilePath: string; ALine, ACharacter: Integer;
   const ANewName: string; ATodas: Boolean): TJSONObject;

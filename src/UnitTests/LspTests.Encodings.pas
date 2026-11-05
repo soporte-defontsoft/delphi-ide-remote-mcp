@@ -112,7 +112,8 @@ uses
   System.JSON,
   Lsp.References,
   Lsp.NombresDeTrabajo,
-  System.Masks;
+  System.Masks,
+  Lsp.Lineas;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin

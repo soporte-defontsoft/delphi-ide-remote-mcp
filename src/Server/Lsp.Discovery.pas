@@ -615,7 +615,8 @@ uses
   Lsp.Patch,
   Lsp.Settings, // ServerDelphiVersion: la version que fija el settings.ini
   Lsp.Rutas,    // RutaDesde: EL resolutor de una ruta leida
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.Lineas;
 
 function TRadStudioInfo.Found: Boolean;
 begin

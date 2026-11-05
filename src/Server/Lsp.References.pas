@@ -203,7 +203,8 @@ uses
   Lsp.Rutas,            // EsRutaAbsoluta: LA regla de ruta completa
   Lsp.Herencia,         // LA cadena de ancestros por el motor (TCadenaPorElMotor)
   Lsp.Listas,
-  Lsp.Casa;
+  Lsp.Casa,
+  Lsp.Lineas;
 
 function IdentifierAt(const ALineText: string; ACol: Integer; out AInicio: Integer): string;
 var

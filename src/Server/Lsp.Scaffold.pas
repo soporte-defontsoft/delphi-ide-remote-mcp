@@ -66,7 +66,8 @@ uses
   Lsp.DesignerMeta, // TRaizDeDiseno: lo que es la raiz que se crea
   System.Generics.Collections,
   Lsp.Discovery,
-  Lsp.ConfigFabricator;
+  Lsp.ConfigFabricator,
+  Lsp.Lineas;
 
 const
   CRLF = #13#10;

@@ -489,7 +489,8 @@ uses
   Lsp.FormRender,   // CajaDeLosAyudantes: la caja desde la que corre
   Lsp.ShaCache,     // DiskStamp y HuellaParaNombre: la huella del conversor, en el nombre de su cache
   MCPServer.Logger,
-  Lsp.Listas;
+  Lsp.Listas,
+  Lsp.Lineas;
 
 { TStyleObj }
 

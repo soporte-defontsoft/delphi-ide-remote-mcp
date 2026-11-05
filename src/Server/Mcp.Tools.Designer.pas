@@ -153,7 +153,8 @@ uses
   Lsp.DesignerEdit,  // insert / set / delete: el form y su unidad, como el IDE
   Lsp.Json,          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre
   Lsp.Rutas,
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.Lineas;
 
 const
   MAX_PROPS = 400;

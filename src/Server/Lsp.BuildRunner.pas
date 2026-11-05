@@ -153,7 +153,8 @@ uses
   Lsp.NetDrives,
   Lsp.Rutas,
   Lsp.NombresDeTrabajo,
-  Lsp.Listas;
+  Lsp.Listas,
+  Lsp.Lineas;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).

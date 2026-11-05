@@ -206,11 +206,11 @@ uses
   System.IOUtils,
   System.StrUtils,
   System.Character, // los pares de sustitutos
-  Lsp.Patch,     // LineasDelTexto, EL troceador
   Lsp.NetDrives, // SinBarraFinal
   Lsp.Mascara,   // MaskDriveText
   Lsp.Texts,     // MsgFmt: la nota del recorte
-  Lsp.Rutas;
+  Lsp.Rutas,
+  Lsp.Lineas;    // LineasDelTexto, EL troceador
 
 { TPagina }
 

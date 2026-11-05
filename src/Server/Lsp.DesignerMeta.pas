@@ -446,7 +446,8 @@ uses
   Lsp.Herencia, // LA cadena de ancestros por el motor (la base de la raiz)
   Lsp.DesignerForma, // UnidadDeDesigner: el .pas de un designer (RaizParaElLector)
   Lsp.Args,
-  Lsp.Listas; // ExtractoDeLinea: la cita de una linea en una respuesta
+  Lsp.Listas, // ExtractoDeLinea: la cita de una linea en una respuesta
+  Lsp.Lineas;
 
 type
   TJubilada = record

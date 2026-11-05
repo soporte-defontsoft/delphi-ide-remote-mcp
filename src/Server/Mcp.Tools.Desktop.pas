@@ -128,7 +128,8 @@ uses
   Lsp.Discovery, // PerfilConSuNombre: el perfil con el nombre del IDE
   Lsp.Pascal,    // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Casa,
-  Lsp.TextoDelNodo;
+  Lsp.TextoDelNodo,
+  Lsp.Lineas;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
 function ParseRegion(const ATexto: string; out X, Y, W, H: Integer): Boolean;

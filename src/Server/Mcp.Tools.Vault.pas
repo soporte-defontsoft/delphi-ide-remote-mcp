@@ -180,7 +180,8 @@ uses
   Lsp.Settings,
   Lsp.Mascara,
   System.Character,
-  Mcp.Vault.Seed;
+  Mcp.Vault.Seed,
+  Lsp.Lineas;
 
 const
   // Per-result budget. A client caps what one tool result may carry (~25K

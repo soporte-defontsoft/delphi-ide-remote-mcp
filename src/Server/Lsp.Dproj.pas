@@ -1263,7 +1263,8 @@ uses
   System.Character,
   Lsp.NetDrives,
   Lsp.Sandbox,
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.Lineas;
 
 { El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
   entre comillas: un Condition="'$(A)'>'1'" no la cierra. 0 si no hay. }

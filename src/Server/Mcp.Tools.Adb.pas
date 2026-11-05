@@ -103,7 +103,8 @@ uses
   Lsp.BuildRunner,
   Lsp.Codificacion,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
-  Lsp.Listas;
+  Lsp.Listas,
+  Lsp.Lineas;
 
 { El valor de una linea "<clave>: <valor>" de la salida de `wm size` / `wm
   density` ("Physical size: 1080x1920", "Override density: 320"); '' si no

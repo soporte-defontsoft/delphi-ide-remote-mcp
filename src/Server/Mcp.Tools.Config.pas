@@ -140,7 +140,8 @@ uses
   Lsp.DesignerMeta,  // MetaTable: la tabla que juzga la raiz de un add-unit
   Lsp.DesignerForma, // DesignersDeUnidad, EsDesignerFmx: de que marco es
   Lsp.Pascal,        // SinMayusculas: EL pliegue de lo que no es una ruta
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Lineas;
 
 constructor TDelphiConfigTool.Create;
 begin

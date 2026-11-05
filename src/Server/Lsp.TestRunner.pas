@@ -68,7 +68,8 @@ uses
   Lsp.Casa,
   Lsp.ShaCache, // DiskStamp y HuellaDeFichero: la foto de la carpeta y lo que se copia
   Lsp.ProcessLaunch,
-  Lsp.Args;
+  Lsp.Args,
+  Lsp.Lineas;
 
 type
   TTestKind = (tkNone, tkDUnitX, tkConsole);

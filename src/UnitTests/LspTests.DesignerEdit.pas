@@ -79,7 +79,8 @@ uses
   Lsp.DesignerEdit,
   System.IOUtils,
   Lsp.Discovery,
-  LspTests.Comun;
+  LspTests.Comun,
+  Lsp.Lineas;
 
 type
   // un componente con una cadena publicada: lo que la RTL escribe de el

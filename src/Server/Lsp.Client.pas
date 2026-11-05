@@ -288,7 +288,8 @@ uses
   Lsp.Codificacion,
   System.Character,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.Lineas;
 
 function SymChildren(const ANode: TJSONObject): TJSONArray;
 var

@@ -163,7 +163,8 @@ uses
   Lsp.Args,
   Winapi.Windows,
   Lsp.Listas,          // ExtractoDeLinea: la cita de una linea en una respuesta
-  Lsp.ProcessLaunch;
+  Lsp.ProcessLaunch,
+  Lsp.Lineas;
 
 const
   // (las identidades de la tabla, ID_VCL_CONTROL y las demas: Lsp.DesignerMeta)

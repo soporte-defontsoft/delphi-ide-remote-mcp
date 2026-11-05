@@ -244,7 +244,8 @@ uses
   Lsp.Listas,        // ColaDeSalida: EL recorte de una salida en la respuesta
   Lsp.NombresDeTrabajo,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
-  Lsp.ShaCache;
+  Lsp.ShaCache,
+  Lsp.Lineas;
 
 var
   GNodoLock: TCriticalSection;

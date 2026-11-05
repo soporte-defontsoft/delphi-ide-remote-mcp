@@ -519,7 +519,7 @@ uses
   Lsp.Codificacion, // EncKindOf
   Lsp.Discovery,    // DiscoverRadStudio: el Delphi del servidor
   Lsp.ShaCache,     // Sha256DeBytes: la huella de READ=, la misma que compone el ayudante; HuellaDeFichero,
-                    // DiskStamp y HuellaParaNombre: el tamano de lo junto y el nombre de la caja de paquetes
+  // DiskStamp y HuellaParaNombre: el tamano de lo junto y el nombre de la caja de paquetes
   Lsp.Rutas,        // RutaDesde: EL resolutor de una ruta leida de un fichero
   Lsp.NetDrives,    // PrefijoSinBarra y ConBarrasDeWindows: la forma de una ruta del IDE
   Lsp.Listas,
@@ -527,7 +527,8 @@ uses
   Lsp.ProcessLaunch,
   Lsp.Pascal,
   Lsp.Mascara,
-  Lsp.PascalDecl;
+  Lsp.PascalDecl,
+  Lsp.Lineas;
 
 const
   {$I ..\Render\FormRenderProtocolo.inc}

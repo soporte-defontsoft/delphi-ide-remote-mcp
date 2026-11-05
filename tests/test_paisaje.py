@@ -43,10 +43,10 @@ LANZA = r'\b(?:RunCaptured(?:In|EnContenedor)?|RunDetached|CreateProcess\w*|Shel
 REGLAS = [
     # seccion 6 de la 1.25, revisor del paisaje del 31-oct: formatos que estaban a mano en dos o mas sitios
     ('un fichero que nace acabado en salto a mano', r"\.EndsWith\(\s*(?:CRLF|#10|#13#10)\s*\)",
-     [('Lsp.Patch.pas', 'TieneSaltoFinal'),
+     [('Lsp.Lineas.pas', 'TieneSaltoFinal'),
       # otra pregunta: anadir a una nota del vault, no nacer
       ('Mcp.Tools.Vault.pas', 'TVaultAppendTool.ExecuteWithParams')],
-     'TextoQueNace (Lsp.Patch, V215): createunit, delphi_create y el create de un changeset'),
+     'TextoQueNace (Lsp.Lineas, V215): createunit, delphi_create y el create de un changeset'),
     # ...y el texto del catalogo puesto a mano tras un "si esta vacio" (cuatro sitios, dos de ellos nuevos en el cierre
     # de la 1.26 con DijoOtraVersion: revisor del paisaje del cierre)
     ('una lista vacia dicha a mano', r"'\(none\)'|MsgText\(\s*SF_NINGUNO\s*\)", [], 'ONinguno (Lsp.Texts)'),
@@ -73,7 +73,7 @@ REGLAS = [
     ('los numeros del SDK de Android a mano', r"SdkVersion=\d", [('Lsp.BuildRunner.pas', 'SdkDeAndroidDelIde')],
      'los dice el paquete de Android del IDE (SdkDeAndroidDelIde, V220)'),
     ('una unit vacia compuesta a mano', r"'unit %s;'#",
-     [('Lsp.Patch.pas', 'EsqueletoDeUnit')], 'EsqueletoDeUnit (Lsp.Patch, P9)'),
+     [('Lsp.Lineas.pas', 'EsqueletoDeUnit')], 'EsqueletoDeUnit (Lsp.Lineas, P9)'),
     ('la carpeta bin del IDE a mano', r"(?:\+\s*|,\s*)'\\?bin(?:\\[^']*)?'",
      [('Lsp.Rutas.pas', 'BinDelIde'),
       # el ayudante del render no compila Lsp.Rutas; el bin del apk es otra carpeta
@@ -331,8 +331,8 @@ REGLAS = [
      'EncDeFicheroNuevo (Lsp.Patch, A21 de la 1.23)'),
     # el salto que pide el agente traducido a mano: cinco SameText(..., 'lf') en los dos create (S1, A38)
     ('el salto que pide el agente traducido a mano', r"(?i)SameText\([^;]*Eol[^;]*'lf'\s*\)",
-     [('Lsp.Patch.pas', 'SaltoPedido')],
-     'SaltoPedido junto a EolDesconocido (Lsp.Patch, A38 de la 1.23)'),
+     [('Lsp.Lineas.pas', 'SaltoPedido')],
+     'SaltoPedido junto a EolDesconocido (Lsp.Lineas, A38 de la 1.23)'),
     # la carpeta que nombra quien llama y es un fichero: list y package lo decian a mano con el nombre de
     # list, y projects contestaba que no existia (W1, A17 de la 1.23)
     ('la carpeta que es un fichero dicha a mano', r"\bSR_LIST_IS_FILE_FMT\b",
@@ -729,10 +729,10 @@ REGLAS = [
      'Lsp.Discovery compone la clave del IDE (ClaveDelIde) y la lee (IdeConfigValue, IdeSubclaves, '
      'IdeValoresDeClave...): un TRegistry abierto a mano sobre ella es otro lector, sin el except de un '
      'valor que no es texto'),
-    # partir un texto en lineas vive en Lsp.Patch: habia ~30 troceos a mano con cinco semanticas,
+    # partir un texto en lineas vive en Lsp.Lineas: habia ~30 troceos a mano con cinco semanticas,
     # casi todos de la SALIDA de un proceso (V87 de la 1.23.1). Los que se quedan, con su porque
     ('partir en lineas a mano', r'\.Split\(\s*\[\s*(?:#13#10|#10|#13|sLineBreak|CRLF)\b',
-     [('Lsp.Patch.pas', 'SplitToLines'),
+     [('Lsp.Lineas.pas', 'SplitToLines'),
       # el inverso exacto de su Join(#10) de lineas sin CR: una ultima en blanco es una linea
       ('Lsp.Patch.pas', 'DoEdit'),
       # las lineas como las cuenta TParser, el juez de un form: solo un LF parte

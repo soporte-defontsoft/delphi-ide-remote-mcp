@@ -151,7 +151,8 @@ uses
   Lsp.Lugares,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Mascara,
-  Lsp.Listas;
+  Lsp.Listas,
+  Lsp.Lineas;
 
 // la tool git va por delante de sus compositores
 function GitExito(const ACuerpo: string; AExit: Integer): string; forward;
