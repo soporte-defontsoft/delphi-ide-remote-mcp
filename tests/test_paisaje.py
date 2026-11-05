@@ -93,7 +93,7 @@ REGLAS = [
      [('Lsp.Sandbox.pas', 'VariableQueVeElBuild')],
      'VariableQueVeElBuild y EntornoSinConfiguracion (Lsp.Sandbox, P5): lo que msbuild ve del entorno'),
     ('los comandos de adb con dispositivo en otra lista', r"'install'\s*,\s*'run'\s*,\s*'stop'", [],
-     'ADB_CAMPOS (Lsp.Guard, P6): la tabla de la tool y de la puerta'),
+     'ADB_CAMPOS (Lsp.JuecesDeArgumentos, P6): la tabla de la tool y de la puerta'),
     ('una linea del pintado del ayudante a mano',
      r"\bResponde\(\s*FR_(?:ROOT|PACKAGES|RECT|SIZE|MS|COMPONENTS|NONVISUALS|FIDELITY|CAPTURE|BOX|PHASE)\b",
      [('FormRender.Comun.pas', 'RespondeRaiz'), ('FormRender.Comun.pas', 'RespondePaquetes'),
@@ -568,7 +568,7 @@ REGLAS = [
      'DprDe, la inversa de DprojDe (2.2 de la 1.18.0: a mano en el build, delphi_test y el scaffold; '
      'y el .dpk de un paquete, que solo sabia ResolveProjectPair: P9)'),
     ('el juez del nombre de un perfil', r"(?i)(?:IsMatch|CharInSet)\s*\(\s*\w*(?:prof|perfil)\w*\s*,", [],
-     'Lsp.Guard.BadProfileName, la regla de la puerta (2.3 de la 1.18.0: set-profile y remove-profile '
+     'Lsp.JuecesDeArgumentos.BadProfileName, la regla de la puerta (2.3 de la 1.18.0: set-profile y remove-profile '
      'tenian una regex propia que dejaba pasar el punto)'),
     # las casas del lector de forms de la revision de la 1.17.0 que no tenian
     # regla (punto 10 del revisor de las pruebas; 2.3 de la 1.18.0)

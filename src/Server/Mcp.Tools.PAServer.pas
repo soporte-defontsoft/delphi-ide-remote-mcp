@@ -134,7 +134,8 @@ uses
   Lsp.NombresDeTrabajo,
   Lsp.Lineas,
   Lsp.Extensiones,
-  Lsp.RegistroDelIde;
+  Lsp.RegistroDelIde,
+  Lsp.JuecesDeArgumentos;
 
 const
   { La plataforma de los SDK que trae get-sdk y que este servidor registra,

@@ -155,7 +155,8 @@ uses
   Lsp.NombresDeTrabajo,
   Lsp.Listas,
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.JuecesDeArgumentos;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).

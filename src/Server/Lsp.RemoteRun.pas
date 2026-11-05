@@ -245,7 +245,8 @@ uses
   Lsp.NombresDeTrabajo,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.ShaCache,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.JuecesDeArgumentos;
 
 var
   GNodoLock: TCriticalSection;

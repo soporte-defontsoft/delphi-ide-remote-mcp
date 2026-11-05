@@ -144,7 +144,8 @@ uses
   Lsp.Lineas,
   Lsp.Extensiones,
   Lsp.Puertas,
-  Lsp.Mudanzas;
+  Lsp.Mudanzas,
+  Lsp.JuecesDeArgumentos;
 
 constructor TDelphiConfigTool.Create;
 begin
