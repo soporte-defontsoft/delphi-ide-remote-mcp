@@ -32,6 +32,9 @@ type
     FError: string;
     function Resolver: Boolean;
     procedure PrepararEntorno;
+    { Hasta AMax enteros (CARDINAL, formato 32) de la propiedad ANombre de
+      AVentana; vacio si no la tiene. Los lee LeerPid y el marco de GTK. }
+    function Cardinales(AVentana: NativeUInt; const ANombre: string; AMax: Integer): TArray<Cardinal>;
     function LeerPid(AVentana: NativeUInt): Cardinal;
     function LeerTitulo(AVentana: NativeUInt): string;
   public
@@ -253,28 +256,44 @@ begin
   end;
 end;
 
-function TOjos.LeerPid(AVentana: NativeUInt): Cardinal;
+function TOjos.Cardinales(AVentana: NativeUInt; const ANombre: string; AMax: Integer): TArray<Cardinal>;
 var
   Atomo, TipoReal, Num, Restan: NativeUInt;
-  Formato: Integer;
+  Formato, I: Integer;
   Datos: Pointer;
   N: UTF8String;
 begin
-  Result := 0;
-  N := Cadena('_NET_WM_PID');
+  Result := nil;
+  N := Cadena(ANombre);
   Atomo := XInternAtom(FDisp, MarshaledAString(PAnsiChar(N)), 1);
   if Atomo = 0 then
     Exit;
   Datos := nil;
-  if XGetWindowProperty(FDisp, AVentana, Atomo, 0, 1, 0, XA_CARDINAL,
+  if XGetWindowProperty(FDisp, AVentana, Atomo, 0, AMax, 0, XA_CARDINAL,
        TipoReal, Formato, Num, Restan, Datos) <> 0 then
     Exit;
   if Datos <> nil then
-  begin
-    if (Num >= 1) and (Formato = 32) then
-      Result := PCardinal(Datos)^;
+  try
+    { el formato 32 llega como long de C: 8 bytes por valor en Linux64 }
+    if Formato = 32 then
+      for I := 0 to Integer(Num) - 1 do
+      begin
+        if I >= AMax then
+          Break;
+        Result := Result + [Cardinal(PNativeUInt(PByte(Datos) + I * SizeOf(NativeUInt))^)];
+      end;
+  finally
     XFree(Datos);
   end;
+end;
+
+function TOjos.LeerPid(AVentana: NativeUInt): Cardinal;
+begin
+  var C := Cardinales(AVentana, '_NET_WM_PID', 1);
+  if Length(C) = 1 then
+    Result := C[0]
+  else
+    Result := 0;
 end;
 
 function TOjos.TamanoRaiz(out AAncho, AAlto: Integer): Boolean;
@@ -372,6 +391,21 @@ begin
         V.Titulo := LeerTitulo(P^);
         V.Pid := LeerPid(P^);
         Completar(P^, V, 0);
+        { Una ventana que se dibuja su propio marco (GTK con CSD: una app FMX
+          en GNOME) lleva su sombra DENTRO de la ventana X11, y no se ve: el
+          rectangulo salia 25 px mas grande por cada lado (medido el
+          5-nov-2026 en el Fedora con GNOME). GTK dice cuanto mide en
+          _GTK_FRAME_EXTENTS (izquierda, derecha, arriba, abajo), el juez:
+          se resta para dar el rectangulo VISIBLE. Sin ella (un marco del
+          escritorio, como en Plasma), el de siempre. }
+        var Marco := Cardinales(P^, '_GTK_FRAME_EXTENTS', 4);
+        if Length(Marco) = 4 then
+        begin
+          Inc(V.X, Marco[0]);
+          Inc(V.Y, Marco[2]);
+          Dec(V.Ancho, Marco[0] + Marco[1]);
+          Dec(V.Alto, Marco[2] + Marco[3]);
+        end;
         { Sin nombre no es una ventana para quien mira (un menu, un tooltip).
           Y la ventana GUARDIA de Mutter lleva nombre ("mutter guard window",
           medido 24-sep) pero no es de nadie: sin PID y tapando la raiz entera. }
