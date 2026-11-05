@@ -154,7 +154,8 @@ uses
   Lsp.TextoDelNodo in 'Lsp.TextoDelNodo.pas',
   Lsp.Lineas in 'Lsp.Lineas.pas',
   Lsp.Extensiones in 'Lsp.Extensiones.pas',
-  Lsp.RegistroDelIde in 'Lsp.RegistroDelIde.pas';
+  Lsp.RegistroDelIde in 'Lsp.RegistroDelIde.pas',
+  Lsp.Papelera in 'Lsp.Papelera.pas';
 
 {$R *.res}
 

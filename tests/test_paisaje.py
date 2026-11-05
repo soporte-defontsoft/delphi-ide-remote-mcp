@@ -1471,7 +1471,7 @@ REGLAS = [
       # el zip de delphi_package se arma en su temporal de sustitucion junto al
       # destino, ya comprobado por la jaula, y se pone de un golpe
       ('Mcp.Tools.Workspace.pas', 'TDelphiPackageTool.ExecuteWithParams'),
-      ('Lsp.Patch.pas', 'BackupFile'), ('Lsp.Patch.pas', 'GuardaContenidoActual'),
+      ('Lsp.Papelera.pas', 'BackupFile'), ('Lsp.Papelera.pas', 'GuardaContenidoActual'),
       # los recorredores y movimientos de la jaula (no cruzan enlaces; la puerta antes)
       ('Lsp.Guard.pas', 'CopiaNuestra'), ('Lsp.Guard.pas', 'CopiaArbol'),
       # (ApplyOneConAvisos salio el 3-nov-2026: el move del changeset renombra por
@@ -1672,8 +1672,8 @@ REGLAS = [
     # (TrashStampedName), y la mascara + '-*' que las recoge la escribian a mano el recorredor
     # (WalkFiles) y la llamada que recupera un lote
     ('el comodin de las copias de la papelera a mano', r"'-\*'",
-     [('Lsp.Patch.pas', 'MascaraDeCopias')],
-     'MascaraDeCopias (Lsp.Patch), junto a su nombrador TrashStampedName y su lector TrashOriginalName'),
+     [('Lsp.Papelera.pas', 'MascaraDeCopias')],
+     'MascaraDeCopias (Lsp.Papelera), junto a su nombrador TrashStampedName y su lector TrashOriginalName'),
     # el valor <cabeza>|<mensaje en partes> del ayudante de render, IGNORED= y NOTLOADED= (V106 de
     # la 1.23.1): se componia a mano tres veces y tenia dos lectores, y el de NOTLOADED= no leia
     # nada sin cabeza o sin separador
@@ -2725,7 +2725,7 @@ REGLAS_PY = [
      [('mcp_cliente.py', 'def dia_de_papelera')],
      'mc.dia_de_papelera, como NombreDeDia del servidor'),
     ('el cajon de lo borrado a mano', r"""os\.path\.join\([^)]*['"]deleted['"]""", [],
-     'mc.CAJON_BORRADOS, leido de Lsp.Patch'),
+     'mc.CAJON_BORRADOS, leido de Lsp.Papelera'),
     # (las dos de abajo, del revisor de version de la 1.18.0; __delphi-temp y reports
     # tenian sus comprobaciones de ausencia por mc, y el barrido de sus ~45 lineas
     # restantes, apuntado para la 1.19.0, se hizo el 18-oct-2026: las dos ultimas)

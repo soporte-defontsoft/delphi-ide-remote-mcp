@@ -114,7 +114,8 @@ uses
   Lsp.NombresDeTrabajo,
   System.Masks,
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.Papelera;
 
 function B(const A: array of Byte): TArray<Byte>;
 begin

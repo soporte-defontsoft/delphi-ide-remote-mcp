@@ -77,7 +77,8 @@ uses
   Lsp.NetDrives,
   Lsp.Rutas,
   Lsp.Casa,
-  Lsp.Identidad;
+  Lsp.Identidad,
+  Lsp.Papelera;
 
 function IsBackupPath(const APath: string): Boolean;
 begin

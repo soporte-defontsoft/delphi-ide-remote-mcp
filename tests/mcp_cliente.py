@@ -136,16 +136,16 @@ _PAPELERA = {}
 def _papelera():
     """Las constantes de la papelera, leidas de sus nombradores en el servidor:
     la carpeta y la marca de dueno de Lsp.Casa (desde el 8-oct-2026), los
-    cajones de Lsp.Patch. Las baterias no las escriben a mano: tres checks
+    cajones de Lsp.Papelera (de Lsp.Patch hasta B6 de la 1.28). Las baterias no las escriben a mano: tres checks
     buscaban la forma de antes de la sexta revision y se pusieron rojos por
     eso, no por el servidor (28-sep-2026)."""
     if not _PAPELERA:
         for unidad, nombres in (('Lsp.Casa.pas', ('BACKUP_SUB', 'MARCA_DUENO_EXT',
                                                   'BUZON_SIN_WORKSPACE', 'BUZON_PREFIJO_WORKSPACE',
                                                   'IDE_COPIAS_SUB', 'CAPTURAS_SUB', 'DESCARGA_PREFIJO')),
-                                ('Lsp.Patch.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
-                                                   'CAJON_SUSTITUIDOS', 'CAJON_CORRUPTOS',
-                                                   'TEMPORAL_DE_SUSTITUCION_EXT'))):
+                                ('Lsp.Papelera.pas', ('CAJON_BORRADOS', 'CAJON_ANTES_DE_RESTAURAR',
+                                                      'CAJON_SUSTITUIDOS', 'CAJON_CORRUPTOS')),
+                                ('Lsp.Patch.pas', ('TEMPORAL_DE_SUSTITUCION_EXT',))):
             with open(os.path.join(REPO, 'src', 'Server', unidad),
                       encoding='utf-8-sig', errors='replace') as fh:
                 t = fh.read()
@@ -201,7 +201,7 @@ def copias(carpeta, nombre=None, cajon=None, bajo=False):
     """Las copias SELLADAS de <nombre> en la papelera de <carpeta>, de todos los
     dias, sin sus marcas: el lector de lo que compone TrashPathFor
     (<carpeta>\\__delphi-patch\\<dia>\\<cajon>\\<nombre>-<hhnnsszzz>). cajon
-    es el NOMBRE de la constante de Lsp.Patch (CAJON_BORRADOS,
+    es el NOMBRE de la constante de Lsp.Papelera (CAJON_BORRADOS,
     CAJON_SUSTITUIDOS, CAJON_ANTES_DE_RESTAURAR, CAJON_CORRUPTOS); None,
     todos. nombre None:
     las de cualquier fichero. bajo=True: en TODAS las papeleras bajo carpeta

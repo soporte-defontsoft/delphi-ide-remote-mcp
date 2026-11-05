@@ -1234,7 +1234,8 @@ uses
   MCPServer.Logger, // el aviso de un dia de la papelera que se queda
   Lsp.Listas,
   Lsp.Patch,
-  System.Character;
+  System.Character,
+  Lsp.Papelera;
 
 var
   // los dias de la papelera que ya dijeron en el log que se quedan: UNA vez

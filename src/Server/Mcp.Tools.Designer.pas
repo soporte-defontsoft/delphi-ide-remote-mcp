@@ -154,7 +154,8 @@ uses
   Lsp.Json,          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre
   Lsp.Rutas,
   Lsp.Mascara,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Papelera;
 
 const
   MAX_PROPS = 400;

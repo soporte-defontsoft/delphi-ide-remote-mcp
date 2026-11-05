@@ -90,7 +90,8 @@ uses
   Lsp.NetDrives,
   Lsp.DesignerBin,
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.Papelera;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);

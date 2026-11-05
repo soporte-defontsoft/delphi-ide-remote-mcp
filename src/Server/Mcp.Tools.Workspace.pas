@@ -269,7 +269,8 @@ uses
   Lsp.Json,
   Lsp.FormRender, // EmpiezaLaEspera: el reloj de lo que espera el cliente
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.Papelera;
 
 const
   // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo
