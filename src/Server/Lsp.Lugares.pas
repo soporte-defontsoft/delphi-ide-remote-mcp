@@ -83,6 +83,16 @@ function LugaresDeLaBiblioteca: TArray<string>;
   renombre (Lsp.Guard.SustitucionDenegada, P4-a de la 1.18.0). }
 function EscribibleDeVerdad(const AReal: string): Boolean;
 
+{ ADir esta en la raiz de ESCRITURA de ALGUN agente - de cualquier workspace
+  declarado o del modo local, no solo de la sesion que pregunta -: por el
+  texto (EnLugar, la forma larga: quien escribe la raiz cambia lo que haya en
+  ella, una union tambien) o por su ruta real contra la real de cada raiz
+  (EnAlgunLugar: una union de fuera que lleva dentro). La pregunta del juez
+  del programa del operador (Lsp.Guard.ProgramaFueraDelAgente): un git.exe en
+  la raiz de OTRO workspace no era "de este agente" y corria con la cuenta del
+  servicio (C31 de la 1.28, medido: test_git_otro_workspace_128). }
+function EnRaizDeAlgunAgente(const ADir: string): Boolean;
+
 { La entrada de ReadOnlyPaths (tal como esta declarada) que cubre APath;
   '' si ninguna. EL lector de ReadOnlyPaths de las escrituras, el de la jaula
   (Lsp.Guard.PathDenied). Por el texto Y por la ruta REAL: un junction de la
@@ -948,6 +958,15 @@ begin
   finally
     TMonitor.Exit(GLibCandado);
   end;
+end;
+
+function EnRaizDeAlgunAgente(const ADir: string): Boolean;
+begin
+  var Raices := RaicesDeLosWorkspaces + RaicesDelModoLocal;
+  for var R in Raices do
+    if EnLugar(ADir, R) then
+      Exit(True);
+  Result := EnAlgunLugar(RealPath(ADir), Raices);
 end;
 
 function EscribibleDeVerdad(const AReal: string): Boolean;

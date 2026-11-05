@@ -771,7 +771,8 @@ function EscrituraDenegada(const APath: string): string;
   carpetas de APath (ProgramaEnPath: el PATH de un entorno, nunca la carpeta
   actual ni la del exe) Y en una carpeta donde esta sesion NO escribe (la
   puerta del escritor sobre su carpeta: fuera de las raices, una referencia,
-  un sitio de solo lectura). '' si no esta, o si esta donde el agente
+  un sitio de solo lectura) ni otro agente (la raiz de otro workspace: C31 de
+  la 1.28). '' si no esta, o si esta donde el agente
   escribe: un git.exe o un msbuild.exe que el agente pueda dejar en una
   carpeta del PATH es el suyo, no el del operador (la regla del 13-oct: el
   programa por su ruta, encontrada donde el agente no escribe; B1 del cierre
@@ -780,8 +781,9 @@ function ProgramaDelOperador(const APrograma, APath: string): string;
 { ...y la mitad de esa pregunta para un programa tomado de una RUTA escrita (el
   SDKAdbPath de un .sdk, el paclient de la instalacion o de
   DELPHI_MCP_PACLIENT): ARuta, o '' si esta en una carpeta donde esta sesion
-  escribe - un adb.exe que el agente deje ahi correria como el servicio
-  (revisor del paisaje de la 1.27). }
+  u otro agente escribe - un adb.exe que el agente deje ahi correria como el
+  servicio (revisor del paisaje de la 1.27; el de otro workspace, C31 de la
+  1.28). }
 function ProgramaFueraDelAgente(const ARuta: string): string;
 
 { Una CARPETA donde la tool pide un FICHERO: '' si no lo es; si lo es, "es
@@ -1511,6 +1513,15 @@ begin
   // "solo lectura: list" con GIT-050)
   if (Result <> '') and HayJaula and
      (PathDenied(ExtractFileDir(Result), True) = '') then
+    Result := '';
+  // ...ni donde escribe OTRO agente: la jaula de arriba es la de quien llama,
+  // y un git.exe en la raiz de otro workspace no era "de este agente" - se
+  // lanzaba con la cuenta del servicio, plantado por el de alli (C31 de la
+  // 1.28, medido: test_git_otro_workspace_128). Las raices de ESCRITURA de
+  // todo lo declarado; dentro por el texto (quien escribe la raiz cambia lo
+  // que haya en ella, una union tambien) o de verdad (una union de fuera que
+  // lleva dentro)
+  if (Result <> '') and EnRaizDeAlgunAgente(ExtractFileDir(Result)) then
     Result := '';
 end;
 
