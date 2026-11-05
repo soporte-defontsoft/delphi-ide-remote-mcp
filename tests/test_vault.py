@@ -89,8 +89,10 @@ check('registro: las 5 tools de vault existen con VaultPath + VaultReadOnly=0',
 # 1b. Session wiring: instructions on initialize + the invocable /vault prompt
 # ===========================================================================
 instr = s.init.get('instructions', '')
-check('initialize: con vault, "instructions" trae el protocolo de arranque',
-      'vault_read' in instr and instr.strip() == mc.catalogo()['SD_VAULT_INSTRUCTIONS'].strip(), instr[:200])
+# el mapa de las tools va SIEMPRE delante (B10 de la 1.28) y el protocolo del vault detras
+check('initialize: con vault, "instructions" trae el mapa de las tools y el protocolo de arranque',
+      'vault_read' in instr and instr.startswith(mc.catalogo()['SD_SERVER_INSTRUCTIONS'])
+      and instr.strip().endswith(mc.catalogo()['SD_VAULT_INSTRUCTIONS'].strip()), instr[:200])
 check('initialize: instructions es CORTO (viaja en cada prompt)',
       0 < len(instr) < 2000, len(instr))
 check('initialize: declara la capability prompts',
@@ -537,8 +539,9 @@ names = s4.tools()
 check('sin vault: NINGUNA tool vault_* aparece en tools/list',
       not any(t.startswith('vault_') for t in names), [t for t in names if 'vault' in t])
 check('sin vault: las tools de Delphi siguen ahi', 'delphi_read' in names, names[:5])
-check('sin vault: initialize NO trae instructions de vault',
-      'vault_read' not in s4.init.get('instructions', ''), s4.init.get('instructions', '')[:150])
+check('sin vault: initialize NO trae instructions de vault, solo el mapa de las tools (B10 de la 1.28)',
+      'vault_read' not in s4.init.get('instructions', '')
+      and s4.init.get('instructions', '') == mc.catalogo()['SD_SERVER_INSTRUCTIONS'], s4.init.get('instructions', '')[:150])
 check('sin vault: NO se declara la capability prompts',
       'prompts' not in s4.init.get('capabilities', {}), s4.init.get('capabilities'))
 _m4 = s4.rpc('prompts/list')

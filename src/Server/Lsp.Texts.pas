@@ -1923,6 +1923,19 @@ const
     'rewrites, stop and ask the user. The server keeps a copy of the ' +
     'original before writing.';
 
+  { Lo PRIMERO de las instructions del initialize, con vault o sin el: un mapa de
+    las tools para el cliente que difiere su carga (Claude Code solo ve nombres
+    hasta que pide una) y no sabe por cual empezar (B10 de la 1.28, medido en
+    superficie-tools-1-27: 300-500 caracteres). Viaja en CADA prompt: corto. }
+  SD_SERVER_INSTRUCTIONS =
+    'Delphi server: read, edit, build, test and deploy Delphi code on THIS ' +
+    'machine (srvd: paths are its disks). Start with delphi_workspace (your ' +
+    'roots) and delphi_help (task -> tool; command=conventions, the house ' +
+    'rules). Read: delphi_read, delphi_search, delphi_list, delphi_symbols. ' +
+    'Edit by anchor: delphi_edit (Pascal), delphi_textedit (other text), ' +
+    'delphi_changeset (several files). Forms: delphi_designer. Build: ' +
+    'delphi_build; does it work: delphi_test. Git: delphi_git.';
+
   // Handed to the model in the initialize response when a vault is configured
   // - unless the vault ships its own VAULT-INSTRUCTIONS.md, which wins. Short
   // on purpose: instructions travel in EVERY prompt of every client, so the

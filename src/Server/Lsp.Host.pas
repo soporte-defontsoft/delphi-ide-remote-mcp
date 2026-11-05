@@ -207,10 +207,15 @@ begin
   // Knowledge vault (optional): tell the model it exists and how to start
   // (MCP "instructions"), and expose the invocable /vault prompt. Both are
   // inert - and the prompts capability is not advertised - with no vault.
+  // ...detras del mapa de las tools, que va siempre (B10 de la 1.28): el
+  // cliente que difiere su carga sabe por donde empezar
   TMCPCoreManager.Instructions :=
     function: string
     begin
-      Result := VaultInstructions;
+      Result := MsgText(SD_SERVER_INSTRUCTIONS);
+      var Vault := VaultInstructions;
+      if Vault <> '' then
+        Result := Result + #10#10 + Vault;
     end;
   if VaultConfiguredAnywhere then
   begin
