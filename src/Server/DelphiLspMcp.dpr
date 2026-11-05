@@ -153,7 +153,8 @@ uses
   Lsp.Reparse in 'Lsp.Reparse.pas',
   Lsp.TextoDelNodo in 'Lsp.TextoDelNodo.pas',
   Lsp.Lineas in 'Lsp.Lineas.pas',
-  Lsp.Extensiones in 'Lsp.Extensiones.pas';
+  Lsp.Extensiones in 'Lsp.Extensiones.pas',
+  Lsp.RegistroDelIde in 'Lsp.RegistroDelIde.pas';
 
 {$R *.res}
 

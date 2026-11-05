@@ -133,7 +133,8 @@ uses
   Lsp.Rutas,
   Lsp.NombresDeTrabajo,
   Lsp.Lineas,
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.RegistroDelIde;
 
 const
   { La plataforma de los SDK que trae get-sdk y que este servidor registra,

@@ -256,6 +256,7 @@
         <DCCReference Include="Lsp.TextoDelNodo.pas"/>
         <DCCReference Include="Lsp.Lineas.pas"/>
         <DCCReference Include="Lsp.Extensiones.pas"/>
+        <DCCReference Include="Lsp.RegistroDelIde.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

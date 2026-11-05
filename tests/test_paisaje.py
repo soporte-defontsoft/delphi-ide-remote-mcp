@@ -141,7 +141,7 @@ REGLAS = [
       ('Lsp.BuildRunner.pas', 'RunCore'), ('Lsp.Sandbox.pas', 'CreateProcessEnContenedor'),
       ('Lsp.Transport.Process.pas', 'TLspProcessTransport.Start'), ('McpRunJob.dpr', 'Arrancar'),
       # reg.exe export: la copia de una clave del IDE antes de tocarla (V10 de la 1.23)
-      ('Lsp.Patch.pas', 'ExportaClaveDelIde')],
+      ('Lsp.RegistroDelIde.pas', 'ExportaClaveDelIde')],
      'cada programa externo se lanza desde UN sitio conocido; uno nuevo se revisa aqui'),
     # (y la orden con el conversor de la caja, que va a su contenedor: 1.26, forma 6)
     ('lanzar el conversor de estilos', '(?:' + LANZA + r""".*ComillasSinEscape\(A?Exe\))|ComillasSinEscape\([^;]*StyleConverterExe""",
@@ -696,10 +696,10 @@ REGLAS = [
     ('escribir el registro', r'\bTRegistry\.Create\s*\([^)]*KEY_(?:WRITE|ALL_ACCESS)|\bTRegistry\.Create\s*(?:;|\(\s*\))|'
                              r'\.DeleteKey\s*\(|'
                              r'\bReg(?:SetValue|DeleteKey|DeleteValue|CreateKey)\w*\s*\(',
-     [('Lsp.Patch.pas', 'EscribeClaveDelIde'), ('Lsp.Patch.pas', 'BorraClaveDelIde'),
+     [('Lsp.RegistroDelIde.pas', 'EscribeClaveDelIde'), ('Lsp.RegistroDelIde.pas', 'BorraClaveDelIde'),
       # la clave del propio servicio al instalarlo (la del operador, con permisos de admin)
       ('Lsp.Service.pas', 'TDelphiLspMcpService.ServiceAfterInstall')],
-     'EscribeClaveDelIde y BorraClaveDelIde (Lsp.Patch): LA puerta del registro del IDE, que exporta '
+     'EscribeClaveDelIde y BorraClaveDelIde (Lsp.RegistroDelIde): LA puerta del registro del IDE, que exporta '
      'antes lo que pisa o borra (reg.exe) y no reescribe lo que ya dice lo mismo'),
     # el SHA-256 vive en UNA casa, Lsp.ShaCache: Lsp.RemoteRun y Lsp.Changeset montaban su
     # propio THashSHA2, uno leyendo el binario a mano (V84 de la 1.23.1)
@@ -725,7 +725,7 @@ REGLAS = [
     ('la clave del IDE leida sin su lector', r'\bClaveDelIde\(',
      [('Lsp.Discovery.pas', '*'),
       # los dos escritores, que componen la clave que exportan antes de tocarla
-      ('Lsp.Patch.pas', 'EscribeClaveDelIde'), ('Lsp.Patch.pas', 'BorraClaveDelIde')],
+      ('Lsp.RegistroDelIde.pas', 'EscribeClaveDelIde'), ('Lsp.RegistroDelIde.pas', 'BorraClaveDelIde')],
      'Lsp.Discovery compone la clave del IDE (ClaveDelIde) y la lee (IdeConfigValue, IdeSubclaves, '
      'IdeValoresDeClave...): un TRegistry abierto a mano sobre ella es otro lector, sin el except de un '
      'valor que no es texto'),
