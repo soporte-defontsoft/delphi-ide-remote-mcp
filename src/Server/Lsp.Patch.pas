@@ -345,7 +345,8 @@ uses
   Lsp.Papelera,       // BackupFile, GuardaContenidoActual: las copias de la jaula
   Lsp.Deteccion,      // DetectEnc, Measure, Auditoria: EL detector de codificacion y la auditoria de unos bytes
   Lsp.Puertas,        // LeeTexto, PatchSaveText, AtomicWrite, EnterFileEdit: las puertas de leer y escribir
-  Lsp.JuicioDeForms;  // JuicioDeLoEscrito, NotaDeUtf8SinBom, AplazaJuicioDeForm: el juicio de un form
+  Lsp.JuicioDeForms,  // JuicioDeLoEscrito, NotaDeUtf8SinBom, AplazaJuicioDeForm: el juicio de un form
+  Lsp.ClausulaUses;
 
 const
   MAX_EDITS = 50; // entradas de una tanda

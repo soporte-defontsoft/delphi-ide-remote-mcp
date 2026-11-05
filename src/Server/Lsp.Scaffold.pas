@@ -70,7 +70,8 @@ uses
   Lsp.Lineas,
   Lsp.Deteccion,
   Lsp.Puertas,
-  Lsp.JuicioDeForms;
+  Lsp.JuicioDeForms,
+  Lsp.ClausulaUses;
 
 const
   CRLF = #13#10;

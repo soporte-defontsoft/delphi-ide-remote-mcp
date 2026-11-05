@@ -206,7 +206,8 @@ uses
   Lsp.Lineas,
   Lsp.Extensiones,
   Lsp.Puertas,
-  Lsp.JuicioDeForms;
+  Lsp.JuicioDeForms,
+  Lsp.ClausulaUses;
 
 function IdentifierAt(const ALineText: string; ACol: Integer; out AInicio: Integer): string;
 var

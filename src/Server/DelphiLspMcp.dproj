@@ -262,6 +262,7 @@
         <DCCReference Include="Lsp.Puertas.pas"/>
         <DCCReference Include="Lsp.JuicioDeForms.pas"/>
         <DCCReference Include="Lsp.Mudanzas.pas"/>
+        <DCCReference Include="Lsp.ClausulaUses.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -153,7 +153,7 @@ uses
   Lsp.ConfigFabricator, // NotaDeRecorte, UnitsDeFueraDelProyecto
   Lsp.Mascara,
   Lsp.Rutas,
-  Lsp.ProjectUnits,
+  Lsp.ClausulaUses,
   Lsp.Lineas,
   Lsp.Puertas;
 

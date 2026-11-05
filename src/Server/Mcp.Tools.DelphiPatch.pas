@@ -134,7 +134,8 @@ uses
   Lsp.Pascal,      // SinMayusculas: EL pliegue de lo que no es una ruta
   MCPServer.Registration,
   Lsp.FormRender,  // EmpiezaLaEspera: el reloj de lo que espera el cliente
-  Lsp.JuicioDeForms;
+  Lsp.JuicioDeForms,
+  Lsp.ClausulaUses;
 
 { TDelphiReadTool }
 

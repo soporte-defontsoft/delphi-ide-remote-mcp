@@ -87,8 +87,8 @@ REGLAS = [
     ('LocalSystem por el nombre de la cuenta', r"'\\?SYSTEM'|(?i:systemprofile)",
      [], 'SidDeEstaCuenta = SID_DE_LOCALSYSTEM (Lsp.Sandbox, P11): el juez es el SID'),
     ('una lista de units de quien llama cortada a mano', r"\.Split\(\s*\[\s*';'\s*,\s*','",
-     [('Lsp.ProjectUnits.pas', 'NombresDeUnidades')],
-     'NombresDeUnidades (Lsp.ProjectUnits, P13)'),
+     [('Lsp.ClausulaUses.pas', 'NombresDeUnidades')],
+     'NombresDeUnidades (Lsp.ClausulaUses, P13)'),
     ('el prefijo de la configuracion a mano', r"'DELPHI_MCP_'",
      [('Lsp.Sandbox.pas', 'VariableQueVeElBuild')],
      'VariableQueVeElBuild y EntornoSinConfiguracion (Lsp.Sandbox, P5): lo que msbuild ve del entorno'),
@@ -361,8 +361,8 @@ REGLAS = [
     # ...y su forma en linea (' uses A, B;' pegada a la palabra de una unit de una linea), que se quedo a mano al
     # lado de su llamada y la regex no veia: blancos dentro del literal (C3 del revisor del cierre de la 1.26)
     ('una clausula uses nueva compuesta a mano', r"'uses'\s*\+\s*\w+\s*\+\s*'  '|'\s+uses\s+'\s*\+",
-     [('Lsp.ProjectUnits.pas', 'EstrenaClausula')],
-     'EstrenaClausula (Lsp.ProjectUnits): el escritor de una clausula uses nueva y su forma, la del IDE'),
+     [('Lsp.ClausulaUses.pas', 'EstrenaClausula')],
+     'EstrenaClausula (Lsp.ClausulaUses): el escritor de una clausula uses nueva y su forma, la del IDE'),
     ('una extension juzgada con el locale',
      # (y las otras dos formas de juzgar el final de un nombre con el locale: EndsWith con IgnoreCase y
      # EndsText, CompareString del usuario; las vio el revisor del cierre de la 1.26, C5)
@@ -1164,7 +1164,7 @@ REGLAS = [
      r"'\^(?:\[ \\t\]\*|\\s\*)'\s*\+\s*\w+\s*\+\s*'\\b'|\^(?:interface|implementation)\[ \]\*\$|"
      r"(?:\.Trim\.ToLower|\bSinMayusculas\(\s*\w+\.Trim\s*\))\s*=\s*'(?:interface|implementation)'",
      [],
-     'FinDeSeccion (Lsp.ProjectUnits): la palabra entera en el codigo, este donde este (estaba cinco '
+     'FinDeSeccion (Lsp.ClausulaUses): la palabra entera en el codigo, este donde este (estaba cinco '
      'veces en tres funciones de ProjectUnits; a principio de linea hasta el 18-oct-2026, y una unit de '
      'una linea no tenia seccion). La deuda que quedaba, la linea exacta de InterfaceDigest (delphi_symbols '
      'de una carpeta), cerrada en la 1.27 con SeccionEnLineas (B2 del revisor). La de ExecutePatch, la linea que es la palabra para la '
@@ -1809,7 +1809,7 @@ REGLAS = [
     # comentarios (medido el 18-oct-2026: vcl pasaba a ser de todas las plataformas)
     ('la clausula requires leida con una regex', r"TRegEx\.\w+\s*\([^;]*'[^']*\brequires\b", [],
      'FindUses con la palabra (APalabra=requires): EL lector de las clausulas, con sus comentarios '
-     'y sus ramas; y ReplaceUses, su escritor (Lsp.ProjectUnits)'),
+     'y sus ramas; y ReplaceUses, su escritor (Lsp.ClausulaUses)'),
     # que una linea es una SENTENCIA, por una lista de palabras clave (el aviso de un
     # metodo partido miraba asi la linea de encima, y dos declaraciones seguidas en un
     # interface avisaban; 18-oct-2026): donde esta cada cuerpo lo sabe el lector

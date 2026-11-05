@@ -159,7 +159,8 @@ uses
   Lsp.Deteccion in 'Lsp.Deteccion.pas',
   Lsp.Puertas in 'Lsp.Puertas.pas',
   Lsp.JuicioDeForms in 'Lsp.JuicioDeForms.pas',
-  Lsp.Mudanzas in 'Lsp.Mudanzas.pas';
+  Lsp.Mudanzas in 'Lsp.Mudanzas.pas',
+  Lsp.ClausulaUses in 'Lsp.ClausulaUses.pas';
 
 {$R *.res}
 
