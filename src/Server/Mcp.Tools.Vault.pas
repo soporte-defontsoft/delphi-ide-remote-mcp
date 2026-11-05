@@ -699,7 +699,11 @@ begin
         Donde := MsgFmt(SF_VAULT_PAGINA_FMT, [Pag.Total, Pag.Desde]);
       if Pag.HayMas then
         Donde := Donde + MsgFmt(SF_VAULT_SIGUIENTE_FMT, [Pag.Siguiente]);
-      Result := MsgFmt(SN_VAULT_RESULTADOS_FMT, [Pag.Mostrados, Donde]) + #10#10 + Sb.ToString;
+      Result := MsgFmt(SN_VAULT_RESULTADOS_FMT, [Pag.Mostrados, Donde]);
+      // el tope, si es el que corto (la nota de TPagina, la de toda lista)
+      if Pag.NotaDeTope <> '' then
+        Result := Result + #10 + Pag.NotaDeTope;
+      Result := Result + #10#10 + Sb.ToString;
     end;
   finally
     Sb.Free;

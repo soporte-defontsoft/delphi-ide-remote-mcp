@@ -35,6 +35,9 @@ ruta otra vez".
       maximo con un "(limit reached)" y lo de detras no se alcanzaba; ahora
       dice de cuantos, desde donde y la pagina siguiente, y recorrerla llega
       a todos (contenido y nombres)
+  L9b ...y un maxresults por ENCIMA del tope (5000 sobre 510 aciertos) daba 500
+      en silencio: la cabecera lo dice, LIST-017, solo si el tope corta (la
+      pagina siguiente, que cabe, no) - la nota de TPagina, la de toda lista
   L10 __history y __recovery (las copias muertas del IDE) no salen en list
       (ficheros y dirs) ni en search, y se CUENTAN como compilacion; y
       escribir dentro se niega (GUARD-005). Ninguna bateria lo miraba (David,
@@ -113,6 +116,10 @@ os.makedirs(os.path.join(VAULT, 'notas'))
 for i in range(30):
     with open(os.path.join(VAULT, 'notas', 'n%02d.md' % i), 'w', encoding='utf-8') as f:
         f.write('# Nota %d\n\nmarca del vault\n' % i)
+# L9b: una nota de 510 lineas con su marca, en su carpeta (el paseo por nombres de L9 va por n*.md)
+os.makedirs(os.path.join(VAULT, 'tope'))
+with open(os.path.join(VAULT, 'tope', 'larga.md'), 'w', encoding='utf-8') as f:
+    f.write('# Larga\n\n' + ''.join('marca del tope %d\n' % i for i in range(510)))
 
 EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_VAULT_PATH': VAULT,
@@ -302,7 +309,7 @@ try:
           len(lineas(t3)) == 30 and 'offset=' not in t3.split('\n', 1)[0], t3[:200])
     vistas, ofs, paginas = [], 0, 0
     while paginas < 10:
-        tn = llama('vault_search', {'target': 'files', 'pattern': '*.md', 'maxresults': 7, 'offset': ofs})
+        tn = llama('vault_search', {'target': 'files', 'pattern': 'n*.md', 'maxresults': 7, 'offset': ofs})
         paginas += 1
         vistas += lineas(tn)
         m = SIGUIENTE.search(tn)
@@ -311,6 +318,15 @@ try:
         ofs = int(m.group(1))
     check('L9 ...por nombres igual: paginas de 7 llegan a las 30 notas sin repetir',
           paginas == 5 and len(vistas) == 30 and len(set(vistas)) == 30, (paginas, len(vistas)))
+
+    # ----------------------------------------------------------------- L9b
+    TOPE = cat['SN_LISTAS_TOPE_FMT'] % (500, 5000)
+    tt = llama('vault_search', {'target': 'content', 'pattern': 'marca del tope', 'maxresults': 5000})
+    check('L9b vault_search maxresults=5000 sobre 510: 500 y la cabecera dice el tope (LIST-017)',
+          len(lineas(tt)) == 500 and TOPE in tt.split('\n\n', 1)[0], tt[:400])
+    tt2 = llama('vault_search', {'target': 'content', 'pattern': 'marca del tope', 'maxresults': 5000, 'offset': 500})
+    check('L9b ...(guarda) la siguiente, que cabe (10): sin nota del tope',
+          len(lineas(tt2)) == 10 and not mc.es(tt2, 'SN_LISTAS_TOPE_FMT'), tt2[:300])
 
     # ------------------------------------------------------------------ L10
     jh = mc.como_json(llama('delphi_list', {'root': HIST, 'pattern': '*'}))

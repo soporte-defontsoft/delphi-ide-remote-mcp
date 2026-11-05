@@ -1481,6 +1481,15 @@ const
     'byFolder says where they are, and one of those folders as root (or a ' +
     'pattern, *.pas) narrows it down.';
 
+  { El tope de una pagina cuando ES el que corta: se pidio mas de lo que cabe
+    y quedan entradas (TPagina.NotaDeTope). Se bajaba al tope en silencio:
+    maxresults=5000 daba 500 sin decir por que (Hermes, revision completa de
+    la 1.27.0, en delphi_list y delphi_search). Sin nombre de parametro: lo
+    usan las tools de maxresults y delphi_docs con limit. }
+  SN_LISTAS_TOPE_FMT =
+    '[LIST-017] A page holds at most %d entries here, not the %d asked ' +
+    'for: the rest comes page by page, with offset.';
+
   // LIST-011 ("es un fichero", la segunda de delphi_list) se retiro en la
   // 1.23: no se alcanzaba (LIST-002 sale antes) y era el mismo hecho con otro
   // codigo (A17)

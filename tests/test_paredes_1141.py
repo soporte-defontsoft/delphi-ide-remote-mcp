@@ -29,6 +29,10 @@ vivos en la 1.14.0, medidos el 6-oct-2026 antes de tocar nada.
       500 con hasMore/nextOffset y LIST-010; byFolder dice donde estan (la
       carpeta de las copias primero); recorrer nextOffset llega a TODOS sin
       repetir; maxresults=50 da 50; un offset pasado el final, 0 y sin mas
+  P7b ...y un maxresults por ENCIMA del tope (5000) daba 500 EN SILENCIO (Hermes,
+      revision completa de la 1.27.0, en delphi_list y delphi_search): la
+      pagina lo dice en pageNote, LIST-017, solo cuando el tope es el que
+      corta (con lo que queda cabiendo, o sin pedir mas, no)
   P8  ...y el modo dirs=true igual: 510 carpetas, 500 + 10, LIST-013
   (P9, la purga del arranque de una raiz de red repetida en dos workspaces,
       salio con esa purga en la 1.23: V31, el arranque no toca las raices)
@@ -167,6 +171,20 @@ try:
     p50 = mc.como_json(llama('delphi_list', {'root': LISTA, 'maxresults': 50}))
     check('P7 ...maxresults=50 da 50 y la siguiente en 50',
           p50.get('shown') == 50 and p50.get('nextOffset') == 50, {k: p50.get(k) for k in ('shown', 'nextOffset')})
+    pg5k = mc.como_json(llama('delphi_list', {'root': LISTA, 'maxresults': 5000}))
+    check('P7b maxresults=5000 sobre 720: 500 y LIST-017 dice el tope y lo pedido',
+          pg5k.get('shown') == 500 and pista('SN_LISTAS_TOPE_FMT', 500, 5000) in pg5k.get('pageNote', ''),
+          {k: pg5k.get(k) for k in ('shown', 'hasMore', 'pageNote')})
+    pg5k2 = mc.como_json(llama('delphi_list', {'root': LISTA, 'maxresults': 5000, 'offset': 500}))
+    check('P7b ...(guarda) si lo que queda cabe (220 desde 500), sin nota: el tope no corto nada',
+          pg5k2.get('shown') == 220 and 'pageNote' not in pg5k2, {k: pg5k2.get(k) for k in ('shown', 'pageNote')})
+    check('P7b ...(guarda) la pagina de siempre, sin maxresults, tampoco la lleva: no se pidio mas',
+          p1.get('shown') == 500 and 'pageNote' not in p1, p1.get('pageNote'))
+    sk = mc.como_json(llama('delphi_search', {'root': LISTA, 'query': 'implementation', 'maxresults': 5000}))
+    check('P7b ...delphi_search igual (la misma pagina): 720 aciertos, 500 y LIST-017',
+          sk.get('total') == 720 and sk.get('shown') == 500
+          and pista('SN_LISTAS_TOPE_FMT', 500, 5000) in sk.get('pageNote', ''),
+          {k: sk.get(k) for k in ('total', 'shown', 'pageNote')})
     pfin = mc.como_json(llama('delphi_list', {'root': LISTA, 'offset': 10000}))
     check('P7 ...un offset pasado el final: 0 y sin mas',
           pfin.get('total') == 720 and pfin.get('shown') == 0 and pfin.get('hasMore') is False,

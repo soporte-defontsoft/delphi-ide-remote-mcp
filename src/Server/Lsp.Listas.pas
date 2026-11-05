@@ -19,6 +19,9 @@ type
     500 primeras entradas eran copias de backups\). Se empieza con PaginaDe. }
   TPagina = record
     Desde, Max, Total, Mostrados: Integer;
+    { lo que se pidio por pagina cuando pasaba del tope (0 si no): PaginaDe
+      lo bajaba en silencio }
+    Pedido: Integer;
     { uno mas de la lista: True si cae en ESTA pagina (y ya cuenta como
       mostrado) }
     function Entra: Boolean;
@@ -31,6 +34,11 @@ type
       '' si no. delphi_list (ficheros y carpetas), delphi_projects y la
       lectura de delphi_docs la componian a mano (A17-W5 de la 1.23) }
     function NotaDeRecorte(const AFmt: string): string;
+    { la nota del TOPE cuando es el que corta: se pidio mas de lo que cabe
+      en una pagina y quedan entradas; '' si no (cupo todo, o no se pidio
+      mas). La pone Report en pageNote; quien escribe su lista como texto
+      (vault_search) la anade el. }
+    function NotaDeTope: string;
   end;
 
   { DONDE esta una lista que no cabe, no solo cuanto: la carpeta de cada
@@ -223,7 +231,10 @@ begin
   if AMax <= 0 then
     AMax := APorDefecto;
   if AMax > ATope then
+  begin
+    Result.Pedido := AMax;
     AMax := ATope;
+  end;
   Result.Max := AMax;
 end;
 
@@ -266,6 +277,9 @@ begin
   AObj.AddPair('hasMore', TJSONBool.Create(HayMas));
   if HayMas then
     AObj.AddPair('nextOffset', TJSONNumber.Create(Siguiente));
+  var Tope := NotaDeTope;
+  if Tope <> '' then
+    AObj.AddPair('pageNote', Tope);
 end;
 
 function TPagina.NotaDeRecorte(const AFmt: string): string;
@@ -273,6 +287,13 @@ begin
   Result := '';
   if HayMas then
     Result := MsgFmt(AFmt, [Mostrados, Total, Siguiente]);
+end;
+
+function TPagina.NotaDeTope: string;
+begin
+  Result := '';
+  if (Pedido > Max) and HayMas then
+    Result := MsgFmt(SN_LISTAS_TOPE_FMT, [Max, Pedido]);
 end;
 
 { TPorCarpeta }
