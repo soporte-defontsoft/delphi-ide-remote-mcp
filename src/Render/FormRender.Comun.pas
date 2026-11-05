@@ -427,6 +427,66 @@ uses
 
 type
   TComponentCrack = class(TComponent);
+  TPersistentCrack = class(TPersistent);
+
+  { Un TFiler que no lee ni escribe: se le da a DefineProperties de un objeto y
+    apunta lo que define sin escritor (WriteData nil) - TWriter no lo escribe
+    nunca por su nombre: en FMX, FontColor o Font.Size de un TEdit solo se leen,
+    por compatibilidad, y el lector los pone en TextSettings. EL juez es la
+    clase cargada (norma 6), no una lista (C9 de la 1.28). }
+  TEspiaDeDefinidas = class(TFiler)
+  private
+    FSinEscritor: TArray<string>;
+  public
+    procedure DefineProperty(const Name: string; ReadData: TReaderProc; WriteData: TWriterProc;
+      HasData: Boolean); override;
+    procedure DefineBinaryProperty(const Name: string; ReadData, WriteData: TStreamProc;
+      HasData: Boolean); override;
+    procedure FlushBuffer; override;
+    // lo de AObj; [] si su DefineProperties no se deja preguntar (uno que da por
+    // hecho un TReader o un TWriter): de ese objeto no se sabe
+    class function SinEscritor(AObj: TPersistent): TArray<string>; static;
+  end;
+
+procedure TEspiaDeDefinidas.DefineProperty(const Name: string; ReadData: TReaderProc;
+  WriteData: TWriterProc; HasData: Boolean);
+begin
+  if not Assigned(WriteData) then
+    FSinEscritor := FSinEscritor + [Name];
+end;
+
+procedure TEspiaDeDefinidas.DefineBinaryProperty(const Name: string; ReadData, WriteData: TStreamProc;
+  HasData: Boolean);
+begin
+  if not Assigned(WriteData) then
+    FSinEscritor := FSinEscritor + [Name];
+end;
+
+procedure TEspiaDeDefinidas.FlushBuffer;
+begin
+  // no escribe nada
+end;
+
+class function TEspiaDeDefinidas.SinEscritor(AObj: TPersistent): TArray<string>;
+begin
+  Result := [];
+  var Flujo := TMemoryStream.Create;
+  try
+    var Espia := TEspiaDeDefinidas.Create(Flujo, 16);
+    try
+      try
+        TPersistentCrack(AObj).DefineProperties(Espia);
+        Result := Espia.FSinEscritor;
+      except
+        Result := [];
+      end;
+    finally
+      Espia.Free;
+    end;
+  finally
+    Flujo.Free;
+  end;
+end;
 
 var
   GVerbose: Boolean = False;
@@ -2033,16 +2093,20 @@ end;
   (TextSettings.Font), y la TFont de FMX guarda Style como StyleExt
   (DefineProperties) - se decia "no se guarda" de lo que el IDE escribio
   (Fable sobre la 1.22.2, B2). Un componente al que apunta una propiedad es
-  una referencia, no un subobjeto: no se baja. }
-function NuncaGuardadas(AObj: TPersistent): string;
+  una referencia, no un subobjeto: no se baja. En APorCodigo, de los mismos
+  objetos, lo que su DefineProperties define sin escritor (TEspiaDeDefinidas):
+  tampoco se escribe nunca por su nombre (C9 de la 1.28). }
+function NuncaGuardadas(AObj: TPersistent; out APorCodigo: string): string;
 var
-  Juntas: string;
+  Juntas, PorCodigo: string;
 
   procedure Junta(AO: TPersistent; const APrefijo: string; ANivel: Integer);
   var
     Lista: PPropList;
     N: Integer;
   begin
+    for var Nombre in TEspiaDeDefinidas.SinEscritor(AO) do
+      PorCodigo := PorCodigo + (if PorCodigo <> '' then ',' else '') + APrefijo + Nombre;
     N := GetTypeData(AO.ClassInfo)^.PropCount;
     if N = 0 then
       Exit;
@@ -2074,8 +2138,17 @@ var
 
 begin
   Juntas := '';
+  PorCodigo := '';
   Junta(AObj, '', 0);
   Result := Juntas;
+  APorCodigo := PorCodigo;
+end;
+
+{ <Nombre>=<prop>,<prop>,... de ORDER=, UNSTORED= y BYCODE= (ALista ya va
+  separada por comas). La inversa: Lsp.FormRender.LeeRespuestaDeRender }
+function ListaDelComponente(const ANombre, ALista: string): string;
+begin
+  Result := ANombre + '=' + ALista;
 end;
 
 procedure EscribeComoElIde(ARaiz: TComponent);
@@ -2102,9 +2175,12 @@ begin
       var C := ComponenteDeRuta(ARaiz, GPeticion.Componente);
       if C <> nil then
       begin
-        Responde(FR_ORDER, GPeticion.Componente + '=' + OrdenDelEscritor(C));
-        // ...y las que su clase no guarda nunca por su nombre (UNSTORED=)
-        Responde(FR_UNSTORED, GPeticion.Componente + '=' + NuncaGuardadas(C));
+        Responde(FR_ORDER, ListaDelComponente(GPeticion.Componente, OrdenDelEscritor(C)));
+        // ...y las que su clase no guarda nunca por su nombre (UNSTORED=), y lo
+        // que define por codigo sin escritor (BYCODE=)
+        var PorCodigo: string;
+        Responde(FR_UNSTORED, ListaDelComponente(GPeticion.Componente, NuncaGuardadas(C, PorCodigo)));
+        Responde(FR_BYCODE, ListaDelComponente(GPeticion.Componente, PorCodigo));
       end;
     end;
   finally

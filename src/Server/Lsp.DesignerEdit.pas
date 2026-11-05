@@ -212,6 +212,9 @@ type
     // y la primera de esas propiedades, para su linea
     GuardadaEnOtras: Boolean;
     GuardadaEn, GuardadaEnProp: string;
+    // ...porque su clase solo la LEE, por codigo, sin escritor (BYCODE=), no
+    // porque la declare stored False: la nota dice cual (C9 de la 1.28)
+    GuardadaPorCodigo: Boolean;
   end;
 
   { Una propiedad compuesta aqui que el escritor del IDE guarda con otro valor:
@@ -222,6 +225,8 @@ type
     // son las lineas que escribe por ella y Donde la primera de sus propiedades
     EnOtras: Boolean;
     Donde: string;
+    // ...y es de las que su clase define por codigo sin escritor (BYCODE=)
+    PorCodigo: Boolean;
   end;
 
 { ---- el form ---- }
@@ -2044,7 +2049,8 @@ begin
             end;
             var Puesto := EnElOrden(R.Orden, N.Prop);
             // lo que su cargador no pudo aplicar, por su valor (el metodo, la
-            // referencia), o lo que su lector se salto de este componente
+            // referencia), o lo que su lector se salto de este componente - de
+            // ESTE form: el Edit1 de un frame en linea se llama igual (C9 de la 1.28)
             var Hay: Boolean;
             var Valor := Doc.ValorDe(O, N.Prop, Hay);
             var Queda := False;
@@ -2052,7 +2058,7 @@ begin
               if SameText(V, Valor) then
                 Queda := True;
             for var Ig in R.Ignoradas do
-              if SameText(Ig.Componente, ANomObj) and
+              if LeidoEnElForm(Ig.Fichero, F.Dfm) and SameText(Ig.Componente, ANomObj) and
                  (SameText(Ig.Propiedad, N.Prop) or SameText(Ig.Propiedad, ArribaDe(N.Prop))) then
                 Queda := True;
             if not Queda then
@@ -2065,17 +2071,25 @@ begin
               // subobjetos, por su ruta: TextSettings.Font.Style de FMX la guarda
               // TFont como StyleExt (DefineProperties), y DSGN-165 decia "no se
               // guarda" de lo que el IDE escribio (Fable sobre la 1.22.2, B2)
-              if MatchText(N.Prop, R.NuncaGuardadas) or MatchText(ArribaDe(N.Prop), R.NuncaGuardadas) then
+              // Y lo que la clase define POR CODIGO sin escritor (BYCODE=, su
+              // DefineProperties): Font.Size de un TLabel FMX va a
+              // TextSettings.Font.Size, y DSGN-165 decia "el valor de la clase"
+              // (C9 de la 1.28, medido)
+              var DeSuCodigo := MatchText(N.Prop, R.PorCodigo);
+              if DeSuCodigo or MatchText(N.Prop, R.NuncaGuardadas) or MatchText(ArribaDe(N.Prop), R.NuncaGuardadas) then
               begin
                 // ...en lo que escribe SU dueno: una de un subobjeto la escribe
                 // el DefineProperties de ese subobjeto, con su ruta delante; una
-                // del componente, cualquiera suya (FMX: Width en Size.Width)
+                // del componente, cualquiera suya (FMX: Width en Size.Width). La
+                // de su codigo la pone SU lector donde quiere, con punto o sin el:
+                // cualquiera suya
                 var Dueno := '';
-                if N.Prop.LastIndexOf('.') > 0 then
+                if not DeSuCodigo and (N.Prop.LastIndexOf('.') > 0) then
                   Dueno := N.Prop.Substring(0, N.Prop.LastIndexOf('.') + 1);
                 var EnOtras := Default(TGuardadaComo);
                 EnOtras.Prop := N.Prop;
                 EnOtras.EnOtras := True;
+                EnOtras.PorCodigo := DeSuCodigo;
                 var Suyas_: TArray<string> := [];
                 for var K := 0 to High(Cambiadas) do
                   if (Dueno = '') or DeCambiada[K].StartsWith(Dueno, True) then
@@ -2084,8 +2098,15 @@ begin
                     if EnOtras.Donde = '' then
                       EnOtras.Donde := DeCambiada[K];
                   end;
-                EnOtras.Valor := string.Join('; ', Suyas_);
-                AOtras := AOtras + [EnOtras];
+                // el escritor no escribio nada por ella: es el valor que ya da la
+                // clase (DSGN-165; daba storedIn vacio)
+                if Length(Suyas_) = 0 then
+                  ANoGuarda := ANoGuarda + [N.Prop]
+                else
+                begin
+                  EnOtras.Valor := string.Join('; ', Suyas_);
+                  AOtras := AOtras + [EnOtras];
+                end;
               end
               else
                 ANoGuarda := ANoGuarda + [N.Prop];
@@ -2133,6 +2154,7 @@ begin
         AInfo.GuardadaEnOtras := True;
         AInfo.GuardadaEn := O.Valor;
         AInfo.GuardadaEnProp := O.Donde;
+        AInfo.GuardadaPorCodigo := O.PorCodigo;
       end
       else
         AInfo.GuardadaComo := O.Valor;
@@ -2966,6 +2988,7 @@ begin
     // la nota remite a los campos: un valor repetido dentro de la frase lo
     // estropeaba el enmascarador, que solo respeta lineas enteras (V103)
     AObj.AddPair('storedNote', MsgFmt(SN_DESIGNER_IDE_GUARDA_EN_OTRAS_FMT, [AInfo.Prop, ANombre,
+      MsgText(IfThen(AInfo.GuardadaPorCodigo, SF_DESIGNER_IDE_SOLO_SE_LEE, SF_DESIGNER_IDE_STORED_FALSE)),
       MsgText(IfThen(AInfo.GuardadaEn = '', SF_DESIGNER_IDE_NADA_CAMBIA, SF_DESIGNER_IDE_VER_STOREDIN))]));
   end
   else if AInfo.GuardadaComo <> '' then
@@ -4231,9 +4254,11 @@ begin
     Exit;
   // el lector NOMBRA uno de estos valores (las partes de su error, que da el
   // ayudante en su idioma): es el
-  // ...por su Name a secas, tambien uno de un frame en linea (ANombre es su ruta)
+  // ...por su Name a secas, tambien uno de un frame en linea (ANombre es su ruta),
+  // y leyendo ESTE form: el de un ancestro o el fichero de un frame se llama
+  // igual y no es este valor (C9 de la 1.28, medido: DSGN-149 de un claRed sano)
   var Suyo := ObjetoPorNombre(F.Doc, ANombre);
-  if (Suyo <> nil) and SameText(Lectura.Componente, Suyo.ObjName) then
+  if (Suyo <> nil) and LeidoEnElForm(Lectura.Fichero, F.Dfm) and SameText(Lectura.Componente, Suyo.ObjName) then
     for var I := 0 to High(AInfos) do
       if AInfos[I].SinJuez and SameText(AInfos[I].Prop, Lectura.Propiedad) then
         Exit(MsgFmt(SR_DESIGNER_SET_NO_CARGA_FMT, [ANombre, AInfos[I].Prop, AInfos[I].Valor,

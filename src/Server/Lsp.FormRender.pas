@@ -187,6 +187,10 @@ type
     // UNSTORED=: del componente pedido, las publicadas que su clase declara
     // stored False - el escritor no las escribe nunca por su nombre (1.22.1)
     NuncaGuardadas: TArray<string>;
+    // BYCODE=: del componente pedido, lo que su clase define POR CODIGO sin
+    // escritor - tampoco se escribe por su nombre, y su lector lo pone donde
+    // quiere (FontColor de un TEdit FMX va a TextSettings; C9 de la 1.28)
+    PorCodigo: TArray<string>;
     // UNAPPLIED=: lo que el lector leyo y no pudo aplicar - el metodo de un
     // evento, una referencia que no resolvio -, por su valor (1.22.1)
     NoAplicados: TArray<string>;
@@ -259,6 +263,14 @@ function PartesDeLectura(const AValor: string): TIgnorada;
   sus ignored, y lo piden tambien LoQueNoCargo y lint. }
 function LineaDeLoLeido(AFicheros: TFicherosDelForm; const AI: TIgnorada; out ADoc: TStyleDoc;
   out AFichero: string): Integer;
+
+{ Si el fichero que leia el lector cuando dijo algo (AFichero: el Fichero de una
+  TIgnorada) es el form AForm, y no un frame en linea ni un ancestro; '' (no lo
+  dijo) o sin AForm cuentan como el form. EL juicio: lo hacia a mano
+  TFicherosDelForm.Doc, y lo piden los que atribuyen lo que dijo el lector a un
+  componente del form por su nombre (C9 de la 1.28, medido: el Edit1 de un frame
+  o de un ancestro con un valor que no carga se tomaba por el Edit1 del form). }
+function LeidoEnElForm(const AFichero, AForm: string): Boolean;
 
 { Si lo que el lector se salto (AI) es una propiedad de la RAIZ (ARaizNombre)
   que publica una clase del USUARIO (APublicadas: PublicadasPorElUsuario): el
@@ -729,6 +741,16 @@ var
       V := L.Substring(Length(AClave));
   end;
 
+  // <Nombre>=<prop>,<prop>,... (ORDER=, UNSTORED=, BYCODE=): el nombre no lleva
+  // '='. La inversa de FormRender.Comun.ListaDelComponente
+  function ListaDelComponente: TArray<string>;
+  begin
+    Result := [];
+    P := V.IndexOf('=');
+    if P > 0 then
+      Result := V.Substring(P + 1).Split([','], TStringSplitOptions.ExcludeEmpty);
+  end;
+
 begin
   Result := Default(TRespuestaRender);
   Result.Sesion := -1;
@@ -847,19 +869,11 @@ begin
       end;
     end
     else if Es(FR_ORDER) then
-    begin
-      // <Nombre>=<prop>,<prop>,...: el nombre no lleva '='
-      P := V.IndexOf('=');
-      if P > 0 then
-        Result.Orden := V.Substring(P + 1).Split([','], TStringSplitOptions.ExcludeEmpty);
-    end
+      Result.Orden := ListaDelComponente
+    else if Es(FR_BYCODE) then
+      Result.PorCodigo := ListaDelComponente
     else if Es(FR_UNSTORED) then
-    begin
-      // <Nombre>=<prop>,<prop>,...: como ORDER=
-      P := V.IndexOf('=');
-      if P > 0 then
-        Result.NuncaGuardadas := V.Substring(P + 1).Split([','], TStringSplitOptions.ExcludeEmpty);
-    end
+      Result.NuncaGuardadas := ListaDelComponente
     else if Es(FR_UNAPPLIED) then
       Result.NoAplicados := Result.NoAplicados + [V]
     else if Es(FR_PARTIAL) then
@@ -908,7 +922,7 @@ end;
 function TFicherosDelForm.Doc(const AFichero: string; out AOtro: string): TStyleDoc;
 begin
   AOtro := '';
-  if (AFichero = '') or (FForm = '') or SameFileName(AFichero, FForm) then
+  if LeidoEnElForm(AFichero, FForm) then
     Exit(FDoc);
   AOtro := AFichero;
   for var I := 0 to High(FRutas) do
@@ -924,6 +938,11 @@ begin
   end;
   FRutas := FRutas + [AFichero];
   FDocs := FDocs + [Result];
+end;
+
+function LeidoEnElForm(const AFichero, AForm: string): Boolean;
+begin
+  Result := (AFichero = '') or (AForm = '') or SameFileName(AFichero, AForm);
 end;
 
 function LineaDeLoLeido(AFicheros: TFicherosDelForm; const AI: TIgnorada; out ADoc: TStyleDoc;

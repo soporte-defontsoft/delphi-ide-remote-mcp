@@ -6488,13 +6488,20 @@ const
     el IDE no la guarda nunca por su nombre y lo que el form guarda de ella va
     en otras (en FMX, Width y Height van en Size). Decia DSGN-165, "el valor de
     la clase", con Size.Width escrito (completo de Opus de la 1.22.1). Lleva
-    [prop, nombre, SF_DESIGNER_IDE_VER_STOREDIN, o SF_DESIGNER_IDE_NADA_CAMBIA si
-    no cambio nada de lo que guarda]: lo que escribe por ella va en storedIn,
-    tal cual, y no repetido aqui (V103 de la 1.23.1). }
+    [prop, nombre, por que, SF_DESIGNER_IDE_VER_STOREDIN o SF_DESIGNER_IDE_NADA_CAMBIA
+    si no cambio nada de lo que guarda]: lo que escribe por ella va en storedIn,
+    tal cual, y no repetido aqui (V103 de la 1.23.1). El POR QUE:
+    SF_DESIGNER_IDE_STORED_FALSE, o SF_DESIGNER_IDE_SOLO_SE_LEE para lo que su
+    clase define por codigo sin escritor (Font.Size de un TLabel FMX; C9 de la
+    1.28: decia "stored False" de lo que no lo es). }
   SN_DESIGNER_IDE_GUARDA_EN_OTRAS_FMT =
-    '[DSGN-167] The IDE never stores %s of %s by that name (its class declares ' +
-    'it stored False): the form keeps it in the properties the IDE writes for ' +
-    'it - here: %s.';
+    '[DSGN-167] The IDE never stores %s of %s by that name (%s): the form ' +
+    'keeps it in the properties the IDE writes for it - here: %s.';
+  SF_DESIGNER_IDE_STORED_FALSE =
+    'its class declares it stored False';
+  SF_DESIGNER_IDE_SOLO_SE_LEE =
+    'its class only reads it, by code, for older forms, and has nothing to ' +
+    'write it with';
   SF_DESIGNER_IDE_NADA_CAMBIA =
     'nothing it stores changed';
   SF_DESIGNER_IDE_VER_STOREDIN =

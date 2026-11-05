@@ -7,7 +7,7 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 7; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11)
+  FR_PROTOCOLO_VERSION = 8; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9)
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
@@ -81,6 +81,11 @@
                                  // TypInfo): TWriter no las escribe nunca por su nombre, y lo que el form
                                  // guarda de ellas va en otras (en FMX, Width y Height van en Size). El
                                  // servidor no las da por "el valor de la clase" (1.22.1)
+  FR_BYCODE = 'BYCODE=';         // BYCODE=<Nombre>=<prop>,<prop>,... con UNSTORED=: lo que SU clase (y sus
+                                 // subobjetos, por su ruta) define POR CODIGO (DefineProperties) sin con que
+                                 // escribirlo - TWriter no lo escribe nunca por su nombre y su lector lo pone
+                                 // donde quiere (en FMX, FontColor y Font.Size de un TEdit van a TextSettings).
+                                 // El servidor dice donde quedo, no "el valor de la clase" (C9 de la 1.28)
   FR_UNAPPLIED = 'UNAPPLIED=';   // UNAPPLIED=<valor> (repetible): lo que el lector leyo y NO pudo aplicar, el
                                  // nombre del metodo de un evento (no hay codigo) o una referencia a un
                                  // componente que no resolvio en el form (la de otro modulo). El escritor no

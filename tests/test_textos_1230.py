@@ -133,13 +133,16 @@ try:
     fmx = [f for f in glob.glob(os.path.join(FDIR, '*.fmx'))]
     FMX = fmx[0] if fmx else os.path.join(FDIR, 'no-hay.fmx')
     mc.espera_info(srv.call, {'command': 'info', 'classname': 'TLabel', 'framework': 'fmx'})
-    srv.call('delphi_designer', {'command': 'insert', 'path': FMX, 'classname': 'TLabel', 'component': 'Label9'}, t=300)
+    # su respuesta va en el detalle de T8: sin ella, un insert que fallo dejaba solo el DSGN-078 del set
+    # (ciclo c9b del 5-nov: roja una vez, 65 s, y verde sola en 4 s)
+    ri = srv.call('delphi_designer', {'command': 'insert', 'path': FMX, 'classname': 'TLabel',
+                                      'component': 'Label9'}, t=300)
     r = srv.call('delphi_designer', {'command': 'set', 'path': FMX, 'component': 'Label9',
                                      'prop': 'TextSettings.Font.Style', 'value': '[fsBold]'}, t=300)
     t = open(FMX, 'rb').read().decode('utf-8-sig')
     check('T8 FMX TextSettings.Font.Style=[fsBold]: storedIn con el StyleExt que escribe el IDE, no notStored',
           not mc.fallo(r) and 'notStored' not in r and 'StyleExt' in mc.como_json(r).get('storedIn', '')
-          and 'TextSettings.Font.StyleExt' in t, (r[:500], fmx))
+          and 'TextSettings.Font.StyleExt' in t, (r[:500], fmx, 'insert: ' + ri[:600]))
 
     # --- T9 ------------------------------------------------------------------------
     INC = escribe(os.path.join(PDIR, 'Defs.inc'), b'const\r\n  CINC = 1;\r\n')
