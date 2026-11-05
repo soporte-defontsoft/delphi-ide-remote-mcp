@@ -784,15 +784,33 @@ begin
   AResp.Free;
 end;
 
+type
+  { lo que dice UN motor de un candidato (Juzga, en FindDelphiReferences) }
+  TVeredicto = (vMismo, vPariente, vSinResolver, vOtro);
+
+  { un candidato que el motor del objetivo resolvio (Veredicto, Uri, Linea;
+    nunca vSinResolver, que va a unverified). Suyo: el proyecto de su fichero
+    cuando es OTRO ('' = el del objetivo, o ninguno). Juez: Suyo cuando el
+    motor de ese proyecto contesto (B1 de la 1.28), y entonces Veredicto, Uri
+    y Linea son lo que dijo ese, el que compila esa linea }
+  TJuzgado = record
+    C: TCandidate;
+    Veredicto: TVeredicto;
+    Uri: string;
+    Linea: Integer;
+    Suyo: string;
+    Juez: string;
+  end;
+
 function FindDelphiReferences(const AFilePath: string;
   ALine, ACharacter: Integer; AMaxFiles, AMaxCandidates: Integer): TJSONObject;
 var
   Session: TLspSession;
   Client: TLspClient;
-  Settings, RootDir, FullPath, Ident, TargetUri, CandUri: string;
+  Settings, RootDir, FullPath, Ident, TargetUri: string;
   Lines: TStringList;
   Resp: TJSONObject;
-  TargetLine, CandLine, TargetCol: Integer;
+  TargetLine, TargetCol: Integer;
   Candidates: TList<TCandidate>;
   Cand: TCandidate;
   Files: TArray<string>;
@@ -808,6 +826,7 @@ var
   VistaLine: string;
   Rejected, Scanned: Integer;
   RejectedArr: TJSONArray;
+  Juzgados: TList<TJuzgado>;     // los que resolvio un motor (B1 de la 1.28)
   ScopeDirs: TArray<string>;
   OpenedFiles: TDictionary<string, Boolean>;
   Entry: TJSONObject;
@@ -862,6 +881,83 @@ var
   begin
     Result := Desciende(AFile1, ALinea1, AFile2, ALinea2) or
       Desciende(AFile2, ALinea2, AFile1, ALinea1);
+  end;
+
+  { EL juicio de un candidato por UN motor: el mismo simbolo (la linea del
+    objetivo o la de su gemelo, o un miembro de la propia clase objetivo), un
+    metodo de la misma familia (override), sin resolver, u OTRA definicion
+    (AUri, ALinea). Lo pregunta el motor del objetivo de todos, y el del
+    proyecto de un parecido que es de OTRO proyecto (B1 de la 1.28).
+    ACalentando: un motor recien llegado contesta null mientras indexa, y
+    DefinitionResolved espera a que resuelva (su "todavia no" queda en sin
+    resolver) }
+  function Juzga(AMotor: TLspClient; const C: TCandidate; ACalentando: Boolean;
+    out AUri: string; out ALinea: Integer): TVeredicto;
+  var
+    R: TJSONObject;
+    Pendiente: Boolean;
+  begin
+    if ACalentando then
+      R := AMotor.DefinitionResolved(TLspClient.PathToUri(C.Path), C.Line, C.Col + 1, Pendiente)
+    else
+      R := AMotor.Definition(TLspClient.PathToUri(C.Path), C.Line, C.Col + 1);
+    // con LA correccion: la cabecera de una anidada resuelve a si misma, y
+    // una homonima hermana a la suya, no a la rutina que la contiene
+    // (la correccion, con la columna donde EMPIEZA, como el gemelo)
+    R := DefinicionCorregida(R, C.Path, C.Line, C.Col, C.Text, AMotor);
+    try
+      var Resuelto := DefinitionLocation(R, AUri, ALinea);
+      if Resuelto and SameText(AUri, TargetUri) and
+         ((ALinea = TargetLine) or (ALinea = TargetTwin)) then
+        Exit(vMismo);
+      // ...o a un MIEMBRO de la propia clase objetivo: en la cabecera
+      // 'procedure TFoo.Pinta;' el motor resuelve el TFoo al metodo
+      // Pinta (medido el 15-oct-2026), y ese TFoo es la clase misma, no
+      // un pariente (salia "via override", y sin parentesco se quedaba
+      // fuera del rename de la clase)
+      if Resuelto and SameText(AUri, TargetUri) then
+      begin
+        var Propia := Cadena.TipoEn(TargetPath, TargetLine);
+        if (Propia <> nil) and Propia.Contiene(ALinea) then
+          Exit(vMismo);
+      end;
+      // El parentesco: el candidato resolvio a OTRA linea, pero a un
+      // metodo del mismo nombre en una clase de la misma familia. Eso no
+      // es un homonimo: es el mismo metodo a otra altura de la jerarquia.
+      // La familia la dice el motor (EsPariente), entre la declaracion de
+      // la clase del objetivo y la de la clase del candidato
+      if Resuelto and (ClaseObjetivoLinea >= 0) then
+      begin
+        var CandPath := TLspClient.UriToPath(AUri);
+        var ClaseCand := ClaseDeMetodo(Cadena.LineasDe(CandPath), Cadena.UnidadDe(CandPath), ALinea, Ident);
+        if (ClaseCand <> nil) and
+           EsPariente(TargetPath, ClaseObjetivoLinea, CandPath, ClaseCand.Linea) then
+          Exit(vPariente);
+      end;
+      if AUri = '' then
+        Exit(vSinResolver);
+      Result := vOtro;
+    finally
+      R.Free;
+    end;
+  end;
+
+  // un pariente confirmado (via override), con la cabecera si lo es
+  function ParienteJson(const C: TCandidate; const AUri: string; ALinea: Integer): TJSONObject;
+  begin
+    Result := CandidateJson(C);
+    Result.AddPair('via', 'override');
+    Result.AddPair('resolvedTo', TLspClient.UriToPath(AUri));
+    // las dos de la casa, como line/line0 (1.15.0: aqui iba solo la
+    // 0-based y en los rechazados la 0-based y resolvedLine1)
+    Result.AddPair('resolvedLine', TJSONNumber.Create(ALinea + 1));
+    Result.AddPair('resolvedLine0', TJSONNumber.Create(ALinea));
+    // la CABECERA de ese pariente (su declaracion o su implementacion,
+    // por EL lector de cabeceras), no una llamada: la nota las contaba
+    // a todas como usos (medido: procedure Q; override; y
+    // procedure TDer.Q; salian igual que D.Q)
+    if ColumnaDelNombreDeRutina(CodigoPascal(C.Text)) = C.Col then
+      Result.AddPair('header', TJSONBool.Create(True));
   end;
 
 begin
@@ -1248,9 +1344,12 @@ begin
     Unverified := TJSONArray.Create;
     Rejected := 0;
     RejectedArr := TJSONArray.Create;
+    Juzgados := TList<TJuzgado>.Create;
     FilesOpened := 0;
     OpenedFiles := TDictionary<string, Boolean>.Create;
     try
+      // el proyecto del objetivo: con el se compara el de cada candidato
+      var MiProyecto := Session.FindDproj(FullPath);
       for Cand in Candidates do
       begin
         // un candidato cuya ruta no se le puede NOMBRAR al motor (medio
@@ -1279,103 +1378,115 @@ begin
           OpenedFiles.Add(ClaveDeRuta(Cand.Path), True);
           Inc(FilesOpened);
         end;
-        // con LA correccion: la cabecera de una anidada resuelve a si misma, y
-        // una homonima hermana a la suya, no a la rutina que la contiene
-        // (la correccion, con la columna donde EMPIEZA, como el gemelo)
-        Resp := DefinicionCorregida(Client.Definition(TLspClient.PathToUri(Cand.Path),
-          Cand.Line, Cand.Col + 1), Cand.Path, Cand.Line, Cand.Col, Cand.Text, Client);
+        var J: TJuzgado;
+        J.C := Cand;
+        J.Veredicto := Juzga(Client, Cand, False, J.Uri, J.Linea);
+        if J.Veredicto = vSinResolver then
+        begin
+          Unverified.Add(CandidateJson(Cand));
+          Continue;
+        end;
+        // su proyecto, cuando es OTRO: lo juzga ademas su motor, abajo
+        J.Suyo := Session.FindDproj(Cand.Path);
+        if RutaEnLista(J.Suyo, [MiProyecto]) then
+          J.Suyo := '';
+        J.Juez := '';
+        Juzgados.Add(J);
+      end;
+
+      // B1 de la 1.28 (Hermes, luna y Qwen el 4-nov: dos proyectos con
+      // nombres por defecto, el segundo en una subcarpeta del primero). Una
+      // linea de OTRO proyecto la resolvio el motor del objetivo con unos
+      // ajustes que no son los suyos: un parecido podia ser este simbolo visto
+      // desde su proyecto (rename lo negaba siempre, RENAME-017), y una
+      // confirmada podia ser OTRO para el (en vivo el 5-nov: AppTres compila su
+      // propia copia de UCalc y el motor de AppUno daba su llamada a Doble por
+      // nuestra: el rename la habria renombrado y AppTres no compilaria). EL
+      // juez de una linea es el motor de SU proyecto, el que le da la sesion
+      // (FindDproj, como a toda tool), y su respuesta manda. Uno del MISMO
+      // proyecto o de ninguno se queda con la del motor del objetivo, el unico
+      // juez que tiene (y sus parecidos siguen negando un rename). Medido el
+      // 5-nov (B1Rename del sandbox): el motor de AppDos dice de su Doble lo
+      // mismo que el de AppUno.
+      var SinJuez: TArray<string> := [];        // proyectos cuyo motor no se pudo tener
+      var AbiertosFuera: TArray<string> := [];  // ficheros abiertos en el motor de su proyecto
+      for I := 0 to Juzgados.Count - 1 do
+      begin
+        var J := Juzgados[I];
+        if (J.Suyo = '') or RutaEnLista(J.Suyo, SinJuez) then
+          Continue;
+        // con su propio tope (AMaxFiles), aparte del de arriba: cada fichero, una vez
+        if not RutaEnLista(J.C.Path, AbiertosFuera) then
+        begin
+          if Length(AbiertosFuera) >= AMaxFiles then
+            Continue;
+          AbiertosFuera := AbiertosFuera + [J.C.Path];
+        end;
+        var Ajustes: string;
+        var Motor: TLspClient := nil;
         try
-          var Resuelto := DefinitionLocation(Resp, CandUri, CandLine);
-          var EsElMismo := Resuelto and SameText(CandUri, TargetUri) and
-            ((CandLine = TargetLine) or (CandLine = TargetTwin));
-          // ...o a un MIEMBRO de la propia clase objetivo: en la cabecera
-          // 'procedure TFoo.Pinta;' el motor resuelve el TFoo al metodo
-          // Pinta (medido el 15-oct-2026), y ese TFoo es la clase misma, no
-          // un pariente (salia "via override", y sin parentesco se quedaba
-          // fuera del rename de la clase)
-          if Resuelto and not EsElMismo and SameText(CandUri, TargetUri) then
-          begin
-            var Propia := Cadena.TipoEn(TargetPath, TargetLine);
-            EsElMismo := (Propia <> nil) and Propia.Contiene(CandLine);
-          end;
-          // El parentesco: el candidato resolvio a OTRA linea, pero a un
-          // metodo del mismo nombre en una clase de la misma familia. Eso no
-          // es un homonimo: es el mismo metodo a otra altura de la jerarquia.
-          // La familia la dice el motor (EsPariente), entre la declaracion de
-          // la clase del objetivo y la de la clase del candidato
-          var Pariente := False;
-          if Resuelto and not EsElMismo and (ClaseObjetivoLinea >= 0) then
-          begin
-            var CandPath := TLspClient.UriToPath(CandUri);
-            var ClaseCand := ClaseDeMetodo(Cadena.LineasDe(CandPath), Cadena.UnidadDe(CandPath), CandLine, Ident);
-            Pariente := (ClaseCand <> nil) and
-              EsPariente(TargetPath, ClaseObjetivoLinea, CandPath, ClaseCand.Linea);
-          end;
-          if EsElMismo then
-            Confirmed.Add(CandidateJson(Cand))
-          else if Pariente then
-          begin
-            var PObj := CandidateJson(Cand);
-            PObj.AddPair('via', 'override');
-            PObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
-            // las dos de la casa, como line/line0 (1.15.0: aqui iba solo la
-            // 0-based y en los rechazados la 0-based y resolvedLine1)
-            PObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine + 1));
-            PObj.AddPair('resolvedLine0', TJSONNumber.Create(CandLine));
-            // la CABECERA de ese pariente (su declaracion o su implementacion,
-            // por EL lector de cabeceras), no una llamada: la nota las contaba
-            // a todas como usos (medido: procedure Q; override; y
-            // procedure TDer.Q; salian igual que D.Q)
-            if ColumnaDelNombreDeRutina(CodigoPascal(Cand.Text)) = Cand.Col then
-              PObj.AddPair('header', TJSONBool.Create(True));
-            Confirmed.Add(PObj);
-            Familia := True;
-          end
-          else if CandUri = '' then
-            Unverified.Add(CandidateJson(Cand))
-          else
-          begin
-            Inc(Rejected);
-            // A "homonym" is only a homonym if the engine really resolved it
-            // somewhere else. When the file belongs to ANOTHER project, the
-            // engine resolves it against the wrong settings and the real
-            // reference lands here - which is how a rename came back
-            // applicable while leaving a caller broken (measured 2026-08-25).
-            // Keep them, with where they resolved instead, so the caller can
-            // look rather than trust a count.
-            // Only when it resolves to ANOTHER unit. A symbol declared in
-            // the interface and implemented below resolves to two different
-            // lines of its own file, and treating that as a lookalike made
-            // every single rename inapplicable (caught by the battery).
-            // Every rejection is LISTED, never just counted. The tool's own
-            // description promises leftovers are never silently dropped, and
-            // a bare count is precisely what hid the bug above from view
-            // (rejectedHomonyms: 3, rejected: []). Same-file leftovers are
-            // listed too now: with the decl/impl pair accepted above, one
-            // that still lands here really is another symbol, and the caller
-            // is the one who should decide whether that matters.
-            // ...pero LISTADOS, no VOLCADOS. Con un identificador corto (una
-            // variable local "F") salen cientos: 212 homonimos con su ruta y
-            // su texto entero hicieron una respuesta de 78 KB que el cliente
-            // MCP rechazo ENTERA por pasarse de tokens - o sea que el agente
-            // no vio ni las 8 referencias buenas. La tool promete "Bounded
-            // work"; el trabajo si estaba acotado, la respuesta no. Medido el
-            // 2026-09-20 por un agente auditor. Se listan los primeros y se
-            // dice cuantos hay: el recuento completo sigue en
-            // rejectedHomonyms.
-            if RejectedArr.Count < 25 then
-            begin
-              var RObj := CandidateJson(Cand);
-              RObj.AddPair('resolvedTo', TLspClient.UriToPath(CandUri));
-              RObj.AddPair('resolvedLine', TJSONNumber.Create(CandLine + 1));
-              RObj.AddPair('resolvedLine0', TJSONNumber.Create(CandLine));
-              RejectedArr.AddElement(RObj);
-            end;
-          end;
-        finally
-          Resp.Free;
+          Motor := Session.AcquireFor(J.C.Path, Ajustes);
+        except
+          // el motor de su proyecto no se pudo tener (no arranca, su carpeta
+          // se va): sin juez, y no se le vuelve a pedir
+          SinJuez := SinJuez + [J.Suyo];
+          Continue;
+        end;
+        // el MISMO motor es el mismo proyecto, se escriba como se escriba su
+        // ruta: su respuesta es la de arriba
+        if Motor = Client then
+        begin
+          J.Suyo := '';
+          Juzgados[I] := J;
+          Continue;
+        end;
+        var Uri: string;
+        var Linea: Integer;
+        var Veredicto := vSinResolver;
+        try
+          Veredicto := Juzga(Motor, J.C, True, Uri, Linea);
+        except
+          // un motor parado a medias: con un tope de motores ([Server]
+          // MaxEngines) tener el suyo puede retirar el del objetivo, que es el
+          // que juzga la familia. Sin juez
+          SinJuez := SinJuez + [J.Suyo];
+          Continue;
+        end;
+        if Veredicto <> vSinResolver then
+        begin
+          J.Veredicto := Veredicto;
+          J.Uri := Uri;
+          J.Linea := Linea;
+          J.Juez := J.Suyo;
+          Juzgados[I] := J;
         end;
       end;
+
+      // lo que queda de cada uno, en el orden del barrido (los parecidos, abajo)
+      for var J in Juzgados do
+        if J.Veredicto in [vMismo, vPariente] then
+        begin
+          if (J.Suyo <> '') and (J.Juez = '') then
+          begin
+            // de OTRO proyecto, y el motor de ese no contesto: "es este" lo
+            // dijo el del objetivo, con unos ajustes que no son los suyos
+            var UObj := CandidateJson(J.C);
+            UObj.AddPair('note', MsgFmt(SN_REFS_SU_PROYECTO_NO_CONTESTA_FMT, [J.Suyo]));
+            Unverified.Add(UObj);
+            Continue;
+          end;
+          var CObj: TJSONObject;
+          if J.Veredicto = vPariente then
+          begin
+            CObj := ParienteJson(J.C, J.Uri, J.Linea);
+            Familia := True;
+          end
+          else
+            CObj := CandidateJson(J.C);
+          if J.Juez <> '' then
+            CObj.AddPair('project', J.Juez);
+          Confirmed.Add(CObj);
+        end;
 
       Result := TJSONObject.Create;
       Result.AddPair('identifier', Ident);
@@ -1410,7 +1521,46 @@ begin
       end;
       if Familia then
         Result.AddPair('familyNote', MsgText(SN_REFS_FAMILY_NOTE));
+      // Every rejection is LISTED, never just counted. The tool's own
+      // description promises leftovers are never silently dropped, and
+      // a bare count is precisely what hid the bug above from view
+      // (rejectedHomonyms: 3, rejected: []).
+      // ...pero LISTADOS, no VOLCADOS. Con un identificador corto (una
+      // variable local "F") salen cientos: 212 homonimos con su ruta y
+      // su texto entero hicieron una respuesta de 78 KB que el cliente
+      // MCP rechazo ENTERA por pasarse de tokens - o sea que el agente
+      // no vio ni las 8 referencias buenas. Medido el 2026-09-20 por un
+      // agente auditor. Se listan los primeros y se dice cuantos hay.
+      // Un rechazado lo es porque resolvio a OTRA definicion; uno declarado
+      // en el interface e implementado abajo resuelve a dos lineas de su
+      // fichero, y las dos son el simbolo (el gemelo, en Juzga): tomarlo por
+      // parecido dejaba todo rename sin aplicar (lo cazo la bateria).
+      // Primero los que solo juzgo un motor: son los que niegan un rename
+      // (RENAME-017), y con mas de 25 tienen que ser ellos los que se vean;
+      // luego los que confirma su proyecto (B1 de la 1.28)
+      Rejected := 0;
+      var PorSuProyecto := 0;
+      for var Vuelta := 0 to 1 do
+        for var J in Juzgados do
+          if (J.Veredicto = vOtro) and ((J.Juez = '') = (Vuelta = 0)) then
+          begin
+            Inc(Rejected);
+            if J.Juez <> '' then
+              Inc(PorSuProyecto);
+            if RejectedArr.Count < 25 then
+            begin
+              var RObj := CandidateJson(J.C);
+              RObj.AddPair('resolvedTo', TLspClient.UriToPath(J.Uri));
+              RObj.AddPair('resolvedLine', TJSONNumber.Create(J.Linea + 1));
+              RObj.AddPair('resolvedLine0', TJSONNumber.Create(J.Linea));
+              if J.Juez <> '' then
+                RObj.AddPair('project', J.Juez);
+              RejectedArr.AddElement(RObj);
+            end;
+          end;
       Result.AddPair('rejectedHomonyms', TJSONNumber.Create(Rejected));
+      if PorSuProyecto > 0 then
+        Result.AddPair('rejectedByTheirProject', TJSONNumber.Create(PorSuProyecto));
       Result.AddPair('rejected', RejectedArr);
       if Rejected > RejectedArr.Count then
         Result.AddPair('rejectedNote', MsgFmt(SN_REFS_REJECTED_CAP_FMT,
@@ -1478,6 +1628,7 @@ begin
         Result.AddPair('project', Proyecto);
     finally
       OpenedFiles.Free;
+      Juzgados.Free;
     end;
   finally
     Candidates.Free;

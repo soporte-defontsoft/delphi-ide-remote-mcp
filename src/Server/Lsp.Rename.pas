@@ -289,16 +289,27 @@ begin
       // A "homonym" the engine resolved somewhere else may be the real thing
       // seen through another project's settings - which is exactly how a
       // rename came back applicable and broke a sibling's build (measured
-      // 2026-08-25). We cannot tell the two apart from here, so they are
-      // BLOCKERS with their location: the caller looks and decides.
+      // 2026-08-25). They are BLOCKERS with their location: the caller looks
+      // and decides. Salvo los de OTRO proyecto que el motor de SU proyecto
+      // juzgo otra definicion (B1 de la 1.28): references los lista con su
+      // "project" y los cuenta en rejectedByTheirProject, y van de aviso.
+      // La cuenta, de rejectedHomonyms: la lista va cortada a 25
       if Refs.GetValue('rejected') <> nil then
       begin
         RejArr := Refs.GetValue('rejected') as TJSONArray;
-        if RejArr.Count > 0 then
+        var PorSuProyecto := Refs.GetValue<Integer>('rejectedByTheirProject', 0);
+        var Niegan := Refs.GetValue<Integer>('rejectedHomonyms', RejArr.Count) - PorSuProyecto;
+        if Niegan > 0 then
         begin
-          Blockers.Add(MsgFmt(SR_RENAME_HOMONYMS_FMT, [RejArr.Count]));
-          Result.AddPair('lookalikes', TJSONArray(RejArr.Clone));
+          Blockers.Add(MsgFmt(SR_RENAME_HOMONYMS_FMT, [Niegan]));
+          var Parecidos := TJSONArray.Create;
+          Result.AddPair('lookalikes', Parecidos);
+          for var V in RejArr do
+            if (V is TJSONObject) and (TJSONObject(V).GetValue('project') = nil) then
+              Parecidos.AddElement(TJSONObject(V.Clone));
         end;
+        if PorSuProyecto > 0 then
+          Warnings.Add(MsgFmt(SN_RENAME_HOMONIMOS_DE_SU_PROYECTO_FMT, [PorSuProyecto]));
       end;
       if Refs.GetValue('scope') <> nil then
         Result.AddPair('scope', TJSONArray(Refs.GetValue('scope').Clone));

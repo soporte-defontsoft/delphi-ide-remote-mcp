@@ -149,7 +149,12 @@ it. With no name, each request of that protocol is a stranger to the one before.
   `TFoo`) or an overload is
   never taken for yours: `via: "override"` in `delphi_references` is the
   inheritance family as the engine resolves it, and a namesake leaves the
-  rename not applicable (`RENAME-017`) instead of being renamed with it.
+  rename not applicable (`RENAME-017`) instead of being renamed with it -
+  unless it lives in ANOTHER project and that project's own engine says it
+  is another definition: then it is only a warning (`RENAME-024`), and it
+  shows in `delphi_references` `rejected` with its `project`. Every line of
+  another project is judged by that project's engine, a confirmed one too
+  (one it cannot ask stays `unverified`, `LSP-054`).
   `delphi_references` lists the lines of the form files that name it as
   well (`designer`) - the ones a rename blocks on (`RENAME-019`); a
   component of the form is renamed with `delphi_designer command=set

@@ -938,6 +938,16 @@ const
     'holds them, or the gate refused): they are listed in "unreadable" and ' +
     'were NOT scanned, so a reference in them is not here. ' +
     'delphi_rename_symbol refuses while any is listed.';
+  { B1 de la 1.28: una linea de OTRO proyecto la juzga el motor de su proyecto;
+    si ese no contesta, el "es este" del motor del objetivo no basta (en vivo
+    el 5-nov: AppTres compilaba su propia copia y se daba su llamada por nuestra) }
+  SN_REFS_SU_PROYECTO_NO_CONTESTA_FMT =
+    '[LSP-054] This line belongs to another project (%s), and the engine of ' +
+    'that project could not be asked or did not answer (it did not start, or ' +
+    'the bound of files to open was reached). The engine of the symbol''s ' +
+    'project says it is this symbol, but with settings that are not that ' +
+    'file''s: that is how a rename broke a sibling project. delphi_definition ' +
+    'on the line asks the engine of its own project.';
   { Los usos en los ficheros de diseno: rename los veia y bloqueaba, references
     no los listaba (Sonnet, validacion de la 1.21.1). }
   SN_REFS_DESIGNER_FMT =
@@ -4674,15 +4684,26 @@ const
     'workspace roots (RTL or an installed component): that is not ' +
     'renamed from here.';
 
+  { B1 de la 1.28: un parecido de OTRO proyecto lo juzga ademas el motor de SU
+    proyecto (Lsp.References); los que confirma ese motor no niegan (RENAME-024) }
   SR_RENAME_HOMONYMS_FMT =
     '[RENAME-017 DENIED] There are %d occurrence(s) of the same name ' +
-    'that the engine resolves to ANOTHER definition (see "lookalikes"). ' +
+    'that the engine resolves to ANOTHER definition (see "lookalikes"), ' +
+    'judged by one engine only: they are in this same project ("project"), ' +
+    'in no project, or the engine of their own project could not answer. ' +
     'They may really be something else and need no change... or they may ' +
-    'be THIS one, seen from a different project with another ' +
-    'configuration: that is what happened in the field, and the rename ' +
-    'said yes while it left a project that did not compile. Check them ' +
-    'one by one before applying anything; "scope" tells you where I ' +
-    'searched, and "project" with which project''s settings.';
+    'be THIS one, seen with another configuration: that is what happened ' +
+    'in the field, and the rename said yes while it left a project that ' +
+    'did not compile. Check them one by one before applying anything; ' +
+    '"scope" tells you where I searched. One in ANOTHER project is asked to ' +
+    'the engine of that project, and blocks nothing when it says it is ' +
+    'another definition (RENAME-024).';
+
+  SN_RENAME_HOMONIMOS_DE_SU_PROYECTO_FMT =
+    '[RENAME-024] %d occurrence(s) of the same name in OTHER projects are ' +
+    'another symbol for the engine of the project that compiles them, so ' +
+    'they stay as they are; delphi_references lists them in "rejected", ' +
+    'each with its "project".';
 
   SR_RENAME_UNVERIFIED_FMT =
     '[RENAME-018 DENIED] %d candidate references NOT semantically ' +
