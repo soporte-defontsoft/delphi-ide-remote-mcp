@@ -4581,6 +4581,29 @@ begin
       // despues EDIT-084 "edited" o el DSGN-021 de un form que ya estaba roto
       // (W2 del revisor de cierre de la 1.18.2, medido; DoEdit no juzga un
       // EDIT-113)
+      // un form que se leia y la tanda deja ilegible para el parser del IDE
+      // vuelve entero, byte a byte, como una entrada que falla (B3 de la 1.28):
+      // juzgado sobre lo que queda, no entrada a entrada (un paso intermedio
+      // puede no leerse; DoEdit no juzga dentro de una tanda)
+      if EsRutaDeDesigner(APath) and (SinCambios < Arr.Count) then
+      begin
+        var Rompe := '';
+        try
+          var EncFinal: string;
+          Rompe := NegativaDelParser(TPath.GetFileName(APath), TextoAntes,
+            PatchLoadText(APath, EncFinal), EncFinal, False);
+        except
+          Rompe := ''; // un form que no se relee: lo dice el juicio de abajo
+        end;
+        if Rompe <> '' then
+        begin
+          var NoVolvio := Foto.Restaura;
+          Result := Rompe;
+          if NoVolvio <> '' then
+            Result := MsgFmt(SR_FOTO_NO_VOLVIO_FMT, [NoVolvio, Rompe]);
+          Exit;
+        end;
+      end;
       if Aplazado and (SinCambios < Arr.Count) then
       try
         var EncF: string;
@@ -6528,6 +6551,16 @@ begin
     // escritor, y nada mas (el preview de un changeset; decima revision)
     if AEnsayo then
       Exit(SustitucionDenegada(APath));
+    // un form que se leia y esta edicion deja ilegible para el parser del IDE
+    // no se escribe (DSGN-124), como no lo escribe el disenador: se escribia y
+    // se avisaba despues (B3 de la 1.28). Dentro de una tanda o un changeset
+    // juzga quien agrupa, sobre lo que queda: un paso intermedio puede no leerse
+    if AIsDesigner and (GJuicioDeFormAplazado = 0) then
+    begin
+      var Rompe := NegativaDelParser(TPath.GetFileName(APath), Text, Joined, EncName(K), False);
+      if Rompe <> '' then
+        Exit(Rompe);
+    end;
     var CopyNote := BackupFile(APath);
     AtomicWrite(APath, NewBytes);
 

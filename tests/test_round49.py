@@ -200,9 +200,11 @@ try:
     open(fmx, 'wb').write(b"object Form1: TForm1\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'F'\r\nend\r\n")
     r = call('delphi_edit', {'path': fmx, 'edits': json.dumps([
         {'old': "  Top = 0\r\n  Caption = 'F'", 'new': "  Top = 0\r\n  // y\r\n  Caption = 'F'"}])})
-    check('E6 ...y un form escrito por un bloque lo juzga el parser del IDE (DSGN-123), como una linea',
-          mc.es(r, 'SN_PATCH_EDITS_OK_FMT') and mc.es(r, 'SN_DSGN_PARSER_FMT') and
-          b'// y' in open(fmx, 'rb').read(), r[:300])
+    # (B3 de la 1.28: lo que lo deja ilegible ya no se escribe - DSGN-124 y la tanda vuelve)
+    check('E6 ...y un form escrito por un bloque lo juzga el parser del IDE, como una linea: DSGN-124 y vuelve',
+          mc.abre(r, 'SR_DSGN_PARSER_NO_ESCRIBE_FMT') and
+          open(fmx, 'rb').read() == b"object Form1: TForm1\r\n  Left = 0\r\n  Top = 0\r\n  Caption = 'F'\r\nend\r\n",
+          r[:300])
 
     # ------------------------------------------------------------ changeset
     planta()

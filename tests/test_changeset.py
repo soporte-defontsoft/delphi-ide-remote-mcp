@@ -277,9 +277,11 @@ cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': _m3,
     'content': "object Form1: TForm1\r\n  // un comentario que el parser no lee\r\n  Caption = 'x'\r\nend\r\n"})
 cs({'command': 'preview', 'id': cid})
 r = cs({'command': 'commit', 'id': cid})
-check('M-3 el create de un .fmx que el parser del IDE no lee: se escribe y CHSET-032 lleva el DSGN-123',
-      mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and mc.es(r, 'SN_CHANGESET_AVISOS_FMT') and
-      mc.es(r, 'SN_DSGN_PARSER_FMT') and os.path.exists(_m3), r[-600:])
+# (B3 de la 1.28: ya no se escribe - el commit deshace el lote, CHSET-026 con DSGN-124, como
+# delphi_create no lo crea)
+check('M-3 el create de un .fmx que el parser del IDE no lee: el lote vuelve (CHSET-026 con DSGN-124) y no existe',
+      mc.abre(r, 'SR_CHANGESET_ROLLED_BACK_FMT') and mc.es(r, 'SR_DSGN_PARSER_NO_ESCRIBE_FMT') and
+      not os.path.exists(_m3), r[-600:])
 
 srv.mata()
 mc.borra(BASE)  # no se quedaba en la maquina (revisor de baterias de la 1.27)

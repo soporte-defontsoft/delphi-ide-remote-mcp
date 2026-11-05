@@ -204,8 +204,12 @@ try:
                                   'content': 'object Form1: TForm1\n  // esto no lo lee el IDE\nend\n'})
     srv.call('delphi_changeset', {'command': 'preview', 'id': cid})
     r = srv.call('delphi_changeset', {'command': 'commit', 'id': cid}, t=240)
-    check('J16 changeset que crea un form ilegible: DSGN-123 UNA vez (el juicio final, no el paso)',
-          not mc.rechazado(r) and mc.ids(r).count(mc.id_de('SN_DSGN_PARSER_FMT')) == 1, r[:700])
+    # (B3 de la 1.28: un form ilegible ya no se escribe - el lote vuelve con DSGN-124 UNA vez, juzgado
+    # sobre lo que quedo y no en el paso)
+    check('J16 changeset que crea un form ilegible: vuelve, DSGN-124 UNA vez y sin DSGN-123, y no existe',
+          mc.abre(r, 'SR_CHANGESET_ROLLED_BACK_FMT') and
+          mc.ids(r).count(mc.id_de('SR_DSGN_PARSER_NO_ESCRIBE_FMT')) == 1 and
+          not mc.es(r, 'SN_DSGN_PARSER_FMT') and not os.path.exists(os.path.join(d16, 'UMal.dfm')), r[:700])
     # W10 del revisor de cierre: en un changeset con move, el form que queda en
     # disco es el DESTINO, y no se juzgaba (Seen guardaba el origen). De la B de
     # la 1.19.2 a la 1.22 un form no se movia por changeset (CHSET-033); desde

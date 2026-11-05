@@ -1097,9 +1097,6 @@ begin
 end;
 
 function TStyleDoc.JuicioDelParser(const ATexto: string): string;
-var
-  Linea, LineaAntes: Integer;
-  Cita, CitaAntes, Error, Antes: string;
 begin
   // lo LEIDO, por lineas como lo lee el parser del IDE: si no, lo que se va
   // a escribir se compuso sobre otras lineas (DSGN-160). La segunda barrera
@@ -1107,15 +1104,9 @@ begin
   Result := FormaDistinta;
   if Result <> '' then
     Exit;
-  Error := ParserDeForm(ATexto, FEnc, Linea, Cita);
-  if Error <> '' then
-  begin
-    // como estaba ANTES: si ya no se leia, se dice asi (el arreglo es otro)
-    Antes := ParserDeForm(TextoDe(FLeidas), FEnc, LineaAntes, CitaAntes);
-    if Antes <> '' then
-      Exit(MsgFmt(SR_DSGN_PARSER_YA_ROTO_FMT, [TPath.GetFileName(FPath), Antes, LineaAntes, CitaAntes]));
-    Exit(MsgFmt(SR_DSGN_PARSER_NO_ESCRIBE_FMT, [TPath.GetFileName(FPath), Error, Linea, Cita]));
-  end;
+  // EL juez de antes de escribir (Lsp.DesignerBin.NegativaDelParser); si ya
+  // no se leia, se dice asi (el arreglo es otro: delphi_edit)
+  Result := NegativaDelParser(TPath.GetFileName(FPath), TextoDe(FLeidas), ATexto, FEnc, True);
 end;
 
 { ---- files ---- }

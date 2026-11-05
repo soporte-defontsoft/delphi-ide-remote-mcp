@@ -11140,12 +11140,12 @@ const
     'CREATE (in the encoding configured in the IDE, or UTF-8 with a BOM ' +
     'when ANSI cannot hold it), RESTORE, ADDUSES and ' +
     'REMOVEUSES - each parameter says which mode it belongs to. Refuses ' +
-    'whole-file rewrites and binary designer files (TPF0); backs up, ' +
+    'whole-file rewrites, binary designer files (TPF0) and a form the ' +
+    'IDE''s parser would stop reading; backs up, ' +
     'writes atomically and audits the result (encoding, EOLs, mojibake, ' +
     'end. structure, a brace comment with a brace inside - warned, never ' +
     'refused), reporting the REAL lines read back from disk: use them as ' +
-    'evidence. Never edit Delphi files with generic tools: ANSI sources ' +
-    'get destroyed.';
+    'evidence. Generic tools destroy ANSI sources.';
 
   // Descripciones que estaban en linea en Mcp.Tools.FileOps.pas (paso 3d, 27-sep-2026)
   SP_FILE_PATH =

@@ -15,9 +15,16 @@ decia CLEAN y solo preview (el IDE) lo rechazaba: "Identifier expected on line
       DSGN-126) y un set de un valor bueno en el estilo se escribe
   P6  un set sobre un form de texto en UTF-16: DSGN-122 y no escribe - el IDE
       no lo carga (A28 de la 1.23; lo escribia y decia que el IDE lo abria) -
-  P7  revisor 2 de la noche, M-B: delphi_edit que mete un // en un .fmx dice
-      DSGN-123 (su lint no preguntaba al parser: la puerta del 8-oct)
-  P8  B-8: la tanda (edits) lo lleva en su resumen, con lo que va debajo
+  P7  (B3 de la 1.28) delphi_edit que mete un // en un .fmx que se leia NO lo
+      escribe: DSGN-124, como el disenador. Desde la M-B del revisor 2 de la
+      noche lo escribia y avisaba DSGN-123 despues (roja contra 578ccf2)
+  P7b ...sobre un form YA roto se escribe y se avisa (DSGN-123): quien lo
+      arregla a mano escribe pasos que aun no se leen; P7c el paso que lo
+      arregla se escribe sin aviso
+  P8  la tanda (edits) que deja un // en un form sano vuelve entera: DSGN-124
+      y el form byte a byte; P8b juzgada por lo que QUEDA: un paso intermedio
+      ilegible que el siguiente quita se escribe. Y lo que va debajo de un
+      aviso *** (B-8) sigue en su resumen
 
 Uso:  python tests/test_parser_form.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -98,19 +105,42 @@ try:
           mc.abre(r, 'SR_DSGN_FORM_ANCHO_NO_CARGA_FMT') and _b16.startswith(b'\xff\xfe') and
           'Ancho' not in _b16[2:].decode('utf-16-le'), r[:400])
 
-    # P7: delphi_edit sobre el form arreglado de P5, metiendo un //
+    # P7: delphi_edit sobre el form arreglado de P5, metiendo un //: no se escribe
+    _antes7 = open(FMX, 'rb').read()
     r = srv.call('delphi_edit', {'path': FMX, 'old': 'object Form1: TForm1',
                                  'new': 'object Form1: TForm1\n  // otro comentario'}, t=200)
-    check('P7 delphi_edit que mete un // en un .fmx: DSGN-123 en su respuesta (avisa, no niega)',
-          not mc.fallo(r) and mc.es(r, 'SN_DSGN_PARSER_FMT') and b'// otro comentario' in open(FMX, 'rb').read(),
+    check('P7 delphi_edit que mete un // en un .fmx sano: DSGN-124 y el form intacto (niega, como el disenador)',
+          mc.abre(r, 'SR_DSGN_PARSER_NO_ESCRIBE_FMT') and open(FMX, 'rb').read() == _antes7, r[:500])
+    # P7b/P7c: un form YA roto se sigue arreglando a mano, paso a paso
+    _roto7 = os.path.join(JAIL, 'URoto7.fmx')
+    open(_roto7, 'wb').write(ROTO)
+    r = srv.call('delphi_edit', {'path': _roto7, 'old': "    Text = 'Button1'", 'new': "    Text = 'Boton'"}, t=200)
+    check('P7b delphi_edit en un form YA roto: se escribe y avisa DSGN-123 (el arreglo a mano sigue abierto)',
+          not mc.fallo(r) and mc.es(r, 'SN_DSGN_PARSER_FMT') and b"Text = 'Boton'" in open(_roto7, 'rb').read(),
           r[-600:])
-    # P8: lo mismo por la tanda, en otro form sano
+    r = srv.call('delphi_edit', {'path': _roto7, 'old': '  // un comentario que el parser del IDE no lee',
+                                 'delete': True}, t=200)
+    check('P7c ...y el paso que lo arregla se escribe, ya sin DSGN-123',
+          not mc.fallo(r) and not mc.es(r, 'SN_DSGN_PARSER_FMT') and b'//' not in open(_roto7, 'rb').read(),
+          r[-600:])
+    # P8: lo mismo por la tanda, en otro form sano: vuelve entera
     _tanda = os.path.join(JAIL, 'UTanda.fmx')
     open(_tanda, 'wb').write(ROTO.replace(b'  // un comentario que el parser del IDE no lee\r\n', b''))
+    _antes8 = open(_tanda, 'rb').read()
     r = srv.call('delphi_edit', {'path': _tanda, 'edits': json.dumps([
         {'old': "Caption = 'Form1'", 'new': "Caption = 'Form1'\n  // de la tanda"}])}, t=200)
-    check('P8 la tanda (edits) lleva el DSGN-123 en su resumen (B-8)',
-          not mc.fallo(r) and mc.es(r, 'SN_DSGN_PARSER_FMT'), r[-600:])
+    check('P8 la tanda que deja un // en un form sano: DSGN-124 y el form intacto, byte a byte',
+          mc.abre(r, 'SR_DSGN_PARSER_NO_ESCRIBE_FMT') and open(_tanda, 'rb').read() == _antes8, r[:500])
+    # (en su propio form: con el de P8, un P8 rojo le dejaba su // y P8b fallaba por el)
+    _tanda3 = os.path.join(JAIL, 'UTanda3.fmx')
+    open(_tanda3, 'wb').write(_antes8)
+    r = srv.call('delphi_edit', {'path': _tanda3, 'edits': json.dumps([
+        {'old': "Caption = 'Form1'", 'new': "Caption = 'Form1'\n  // de paso"},
+        {'old': '  // de paso', 'delete': True},
+        {'old': "    Text = 'Button1'", 'new': "    Text = 'Tanda'"}])}, t=200)
+    check('P8b ...juzgada sobre lo que QUEDA: un paso intermedio ilegible que el siguiente quita, se escribe',
+          not mc.fallo(r) and b"Text = 'Tanda'" in open(_tanda3, 'rb').read() and b'//' not in open(_tanda3, 'rb').read(),
+          r[-600:])
     # ...y lo que va DEBAJO de un aviso *** (revisor 3, B-2: DSGN-123 ya llevaba
     # ***, y el filtro viejo de solo las lineas *** tambien lo pasaba): la lista
     # de EDIT-076, cuya linea no lleva marca

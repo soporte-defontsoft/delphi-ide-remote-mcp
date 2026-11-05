@@ -244,6 +244,16 @@ function ParserDeForm(const ATexto, AEnc: string; out ALinea: Integer;
   out ACita: string): string;
 { El aviso del lint con eso (DSGN-123); '' si el parser lo lee. }
 function AvisoDelParserDeForm(const ATexto, AEnc: string): string;
+{ EL juicio del parser del IDE ANTES de escribir un designer de texto (los
+  bytes que haria ADespues en AEnc): '' si se lee; si no, la negativa
+  DSGN-124. Si AAntes (lo que dice el disco antes; '' = un fichero nuevo) ya
+  no se leia: con ANiegaYaRoto, DSGN-125; sin el, '' - quien lo arregla a
+  mano (delphi_edit, la tanda, el changeset) escribe pasos que aun no se
+  leen, y su aviso DSGN-123 sigue despues. El de TStyleDoc.Guarda (designer,
+  styles) y el de los escritores de texto, que escribian lo que el IDE no
+  abre y avisaban despues (B3 de la 1.28). }
+function NegativaDelParser(const ANombre, AAntes, ADespues, AEnc: string;
+  ANiegaYaRoto: Boolean): string;
 
 { La linea (1-based) en la que EL parser del IDE lee las lineas de un
   designer de texto de otra manera que LineasDeForm, que lee la forma en que
@@ -388,6 +398,29 @@ begin
   Result := ParserDeForm(ATexto, AEnc, Linea, Cita);
   if Result <> '' then
     Result := MsgFmt(SN_DSGN_PARSER_FMT, [Result, Linea, Cita]);
+end;
+
+function NegativaDelParser(const ANombre, AAntes, ADespues, AEnc: string;
+  ANiegaYaRoto: Boolean): string;
+var
+  Linea, LineaAntes: Integer;
+  Cita, CitaAntes, Error, Antes: string;
+begin
+  Result := '';
+  Error := ParserDeForm(ADespues, AEnc, Linea, Cita);
+  if Error = '' then
+    Exit;
+  if AAntes <> '' then
+  begin
+    Antes := ParserDeForm(AAntes, AEnc, LineaAntes, CitaAntes);
+    if Antes <> '' then
+    begin
+      if ANiegaYaRoto then
+        Result := MsgFmt(SR_DSGN_PARSER_YA_ROTO_FMT, [ANombre, Antes, LineaAntes, CitaAntes]);
+      Exit;
+    end;
+  end;
+  Result := MsgFmt(SR_DSGN_PARSER_NO_ESCRIBE_FMT, [ANombre, Error, Linea, Cita]);
 end;
 
 type

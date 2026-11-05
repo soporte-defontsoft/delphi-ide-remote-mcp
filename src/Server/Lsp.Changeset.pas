@@ -87,7 +87,8 @@ uses
   Lsp.ProjectUnits,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.ShaCache,
-  Lsp.NetDrives;
+  Lsp.NetDrives,
+  Lsp.DesignerBin;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
@@ -424,7 +425,8 @@ begin
         // un form nuevo, en una codificacion que EL parser del IDE lea, la
         // misma regla que delphi_create (Lsp.Patch.EncDeFormNuevo; el create
         // de un changeset la saltaba: revisor 3 de la noche, M-3); si no lo
-        // lee en ninguna, se escribe y se avisa, como delphi_edit (DSGN-123)
+        // lee en ninguna, el commit deshace el lote (NegativaDelParser, sobre
+        // lo que quedo: B3 de la 1.28), como delphi_create no lo escribe
         var ErrForm: string;
         var LinForm: Integer;
         var CitaForm: string;
@@ -1201,6 +1203,39 @@ begin
           end;
         finally
           AplazaJuicioDeForm(False);
+        end;
+        // un form que se leia y el lote deja ilegible para el parser del IDE
+        // deshace el lote entero, como una operacion que falla: se escribia y
+        // se avisaba despues (B3 de la 1.28). Sobre lo que quedo, no paso a paso
+        // (un paso intermedio puede no leerse), y por lo que cambia su texto:
+        // un move no cambia lo que dice el form. La operacion que se cita es la
+        // ULTIMA que lo toco
+        if Applied then
+        begin
+          var Juzgados: TArray<string> := [];
+          for var J := C.Ops.Count - 1 downto 0 do
+          begin
+            var FPath := C.Ops[J].Path;
+            if not (C.Ops[J].Kind in [opEdit, opCreate, opDeleteLine]) or not EsRutaDeDesigner(FPath) or
+               RutaEnLista(FPath, Juzgados) or not TFile.Exists(FPath) or not Foto.Cambio(FPath) then
+              Continue;
+            Juzgados := Juzgados + [FPath];
+            var Rompe := '';
+            try
+              var EncF: string;
+              Rompe := NegativaDelParser(TPath.GetFileName(FPath), TextoDeLaFoto(Foto, FPath),
+                PatchLoadText(FPath, EncF), EncF, False);
+            except
+              Rompe := ''; // un form que no se relee: lo dice el juicio de abajo
+            end;
+            if Rompe <> '' then
+            begin
+              Applied := False;
+              Err := Rompe;
+              N := J + 1;
+              Break;
+            end;
+          end;
         end;
         // Counts BEFORE dropping the changeset: GSets owns it, so Remove
         // FREES C and reading C.Ops.Count afterwards returned 0 - the
