@@ -1460,6 +1460,12 @@ begin
   ProfName := Params.Profile.Trim;
   if ProfName = '' then
     Exit(MsgText(SR_PASERVER_NEED_NAME));
+  // active, por LA gramatica de un si/no (LeeSiNo), y antes de hacer nada:
+  // tenia la suya al final del todo, y active=on o active=xyz se tomaban por
+  // un no sin decirlo (revisor del paisaje de la 1.28, J11)
+  var Activo := False;
+  if (Params.Active.Trim <> '') and not LeeSiNo(Params.Active, Activo) then
+    Exit(MsgFmt(SR_PASERVER_ACTIVE_NO_ES_SINO_FMT, [Params.Active.Trim]));
   var DelIde: string;
   Result := PerfilParaOperar(ProfName, Info, PaClient, DelIde);
   if Result <> '' then
@@ -1667,7 +1673,7 @@ begin
       try
         var CopiaAsiento, CopiaDefault: string;
         if RegistrarSdkEnIde(Info.Version, Info.RootDir, SysRoot, SdkName,
-          MatchText(Params.Active.Trim, ['si', 'yes', 'true', '1']), CopiaAsiento, CopiaDefault) then
+          Activo, CopiaAsiento, CopiaDefault) then
           Return.AddPair('ideSdkRegistered', TJSONBool.Create(True));
         if CopiaAsiento <> '' then
           Return.AddPair('previousIdeSeatCopy', CopiaAsiento);

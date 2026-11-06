@@ -996,6 +996,22 @@ begin
   Result := Result + 'end' + CRLF;
 end;
 
+{ El "project" de una llamada de delphi_create, antes de escribir nada: la
+  puerta de escribir, que sea un PROYECTO (con un .txt se creaban el .pas y el
+  .dfm y luego no se podian registrar) y que exista. Eran tres copias, y la
+  del include no preguntaba si era un proyecto: con un .gitignore creaba el
+  .inc y callaba (revisor del paisaje de la 1.28, J6). }
+function ProyectoDeLaLlamada(const ADprPath: string): string;
+begin
+  Result := WriteTargetDenied(ADprPath);
+  if Result <> '' then
+    Exit;
+  if not EsProyectoOSuFuente(ADprPath) then
+    Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
+  if not TFile.Exists(ADprPath) then
+    Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath])));
+end;
+
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
   const ASubDir, AAncestro: string): string;
 var
@@ -1011,15 +1027,9 @@ begin
   // path given"): lo que falta es el proyecto (Opus en Hermes, 1.22.1)
   if ADprPath.Trim = '' then
     Exit(MsgText(SR_CREATE_FORM_NEED_PROJECT));
-  Result := WriteTargetDenied(ADprPath);
+  Result := ProyectoDeLaLlamada(ADprPath);
   if Result <> '' then
     Exit;
-  // "project" tiene que ser un PROYECTO antes de escribir nada: con un .txt
-  // se creaban el .pas y el .dfm y luego no se podian registrar
-  if not EsProyectoOSuFuente(ADprPath) then
-    Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
-  if not TFile.Exists(ADprPath) then
-    Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath])));
   Result := BadUnitName(AUnitName);
   if Result <> '' then
     Exit;
@@ -1294,13 +1304,9 @@ begin
     Exit(ConAvisosDeLlaves(MsgFmt(SN_CREATE_UNIT_SUELTA_FMT,
       [AUnitName, PasPath, Length(LineasDelTexto(Body)), Enc, Salto]), PasPath, Body) + NotaDeNombreTapado(AUnitName, PasPath));
   end;
-  Result := WriteTargetDenied(ADprPath);
+  Result := ProyectoDeLaLlamada(ADprPath);
   if Result <> '' then
     Exit;
-  if not EsProyectoOSuFuente(ADprPath) then
-    Exit(MsgFmt(SR_UNIT_PROJECT_EXT_FMT, [ADprPath]));
-  if not TFile.Exists(ADprPath) then
-    Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath])));
   Result := BadUnitName(AUnitName);
   if Result <> '' then
     Exit;
@@ -1364,11 +1370,9 @@ begin
   if ADprPath.Trim <> '' then
   begin
     // con proyecto, "dir" es su subcarpeta, como para una unit
-    Result := WriteTargetDenied(ADprPath);
+    Result := ProyectoDeLaLlamada(ADprPath);
     if Result <> '' then
       Exit;
-    if not TFile.Exists(ADprPath) then
-      Exit(NoEsFichero(ADprPath, MsgFmt(SR_CREATE_NO_EXISTE_PROYECTO_FMT, [ADprPath])));
     Result := CarpetaEnElProyecto(ADprPath, ADir, Dir);
     if Result <> '' then
       Exit;

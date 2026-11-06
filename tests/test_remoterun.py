@@ -465,6 +465,11 @@ finally:
 j = json.loads(r) if r.startswith('{') else {}
 check('desktop status contra un PAServer que no contesta: reachable=false con el motivo, sin error',
       j.get('reachable') is False and 'error' not in j and 'E0003' in (j.get('hint') or ''), r[:300])
+# desktop type con un salto de linea: UNA linea, dicho antes de nada (DESK-027, con la tecla de Enter);
+# salia RUN-026 nombrando un "Argument 3" que el agente nunca mando (revisor del paisaje de la 1.28, J10)
+r = call('delphi_desktop', {'command': 'type', 'profile': PROFILE, 'text': 'uno\ndos'}, t=180)
+check('desktop type con un salto de linea: DESK-027, una linea y como se pulsa Enter (era RUN-026)',
+      mc.es(r, 'SR_DESKTOP_TYPE_UNA_LINEA') and 'Argument' not in r, r[:300])
 
 # ---- 2ab de la 1.18.2 (revisor, R1): una credencial de SOLO LECTURA no
 # ejecuta. delphi_desktop screenshot/status con project= corre ESE proyecto en

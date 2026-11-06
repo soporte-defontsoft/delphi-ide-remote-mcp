@@ -2611,8 +2611,13 @@ begin
             IDeclExiste := R.Linea;
             Break;
           end;
+        // la clase por el patron del lector (TFoo y TFoo<T> son dos tipos); el
+        // metodo con SUS parametros genericos si los lleva, y blancos alrededor
+        // del punto como entre niveles: TFoo.Bar<T>(X: T) no casaba y se
+        // escribia una segunda implementacion (E2004; revisor del paisaje de
+        // la 1.28, J1)
         var ImplRe := TRegEx.Create('^\s*' + PatronInicioDeRutina + '\s+' +
-          PatronClase + '\.' + TRegEx.Escape(Nombre) + '\s*[(;:]', [roIgnoreCase]);
+          PatronClase + '\s*\.\s*' + TRegEx.Escape(Nombre) + '(?:\s*<[^<>;()]*>)?\s*[(;:]', [roIgnoreCase]);
         var IImplExiste := -1;
         for I := 0 to High(Codigo) do
           if ImplRe.IsMatch(Codigo[I]) then

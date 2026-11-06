@@ -51,10 +51,10 @@ implementation
 
 uses
   System.SysUtils,
-  System.StrUtils,    // MatchText
   System.IOUtils,
   System.Types,
   Lsp.Guard,
+  Lsp.Rutas,          // RutaEnLista: un nombre como lo compara NTFS
   Lsp.Texts,
   Lsp.Puertas,        // EscribeTexto: la puerta de escribir
   Lsp.Codificacion,   // ekUtf8
@@ -292,7 +292,11 @@ end;
 
 function EsFicheroDeGobierno(const ANombre: string): Boolean;
 begin
-  Result := MatchText(ANombre, [VAULT_REGLAS, VAULT_INDICE, VAULT_GUIA_ESCRITURA,
+  // como NTFS compara dos nombres: MatchText pliega con el locale, y en un
+  // Windows turco o azeri vault-instructions.md no era VAULT-INSTRUCTIONS.md
+  // para el juez y SI para el disco - un agente reescribia las instrucciones
+  // del servidor (el V191 otra vez; revisor del paisaje de la 1.28, J7)
+  Result := RutaEnLista(ANombre, [VAULT_REGLAS, VAULT_INDICE, VAULT_GUIA_ESCRITURA,
     VAULT_INSTRUCCIONES]);
 end;
 

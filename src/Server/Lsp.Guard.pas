@@ -1732,7 +1732,9 @@ begin
     var Base := Name;
     if Base.IndexOf('.') > 0 then
       Base := Base.Substring(0, Base.IndexOf('.'));
-    if MatchText(Base.TrimRight, ['CON', 'PRN', 'AUX', 'NUL', 'CONIN$', 'CONOUT$',
+    // (como NTFS compara dos nombres, RutaEnLista: con el locale, en un Windows
+    // turco conin$ no era CONIN$; revisor del paisaje de la 1.28, J7)
+    if RutaEnLista(Base.TrimRight, ['CON', 'PRN', 'AUX', 'NUL', 'CONIN$', 'CONOUT$',
          'COM0', 'COM1', 'COM2', 'COM3', 'COM4', 'COM5', 'COM6', 'COM7', 'COM8', 'COM9',
          'COM'#$00B9, 'COM'#$00B2, 'COM'#$00B3,
          'LPT0', 'LPT1', 'LPT2', 'LPT3', 'LPT4', 'LPT5', 'LPT6', 'LPT7', 'LPT8', 'LPT9',

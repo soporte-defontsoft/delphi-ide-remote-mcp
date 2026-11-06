@@ -382,6 +382,19 @@ REGLAS = [
     ('un perfil o un SDK del IDE elegido con el locale',
      r"\b(?:MatchText|IndexText|AnsiSameText|AnsiIndexText)\(\s*[^;]*?(?:Sdk|Perfil|Profile)", [],
      'IndiceDeRuta / RutaEnLista (Lsp.Rutas): el nombre de un fichero del IDE como lo compara NTFS'),
+    # un nombre que juzga WINDOWS (un fichero de gobierno del vault, un dispositivo reservado) comparado con
+    # el locale: en un Windows turco 'vault-instructions.md' no era VAULT-INSTRUCTIONS.md para el juez y si
+    # para el disco, y un agente reescribia las instrucciones del servidor (revisor del paisaje de la 1.28, J7)
+    # el temporal de una sustitucion escrito fuera de su nucleo: AtomicWrite, el escritor de casi toda la
+    # jaula, lo dejaba suelto si la escritura fallaba (disco lleno) y su gemelo EscribeBytes lo borraba
+    # (revisor del paisaje de la 1.28, J8). Coloca escribe el suyo con su finally
+    ('un temporal de sustitucion escrito fuera de su nucleo', r"WriteAllBytes\(\s*Tmp\b",
+     [('Lsp.Puertas.pas', 'SustituyePorBytes'), ('Lsp.Puertas.pas', 'Coloca')],
+     'SustituyePorBytes (Lsp.Puertas): temporal, escritura y renombre, y a medias no se queda'),
+    ('un nombre de Windows juzgado con el locale',
+     r"\b(?:Ansi)?(?:MatchText|IndexText|SameText)\s*\([^;]*(?:\bVAULT_(?:REGLAS|INDICE|GUIA_ESCRITURA|INSTRUCCIONES)\b"
+     r"|'CONIN\$')", [],
+     'RutaEnLista (Lsp.Rutas): el nombre como lo compara NTFS'),
     # LA gramatica de los condicionales de Pascal (que nombre abre, cambia de rama o cierra): estaba en las
     # constantes de Lsp.ProjectUnits y en linea en el evaluador de Lsp.Preproceso (forma 4 de la 1.26). No hay juez
     # (ni dcc ni el motor dicen que nombres abren un condicional): gramatica PROPIA, UNA. TextoActivoEn distingue
@@ -1462,8 +1475,10 @@ REGLAS = [
     r"TFile\.Open\s*\([^;]*\b(?:faWrite|faReadWrite|fmCreateNew|fmOpenOrCreate|fmTruncate|fmAppend)\b",
      [# LA puerta (EscribeBytes) y los escritores de la jaula que ya preguntan la suya:
       # el atomico, el de productos, la copia diaria y la sellada de la papelera
-      ('Lsp.Puertas.pas', 'EscribeBytes'), ('Lsp.Puertas.pas', 'CopiaAntesDePisar'),
-      ('Lsp.Puertas.pas', 'AtomicWrite'),
+      ('Lsp.Puertas.pas', 'CopiaAntesDePisar'),
+      # el nucleo de EscribeBytes y AtomicWrite: temporal, escritura y renombre, que cada
+      # uno escribia a su modo (J8 de la 1.28: el de AtomicWrite dejaba el temporal)
+      ('Lsp.Puertas.pas', 'SustituyePorBytes'),
       # el renombre que insiste ante un lector de un instante (antes en linea en
       # SustituyePorRenombre; la caja de paquetes del render lo llama tambien)
       ('Lsp.Guard.pas', 'RenombraConReintentos'), ('Lsp.Puertas.pas', 'Coloca'),
@@ -1524,7 +1539,7 @@ REGLAS = [
      r"\bRemoveDirectory\w*\s*\(|\bBorraLoNuestro\s*\(|\bBorraNombre\s*\(",
      [# LA puerta de borrar fuera de la jaula (BorraFichero) y los temporales que los
       # escritores acaban de dejar (el suyo, la copia que no se llego a usar)
-      ('Lsp.Puertas.pas', 'BorraFichero'), ('Lsp.Puertas.pas', 'EscribeBytes'),
+      ('Lsp.Puertas.pas', 'BorraFichero'), ('Lsp.Puertas.pas', 'SustituyePorBytes'),
       ('Lsp.Puertas.pas', 'SustituyePorRenombre'), ('Lsp.Puertas.pas', 'Coloca'),
       # la jaula: su borrado de lo que la operacion acaba de dejar, sus recorredores
       # (no cruzan enlaces; la puerta antes), la papelera y el deshacer
@@ -2052,6 +2067,8 @@ PLANTADO = {
     'el nombre de una carpeta del servidor juzgado a mano': "        if SameText(Nombre, TrashFolderName) then",
     'una extension juzgada con el locale': "  Result := MatchText(TPath.GetExtension(APath), SOURCE_EXTS);",
     'un perfil o un SDK del IDE elegido con el locale': "  if MatchText(AProfile.Trim, Sirven) then",
+    'un nombre de Windows juzgado con el locale': "  Result := MatchText(ANombre, [VAULT_REGLAS, VAULT_INDICE]);",
+    'un temporal de sustitucion escrito fuera de su nucleo': "  TFile.WriteAllBytes(Tmp, B);",
     'las ordenes de red de git a mano': "    if MatchText(Cmd, ['pull', 'fetch', 'push', 'ls-remote']) then",
     'una clausula uses nueva compuesta a mano':
         "    EstrenaClausula(AText, FinLinea, 'uses' + NL + '  ' + string.Join(', ', AFaltan) + ';');",

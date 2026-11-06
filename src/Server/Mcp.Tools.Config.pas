@@ -2190,6 +2190,11 @@ begin
     Result := ConfigDelBuild(InfoDeDproj(AXml), ARawConfig, AConfig);
 end;
 
+const
+  // la marca con que SetProperty pregunta si el sitio que escribe es el que
+  // msbuild lee: sin $( y sin ;, nada la expande ni la trocea
+  VALOR_SONDA_DEL_SITIO = 'mcp-sonda-del-sitio';
+
 function SetProperty(const ADproj, ARawName, ARawValue, ARawPlatform, ARawConfig: string;
   AQuitar: Boolean): string;
 var
@@ -2234,13 +2239,22 @@ begin
   // con el build entero nombrado, lo que msbuild lee para el: se escribe en
   // el ULTIMO grupo con esa Condition, pero un elemento con SU Condition en
   // ese grupo, o un grupo de otra forma mas abajo, gana; se dice (revisor D,
-  // 21-oct-2026). Un valor con $(Nombre) dentro se lee expandido: no se compara
+  // 21-oct-2026). Si gana el SITIO que se escribe se pregunta con una marca en
+  // ese sitio, que nada expande: comparar el valor con lo leido, ya expandido,
+  // daba pisada falsa con cualquier $(X) dentro (.\$(Platform)\bin; revisor
+  // del paisaje de la 1.28, J3)
   Pisada := '';
-  if (Plat <> '') and (Cfg <> '') and not ContainsText(Valor, '$(' + Nombre + ')') then
+  if (Plat <> '') and (Cfg <> '') then
   begin
-    Leido := EffectiveProperty(Xml, Nombre, Plat, Cfg);
-    if Leido <> Valor then
+    var Sonda := Original;
+    var AntesSonda: string;
+    var FaltaSonda: TFaltaDeGrupo;
+    if PonPropiedadDelBuild(Sonda, Nombre, VALOR_SONDA_DEL_SITIO, Plat, Cfg, False, AntesSonda, FaltaSonda) and
+       (EffectiveProperty(Sonda, Nombre, Plat, Cfg) <> VALOR_SONDA_DEL_SITIO) then
+    begin
+      Leido := EffectiveProperty(Xml, Nombre, Plat, Cfg);
       Pisada := MsgFmt(SF_CFG_PROPERTY_PISADA_FMT, [ONinguno(Leido)]);
+    end;
   end;
   // un $(X) del valor que queda ENCIMA de la definicion de X: msbuild lo lee
   // vacio ahi (de arriba abajo; F2613 sin aviso, Opus en Hermes 22-oct-2026).

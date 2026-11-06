@@ -365,6 +365,10 @@ function RaicesDelModoLocal: TArray<string>;
 function RemoteProjectsNow: TArray<string>;
 function ToolsOnly: TArray<string>;
 function ToolsProfileNow: string;
+{ LA gramatica de un si/no (1/0, true/false, yes/no, on/off): False si ATexto
+  no es de ella. Del settings.ini y del entorno, y de un parametro de si/no de
+  una tool (active de get-sdk tenia la suya: J11 de la 1.28). }
+function LeeSiNo(const ATexto: string; out AValor: Boolean): Boolean;
 
 implementation
 

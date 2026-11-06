@@ -161,9 +161,10 @@ type
 
 { Los forms y frames que AProyecto (.dpr, .dpk) lista con raiz de una de AClases,
   con la extension AExt y que la sesion puede leer. De cada entrada se mira su
-  comentario de form, T + nombre como la llama el IDE, y solo si casa se abre el
-  form y manda su raiz: quien pregunta por una clase de un paquete que no esta no
-  lee el proyecto entero. Lo que falte o no se lea no sale. Puede lanzar, como
+  comentario de form, T + nombre como la llama el IDE, y si casa se abre el form
+  y manda su raiz: quien pregunta por una clase de un paquete que no esta no lee
+  el proyecto entero en ese paso. Si ninguno casa, la raiz de los demas, que es
+  la que manda (J4 de la 1.28). Lo que falte o no se lea no sale. Puede lanzar, como
   ProjectUnits, si el proyecto no se deja leer. Lo piden el render (un ancestro o
   un frame de otra carpeta), insert (un frame) y delphi_create (un ancestro). }
 function FormsDeLasClases(const AProyecto: string; const AClases: TArray<string>;
@@ -953,9 +954,25 @@ begin
   Result := ClaveDeRuta(ConBarrasDeWindows(AInclude));
 end;
 
-{ Finds the element for AInclude (path compared case-insensitively with / and
-  \ unified). Returns its [Start, Len) in Xml including the trailing newline. }
-function FindDccRef(const Xml, AInclude: string; out AStart, ALen: Integer): Boolean;
+{ LA clave del FICHERO que nombra el Include AInclude de AFichero (un .dpr o
+  un .dproj), resuelto desde el (RutaDeInclude, EL resolutor); el texto
+  (ClaveDeInclude) si no se resuelve. Comparando el TEXTO, '.\U.pas' en el
+  .dproj no era 'U.pas' del .dpr: remove-unit dejaba huerfana la
+  DCCReference, add-unit anadia otra y view decia dproj:false (revisor del
+  paisaje de la 1.28, J5). }
+function ClaveDeIncludeDe(const AFichero, AInclude: string): string;
+begin
+  var Full := RutaDeInclude(AFichero, AInclude);
+  if Full <> '' then
+    Result := ClaveDeRuta(NormPath(Full))
+  else
+    Result := ClaveDeInclude(AInclude);
+end;
+
+{ Finds the element for AInclude - relative to the .dpr ADpr - in the .dproj
+  ADproj (Xml): the DCCReference that names the SAME file (ClaveDeIncludeDe).
+  Returns its [Start, Len) in Xml including the trailing newline. }
+function FindDccRef(const Xml, ADproj, ADpr, AInclude: string; out AStart, ALen: Integer): Boolean;
 var
   Want: string;
   Hasta: Integer;
@@ -964,9 +981,9 @@ begin
   // regex con el Include el primero, entre comillas dobles, y la etiqueta
   // sola en su linea
   Result := False;
-  Want := ClaveDeInclude(AInclude);
+  Want := ClaveDeIncludeDe(ADpr, AInclude);
   for var T in TramosDeEtiqueta(Xml, 'DCCReference', True) do
-    if ClaveDeInclude(AtributoDeTramo(Xml, T, 'DCCReference', 'Include')) = Want then
+    if ClaveDeIncludeDe(ADproj, AtributoDeTramo(Xml, T, 'DCCReference', 'Include')) = Want then
     begin
       ConSuLinea(Xml, T.Abre, T.Cierra, AStart, Hasta);
       ALen := Hasta - AStart;
@@ -1113,7 +1130,7 @@ begin
   if TFile.Exists(Dproj) then
   begin
     Text := PatchLoadText(Dproj, Enc);
-    if FindDccRef(Text, Include, S, L) then
+    if FindDccRef(Text, Dproj, Dpr, Include, S, L) then
     begin
       // refresh the element (a plain unit that gained a form, for instance)
       Text := Copy(Text, 1, S - 1) + DccRefXml(Info, Include) + Copy(Text, S + L, MaxInt);
@@ -1360,7 +1377,7 @@ begin
   if TFile.Exists(Dproj) then
   begin
     Text := PatchLoadText(Dproj, Enc);
-    if FindDccRef(Text, Include, S, L) then
+    if FindDccRef(Text, Dproj, Dpr, Include, S, L) then
     begin
       Text := Copy(Text, 1, S - 1) + Copy(Text, S + L, MaxInt);
       PatchSaveConSuSalto(Dproj, Text, Enc);
@@ -1473,7 +1490,7 @@ begin
   if TFile.Exists(Dproj) then
   begin
     Text := PatchLoadText(Dproj, Enc);
-    if FindDccRef(Text, OldInclude, S, L) then
+    if FindDccRef(Text, Dproj, Dpr, OldInclude, S, L) then
       Text := Copy(Text, 1, S - 1) + DccRefXml(Info, NewInclude) + Copy(Text, S + L, MaxInt)
     else
     begin
@@ -1643,7 +1660,7 @@ begin
       if ANeedDproj and TFile.Exists(Dproj) then
         // one sweep of the .dproj, then O(1) per entry
         for var Incl in AllTagAttr(PatchLoadText(Dproj, Enc), 'DCCReference', 'Include') do
-          Includes.AddOrSetValue(ClaveDeInclude(Incl), True);
+          Includes.AddOrSetValue(ClaveDeIncludeDe(Dproj, Incl), True);
       // las de TODAS las ramas de un uses partido: la vista, fix-references
       // y la mudanza veian solo la primera
       for E in U.Entries + U.OtrasRamas do
@@ -1653,7 +1670,7 @@ begin
           Continue; // library units (no `in`) are not project files
         P.UnitName := EntryUnitName(E);
         P.FormName := EntryFormName(E);
-        P.InDproj := (not ANeedDproj) or Includes.ContainsKey(ClaveDeInclude(P.Include));
+        P.InDproj := (not ANeedDproj) or Includes.ContainsKey(ClaveDeIncludeDe(Dpr, P.Include));
         Result := Result + [P];
       end;
     except
@@ -2262,18 +2279,18 @@ end;
 
 function FormsDeLasClases(const AProyecto: string; const AClases: TArray<string>;
   const AExt: string): TArray<TFormDelProyecto>;
-begin
-  Result := [];
-  for var U in ProjectUnits(AProyecto, False) do
+var
+  Unidades: TArray<TProjectUnit>;
+
+  // la raiz del designer de U, por su lector: si es de AClases, va
+  procedure Mira(const U: TProjectUnit);
   begin
-    if (U.FormName = '') or not MatchText('T' + U.FormName, AClases) then
-      Continue;
     var Ruta := ChangeFileExt(RutaDesde(TPath.GetDirectoryName(AProyecto), U.Include), AExt);
     if not TFile.Exists(Ruta) or EsEnlace(Ruta) or (ReadPathDenied(Ruta) <> '') then
-      Continue;
+      Exit;
     var Texto, Enc: string;
     if TextoDeDesigner(Ruta, Texto, Enc) <> '' then
-      Continue;
+      Exit;
     for var L in LineasDeForm(SplitToLines(Texto)) do
       if L.Clase = clfObjeto then
       begin
@@ -2288,6 +2305,23 @@ begin
         Break;
       end;
   end;
+
+begin
+  Result := [];
+  Unidades := ProjectUnits(AProyecto, False);
+  // primero los que el IDE llamaria asi (T + su {Form}): quien pregunta por
+  // una clase de un paquete que no esta no abre el proyecto entero...
+  for var U in Unidades do
+    if (U.FormName <> '') and MatchText('T' + U.FormName, AClases) then
+      Mira(U);
+  // ...pero el nombre no es el juez: la raiz del designer si. Un form llamado
+  // FormMain de clase TBaseForm no existia para create ancestor= (CREATE-038),
+  // el frame de insert ni los forms lejanos del preview (revisor del paisaje
+  // de la 1.28, J4). Sin nada por el nombre, se lee la raiz de los demas
+  if Length(Result) = 0 then
+    for var U in Unidades do
+      if (U.FormName <> '') and not MatchText('T' + U.FormName, AClases) then
+        Mira(U);
 end;
 
 { ================================================ rutas que cruzan un borde }

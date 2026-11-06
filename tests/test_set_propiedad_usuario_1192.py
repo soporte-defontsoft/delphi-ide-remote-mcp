@@ -146,6 +146,11 @@ try:
     check('S17 preview: las publicadas por la base en ignored, con la nota DSGN-152 (no es un error del form)',
           'Modo' in ign and mc.es(j.get('ignoredUserNote', ''), 'SN_DESIGNER_PREVIEW_DEL_USUARIO_FMT') and 'TBaseForm' in j.get('ignoredUserNote', ''),
           (ign, j.get('ignoredUserNote'), r[:300]))
+    # ...y sin DSGN-114 ("fix them or remove them"): lo unico saltado es de las clases del usuario, que la
+    # nota de al lado dice que no es un error del form; el preview las contaba (revisor del paisaje de la
+    # 1.28, J2: las dos notas seguidas se contradecian)
+    check('S17b preview: lo publicado por el usuario no cuenta para DSGN-114 (sin ignoredNote)',
+          bool(ign) and 'ignoredNote' not in j, (ign, j.get('ignoredNote'), r[:300]))
 finally:
     s.cierra()
 

@@ -2041,12 +2041,17 @@ begin
       begin
         var Suya: TPropiedadDelUsuario;
         var PropCn, ClaseCn, Otro: string;
+        // lo publicado por las clases del usuario NO es del form (DSGN-152 lo
+        // dice) y lo de una clase sustituida es la nota de una clase de
+        // terceros (DSGN-039): ninguno cuenta para DSGN-114, "fix them or
+        // remove them". Lo contaban, y el preview se contradecia en dos notas
+        // seguidas; el lint ya no los contaba (DeClaseSustituida, EL juicio de
+        // los dos; revisor del paisaje de la 1.28, J2)
         if IgnoradaDelUsuario(R.RaizNombre, Ig, RaizL.Propias, Suya) then
-        begin
           Suyas := Suyas + IfThen(Suyas <> '', ', ') + Ig.Propiedad + ' (' + Suya.Clase + ', ' +
-            TPath.GetFileName(Suya.Fichero) + ')';
-          Inc(DelForm);
-        end
+            TPath.GetFileName(Suya.Fichero) + ')'
+        else if DeClaseSustituida(Ficheros, Ig, R.Sustituidas) then
+          Continue
         else if (R.RaizNombre <> '') and SameText(Ig.Componente, R.RaizNombre) and
                 DeLaRaizQueElLectorNoVe(RaizL, Sustituto, Ig.Propiedad) then
           NoVistas := NoVistas + IfThen(NoVistas <> '', ', ') + Ig.Propiedad
@@ -2312,7 +2317,6 @@ end;
 function TDelphiDesignerTool.ExecuteWithParams(const Params: TDelphiDesignerParams): string;
 var
   Cmd: string;
-  Falta: TFaltaTabla;
 begin
   // la llamada empieza: lo que espera su cliente cuenta desde aqui, y viaja hasta el
   // lector del IDE del lint (A3 de la 1.27)
@@ -2337,16 +2341,13 @@ begin
   // 1.23.1: el simple, props y Name juzgaban con el cerrojo (el ayudante del
   // IDE, el motor de la clase raiz y de los heredados), y un set de una Sample
   // con paquetes paro 87 s todas las ediciones del servidor; ahora cogen el
-  // cerrojo ellos, solo para leer y para escribir (AbreFormParaJuzgar)
-  if MatchText(Cmd, ['set', 'insert']) then
+  // cerrojo ellos, solo para leer y para escribir (AbreFormParaJuzgar). Y
+  // delete desde la 1.28 (J9): lo cogia aqui entero, y un nombre que no esta en
+  // el texto pregunta al juez del IDE. La tabla la esperan ellos tambien fuera
+  // del cerrojo (AbreFormParaJuzgar la pone tras soltarlo): la espera que
+  // habia aqui para delete ya no tiene a quien servir
+  if MatchText(Cmd, ['set', 'insert', 'delete']) then
     Exit(GestoDeDisenador(Params, Desde));
-  // la tabla que piden insert, set (parent= y Name tambien) y delete se
-  // espera FUERA del cerrojo, por lo mismo: set parent= la esperaba dentro y
-  // paraba todas las ediciones mientras se generaba (revision de la 1.17.0)
-  if MatchText(Cmd, ['insert', 'set', 'delete']) and
-     (MetaTable(EsDesignerFmx(Params.Path), Falta) = nil) and
-     (Falta.Negativa <> '') then
-    Exit(Falta.Negativa);
   EnterFileEdit;
   try
     Result := GestoDeDisenador(Params, Desde);

@@ -385,17 +385,25 @@ begin
   begin
     if Params.Text.Trim = '' then
       Exit(MsgText(SR_ADBLINUX_NEEDTEXT));
+    // UNA linea, por EL juez de lo que cabe en el fichero de trabajo
+    // (ArgumentoCabeEnElTrabajo): un salto salia como RUN-026 nombrando un
+    // "Argument 3" que el agente nunca mando. Y lo pedido se escribe tal cual:
+    // el Trim quitaba sin decirlo los blancos de delante y de detras (revisor
+    // del paisaje de la 1.28, J10)
+    var Texto := TextoParaElNodo(Params.Text);
+    if not ArgumentoCabeEnElTrabajo(Texto) then
+      Exit(MsgText(SR_DESKTOP_TYPE_UNA_LINEA));
     { Con coordenadas es UN solo viaje: pulsa para dar el foco y escribe. }
     if (Params.X.Trim <> '') and (Params.Y.Trim <> '') then
     begin
       var FT := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
       if FT <> '' then
         Exit(FT);
-      Args := Args + [NODO_ORDEN_ESCRIBE, IntToStr(PX), IntToStr(PY), TextoParaElNodo(Params.Text.Trim)];
+      Args := Args + [NODO_ORDEN_ESCRIBE, IntToStr(PX), IntToStr(PY), Texto];
     end
     else
       // codificado: el nodo lo lee con ParamStr, que no recibe una comilla (Lsp.TextoDelNodo)
-      Args := Args + [NODO_ORDEN_TEXTO, TextoParaElNodo(Params.Text.Trim)];
+      Args := Args + [NODO_ORDEN_TEXTO, Texto];
   end
   else if Cmd = 'overview' then
     Args := Args + [NODO_ORDEN_VENTANAS];

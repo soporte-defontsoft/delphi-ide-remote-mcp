@@ -305,6 +305,14 @@ function LoQueNoCargo(const R: TRespuestaRender; ADoc: TStyleDoc; const AForm: s
   aviso: lo mide V3 de test_lint_vistas_1202. }
 function DelCodigoDeUnComponente(const AI: TIgnorada): Boolean;
 
+{ Lo que el lector salto de un objeto cuya clase el ayudante SUSTITUYO
+  (ASustituidas: no esta instalada, y su sustituto no publica sus
+  propiedades): la nota de una clase de terceros (DSGN-039), no un valor malo
+  del form. EL juicio de LoQueNoCargo (el lint) y del preview, que lo contaba en
+  DSGN-114 y mandaba quitarlo (revisor del paisaje de la 1.28, J2). }
+function DeClaseSustituida(AFicheros: TFicherosDelForm; const AI: TIgnorada;
+  const ASustituidas: TArray<string>): Boolean;
+
 { Lo que se salto es un frame que se contiene a si mismo (RENDER-026): del fichero,
   no del codigo de un componente. }
 function EsFrameCiclico(const AI: TIgnorada): Boolean;
@@ -980,6 +988,24 @@ begin
   Result := (AI.Origen <> '') and not EsFrameCiclico(AI);
 end;
 
+function DeClaseSustituida(AFicheros: TFicherosDelForm; const AI: TIgnorada;
+  const ASustituidas: TArray<string>): Boolean;
+var
+  Otro: string;
+begin
+  Result := False;
+  if (AFicheros = nil) or (AI.Componente = '') then
+    Exit;
+  var D := AFicheros.Doc(AI.Fichero, Otro);
+  if D = nil then
+    Exit;
+  var Obj := D.ObjetoDeNombre(AI.Componente, True);
+  if Obj <> nil then
+    for var S in ASustituidas do
+      if SameText(S, Obj.ClassName_) then
+        Exit(True);
+end;
+
 function TextoDeIgnorada(const AI: TIgnorada): string;
 begin
   Result := AI.Texto;
@@ -1080,22 +1106,6 @@ var
     Result := Ficheros.Doc(AI.Fichero, Otro);
   end;
 
-  // lo que se salto de un objeto cuya clase el ayudante SUSTITUYO (no esta
-  // instalada: el sustituto no publica sus propiedades) no es un valor malo:
-  // es la nota de una clase de terceros (DSGN-039), no un aviso por edicion
-  function DeSustituida(const AI: TIgnorada): Boolean;
-  begin
-    Result := False;
-    var D := DocDe(AI);
-    if (D = nil) or (AI.Componente = '') then
-      Exit;
-    var Obj := D.ObjetoDeNombre(AI.Componente, True);
-    if Obj <> nil then
-      for var S in R.Sustituidas do
-        if SameText(S, Obj.ClassName_) then
-          Exit(True);
-  end;
-
 begin
   // los documentos de lo leido, el form y los ficheros que nombra el lector (el
   // cuerpo, sin reindentar)
@@ -1123,7 +1133,9 @@ begin
   for var I in R.Ignoradas do
   begin
     var Suya: TPropiedadDelUsuario;
-    if DeSustituida(I) or IgnoradaDelUsuario(RaizNombre, I, Raiz.Propias, Suya) then
+    // lo de una clase sustituida no es un valor malo: la nota de una clase de
+    // terceros (DSGN-039), no un aviso por edicion (DeClaseSustituida, EL juicio)
+    if DeClaseSustituida(Ficheros, I, R.Sustituidas) or IgnoradaDelUsuario(RaizNombre, I, Raiz.Propias, Suya) then
       Continue;
     // de la raiz, y de su clase y no de la form en la que la lee el lector: un
     // TQuickRep, un TForm3D, un modulo de datos FMX - no se sabe (DSGN-154)

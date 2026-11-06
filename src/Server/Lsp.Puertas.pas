@@ -690,9 +690,29 @@ begin
     PonFechaDeCreacion(APath, Antes.ftCreationTime);
 end;
 
+{ APath sustituido por los bytes B: el temporal junto a el, escrito, y el
+  renombre de un solo gesto. A medias no se queda: un temporal suelto no lo
+  ve nadie para borrarlo (salia en delphi_list y git add se lo llevaba).
+  Eran dos copias, y la de AtomicWrite - el escritor de casi toda la jaula -
+  no lo borraba si la escritura fallaba (disco lleno; revisor del paisaje de
+  la 1.28, J8). }
+procedure SustituyePorBytes(const APath: string; const B: TBytes);
+var
+  Tmp: string;
+begin
+  Tmp := TemporalDeSustitucion(APath);
+  try
+    TFile.WriteAllBytes(Tmp, B);
+  except
+    System.SysUtils.DeleteFile(Tmp);
+    raise;
+  end;
+  SustituyePorRenombre(Tmp, APath); // si no puede, borra el temporal y lanza
+end;
+
 procedure AtomicWrite(const APath: string; const B: TBytes);
 var
-  Tmp, Motivo: string;
+  Motivo: string;
 begin
   // EL escritor pregunta el mismo (Lsp.Guard.EscrituraDenegada): quien lo
   // llama puede haberse olvidado, o escribir un fichero que no le pasaron
@@ -707,9 +727,7 @@ begin
     Motivo := RutaLargaDenegada(APath);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
-  Tmp := TemporalDeSustitucion(APath);
-  TFile.WriteAllBytes(Tmp, B);
-  SustituyePorRenombre(Tmp, APath);
+  SustituyePorBytes(APath, B);
   ApuntaEscritoEnLaLlamada(APath, B); // lo que el origen espera encontrar
 end;
 
@@ -1187,7 +1205,7 @@ end;
 function EscribeBytes(const APath: string; const ABytes: TArray<Byte>;
   ALugar: TLugarDeTexto): string;
 var
-  Motivo, Tmp: string;
+  Motivo: string;
 begin
   Result := '';
   // la jaula tiene SU escritor, que pregunta lo mismo y apunta lo escrito
@@ -1218,15 +1236,7 @@ begin
   // en el IDE, lo que se pisa se copia ANTES en la casa; sin copia no se pisa
   if (ALugar = ltIde) and TFile.Exists(APath) then
     Result := CopiaAntesDePisar(APath);
-  Tmp := TemporalDeSustitucion(APath);
-  try
-    TFile.WriteAllBytes(Tmp, ABytes);
-  except
-    // a medias no se queda: un temporal suelto no lo ve nadie para borrarlo
-    System.SysUtils.DeleteFile(Tmp);
-    raise;
-  end;
-  SustituyePorRenombre(Tmp, APath); // si no puede, borra el temporal y lanza
+  SustituyePorBytes(APath, ABytes);
 end;
 
 function EscribeTexto(const APath, ATexto: string; ALugar: TLugarDeTexto;

@@ -103,9 +103,9 @@ function PlanDeRenombre(ADoc: TStyleDoc; AObj: TStyleObj;
 
 { Los comandos. Cada uno devuelve el JSON de lo hecho, o la negativa sin
   haber escrito nada. La jaula de escritura la piden ellos. El cerrojo de
-  escritura (EnterFileEdit): insert y set (todas sus formas) lo cogen ellos,
-  solo para leer y para escribir, con el juicio fuera (AbreFormParaJuzgar,
-  V173c de la 1.23.1); delete lo coge la tool. }
+  escritura (EnterFileEdit): insert, set (todas sus formas) y delete lo cogen
+  ellos, solo para leer y para escribir, con el juicio fuera
+  (AbreFormParaJuzgar; V173c de la 1.23.1, y delete en la 1.28, J9). }
 // AProps (3.10 de la 1.18.0): 'Prop=valor;...' - las propiedades iniciales de
 // insert, o varias de set de una vez; todo o nada, cada una juzgada como set
 function InsertaComponente(const APath, AClase, AComponente, AParent: string;
@@ -4225,11 +4225,18 @@ var
   Lista: TArray<string>;
   Quedan: TJSONArray;
   Ret: TJSONObject;
+  Antes, AntesPas: TArray<Byte>;
 begin
   if AComponente.Trim = '' then
     Exit(MsgText(SR_DESIGNER_NEED_COMPONENT));
-  // la tabla tambien: que lineas del form son referencias (JuezDeReferencias)
-  Result := AbreForm(APath, True, True, F);
+  // la tabla tambien: que lineas del form son referencias (JuezDeReferencias).
+  // Con el protocolo de los demas (AbreFormParaJuzgar): el cerrojo solo para
+  // leer y para escribir. delete lo cogia la tool entero, y un nombre que no
+  // esta en el texto pregunta al juez del IDE (HeredadoSegunElIde) - con el
+  // cerrojo y sin plazo de cliente, todas las escrituras del servidor paradas
+  // mientras el ayudante cargaba paquetes (revisor del paisaje de la 1.28, J9;
+  // el V173c de set e insert)
+  Result := AbreFormParaJuzgar(APath, True, True, F, Antes, AntesPas);
   if Result <> '' then
     Exit;
   try
@@ -4242,7 +4249,15 @@ begin
     Result := PlanDeBorrado(F.Doc, Obj, F.PasTexto, F.PasNombre, Imp, Dfm, Pas, JuezDeReferencias(F), F.Tabla);
     if Result <> '' then
       Exit;
-    Result := EscribeFormYUnidad(F, Dfm, Pas, Pas <> F.PasTexto);
+    // con el cerrojo: el form y la unidad son los que se juzgaron
+    EnterFileEdit;
+    try
+      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
+      if Result = '' then
+        Result := EscribeFormYUnidad(F, Dfm, Pas, Pas <> F.PasTexto);
+    finally
+      LeaveFileEdit;
+    end;
     // los usos que quedan, con las lineas de la unidad que QUEDA: el campo
     // y los manejadores que se fueron estaban por encima (3.8, Hermes)
     if (Result = '') and (Imp.Nota = '') and (F.PasTexto <> '') then

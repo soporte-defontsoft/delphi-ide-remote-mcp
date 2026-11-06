@@ -2498,6 +2498,11 @@ const
     'none). Default: nothing is touched - what a project builds with ' +
     'belongs to the project (delphi_config set-sdk) or to you.';
 
+  SR_PASERVER_ACTIVE_NO_ES_SINO_FMT =
+    '[PAS-073 INVALID_PARAM] active="%s" is not a yes or a no: it takes yes/no ' +
+    '(also true/false, 1/0, on/off), or nothing to leave the active SDK as it is. ' +
+    'Nothing was done.';
+
   SR_PASERVER_SDK_NOFILE_FMT =
     '[PAS-008 NOT_FOUND] I have no SDK called "%s" (delphi_paserver ' +
     'command=profiles lists them). They are brought in with ' +
@@ -2798,6 +2803,10 @@ const
     '[DESK-002 INVALID_PARAM] type needs "text". If you also pass x and y, it ' +
     'presses there before writing: that is the real gesture, "write this ' +
     'here", and it starts up only once.';
+  SR_DESKTOP_TYPE_UNA_LINEA =
+    '[DESK-027 INVALID_PARAM] type writes ONE line, and this text has a line break ' +
+    '(or a NUL). Send each line in its own type and press Enter between them with ' +
+    'key (code=28 on Linux, code=enter on Windows). Nothing was typed.';
   SR_ADBLINUX_NONODE =
     '[DESK-021 INVALID_PARAM] delphi_desktop: neither "project" nor a ' +
     'bundled node for that system. Either the operator leaves the node ' +
