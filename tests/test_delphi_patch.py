@@ -329,21 +329,35 @@ check('insert metodo con tipo anidado: la declaracion cae en public, DESPUES del
       '    procedure Ping;' in ctx and ctx.index('procedure Ping;') > ctx.index('FLista: TDentro;')
       and ctx.index('procedure Ping;') < ctx.index('implementation'), ctx)
 
-# --- createunit ---
+# --- una unit nueva: delphi_create (createunit salio de delphi_edit en la 1.28, B10) ---
 NU = os.path.join(DIR, 'Naciente.pas')
 if os.path.exists(NU):
     os.remove(NU)
-out = call('delphi_edit', {"path": NU, "createunit": True})
-check('createunit: crea', mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out)
+out = call('delphi_create', {"kind": "unit", "name": "Naciente", "dir": DIR})
+check('unit suelta: crea', mc.abre(out, 'SN_CREATE_UNIT_SUELTA_FMT'), out)
 nb2 = open(NU, 'rb').read()
 # la codificacion de un fuente NUEVO es la que pide el IDE de esta maquina (su DefaultFileFilter: el juez
 # del servidor, NewFileEncName): UTF-8 con BOM si es utf8toutf8, ANSI sin BOM si no. Era el BOM a mano
 _utf8 = mc.ide_prefiere_utf8()
-check('createunit: %s + CRLF + esqueleto (lo que pide el IDE)' % ('UTF-8 BOM' if _utf8 else 'ANSI sin BOM'),
+check('unit suelta: %s + CRLF + esqueleto (lo que pide el IDE)' % ('UTF-8 BOM' if _utf8 else 'ANSI sin BOM'),
       nb2.startswith(b'\xef\xbb\xbf') == _utf8 and b'\r\n' in nb2 and b'unit Naciente;' in nb2,
       nb2[:40])
-out = call('delphi_edit', {"path": NU, "createunit": True})
-check('createunit: jamas sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_EDIT_EXISTE_CREATEUNIT_JAMAS_SOBREESCRIBE_FMT'), out)
+# ...y la respuesta dice como nacio, con la etiqueta de delphi_read del mismo fichero (lo decia createunit)
+_r = call('delphi_read', {"path": NU})
+_enc = re.search(r'encoding=(.+?)  eol=(\w+)', _r)
+check('unit suelta: la respuesta dice su codificacion y su salto como delphi_read',
+      bool(_enc) and ('encoding %s, %s' % (_enc.group(1), _enc.group(2))) in out, (out[:300], _r[:120]))
+out = call('delphi_create', {"kind": "unit", "name": "Naciente", "dir": DIR})
+check('unit suelta: jamas sobreescribe', mc.rechazado(out) and mc.es(out, 'SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT'), out)
+# eol=lf: el salto que pedia createunit, ahora de delphi_create (sin perder la funcion)
+NL = os.path.join(DIR, 'NacienteLf.pas')
+out = call('delphi_create', {"kind": "unit", "name": "NacienteLf", "dir": DIR, "eol": "lf"})
+_b = open(NL, 'rb').read() if os.path.exists(NL) else b''
+check('unit suelta eol=lf: LF sin un CR y la respuesta lo dice',
+      mc.abre(out, 'SN_CREATE_UNIT_SUELTA_FMT') and b'\n' in _b and b'\r' not in _b and ', LF, ' in out, out[:300])
+out = call('delphi_create', {"kind": "unit", "name": "NacienteMac", "dir": DIR, "eol": "mac"})
+check('unit eol=mac: INVALID_PARAM y nada creado', mc.rechazado(out) and mc.es(out, 'SR_TEXT_EOL_FMT')
+      and not os.path.exists(os.path.join(DIR, 'NacienteMac.pas')), out[:300])
 
 # --- designer lint: known cross-framework property mistakes warn at edit
 # time (field, Fase 3: they crash the app at form-load, silently on Android;
@@ -1026,10 +1040,10 @@ check('insert en una unit con begin..end. de inicializacion: delante de su begin
 # blancos de alrededor del punto; create lo negaba (CREATE-019). Move la reescribia
 # entera hasta V19 (1.23); ahora mueve el fichero como el operador y no la toca
 PASD = os.path.join(DIR, 'UPunto.Dos.pas')
-out = call('delphi_edit', {"path": PASD, "createunit": True,
-                            "content": "unit UPunto . Dos;\n\ninterface\n\nimplementation\n\nend.\n"})
+out = call('delphi_create', {"kind": "unit", "name": "UPunto.Dos", "dir": DIR,
+                              "content": "unit UPunto . Dos;\n\ninterface\n\nimplementation\n\nend.\n"})
 check('cabecera "unit UPunto . Dos;": create la toma (es UPunto.Dos, como la lee dcc)',
-      os.path.exists(PASD) and mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out[:300])
+      os.path.exists(PASD) and mc.abre(out, 'SN_CREATE_UNIT_SUELTA_FMT'), out[:300])
 if os.path.exists(PASD):
     out = call('delphi_move', {"path": PASD, "dest": os.path.join(DIR, 'UTres.pas')})
     _src = open(os.path.join(DIR, 'UTres.pas'), 'rb').read().decode('utf-8-sig') if os.path.exists(os.path.join(DIR, 'UTres.pas')) else ''

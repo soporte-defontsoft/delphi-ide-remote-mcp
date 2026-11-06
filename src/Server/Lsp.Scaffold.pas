@@ -18,22 +18,26 @@ function CreateDelphiProject(const ADir, AName, AKind: string): string;
   de un form o frame del proyecto del que hereda (no en un data module; V76 de la 1.24). }
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
   const ASubDir: string = ''; const AAncestro: string = ''): string;
-{ A plain unit (interface/implementation skeleton) registered in the project. }
+{ A plain unit (interface/implementation skeleton) registered in the project.
+  AEol: el salto en que nace, "crlf" (por defecto) o "lf" (Lsp.Lineas:
+  EolDesconocido lo juzga, SaltoPedido lo da). }
 function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string;
-  const ASubDir: string = ''): string;
+  const ASubDir: string = ''; const AEol: string = ''): string;
 
 { Un .inc con su content: en la subcarpeta ADir del proyecto dado o, sin
-  proyecto, en la carpeta ABSOLUTA ADir. No se registra en ningun sitio. }
-function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;
+  proyecto, en la carpeta ABSOLUTA ADir. No se registra en ningun sitio.
+  AEol, como en una unit. }
+function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string;
+  const AEol: string = ''): string;
 
 { LA regla de un nombre de unit NUEVO: un identificador (con puntos), y
   ningun tramo palabra reservada, ni el nombre de una unit de la biblioteca
   que resuelve dcc, ni colgando de uno de sus espacios de nombres (el juez,
   Lsp.Discovery.UnidadesDeLaBiblioteca, no una lista: V33 de la 1.23). '' si
-  vale; si no, la negativa. La usan delphi_create, la creacion de units de
-  delphi_edit y el move que renombra una unit: los dos ultimos solo miraban
-  que fuera un identificador, y 'Begin.pas' o 'System.pas' pasaban
-  (revision de paisaje del 4-oct-2026). }
+  vale; si no, la negativa. La usan delphi_create y el move que renombra una
+  unit (y la creacion de units de delphi_edit, retirada en la 1.28): los que
+  no eran delphi_create solo miraban que fuera un identificador, y
+  'Begin.pas' o 'System.pas' pasaban (revision de paisaje del 4-oct-2026). }
 function BadUnitName(const AName: string): string;
 { ...y lo que no se niega (David, 25-oct-2026: nota, no negativa): un nombre
   corto que dcc tambien encuentra por un ambito de unidad del proyecto de
@@ -1204,24 +1208,36 @@ begin
        IfThen(FrameworkNote <> '', #10 + FrameworkNote, '')]) + NotaDeNombreTapado(AUnitName, ADprPath);
 end;
 
+{ Como nace un fuente que se acaba de escribir, lo que dice la respuesta de
+  delphi_create: LA etiqueta de su codificacion, MEDIDA del disco
+  (Lsp.Deteccion.EtiquetaDeLosBytes; la decide el escritor, no la plantilla),
+  y el nombre de su salto. Lo decia la creacion de units de delphi_edit,
+  retirada en la 1.28 (B10): delphi_create no lo decia. }
+procedure ComoNacio(const ARuta, ABody: string; out AEnc, ASalto: string);
+begin
+  // por LA puerta de leer: lo acaba de escribir en la jaula
+  AEnc := EtiquetaDeLosBytes(LeeBytes(ARuta, [ltJaula]));
+  ASalto := NombreDelSalto(SaltoDominante(ABody));
+end;
+
 { El fuente de una unit: el content del agente, comprobado (su `unit X;` es
-  el nombre, acaba en `end.`) y con CRLF; sin content, el esqueleto vacio. ''
+  el nombre, acaba en `end.`) y con el salto ASalto; sin content, el esqueleto vacio. ''
   en ABody y el motivo en el resultado si no vale. UNA regla para la unit de
   un proyecto y para la suelta. }
-function CuerpoDeUnit(const AUnitName, AContent: string; out ABody: string): string;
+function CuerpoDeUnit(const AUnitName, AContent, ASalto: string; out ABody: string): string;
 begin
   Result := '';
   ABody := AContent;
   if ABody.Trim <> '' then
   begin
-    // la regla del content, la de delphi_edit createunit (Lsp.Patch)
+    // la regla del content (Lsp.Patch.ContenidoDeUnitNoValido)
     Result := ContenidoDeUnitNoValido(AUnitName, ABody);
     if Result <> '' then
       Exit;
-    ABody := TextoQueNace(ABody, CRLF);
+    ABody := TextoQueNace(ABody, ASalto);
   end
   else
-    ABody := EsqueletoDeUnit(AUnitName, CRLF);
+    ABody := EsqueletoDeUnit(AUnitName, ASalto);
 end;
 
 { Un fuente SUELTO en una carpeta ABSOLUTA de la jaula, que ningun proyecto
@@ -1248,7 +1264,7 @@ begin
 end;
 
 function CreateDelphiUnit(const ADprPath, AUnitName, AContent: string;
-  const ASubDir: string): string;
+  const ASubDir: string; const AEol: string): string;
 var
   Dir, PasPath, Body: string;
 begin
@@ -1257,19 +1273,26 @@ begin
   // ruta invalida: " with an empty path and cost four calls to decode
   // (measured 2026-08-25). Sin proyecto y con una carpeta ABSOLUTA, la unit
   // se crea SUELTA: nadie la lista todavia (el muro del 26-sep-2026).
+  // El salto lo pide eol: uno que no existe se niega antes de nada, con la
+  // regla de delphi_textedit (Lsp.Lineas.EolDesconocido)
+  Result := EolDesconocido(AEol);
+  if Result <> '' then
+    Exit;
   if ADprPath.Trim = '' then
   begin
     if (ASubDir.Trim = '') or not EsRutaAbsoluta(ASubDir.Trim) then
       Exit(MsgText(SR_CREATE_UNIT_NEED_PROJECT));
-    Result := CuerpoDeUnit(AUnitName, AContent, Body);
+    Result := CuerpoDeUnit(AUnitName, AContent, SaltoPedido(AEol), Body);
     if Result <> '' then
       Exit;
     Result := CreaFuenteSuelto(ASubDir, AUnitName, '.pas', Body, PasPath);
     if Result <> '' then
       Exit;
     // el content es del agente: lo audita el mismo aviso que delphi_edit
+    var Enc, Salto: string;
+    ComoNacio(PasPath, Body, Enc, Salto);
     Exit(ConAvisosDeLlaves(MsgFmt(SN_CREATE_UNIT_SUELTA_FMT,
-      [AUnitName, PasPath, Length(LineasDelTexto(Body))]), PasPath, Body) + NotaDeNombreTapado(AUnitName, PasPath));
+      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Enc, Salto]), PasPath, Body) + NotaDeNombreTapado(AUnitName, PasPath));
   end;
   Result := WriteTargetDenied(ADprPath);
   if Result <> '' then
@@ -1293,7 +1316,7 @@ begin
   // empty unit (field round 8). The name still has to agree with the file:
   // registering UFoo.pas whose source says `unit UBar` is a lie the compiler
   // discovers much later.
-  Result := CuerpoDeUnit(AUnitName, AContent, Body);
+  Result := CuerpoDeUnit(AUnitName, AContent, SaltoPedido(AEol), Body);
   if Result <> '' then
     Exit;
   // todo o nada, como el form: si no se registra, la unit creada se quita
@@ -1314,11 +1337,16 @@ begin
     Result := MsgConCausa(SR_CREATE_CREADA_NO_REGISTRADA_FMT, Result, [AUnitName, Result]);
   end
   else
+  begin
+    var Enc, Salto: string;
+    ComoNacio(PasPath, Body, Enc, Salto);
     Result := ConAvisosDeLlaves(MsgFmt(SK_CREATE_CREADA_UNIT_LINEAS_FMT,
-      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Result]), PasPath, Body) + NotaDeNombreTapado(AUnitName, ADprPath);
+      [AUnitName, PasPath, Length(LineasDelTexto(Body)), Enc, Salto, Result]), PasPath, Body) + NotaDeNombreTapado(AUnitName, ADprPath);
+  end;
 end;
 
-function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string): string;
+function CreateDelphiInclude(const ADprPath, AName, AContent, ADir: string;
+  const AEol: string): string;
 var
   Dir, Nombre, Ruta, Body: string;
 begin
@@ -1328,7 +1356,10 @@ begin
     Nombre := TPath.ChangeExtension(Nombre, '').TrimRight(['.']);
   if AContent.Trim = '' then
     Exit(MsgText(SR_CREATE_INCLUDE_CONTENT));
-  Body := TextoQueNace(AContent, CRLF);
+  Result := EolDesconocido(AEol);
+  if Result <> '' then
+    Exit;
+  Body := TextoQueNace(AContent, SaltoPedido(AEol));
   Dir := ADir;
   if ADprPath.Trim <> '' then
   begin
@@ -1346,8 +1377,10 @@ begin
   if Result <> '' then
     Exit;
   // las lineas como delphi_read: contaba la fantasma del salto final (septima revision)
+  var Enc, Salto: string;
+  ComoNacio(Ruta, Body, Enc, Salto);
   Result := ConAvisosDeLlaves(MsgFmt(SN_CREATE_INCLUDE_FMT,
-    [Nombre, Ruta, Length(LineasDelTexto(Body)), Nombre]), Ruta, Body);
+    [Nombre, Ruta, Length(LineasDelTexto(Body)), Enc, Salto, Nombre]), Ruta, Body);
 end;
 
 end.

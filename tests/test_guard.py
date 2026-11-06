@@ -61,8 +61,8 @@ check('fuera con punto final: la anomalia, sin la pista de la zona',
       not mc.es(out, 'SN_READ_ZONE_HINT'), out)
 out = call('delphi_edit', {"path": OUT_PAS, "old": "unit Fuera;", "new": "x"})
 check('fuera: edit vetado', denied(out), out)
-out = call('delphi_edit', {"path": os.path.join(OUTSIDE, 'Nueva.pas'), "createunit": True})
-check('fuera: createunit vetado', denied(out), out)
+out = call('delphi_create', {"kind": "unit", "name": "Nueva", "dir": OUTSIDE})
+check('fuera: crear una unit vetado', denied(out) and not os.path.exists(os.path.join(OUTSIDE, 'Nueva.pas')), out)
 # una tool que ESCRIBE recibe la jaula a secas: la pista de lectura de la zona
 # (READ-003) en la negativa de un create despistaba (duodecima revision, r12c)
 check('fuera: ...sin la pista de lectura READ-003 en una tool que escribe', not mc.es(out, 'SN_READ_ZONE_HINT'), out)
@@ -429,7 +429,7 @@ if CAT:
         out = call('delphi_list', {"root": pkg, "pattern": "*.pas"})
         check('lib: fuentes de un paquete GetIt (FmxLinux) legibles',
               not denied(out) and '.pas' in out, out[:150])
-        out = call('delphi_edit', {"path": os.path.join(pkg, 'x.pas'), "createunit": True})
+        out = call('delphi_create', {"kind": "unit", "name": "x", "dir": pkg})
         check('lib: ESCRIBIR en un paquete GetIt vetado', denied(out), out[:150])
     else:
         print('SKIP - lib: FmxLinux no instalado en esta maquina')

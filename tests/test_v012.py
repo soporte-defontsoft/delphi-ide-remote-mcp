@@ -186,9 +186,10 @@ check('visibility inexistente distinta de published: sigue rechazada',
 
 # ---- B2: acentos= sin contar el BOM ---------------------------------------
 NU = os.path.join(INSIDE, 'Nueva.Unidad.pas')
-out = call('delphi_edit', {"path": NU, "createunit": True})
-check('createunit: informa el encoding del IDE',
-      mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out)
+# (era delphi_edit createunit, que salio en la 1.28: la unit suelta de delphi_create dice su encoding)
+out = call('delphi_create', {"kind": "unit", "name": "Nueva.Unidad", "dir": INSIDE})
+check('unit nueva: informa el encoding',
+      mc.abre(out, 'SN_CREATE_UNIT_SUELTA_FMT') and ', encoding ' in out, out)
 out = call('delphi_read', {"path": NU})
 check('accents=0 en unit nueva sin acentos (BOM fuera de la cuenta)',
       'accents=0' in out, out)

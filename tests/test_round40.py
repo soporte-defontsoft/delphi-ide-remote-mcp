@@ -80,12 +80,13 @@ try:
     # ------------------------------------------------------------------ L2
     # El gemelo. Nunca fallo -imprime el nombre del fichero-, y por eso mismo
     # se mide: es el que demuestra que la pareja iba descuadrada.
-    b = call('delphi_edit', {'path': os.path.join(JAIL, 'UNueva.pas'),
-                             'createunit': True})
-    # que la creacion OCURRIO: un createunit que fallaba tampoco traia la letra
+    # (era delphi_edit createunit, que salio en la 1.28: hoy la unit suelta de delphi_create,
+    # que tambien dice la ruta del fichero creado)
+    b = call('delphi_create', {'kind': 'unit', 'name': 'UNueva', 'dir': JAIL})
+    # que la creacion OCURRIO: un create que fallaba tampoco traia la letra
     # real (revisor de baterias, 18-oct-2026)
-    check('L2 el CREADA de delphi_edit tampoco',
-          mc.abre(b, 'SK_EDIT_CREADA_UNIT_FMT') and os.path.isfile(os.path.join(JAIL, 'UNueva.pas'))
+    check('L2 el CREATED de una unit tampoco',
+          mc.abre(b, 'SN_CREATE_UNIT_SUELTA_FMT') and os.path.isfile(os.path.join(JAIL, 'UNueva.pas'))
           and sin_letra_real(b), b[:200])
 
     # ------------------------------------------------------------------ L3

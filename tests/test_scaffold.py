@@ -264,9 +264,9 @@ except Exception:
     check('package: parsea', False, out[:200])
 
 # --- new unit in a NEW subfolder of an existing project ---
-out = call('delphi_edit', {"path": os.path.join(VDIR, 'nucleo', 'UUtilidades.pas'),
-                           "createunit": True})
-check('createunit: en subcarpeta NUEVA', mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT')
+# (era delphi_edit createunit, que salio en la 1.28: la unit SUELTA de delphi_create, sin registrar)
+out = call('delphi_create', {"kind": "unit", "name": "UUtilidades", "dir": os.path.join(VDIR, 'nucleo')})
+check('unit suelta: en subcarpeta NUEVA', mc.abre(out, 'SN_CREATE_UNIT_SUELTA_FMT')
       and os.path.exists(os.path.join(VDIR, 'nucleo', 'UUtilidades.pas')), out)
 
 # --- FMX project ---
@@ -292,24 +292,24 @@ check('create FMX: el compilador no resuelve un "uses Dialogs" sin calificar con
       os.path.isfile(os.path.join(FDIR, 'USinCalificar.pas')) and not ok and 'F2613' in str(err)
       and 'Dialogs' in str(err), (_rc[:120], err))
 
-# --- B0: createunit accepts DOTTED namespace unit names ---
-out = call('delphi_edit', {"path": os.path.join(VDIR, 'Lsp.BuildRunner.pas'),
-                           "createunit": True})
-check('createunit: nombre dotted (Lsp.BuildRunner) aceptado',
-      mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT') and 'Lsp.BuildRunner' in out, out[:150])
+# --- B0: a new unit accepts DOTTED namespace unit names ---
+out = call('delphi_create', {"kind": "unit", "name": "Lsp.BuildRunner", "dir": VDIR})
+check('unit suelta: nombre dotted (Lsp.BuildRunner) aceptado',
+      mc.abre(out, 'SN_CREATE_UNIT_SUELTA_FMT') and 'Lsp.BuildRunner' in out
+      and os.path.isfile(os.path.join(VDIR, 'Lsp.BuildRunner.pas')), out[:150])
 
 # --- M1: whole unit content in ONE call (create-with-content) + eol ---
 uc = ("unit Mi.Unidad.Nueva;\n\ninterface\n\nfunction Saluda: string;\n\n"
       "implementation\n\nfunction Saluda: string;\nbegin\n"
       "  Result := '¡hola gestoría!';\nend;\n\nend.")
 up = os.path.join(VDIR, 'Mi.Unidad.Nueva.pas')
-out = call('delphi_edit', {"path": up, "createunit": True, "content": uc})
-check('createunit: unit COMPLETA en una llamada', mc.abre(out, 'SK_EDIT_CREADA_UNIT_FMT'), out[:200])
+out = call('delphi_create', {"kind": "unit", "name": "Mi.Unidad.Nueva", "dir": VDIR, "content": uc})
+check('unit suelta: COMPLETA en una llamada', mc.abre(out, 'SN_CREATE_UNIT_SUELTA_FMT'), out[:200])
 raw = open(up, 'rb').read()
-check('createunit content: UTF-8 con BOM y CRLF (sin LF sueltos)',
+check('unit con content: UTF-8 con BOM y CRLF (sin LF sueltos)',
       raw[:3] == b'\xef\xbb\xbf' and raw.count(b'\n') == raw.count(b'\r\n'),
       repr(raw[:40]))
-check('createunit content: acentos intactos',
+check('unit con content: acentos intactos',
       '¡hola gestoría!' in raw.decode('utf-8-sig'), raw[-120:])
 out = call('delphi_textedit', {"path": os.path.join(VDIR, 'unix.md'),
                                "create": True, "content": "a\nb\n", "eol": "lf"})
@@ -318,7 +318,7 @@ check('textedit: eol=lf produce LF puro',
 
 # --- B1: old given + new="" blanks the line (no Access Violation) ---
 bp = os.path.join(VDIR, 'BlankMe.pas')
-call('delphi_edit', {"path": bp, "createunit": True})
+call('delphi_create', {"kind": "unit", "name": "BlankMe", "dir": VDIR})
 out = call('delphi_edit', {"path": bp, "old": "interface", "new": ""})
 check('edit: new="" blanquea la linea sin AccessViolation',
       mc.es(out, 'SK_EDIT_BLANQUEADA_LINEA_FMT') and 'AccessViolation' not in out, out[:150])

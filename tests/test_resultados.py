@@ -55,7 +55,8 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E28 changeset sin id es INVALID_PARAM
   E29 compilar una CARPETA es INVALID_PARAM (decia "no existe")
   E30 una entrada con "new" que no es texto (dejaba la linea en blanco con OK)
-  E31 createunit con un eol que no existe (creaba en CRLF)
+  E31 una unit con un eol que no existe (createunit creaba en CRLF; desde la 1.28,
+      delphi_create)
   E32 set-sdk / set-profile sin valor (quitaban el pin con exito)
   E33 dos agentes a la vez sobre un fichero: lo que cada uno recibio como OK
       esta en el disco (la tanda de delphi_edit no tomaba el cerrojo)
@@ -71,7 +72,7 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
       en silencio como el valor por defecto en delphi_read)
   E39 delphi_search con una mascara que no casa con nada lo dice
   E40 delphi_help no anuncia vault_* en un workspace sin vault
-  E41 createunit eol=lf sin content escribe LF (decia LF y escribia CRLF)
+  E41 una unit eol=lf sin content escribe LF (createunit decia LF y escribia CRLF)
   E42 git diff con cambios no hereda las pistas de fallo (1.19.0: sin
       --exit-code, el diff a secas)
   E43 un fichero que otro proceso tiene abierto es DENIED (era INTERNAL)
@@ -92,7 +93,7 @@ La segunda revision (27-sep, antes de publicar) encontro mas:
   E54 un .groupproj que otro tiene abierto es DENIED (SYS-027)
   E55 una ruta de Linux o relativa: INVALID_PARAM en la entrada
   E56 modos de delphi_edit que no combinan: INVALID_PARAM
-  E57 createunit con un content que no casa: INVALID_PARAM, nada creado
+  E57 una unit con un content que no casa: INVALID_PARAM, nada creado
   E58 delphi_create con un proyecto que no se deja registrar: nada creado
   E59 borrar una unit con un proyecto que no se deja tocar: se borra, porque desde
       V19 (1.23) un borrado es el del operador y no toca el proyecto; la nota lo dice
@@ -471,8 +472,8 @@ try:
     check('E30 ...y el fichero sigue igual', open(U1252, 'rb').read() == U1252_ANTES, '')
 
     MAC = os.path.join(JAIL, 'Mac.pas')
-    rechazo('E31 createunit con un eol que no existe: INVALID_PARAM (creaba en CRLF)', 'delphi_edit',
-            {'path': MAC, 'createunit': True, 'eol': 'mac'}, 'INVALID_PARAM', 'SR_TEXT_EOL_FMT')
+    rechazo('E31 una unit con un eol que no existe: INVALID_PARAM (createunit creaba en CRLF)', 'delphi_create',
+            {'kind': 'unit', 'name': 'Mac', 'dir': JAIL, 'eol': 'mac'}, 'INVALID_PARAM', 'SR_TEXT_EOL_FMT')
     check('E31 ...y no crea nada', not os.path.exists(MAC), os.listdir(JAIL))
 
     DPCFG = os.path.join(PCFG, 'Cfg.dproj')
@@ -490,7 +491,7 @@ try:
     # OK para "marca 1" y en el disco quedaba "marca 0")
     import threading
     BIG = os.path.join(JAIL, 'Big.pas')
-    llama('delphi_edit', {'path': BIG, 'createunit': True})
+    llama('delphi_create', {'kind': 'unit', 'name': 'Big', 'dir': JAIL})
     relleno = '\n'.join('// relleno %d' % i for i in range(20000))
     llama('delphi_edit', {'path': BIG, 'old': 'implementation',
                           'new': 'implementation\n\nprocedure A;\nbegin\nend;\n\n// marca 0\n' + relleno})
@@ -623,8 +624,8 @@ try:
           and mc.catalogo()['SF_HELP_TASKS_SIN_VAULT'].strip()[:30] in t, t[-400:])
 
     LFU = os.path.join(JAIL, 'Lf.pas')
-    res, sc, t = llama('delphi_edit', {'path': LFU, 'createunit': True, 'eol': 'lf'})
-    check('E41 createunit eol=lf sin content escribe LF',
+    res, sc, t = llama('delphi_create', {'kind': 'unit', 'name': 'Lf', 'dir': JAIL, 'eol': 'lf'})
+    check('E41 una unit eol=lf sin content escribe LF',
           not res.get('isError') and os.path.exists(LFU) and b'\r' not in open(LFU, 'rb').read(), t[:200])
 
     open(os.path.join(GREPO, 'a.txt'), 'w').write('rebase\n')
@@ -799,9 +800,9 @@ try:
           mc.abre(t, 'SR_EDIT_MODOS_NO_COMBINAN_FMT') and open(LFU, 'rb').read() == LF_ANTES, t[:200])
 
     OTRA = os.path.join(JAIL, 'Otra.pas')
-    res, sc, t = llama('delphi_edit', {'path': OTRA, 'createunit': True,
-                                       'content': 'unit NoCasa;\n\ninterface\n\nimplementation\n\nend.\n'})
-    check('E57 createunit con un content cuyo "unit" no casa: INVALID_PARAM y nada creado',
+    res, sc, t = llama('delphi_create', {'kind': 'unit', 'name': 'Otra', 'dir': JAIL,
+                                         'content': 'unit NoCasa;\n\ninterface\n\nimplementation\n\nend.\n'})
+    check('E57 una unit con un content cuyo "unit" no casa: INVALID_PARAM y nada creado',
           res.get('isError') is True and sc.get('code') == 'INVALID_PARAM' and
           mc.abre(t, 'SR_CREATE_CONTENT_NAME_FMT') and not os.path.exists(OTRA), t[:200])
 

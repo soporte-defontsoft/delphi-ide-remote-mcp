@@ -9,7 +9,8 @@ deja ahora cada ruta marcada [RutaDelServidor] con '\', para todas las tools.
 
   B1 delphi_edit con D:/... escribe (no GUARD-037)
   B2 delphi_textedit con D:/... escribe
-  B3 delphi_edit createunit con D:/... crea el fichero donde dice
+  B3 una unit suelta con D:/... crea el fichero donde dice (era delphi_edit
+     createunit; desde la 1.28, delphi_create con su dir)
   B4 la unidad virtual con '/' (srvX:/...) escribe tambien
   B5 control: una ruta con '/' FUERA de la jaula sigue negada como fuera (GUARD-002)
   B6 control: delphi_read con '/' lee como siempre
@@ -45,8 +46,8 @@ try:
     r = S.call('delphi_textedit', {'path': barra(T), 'old': 'dos', 'new': 'dos B2'})
     check('B2 delphi_textedit con D:/ escribe', not mc.fallo(r) and 'dos B2' in open(T, encoding='utf-8').read(), r[:300])
     NUEVA = os.path.join(JAIL, 'sub', 'UNueva.pas')
-    r = S.call('delphi_edit', {'path': barra(NUEVA), 'createunit': True})
-    check('B3 createunit con D:/ crea el fichero donde dice', not mc.fallo(r) and os.path.isfile(NUEVA), r[:300])
+    r = S.call('delphi_create', {'kind': 'unit', 'name': 'UNueva', 'dir': barra(os.path.dirname(NUEVA))})
+    check('B3 una unit con D:/ crea el fichero donde dice', not mc.fallo(r) and os.path.isfile(NUEVA), r[:300])
     r = S.call('delphi_edit', {'path': mc.virtual(mc.larga(U)).replace('\\', '/'), 'old': '// B1', 'new': '// B4'})
     check('B4 la unidad virtual con / escribe tambien', not mc.fallo(r) and '// B4' in open(U, encoding='utf-8-sig').read(), r[:300])
     r = S.call('delphi_textedit', {'path': barra(os.path.join(FUERA, 'x.txt')), 'create': True, 'content': 'x'})

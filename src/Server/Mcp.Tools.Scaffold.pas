@@ -22,6 +22,7 @@ type
     FFormName: string;
     FAncestor: string;
     FContent: string;
+    FEol: string;
   public
     [SchemaDescription(SP_CREATE_KIND)]
     [Required]
@@ -43,6 +44,8 @@ type
     [SchemaDescription(SP_CREATE_CONTENT)]
     [Contenido]
     property Content: string read FContent write FContent;
+    [SchemaDescription(SP_CREATE_EOL)]
+    property Eol: string read FEol write FEol;
   end;
 
   TDelphiCreateTool = class(TMCPToolBase<TDelphiCreateParams>)
@@ -97,8 +100,8 @@ const
     'form-vcl', 'project formname dir ancestor', 'form-fmx', 'project formname dir ancestor',
     'frame-vcl', 'project formname dir ancestor', 'frame-fmx', 'project formname dir ancestor',
     'datamodule', 'project formname dir',
-    'unit', 'project content dir',
-    'include', 'project content dir');
+    'unit', 'project content dir eol',
+    'include', 'project content dir eol');
 var
   K, Suyos, Sobra, VaCon: string;
 begin
@@ -111,7 +114,7 @@ begin
   Sobra := ParametroQueNoVa(K, KINDS,
     ['dir', Params.Dir, '', 'project', Params.Project, '',
      'formname', Params.FormName, '', 'content', Params.Content, '',
-     'ancestor', Params.Ancestor, ''], Suyos, VaCon);
+     'ancestor', Params.Ancestor, '', 'eol', Params.Eol, ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_CREATE_NO_VA_CON_KIND_FMT, [Sobra, Params.Kind.Trim,
       Params.Kind.Trim, 'name ' + Suyos]) + VaCon);
@@ -125,10 +128,10 @@ begin
       Params.Dir, Params.Ancestor)
   else if K = 'unit' then
     Result := CreateDelphiUnit(Params.Project, Params.Name, Params.Content,
-      Params.Dir)
+      Params.Dir, Params.Eol)
   else if K = 'include' then
     Result := CreateDelphiInclude(Params.Project, Params.Name, Params.Content,
-      Params.Dir)
+      Params.Dir, Params.Eol)
   else
     Result := MsgText(SR_CREATE_KIND_DEBE_SER_ALL);
 end;

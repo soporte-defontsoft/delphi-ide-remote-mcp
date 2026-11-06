@@ -376,9 +376,10 @@ ok, err = build_ok(DPROJ)
 check('I9b ...y el proyecto COMPILA', ok, err)
 
 # ---- I10 el nombre de una unit NUEVA: la regla entera (Lsp.Scaffold) ----
-# createunit solo miraba que fuera un identificador: Begin.pas pasaba
-r = call('delphi_edit', {'path': os.path.join(PRJ, 'Begin.pas'), 'createunit': True})
-check('I10 createunit de una unit que se llama como una palabra reservada: rechazado',
+# createunit solo miraba que fuera un identificador: Begin.pas pasaba (createunit salio de
+# delphi_edit en la 1.28: la unit suelta de delphi_create, con la misma regla)
+r = call('delphi_create', {'kind': 'unit', 'name': 'Begin', 'dir': PRJ})
+check('I10 una unit nueva que se llama como una palabra reservada: rechazada',
       mc.rechazado(r) and mc.es(r, 'SR_CREATE_RESERVED_FMT') and not os.path.exists(os.path.join(PRJ, 'Begin.pas')),
       r[:300])
 

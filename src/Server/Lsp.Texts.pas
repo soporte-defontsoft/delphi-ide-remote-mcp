@@ -365,7 +365,8 @@ const
     '[CREATE-003 INVALID_PARAM] Without "project", "dir" must be the ABSOLUTE ' +
     'folder in which to create the file (inside your roots).';
   SN_CREATE_UNIT_SUELTA_FMT =
-    '[CREATE-004] CREATED unit %s (%s), %d lines, STANDALONE: no project ' +
+    '[CREATE-004] CREATED unit %s (%s), %d lines, encoding %s, %s, ' +
+    'STANDALONE: no project ' +
     'lists it yet. To put it in one: delphi_config command=add-unit; if ' +
     'its uses is split into {$IFDEF} branches, delphi_edit in the right ' +
     'branch.';
@@ -381,7 +382,8 @@ const
     '[CREATE-005 INVALID_PARAM] kind=include needs "content": an empty .inc is ' +
     'of no use.';
   SN_CREATE_INCLUDE_FMT =
-    '[CREATE-006] CREATED include %s (%s), %d lines. Use it with {$I ' +
+    '[CREATE-006] CREATED include %s (%s), %d lines, encoding %s, %s. ' +
+    'Use it with {$I ' +
     '%s.inc} from the unit that needs it; it is not registered in any ' +
     'project.';
   // Un uses partido en ramas IFDEF (cada rama acaba en su ;): error: y no
@@ -1283,15 +1285,16 @@ const
     'Nothing was done: send them in separate calls, one mode per call.';
 
   { Un parametro que no es del modo de la llamada: se ignoraba en silencio
-    ("content" sin create / createunit, sexta revision; code sin insert,
+    ("content" sin create / createunit - esta, retirada en la 1.28 -, sexta
+    revision; code sin insert,
     eol sin create, atline con edits..., septima: la regla general,
     Lsp.Guard.ParametroQueNoVa). }
   SR_EDIT_NO_VA_CON_MODO_FMT =
     '[EDIT-115 INVALID_PARAM] "%s" does not go with %s (it would be ' +
     'ignored). Nothing was done: %s takes %s.';
 
-  SR_EDIT_NO_SE_ESCRIBIO_FMT =
-    '[EDIT-112 DENIED] Could not write %s: %s';
+  // EDIT-112 (no se pudo escribir la unit nueva de createunit) se retiro en la
+  // 1.28 (B10), con la creacion de units de delphi_edit.
 
   SN_EDIT_SIN_CAMBIOS_FMT =
     '[EDIT-113] UNCHANGED: line %d of %s already says exactly that, so ' +
@@ -9078,15 +9081,9 @@ const
     'deploy files, the projects of a group) and delphi_create writes a new ' +
     'one; delphi_edit, delphi_textedit and delphi_changeset do not write it.';
 
-  SR_EDIT_CREATEUNIT_SOLO_CREA_UNITS =
-    '[EDIT-034 INVALID_PARAM] createunit only creates units (.pas).';
-
-  SR_EDIT_EXISTE_CREATEUNIT_JAMAS_SOBREESCRIBE_FMT =
-    '[EDIT-035 DENIED] %s ALREADY EXISTS. createunit never overwrites.';
-
-  SR_EDIT_IDENTIFICADOR_PASCAL_VALIDO_NOMBRE_FMT =
-    '[EDIT-036 INVALID_PARAM] ''%s'' is not a valid Pascal identifier for a unit ' +
-    'name.';
+  // EDIT-034, EDIT-035 y EDIT-036 (los de createunit: solo un .pas, nunca
+  // sobreescribe, un identificador valido) se retiraron en la 1.28 (B10): la
+  // creacion de units salio de delphi_edit; la hace delphi_create, con las suyas.
 
   SR_EDIT_BINARIO_FIRMA_TPF0_ENVOLTORIO_FMT =
     '[EDIT-037 DENIED] %s is a BINARY %s (TPF0 signature or $FF resource ' +
@@ -9153,7 +9150,8 @@ const
 
   SR_EDIT_INSERT_METODO_APLICA_DPR =
     '[EDIT-047 INVALID_PARAM] insert:"metodo" does not apply to a .dpr (classes ' +
-    'go in units). Create the unit with createunit and insert there.';
+    'go in units). Create the unit with delphi_create kind=unit and insert ' +
+    'there.';
 
   SR_EDIT_ENCUENTRO_FINAL_CABECERA_USES =
     '[EDIT-048 DENIED] The end of the .dpr header/uses was not found, so ' +
@@ -9249,7 +9247,7 @@ const
   SR_EDIT_FALTAN_PARAMETROS_MODOS_OLD =
     '[EDIT-058 INVALID_PARAM] Missing parameters. Modes: old+new (edit) ' +
     '| edits (several at once) | fragment+atline+new | delete+old | ' +
-    'insert+code (insert) | createunit | restore | adduses | removeuses. ' +
+    'insert+code (insert) | restore | adduses | removeuses. ' +
     'To read use delphi_read.';
 
   SR_EDIT_HAS_PASADO_OLD_PERO =
@@ -10310,19 +10308,9 @@ const
     '[EDIT-064] ... truncated at line %d of %d. Ask for another range ' +
     'with fromline/toline.';
 
-  SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT =
-    '[EDIT-066 DENIED] Could not encode the content: %s'#10 +
-    'Use native Pascal literals (#$XXXX) for characters outside the ' +
-    'character set.';
-
-  SK_EDIT_CREADA_UNIT_FMT =
-    '[EDIT-067] CREATED %s (unit %s) - %s, encoding %s (the one ' +
-    'configured in the IDE, or UTF-8 with a BOM when that is ANSI and the ' +
-    'content does not fit), %s.'#10 +
-    'Verification (re-read from disk): %s'#10 +
-    'NEXT STEP - register it with delphi_config command=add-unit (it ' +
-    'writes the .dpr uses with its in ''...'' path and the .dproj entry): ' +
-    'without that, the unit is not part of the project.';
+  // EDIT-066 y EDIT-067 (el content que no se pudo codificar y el CREATED de
+  // createunit) se retiraron en la 1.28 (B10), con la creacion de units de
+  // delphi_edit.
 
   SN_EDIT_RESTAURAR_NADA_HECHO_FMT =
     '[EDIT-068] RESTORE %s from %s: NOTHING done yet.'#10 +
@@ -10566,7 +10554,7 @@ const
     'so it was removed: NOTHING was created. The cause: %s';
 
   SK_CREATE_CREADA_UNIT_LINEAS_FMT =
-    '[CREATE-033] CREATED unit %s (%s), %d lines.'#10 +
+    '[CREATE-033] CREATED unit %s (%s), %d lines, encoding %s, %s.'#10 +
     '%s';
 
   // Mensajes que estaban en linea en Mcp.Tools.Scaffold.pas (paso 3c a mano, 27-sep-2026)
@@ -11163,18 +11151,6 @@ const
     'INSERT "rutina-global" optional: true = also declare it in the ' +
     'interface section (visible outside the unit)';
 
-  SP_EDIT_CREATEUNIT =
-    'CREATE mode: true = create the .pas (never overwrites). Then ' +
-    'register it with delphi_config command=add-unit';
-
-  SP_EDIT_CONTENT =
-    'CREATE mode: the COMPLETE file content in one call (empty = ' +
-    'standard IDE skeleton). Use this when you already know the whole ' +
-    'unit: one call instead of create + N patches';
-
-  SP_EDIT_EOL =
-    'CREATE mode: line endings, "crlf" (default, Delphi standard) or "lf"';
-
   SP_EDIT_RESTORE =
     'RESTORE mode: true = restore the file from this tool''s backup. ' +
     'First call shows what would be LOST; repeat with confirm=true to ' +
@@ -11220,8 +11196,7 @@ const
     '(old = full line(s) from delphi_read + new; fragment + atline for a ' +
     'piece of a LONG line; edits for several at once), DELETE, INSERT (a ' +
     'new routine or method at the legal spot, both halves of a method), ' +
-    'CREATE (in the encoding configured in the IDE, or UTF-8 with a BOM ' +
-    'when ANSI cannot hold it), RESTORE, ADDUSES and ' +
+    'RESTORE, ADDUSES and ' +
     'REMOVEUSES - each parameter says which mode it belongs to. Refuses ' +
     'whole-file rewrites, binary designer files (TPF0) and a form the ' +
     'IDE''s parser would stop reading; backs up, ' +
@@ -11328,10 +11303,13 @@ const
     'Forms/frames: the class of a form or frame of this project to inherit from';
 
   SP_CREATE_CONTENT =
-    'kind=unit optional: the FULL source, written as it comes (CRLF) and ' +
+    'kind=unit optional: the FULL source, written as it comes (in eol) and ' +
     'registered in the same call - no empty skeleton first. Its `unit X;` ' +
     'must match "name" and it must end in `end.`. Without it, a standard ' +
     'empty skeleton. kind=include: REQUIRED, the text of the .inc.';
+
+  SP_CREATE_EOL =
+    'kind=unit or include: line endings, "crlf" (default, Delphi standard) or "lf"';
 
   SD_CREATE_CREATE =
     'Create a NEW Delphi project - console/VCL/FMX (.dpr + buildable ' +
@@ -12137,12 +12115,6 @@ const
   SK_EDIT_LECTURA_VACIO_FMT =
     '[READ-006] %s  encoding=%s  eol=%s  %s'#10 +
     'The file is EMPTY (0 lines).';
-
-  SF_EDIT_CONTENIDO_APORTADO =
-    'supplied content';
-
-  SF_EDIT_ESQUELETO_ESTANDAR_IDE =
-    'standard IDE skeleton';
 
   SF_EDIT_NINGUNA_YA_EN_COPIA =
     '  (none: the current file has no lines that are not already in the ' +

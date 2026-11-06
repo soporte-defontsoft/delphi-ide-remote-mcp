@@ -106,6 +106,11 @@ What the measures taught:
   stayed, and in 1.18.0 the engine was made to do what they say - the old
   rule made `occurrence` count other lines than the model did and a batch
   wrote the wrong one (measured).
+- **"The answer brings it" is not always redundant.** Naming a field the
+  answer carries usually goes (above), but a sentence that tells the model
+  what the answer will SAY is what lets it act without looking first:
+  without "the answer lists them with their line", asked to delete a
+  component, it read the form's tree before deleting (third pass, below).
 
 ## The first pass (October 2026)
 
@@ -174,3 +179,47 @@ task from 3 of 5 to 2 of 18. What it had dropped was "enable or disable a
 platform in the .dproj" from `add-platform`: with that phrase back, 9 of 18,
 and the other ten tasks of `delphi_config` stay where they were (28 and 29 of
 33).
+
+## The third pass (November 2026)
+
+Three actions of the review of the tool surface: does the whole list make a
+small model choose worse, trim the `command` of `delphi_designer` and of
+`delphi_paserver`, and take `createunit` out of `delphi_edit`. Qwen3.8 Flash
+Next on its one slot, the definitions as this server's `tools/list` gives
+them, the first call judged and nobody executing it.
+
+**The whole list does not make the choice worse.** 22 tasks as a user would
+ask them (11 reading, 11 writing), three times each, with the `tools/list`
+of each profile:
+
+| Profile | Tools | Prompt tokens | Reading, right at the first call | Writing, right at the first call | A wrong tool |
+| --- | --- | --- | --- | --- | --- |
+| full | 37 | ~25,600 | 32/33 | 19/33 | 0 |
+| coder | 34 | ~23,000 | 30/33 | 18/33 | 0 |
+| reader | 19 | ~6,500 | 30/33 | - | 0 |
+
+Every first call that was not the task's tool was a look first:
+`delphi_read` before an edit (its `old` is copied from a read),
+`delphi_workspace` (its description says to call it first), a search for
+the text to change. A smaller profile buys room in the context, not a
+better choice.
+
+**Both trims lost.** `delphi_designer.command`, 3,024 characters to 2,131:
+40 of 45 tasks right with the current text, 31 with the trim (it looked at
+the tree first, and two inserts came without `component`).
+`delphi_paserver.command`, 2,075 to 1,552: 36 of 39 against 33. A gentle
+trim that only took out the names of fields the answer brings and a rule
+its parameter already states (365 and 276 characters) lost too, over three
+runs and five more: a delete 2 of 8 against 6, a rename 6 against 8, a
+`remove-profile` 6 against 8. No miss was a wrong action - every one was a
+look first (`tree`, `get`, `platforms`, `profiles`) - and what had let the
+model act without looking were the sentences that say what the answer will
+bring ("the answer lists them with their line", "the answer says where").
+Both texts stay as they were.
+
+**`createunit` went.** Offered `delphi_edit` and `delphi_create` together
+and asked to create a unit, the model chose `delphi_create` 12 times out of
+12 with `createunit` there, and 12 out of 12 without it; Hermes had called
+`createunit` 38 times against 257 `delphi_create kind=unit`. Its one thing
+of its own, `eol`, moved to `delphi_create`, and so did saying the encoding
+a unit is born in.

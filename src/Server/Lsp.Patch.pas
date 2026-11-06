@@ -38,9 +38,6 @@ type
     ClassName_: string;
     Visibility: string;
     Visible: Boolean;
-    CreateUnit_: Boolean;
-    Content: string;      // createunit: whole file content in one call
-    Eol: string;          // 'lf' = LF endings; anything else = CRLF (default)
     Restore: Boolean;
     Confirm: Boolean;
     Ensayo: Boolean;      // todo menos escribir: el preview de un changeset pregunta al motor
@@ -259,16 +256,17 @@ function EcoNumerado(const APath: string; AFrom, ATo: Integer): string;
 function ModosQueNoCombinan(const AModos: array of string): string;
 
 { Un "content" de unit que no vale: sin "unit X;", con otro nombre que el
-  del fichero, o sin "end." (la negativa; '' si vale). UNA regla para
-  delphi_create y delphi_edit createunit: la segunda creaba Nueva.pas con
-  "unit Otra;" contestando CREATED (quinta revision). }
+  del fichero, o sin "end." (la negativa; '' si vale). La de delphi_create;
+  era UNA regla con la creacion de units de delphi_edit (retirada en la 1.28),
+  que creaba Nueva.pas con "unit Otra;" contestando CREATED (quinta revision). }
 function ContenidoDeUnitNoValido(const AUnitName, AContent: string): string;
 
 { AMsg y detras, en su linea, el aviso EDIT-091 de cada comentario de llave
   con otra llave dentro en ANuevo -el fuente ENTERO que el agente acaba de
   escribir en APath-. Para los que escriben un
-  fuente ENTERO con el content del agente (delphi_create, delphi_edit
-  createunit): solo lo auditaban los motores de edicion, y una unit nueva
+  fuente ENTERO con el content del agente (delphi_create; tambien la creacion
+  de units de delphi_edit, retirada en la 1.28): solo lo auditaban los motores
+  de edicion, y una unit nueva
   con el ejemplo de un comentario entre llaves no compilaba sin que nadie lo
   dijera (6-oct-2026, Lsp.Listas: E2065 tres veces). }
 function ConAvisosDeLlaves(const AMsg, APath, ANuevo: string): string;
@@ -300,8 +298,8 @@ procedure SignificadoDeOldNew(const AOld, ANew: string; out AHasOld, AHasNew: Bo
   a ser new (Fable, revision de la 1.22.2). }
 function DeleteDeLineaDenegado(AHasOld: Boolean; const AOld, ANew: string; AAtLine: Integer): string;
 { Con "fragment", lo que NO puede venir en la misma llamada - el primero que
-  venga: old, delete, toline, y los modos propios de quien llama (createunit,
-  restore, insert; create; occurrence en una tanda), ya decididos en
+  venga: old, delete, toline, y los modos propios de quien llama (restore,
+  insert; create; occurrence en una tanda), ya decididos en
   AModosPropios -, para que FragmentoALinea lo niegue por su nombre. '' si
   nada. La escalera estaba en ExecutePatch, en TextEditNucleo y en la tanda
   (D7). }
@@ -1875,8 +1873,7 @@ begin
         // lo que choca con fragment, por LA escalera (OtroModoConFragmento);
         // los modos propios de delphi_edit, decididos aqui
         var Propios := '';
-        if A.CreateUnit_ then Propios := 'createunit'
-        else if A.Restore then Propios := 'restore'
+        if A.Restore then Propios := 'restore'
         else if A.Insert <> '' then Propios := 'insert';
         var Otros := OtroModoConFragmento(A.HasOld, A.OldLine, A.DeleteLine, A.ToLine, Propios);
         var LineaVieja, LineaNueva: string;
@@ -1892,89 +1889,10 @@ begin
       // por lineas se rechaza en vez de tragarselo en silencio.
       if A.ToLine > 0 then
       begin
-        if A.CreateUnit_ then
-          Exit(MsgFmt(SR_RANGE_WRONG_MODE_FMT, ['createunit']));
         if A.Restore then
           Exit(MsgFmt(SR_RANGE_WRONG_MODE_FMT, ['restore']));
         if A.Insert <> '' then
           Exit(MsgFmt(SR_RANGE_WRONG_MODE_FMT, ['insert=' + A.Insert]));
-      end;
-
-      // ---------- CREATE UNIT ----------
-      if A.CreateUnit_ then
-      begin
-        if Ext <> '.pas' then
-          Exit(MsgText(SR_EDIT_CREATEUNIT_SOLO_CREA_UNITS));
-        var MalEol := EolDesconocido(A.Eol);
-        if MalEol <> '' then
-          Exit(MalEol);
-        if TFile.Exists(A.Path) then
-          Exit(MsgFmt(SR_EDIT_EXISTE_CREATEUNIT_JAMAS_SOBREESCRIBE_FMT, [TPath.GetFileName(A.Path)]));
-        var UnitName := TPath.GetFileNameWithoutExtension(A.Path);
-        // Dotted namespaces are legal Delphi and REQUIRED by modern projects
-        // (Lsp.BuildRunner, System.SysUtils...): allow Ident(.Ident)*, with
-        // EL identificador (Lsp.Pascal): una enye o un acento son legales.
-        if not EsIdentificador(UnitName, True) then
-          Exit(MsgFmt(SR_EDIT_IDENTIFICADOR_PASCAL_VALIDO_NOMBRE_FMT, [UnitName]));
-        // ...y la regla entera de un nombre de unit nuevo (Lsp.Scaffold): una
-        // palabra reservada o una unit de la RTL pasaban (revision de paisaje)
-        var MalNombre := BadUnitName(UnitName);
-        if MalNombre <> '' then
-          Exit(MalNombre);
-        var Skel: string;
-        var Note: string;
-        if A.Content <> '' then
-        begin
-          var MalContenido := ContenidoDeUnitNoValido(UnitName, A.Content);
-          if MalContenido <> '' then
-            Exit(MalContenido);
-          // Whole known content in ONE call (replicating a file you already
-          // have beats a create + N anchored patches). EOL normalized to
-          // CRLF - the JSON channel often arrives LF-only - and the result
-          // is audited below like any other write.
-          Skel := TextoQueNace(A.Content, SaltoPedido(A.Eol));
-          Note := MsgText(SF_EDIT_CONTENIDO_APORTADO);
-        end
-        else
-        begin
-          // eol=lf tambien sin content: decia "LF" y escribia CRLF
-          // (verificacion de la tercera ronda)
-          Skel := EsqueletoDeUnit(UnitName, SaltoPedido(A.Eol));
-          Note := MsgText(SF_EDIT_ESQUELETO_ESTANDAR_IDE);
-        end;
-        CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(A.Path)));
-        // New files honour the encoding the IDE is configured to use
-        // (NewFileEncName, la regla de todos: aqui habia otra copia), y si
-        // esa es la ANSI y el contenido no cabe, UTF-8 con BOM, como el IDE
-        // al guardar (EncAlEscribir; 4.1 de la 1.18.0)
-        var NewK := EncAlEscribir(A.Path, EncKindOf(EncDeFicheroNuevo(A.Path)), nil, False, Skel);
-        var CreadoBytes: TArray<Byte> := nil;
-        try
-          CreadoBytes := EncodeText(Skel, NewK);
-        except
-          on E: Exception do
-            Exit(MsgEnvuelve(SR_EDIT_AL_CODIFICAR_CONTENIDO_FMT, E.Message));
-        end;
-        // ...y lo que se escribe tiene que leerse igual (EDIT-122)
-        var Cambia := LecturaCambiada(A.Path, CreadoBytes, NewK);
-        if Cambia <> '' then
-          Exit(Cambia);
-        // escribir es otra cosa que codificar: una ruta demasiado larga salia
-        // como "no se pudo codificar" (quinta revision)
-        try
-          AtomicWrite(A.Path, CreadoBytes);
-        except
-          on E: Exception do
-            Exit(MsgEnvuelve(SR_EDIT_NO_SE_ESCRIBIO_FMT, E.Message, [A.Path, E.Message]));
-        end;
-        var NotaCreada: string;
-        var CM := Measure(RelecturaDe(A.Path, CreadoBytes, NotaCreada));
-        Exit(ConAvisosDeLlaves(MsgFmt(SK_EDIT_CREADA_UNIT_FMT,
-          // LA etiqueta, la de delphi_read del mismo fichero: un esqueleto ASCII
-          // en ANSI decia cp1252 y read "ascii" (V208 de la 1.23.1)
-          [TPath.GetFileName(A.Path), UnitName, Note, EtiquetaDeCodificacion(NewK, not HayByteAlto(CreadoBytes)),
-           NombreDelSalto(SaltoPedido(A.Eol)), Auditoria(CM)]) +
-          IfThen(NotaCreada <> '', #10 + NotaCreada, '') + NotaDeNombreTapado(UnitName, A.Path), A.Path, Skel));
       end;
 
       if not TFile.Exists(A.Path) then

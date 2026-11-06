@@ -94,11 +94,13 @@ function ReescribeConSusSaltos(const AAntes, ANuevo: string): string;
   "uno\rdos\r\r\n" (novena revision). }
 function ConSalto(const AText, ASalto: string): string;
 { El texto con que nace un fichero: ConSalto y, si no esta vacio, acabado en un
-  salto. Estaba escrito cuatro veces: el create de un changeset, createunit y la
+  salto. Estaba escrito cuatro veces: el create de un changeset, createunit
+  (retirada de delphi_edit en la 1.28) y la
   unit y el .inc de delphi_create (V215). delphi_textedit no lo llama: escribe
   lo que le dan, sin anadirle el final. }
 function TextoQueNace(const AText, ASalto: string): string;
-{ Una unit vacia, la del IDE, con ese salto: createunit y delphi_create la
+{ Una unit vacia, la del IDE, con ese salto: createunit (retirada en la 1.28)
+  y delphi_create la
   escribian cada uno (P9 del revisor). }
 function EsqueletoDeUnit(const AUnitName, ASalto: string): string;
 
@@ -124,8 +126,9 @@ function NombreDelSalto(const ASalto: string): string;
 
 
 { El "eol" de quien crea un fichero: '' si vale (crlf, lf, o vacio = crlf); si
-  no, la negativa. UNA regla para delphi_textedit y delphi_edit createunit: la
-  segunda aceptaba "mac" y creaba en CRLF (tercera revision, 27-sep-2026). }
+  no, la negativa. UNA regla para delphi_textedit y delphi_create (antes para
+  delphi_edit createunit, retirada en la 1.28, que aceptaba "mac" y creaba en
+  CRLF: tercera revision, 27-sep-2026). }
 function EolDesconocido(const AEol: string): string;
 { ...y su inversa: el salto que ese "eol" pide (#10 con lf; #13#10 con crlf o
   vacio). Los dos create lo traducian a mano en cinco sitios, cada uno con su

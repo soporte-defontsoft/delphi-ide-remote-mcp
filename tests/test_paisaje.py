@@ -46,7 +46,7 @@ REGLAS = [
      [('Lsp.Lineas.pas', 'TieneSaltoFinal'),
       # otra pregunta: anadir a una nota del vault, no nacer
       ('Mcp.Tools.Vault.pas', 'TVaultAppendTool.ExecuteWithParams')],
-     'TextoQueNace (Lsp.Lineas, V215): createunit, delphi_create y el create de un changeset'),
+     'TextoQueNace (Lsp.Lineas, V215): delphi_create y el create de un changeset'),
     # ...y el texto del catalogo puesto a mano tras un "si esta vacio" (cuatro sitios, dos de ellos nuevos en el cierre
     # de la 1.26 con DijoOtraVersion: revisor del paisaje del cierre)
     ('una lista vacia dicha a mano', r"'\(none\)'|MsgText\(\s*SF_NINGUNO\s*\)", [], 'ONinguno (Lsp.Texts)'),
@@ -1210,9 +1210,10 @@ REGLAS = [
     ('codificar el texto de un fichero para escribirlo', r'\bEncodeText\s*\(',
      [('Lsp.Codificacion.pas', '*'),
       # los DOS escritores (con la regla de ida y vuelta y la del primer caracter no
-      # ASCII), la creacion de una unit nueva y la medida de un cuerpo de varios bytes
+      # ASCII) y la medida de un cuerpo de varios bytes (la otra casa, la creacion de
+      # una unit en delphi_edit, salio con createunit en la 1.28: la deuda encoge)
       ('Lsp.Patch.pas', 'DoEdit'), ('Lsp.Puertas.pas', 'PatchSaveText'),
-      ('Lsp.Patch.pas', 'ExecutePatch'), ('Lsp.Deteccion.pas', 'Measure'),
+      ('Lsp.Deteccion.pas', 'Measure'),
       # la puerta de escribir: el texto que COMPONE el servidor, en la codificacion
       # de su formato (un .job, una nota del vault, un .sdk), con la de ida y vuelta
       ('Lsp.Puertas.pas', 'EscribeTexto'),

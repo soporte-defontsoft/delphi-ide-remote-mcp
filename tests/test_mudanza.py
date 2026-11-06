@@ -666,10 +666,11 @@ try:
                                'content': '// cabecera\n{ uno { dos } }\n'})
     check('W6d ...y de un .inc (linea 2)',
           mc.abre(r, 'SN_CREATE_INCLUDE_FMT') and aviso % 2 in r, r[:400])
-    r = call('delphi_edit', {'path': ruta('w', 'plano', 'UNueva.pas'), 'createunit': True,
-                             'content': 'unit UNueva;\n\ninterface\n\n{ a { b } }\n\nimplementation\n\nend.\n'})
-    check('W6d ...y delphi_edit createunit con content (linea 5)',
-          mc.abre(r, 'SK_EDIT_CREADA_UNIT_FMT') and aviso % 5 in r, r[:400])
+    # (era delphi_edit createunit, que salio en la 1.28: el mismo caso con eol=lf, el que solo el tenia)
+    r = call('delphi_create', {'kind': 'unit', 'name': 'UNueva', 'dir': PLANO, 'eol': 'lf',
+                               'content': 'unit UNueva;\n\ninterface\n\n{ a { b } }\n\nimplementation\n\nend.\n'})
+    check('W6d ...y una unit en LF con content (linea 5)',
+          mc.abre(r, 'SN_CREATE_UNIT_SUELTA_FMT') and aviso % 5 in r, r[:400])
     r = call('delphi_create', {'kind': 'unit', 'name': 'ULimpia', 'dir': PLANO,
                                'content': 'unit ULimpia;\n\n{ normal }\n\ninterface\n\nimplementation\n\nend.\n'})
     check('W6d (control) una unit con un comentario normal: sin aviso',

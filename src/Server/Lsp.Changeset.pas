@@ -834,7 +834,7 @@ begin
             // whatever arrived, so the same source produced a CRLF file one
             // way and an LF one the other (measured 2026-08-25). One project,
             // one convention.
-            // Un fuente o un form nace como lo crean delphi_create y createunit
+            // Un fuente o un form nace como lo crea delphi_create
             // (CRLF y su salto final); lo demas, como delphi_textedit create: en
             // CRLF y sin anadirle el final (revisor del paisaje de la 1.26, D:
             // un .json o un .txt salian con un salto que nadie escribio)

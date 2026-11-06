@@ -7,8 +7,9 @@
      el manifiesto sigue por el mismo camino (EsXmlDelIde -> EncDeFicheroNuevo)
   N2 (A21, guarda) un .txt creado por un changeset y por delphi_textedit nace en
      UTF-8 sin BOM
-  N3 (A38, guarda) eol=lf en el create de delphi_edit y de delphi_textedit: los
-     bytes en LF y la respuesta dice LF; sin eol, CRLF; eol=cr se niega en los dos
+  N3 (A38, guarda) eol=lf en el create de delphi_create (una unit; era el
+     createunit de delphi_edit hasta la 1.28) y de delphi_textedit: los bytes en LF
+     y la respuesta dice LF; sin eol, CRLF; eol=cr se niega en los dos
 
 Uso:  python tests/test_nacer_1230.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -46,13 +47,13 @@ try:
           os.path.exists(pt2) and not open(pt2, 'rb').read().startswith(BOM), r[:300])
 
     pu = os.path.join(JAIL, 'ULf.pas')
-    r1 = srv.call('delphi_edit', {'path': pu, 'createunit': True, 'eol': 'lf'})
+    r1 = srv.call('delphi_create', {'kind': 'unit', 'name': 'ULf', 'dir': JAIL, 'eol': 'lf'})
     pl = os.path.join(JAIL, 'lf.txt')
     r2 = srv.call('delphi_textedit', {'path': pl, 'create': True, 'content': 'a\r\nb\r\n', 'eol': 'lf'})
     pc = os.path.join(JAIL, 'crlf.txt')
     r3 = srv.call('delphi_textedit', {'path': pc, 'create': True, 'content': 'a\nb\n'})
     r4 = srv.call('delphi_textedit', {'path': os.path.join(JAIL, 'cr.txt'), 'create': True, 'content': 'a', 'eol': 'cr'})
-    r5 = srv.call('delphi_edit', {'path': os.path.join(JAIL, 'UCr.pas'), 'createunit': True, 'eol': 'cr'})
+    r5 = srv.call('delphi_create', {'kind': 'unit', 'name': 'UCr', 'dir': JAIL, 'eol': 'cr'})
     b1 = open(pu, 'rb').read() if os.path.exists(pu) else b''
     b2 = open(pl, 'rb').read() if os.path.exists(pl) else b''
     b3 = open(pc, 'rb').read() if os.path.exists(pc) else b''

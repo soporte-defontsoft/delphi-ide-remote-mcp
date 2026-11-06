@@ -40,6 +40,10 @@ function DetectEnc(const B: TArray<Byte>; AEsDesigner: Boolean = False): TEncKin
   como ANSI (A41 de la 1.23, David 24-oct); el create de delphi_textedit ya lo
   decia asi, con su propia regla. Solo la etiqueta: los bytes no cambian. }
 function EtiquetaDeCodificacion(K: TEncKind; AEsAscii: Boolean): string;
+{ ...y la de unos bytes YA escritos (lo releido del disco): EL detector, con
+  AEsDesigner como lee delphi_read un form, y LA etiqueta. Estaba a mano en
+  delphi_textedit; delphi_create la dice tambien desde la 1.28 (B10). }
+function EtiquetaDeLosBytes(const B: TArray<Byte>; AEsDesigner: Boolean = False): string;
 function Measure(const B: TArray<Byte>): TMetrics;
 { Lo que dicen los contadores de Measure en una respuesta: 'audit=clean' con
   los acentos cuando no hay nada que mirar, y los contadores enteros cuando
@@ -144,6 +148,11 @@ begin
     Result := MsgText(SF_TEXT_ASCII_COMPATIBLES)
   else
     Result := EncName(K);
+end;
+
+function EtiquetaDeLosBytes(const B: TArray<Byte>; AEsDesigner: Boolean): string;
+begin
+  Result := EtiquetaDeCodificacion(DetectEnc(B, AEsDesigner), not HayByteAlto(B));
 end;
 
 function DetectEnc(const B: TBytes; AEsDesigner: Boolean): TEncKind;

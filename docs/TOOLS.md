@@ -271,7 +271,7 @@ No parameters.
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keeping their real encoding and line endings. Modes: EDIT (old = full line(s) from delphi_read + new; fragment + atline for a piece of a LONG line; edits for several at once), DELETE, INSERT (a new routine or method at the legal spot, both halves of a method), CREATE (in the encoding configured in the IDE, or UTF-8 with a BOM when ANSI cannot hold it), RESTORE, ADDUSES and REMOVEUSES - each parameter says which mode it belongs to. Refuses whole-file rewrites, binary designer files (TPF0) and a form the IDE's parser would stop reading; backs up, writes atomically and audits the result (encoding, EOLs, mojibake, end. structure, a brace comment with a brace inside - warned, never refused), reporting the REAL lines read back from disk: use them as evidence. Generic tools destroy ANSI sources.
+SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keeping their real encoding and line endings. Modes: EDIT (old = full line(s) from delphi_read + new; fragment + atline for a piece of a LONG line; edits for several at once), DELETE, INSERT (a new routine or method at the legal spot, both halves of a method), RESTORE, ADDUSES and REMOVEUSES - each parameter says which mode it belongs to. Refuses whole-file rewrites, binary designer files (TPF0) and a form the IDE's parser would stop reading; backs up, writes atomically and audits the result (encoding, EOLs, mojibake, end. structure, a brace comment with a brace inside - warned, never refused), reporting the REAL lines read back from disk: use them as evidence. Generic tools destroy ANSI sources.
 
 *Access: read-write (refused to a read-only credential).*
 
@@ -290,9 +290,6 @@ SAFE editing of Delphi sources (.pas .dpr .dpk .inc, plus text .dfm/.fmx), keepi
 | `inclass` | string | optional | INSERT "metodo": exact class name (e.g. TOrderForm) |
 | `visibility` | string | optional | INSERT "metodo" optional: private/protected/public/published; empty = end of class. "published" also works on a form class without the keyword (the implicit section after the class header, where event handlers go). |
 | `visible` | boolean | optional | INSERT "rutina-global" optional: true = also declare it in the interface section (visible outside the unit) |
-| `createunit` | boolean | optional | CREATE mode: true = create the .pas (never overwrites). Then register it with delphi_config command=add-unit |
-| `content` | string | optional | CREATE mode: the COMPLETE file content in one call (empty = standard IDE skeleton). Use this when you already know the whole unit: one call instead of create + N patches |
-| `eol` | string | optional | CREATE mode: line endings, "crlf" (default, Delphi standard) or "lf" |
 | `restore` | boolean | optional | RESTORE mode: true = restore the file from this tool's backup. First call shows what would be LOST; repeat with confirm=true to execute |
 | `confirm` | boolean | optional | Only with restore: execute after having seen the losses |
 | `adduses` | string | optional | ADDUSES mode: units to add to a uses clause of this .pas, separated by ; (System.SysUtils;UCustomer). The engine writes the commas and the terminator, creates the clause when there is none, and skips units already in either section (a unit cannot be in both). In a .dpr it takes LIBRARY units (no path; section does not apply); a unit of the project goes by delphi_config add-unit, and a .dpk by add-unit / add-requires. |
@@ -363,7 +360,8 @@ Create a NEW Delphi project - console/VCL/FMX (.dpr + buildable .dproj + main fo
 | `project` | string | optional | Everything but projects: the ABSOLUTE path of the .dpr, .dpk or .dproj that registers the new unit (uses of a program, contains of a package). kind=unit may go without it, with an ABSOLUTE dir (standalone, listed by no project yet). kind=include: optional, and dir is then relative to it. |
 | `formname` | string | optional | Forms/frames/data modules optional: instance name without the T (default: Form+unit, Frame+unit, DM+unit) |
 | `ancestor` | string | optional | Forms/frames: the class of a form or frame of this project to inherit from |
-| `content` | string | optional | kind=unit optional: the FULL source, written as it comes (CRLF) and registered in the same call - no empty skeleton first. Its `unit X;` must match "name" and it must end in `end.`. Without it, a standard empty skeleton. kind=include: REQUIRED, the text of the .inc. |
+| `content` | string | optional | kind=unit optional: the FULL source, written as it comes (in eol) and registered in the same call - no empty skeleton first. Its `unit X;` must match "name" and it must end in `end.`. Without it, a standard empty skeleton. kind=include: REQUIRED, the text of the .inc. |
+| `eol` | string | optional | kind=unit or include: line endings, "crlf" (default, Delphi standard) or "lf" |
 <!-- /contract -->
 
 ## Manage files  (read-write only)
@@ -981,7 +979,7 @@ Concrete sequences that string the tools together. Paths shown as `srvd:\...` ar
 
 ### Edit a source safely
 1. `delphi_read` the region; copy the exact line to replace.
-2. `delphi_edit {path, old:"<the full line>", new:"<replacement>"}`. For a NEW routine use `insert:"rutina-global"` or `insert:"metodo"`+`inclass`+`code`; to remove a line use `delete:true`; to create a unit use `createunit:true` (+ optional `content`).
+2. `delphi_edit {path, old:"<the full line>", new:"<replacement>"}`. For a NEW routine use `insert:"rutina-global"` or `insert:"metodo"`+`inclass`+`code`; to remove a line use `delete:true`. A new unit is `delphi_create {kind:"unit"}` (+ optional `content`, `eol`).
 3. Read the tool's audit output (encoding, EOLs, the real lines re-read from disk). If it warns, `delphi_edit {path, restore:true}` then `confirm:true`.
 4. `delphi_diagnostics {path}` — compiler codes with no build; then `delphi_build` as the real check.
 

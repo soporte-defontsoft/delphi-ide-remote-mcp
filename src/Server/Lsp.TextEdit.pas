@@ -245,8 +245,7 @@ begin
   // 1.23). Decia la codificacion LEIDA, y el primer acento de un texto ASCII lo
   // escribe EncAlEscribir en la de uno nuevo de su clase, que puede ser otra
   var Escritos := TFile.ReadAllBytes(A.Path);
-  var Etiqueta := EtiquetaDeCodificacion(DetectEnc(Escritos, EsRutaDeDesigner(A.Path)),
-    not HayByteAlto(Escritos));
+  var Etiqueta := EtiquetaDeLosBytes(Escritos, EsRutaDeDesigner(A.Path));
 
   if Cuantas > 1 then
     Exit(MsgFmt(SK_TEXT_RANGO_VERIFICACION_FMT,

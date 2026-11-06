@@ -46,9 +46,6 @@ type
     FInClass: string;
     FVisibility: string;
     FVisible: Boolean;
-    FCreateUnit: Boolean;
-    FContent: string;
-    FEol: string;
     FRestore: Boolean;
     FConfirm: Boolean;
     FAddUses: string;
@@ -89,13 +86,6 @@ type
     property Visibility: string read FVisibility write FVisibility;
     [SchemaDescription(SP_EDIT_VISIBLE)]
     property Visible: Boolean read FVisible write FVisible;
-    [SchemaDescription(SP_EDIT_CREATEUNIT)]
-    property CreateUnit: Boolean read FCreateUnit write FCreateUnit;
-    [SchemaDescription(SP_EDIT_CONTENT)]
-    [Contenido]
-    property Content: string read FContent write FContent;
-    [SchemaDescription(SP_EDIT_EOL)]
-    property Eol: string read FEol write FEol;
     [SchemaDescription(SP_EDIT_RESTORE)]
     property Restore: Boolean read FRestore write FRestore;
     [SchemaDescription(SP_EDIT_CONFIRM)]
@@ -224,21 +214,19 @@ begin
     IfThen(Params.AddUses.Trim <> '', 'adduses'),
     IfThen(Params.RemoveUses.Trim <> '', 'removeuses'),
     IfThen(Params.Insert.Trim <> '', 'insert'),
-    IfThen(Params.CreateUnit, 'createunit'),
     IfThen(Params.Restore, 'restore'),
     IfThen((Params.Old <> '') or (Params.New <> '') or (Params.Fragment <> '') or Params.Delete,
       'old/new/fragment/delete')]);
   if Result <> '' then
     Exit;
   // lo que no es del modo de la llamada se dice (Lsp.Guard.ParametroQueNoVa):
-  // content sin createunit (sexta revision), code sin insert, atline con
+  // code sin insert, atline con
   // edits, section con un old/new... se ignoraban (septima)
   var Modo: string;
   if Params.Edits.Trim <> '' then Modo := 'edits'
   else if Params.AddUses.Trim <> '' then Modo := 'adduses'
   else if Params.RemoveUses.Trim <> '' then Modo := 'removeuses'
   else if Params.Insert.Trim <> '' then Modo := 'insert=' + SinMayusculas(Params.Insert.Trim)
-  else if Params.CreateUnit then Modo := 'createunit'
   else if Params.Restore then Modo := 'restore'
   else Modo := 'old/new';
   var Suyos, VaCon: string;
@@ -248,14 +236,12 @@ begin
       'removeuses', 'removeuses section',
       'insert=rutina-global', 'insert code visible',
       'insert=metodo', 'insert code inclass visibility',
-      'createunit', 'createunit content eol',
       'restore', 'restore confirm',
       'old/new', 'old new fragment delete atline toline'],
     ['atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
      'toline', IfThen(Params.ToLine <> 0, IntToStr(Params.ToLine)), '',
      'code', Params.Code, '', 'inclass', Params.InClass, '',
      'visibility', Params.Visibility, '', 'visible', IfThen(Params.Visible, 'true'), '',
-     'content', Params.Content, '', 'eol', Params.Eol, '',
      'confirm', IfThen(Params.Confirm, 'true'), '', 'section', Params.Section, ''],
     Suyos, VaCon);
   if Sobra <> '' then
@@ -317,9 +303,6 @@ begin
   A.ClassName_ := Params.InClass;
   A.Visibility := Params.Visibility;
   A.Visible := Params.Visible;
-  A.CreateUnit_ := Params.CreateUnit;
-  A.Content := Params.Content;
-  A.Eol := Params.Eol;
   A.Restore := Params.Restore;
   A.Confirm := Params.Confirm;
   // ExecutePatch suelta el cerrojo al volver: el lector, despues
