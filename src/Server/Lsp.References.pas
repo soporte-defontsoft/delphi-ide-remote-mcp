@@ -1351,6 +1351,7 @@ begin
     Juzgados := TList<TJuzgado>.Create;
     FilesOpened := 0;
     OpenedFiles := TDictionary<string, Boolean>.Create;
+    var ListaMiProyecto := TDictionary<string, Boolean>.Create; // fichero -> lo lista el proyecto del objetivo
     try
       // el proyecto del objetivo: con el se compara el de cada candidato
       var MiProyecto := Session.FindDproj(FullPath);
@@ -1394,6 +1395,27 @@ begin
         J.Suyo := Session.FindDproj(Cand.Path);
         if RutaEnLista(J.Suyo, [MiProyecto]) then
           J.Suyo := '';
+        // ...salvo si el proyecto del objetivo LISTA ese fichero (su .dpr lo
+        // nombra por su ruta, EL juez de FindDproj): una unidad compartida es
+        // de los dos y el motor que pregunta ya es el de un proyecto suyo.
+        // FindDproj da el primero que la nombra, y arrancaba ese motor para
+        // nada (R2 de test_ronda16_menores, de la 1.13.0, roja desde B1). Uno
+        // que no se deja leer no la lista: se pregunta al suyo
+        if (J.Suyo <> '') and (MiProyecto <> '') then
+        begin
+          var Lista: Boolean;
+          if not ListaMiProyecto.TryGetValue(ClaveDeRuta(Cand.Path), Lista) then
+          begin
+            try
+              Lista := ProyectoListaUnidad(MiProyecto, Cand.Path);
+            except
+              Lista := False;
+            end;
+            ListaMiProyecto.Add(ClaveDeRuta(Cand.Path), Lista);
+          end;
+          if Lista then
+            J.Suyo := '';
+        end;
         J.Juez := '';
         Juzgados.Add(J);
       end;
@@ -1632,6 +1654,7 @@ begin
         Result.AddPair('project', Proyecto);
     finally
       OpenedFiles.Free;
+      ListaMiProyecto.Free;
       Juzgados.Free;
     end;
   finally
