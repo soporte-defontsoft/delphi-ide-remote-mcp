@@ -29,91 +29,30 @@ Uso:  python tests/test_db_lecturas_129.py [ruta-a-DelphiLspMcp.exe]
 import io
 import json
 import os
-import shutil
-import subprocess
 import time
+import db_arnes as arnes
 import mcp_cliente as mc
 from mcp_cliente import check
 
-PROD_JSON = r'C:\Delphi-mcp-Server\connections\databases\db-connections.json'
-PROD_PG = r'C:\Delphi-mcp-Server\drivers\PG'
-PSQL = os.path.join(os.path.expanduser('~'), 'pgsql', 'bin', 'psql.exe')
 TABLA = 't_db129'
-NOMBRES = ['Ana 50%', 'ana_b', 'BETO', '\u00c1nade', 'CASA', 'casa\\x']
-
-try:
-    ENTRADAS = json.load(io.open(PROD_JSON, encoding='utf-8-sig'))['db-connections']['projects']['mcp-pruebas'][
-        'databases']
-except Exception:
-    ENTRADAS = None
-if not ENTRADAS or not os.path.isdir(PROD_PG):
-    print('NOTA: sin el proyecto mcp-pruebas en el json de produccion o sin drivers\\PG: no se mide nada')
-    mc.fin('delphi_db 1.29 (lecturas)', sin_checks='sin bases de pruebas en esta maquina')
-    raise SystemExit(0)
-
-BASE = mc.carpeta('db_lecturas_129')
-JAIL = os.path.join(BASE, 'jail')
-os.makedirs(JAIL)
-SRV = os.path.join(BASE, 'srv')
-EXE = mc.copia_exe(SRV)
-shutil.copytree(PROD_PG, os.path.join(SRV, 'drivers', 'PG'))
-MS, PG = ENTRADAS['mssql'], ENTRADAS['pg']
-SECRETOS = [s for s in {MS['password'], PG['password'], MS['server'], PG['server'], MS['database']} if s]
-SECRETOS += MS['server'].split('\\') + ["'%s'" % MS['user'], '"%s"' % PG['user']]
-
-
-def entrada(base, **kw):
-    e = dict(base)
-    e.update(kw)
-    return e
-
-
-CONEXIONES = {'db-connections': {'projects': {'pruebas': {'databases': {
-    'mssql': entrada(MS, readonly=True),
-    'pg': entrada(PG, readonly=True),
+NOMBRES = ['Ana 50%', 'ana_b', 'BETO', chr(0xC1) + 'nade', 'CASA', 'casa\\x']
+BASE, JAIL, SRV, EXE, MS, PG = arnes.prepara('db_lecturas_129', 'delphi_db 1.29 (lecturas)')
+SECRETOS = arnes.secretos(MS, PG)
+arnes.escribe_conexiones(SRV, {
+    'mssql': arnes.entrada(MS, readonly=True),
+    'pg': arnes.entrada(PG, readonly=True),
     'caida': {'server': '192.0.2.1', 'database': 'x', 'user': 'x', 'password': 'x', 'engine': 'MSSQL',
               'provider': 'FIREDAC', 'readonly': True},
-    'pg_mala': entrada(PG, password='clave-mal-129', readonly=True),
-    'pg_sin_clave': entrada(PG, password='', readonly=True)}}}}}
-os.makedirs(os.path.join(SRV, 'connections', 'databases'))
-io.open(os.path.join(SRV, 'connections', 'databases', 'db-connections.json'), 'w', encoding='utf-8').write(
-    json.dumps(CONEXIONES, indent=2))
+    'pg_mala': arnes.entrada(PG, password='clave-mal-129', readonly=True),
+    'pg_sin_clave': arnes.entrada(PG, password='', readonly=True)})
 
 
 def sql_mssql(sql):
-    """El arnes en SQL Server: PowerShell con SqlClient y la credencial del json de la bateria (no se imprime)."""
-    ps = os.path.join(BASE, 'arnes.ps1')
-    io.open(os.path.join(BASE, 'arnes.sql'), 'w', encoding='utf-8-sig').write(sql)
-    io.open(ps, 'w', encoding='utf-8-sig').write(
-        "$ErrorActionPreference='Stop'\n"
-        "$j = Get-Content -Raw -Encoding UTF8 '%s' | ConvertFrom-Json\n"
-        "$e = $j.'db-connections'.projects.pruebas.databases.mssql\n"
-        "$b = New-Object System.Data.SqlClient.SqlConnectionStringBuilder\n"
-        "$b['Data Source'] = $e.server; $b['Initial Catalog'] = $e.database; $b['User ID'] = $e.user\n"
-        "$b['Password'] = $e.password; $b['Connect Timeout'] = 15\n"
-        "$c = New-Object System.Data.SqlClient.SqlConnection($b.ConnectionString); $c.Open()\n"
-        "$q = $c.CreateCommand(); $q.CommandText = Get-Content -Raw -Encoding UTF8 '%s'\n"
-        "[void]$q.ExecuteNonQuery(); $c.Close(); 'ok'\n"
-        % (os.path.join(SRV, 'connections', 'databases', 'db-connections.json'), os.path.join(BASE, 'arnes.sql')))
-    r = subprocess.run(['powershell.exe', '-NoProfile', '-ExecutionPolicy', 'Bypass', '-File', ps],
-                       capture_output=True, text=True, timeout=120)
-    return r.returncode == 0 and 'ok' in r.stdout
+    return arnes.sql_mssql(BASE, SRV, 'mssql', sql)
 
 
 def sql_pg(sql):
-    """El arnes en PostgreSQL: psql con la credencial por el entorno (no se imprime) y sin el pgpass. El SQL
-    en un fichero UTF-8 (-f): por la linea de ordenes Windows lo pasa en su pagina ANSI y la A con tilde
-    llegaba como 0xC1 a un cliente UTF8 (medido el 6-nov-2026)."""
-    env = dict(os.environ, PGPASSWORD=PG['password'], PGPASSFILE=os.path.join(BASE, 'no-existe.pgpass'),
-               PGCLIENTENCODING='UTF8')
-    f = os.path.join(BASE, 'arnes_pg.sql')
-    io.open(f, 'w', encoding='utf-8').write(sql)
-    r = subprocess.run([PSQL, '-h', PG['server'], '-p', str(PG.get('port') or 5432), '-U', PG['user'], '-d',
-                        PG['database'], '-w', '-v', 'ON_ERROR_STOP=1', '-q', '-f', f],
-                       capture_output=True, text=True, encoding='utf-8', env=env, timeout=120)
-    if r.returncode != 0:
-        print('  (arnes PG: %s)' % r.stderr.strip()[:200].replace(PG['password'], '***'))
-    return r.returncode == 0
+    return arnes.sql_pg(BASE, PG, sql)
 
 
 def filas_sql(fmt_fecha, bool_lit, n_prefijo):
@@ -207,6 +146,10 @@ try:
                  ('activo equals true', [{'field': 'activo', 'op': 'equals', 'value': True}], [2, 4, 6]),
                  ('alta >= 2025-01-01', [{'field': 'alta', 'op': 'greater_or_equal', 'value': '2025-01-01'}],
                   [2, 4, 6]),
+                 # una fecha sin zona es la que se escribe: la RTL la tomaba por UTC y la pasaba a hora local
+                 # (TryISO8601ToDate con AReturnUTC=False; medido el 6-nov-2026: 04:05 se guardaba como 05:05)
+                 ('alta equals 2025-02-01, sin mover la hora', [{'field': 'alta', 'op': 'equals',
+                                                                 'value': '2025-02-01'}], [2]),
                  ('empty foto false', [{'field': 'foto', 'op': 'empty', 'value': False}], [1]),
                  ('dos filtros (AND)', [{'field': 'activo', 'op': 'equals', 'value': 'yes'},
                                         {'field': 'importe', 'op': 'less', 'value': '7'}], [2, 4])]
@@ -239,11 +182,11 @@ try:
             ({'command': 'rows', 'db': D, 'table': 'no_existe_129'}, 'SR_DB_TABLA_FMT'),
             ({'command': 'rows', 'db': D, 'table': TABLA, 'fields': ['no_existe']}, 'SR_DB_CAMPO_FMT'),
             ({'command': 'rows', 'db': D, 'table': TABLA, 'filters': [{'field': 'id', 'op': 'like', 'value': 1}]},
-             'SR_DB_FILTRO_FMT'),
+             'SR_DB_ENTRADA_FMT'),
             ({'command': 'rows', 'db': D, 'table': TABLA, 'filters': [{'field': 'id', 'op': 'equals',
-                                                                        'value': 'abc'}]}, 'SR_DB_FILTRO_FMT'),
+                                                                        'value': 'abc'}]}, 'SR_DB_ENTRADA_FMT'),
             ({'command': 'rows', 'db': D, 'table': TABLA, 'filters': [{'field': 'id', 'op': 'contains',
-                                                                        'value': '1'}]}, 'SR_DB_FILTRO_FMT'),
+                                                                        'value': '1'}]}, 'SR_DB_ENTRADA_FMT'),
             ({'command': 'summary', 'db': D, 'table': TABLA, 'group': ['nombre:year']}, 'SR_DB_PARTE_FMT'),
             ({'command': 'rows', 'db': D, 'table': TABLA, 'order': 'id sideways'}, 'SR_DB_ORDEN_FMT'),
             ({'command': 'tables', 'db': D, 'table': TABLA}, 'SR_DB_NO_VA_CON_COMANDO_FMT'),
@@ -266,7 +209,7 @@ try:
         check('L13 PG SIN contrasena NO conecta (libpq no lee el pgpass de la cuenta)',
               mc.abre(r, 'SR_DB_NO_ABRE_FMT') and 'tables' not in mc.como_json(r), r[:400])
     # el detalle de un fallo dice CUALES (su posicion en SECRETOS), nunca el secreto ni un trozo
-    fugas = sorted({i for i, s in enumerate(SECRETOS) for rr in respuestas if s and s.lower() in rr.lower()})
+    fugas = arnes.fugas(SECRETOS, respuestas)
     check('L10 ningun secreto del json en ninguna respuesta (%d respuestas)' % len(respuestas), not fugas,
           'secretos que aparecen: posiciones %s de %d' % (fugas, len(SECRETOS)))
 finally:

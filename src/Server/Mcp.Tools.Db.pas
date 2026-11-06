@@ -8,7 +8,11 @@
 
   Primera parte: connections, las bases de ESTA sesion por su nombre
   <proyecto>/<alias>, su motor y si son de solo lectura; las declaradas mal,
-  aparte con el porque (un fragmento: un SR_ no va en un campo JSON). }
+  aparte con el porque (un fragmento: un SR_ no va en un campo JSON).
+  Segunda: tables, fields, rows y summary, en una transaccion que se
+  deshace. Tercera: insert, update y delete, solo donde el json dice
+  readonly:false (la primera barrera, antes de conectar), y update y delete
+  solo con filters (tampoco una lista vacia: tocaria todas las filas). }
 
 interface
 
@@ -186,7 +190,12 @@ begin
       end;
     ftDate, ftTime, ftDateTime, ftTimeStamp, ftOraTimeStamp:
       begin
-        if not TryISO8601ToDate(S, F, False) then
+        // AReturnUTC=True: una fecha SIN zona queda como se escribe y una con
+        // zona pasa a UTC por su desplazamiento. Con False la RTL toma la que
+        // no trae zona por UTC y la pasa a la hora local de esta maquina
+        // (System.DateUtils.AdjustDateTime; medido el 6-nov-2026: 04:05 se
+        // guardaba como 05:05 y un equals de una fecha no encontraba nada)
+        if not TryISO8601ToDate(S, F, True) then
           Exit;
         AVar := VarFromDateTime(F);
       end;
@@ -248,8 +257,10 @@ begin
 end;
 
 { La base que nombra ADb, abierta, o la negativa: de la sesion, usable, y la
-  conexion con su plazo (Lsp.BaseDeDatos.AbreBase). }
-function AbreLaBase(const ACmd, ADb: string; out S: TSesionDb): string;
+  conexion con su plazo (Lsp.BaseDeDatos.AbreBase). Para escribir
+  (AEscribe), una que el json no declara de solo lectura: la primera
+  barrera, antes de conectar. }
+function AbreLaBase(const ACmd, ADb: string; AEscribe: Boolean; out S: TSesionDb): string;
 var
   Por: string;
 begin
@@ -261,6 +272,8 @@ begin
   Por := DefectoDeConexion(S.Conexion);
   if Por <> '' then
     Exit(MsgFmt(SR_DB_INUTILIZABLE_FMT, [NombreDeConexion(S.Conexion), Por]));
+  if AEscribe and S.Conexion.SoloLectura then
+    Exit(MsgFmt(SR_DB_SOLO_LECTURA_FMT, [NombreDeConexion(S.Conexion), ACmd]));
   Result := AbreBase(S.Conexion, S.Conn);
 end;
 
@@ -291,6 +304,35 @@ begin
   Result := False;
 end;
 
+{ El parametro siguiente de AParams (p1, p2...) con su valor y su tipo; el
+  nombre, para la sentencia. Los de values y los de filters comparten la
+  numeracion: un update lleva los dos. }
+function NuevoParametro(var AParams: TArray<TParametroDb>; const AValor: Variant;
+  ATipo: TFieldType): string;
+begin
+  Result := 'p' + IntToStr(Length(AParams) + 1);
+  SetLength(AParams, Length(AParams) + 1);
+  AParams[High(AParams)].Nombre := Result;
+  AParams[High(AParams)].Tipo := ATipo;
+  AParams[High(AParams)].Valor := AValor;
+end;
+
+{ La entrada I de una lista de filters o de values (AQue): un objeto con un
+  "field" de ACampos; False con la negativa (AForma: como es una entrada). }
+function EntradaConCampo(ALista: TJSONArray; const AQue: string; I: Integer; const AForma: string;
+  const ACampos: TArray<TCampoDb>; const ATabla: string; out AObj: TJSONObject; out ACampo: TCampoDb;
+  out ANeg: string): Boolean;
+begin
+  AObj := nil;
+  if not (ALista.Items[I] is TJSONObject) then
+  begin
+    ANeg := MsgFmt(SR_DB_ENTRADA_FMT, [AQue, I + 1, AForma]);
+    Exit(False);
+  end;
+  AObj := TJSONObject(ALista.Items[I]);
+  Result := CampoDe(ACampos, ValorTexto(AObj.GetValue('field')), ATabla, ACampo, ANeg);
+end;
+
 { El WHERE de AFiltros (filters) y sus parametros, o la negativa. Cada campo
   del catalogo, cada op de la lista, cada valor tipado por su campo: nada de
   lo que escribe el agente viaja como texto a la base. La comparacion de
@@ -303,24 +345,15 @@ var
   Lista: TJSONArray;
   Obj: TJSONObject;
   C: TCampoDb;
-  Op, Neg, Q, P, T: string;
+  Op, Neg, Q, T: string;
   B: Boolean;
   V: Variant;
   I: Integer;
 
-  procedure AnadeParam(const AValor: Variant; ATipo: TFieldType);
-  begin
-    P := 'p' + IntToStr(Length(AParams) + 1);
-    SetLength(AParams, Length(AParams) + 1);
-    AParams[High(AParams)].Nombre := P;
-    AParams[High(AParams)].Tipo := ATipo;
-    AParams[High(AParams)].Valor := AValor;
-  end;
-
   function Como(const APatron: string): string;
   begin
-    AnadeParam(APatron, ftWideString);
-    Result := '{fn UCASE(' + Q + ')} LIKE {fn UCASE(:' + P + ')} ESCAPE ''\''';
+    Result := '{fn UCASE(' + Q + ')} LIKE {fn UCASE(:' + NuevoParametro(AParams, APatron, ftWideString) +
+      ')} ESCAPE ''\''';
   end;
 
 begin
@@ -334,14 +367,11 @@ begin
   try
     for I := 0 to Lista.Count - 1 do
     begin
-      if not (Lista.Items[I] is TJSONObject) then
-        Exit(MsgFmt(SR_DB_FILTRO_FMT, [I + 1, MsgText(SF_DB_FILTRO_FORMA)]));
-      Obj := TJSONObject(Lista.Items[I]);
-      if not CampoDe(ACampos, ValorTexto(Obj.GetValue('field')), ATabla, C, Neg) then
+      if not EntradaConCampo(Lista, 'filters', I, MsgText(SF_DB_FILTRO_FORMA), ACampos, ATabla, Obj, C, Neg) then
         Exit(Neg);
       Op := SinMayusculas(ValorTexto(Obj.GetValue('op')));
       if not MatchText(Op, OPS_DE_FILTRO) then
-        Exit(MsgFmt(SR_DB_FILTRO_FMT, [I + 1, MsgFmt(SF_DB_FILTRO_OP_FMT, [Op])]));
+        Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_FILTRO_OP_FMT, [Op])]));
       Q := CitaNombre(S.Conn, C.Nombre);
       if AWhere <> '' then
         AWhere := AWhere + ' AND ';
@@ -349,16 +379,17 @@ begin
       if Op = 'empty' then
       begin
         if not LeeSiNo(ValorTexto(Obj.GetValue('value')), B) then
-          Exit(MsgFmt(SR_DB_FILTRO_FMT, [I + 1, MsgFmt(SF_DB_FILTRO_VALOR_FMT, [C.Nombre, 'true or false'])]));
+          Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_VALOR_NO_CABE_FMT,
+            [C.Nombre, 'true or false'])]));
         AWhere := AWhere + Q + IfThen(B, ' IS NULL', ' IS NOT NULL');
         Continue;
       end;
       if EsBinario(C.TipoDeCampo) then
-        Exit(MsgFmt(SR_DB_FILTRO_FMT, [I + 1, MsgFmt(SF_DB_FILTRO_BINARIO_FMT, [C.Nombre])]));
+        Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_FILTRO_BINARIO_FMT, [C.Nombre])]));
       if MatchText(Op, ['contains', 'starts_with', 'words']) then
       begin
         if not EsTexto(C.TipoDeCampo) then
-          Exit(MsgFmt(SR_DB_FILTRO_FMT, [I + 1, MsgFmt(SF_DB_FILTRO_TEXTO_FMT, [Op, C.Nombre, C.Tipo])]));
+          Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_FILTRO_TEXTO_FMT, [Op, C.Nombre, C.Tipo])]));
         T := ValorTexto(Obj.GetValue('value'));
         if Op = 'contains' then
           AWhere := AWhere + Como('%' + SinComodines(T) + '%')
@@ -376,9 +407,8 @@ begin
         Continue;
       end;
       if not ValorParaCampo(Obj.GetValue('value'), C, V) then
-        Exit(MsgFmt(SR_DB_FILTRO_FMT, [I + 1, MsgFmt(SF_DB_FILTRO_VALOR_FMT, [C.Nombre, C.Tipo])]));
-      AnadeParam(V, C.TipoDeCampo);
-      AWhere := AWhere + Q + ' ' + OperadorDe(Op) + ' :' + P;
+        Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_VALOR_NO_CABE_FMT, [C.Nombre, C.Tipo])]));
+      AWhere := AWhere + Q + ' ' + OperadorDe(Op) + ' :' + NuevoParametro(AParams, V, C.TipoDeCampo);
     end;
   finally
     Lista.Free;
@@ -497,7 +527,7 @@ var
   R: TJSONObject;
   L: TJSONArray;
 begin
-  Result := AbreLaBase('tables', P.Db, S);
+  Result := AbreLaBase('tables', P.Db, False, S);
   if Result <> '' then
     Exit;
   try
@@ -535,7 +565,7 @@ var
 begin
   if P.Table.Trim = '' then
     Exit(MsgFmt(SR_DB_FALTA_FMT, ['fields', 'table']));
-  Result := AbreLaBase('fields', P.Db, S);
+  Result := AbreLaBase('fields', P.Db, False, S);
   if Result <> '' then
     Exit;
   try
@@ -595,7 +625,7 @@ var
 begin
   if P.Table.Trim = '' then
     Exit(MsgFmt(SR_DB_FALTA_FMT, ['rows', 'table']));
-  Result := AbreLaBase('rows', P.Db, S);
+  Result := AbreLaBase('rows', P.Db, False, S);
   if Result <> '' then
     Exit;
   try
@@ -689,6 +719,7 @@ var
   Tabla, Neg, Where, OrderBy, Sel, GroupBy, Expr, Op: string;
   C: TCampoDb;
   Valores: TJSONArray;
+  Obj: TJSONObject;
   Q: TFDQuery;
   R: TJSONObject;
   Filas: TJSONArray;
@@ -697,7 +728,7 @@ var
 begin
   if P.Table.Trim = '' then
     Exit(MsgFmt(SR_DB_FALTA_FMT, ['summary', 'table']));
-  Result := AbreLaBase('summary', P.Db, S);
+  Result := AbreLaBase('summary', P.Db, False, S);
   if Result <> '' then
     Exit;
   try
@@ -742,15 +773,14 @@ begin
           try
             for I := 0 to Valores.Count - 1 do
             begin
-              if not (Valores.Items[I] is TJSONObject) then
-                Exit(MsgFmt(SR_DB_AGREGADO_FMT, [I + 1, MsgText(SF_DB_AGREGADO_FORMA)]));
-              if not CampoDe(Campos, ValorTexto(TJSONObject(Valores.Items[I]).GetValue('field')), Tabla, C, Neg) then
+              if not EntradaConCampo(Valores, 'values', I, MsgText(SF_DB_AGREGADO_FORMA), Campos, Tabla, Obj, C,
+                Neg) then
                 Exit(Neg);
-              Op := SinMayusculas(ValorTexto(TJSONObject(Valores.Items[I]).GetValue('op')));
+              Op := SinMayusculas(ValorTexto(Obj.GetValue('op')));
               if not MatchText(Op, OPS_DE_VALOR) then
-                Exit(MsgFmt(SR_DB_AGREGADO_FMT, [I + 1, MsgText(SF_DB_AGREGADO_FORMA)]));
+                Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['values', I + 1, MsgText(SF_DB_AGREGADO_FORMA)]));
               if MatchText(Op, ['sum', 'avg']) and not EsNumero(C.TipoDeCampo) then
-                Exit(MsgFmt(SR_DB_AGREGADO_FMT, [I + 1, MsgFmt(SF_DB_AGREGADO_NUMERO_FMT, [C.Nombre])]));
+                Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['values', I + 1, MsgFmt(SF_DB_AGREGADO_NUMERO_FMT, [C.Nombre])]));
               Sel := Sel + IfThen(Sel <> '', ', ') + UpperCase(Op) + '(' + CitaNombre(S.Conn, C.Nombre) + ')';
               Etiquetas := Etiquetas + [Op + '_' + C.Nombre];
             end;
@@ -790,6 +820,141 @@ begin
           end;
         finally
           Q.Free;
+        end;
+      finally
+        if S.Conn.InTransaction then
+          S.Conn.Rollback;
+      end;
+    except
+      on E: Exception do
+        Result := NegativaDeLaBase(E, S.Conexion);
+    end;
+  finally
+    S.Conn.Free;
+  end;
+end;
+
+{ Los values de insert y update (objetos con field y value): las columnas citadas y
+  las marcas de sus parametros, cada valor tipado por su campo (null escribe
+  NULL; un binario, solo NULL: el JSON no lo trae); o la negativa. }
+function ValoresParaEscribir(const S: TSesionDb; const ATabla: string; const ACampos: TArray<TCampoDb>;
+  const AValores: string; var AParams: TArray<TParametroDb>; out ACols, AMarcas: TArray<string>): string;
+var
+  Lista: TJSONArray;
+  Obj: TJSONObject;
+  Valor: TJSONValue;
+  C: TCampoDb;
+  V: Variant;
+  Neg: string;
+  I: Integer;
+begin
+  Result := '';
+  ACols := [];
+  AMarcas := [];
+  Lista := ListaJson(AValores);
+  if Lista = nil then
+    Exit(MsgFmt(SR_DB_LISTA_FMT, ['values', MsgText(SF_DB_VALOR_FORMA)]));
+  try
+    for I := 0 to Lista.Count - 1 do
+    begin
+      if not EntradaConCampo(Lista, 'values', I, MsgText(SF_DB_VALOR_FORMA), ACampos, ATabla, Obj, C, Neg) then
+        Exit(Neg);
+      Valor := Obj.GetValue('value');
+      if Valor = nil then
+        Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['values', I + 1, MsgText(SF_DB_VALOR_FORMA)]));
+      if Valor is TJSONNull then
+        V := Null
+      else if EsBinario(C.TipoDeCampo) then
+        Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['values', I + 1, MsgFmt(SF_DB_VALOR_BINARIO_FMT, [C.Nombre])]))
+      else if not ValorParaCampo(Valor, C, V) then
+        Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['values', I + 1, MsgFmt(SF_DB_VALOR_NO_CABE_FMT, [C.Nombre, C.Tipo])]));
+      ACols := ACols + [CitaNombre(S.Conn, C.Nombre)];
+      AMarcas := AMarcas + [':' + NuevoParametro(AParams, V, C.TipoDeCampo)];
+    end;
+  finally
+    Lista.Free;
+  end;
+end;
+
+{ insert, update y delete (ACmd): solo donde el json dice readonly:false (lo
+  niega AbreLaBase antes de conectar), y update y delete solo con filters que
+  seleccionen algo. La sentencia la compone el servidor como las lecturas
+  (nombres del catalogo citados por FireDAC, valores por parametro tipado) y
+  va en una transaccion que solo se confirma si la base la acepta. La
+  respuesta dice cuantas filas toco. }
+function Escribe(const ACmd: string; const P: TDelphiDbParams): string;
+var
+  S: TSesionDb;
+  Campos: TArray<TCampoDb>;
+  Pars: TArray<TParametroDb>;
+  Cols, Marcas: TArray<string>;
+  Tabla, Neg, Where, Sql, Sets: string;
+  Q: TFDQuery;
+  R: TJSONObject;
+  Tocadas: Int64;
+begin
+  if P.Table.Trim = '' then
+    Exit(MsgFmt(SR_DB_FALTA_FMT, [ACmd, 'table']));
+  if (ACmd <> 'delete') and (P.Values.Trim = '') then
+    Exit(MsgFmt(SR_DB_FALTA_FMT, [ACmd, 'values']));
+  if (ACmd <> 'insert') and (P.Filters.Trim = '') then
+    Exit(MsgFmt(SR_DB_FALTA_FMT, [ACmd, 'filters']));
+  Result := AbreLaBase(ACmd, P.Db, True, S);
+  if Result <> '' then
+    Exit;
+  try
+    try
+      S.Conn.StartTransaction;
+      try
+        if not TablaDe(S, P.Table, Tabla, Neg) then
+          Exit(Neg);
+        Campos := CamposDeTabla(S.Conn, Tabla);
+        Pars := [];
+        Cols := [];
+        Marcas := [];
+        if ACmd <> 'delete' then
+        begin
+          Result := ValoresParaEscribir(S, Tabla, Campos, P.Values, Pars, Cols, Marcas);
+          if Result <> '' then
+            Exit;
+          if Length(Cols) = 0 then
+            Exit(MsgFmt(SR_DB_FALTA_FMT, [ACmd, 'values']));
+        end;
+        Result := ClausulaDeFiltros(S, Tabla, Campos, P.Filters, Pars, Where);
+        if Result <> '' then
+          Exit;
+        // filters = [] no selecciona nada: sin WHERE, update y delete tocarian
+        // todas las filas
+        if (ACmd <> 'insert') and (Where = '') then
+          Exit(MsgFmt(SR_DB_FALTA_FMT, [ACmd, 'filters']));
+        if ACmd = 'insert' then
+          Sql := 'INSERT INTO ' + CitaNombre(S.Conn, Tabla) + ' (' + string.Join(', ', Cols) + ') VALUES (' +
+            string.Join(', ', Marcas) + ')'
+        else if ACmd = 'update' then
+        begin
+          Sets := '';
+          for var K := 0 to High(Cols) do
+            Sets := Sets + IfThen(Sets <> '', ', ') + Cols[K] + ' = ' + Marcas[K];
+          Sql := 'UPDATE ' + CitaNombre(S.Conn, Tabla) + ' SET ' + Sets + Where;
+        end
+        else
+          Sql := 'DELETE FROM ' + CitaNombre(S.Conn, Tabla) + Where;
+        Q := NuevaConsulta(S, Sql, Pars);
+        try
+          Q.ExecSQL;
+          Tocadas := Q.RowsAffected;
+        finally
+          Q.Free;
+        end;
+        S.Conn.Commit;
+        R := TJSONObject.Create;
+        try
+          R.AddPair('db', NombreDeConexion(S.Conexion));
+          R.AddPair('table', Tabla);
+          R.AddPair('affected', TJSONNumber.Create(Tocadas));
+          Result := R.ToJSON;
+        finally
+          R.Free;
         end;
       finally
         if S.Conn.InTransaction then
@@ -872,7 +1037,10 @@ begin
       'tables', 'db',
       'fields', 'db table',
       'rows', 'db table fields filters order limit offset',
-      'summary', 'db table filters group values order limit'],
+      'summary', 'db table filters group values order limit',
+      'insert', 'db table values',
+      'update', 'db table values filters',
+      'delete', 'db table filters'],
     ['db', Params.Db, '', 'table', Params.Table, '', 'fields', Params.Fields, '',
      'filters', Params.Filters, '', 'order', Params.Order, '',
      'limit', IfThen(Params.Limit <> 0, IntToStr(Params.Limit)), '',
@@ -880,12 +1048,13 @@ begin
      'group', Params.Group, '', 'values', Params.Values, ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_DB_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, Suyos]) + VaCon);
-  case IndexText(Cmd, ['connections', 'tables', 'fields', 'rows', 'summary']) of
+  case IndexText(Cmd, ['connections', 'tables', 'fields', 'rows', 'summary', 'insert', 'update', 'delete']) of
     0: Result := Connections;
     1: Result := Tables(Params);
     2: Result := Fields(Params);
     3: Result := Rows(Params);
     4: Result := Summary(Params);
+    5, 6, 7: Result := Escribe(Cmd, Params);
   else
     Result := MsgText(SR_DB_COMANDO);
   end;

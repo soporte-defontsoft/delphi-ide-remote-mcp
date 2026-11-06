@@ -171,6 +171,14 @@ begin
   AConn.ResourceOptions.CmdExecTimeout := PLAZO_ORDEN_DB;
 end;
 
+{ Lo que dijo el motor, para la causa de DB-009 y DB-010: enmascarado y sin
+  su punto final, que el mensaje pone el suyo (medido en vivo el 6-nov-2026:
+  "already exists.. Nothing was changed"). }
+function TextoDelMotor(const AMensaje: string; const AConexion: TConexionDb): string;
+begin
+  Result := EnmascaraConexion(AMensaje, AConexion).Trim.TrimRight(['.']);
+end;
+
 type
   { Una apertura con plazo: la conexion, el resultado y quien la libera. Estado
     0 = esperando, 1 = quien esperaba se fue (la libera el hilo), 2 = el hilo
@@ -258,7 +266,7 @@ begin
     A.Conn.Free;
     if A.DelMotor and (A.Kind in [ekUserPwdInvalid, ekUserPwdExpired]) then
       Exit(MsgFmt(SR_DB_LOGIN_FMT, [Nombre]));
-    Result := MsgFmt(SR_DB_NO_ABRE_FMT, [Nombre, EnmascaraConexion(A.Mensaje, AConexion)]);
+    Result := MsgFmt(SR_DB_NO_ABRE_FMT, [Nombre, TextoDelMotor(A.Mensaje, AConexion)]);
   finally
     A.Free;
   end;
@@ -337,7 +345,7 @@ end;
 function NegativaDeLaBase(E: Exception; const AConexion: TConexionDb): string;
 begin
   Result := MsgFmt(SR_DB_RESPONDE_FMT, [NombreDeConexion(AConexion),
-    EnmascaraConexion(E.Message, AConexion)]);
+    TextoDelMotor(E.Message, AConexion)]);
 end;
 
 initialization

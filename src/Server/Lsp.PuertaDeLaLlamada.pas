@@ -838,7 +838,9 @@ begin
   AnadeAcceso('delphi_rename_symbol', atMixta, ['preview'], 'mode');
   // las bases con nombre (1.29): connections lee la configuracion y tables,
   // fields, rows y summary leen la base (en una transaccion que se deshace);
-  // lo que no esta en la lista se niega a una credencial de lectura, cerrado
+  // lo que no esta en la lista se niega a una credencial de lectura, cerrado:
+  // insert, update y delete escriben (y la tool, ademas, solo donde el json
+  // de conexiones dice readonly:false)
   AnadeAcceso('delphi_db', atMixta, ['connections', 'tables', 'fields', 'rows', 'summary']);
 end;
 

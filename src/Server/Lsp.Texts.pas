@@ -4646,7 +4646,7 @@ const
 
   SR_DB_COMANDO =
     '[DB-006 INVALID_PARAM] Command must be connections | tables | fields | ' +
-    'rows | summary. Nothing was done.';
+    'rows | summary | insert | update | delete. Nothing was done.';
 
   // %s = el nombre de la base, %d = los segundos
   SR_DB_NO_RESPONDE_FMT =
@@ -4675,9 +4675,10 @@ const
     '[DB-013 INVALID_PARAM] "%s" is not a field of %s: fields, filters, ' +
     'order, group and values take names as command=fields lists them. ' +
     'Nothing was done.';
-  // %d = el numero del filtro (desde 1), %s = por que (un SF_DB_FILTRO_*)
-  SR_DB_FILTRO_FMT =
-    '[DB-014 INVALID_PARAM] filters, entry %d: %s. Nothing was done.';
+  // Una entrada de filters o de values: %s = la lista, %d = la entrada
+  // (desde 1), %s = por que (un SF_DB_FILTRO_*, SF_DB_AGREGADO_*, SF_DB_VALOR_*)
+  SR_DB_ENTRADA_FMT =
+    '[DB-014 INVALID_PARAM] %s, entry %d: %s. Nothing was done.';
   SF_DB_FILTRO_FORMA =
     'each entry is {"field": ..., "op": ..., "value": ...}';
   // %s = el op dado
@@ -4685,8 +4686,8 @@ const
     '"%s" is not an op: equals, not_equals, contains, words, starts_with, ' +
     'greater, less, greater_or_equal, less_or_equal, empty (value true or ' +
     'false)';
-  // %s = el campo, %s = su tipo en la base
-  SF_DB_FILTRO_VALOR_FMT =
+  // %s = el campo, %s = su tipo en la base (filters y values)
+  SF_DB_VALOR_NO_CABE_FMT =
     'the value does not fit field "%s" (%s; a date goes as ' +
     'yyyy-mm-dd or yyyy-mm-ddThh:mm:ss)';
   SF_DB_FILTRO_BINARIO_FMT = 'field "%s" holds binary data and is not compared';
@@ -4706,13 +4707,18 @@ const
     '[DB-016 INVALID_PARAM] order takes "field" or "field desc", ' +
     'separated by commas (summary: also n or a value as op_field): "%s". ' +
     'Nothing was done.';
-  // %d = la entrada (desde 1), %s = por que
-  SR_DB_AGREGADO_FMT =
-    '[DB-017 INVALID_PARAM] values, entry %d: %s. Nothing was done.';
+  // %s = la base, %s = el comando
+  SR_DB_SOLO_LECTURA_FMT =
+    '[DB-017 DENIED] The database "%s" is read-only (so the operator ' +
+    'declared it), and command=%s writes. Nothing was done.';
   SF_DB_AGREGADO_FORMA =
     'each entry is {"field": ..., "op": sum | avg | min | max | count}';
   // %s = el campo
   SF_DB_AGREGADO_NUMERO_FMT = 'sum and avg take a numeric field, and "%s" is not one';
+  SF_DB_VALOR_FORMA =
+    'each entry is {"field": ..., "value": ...} (null writes NULL)';
+  // %s = el campo
+  SF_DB_VALOR_BINARIO_FMT = 'field "%s" holds binary data: only null is written to it';
   // %s = lo dado
   SR_DB_PARTE_FMT =
     '[DB-018 INVALID_PARAM] group, "%s": an entry is "field", or ' +
@@ -4733,15 +4739,19 @@ const
     'lists them ("db" = project/alias, engine, readonly; the ones declared ' +
     'wrong under "unusable"); tables and fields, what one holds; rows reads ' +
     '(filters, fields, order, limit/offset, and always the total); summary ' +
-    'groups and adds up. The server, the credentials and the real database ' +
-    'stay with the operator.';
+    'groups and adds up; insert, update and delete write, only where ' +
+    'readonly=false (update and delete only the rows their filters select, ' +
+    'and they need filters), and say how many rows they touched. The ' +
+    'server, the credentials and the real database stay with the operator.';
   SP_DB_COMMAND =
-    'connections (the default) | tables | fields | rows | summary.';
+    'connections (the default) | tables | fields | rows | summary | insert | ' +
+    'update | delete.';
   SP_DB_DB = 'The database, as connections lists it (project/alias).';
-  SP_DB_TABLE = 'fields, rows, summary: a table or view as tables lists it.';
+  SP_DB_TABLE = 'All but connections and tables: a table or view as tables lists it.';
   SP_DB_FIELDS = 'rows: the fields to return (default: all but binary ones).';
   SP_DB_FILTERS =
-    'rows, summary: a list of {"field", "op", "value"}; all must hold. op: ' +
+    'rows, summary, update, delete: a list of {"field", "op", "value"}; all ' +
+    'must hold. op: ' +
     'equals, not_equals, greater, less, greater_or_equal, less_or_equal, ' +
     'contains, starts_with, words (every word, any order), empty (value ' +
     'true/false). A date as yyyy-mm-dd or yyyy-mm-ddThh:mm:ss.';
@@ -4755,7 +4765,8 @@ const
     'field:month, field:day or field:hour.';
   SP_DB_VALUES =
     'summary: a list of {"field", "op"} - sum | avg | min | max | count; ' +
-    'each group also carries n, its rows.';
+    'each group also carries n, its rows. insert, update: a list of ' +
+    '{"field", "value"} to write (null writes NULL).';
 
   // ---- delphi_build: F2613 helper ----
 

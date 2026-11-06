@@ -954,25 +954,27 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-The databases the operator gave this workspace, by NAME and through operations: you never write SQL - the server composes it from these fields and FireDAC turns it into each engine's dialect. connections lists them ("db" = project/alias, engine, readonly; the ones declared wrong under "unusable"); tables and fields, what one holds; rows reads (filters, fields, order, limit/offset, and always the total); summary groups and adds up. The server, the credentials and the real database stay with the operator.
+The databases the operator gave this workspace, by NAME and through operations: you never write SQL - the server composes it from these fields and FireDAC turns it into each engine's dialect. connections lists them ("db" = project/alias, engine, readonly; the ones declared wrong under "unusable"); tables and fields, what one holds; rows reads (filters, fields, order, limit/offset, and always the total); summary groups and adds up; insert, update and delete write, only where readonly=false (update and delete only the rows their filters select, and they need filters), and say how many rows they touched. The server, the credentials and the real database stay with the operator.
 
 *Access: mixed (`command` connections / tables / fields / rows / summary read-only; every other command read-write, refused to a read-only credential).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | connections (the default) \| tables \| fields \| rows \| summary. |
+| `command` | string | optional | connections (the default) \| tables \| fields \| rows \| summary \| insert \| update \| delete. |
 | `db` | string | optional | The database, as connections lists it (project/alias). |
-| `table` | string | optional | fields, rows, summary: a table or view as tables lists it. |
+| `table` | string | optional | All but connections and tables: a table or view as tables lists it. |
 | `fields` | array | optional | rows: the fields to return (default: all but binary ones). |
-| `filters` | array | optional | rows, summary: a list of {"field", "op", "value"}; all must hold. op: equals, not_equals, greater, less, greater_or_equal, less_or_equal, contains, starts_with, words (every word, any order), empty (value true/false). A date as yyyy-mm-dd or yyyy-mm-ddThh:mm:ss. |
+| `filters` | array | optional | rows, summary, update, delete: a list of {"field", "op", "value"}; all must hold. op: equals, not_equals, greater, less, greater_or_equal, less_or_equal, contains, starts_with, words (every word, any order), empty (value true/false). A date as yyyy-mm-dd or yyyy-mm-ddThh:mm:ss. |
 | `order` | string | optional | "field" or "field desc", comma separated; summary: also n, or a value as op_field (sum_total). |
 | `limit` | integer | optional | rows (default 100) and summary (default 50); at most 500. |
 | `offset` | integer | optional | rows: how many to skip, for the next page. |
 | `group` | array | optional | summary: the fields to group by; a date field also as field:year, field:month, field:day or field:hour. |
-| `values` | array | optional | summary: a list of {"field", "op"} - sum \| avg \| min \| max \| count; each group also carries n, its rows. |
+| `values` | array | optional | summary: a list of {"field", "op"} - sum \| avg \| min \| max \| count; each group also carries n, its rows. insert, update: a list of {"field", "value"} to write (null writes NULL). |
 <!-- /contract -->
 
 The databases are the OPERATOR's: defined in the server's connections file (outside every root: the agent never sees it) and opened to a workspace with `DbAllowedProjects=<project>` in its section of `settings.ini` - a project gives all its databases. Without one, `delphi_db` is not in `tools/list` (it stays callable and answers `DB-002`). The agent names a database `project/alias` exactly as `connections` lists it, and sees its engine (the FireDAC driver) and whether it is read-only; never the server, the real database or the credentials. It works through operations: it never writes SQL (1.29).
+
+Writing (`insert`, `update`, `delete`) is only for a database the connections file declares `"readonly": false`; on a read-only one it is refused before connecting (`DB-017`), and a read-only credential cannot ask for it at all. `update` and `delete` change only the rows their `filters` select and refuse to run without filters (an empty list included, `DB-011`). Values go as parameters typed by their field (`null` writes NULL; a binary field takes only `null`), each command runs in a transaction that is committed only when the database accepts it, and the answer says how many rows it touched (`affected`). No DDL and no procedures.
 
 ## Feedback
 
