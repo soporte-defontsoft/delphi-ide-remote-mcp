@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-11-05 (current release v1.27.1; 42 tools).
+Status page as of 2026-11-06 (current release v1.28.0; 42 tools).
 
 ## Delivered
 
@@ -73,6 +73,8 @@ Status page as of 2026-11-05 (current release v1.27.1; 42 tools).
 - What the server starts and how long a client waits: every container run in one of a fixed set of slots, so a long session still starts them; no child given the server's configuration, and a program taken from a written path judged where it lives; the IDE's form reader asked only within the time a client waits (`DSGN-185`, `DSGN-188`, `EDIT-131`); `layout` judging what the renderer measured, FMX by the VCL's judge; the form renderers with the manifest the IDE gives an application (native FMX controls drawn) and a form's ancestor chain brought whole (render protocol 5); a deploy that says what another configuration ships (`BUILD-068`); window titles in UTF-8 on the desktop node, and KDE Plasma measured (1.27.0)
 
 - The patch of 1.27: `delphi_styles set` saying `UNCHANGED` (`STYLE-069`) for a file it leaves as it was, without writing it or taking a backup, and how FMX's own writer stores the value (1.27.1)
+
+- The close of the open list: `delphi_desktop` on KDE Plasma (the desktop portal's hands, KWin's overview, the scale measured where the desktop does not say it) and `drag`, which moves and resizes windows; creating a unit is `delphi_create`'s alone; `delphi_adb` and `delphi_desktop` announced only where the workspace declares somewhere for them to go, and the `instructions` opening with a map of the tools; a form the IDE's parser would stop reading never written by an edit (`DSGN-124`); a rename that asks each project's engine about a namesake; a long written block echoed head and tail; and what a review of the landscape of the whole source found failing, fixed (1.28.0)
 
 ## Next
 

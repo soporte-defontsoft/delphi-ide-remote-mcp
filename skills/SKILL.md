@@ -561,8 +561,10 @@ You always work inside ONE workspace: what its declaration grants is ALL
 there is (an absent switch is off, an absent list is empty - hosts,
 projects, devices, vault). A refusal naming `RemoteHosts`,
 `RemoteRunProjects`, `DesktopAllowedHosts` or `AdbAllowedDevices` is your workspace's declared
-reach, not a server bug: `delphi_report` it if you need more. A `403` with
+reach, not a server bug: `delphi_report` it if you need more. Where it
+declares no device or desktop host, `delphi_adb` and `delphi_desktop` are
+not even in `tools/list` (`delphi_help` says which key opens them). A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (one of its settings - its roots, a protection - did not load): the operator's side, not yours.
 
-<!-- contract reviewed: v1.27.1 -->
+<!-- contract reviewed: v1.28.0 -->
