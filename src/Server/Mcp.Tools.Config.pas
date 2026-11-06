@@ -70,8 +70,11 @@ type
     [RutaRelativa] // relativa al proyecto, o una macro del IDE ($(BDS)...)
     // ...y en los remove-* es la ENTRADA que se quita, tal como la lista el
     // proyecto: ni se lee ni se escribe, asi que el suelo no la juzga (una de
-    // fuera, que BUILD-050 pide quitar, se quita; 21-oct-2026)
-    [NombreSiComando('remove-unit,remove-searchpath,remove-project')]
+    // fuera, que BUILD-050 pide quitar, se quita; 21-oct-2026). remove-deployfile
+    // tambien: se quedo fuera de la lista y un DeployFile de la maquina del autor
+    // no se podia quitar del .dproj, que solo escribe delphi_config (informe de
+    // fable, 6-nov-2026)
+    [NombreSiComando('remove-unit,remove-searchpath,remove-project,remove-deployfile')]
     property Path: string read FPath write FPath;
     // VARIAS carpetas de add/remove-searchpath en una llamada (1.21.4), una
     // LISTA como paths de delphi_git: la jaula juzga cada una, y en

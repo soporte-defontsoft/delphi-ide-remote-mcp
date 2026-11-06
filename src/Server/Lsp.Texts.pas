@@ -7035,8 +7035,8 @@ const
     'delphi_config set-property / remove-property for a property (a ' +
     'keystore, a manifest, an icon: the group of that platform and ' +
     'configuration), remove-unit / remove-searchpath for a unit or a search ' +
-    'path - they take the entry as the project lists it, even one that ' +
-    'points outside.';
+    'path, remove-deployfile for a file to ship - they take the entry as the ' +
+    'project lists it, even one that points outside.';
 
   SF_BUILD_LECTURA_ESCRITA_FMT = ' (written in the project as %s)';
 
@@ -10884,7 +10884,8 @@ const
     'found" only there. add-deployfile / remove-deployfile: ship an extra ' +
     'file with the build on ONE platform and configuration, as the IDE''s Deployment Manager ' +
     '(a native .so/.dylib/.dll a component loads, data files), into the ' +
-    'project and its .deployproj (created if missing). add-unit / ' +
+    'project and its .deployproj (created if missing); remove-deployfile ' +
+    'takes the entry as the project lists it, even one that points outside. add-unit / ' +
     'remove-unit: the IDE''s Add to / Remove from project (.dpr uses, ' +
     'CreateForm for forms, the .dproj): add-unit takes an EXISTING .pas, ' +
     'remove-unit the entry as the project lists it - even one whose file ' +

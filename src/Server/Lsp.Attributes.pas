@@ -81,8 +81,9 @@ type
 
   { Una ruta DEL SERVIDOR que, con ciertos valores del parametro "command" de
     su tool, es lo que el PROYECTO DICE y no un sitio que la tool lea o
-    escriba: la entrada que remove-unit / remove-searchpath / remove-project
-    quitan de un .dpr, un .dproj o un .groupproj. Con esos comandos el suelo
+    escriba: la entrada que remove-unit / remove-searchpath / remove-project /
+    remove-deployfile quitan de un .dpr, un .dproj, un .deployproj o un
+    .groupproj. Con esos comandos el suelo
     de la jaula (ArgPathOutsideDenied) no la juzga -la tool juzga el
     PROYECTO, para escribir, y el nucleo no abre una ruta de fuera-, y sigue
     siendo [RutaDelServidor] para lo demas: la traduccion de las unidades

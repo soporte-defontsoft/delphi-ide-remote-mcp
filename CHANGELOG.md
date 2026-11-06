@@ -8,6 +8,10 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- `delphi_config remove-deployfile` takes the entry as the project lists it, even one that points outside the workspace, as `remove-unit`, `remove-searchpath` and `remove-project` already did: a `DeployFile` that a project copied from another machine names on that machine's disk was refused with `GUARD-002`, and the `.dproj` - which only `delphi_config` writes - kept it, so `delphi_build` kept refusing the project with `BUILD-050` (found by an agent, 6-nov). The entry goes from the `.dproj` and the `.deployproj`, and the file it names is never opened. `BUILD-050` now says that `remove-deployfile` removes a file to ship.
+
 ## [1.28.0] - 2026-11-06
 
 A minor version that closes the list the project kept open. `delphi_desktop` drives a Linux

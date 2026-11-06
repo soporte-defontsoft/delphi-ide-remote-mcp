@@ -22,8 +22,14 @@ del .dpr y del .dproj; add-unit sigue pidiendo un .pas legible.
       build compila
   R5  control: add-unit con una ruta de fuera sigue negado (el suelo juzga lo
       que SI se lee)
+  R6  un DeployFile de fuera (el .dproj y el .deployproj, como deja un
+      proyecto copiado de otra maquina): BUILD-050 dice remove-deployfile, y
+      remove-deployfile lo quita de los dos sin leer el fichero; el build
+      compila (informe de fable, 6-nov-2026: GUARD-002, y el .dproj solo lo
+      escribe delphi_config)
 
-R1, R3 y R4 (el remove) son ROJAS contra 1.21.2 (pasar su exe como argumento).
+R1, R3 y R4 (el remove) son ROJAS contra 1.21.2 (pasar su exe como argumento);
+R6, contra 1.28.0.
 
 Uso:  python tests/test_remove_fuera_1213.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -136,6 +142,35 @@ try:
     # negativa de add-unit (un parametro, el proyecto)
     check('R5 control: add-unit con una ruta de fuera sigue negado (lo que SI se lee)',
           mc.abre(r, 'SR_JAIL_FMT') and 'UFuera' not in lee(dpr), r[:300])
+
+    # --- R6: un DeployFile de fuera ---
+    carpeta, dpr, dproj = fixture('r6')
+    escribe(os.path.join(carpeta, 'dentro.txt'), 'se despliega\r\n')
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'add-deployfile', 'platform': 'Win64',
+                                   'path': 'dentro.txt'})
+    check('R6 fixture: add-deployfile de un fichero de dentro', mc.abre(r, 'SN_CONFIG_DEPLOY_ADDED_FMT'), r[:300])
+    libfuera = os.path.join(FUERA, 'libfuera.so')
+    escribe(libfuera, SECRETO + '\r\n')
+    antes = sha(libfuera)
+    manifiesto = os.path.splitext(dproj)[0] + '.deployproj'
+    xml, man = lee(dproj), lee(manifiesto)
+    check('R6 fixture: la entrada esta en el .dproj y en el .deployproj',
+          'LocalName="dentro.txt"' in xml and 'Include="dentro.txt"' in man, man[:400])
+    # como queda un proyecto copiado de otra maquina: la entrada apunta a SU disco
+    escribe(dproj, xml.replace('LocalName="dentro.txt"', 'LocalName="%s"' % libfuera))
+    escribe(manifiesto, man.replace('Include="dentro.txt"', 'Include="%s"' % libfuera))
+    r = build(dproj)
+    check('R6 el build lo niega (BUILD-050) y dice como quitarlo: remove-deployfile',
+          mc.rechazado(r) and mc.es(r, 'SR_BUILD_LECTURA_FUERA_FMT') and 'remove-deployfile' in r, r[:400])
+    r = srv.call('delphi_config', {'project': dproj, 'command': 'remove-deployfile', 'platform': 'Win64',
+                                   'path': libfuera})
+    check('R6 remove-deployfile con esa ruta: QUITADO (no GUARD-002), del .dproj y del .deployproj',
+          mc.es(r, 'SN_CONFIG_DEPLOY_REMOVED_FMT') and 'libfuera' not in lee(dproj)
+          and 'libfuera' not in lee(manifiesto), r[:400])
+    check('R6 ...el fichero de fuera intacto y su contenido sin citar',
+          sha(libfuera) == antes and SECRETO not in r, r[:300])
+    r = build(dproj)
+    check('R6 ...y el build compila', compila(r), detalle(r))
 finally:
     srv.cierra()
     mc.borra(BASE)
