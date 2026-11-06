@@ -145,7 +145,7 @@ function VigiasDeLaBiblioteca(const AVersion: string): TArray<TVigiaDeClave>;
   paisaje de la 1.27), como la biblioteca hasta la 1.21.4. }
 function VigiasDeLaCarpetaDeSdks(const AVersion: string): TArray<TVigiaDeClave>;
 { El vigia de la clave Editor del IDE, donde vive su codificacion por defecto
-  (IdeDefaultUtf8: lo cachea Lsp.Patch.IdeWantsUtf8). }
+  (IdeDefaultUtf8: lo cachea Lsp.Deteccion.IdeWantsUtf8). }
 function VigiasDelEditor(const AVersion: string): TArray<TVigiaDeClave>;
 { Si Windows senalo el evento desde la ultima pregunta: True UNA vez por
   cambio, y REARMADA antes de contestar, para que un cambio que llegue

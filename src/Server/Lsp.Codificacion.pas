@@ -11,8 +11,8 @@ unit Lsp.Codificacion;
   Salen de Lsp.Patch el 8-oct-2026 (la 1.18.0, la version de la limpieza),
   movidos sin cambiar una linea. Son PUROS: no saben nada del IDE ni de la
   jaula. DECIDIR la codificacion de unos bytes no es de aqui: EL detector
-  (DetectEnc, que para el ASCII sin BOM pregunta al IDE) se queda en
-  Lsp.Patch, y test_paisaje lo fija alli. }
+  (DetectEnc, que para el ASCII sin BOM pregunta al IDE) vive en
+  Lsp.Deteccion, y test_paisaje lo fija alli. }
 
 interface
 

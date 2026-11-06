@@ -287,7 +287,7 @@ end;
 { La ruta REAL (enlaces resueltos) sigue dentro del vault: UNA regla para la
   nota (VaultResolve) y para su copia (VaultBackup), que escribia por un
   enlace en backups\ sin mirar (quinta revision). La pregunta es la del vault
-  como lugar de las puertas (Lsp.Patch): UNA, para leer y para escribir. }
+  como lugar de las puertas (Lsp.Puertas): UNA, para leer y para escribir. }
 function DentroDelVault(const AFull: string): Boolean;
 begin
   Result := LugarDeLecturaDenegado(AFull, [ltVault]) = '';

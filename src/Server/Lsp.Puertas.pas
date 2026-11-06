@@ -60,7 +60,7 @@ const
     valores, sus directivas, el in de un .dpr, los enlaces de su arbol y lo
     que nombra el .rc de un RcCompile (Lsp.Styles.RcLecturasDenegadas). Lo
     que el AGENTE nombra en una llamada (add-searchpath, add-deployfile) lo
-    juzga la jaula, tambien en el suelo (Lsp.Guard.ArgPathOutsideDenied): con
+    juzga la jaula, tambien en el suelo (Lsp.PuertaDeLaLlamada.ArgPathOutsideDenied): con
     la zona de biblioteca apagada, una carpeta de la biblioteca no la nombra
     el agente, aunque un proyecto que la lista compile. }
   LUGARES_DEL_BUILD: TLugaresDeTexto = [ltJaula, ltBiblioteca];

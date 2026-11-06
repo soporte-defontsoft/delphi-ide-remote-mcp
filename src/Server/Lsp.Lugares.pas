@@ -39,7 +39,7 @@ function LibraryReadRoots: TArray<string>;
   sysroot que su SDK Manager registra aunque viva en otro sitio (los de
   Android, en el CatalogRepository: Discovery.SysrootsRegistrados, leidos en
   cada llamada). Los sysroots que nombra un .sdk de la carpeta de perfiles los
-  anade la puerta (Lsp.Patch.SysrootsDeLosSdk): saberlos pide leer, y aqui no
+  anade la puerta (Lsp.Puertas.SysrootsDeLosSdk): saberlos pide leer, y aqui no
   se lee nada. Lo que el servidor lee o escribe del IDE FUERA de
   las raices va solo ahi, por las puertas de Lsp.Patch (David, 9-oct-2026:
   fuera de esto se niega; decisions/puertas-diseno-2026-10-09). NO las
@@ -65,7 +65,7 @@ function LugaresDelIde(AParaEscribir: Boolean = False): TArray<string>;
   reventar la pila (A5 de la 1.27). '' sin Delphi. }
 function InstalacionDelIde: string;
 
-{ LA ZONA DE BIBLIOTECA como lugar de las puertas (ltBiblioteca, Lsp.Patch):
+{ LA ZONA DE BIBLIOTECA como lugar de las puertas (ltBiblioteca, Lsp.Puertas):
   la de LibraryRoots, solo para LEER, este o no encendida LibraryZone - lo
   que el motor lee de la Library Path lo pide el IDE, no el agente (P2 de la
   1.18.0). Aparte de LugaresDelIde por lo que dice alli (cargarla pasa por la

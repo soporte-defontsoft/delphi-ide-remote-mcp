@@ -17,7 +17,7 @@ interface
 function AgentTempDir(const ASub: string = ''): string;
 
 { La pregunta de las PUERTAS sobre las capturas (el lugar ltEntregables de
-  Lsp.Patch, CaptureTarget antes de que nadie dibuje, baje o recorte alli, y
+  Lsp.Puertas, CaptureTarget antes de que nadie dibuje, baje o recorte alli, y
   quien entrega o consume una): APath cae en la casa de capturas del
   workspace de quien llama (cualquier agente suyo) SIN enlaces en el camino.
   La juzga el nombrador y no la jaula. Hasta la 1.18.1 nadie lo miraba: un

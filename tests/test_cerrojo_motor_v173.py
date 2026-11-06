@@ -3,7 +3,7 @@
 cerrojo de escritura del servidor cogido (EnterFileEdit, uno por proceso).
 
 V173a: tras un delphi_edit de un .fmx, el lint que corre DENTRO del cerrojo
-(Lsp.Patch.DesignerLint) juzgaba la clase raiz por su cadena de ancestros y,
+(Lsp.JuicioDeForms.DesignerLint) juzgaba la clase raiz por su cadena de ancestros y,
 con la base del usuario en otra unidad, arrancaba el motor (Lsp.Herencia):
 un textedit de OTRO fichero esperaba (medido contra 13f78f3: 1,86 s de los 2,60
 del edit, con el motor frio). La regla "con el cerrojo, sin motor" vivia en

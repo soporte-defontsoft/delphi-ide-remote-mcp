@@ -10,10 +10,10 @@ unit Lsp.Casa;
   movidos sin cambiar una linea. Los nombradores no usan nada de la jaula,
   y los usan la jaula y el lector del settings.ini (SettingsIniPath). El
   escritor de la casa (EscribeEnCasaDelServidor) se fue el 9-oct-2026 a la
-  puerta de escribir (Lsp.Patch), con la casa como lugar.
-  Lo que se hace CON esas carpetas - los entregables del agente
-  (AgentTempDir, CaptureTarget), la purga del arranque y la presencia de
-  instancias - pregunta a las puertas y se queda en Lsp.Guard.
+  puerta de escribir (Lsp.Puertas), con la casa como lugar.
+  Lo que se hace CON esas carpetas pregunta a las puertas: los entregables
+  del agente (AgentTempDir, CaptureTarget) en Lsp.Capturas, la purga del
+  arranque y la presencia de instancias en Lsp.Guard.
 
   Y los de la PAPELERA, la hermana de __delphi-temp, que llegan de Lsp.Patch
   el mismo dia y tambien sin cambiar una linea: el nombre de su carpeta
@@ -119,7 +119,7 @@ function BuzonDeInformes(const AAgente: string = ''): string;
   1.18.0). }
 function CarpetaDeWorkspace(const AWorkspace: string): string;
 { LA casa del servidor como LUGAR de las puertas de leer y escribir texto
-  (ltCasa, Lsp.Patch): sus caches, el buzon y los informes. NO la carpeta del
+  (ltCasa, Lsp.Puertas): sus caches, el buzon y los informes. NO la carpeta del
   exe entera: ahi esta settings.ini, que tiene su propio lector (Lsp.Settings)
   y no lo lee ninguna puerta. Una casa que no es absoluta (LOCALAPPDATA vacia)
   no es lugar: se resolveria contra la carpeta de trabajo del proceso. }

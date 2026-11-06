@@ -12,7 +12,7 @@ unit Mcp.Tools.Config;
     MSBuild structure. Refuses a platform the framework cannot target.
 
   Reads the .dproj through the shared Lsp.Dproj parser (no second parser) and
-  writes it through Lsp.Patch (encoding-preserving, atomic, auto-backup). }
+  writes it through Lsp.Puertas (encoding-preserving, atomic, auto-backup). }
 
 interface
 

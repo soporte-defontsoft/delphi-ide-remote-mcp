@@ -7,7 +7,7 @@ escritores del disenador (insert/set/delete) y preview; delphi_edit, su tanda
 B1; medido en produccion el 13-oct: delphi_edit sobre un .dfm UTF-16 escribia
 sin la nota y designer set la daba). Ahora la nota tiene UN compositor
 (Lsp.DesignerBin.NotaDeFormAncho) y la dice tambien el juicio del form de los
-escritores genericos (Lsp.Patch.DesignerLint).
+escritores genericos (Lsp.JuicioDeForms.DesignerLint).
 
   W1 delphi_edit sobre un .dfm UTF-16 LE: escribe y dice DSGN-121
   W2 ...su tanda (edits): igual

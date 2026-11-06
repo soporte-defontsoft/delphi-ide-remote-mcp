@@ -1527,7 +1527,7 @@ const
     'ones. delphi_report is available to tell us about any problem.';
   // la condicion de un comando que solo lee sin ciertos parametros, en el
   // anuncio de la tabla de accesos (readOnlyWhen): %s = 'out= or project='
-  // (Lsp.Guard.CondicionSinParametros; 2ab de la 1.18.2)
+  // (Lsp.PuertaDeLaLlamada.CondicionSinParametros; 2ab de la 1.18.2)
   SF_ACCESO_SIN_FMT =
     'without %s';
 
@@ -4989,7 +4989,7 @@ const
     '[HELP-003 NOT_FOUND] There is no tool "%s". These resemble what you ' +
     'ask for: %s';
 
-  { Una tool que esta sesion no puede usar (Lsp.Guard.MotivoToolOculta: la
+  { Una tool que esta sesion no puede usar (Lsp.PuertaDeLaLlamada.MotivoToolOculta: la
     credencial de solo lectura, sin vault, el vault de solo lectura): tools/list
     no se la anuncia y command=tool la describia entera, y la llamada se
     negaria (V199 de la 1.23.1). El motivo es el texto de la tabla. }
@@ -5080,9 +5080,9 @@ const
     'vault_create'#10;
 
   { La credencial de solo lectura: tools/list no le anuncia las tools enteras
-    de escritura (Lsp.Guard.ToolHiddenFromList), y la tabla de arriba se las
+    de escritura (Lsp.PuertaDeLaLlamada.ToolHiddenFromList), y la tabla de arriba se las
     nombraria igual (6-oct-2026). }
-  { delphi_adb y delphi_desktop sin nada declarado a donde ir (Lsp.Guard,
+  { delphi_adb y delphi_desktop sin nada declarado a donde ir (Lsp.PuertaDeLaLlamada,
     moSinDestino; B10 de la 1.28): no se anuncian, y se dice cual y por que.
     Lleva [las de abajo, separadas por coma]. }
   SF_HELP_TASKS_SIN_DESTINO_FMT =
@@ -5099,7 +5099,7 @@ const
     'their reading commands - tools/list says which in _meta.access and ' +
     'readOnlyCommands.';
 
-  { Lo que tools/list no anuncia y POR QUE (Lsp.Guard.MotivoToolOculta): un
+  { Lo que tools/list no anuncia y POR QUE (Lsp.PuertaDeLaLlamada.MotivoToolOculta): un
     agente conto 37 tools donde la documentacion dice 42 y creyo que se
     habian fusionado (Hermes, validacion de la 1.16.0). }
   SF_HELP_TASKS_SIN_VAULT =
@@ -7595,7 +7595,7 @@ const
   // MOVE-005 (lo que la mudanza re-apunto) y MOVE-006 (lo que no pudo) se
   // retiraron en la 1.23 (V19): un move, una copia o un borrado como un
   // operador no re-apuntan nada, lo dicen (MOVE-023, FILE-046)
-  { La NOTA INFORMATIVA de V19 (Lsp.ProjectUnits.ReferenciasQueCruzan): lo
+  { La NOTA INFORMATIVA de V19 (Lsp.Mudanzas.ReferenciasQueCruzan): lo
     que cruza el borde de lo movido o copiado, o apunta a lo borrado. }
   SN_REFERENCIAS_CRUZAN_FMT =
     '  [MOVE-023] NOTE, nothing was re-pointed (an operator does not): ' +

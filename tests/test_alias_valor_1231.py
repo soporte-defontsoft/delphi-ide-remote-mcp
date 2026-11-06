@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """Un ALIAS de parametro y su nombre real a la vez, con valores DISTINTOS (V93,
-1.23.1). ApplyArgAliases (Lsp.Guard) descartaba el alias en silencio: medido en
+1.23.1). ApplyArgAliases (Lsp.PuertaDeLaLlamada) descartaba el alias en silencio: medido en
 produccion, delphi_search root=A path=B buscaba en A y no decia nada de B. Un
 parametro ignorado en silencio es un fallo nuestro: con valores distintos se
 niega nombrando los dos; con el MISMO valor (el caso de Hermes, path=root) sigue
