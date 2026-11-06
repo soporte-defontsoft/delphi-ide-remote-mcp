@@ -312,9 +312,12 @@ installed by hand.
 image with a `frame` token. Measure x,y ON THAT IMAGE and call `tap` (or
 `type`, which presses there first: one trip) with those x,y and
 `frame=<the token, copied as it is>`: the server converts scale and crop
-origin for you - never divide by a scale or add an origin yourself. Every
+origin for you - never divide by a scale or add an origin yourself. `drag`
+presses at x,y and releases at `tox,toy`, both on the same screenshot: a
+title bar moves a window, and pressed just past the right or bottom edge of
+its `windows` rectangle it resizes it. Every
 capture lists `windows` (title + rectangle); `overview` brings a covered
-one into view (Linux: the Super overview); `screenshot region="x,y,w,h"`
+one into view (Linux: the desktop's overview); `screenshot region="x,y,w,h"`
 or `window="<title>"` brings a piece at full resolution to read a small
 dialog - go back to the whole desktop whenever something may have opened
 elsewhere. `key` takes an evdev code on Linux and a key NAME on Windows
