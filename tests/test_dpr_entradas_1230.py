@@ -17,8 +17,9 @@ Medido en produccion (r1222bj) el 25-oct-2026:
   D3 una clausula con una comilla sin cerrar: USES-026, y el .dpr no cambia
   D4 un CreateForm partido en dos lineas se va con su unit, y el .dpr compila
   D5 control: el .dpr de un proyecto nuevo, el de siempre
+  D6 remove-unit con el nombre a secas: CFG-036 dice como seguir (Hermes, 1.28.0 previa)
 
-Rojo contra r1222bj: D1-D4.
+Rojo contra r1222bj: D1-D4; contra b981920: D6.
 
 Uso:  python tests/test_dpr_entradas_1230.py [exe]
 """
@@ -92,6 +93,16 @@ try:
         check('D4 un CreateForm partido en dos lineas se va con su unit, y el .dpr compila',
               cf[0].group(1) not in dpr and cf[0].group(2) not in dpr and 'Application.Run;' in dpr and ok,
               (r[:200], dpr, err))
+
+    # --- D6 ---------------------------------------------------------------------
+    # Hermes (Qwen, 1.28.0 previa): view section=units da "unit":"UChapo" y remove-unit con ese nombre
+    # contestaba solo '"UChapo" is not a .pas unit.', sin decir que path es su .pas: un turno perdido
+    antes = mc.lee(DPR)
+    r = cfg(command='remove-unit', project=DPROJ, path='UMain')
+    check('D6 remove-unit con el nombre a secas: CFG-036 dice que path es su .pas, como lo lista view, '
+          'y el .dpr no cambia',
+          mc.rechazado(r) and mc.es(r, 'SR_UNIT_NOT_PAS_FMT') and 'section=units' in r and
+          mc.lee(DPR) == antes, r[:300])
 finally:
     s.cierra()
 

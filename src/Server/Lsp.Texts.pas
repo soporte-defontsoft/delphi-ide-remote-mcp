@@ -3877,7 +3877,9 @@ const
     'delphi_create kind=unit (or form-vcl / form-fmx).';
 
   SR_UNIT_NOT_PAS_FMT =
-    '[CFG-036 INVALID_PARAM] "%s" is not a .pas unit.';
+    '[CFG-036 INVALID_PARAM] "%s" is not a .pas unit: path is the unit''s .pas ' +
+    'file, extension included (a unit already in the project, also as delphi_config ' +
+    'command=view section=units lists its "file"). Nothing was done.';
 
   SR_UNIT_NO_HEADER_FMT =
     '[CFG-037 DENIED] %s has no "unit X;" header - it is not a Delphi ' +
