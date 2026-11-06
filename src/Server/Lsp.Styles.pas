@@ -547,7 +547,7 @@ class function TStyleDoc.DeTexto(const AText: string): TStyleDoc;
 begin
   Result := TStyleDoc.CreateVacio;
   Result.FPath := '';
-  Result.FEnc := 'utf8';
+  Result.FEnc := EncName(ekUtf8);
   Result.FEol := SaltoDominante(AText);
   Result.FLines := SplitToLines(AText);
   Result.FLeidas := Copy(Result.FLines);

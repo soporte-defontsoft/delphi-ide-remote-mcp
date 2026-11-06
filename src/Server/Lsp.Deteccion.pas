@@ -127,7 +127,7 @@ end;
 function NewFileEncName: string;
 begin
   if IdeWantsUtf8 then
-    Result := 'utf8-bom'
+    Result := EncName(ekUtf8Bom)
   else
     Result := EncName(ekAnsi);
 end;
@@ -137,9 +137,9 @@ begin
   if EsDelMotorPascal(APath) then
     Result := NewFileEncName
   else if EsXmlDelIde(APath) then
-    Result := 'utf8-bom'
+    Result := EncName(ekUtf8Bom)
   else
-    Result := 'utf8';
+    Result := EncName(ekUtf8);
 end;
 
 function EtiquetaDeCodificacion(K: TEncKind; AEsAscii: Boolean): string;

@@ -2431,7 +2431,7 @@ begin
       // lee con su detector, asi que va en UTF-8 con BOM, quepa lo que quepa
       if AUnidad <> '' then
         EscribeTexto(TPath.Combine(Dir, TPath.GetFileName(UnidadDeDesigner(APath))), AUnidad, ltTemporal,
-          EncKindOf('utf8-bom'), False);
+          ekUtf8Bom, False);
     except
       on E: Exception do
       begin

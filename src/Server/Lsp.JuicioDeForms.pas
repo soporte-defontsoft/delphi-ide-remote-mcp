@@ -373,12 +373,12 @@ begin
     Exit;
   var LineaBom: Integer;
   var CitaBom: string;
-  if ParserDeForm(ATexto, 'utf8-bom', LineaBom, CitaBom) = '' then
+  if ParserDeForm(ATexto, EncName(ekUtf8Bom), LineaBom, CitaBom) = '' then
   begin
     AError := '';
     ALinea := 0;
     ACita := '';
-    Result := 'utf8-bom';
+    Result := EncName(ekUtf8Bom);
   end;
 end;
 

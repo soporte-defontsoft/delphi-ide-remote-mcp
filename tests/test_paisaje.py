@@ -330,6 +330,12 @@ REGLAS = [
     ('la codificacion de un fichero nuevo elegida a mano', r"\bNewFileEncName\b",
      [('Lsp.Deteccion.pas', 'EncDeFicheroNuevo'), ('Lsp.Scaffold.pas', 'CreateDelphiProject')],
      'EncDeFicheroNuevo (Lsp.Deteccion, A21 de la 1.23)'),
+    # el nombre de una codificacion escrito a mano: V208 de la 1.23, que nunca paso a una lista; el repaso del vault
+    # del 6-nov lo hallo en siete sitios ('utf8' o 'utf8-bom' compuestos a mano, y uno pasado al lector para sacar
+    # la clase que ya era ekUtf8Bom)
+    ('el nombre de una codificacion escrito a mano', r"'utf(?:8(?:-bom)?|16-[lb]e|32-[lb]e)'",
+     [('Lsp.Codificacion.pas', 'EncName'), ('Lsp.Codificacion.pas', 'EncKindOf')],
+     'EncName y su inversa EncKindOf (Lsp.Codificacion)'),
     # el salto que pide el agente traducido a mano: cinco SameText(..., 'lf') en los dos create (S1, A38)
     ('el salto que pide el agente traducido a mano', r"(?i)SameText\([^;]*Eol[^;]*'lf'\s*\)",
      [('Lsp.Lineas.pas', 'SaltoPedido')],
@@ -2076,6 +2082,7 @@ PLANTADO = {
         "  if SameText(EffectiveProperty(Xml, 'UsePackages', P, C), 'true') then",
     'la palabra que quita un valor a mano': "  Quitar := SameText(Sdk, 'none') or SameText(Sdk, 'default');",
     'la codificacion de un fichero nuevo elegida a mano': "  Enc := NewFileEncName;",
+    'el nombre de una codificacion escrito a mano': "  Result.FEnc := 'utf8-bom';",
     'el salto que pide el agente traducido a mano': "  if SameText(A.Eol, 'lf') then",
     'la carpeta que es un fichero dicha a mano': "      Exit(MsgFmt(SR_LIST_IS_FILE_FMT, [Dir]))",
     'un paquete juzgado por su extension': "  EsPaquete := SameText(TPath.GetExtension(Dpr), '.dpk');",

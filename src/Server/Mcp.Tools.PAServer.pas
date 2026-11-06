@@ -2048,7 +2048,7 @@ begin
       'add-profile', 'profile host port password platform',
       'remove-profile', 'profile',
       'test-connection', 'profile host port',
-      'remote-run', 'profile project job exe args timeoutms',
+      'remote-run', 'profile project exe args timeoutms',
       'kill', 'profile project job',
       'output', 'profile project job',
       'get-sdk', 'profile sdk active',

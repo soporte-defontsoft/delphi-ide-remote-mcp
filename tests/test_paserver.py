@@ -231,6 +231,13 @@ out = puerta.call('delphi_paserver', {"command": "add-profile", "name": PROF_NAM
                                       "password": "x", "platform": "Linux64"}, t=60)
 check('gate (control): con argumentos buenos el paclient falso SI se llama',
       os.path.exists(CENTINELA), out[:200])
+# T10 del informe8 de la 1.23 (I19 de la cierre, 1.28): remote-run aceptaba job y no lo leia (solo kill y output lo
+# usan): el agente creia haberlo pasado. Ahora PAS-051 dice con que comandos va. ROJA contra 52a9a47 (medida en
+# produccion: contestaba del perfil, PAS-053, y el job ni se nombraba)
+out = puerta.call('delphi_paserver', {"command": "remote-run", "profile": "no-existe", "job": "123",
+                                      "project": os.path.join(BASE, 'NoHay', 'NoHay.dproj')})
+check('T10 remote-run con job: PAS-051 (job va con kill y output), no se ignora callado',
+      mc.rechazado(out) and mc.es(out, 'SR_PASERVER_NO_VA_CON_COMANDO_FMT') and '"job"' in out, out[:300])
 puerta.cierra()
 
 # --- add-profile happy path: real profile written by paclient --local ---
