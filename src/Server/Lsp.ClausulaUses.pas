@@ -1074,6 +1074,35 @@ begin
       else
         Entradas[Mapa[UltimaQueQueda]] := SinComentarioDeQuitada(Entradas[Mapa[UltimaQueQueda]], Suyo);
     end;
+  // ...y la nota de LINEA PROPIA de una quitada de detras de la ultima que
+  // queda se queda (11.3), pero en SU linea. EntriesWithout (PegaALaAnterior)
+  // devuelve a la anterior la primera linea que arrastra si empieza por //,
+  // porque el // de detras de su coma es suyo; el troceo por comas recorta
+  // igual los dos, y una nota de linea propia subia detras del ; de la nueva
+  // ultima y parecia suya ('UA; // nota de UB': visto al quitar la ultima
+  // unit de los uses de Lsp.Guard, B6 de la 1.28). Lo que la clausula
+  // ORIGINAL dice: si no iba detras de la coma de esa entrada, baja a una
+  // linea suya
+  if (UltimaQueQueda >= 0) and (UltimaQueQueda < High(U.Entries)) then
+  begin
+    var Ult := Mapa[UltimaQueQueda];
+    var Antes := SplitToLines(U.Entries[UltimaQueQueda]);
+    var Ahora := SplitToLines(Entradas[Ult]);
+    var L := High(Antes);
+    if (L >= 0) and (L <= High(Ahora)) then
+    begin
+      var Suya := Antes[L].TrimRight;
+      var Pegado := Copy(Ahora[L], Length(Suya) + 1, MaxInt).Trim;
+      var HP: string;
+      if Ahora[L].StartsWith(Suya) and Pegado.StartsWith('//') and
+         not TrasLaComa(UltimaQueQueda + 1, Pegado, HP) then
+      begin
+        Ahora[L] := Suya;
+        Insert(Pegado, Ahora, L + 1);
+        Entradas[Ult] := string.Join(#10, Ahora);
+      end;
+    end;
+  end;
   // el comentario que va DETRAS del ; final, en su misma linea, es de la
   // ULTIMA entrada original, y queda fuera de la clausula: con una unit
   // anadida detras se iba a la nueva ('Lsp.NetDrives; // PrefijoSinBarra'

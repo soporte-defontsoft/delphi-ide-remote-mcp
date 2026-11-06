@@ -718,6 +718,27 @@ for _nombre, _usos, _quita, _queda, _fuera in (
 # va detras del ;, no salia en la respuesta (la copia acababa en el ;) y parecia perdido
 check('removeuses: el eco ensena el // que la ultima lleva detras del ; (B16)',
       'UB; // de UB' in out, out)
+# la nota de LINEA PROPIA encima de la quitada se queda (11.3)... tambien si la quitada es la
+# ULTIMA, y en SU linea: subia detras del ; de la nueva ultima y parecia suya ('UA; // nota de
+# UB'; visto al quitar Lsp.JuecesDeArgumentos de Lsp.Guard, B6 de la 1.28, 6-nov-2026). El // que
+# iba detras de la coma de la anterior si vuelve a su linea (control), en un .pas y en un .dpr
+for _nombre, _cab, _usos, _queda, _fuera in (
+        ('NotaPropiaFinal.pas', ['unit NotaPropiaFinal;', '', 'interface', '', 'implementation', '', 'uses'],
+         ['  UA,', '  // nota de UB', '  UB;', '', 'end.'], 'uses\r\n  UA;\r\n  // nota de UB\r\n', ('UA; // nota',)),
+        ('NotaPropiaFinalControl.pas', ['unit NotaPropiaFinalControl;', '', 'interface', '', 'implementation', '',
+                                        'uses'],
+         ['  UA, // de UA', '  // nota de UB', '  UB;', '', 'end.'], 'uses\r\n  UA; // de UA\r\n  // nota de UB\r\n',
+         ('// de UA // nota',)),
+        ('NotaPropiaFinalPrograma.dpr', ['program NotaPropiaFinalPrograma;', '', 'uses'],
+         ['  System.SysUtils,', '  // nota de Classes', '  System.Classes;', '', 'begin', 'end.'],
+         'uses\r\n  System.SysUtils;\r\n  // nota de Classes\r\n', ('SysUtils; // nota',))):
+    _p = os.path.join(DIR, _nombre)
+    open(_p, 'wb').write(CRLF.join(_cab + _usos + ['']).encode('ascii'))
+    out = call('delphi_edit', {"path": _p, "removeuses": 'UB' if _nombre.endswith('.pas') else 'System.Classes'})
+    _src = open(_p, 'rb').read().decode('ascii')
+    check('removeuses de la ULTIMA con una nota de linea propia encima: se queda en SU linea (%s)' % _nombre,
+          mc.abre(out, 'SN_REMOVEUSES_REMOVED_FMT') and _queda in _src and not any(c in _src for c in _fuera),
+          _src)
 # y en un .dpr, por su propio camino (RemoveUsesFromProgram), lo mismo
 _p = os.path.join(DIR, 'SeguidasPrograma.dpr')
 open(_p, 'wb').write(CRLF.join(['program SeguidasPrograma;', '', 'uses', '  System.SysUtils,',
