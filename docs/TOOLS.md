@@ -542,6 +542,8 @@ See and manage a project's build configurations and target PLATFORMS. view (read
 
 **`view` fields (hand-written).** The summary carries the framework, the build configurations, the enabled platforms, `defaultConfig` and `defaultPlatform` (what `delphi_build` and `delphi_test` build without `config=` / `platform=`; `set-active` changes them) and `remoteTargets`: each enabled remote platform with the `sdk` and the PAServer `profile` it builds and deploys with and where each comes from (`sdkSource` / `profileSource`: `project`, IDE default, or none - with the command that fixes it); `section=platforms` carries the same four fields on every remote platform. `set-sdk` writes the `PlatformSDK` property (the one the IDE writes from Project Options); `set-version` touches the Windows VERSIONINFO numbers and the FileVersion/ProductVersion keys only - Android and iOS numbering is a different thing and is not touched.
 
+**A new project group (hand-written).** No tool has a kind for a `.groupproj`: an agent writes the group file with `delphi_changeset` (a `create`, as the IDE saves an empty group) and fills it with `add-project`, which writes what the IDE's Add existing project writes. In the agents' history (some 41,000 calls, measured in 1.28) no task needed more, and one did exactly this.
+
 ### `delphi_paserver`
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->

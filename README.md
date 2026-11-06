@@ -149,7 +149,9 @@ Delphi that has none (≈14 s for the 3,938 units of a RAD Studio 13 with JVCL, 
 and keeps it in `%LOCALAPPDATA%\DelphiLspMcp\designer` with a fingerprint of that source: install or
 touch a component and the first designer call after it regenerates the table in the background
 while the previous one answers. No call ever generates inside an edit: an edit of a form made
-before the first table exists says it did not check (`DSGN-052`). A Delphi with no source gets no
+before the first table exists says it did not check (`DSGN-052`), and a `delphi_designer` insert,
+set or delete that needs it waits up to 30 s for the one being generated and otherwise writes nothing
+and says to try again in a minute (`DSGN-051`). A Delphi with no source gets no
 table and the designer says so (`DSGN-050`) instead of checking a form against another version. The
 class a property *really* holds is chosen by code (`TLabel.TextSettings` holds a
 `TLabelTextSettings`), so going down such a property the lint accepts what a descendant of the
