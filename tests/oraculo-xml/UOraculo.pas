@@ -25,7 +25,7 @@ uses
   System.SysUtils, System.Classes, System.IOUtils, System.Types,
   System.Generics.Collections, System.RegularExpressions, Winapi.ActiveX,
   Xml.XMLIntf, Xml.XMLDoc, Xml.xmldom, Xml.Win.msxmldom,
-  Lsp.Dproj, Lsp.Patch;
+  Lsp.Dproj, Lsp.Puertas;
 
 const
   // los de proyecto y los del IDE que se leen igual: el .sdk de un SDK y las
