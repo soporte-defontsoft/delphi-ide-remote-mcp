@@ -279,11 +279,23 @@ type
   end;
 function CamposDePerfil(const AXml: string): TCamposDePerfil;
 
-{ Los campos de un perfil QUE EL IDE LISTA, de su fichero (el que compone
-  RutaDePerfil): True y ACampos, o False y AMotivo (no existe / no se lee).
-  HostDePerfil y PlataformaDePerfil lo leian cada una a mano, y
-  test-connection necesita el host y el puerto del perfil que no conecto
-  (B12c de la 1.28). }
+{ EL lector de los campos de un perfil QUE EL IDE LISTA, de su fichero (el que
+  compone RutaDePerfil, por FicheroDePerfilListado) y por la puerta del IDE:
+  lpLeido y ACampos; lpNoListado si el IDE no lo lista o su fichero no esta;
+  lpIlegible si no se lee, con el porque en AFallo. Sin textos de nadie: cada
+  llamador dice lo suyo (CamposDePerfilListado, los de la puerta de
+  RemoteHosts; delphi_paserver, los suyos). add-profile, get-sdk y reseat lo
+  leian cada uno a mano (la deuda de B12 de la 1.28). }
+type
+  TLecturaDePerfil = (lpLeido, lpNoListado, lpIlegible);
+function LeeCamposDePerfil(const AVersion, AName: string; out ACampos: TCamposDePerfil;
+  out AFallo: string): TLecturaDePerfil;
+
+{ Los campos de un perfil QUE EL IDE LISTA (LeeCamposDePerfil) con los motivos
+  de la puerta de RemoteHosts: True y ACampos, o False y AMotivo (PAS-053 no
+  existe / PAS-054 no se lee). HostDePerfil y PlataformaDePerfil lo leian cada
+  una a mano, y test-connection necesita el host y el puerto del perfil que no
+  conecto (B12c de la 1.28). }
 function CamposDePerfilListado(const AVersion, AName: string; out ACampos: TCamposDePerfil;
   out AMotivo: string): Boolean;
 
@@ -1598,26 +1610,43 @@ begin
   Result := RutaDePerfil(AVersion, Nombre);
 end;
 
-function CamposDePerfilListado(const AVersion, AName: string; out ACampos: TCamposDePerfil;
-  out AMotivo: string): Boolean;
+function LeeCamposDePerfil(const AVersion, AName: string; out ACampos: TCamposDePerfil;
+  out AFallo: string): TLecturaDePerfil;
 var
   Ruta: string;
 begin
   ACampos := Default(TCamposDePerfil);
-  AMotivo := '';
+  AFallo := '';
   Ruta := FicheroDePerfilListado(AVersion, AName);
   if (Ruta = '') or not TFile.Exists(Ruta) then
-  begin
-    AMotivo := MsgFmt(SR_PROFILE_NO_EXISTE_FMT, [AName.Trim]);
-    Exit(False);
-  end;
+    Exit(lpNoListado);
   try
     ACampos := CamposDePerfil(LeeTexto(Ruta, [ltIde]));
   except
-    AMotivo := MsgFmt(SR_PROFILE_NO_LEIDO_FMT, [AName.Trim]);
-    Exit(False);
+    on E: Exception do
+    begin
+      AFallo := E.Message;
+      Exit(lpIlegible);
+    end;
   end;
-  Result := True;
+  Result := lpLeido;
+end;
+
+function CamposDePerfilListado(const AVersion, AName: string; out ACampos: TCamposDePerfil;
+  out AMotivo: string): Boolean;
+var
+  Fallo: string;
+begin
+  AMotivo := '';
+  case LeeCamposDePerfil(AVersion, AName, ACampos, Fallo) of
+    lpLeido:
+      Exit(True);
+    lpNoListado:
+      AMotivo := MsgFmt(SR_PROFILE_NO_EXISTE_FMT, [AName.Trim]);
+  else
+    AMotivo := MsgFmt(SR_PROFILE_NO_LEIDO_FMT, [AName.Trim]);
+  end;
+  Result := False;
 end;
 
 function HostDePerfil(const AVersion, AName: string; out AMotivo: string): string;

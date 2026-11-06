@@ -27,6 +27,9 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'))
 
 PROF_NAME = 'mcp-e2e-paserver'
 PROF_PASSWORD = 'dummySecretE2E123'
+# I1 de la cierre (1.28): un SEGUNDO perfil al mismo host:puerto, para el aviso de duplicado de add-profile (lee
+# los perfiles listados por EL lector, LeeCamposDePerfil); real como el primero, y cleanup_profile lo recoge
+PROF_DUP = 'mcp-e2e-paserver-dup'
 # el .profile SIN plataforma del reseat (A4 de la depuracion de la 1.23): vive en un APPDATA de prueba, pero el
 # asiento que un build escribiera iria al registro del IDE, y cleanup_profile lo borra
 SIN_PLAT = 'mcp-e2e-sinplataforma'
@@ -42,9 +45,9 @@ with open(PACLIENT_FALSO, 'w', newline='') as _f:
     _f.write('@echo off\r\necho llamado>> "%s"\r\nexit /b 1\r\n' % CENTINELA)
 
 
-def profile_files():
+def profile_files(nombre=PROF_NAME):
     base = os.path.join(os.environ['APPDATA'], 'Embarcadero', 'BDS')
-    return glob.glob(os.path.join(base, '*', PROF_NAME + '.profile'))
+    return glob.glob(os.path.join(base, '*', nombre + '.profile'))
 
 
 def profile_seats(nombre=PROF_NAME):
@@ -80,12 +83,12 @@ def profile_seats(nombre=PROF_NAME):
 
 def cleanup_profile():
     import winreg
-    for f in profile_files():
+    for f in profile_files() + profile_files(PROF_DUP):
         try:
             os.remove(f)
         except OSError:
             pass
-    for sub in profile_seats() + profile_seats(SIN_PLAT):
+    for sub in profile_seats() + profile_seats(SIN_PLAT) + profile_seats(PROF_DUP):
         try:
             winreg.DeleteKey(winreg.HKEY_CURRENT_USER, sub)
         except OSError:
@@ -252,6 +255,11 @@ if not ide_open:
         check('add-profile: note guia el siguiente paso',
               mc.es(d.get('note', ''), 'SN_PASERVER_PROFILE_OK')
               and 'test-connection' in d.get('note', ''), out[:250])
+        # I1 de la cierre (1.28): la contrasena cifrada del perfil que paclient acaba de escribir se lee por EL
+        # lector de un perfil listado (LeeCamposDePerfil; se leia a mano) y el asiento del IDE se escribe con ella
+        check('I1 add-profile: el asiento del IDE se escribe (ideRegistered, sin ideSeatError)',
+              d.get('ideRegistered') is True and 'ideSeatError' not in d, out[:400])
+        check('add-profile sin otro perfil a ese host:puerto: sin aviso de duplicado', 'warning' not in d, out[:400])
     except Exception:
         check('add-profile: parsea', False, out[:300])
 
@@ -267,6 +275,16 @@ if not ide_open:
     # --- profiles now lists it ---
     out = srv.call('delphi_paserver', {"command": "profiles"})
     check('profiles: lista el perfil nuevo', PROF_NAME in out, out[:200])
+
+    # I1 de la cierre (1.28): un segundo perfil al MISMO host:puerto se crea, pero avisando de cual ya apunta ahi;
+    # los perfiles listados se leen por EL lector (LeeCamposDePerfil; se leian a mano)
+    out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_DUP,
+                                       "host": "127.0.0.1", "port": DEAD_PORT,
+                                       "password": "x", "platform": "Linux64"}, t=60)
+    d_dup = mc.como_json(out)
+    check('I1 add-profile al mismo host:puerto: se crea y avisa del perfil que ya apunta ahi',
+          d_dup.get('profile') == PROF_DUP and mc.es(d_dup.get('warning', ''), 'SN_PASERVER_DUP_HOST_FMT')
+          and PROF_NAME in d_dup.get('warning', ''), out[:400])
 
     # --- test-connection with profile: dead port -> connected false, E0003 ---
     out = srv.call('delphi_paserver', {"command": "test-connection", "name": PROF_NAME}, t=90)

@@ -854,7 +854,8 @@ function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
   PaClient, ProfName, Host, Plat, Output, ProfileFile: string;
-  AvisoDup: string;
+  AvisoDup, Fallo: string;
+  Campos: TCamposDePerfil;
   Puerto: Integer;
   ExitCode: Cardinal;
   Return: TJSONObject;
@@ -891,13 +892,11 @@ begin
       [ProfName, HostDePerfil(Info.Version, ProfName)]));
   AvisoDup := '';
   for var Otro in PerfilesDelIde(Info.Version) do // EL lector de la lista
-    try
-      var Campos := CamposDePerfil(LeeTexto(RutaDePerfil(Info.Version, Otro), [ltIde]));
-      if SameText(Campos.Host, Host) and (Campos.Puerto = IntToStr(Puerto)) then
-        AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT, [Otro]);
-    except
-      // un perfil ilegible no impide crear el nuevo
-    end;
+    // EL lector de un perfil listado (B12 de la 1.28: se leia a mano); uno
+    // ilegible no impide crear el nuevo
+    if (LeeCamposDePerfil(Info.Version, Otro, Campos, Fallo) = lpLeido) and
+       SameText(Campos.Host, Host) and (Campos.Puerto = IntToStr(Puerto)) then
+      AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT, [Otro]);
   // cualificada: la variable local PaClient tapa a la funcion (sin mayusculas)
   ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient,
     PaclientPerfilNuevo(Host, Puerto, Params.Password, Plat), ProfName, Output, 30000));
@@ -909,8 +908,17 @@ begin
     var CopiaAsiento := '';
     var SinAsiento := '';
     try
-      CopiaAsiento := RegistrarPerfilEnIde(Info.Version, ProfName, Plat, Host, Puerto,
-        CamposDePerfil(LeeTexto(ProfileFile, [ltIde])).Password);
+      // la contrasena cifrada, por EL lector de un perfil listado: el que
+      // paclient acaba de escribir (B12 de la 1.28: se leia a mano)
+      case LeeCamposDePerfil(Info.Version, ProfName, Campos, Fallo) of
+        lpLeido:
+          CopiaAsiento := RegistrarPerfilEnIde(Info.Version, ProfName, Plat, Host, Puerto,
+            Campos.Password);
+        lpIlegible:
+          SinAsiento := Fallo;
+      else
+        SinAsiento := MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]);
+      end;
     except
       on E: Exception do
         SinAsiento := E.Message;
@@ -1435,7 +1443,8 @@ end;
 function GetSdk(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
-  PaClient, ProfName, ProfileFile, ProfXml, Plat, SysRoot: string;
+  PaClient, ProfName, Plat, SysRoot, Fallo: string;
+  Campos: TCamposDePerfil;
   Output, Pattern, DestDir, GccVer, SdkFile, D: string;
   SdkName, Etiqueta, Glibc: string;
   ExitCode: Cardinal;
@@ -1456,9 +1465,16 @@ begin
   if Result <> '' then
     Exit;
   ProfName := DelIde;
-  ProfileFile := RutaDePerfil(Info.Version, ProfName);
-  ProfXml := LeeTexto(ProfileFile, [ltIde]);
-  Plat := CamposDePerfil(ProfXml).Plataforma;
+  // EL lector de un perfil listado (B12 de la 1.28: se leia a mano).
+  // PerfilParaOperar acaba de leerlo para juzgar su host: fallar aqui es una
+  // carrera, y se contesta lo mismo que alli
+  case LeeCamposDePerfil(Info.Version, ProfName, Campos, Fallo) of
+    lpNoListado:
+      Exit(MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [ProfName]));
+    lpIlegible:
+      Exit(MsgFmt(SR_PROFILE_NO_LEIDO_FMT, [ProfName]));
+  end;
+  Plat := Campos.Plataforma;
   if not SameText(Plat, PLATAFORMA_DE_GETSDK) then
     Exit(MsgFmt(SR_PASERVER_SDK_PLATFORM_FMT, [PLATAFORMA_DE_GETSDK, ProfName, Plat]));
 
@@ -1604,8 +1620,8 @@ begin
       // cada linea de elemento por su compositor (Lsp.Dproj.LineaXml, V97)
       // la plataforma que juzgan reseat-sdk y remove-sdk al leerlo: la misma constante
       Sb.Append(LineaXml('    ', 'Profile_platform', PLATAFORMA_DE_GETSDK));
-      Sb.Append(LineaXml('    ', 'Profile_host', CamposDePerfil(ProfXml).Host));
-      Sb.Append(LineaXml('    ', 'Profile_port', CamposDePerfil(ProfXml).Puerto));
+      Sb.Append(LineaXml('    ', 'Profile_host', Campos.Host));
+      Sb.Append(LineaXml('    ', 'Profile_port', Campos.Puerto));
       Sb.Append(LineaXml('    ', 'Profile_sdkname', NombreDeSdk(SdkName)));
       Sb.Append(LineaXml('    ', 'Profile_displayname', PLATAFORMA_DE_GETSDK + ' ' + SdkName +
         ' (delphi_paserver get-sdk, profile ' + ProfName + ')'));
@@ -1621,8 +1637,8 @@ begin
       // with "cannot find -lgcc_s" even though the .sdk imports fine
       // (measured against the first live sysroot).
       Sb.Append(LineaXml('    ', 'Profile_LibraryPath', string.Join(';', LibDirs.ToStringArray)));
-      if CamposDePerfil(ProfXml).Password <> '' then
-        Sb.Append(LineaXml('    ', 'Profile_password', CamposDePerfil(ProfXml).Password));
+      if Campos.Password <> '' then
+        Sb.Append(LineaXml('    ', 'Profile_password', Campos.Password));
       Sb.AppendLine('  </PropertyGroup>');
       Sb.AppendLine('  <ItemGroup>');
       for D in LibDirs do
@@ -1727,7 +1743,8 @@ var
   Info: TRadStudioInfo;
   Nombre, Plat, Host, Pwd: string;
   Puerto: Integer;
-  Texto: string;
+  Fallo: string;
+  Campos: TCamposDePerfil;
   YaEstaba: Boolean;
   Return: TJSONObject;
   Sembrados, Intactos: TJSONArray;
@@ -1757,17 +1774,22 @@ begin
           Intactos.Add(Nombre);
           Continue;
         end;
-        try
-          Texto := LeeTexto(RutaDePerfil(Info.Version, Nombre), [ltIde]);
-        except
-          // tambien se dice (se saltaba callado; quinta ronda de Fable)
-          on E: Exception do
-          begin
-            Saltados := Saltados + [MsgFmt(SF_PAS_RESEAT_ILEGIBLE_FMT, [Nombre, E.Message])];
-            Continue;
-          end;
+        // EL lector de un perfil listado (B12 de la 1.28: se leia a mano); el
+        // que no se lee tambien se dice (se saltaba callado; quinta ronda de
+        // Fable), y el que se fue entre la lista y la lectura, igual
+        case LeeCamposDePerfil(Info.Version, Nombre, Campos, Fallo) of
+          lpIlegible:
+            begin
+              Saltados := Saltados + [MsgFmt(SF_PAS_RESEAT_ILEGIBLE_FMT, [Nombre, Fallo])];
+              Continue;
+            end;
+          lpNoListado:
+            begin
+              Saltados := Saltados + [MsgFmt(SF_PAS_RESEAT_ILEGIBLE_FMT,
+                [Nombre, MsgFmt(SR_PASERVER_NO_PROFILE_FMT, [Nombre])])];
+              Continue;
+            end;
         end;
-        var Campos := CamposDePerfil(Texto);
         // sin plataforma o sin host no se siembra, y se dice: el asiento diria
         // lo que el .profile no dice. Sin plataforma era Linux64 inventado,
         // cuando remove-sdk ya cierra con una que no se lee (C5; R5 del censo
