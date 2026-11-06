@@ -27,7 +27,11 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - `delphi_paserver` reads the fields of a connection profile through one reader in every command - the profile the IDE lists, from its file, through the IDE's door. `add-profile` (the duplicate host check, and the encrypted password for the IDE's seat), `get-sdk` and `reseat` each read it by hand, each with its own failure. `get-sdk` with a profile that cannot be read now answers `PAS-054`, as the host gate already did for that profile, instead of an internal error.
 
+- The echo of `delphi_edit` and `delphi_textedit` - the lines read back from disk after a write - no longer repeats a long written block whole: up to 40 lines it is whole, as before; a longer one gives its first 15 lines and its last 5, and between them how many are not repeated and the `delphi_read` call that shows them. The audit line still covers the whole file. Replacing 323 lines of a unit answered with 457 lines, 16,798 characters, for an entry of 14,528 (an agent's report, 6-nov); a batch (`edits`) already gave one line per entry. One rule for the two tools.
+
 ### Fixed
+
+- `delphi_edit` called with `createunit`, `content` or `eol` - the unit creation it no longer has since this version - says where it went (`EDIT-132`: `delphi_create kind=unit`, with `content` and `eol`), instead of the generic unknown-parameter refusal that only listed the parameters it takes. A client that keeps an older tool list still offers them: Hermes' did, in the three rounds of its test of this version. The retired parameters are one table at the call's gate, which also holds `delphi_git`'s `args` (`GIT-068`).
 
 - `delphi_designer set` says what else the IDE's writer changed in the component when it stored the property: `alsoWritten` (the lines it wrote or changed) and `alsoRemoved` (the ones it took out), with `DSGN-189`. Setting a `TextSettings` value of an FMX label also writes `StyledSettings` without that flag - it decides which of the label's text settings show - and the answer said only the line of what was set; Hermes found it only through a `get`, in two rounds of the 1.28 test. Both doors of `set`, one property and several (`props`).
 

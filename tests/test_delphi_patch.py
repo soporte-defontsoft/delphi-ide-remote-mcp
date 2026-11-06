@@ -358,6 +358,45 @@ check('unit suelta eol=lf: LF sin un CR y la respuesta lo dice',
 out = call('delphi_create', {"kind": "unit", "name": "NacienteMac", "dir": DIR, "eol": "mac"})
 check('unit eol=mac: INVALID_PARAM y nada creado', mc.rechazado(out) and mc.es(out, 'SR_TEXT_EOL_FMT')
       and not os.path.exists(os.path.join(DIR, 'NacienteMac.pas')), out[:300])
+# I33 del cierre (1.28): un cliente con el esquema viejo manda createunit/content/eol a delphi_edit: EDIT-132 dice a
+# donde fue (delphi_create kind=unit con content y eol), no el SYS-015 generico que solo listaba los parametros que
+# hay (Hermes, las tres rondas del dirigido, con su cache de esquemas del 4-nov). ROJA contra acdd456
+VIEJA = os.path.join(DIR, 'Vieja.pas')
+for _args in ({"createunit": True, "content": "unit Vieja;\n\ninterface\n\nimplementation\n\nend.\n"},
+              {"createunit": True}, {"eol": "lf"}):
+    out = call('delphi_edit', dict({"path": VIEJA}, **_args))
+    check('I33 delphi_edit con %s: EDIT-132 manda a delphi_create y no crea nada' % '+'.join(_args),
+          mc.rechazado(out) and mc.es(out, 'SR_EDIT_CREATEUNIT_RETIRADO') and 'delphi_create' in out
+          and not os.path.exists(VIEJA), out[:300])
+
+# I34 del cierre (1.28): el eco de un bloque escrito LARGO no repite todo lo escrito: su cabeza, la nota con cuantas
+# faltan y el delphi_read que las ensena, y su cola (una sustitucion de 323 lineas devolvia 457, 16.798 caracteres:
+# informe de fable, 6-nov). ROJA contra acdd456. Las dos puertas: delphi_edit (old + toline) y delphi_textedit
+NUEVAS = '\n'.join('// nueva %d' % i for i in range(80))
+call('delphi_create', {"kind": "unit", "name": "Larga", "dir": DIR, "content":
+     "unit Larga;\n\ninterface\n\nimplementation\n\n" + ''.join('// linea %d\n' % i for i in range(100)) + "\nend.\n"})
+out = call('delphi_edit', {"path": os.path.join(DIR, 'Larga.pas'), "old": "// linea 0", "toline": 106, "new": NUEVAS})
+check('I34 delphi_edit de 100 lineas por 80: eco recortado (cabeza, nota con delphi_read, cola) y no las 80',
+      mc.abre(out, 'SN_RANGE_REPLACED_FMT') and 'are not repeated' in out and 'delphi_read path=' in out
+      and '// nueva 0' in out and '// nueva 79' in out and '// nueva 40' not in out and out.count('\n') < 50,
+      (out.count('\n'), out[:600]))
+# la ruta de la nota la compone la tool: va enmascarada (delphi_edit esta exento del filtro de salida por su eco;
+# salia la letra real, medido en vivo el 6-nov)
+_nota = [l for l in out.splitlines() if 'are not repeated' in l]
+check('I34 la ruta del delphi_read de la nota va con su unidad virtual, no con la letra real',
+      bool(_nota) and 'path=srv' in _nota[0] and (mc.larga(DIR)[:3] not in _nota[0]), _nota)
+out = call('delphi_edit', {"path": os.path.join(DIR, 'Larga.pas'), "old": "// nueva 40", "new": "// nueva 40\n// otra"})
+check('I34 control: una edicion corta se ve entera, sin nota', not mc.fallo(out) and 'are not repeated' not in out
+      and '// otra' in out, out[:400])
+LARGO_TXT = os.path.join(DIR, 'Larga.txt')
+# (una linea fuera por cada lado: el fichero entero es EDIT-019, que no se reescribe)
+call('delphi_textedit', {"path": LARGO_TXT, "create": True,
+                         "content": 'cabeza\n' + ''.join('linea %d\n' % i for i in range(100)) + 'cola\n'})
+out = call('delphi_textedit', {"path": LARGO_TXT, "old": "linea 0", "toline": 101,
+                               "new": '\n'.join('nueva %d' % i for i in range(80))})
+check('I34 delphi_textedit de 100 lineas por 80: eco recortado igual (la misma regla)',
+      'are not repeated' in out and 'delphi_read path=' in out and 'nueva 0' in out and 'nueva 79' in out
+      and 'nueva 40' not in out and out.count('\n') < 50, (out.count('\n'), out[:600]))
 
 # --- designer lint: known cross-framework property mistakes warn at edit
 # time (field, Fase 3: they crash the app at form-load, silently on Android;

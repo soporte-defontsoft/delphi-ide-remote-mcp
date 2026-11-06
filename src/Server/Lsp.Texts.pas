@@ -8314,6 +8314,17 @@ const
     'action, name, format, count, context, search, staged, patch, path, ' +
     'message, create. tools/list describes them. Nothing was done.';
 
+  { delphi_edit sin createunit, content ni eol (1.28): una unit nueva es de
+    delphi_create. Un cliente con el esquema viejo los manda (Hermes, con su
+    cache de esquemas del 4-nov, en las tres rondas del dirigido de la 1.28):
+    se le dice a donde fue, no solo los parametros que hay (SYS-015). }
+  SR_EDIT_CREATEUNIT_RETIRADO =
+    '[EDIT-132 INVALID_PARAM] delphi_edit creates no units since 1.28 - no ' +
+    'createunit, content or eol: a new unit, or an include, is delphi_create ' +
+    'kind=unit (or kind=include) with content and eol. A client that keeps an ' +
+    'older tool list still offers them: delphi_help command=tool ' +
+    'name=delphi_edit gives the current one. Nothing was done.';
+
   SR_GIT_PATHS_NO_ES_LISTA =
     '[GIT-069 INVALID_PARAM] "paths" is a LIST of files or folders of the ' +
     'repository: ["a.pas", "src"]. Nothing was done.';
@@ -12216,6 +12227,14 @@ const
     '[EDIT-108] WRITTEN, but the file could not be re-read to show it ' +
     '(another process took it right after: %s). What is shown is what ' +
     'was written.';
+
+  { La linea entre la cabeza y la cola del eco de un bloque escrito largo
+    (Lsp.Patch.NotaDeEcoRecortado): cuantas no se ensenan y el delphi_read que
+    las ensena. Una sustitucion de 323 lineas devolvia 457 (informe de fable,
+    6-nov; I34 del cierre). Lleva [cuantas, fichero, desde, hasta]. }
+  SF_EDIT_ECO_RECORTADO_FMT =
+    '  ... %d lines written here are not repeated (the audit above covers the whole ' +
+    'file): delphi_read path=%s fromline=%d toline=%d shows them';
 
   SR_EDIT_VISIBLE_DESHECHO_FMT =
     '[EDIT-109 DENIED] visible=true: the declaration could not be added ' +

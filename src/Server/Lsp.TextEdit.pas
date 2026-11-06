@@ -252,7 +252,7 @@ begin
       [Format(IfThen(A.DeleteLine, MsgText(SN_RANGE_DELETED_FMT), MsgText(SN_RANGE_REPLACED_FMT)),
          [Cuantas, Target + 1, Target + Cuantas, TPath.GetFileName(A.Path)]),
        Etiqueta, TrashFolderName,
-       EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]));
+       EcoDeLoEscrito(A.Path, Target, Target + Length(NewLines) + 1)]));
   if A.DeleteLine then
     Exit(MsgFmt(SK_TEXT_OK_BORRADA_LINEA_FMT,
       [Target + 1, TPath.GetFileName(A.Path), Etiqueta, TrashFolderName,
@@ -262,10 +262,10 @@ begin
   if (Length(NewLines) = 1) and (NewLines[0] = '') then
     Exit(MsgFmt(SK_TEXT_BLANQUEADA_LINEA_FMT,
       [Target + 1, TPath.GetFileName(A.Path), Etiqueta, TrashFolderName,
-       EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]));
+       EcoDeLoEscrito(A.Path, Target, Target + Length(NewLines) + 1)]));
   Result := MsgFmt(SK_TEXT_OK_LINEA_FMT,
     [Target + 1, TPath.GetFileName(A.Path), Etiqueta, TrashFolderName,
-     EcoNumerado(A.Path, Target, Target + Length(NewLines) + 1)]);
+     EcoDeLoEscrito(A.Path, Target, Target + Length(NewLines) + 1)]);
 end;
 
 { El trabajo; ExecuteTextEdit lo envuelve en el cerrojo de escritura. }

@@ -1003,6 +1003,38 @@ begin
   AEntry.AddPair('_meta', Meta);
 end;
 
+{ Un parametro que la tool YA NO tiene (lo retiro una version, y un cliente con
+  el esquema viejo lo sigue mandando): se le dice a donde fue, con su codigo,
+  antes del SYS-015 generico del deserializador, que solo lista los que hay.
+  La hermana de ApplyArgAliases (alli, un nombre que SI vale, con otro nombre).
+  Era un if de delphi_git (args, 1.19.0); delphi_edit perdio createunit,
+  content y eol en la 1.28 (I33 del cierre: Hermes los mando en las tres
+  rondas del dirigido, con su cache de esquemas del 4-nov). '' si no hay. }
+function ParametroRetiradoDenegado(const AToolName: string; const AArguments: TJSONObject): string;
+const
+  // tool y parametro retirado; la negativa, la de su tool (abajo)
+  Retirados: array[0..3, 0..1] of string = (
+    ('delphi_git', 'args'),
+    ('delphi_edit', 'createunit'),
+    ('delphi_edit', 'content'),
+    ('delphi_edit', 'eol'));
+begin
+  Result := '';
+  if not Assigned(AArguments) then
+    Exit;
+  for var I := Low(Retirados) to High(Retirados) do
+    // leido como lo resuelve el binder (ArgStr: sin mayusculas ni '_'), no
+    // con GetValue: "Args" se saltaba una puerta que leia la clave exacta
+    // (test_guard, auditoria de campo). Uno vacio cae en el SYS-015 del binder
+    if SameText(Retirados[I, 0], AToolName) and (ArgStr(AArguments, Retirados[I, 1]) <> '') then
+      // delphi_git dice sus campos (GIT-068) y delphi_edit a donde fue la
+      // creacion de units (EDIT-132); por su helper, como todo mensaje
+      if SameText(AToolName, 'delphi_git') then
+        Exit(MsgText(SR_GIT_ARGS_RETIRADO))
+      else
+        Exit(MsgText(SR_EDIT_CREATEUNIT_RETIRADO));
+end;
+
 function ReglasDeLaLlamadaDenegadas(const AToolName: string;
   const AArguments: TJSONObject): string;
 var
@@ -1052,17 +1084,14 @@ begin
   Result := ArgPathOutsideDenied(AToolName, AArguments, False);
   if Result <> '' then
     Exit;
-  // delphi_git no tiene args desde la 1.19.0 (David, 14-oct-2026: el agente
-  // pide una operacion): la lista negra de sus opciones se fue con ellos. Un
-  // cliente con el esquema viejo los manda: se le dice que campos usar, con
-  // su codigo, antes del SYS-015 generico del deserializador.
+  // un parametro que la tool ya no tiene (delphi_git args desde la 1.19.0:
+  // David, 14-oct-2026, el agente pide una operacion; delphi_edit createunit,
+  // content y eol desde la 1.28): a donde fue, antes del SYS-015 generico
+  Result := ParametroRetiradoDenegado(AToolName, AArguments);
+  if Result <> '' then
+    Exit;
   if SameText(AToolName, 'delphi_git') and Assigned(AArguments) then
   begin
-    // leido como lo resuelve el binder (ArgStr: sin mayusculas ni '_'), no
-    // con GetValue: "Args" se saltaba una puerta que leia la clave exacta
-    // (test_guard, auditoria de campo). Uno vacio cae en el SYS-015 del binder
-    if ArgStr(AArguments, 'args') <> '' then
-      Exit(MsgText(SR_GIT_ARGS_RETIRADO));
     // An explicit URL in a git call is an outbound connection this machine
     // is about to make: the clone's, which travels in message. It goes
     // through the operator's allowlist WHOLE, as one argument (split, the

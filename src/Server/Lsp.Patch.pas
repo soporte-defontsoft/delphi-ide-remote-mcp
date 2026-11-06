@@ -248,6 +248,19 @@ function AplicaTanda(const APath, AEditsJson: string;
   releer, lo dice en vez de lanzar (la escritura ya se hizo). }
 function EcoNumerado(const APath: string; AFrom, ATo: Integer): string;
 
+{ LA regla del eco de un bloque escrito largo, para delphi_edit y
+  delphi_textedit: entero hasta ECO_MAX_LINEAS; uno mas largo, sus primeras
+  (hasta ACabezaFin) y sus ultimas lineas (desde AColaIni), y entre medias la
+  nota (NotaDeEcoRecortado) con cuantas faltan y el delphi_read que las
+  ensena. Lo que el agente acaba de mandar no vuelve entero: una sustitucion
+  de 323 lineas devolvia 457, 16.798 caracteres (informe de fable, 6-nov; I34
+  del cierre). La auditoria (codificacion, saltos, mojibake) sigue mirando el
+  fichero entero. True si se recorta; lineas 1-based. }
+function RangoDeEco(AFrom, ATo: Integer; out ACabezaFin, AColaIni: Integer): Boolean;
+function NotaDeEcoRecortado(const APath: string; ACabezaFin, AColaIni: Integer): string;
+{ EcoNumerado de AFrom a ATo con esa regla (el eco de delphi_textedit). }
+function EcoDeLoEscrito(const APath: string; AFrom, ATo: Integer): string;
+
 { Los MODOS de una llamada de delphi_edit / delphi_textedit que no combinan:
   con mas de uno, la negativa (INVALID_PARAM); '' si hay uno o ninguno. Se
   descartaba uno en silencio y se contestaba OK (adduses+removeuses solo
@@ -368,6 +381,44 @@ begin
     on E: Exception do
       Result := MsgFmt(SN_EDIT_RELECTURA_FALLIDA_FMT, [MaskDriveText('', E.Message)]);
   end;
+end;
+
+const
+  // el eco de un bloque escrito: entero hasta aqui; mas largo, cabeza y cola
+  ECO_MAX_LINEAS = 40;
+  ECO_CABEZA = 15;
+  ECO_COLA = 5;
+
+function RangoDeEco(AFrom, ATo: Integer; out ACabezaFin, AColaIni: Integer): Boolean;
+begin
+  ACabezaFin := ATo;
+  AColaIni := ATo + 1;
+  Result := ATo - AFrom + 1 > ECO_MAX_LINEAS;
+  if Result then
+  begin
+    ACabezaFin := AFrom + ECO_CABEZA - 1;
+    AColaIni := ATo - ECO_COLA + 1;
+  end;
+end;
+
+function NotaDeEcoRecortado(const APath: string; ACabezaFin, AColaIni: Integer): string;
+begin
+  // la ruta, enmascarada A MANO: delphi_edit y delphi_textedit estan exentos
+  // del filtro de salida (su eco es contenido del disco) y lo que COMPONEN
+  // ellos pasa por MaskDriveText (la obligacion de TOOLS_ECO, Lsp.Mascara);
+  // medido en vivo el 6-nov: salia la letra real
+  Result := MsgFmt(SF_EDIT_ECO_RECORTADO_FMT,
+    [AColaIni - ACabezaFin - 1, MaskDriveText('', APath), ACabezaFin + 1, AColaIni - 1]);
+end;
+
+function EcoDeLoEscrito(const APath: string; AFrom, ATo: Integer): string;
+var
+  CabezaFin, ColaIni: Integer;
+begin
+  if not RangoDeEco(AFrom, ATo, CabezaFin, ColaIni) then
+    Exit(EcoNumerado(APath, AFrom, ATo));
+  Result := EcoNumerado(APath, AFrom, CabezaFin) + #10 +
+    NotaDeEcoRecortado(APath, CabezaFin, ColaIni) + #10 + EcoNumerado(APath, ColaIni, ATo);
 end;
 
 function ContenidoDeUnitNoValido(const AUnitName, AContent: string): string;
@@ -3099,10 +3150,19 @@ begin
       if Replacement <> '' then
         FinC := Idx + Length(Nuevas) + 1;
       if FinC > High(AfterLines) then FinC := High(AfterLines);
+      // un bloque largo: cabeza, la nota y cola (LA regla, RangoDeEco)
+      var CabezaFin, ColaIni: Integer;
+      var Recorta := RangoDeEco(IniC + 1, FinC + 1, CabezaFin, ColaIni);
       var SbC := TStringBuilder.Create;
       try
         for I := IniC to FinC do
-          SbC.Append('  ').Append(CitaDeLinea(I + 1, AfterLines[I])).Append(#10);
+          if Recorta and (I + 1 > CabezaFin) and (I + 1 < ColaIni) then
+          begin
+            if I + 1 = CabezaFin + 1 then
+              SbC.Append(NotaDeEcoRecortado(APath, CabezaFin, ColaIni)).Append(#10);
+          end
+          else
+            SbC.Append('  ').Append(CitaDeLinea(I + 1, AfterLines[I])).Append(#10);
         Ctx := SbC.ToString.TrimRight([#10]);
       finally
         SbC.Free;
