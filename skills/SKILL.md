@@ -300,7 +300,7 @@ it. With no name, each request of that protocol is a stranger to the one before.
 ## The desktop of a target (`delphi_desktop`) - eyes and hands
 
 The same idea as adb, for the machine behind a PAServer profile: a Linux
-(**GNOME only today**, Zorin and Fedora measured), a Windows with PAServer,
+(GNOME or KDE Plasma, Zorin and Fedora measured), a Windows with PAServer,
 or this very server when a PAServer runs in its user session. ALWAYS
 through a PAServer listening on that machine, Windows included: without one
 there is no desktop to reach, whatever the network says. The machine is the

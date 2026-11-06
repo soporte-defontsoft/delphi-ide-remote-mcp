@@ -133,6 +133,11 @@ VM).
   `clientInfo` too (it is your identity), and the headers `MCP-Protocol-Version`,
   `Mcp-Method` and, on what names a tool or resource, `Mcp-Name`.
 
+Three things a client may expect and this server does not do: closing the response
+stream of a call does not cancel the tool - it runs to its end; there are no resource
+subscriptions; and the `sessions` that `delphi_workspace` reports count only the clients
+that used `initialize` (a `2026-07-28` request has no session).
+
 What this server offers is TOOLS. `prompts/list` has one prompt, `vault`, and only where
 a workspace declares a vault; `resources/list` is empty. When a client shows tools called
 `get_prompt`, `list_prompts`, `list_resources` or `read_resource`, they are that client's

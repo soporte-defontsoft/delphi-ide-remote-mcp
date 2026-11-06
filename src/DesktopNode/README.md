@@ -19,9 +19,11 @@ for Linux and for Windows; an `{$IFDEF}` picks who it talks to underneath, and
 adding a third system means writing its unit plus its `Ejecutar<System>` and
 hanging it off the same dispatch:
 
-- **Linux** (GNOME only for today, measured live on Zorin 18 and Fedora):
-  capture through the XDG desktop portal, input through libei, scale from
-  Mutter, every system library opened at runtime.
+- **Linux** (GNOME and KDE Plasma, measured live on Zorin 18 and on Fedora 44
+  with both): the session's environment from the user's systemd manager,
+  capture through the XDG desktop portal, input through libei (handed over by
+  Mutter's remote desktop, or by the portal's where there is none), scale from
+  Mutter or measured, every system library opened at runtime.
 - **Windows** (`Mld.Win.pas`): GDI for the eyes and `SendInput` for the hands,
   both already in the system — nothing to load, nothing to install. It grabs
   the whole virtual desktop (every monitor), so the caller still measures on

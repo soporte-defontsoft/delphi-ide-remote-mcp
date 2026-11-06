@@ -20,7 +20,7 @@ touch it by hand:
   gesture — measured: 3.0 s for a gesture that also updated the node, 1.4 s
   warm.
 
-GNOME targets only for now on Linux; on Windows the PAServer must run inside the
+On Linux, GNOME and KDE Plasma targets; on Windows the PAServer must run inside the
 user's session. Rebuilding belongs to whoever edits the sources — `BuildGroup.bat
 quiet build Release` compiles the four (two projects, each for Linux and for Windows) and copies them here.
 None of the four is versioned (since 2026-09-24): they are build output, and
