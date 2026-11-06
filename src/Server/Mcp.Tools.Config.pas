@@ -145,7 +145,8 @@ uses
   Lsp.Extensiones,
   Lsp.Puertas,
   Lsp.Mudanzas,
-  Lsp.JuecesDeArgumentos;
+  Lsp.JuecesDeArgumentos,
+  Lsp.PuertaDeLaLlamada;
 
 constructor TDelphiConfigTool.Create;
 begin
@@ -2354,7 +2355,9 @@ begin
       IfThen(Cmd = '', 'view', Cmd), ONinguno(Suyos)]) + VaCon);
   // view y get-property solo LEEN el .dproj (y valen en un proyecto de
   // REFERENCIA); todo lo demas lo escribe y pasa por la puerta de escritura.
-  if (Cmd = '') or (Cmd = 'view') or (Cmd = 'get-property') then
+  // Que comando lee lo dice LA tabla de accesos, la de la credencial de solo
+  // lectura (ComandoQueLee): esta tenia su lista al lado (B6 de la 1.23)
+  if ComandoQueLee('delphi_config', Cmd) then
     Result := ReadPathDenied(Params.Project)
   else
     Result := WriteTargetDenied(Params.Project);

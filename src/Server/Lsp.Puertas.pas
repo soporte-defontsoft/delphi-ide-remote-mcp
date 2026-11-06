@@ -741,6 +741,28 @@ end;
 
 function EnLugarDeTexto(const APath: string; ALugar: TLugarDeTexto;
   AParaEscribir: Boolean): Boolean; forward;
+function MismosBytes(const APath: string; const ABytes: TArray<Byte>;
+  ALugar: TLugarDeTexto): Boolean; forward;
+
+{ El destino ya dice EXACTAMENTE lo que se iba a colocar: el producto ALocal
+  (por su tamano primero: si no cuadra no se lee nada) o los bytes ABytes. Lo
+  que no se puede leer no es igual. }
+function MismoContenido(const ADestino, ALocal: string; const ABytes: TBytes;
+  ALugar: TLugarDeTexto): Boolean;
+begin
+  Result := False;
+  if not TFile.Exists(ADestino) then
+    Exit;
+  if ALocal = '' then
+    Exit(MismosBytes(ADestino, ABytes, ALugar));
+  try
+    if TFile.GetSize(ALocal) <> TFile.GetSize(ADestino) then
+      Exit;
+    Result := MismosBytes(ADestino, LeeBytes(ALocal, [ltTemporal, ALugar]), ALugar);
+  except
+    Result := False;
+  end;
+end;
 
 { El nucleo de ColocaProducto y ColocaContenido: ALocal <> '' mueve ese
   fichero; si no, escribe ABytes. }
@@ -780,6 +802,16 @@ begin
     Motivo := ColocacionDenegada(ADestino, ALugar);
     if Motivo <> '' then
       raise Exception.Create(Motivo);
+    // lo que ya dice ESO no se reescribe ni se copia: la regla de EscribeBytes
+    // (MismosBytes, A4 de la 1.18.4), aqui para los productos y los derivados.
+    // Un styles build repetido sellaba en la papelera una copia IDENTICA de
+    // cada .bin.style en CADA llamada (medido el 6-nov, mismo SHA-256: I5 del
+    // cierre de la 1.28). El producto se borra igual (el finally)
+    if MismoContenido(ADestino, ALocal, ABytes, ALugar) then
+    begin
+      Colocado := True;
+      Exit;
+    end;
     // lo que se cree para colocarlo se quita si al final no se coloca
     Ancestro := PrimerAncestroQueExiste(Dir);
     CrearCarpeta(Dir);

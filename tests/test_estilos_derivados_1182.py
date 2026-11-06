@@ -169,6 +169,16 @@ try:
           mc.como_json(r).get('ok') is True and (bytes_de(BIN) or b'').startswith(b'FMX_STYLE') and
           any(bytes_de(c) == VIEJO for c in copias), (r[:300], copias))
 
+    # I5 del cierre de la 1.28: un build que da EXACTAMENTE lo que ya hay no reescribe ni sella nada (la regla de
+    # EscribeBytes, MismosBytes, ahora tambien en Coloca); sellaba una copia identica de cada derivado en CADA build
+    # (medido el 6-nov en el sandbox: mismo SHA-256). ROJA contra 416271b
+    papelera = lambda: sorted(glob.glob(os.path.join(STY, mc.PAPELERA, '**', '*'), recursive=True))
+    antes, bin_antes = papelera(), bytes_de(BIN)
+    r = build(srv)
+    nuevos = [p for p in papelera() if p not in antes]
+    check('I5 un build que da lo que ya hay no sella copias en la papelera ni reescribe el derivado',
+          mc.como_json(r).get('ok') is True and not nuevos and bytes_de(BIN) == bin_antes, (r[:300], nuevos))
+
     # --------------------------- S5: el +R
     limpia()
     open(BIN, 'wb').write(VIEJO)

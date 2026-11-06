@@ -91,7 +91,8 @@ uses
   Lsp.ProcessLaunch,
   Lsp.Lineas,
   Lsp.Extensiones,
-  Lsp.Puertas;
+  Lsp.Puertas,
+  Lsp.PuertaDeLaLlamada;
 
 constructor TDelphiStylesTool.Create;
 begin
@@ -1631,10 +1632,12 @@ begin
      'delete', IfThen(Params.Delete, 'true'), ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_STYLES_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, ONinguno(Suyos)]) + VaCon);
-  if MatchText(Cmd, ['set', 'clone', 'delete', 'build']) then
-    Denied := WriteTargetDenied(Params.Path)
+  // que comando lee lo dice LA tabla de accesos, la de la credencial de solo
+  // lectura (ComandoQueLee): esta tenia su lista al lado (B6 de la 1.23)
+  if ComandoQueLee('delphi_styles', Cmd) then
+    Denied := ReadPathDenied(Params.Path)
   else
-    Denied := ReadPathDenied(Params.Path);
+    Denied := WriteTargetDenied(Params.Path);
   if Denied <> '' then
     Exit(Denied);
   if not (TFile.Exists(Params.Path) or TDirectory.Exists(Params.Path)) then

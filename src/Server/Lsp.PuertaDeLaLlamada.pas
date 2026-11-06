@@ -83,6 +83,13 @@ type
 { La fila de la tabla para una tool; lo que no esta en ella ESCRIBE (cerrado:
   la tabla declara todas, y test_paisaje exige una fila por tool registrada). }
 function AccesoDeTool(const ATool: string): TAccesoDeTool;
+{ El comando ACmd de la tool ATool LEE, por LA tabla (la que juzga una
+  credencial de solo lectura): una de lectura siempre, una de escritura nunca,
+  una mixta sin comando o con uno de sus Lecturas. La preguntan la puerta
+  (LlamadaLee) y las tools que eligen por comando entre la puerta de leer y la
+  de escribir: delphi_config y delphi_styles tenian su propia lista al lado de
+  la de la tabla (B6 de la depuracion de la 1.23, I18 del cierre de la 1.28). }
+function ComandoQueLee(const ATool, ACmd: string): Boolean;
 { '' si una credencial de solo lectura puede hacer ESTA llamada; si no, la
   negativa READ-002 con lo que pedia. delphi_git decide por argumentos
   (GitCommandIsQuery: branch/tag sin ellos listan, worktree y stash solo list), el
@@ -830,6 +837,20 @@ begin
   AnadeAcceso('delphi_rename_symbol', atMixta, ['preview'], 'mode');
 end;
 
+function ComandoQueLee(const ATool, ACmd: string): Boolean;
+var
+  F: TAccesoDeTool;
+begin
+  F := AccesoDeTool(ATool);
+  case F.Acceso of
+    atLectura:
+      Exit(True);
+    atEscritura:
+      Exit(False);
+  end;
+  Result := (ACmd.Trim = '') or MatchText(ACmd.Trim, F.Lecturas);
+end;
+
 function AccesoDeTool(const ATool: string): TAccesoDeTool;
 var
   F: TAccesoDeTool;
@@ -915,7 +936,7 @@ begin
       ArgStr(AArguments, 'message')));
   end;
   AQue := AToolName + ' ' + Cmd;
-  Result := (Cmd = '') or MatchText(Cmd, F.Lecturas);
+  Result := ComandoQueLee(AToolName, Cmd);
 end;
 
 function LecturaDenegada(const AToolName: string; const AArguments: TJSONObject): string;
