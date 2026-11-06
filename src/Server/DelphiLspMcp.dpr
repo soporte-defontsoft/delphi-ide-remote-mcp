@@ -163,7 +163,8 @@ uses
   Lsp.ClausulaUses in 'Lsp.ClausulaUses.pas',
   Lsp.Capturas in 'Lsp.Capturas.pas',
   Lsp.JuecesDeArgumentos in 'Lsp.JuecesDeArgumentos.pas',
-  Lsp.PuertaDeLaLlamada in 'Lsp.PuertaDeLaLlamada.pas';
+  Lsp.PuertaDeLaLlamada in 'Lsp.PuertaDeLaLlamada.pas',
+  Lsp.PurgaDelArranque in 'Lsp.PurgaDelArranque.pas';
 
 {$R *.res}
 

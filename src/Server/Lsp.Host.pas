@@ -109,7 +109,8 @@ uses
   Lsp.Discovery, // NotasDeArranqueDelphi
   Lsp.Settings,
   Lsp.Mascara,
-  Lsp.PuertaDeLaLlamada;
+  Lsp.PuertaDeLaLlamada,
+  Lsp.PurgaDelArranque;
 
 constructor TMcpHost.Create;
 begin
