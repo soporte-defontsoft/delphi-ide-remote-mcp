@@ -116,7 +116,6 @@ uses
   Lsp.Client,
   Lsp.Session,
   Lsp.Casa,
-  Lsp.Guard,
   Lsp.Sandbox,
   LspTests.Comun;
 

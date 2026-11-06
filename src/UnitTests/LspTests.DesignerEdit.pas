@@ -69,7 +69,6 @@ uses
   System.SysUtils,
   System.Classes,
   Lsp.Styles,
-  Lsp.Patch,
   Lsp.Pascal,
   Lsp.PascalDecl,
   Lsp.DesignerBin,

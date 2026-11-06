@@ -230,7 +230,7 @@ begin
     begin
       ClearAttachedImages; // nada de una llamada anterior en este hilo
       OlvidaSalidaHecha;   // ...ni lo que otra dejo dicho al filtro de salida
-      OlvidaOrigenes(True); // ...ni sus bytes de antes: empieza esta (Lsp.Patch.EncAlEscribir)
+      OlvidaOrigenes(True); // ...ni sus bytes de antes: empieza esta (Lsp.Puertas.EncAlEscribir)
       // un nombre que no es una tool no pasa por la puerta: lo contesta el
       // registro ("tool not found"). Con la tabla de accesos cerrada, una
       // credencial de solo lectura recibia READ-002 "escribe o actua" de un

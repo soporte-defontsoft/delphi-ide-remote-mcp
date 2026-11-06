@@ -1,6 +1,6 @@
 ﻿unit LspTests.Encodings;
 
-{ El detector UNICO de codificacion de Lsp.Patch, probado sobre bytes en
+{ El detector UNICO de codificacion de Lsp.Deteccion, probado sobre bytes en
   memoria: lo que delphi_read, delphi_edit, delphi_textedit, delphi_search y
   la auditoria de escritura deciden de un fichero. Nacio el 24-sep-2026, el
   dia que se descubrio que habia DOS detectores y dos puertas de NUL. }
@@ -1131,7 +1131,7 @@ begin
   end;
 end;
 
-{ El mojibake de un texto nuevo (Lsp.Patch.MojibakeLines): UTF-8 leido en la
+{ El mojibake de un texto nuevo (Lsp.Deteccion.MojibakeLines): UTF-8 leido en la
   ANSI de la maquina, o en Latin-1, como lo lee la herramienta de un agente.
   Fuera de la 1252 la o con tilde leida en Latin-1 (C3 B3: U+00C3 U+00B3) no
   tiene byte ANSI y no se veia (medido el 24-oct-2026 con el servidor en la

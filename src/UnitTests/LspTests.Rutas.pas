@@ -123,7 +123,7 @@ type
     [Test] procedure EnLaCasaSoloLoQueViaja;
   end;
 
-  { LA PUERTA DE LEER (Lsp.Patch.LugarDeLecturaDenegado, LeeTexto, LeeBytes)
+  { LA PUERTA DE LEER (Lsp.Puertas.LugarDeLecturaDenegado, LeeTexto, LeeBytes)
     en los lugares que no dependen de la maquina: el temporal y la casa del
     servidor, que son del ejecutor (su carpeta). La jaula y el IDE los mide la
     bateria a traves del servidor (test_build_imports: un Import de fuera).
@@ -147,7 +147,7 @@ type
     [Test] procedure ElComparadorDeLugaresVaPorLaRutaReal;
   end;
 
-  { LA PUERTA DE ESCRIBIR (Lsp.Patch.LugarDeEscrituraDenegado, EscribeTexto)
+  { LA PUERTA DE ESCRIBIR (Lsp.Puertas.LugarDeEscrituraDenegado, EscribeTexto)
     en los mismos lugares del ejecutor: entero o nada (ni un temporal de
     sustitucion al lado), con su codificacion, y un enlace en el camino no
     lleva la escritura detras. Del IDE, lo que no depende de lo que tenga

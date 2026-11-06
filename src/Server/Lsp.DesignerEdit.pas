@@ -148,7 +148,7 @@ uses
   Lsp.Texts,
   Lsp.Guard,           // WriteTargetDenied
   Lsp.Mascara,         // CitaDeLinea y ContenidoTalCual: el texto del form, tal cual en la respuesta
-  Lsp.Patch,           // PatchLoadText/PatchSaveText y los troceadores
+  Lsp.Patch,           // ClaseEnSuUnidad, EntradaDeFormDenegada
   Lsp.Codificacion,    // EncKindOf/EncName: la codificacion de la unidad
   Lsp.Pascal,          // EL identificador, CodigoPascal, LineaDePosicion
   Lsp.PascalDecl,      // EL lector de clases: campos, rutinas y cuerpos
@@ -164,8 +164,8 @@ uses
   Winapi.Windows,
   Lsp.Listas,          // ExtractoDeLinea: la cita de una linea en una respuesta
   Lsp.ProcessLaunch,
-  Lsp.Lineas,
-  Lsp.Puertas,
+  Lsp.Lineas,          // los troceadores
+  Lsp.Puertas,         // PatchLoadText/PatchSaveText
   Lsp.JuicioDeForms;
 
 const
@@ -1719,7 +1719,7 @@ end;
 // delphi_edit tras escribir un designer
 function AvisosDespues(const F: TFormEnEdicion; const ATexto: string): TArray<string>;
 begin
-  // EL lint de un form (Lsp.Patch.LintDeForm), sin esperar a una tabla; el
+  // EL lint de un form (Lsp.JuicioDeForms.LintDeForm), sin esperar a una tabla; el
   // parser del IDE lo primero, con o sin tabla (8.10 de la 1.18.0)
   var L := LintDeForm(F.Dfm, ATexto, F.Doc.Encoding, True, 0, False, F.TextoAntes);
   Result := L.Propiedades + L.Enlace;

@@ -43,7 +43,7 @@ procedure ServeFile(RequestInfo: TIdHTTPRequestInfo;
   cuando la ruta /files no esta servida (stdio). Un agente pequeno que
   recompone la ruta a mano se equivoca (hermes, 25-sep-2026: metio su
   carpeta en medio y pidio un fichero que nunca existio); un enlace se copia.
-  Una captura NUESTRA (Lsp.Guard.CapturaConsumible) sale por su NOMBRE
+  Una captura NUESTRA (Lsp.Capturas.CapturaConsumible) sale por su NOMBRE
   (?capture=), que resuelve su nombrador (CapturaPorNombre): la ruta de
   nuestra casa no la ve el agente (2af de la 1.18.2). }
 function DownloadLinkFor(const AFullPath: string): string;

@@ -4,7 +4,7 @@ hermes1191\\diagh2077): delphi_changeset movia y borraba un fichero de Delphi co
 un fichero SUELTO, COMMIT COMPLETE y el .dpr roto SIN DECIRLO. La 1.19.2 lo nego al
 apilar (CHSET-033) porque delphi_move y delphi_delete lo hacian ENTERO. Desde V19
 (1.23) las tres mueven y borran como el operador, lo nombrado y nada mas, y las
-tres lo DICEN con la misma nota (Lsp.ProjectUnits.NotaDeMudanza): el par partido
+tres lo DICEN con la misma nota (Lsp.Mudanzas.NotaDeMudanza): el par partido
 (FILE-051) y lo que aun apunta a lo movido o lo borrado (MOVE-023, FILE-046).
 
   U1 move de una unidad con form: commit, movida sola, el .dpr igual, y la nota

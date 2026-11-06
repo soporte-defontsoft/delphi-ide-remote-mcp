@@ -6,7 +6,7 @@ con procesos EXTERNOS. La puerta solo miraba la CARPETA y cada proceso abria
 su fichero de salida el mismo (TFileStream fmCreate, brcc32 -fo): lo que la
 jaula dice de ESE fichero no lo preguntaba nadie. Ahora escriben en un
 temporal del servidor y el derivado lo coloca EL escritor de un producto
-(Lsp.Patch.ColocaProducto: la puerta en el momento de escribir, la copia
+(Lsp.Puertas.ColocaProducto: la puerta en el momento de escribir, la copia
 sellada de lo que habia y el renombre), y antes de lanzar nada se pregunta
 por TODOS los destinos, por los .style que lee el conversor y por el .rc: una
 negativa no deja nada a medias. La carpeta tiene DOS estilos: lo que se

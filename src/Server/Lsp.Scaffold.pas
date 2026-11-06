@@ -106,7 +106,7 @@ begin
   if TFile.Exists(APath) then
     raise Exception.Create(MsgFmt(SR_CREATE_YA_EXISTE_SOBREESCRIBE_FMT, [APath]));
   CrearCarpeta(TPath.GetDirectoryName(TPath.GetFullPath(APath)));
-  // la codificacion en que nace, la de todo el que crea (Lsp.Patch.
+  // la codificacion en que nace, la de todo el que crea (Lsp.Deteccion.
   // EncDeFicheroNuevo, A21: un .dproj con BOM, un .gitignore sin el, un
   // fuente en la del IDE); un form, solo en una que EL parser del IDE lea
   // (EncDeFormNuevo): una plantilla nuestra que no lee es un fallo nuestro y

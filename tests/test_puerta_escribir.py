@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """La PUERTA DE ESCRIBIR (bloque de las puertas de la 1.18.0, P3): lo que el
 servidor escribe en SUS lugares - la casa: los informes, las caches - pasa por
-Lsp.Patch.EscribeTexto, que pregunta el lugar por su forma larga y sin enlaces
+Lsp.Puertas.EscribeTexto, que pregunta el lugar por su forma larga y sin enlaces
 en el camino. Cada caso planta una UNION hacia una victima de FUERA de las
 raices: la victima tiene que salir intacta (CLAUDE.md, "Nothing outside the
 workspace").

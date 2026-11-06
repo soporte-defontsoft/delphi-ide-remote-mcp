@@ -1097,7 +1097,7 @@ begin
   try
   Arr := TJSONArray.Create;
   Result.AddPair('declares', Arr);
-  // LA regla de la seccion (Lsp.ProjectUnits.FinDeSeccion, por lineas): la
+  // LA regla de la seccion (Lsp.ClausulaUses.FinDeSeccion, por lineas): la
   // primera vez que la palabra sale entera en el codigo, este donde este en
   // su linea. Se buscaba una linea que solo dijera 'interface' o
   // 'implementation': con 'implementation uses X;' las rutinas del

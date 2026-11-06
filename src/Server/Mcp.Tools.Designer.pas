@@ -1555,11 +1555,11 @@ begin
   if Denied <> '' then
     Exit(Denied);
   // Un .dfm binario se lee al vuelo (Lsp.DesignerBin); uno danado se rechaza.
-  // (por EL lector de designers, Lsp.Patch.TextoDeDesigner)
+  // (por EL lector de designers, Lsp.Puertas.TextoDeDesigner)
   var Motivo := TextoDeDesigner(APath, Text, EncName);
   if Motivo <> '' then
     Exit(MsgEnvuelve(SR_RECHAZADO_FMT, Motivo));
-  // EL lint de un form (Lsp.Patch.LintDeForm): tablas del framework + el
+  // EL lint de un form (Lsp.JuicioDeForms.LintDeForm): tablas del framework + el
   // form contra su clase (check-binding) + EL parser del IDE con los bytes
   // del fichero, lo PRIMERO y con o sin tabla (8.10 de la 1.18.0); un
   // binario ya paso su conversion. lint = todo lo que el compilador no mira
@@ -1753,7 +1753,7 @@ function ConNotaDeFormAncho(const AResult, APath: string): string;
 begin
   Result := AResult;
   try
-    // LA nota (Lsp.Patch.NotaDeCodificacionDeForm): la del form ancho o, si
+    // LA nota (Lsp.JuicioDeForms.NotaDeCodificacionDeForm): la del form ancho o, si
     // no, la de uno SIN BOM cuyos bytes son UTF-8 (READ-009; lint daba CLEAN,
     // medido con dcc el 13-oct); preview y el lint de delphi_edit la
     // componian por su cuenta (W9 del revisor de cierre)
@@ -1970,7 +1970,7 @@ begin
 
   if Temporal <> Propia then
     try
-      ColocaProducto(Temporal, Propia); // EL escritor de un producto (Lsp.Patch)
+      ColocaProducto(Temporal, Propia); // EL escritor de un producto (Lsp.Puertas)
       Temporal := '';
     except
       on E: Exception do

@@ -235,7 +235,7 @@ check('...y en disco queda en ASCII, sin el BOM de UTF-16',
       open(U16, 'rb').read().startswith(b'object FormU: TFormU\r\n'), open(U16, 'rb').read()[:20])
 
 # ---- and a UTF-16 text form is READ, EDITED and WRITTEN BACK as UTF-16 by ONE
-# detector (Lsp.Patch.DetectEnc). Until 24-sep two detectors lived side by
+# detector (Lsp.Deteccion.DetectEnc). Until 24-sep two detectors lived side by
 # side: search read UTF-16 through its own BOM branch, delphi_read did not
 # (and its NUL-byte gate took UTF-16 for a binary). LE with an accent, BE too.
 open(U16, 'wb').write("object FormU: TFormU\r\n  Caption = 'acento: c\u00f3digo'\r\n  ClientHeight = 10\r\n  ClientWidth = 10\r\nend\r\n".encode('utf-16'))

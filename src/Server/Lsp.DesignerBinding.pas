@@ -507,11 +507,11 @@ begin
   // un form ilegible manda a buscar un fichero que nunca fue el problema.
   // (el motivo es lo que DEVUELVE DesignerFileToText; Enc es el texto, y
   // cuando falla queda vacio: el rechazo salia sin motivo desde el 25-sep)
-  // (por EL lector de designers, Lsp.Patch.TextoDeDesigner: binario o texto)
+  // (por EL lector de designers, Lsp.Puertas.TextoDeDesigner: binario o texto)
   var MotivoBin := TextoDeDesigner(ADfm, DfmTxt, Enc);
   if MotivoBin <> '' then
     Exit(MsgEnvuelve(SR_RECHAZADO_FMT, MotivoBin));
-  // el troceador de todos (Lsp.Patch.SplitToLines: un CR suelto es salto)
+  // el troceador de todos (Lsp.Lineas.SplitToLines: un CR suelto es salto)
   var Lineas := SplitToLines(DfmTxt);
   // uno que el parser del IDE no lee por lineas como LineasDeForm: el informe
   // saldria de otras lineas (DSGN-160, 3b del censo de jueces)

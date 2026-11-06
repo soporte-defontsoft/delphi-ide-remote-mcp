@@ -220,7 +220,7 @@ begin
         if not HasDef then
         begin
           // las lineas como las cuenta el LSP (CRLF, LF o CR): el troceador
-          // de todos (Lsp.Patch.SplitToLines)
+          // de todos (Lsp.Lineas.SplitToLines)
           Lines := SplitToLines(PatchLoadText(DefPath, EncName));
           if (DefLine >= 0) and (DefLine < Length(Lines)) then
           begin

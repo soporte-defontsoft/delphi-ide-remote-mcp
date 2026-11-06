@@ -267,7 +267,7 @@ check('M-6 ...y el create de un .pas con una llave anidada tambien (CHSET-032 co
       mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and mc.es(r, 'SN_CHANGESET_AVISOS_FMT') and
       mc.es(r, 'SN_AVISO_LLAVE_ANIDADA_FMT') and os.path.exists(_m6c), r[-600:])
 # M-3 del revisor 3: el create de un changeset escribia un form SIN el juez de
-# delphi_create (Lsp.Patch.EncDeFormNuevo): un .fmx que el parser del IDE no
+# delphi_create (Lsp.JuicioDeForms.EncDeFormNuevo): un .fmx que el parser del IDE no
 # lee se escribe y se AVISA, como delphi_edit (DSGN-123 en CHSET-032). La mitad
 # de la codificacion (un nombre acentuado con el IDE en ANSI) no tiene rojo en
 # esta maquina: su IDE ya crea con BOM

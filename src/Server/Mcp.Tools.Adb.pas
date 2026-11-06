@@ -588,7 +588,7 @@ begin
     // device, pull to a server path, clean up. A direct exec-out redirect
     // mangles the PNG through the console (measured) - hence the tmp file.
     // "out" ya no es obligatorio ni tiene que acabar en ".png" a mano: lo
-    // resuelve CaptureTarget (Lsp.Guard), el mismo para toda la familia de
+    // resuelve CaptureTarget (Lsp.Capturas), el mismo para toda la familia de
     // capturas. El formato sale del fichero que screencap escribe en el
     // dispositivo, no de una segunda constante. Se resuelve ANTES de tocar
     // el dispositivo: un argumento malo de quien llama se contesta sin

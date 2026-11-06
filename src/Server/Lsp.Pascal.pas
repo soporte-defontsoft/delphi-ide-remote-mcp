@@ -309,7 +309,7 @@ function EditDistance(const A, B: string): Integer;
 function ElMasParecido(const A: string; const ACandidatos: array of string;
   ATope: Integer): string;
 // La linea (1-based) de la posicion APos (1-based) de ATexto: un salto es
-// CRLF, LF o un CR suelto, como en el troceador (Lsp.Patch.SplitToLines).
+// CRLF, LF o un CR suelto, como en el troceador (Lsp.Lineas.SplitToLines).
 // Estaba a mano en LlavesAnidadas; el analizador de impacto de
 // delphi_designer (los usos de un componente en su unidad) es el segundo
 { Si el caracter K de ATexto acaba una linea: LF, o un CR que no va delante de un

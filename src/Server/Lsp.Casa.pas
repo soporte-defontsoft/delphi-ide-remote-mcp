@@ -60,7 +60,7 @@ interface
   nuestro, y desde el 25-sep la captura viaja en la respuesta y se consume.
   Costo el 2b y el 2i de la 1.18.2 y una captura dibujada DENTRO de una raiz
   de solo lectura. Hoy la captura viaja en la respuesta o por un enlace que
-  la pide por su NOMBRE y resuelve su nombrador (Lsp.Guard.CapturaPorNombre):
+  la pide por su NOMBRE y resuelve su nombrador (Lsp.Capturas.CapturaPorNombre):
   el agente no ve nuestra casa, y delphi_fetch es para sus ficheros (David,
   12-oct-2026: "nuestros procesos internos y nuestro temp, los agentes no
   deben ni olerlo").
@@ -86,7 +86,7 @@ function ServerTempDir(const ASub: string = ''): string;
   <temporal>\captures\<carpeta del workspace>[\<agente>] -. Por workspace
   porque varios comparten el servidor: a cada uno se le entregan las suyas.
   Sin AAgente, la del workspace entera: la que reconoce quien entrega o
-  consume una captura (Lsp.Guard.EnCasaDeEntregables). }
+  consume una captura (Lsp.Capturas.EnCasaDeEntregables). }
 function CasaDeCapturas(const AAgente: string = ''): string;
 { <LOCALAPPDATA>\DelphiLspMcp\ASub: las caches del servidor que no van junto
   al exe (las configuraciones que se fabrican para el motor, los estilos por

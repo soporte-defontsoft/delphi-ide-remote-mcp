@@ -7,7 +7,7 @@ y los .sdk; la de SDKs; los sysroots). Con DCC_UnitSearchPath=$(APPDATA)\Embarca
 {$I x.profile} con nombre suelto en el .dpr, la puerta aprobaba, dcc leia el fichero del AppData del IDE
 (delphi_read lo niega) y sus errores devolvian su contenido. Ahora todo lo que el build lee porque lo
 DICE el proyecto (valores, {$I}/{$R}, el in de un .dpr, enlaces del arbol) pregunta a uno: la jaula +
-la biblioteca del IDE (Lsp.Patch.LUGARES_DEL_BUILD), este o no encendida la zona. Lo que el AGENTE
+la biblioteca del IDE (Lsp.Puertas.LUGARES_DEL_BUILD), este o no encendida la zona. Lo que el AGENTE
 nombra en una llamada (add-searchpath, add-deployfile) lo sigue juzgando la jaula, suelo incluido.
 
 Un %APPDATA% FALSO (mc.appdata_perfil) con un .profile SENUELO: nunca el real.

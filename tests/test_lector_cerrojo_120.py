@@ -8,7 +8,7 @@ Sample de RAD Studio: 112 de 153 paquetes). La primera version lo pedia desde
 DesignerLint, que corre DENTRO del cerrojo de delphi_edit: una escritura de
 OTRO agente, en otro fichero, esperaba a que acabara. Es lo que ya paso con el
 juez del orden del disenador (revisor 5 de la noche, A3). Ahora lo piden las
-tools al volver (Lsp.Patch.AvisosDelLector).
+tools al volver (Lsp.JuicioDeForms.AvisosDelLector).
 
   K1 A edita el form pesado (y su lector tarda); B, medio segundo despues,
      escribe un .txt en la misma jaula: B acaba ANTES que A (con el lector

@@ -12,7 +12,7 @@
   coordenadas del escritorio. Decision de David, 22-sep-2026.
 
   Todo EN MEMORIA: aqui no se abre ningun fichero. Los bytes los lee y los
-  escribe quien llama, por las puertas de Lsp.Patch (LeeBytes, EscribeBytes,
+  escribe quien llama, por las puertas de Lsp.Puertas (LeeBytes, EscribeBytes,
   ColocaContenido) - el recorte se releia y se reescribia en sitio sin
   ninguna (1.18.2, punto 2b). }
 

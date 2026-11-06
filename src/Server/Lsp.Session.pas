@@ -1661,7 +1661,7 @@ end;
   leer (navigating RTL/components is reading), y lo que no existe no se abre.
   Su ruta completa. Estaba copiada en los dos (revision de la 1.13.0).
   ADelMotor: un fichero al que llevo el MOTOR (AbreEn) se juzga con los
-  lugares del motor (Lsp.Patch.LUGARES_DEL_MOTOR: la jaula, el IDE y su
+  lugares del motor (Lsp.Puertas.LUGARES_DEL_MOTOR: la jaula, el IDE y su
   biblioteca), como lo que se le da a leer (LoadSourceText); el del agente
   (AcquireFor), con la jaula. Con la zona de biblioteca apagada, kind=
   declaration de una rutina de la RTL contestaba GUARD-002 mientras

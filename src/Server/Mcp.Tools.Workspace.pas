@@ -2022,7 +2022,7 @@ begin
   // vez sobre la misma carpeta se estorbasen - una borraba el zip que la otra
   // estaba escribiendo y saltaba "el proceso no tiene acceso al archivo"
   // (medido 2026-09-20). Ahora cada una arma el suyo y la ultima gana, entero.
-  EnProceso := TemporalDeSustitucion(OutZip); // EL nombrador del intermedio (Lsp.Patch)
+  EnProceso := TemporalDeSustitucion(OutZip); // EL nombrador del intermedio (Lsp.Puertas)
 
   Count := 0;
   TotalBytes := 0;

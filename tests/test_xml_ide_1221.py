@@ -4,7 +4,7 @@ antes de que el servidor lo escriba (1.22.1). La 1.22.0 lo prometia en el CHANGE
 todo escritor de un fichero de proyecto", pero el juez vivia en PatchSaveConSuSalto, el de los editores del
 .dproj, y cinco escritores guardaban sin el (revisor Opus de la 1.22.0, H5): add-project / remove-project del
 .groupproj, la mudanza que re-apunta un .dproj o un .groupproj, el .dproj de delphi_create y el create de un
-changeset. Ahora lo pregunta PatchSaveText, el escritor de abajo, por la clase de fichero (Lsp.Patch.EsXmlDelIde).
+changeset. Ahora lo pregunta PatchSaveText, el escritor de abajo, por la clase de fichero (Lsp.Extensiones.EsXmlDelIde).
 
   X0 control: un changeset crea un .deployproj bien formado (commit, y el fichero esta)
   X1 el preview de un changeset que crea un .deployproj que MSXML no carga (R&D sin escapar): CFG-142, con la linea

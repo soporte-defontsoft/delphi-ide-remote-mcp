@@ -38,7 +38,7 @@ function EscribeClaveDelIde(const AVersion, ASubclave: string;
 function BorraClaveDelIde(const AVersion, ASubclave: string): string;
 { La copia en la casa de algo del IDE antes de pisarlo o borrarlo (lo dice su
   cuerpo): la del registro, aqui, y la de un fichero del IDE, la de
-  CopiaAntesDePisar en Lsp.Patch. }
+  CopiaAntesDePisar en Lsp.Puertas. }
 function GuardaCopiaDelIde(const ANombre: string; const AGuarda: TProc<string>): string;
 
 implementation

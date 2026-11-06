@@ -72,12 +72,12 @@ uses
 
 // Las extensiones de otras tools (fuentes y designers de delphi_edit, los de
 // proyecto del IDE / delphi_create) son las listas del motor: SOURCE_EXTS,
-// DESIGNER_EXTS y PROJECT_EXTS de Lsp.Patch (aqui habia una copia; decima)
+// DESIGNER_EXTS y PROJECT_EXTS de Lsp.Extensiones (aqui habia una copia; decima)
 
 // IsAscii vive en Lsp.Codificacion (4.1 de la 1.18.0: habia otra en linea)
 
 
-// LeadingWhite vive en Lsp.Patch, con la regla de la sangria de las dos tools
+// LeadingWhite vive en Lsp.Lineas, con la regla de la sangria de las dos tools
 
 function ExtGate(const APath: string): string;
 var
@@ -121,11 +121,11 @@ begin
     CrearCarpeta(Dir);
   // Line endings are explicit: the JSON channel often delivers LF-only text,
   // so CRLF (the Windows default here) is applied unless 'lf' is asked for.
-  // el normalizador de todos (Lsp.Patch.ConSalto): un CR suelto tambien; el
+  // el normalizador de todos (Lsp.Lineas.ConSalto): un CR suelto tambien; el
   // salto pedido, por su lector (SaltoPedido, A38)
   Text := ConSalto(A.Content, SaltoPedido(A.Eol));
   EolName := NombreDelSalto(SaltoPedido(A.Eol));
-  // la codificacion en que nace, la de todo el que crea (Lsp.Patch.
+  // la codificacion en que nace, la de todo el que crea (Lsp.Deteccion.
   // EncDeFicheroNuevo, A21): un texto, UTF-8 sin BOM; un manifiesto del IDE,
   // con el
   var Enc := EncDeFicheroNuevo(A.Path);
@@ -144,7 +144,7 @@ begin
   // (medido 2026-09-21, bateria test_round40).
   Result := MsgFmt(SK_TEXT_CREADO_ENCODING_FINALES_FMT,
     [MaskDriveText('', A.Path),
-     EtiquetaDeCodificacion(EncKindOf(Enc), IsAscii(Text)), // LA etiqueta (Lsp.Patch, A41)
+     EtiquetaDeCodificacion(EncKindOf(Enc), IsAscii(Text)), // LA etiqueta (Lsp.Deteccion, A41)
      EolName, Length(TFile.ReadAllBytes(A.Path))]);
 end;
 
@@ -162,7 +162,7 @@ begin
     Exit;
   if not TFile.Exists(A.Path) then
     Exit(NoEsFichero(A.Path, MsgFmt(SR_TEXT_NO_EXISTE_CREARLO_FMT, [A.Path])));
-  // La regla "esto no es texto" es LooksBinaryBytes (Lsp.Patch), la misma de
+  // La regla "esto no es texto" es LooksBinaryBytes (Lsp.Deteccion), la misma de
   // delphi_read: aqui habia una copia con otra ventana y sin UTF-16.
   if LooksBinaryBytes(TFile.ReadAllBytes(A.Path)) then
     Exit(MsgFmt(SR_TEXT_PARECE_BINARIO_FMT, [TPath.GetFileName(A.Path)]));
@@ -174,8 +174,8 @@ begin
 
   Text := PatchLoadText(A.Path, EncNm);
   var Antes := Text; // para saber si la edicion cambia algo
-  Eol := SaltoDominante(Text); // el de todos (Lsp.Patch)
-  Lines := LineasDelTexto(Text); // sin la fantasma del salto final (Lsp.Patch)
+  Eol := SaltoDominante(Text); // el de todos (Lsp.Lineas)
+  Lines := LineasDelTexto(Text); // sin la fantasma del salto final (Lsp.Lineas)
   // Un ancla vacia o de solo blancos: la regla de delphi_edit (EDIT-060). Aqui
   // casaba con TODAS las lineas en blanco (un old "   " llegaba desde el
   // changeset) y la gemela la negaba. Solo vale para borrar una linea EN
@@ -216,7 +216,7 @@ begin
   var Cuantas := Fin - Target + 1;
 
   // Replacement, con LA regla de la sangria que el ancla dejo fuera, la de
-  // las dos tools (Lsp.Patch.SangraComoLaLinea: aqui vivia una copia propia,
+  // las dos tools (Lsp.Lineas.SangraComoLaLinea: aqui vivia una copia propia,
   // distinta de la de delphi_edit - 6-oct-2026).
   if A.DeleteLine then
     SetLength(NewLines, 0)  // la linea se va entera: ni una vacia queda

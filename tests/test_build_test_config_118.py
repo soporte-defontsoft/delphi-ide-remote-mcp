@@ -1,10 +1,10 @@
 # -*- coding: utf-8 -*-
 """Paridad de validacion de delphi_test con delphi_build (revisor 1.18.1, zona jaula).
 
-delphi_build sanea config/platform en la puerta (BuildArgDenied, Lsp.Guard.pas):
+delphi_build sanea config/platform en la puerta (BuildArgDenied, Lsp.JuecesDeArgumentos.pas):
 platform por la whitelist exacta (CanonicalPlatform) y config por un charset que
 no admite metacaracteres. delphi_test NO pasa por esa puerta (BuildArgDenied solo
-se aplica a delphi_build, Lsp.Guard.pas ~2161): su unico control de config es
+se aplica a delphi_build, Lsp.JuecesDeArgumentos.pas): su unico control de config es
 ConfigDesconocida (Lsp.Dproj.pas), que no restringe nada cuando el .dproj no
 declara <BuildConfiguration> (la condicion es "Length(Configs)>0 and not
 HasConfig(...)"). Y config termina sin entrecomillar en la linea de msbuild

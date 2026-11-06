@@ -1240,7 +1240,7 @@ begin
 end;
 
 { El derivado que un proceso dejo en ALocal (nuestra temporal), en ADestino
-  por EL escritor de un producto (Lsp.Patch.ColocaProducto): la puerta en el
+  por EL escritor de un producto (Lsp.Puertas.ColocaProducto): la puerta en el
   momento de escribir, la copia sellada de lo que habia y el renombre, que
   rompe un hardlink en vez de escribir a traves de el. El conversor
   (TFileStream fmCreate) y brcc32 (-fo) abrian el destino ellos mismos: lo

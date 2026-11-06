@@ -178,7 +178,7 @@ var
   Faltan: Integer;
 begin
   try
-    Lista := ProyectosDeGrupo(AGroup); // EL lector de grupos (Lsp.ProjectUnits)
+    Lista := ProyectosDeGrupo(AGroup); // EL lector de grupos (Lsp.Mudanzas)
   except
     on E: Exception do
       Exit(MsgEnvuelve(SR_CONFIG_GROUP_READ_FMT, E.Message, [AGroup, E.Message]));
@@ -1287,7 +1287,7 @@ const
 
 function DeployProjPath(const ADproj: string): string;
 begin
-  Result := ManifiestoDe(ADproj); // EL compositor (Lsp.Patch)
+  Result := ManifiestoDe(ADproj); // EL compositor (Lsp.Extensiones)
 end;
 
 { La carpeta de la entrada en el .dproj, en la forma del Deployment Manager

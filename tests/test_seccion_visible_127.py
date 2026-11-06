@@ -3,7 +3,7 @@
 paisaje de la 1.27).
 
 La declaracion de una rutina visible va delante del implementation; Lsp.Patch lo buscaba como una linea que
-solo dice eso, y FinDeSeccion (Lsp.ProjectUnits), la regla de adduses y del renombrado, lo toma la primera vez
+solo dice eso, y FinDeSeccion (Lsp.ClausulaUses), la regla de adduses y del renombrado, lo toma la primera vez
 que la palabra sale entera en el codigo, este donde este en su linea.
 
   V1 "implementation uses System.SysUtils;" en una linea: la declaracion en el interface y el cuerpo

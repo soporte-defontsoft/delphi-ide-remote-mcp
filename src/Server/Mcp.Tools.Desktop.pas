@@ -588,7 +588,7 @@ begin
     else if (Cmd <> 'status') and (Remota <> '') then
     begin
       // Lo mismo que su gemela de Windows, y por la MISMA funcion: donde cae
-      // la captura y como se llama lo decide CaptureTarget (Lsp.Guard), con
+      // la captura y como se llama lo decide CaptureTarget (Lsp.Capturas), con
       // el formato que trae la captura remota. Se resuelve ANTES de bajar
       // nada: un "out" con la extension equivocada no merece el viaje.
       var EnLaCasa: Boolean;

@@ -863,7 +863,7 @@ begin
   // the last one could land inside that one's conditional block
   if RunAt <> -1 then
   begin
-    // la sangria, con el lector de la casa (Lsp.Patch.LeadingWhite):
+    // la sangria, con el lector de la casa (Lsp.Lineas.LeadingWhite):
     // habia cinco copias a mano con TrimLeft, que se lleva tambien los
     // caracteres de control (#0..#31) a la linea nueva (1.15.0)
     Indent := LeadingWhite(Lines[RunAt]);

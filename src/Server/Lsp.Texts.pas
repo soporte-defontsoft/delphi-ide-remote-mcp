@@ -2803,7 +2803,7 @@ const
     'and then it is deployed and updated by itself), or pass project= ' +
     'with the .dproj of the node deployed via delphi_build target=Deploy.';
   { UNA descripcion para el "out" de toda la familia de capturas, porque es
-    UNA regla (CaptureTarget, Lsp.Guard). Va aqui arriba porque una constante
+    UNA regla (CaptureTarget, Lsp.Capturas). Va aqui arriba porque una constante
     se declara antes de su primer uso. }
   SP_CAPTURE_OUT_RULE =
     ': a FOLDER (existing, or ending in \ - the server names the file) ' +
@@ -3120,7 +3120,7 @@ const
     'key';
 
   { El "out" de TODA la familia de capturas (delphi_desktop, delphi_adb_linux,
-    delphi_adb): una regla y un texto, en CaptureTarget (Lsp.Guard). El
+    delphi_adb): una regla y un texto, en CaptureTarget (Lsp.Capturas). El
     formato lo dice la CAPTURA, no una constante: el dia que un nodo devuelva
     otra cosa que PNG, esto sigue siendo verdad sin tocarlo. }
   { Una captura que no es un PNG, sin out=: en la casa del servidor solo vive
@@ -4170,7 +4170,7 @@ const
     'ANYTHING: moving it to the trash failed (%s). The contents are still ' +
     'INTACT in place.';
 
-  { ColocaProducto (Lsp.Patch) mueve y borra el producto que coloca: solo uno
+  { ColocaProducto (Lsp.Puertas) mueve y borra el producto que coloca: solo uno
     NUESTRO - de la temporal del servidor, o ya en la carpeta del destino,
     la que aprueba la puerta. Otro es un fallo de quien llama (revisor de P4,
     9-oct-2026). }
@@ -6989,7 +6989,7 @@ const
   { Lo que el build LEE por lo que el proyecto escribe (el icono, el
     manifiesto, un search path, un .rc, un DeployFile, un keystore...): cada
     valor de cada propiedad y cada Include de cada item, por la puerta de
-    leer con los lugares del build (Lsp.Patch.LUGARES_DEL_BUILD: la jaula y la
+    leer con los lugares del build (Lsp.Puertas.LUGARES_DEL_BUILD: la jaula y la
     biblioteca, sin los lugares del IDE desde A9 de la 1.27;
     Lsp.BuildRunner.LecturasDelBuildDenegadas, 1.21.2). Se juzga la ruta,
     exista o no: decir "existe" de una de fuera
@@ -7097,7 +7097,7 @@ const
     'thing.)';
 
   // PKG-002 (el zip que no se pudo colocar) retirado el 9-oct-2026: lo
-  // coloca ColocaProducto (Lsp.Patch), que dice la causa por la regla de
+  // coloca ColocaProducto (Lsp.Puertas), que dice la causa por la regla de
   // todas (MotivoDelSistema) o la negativa de la puerta
 
   // El otro lado de lo mismo: reintento y SALIO. Un build que de pronto tarda
@@ -7235,7 +7235,7 @@ const
     que salto no se puede cargar a este fichero (la raiz que no ve, una
     excepcion del codigo de un componente, las partes de una clase del
     proyecto; 1.20.2). El primer %s, por que se le preguntaba
-    (Lsp.Patch.PorQueAlLector: las lineas, el frame o las dos; con un frame y
+    (Lsp.JuicioDeForms.PorQueAlLector: las lineas, el frame o las dos; con un frame y
     ninguna linea decia '0 line(s) hold a property'); el segundo, por que no
     contesto. Va como nota: el lint no dice CLEAN de lo que no sabe (DSGN-061
     de la 1.20). }
@@ -8130,7 +8130,7 @@ const
 
   // PAS-031 (un nombre de perfil CON punto) retirado el 9-oct-2026:
   // set-profile y remove-profile contestan PAS-015, la regla de la puerta
-  // (Lsp.Guard.BadProfileName)
+  // (Lsp.JuecesDeArgumentos.BadProfileName)
 
   SN_PASERVER_PROFILE_REMOVED_FMT =
     '[PAS-032] DELETED the connection profile "%s". NOTE: profiles live ' +
@@ -8184,7 +8184,7 @@ const
   // lee como fichero LOCAL, relativo a la carpeta del servidor (medido
   // 30-oct-2026 contra el PAServer local; V217 de la 1.23.1). El texto no lo
   // cuenta: al agente no se le nombra la casa del servidor. La regla, en
-  // Lsp.Guard (NombreRompeCampoDePaclient).
+  // Lsp.JuecesDeArgumentos (NombreRompeCampoDePaclient).
   SR_PACLIENT_NOMBRE_FMT =
     '[PAS-071 DENIED] The project name "%s" cannot travel to a PAServer ' +
     'target: its name goes into the fields of the transfer, and only letters, ' +
@@ -8673,7 +8673,7 @@ const
   // CHSET-033 (un fichero de Delphi no se movia ni se borraba por changeset:
   // delphi_move y delphi_delete lo hacian entero; B de la 1.19.2) se retiro en
   // la 1.23 (V19): las tres mueven y borran como el operador y dan la misma
-  // nota (Lsp.ProjectUnits.NotaDeMudanza)
+  // nota (Lsp.Mudanzas.NotaDeMudanza)
 
   SN_CHANGESET_STATUS_NOTE =
     '[CHSET-019] The ids are shown cut short on purpose: changesets can ' +
@@ -9096,7 +9096,8 @@ const
     'delphi_designer already READ it on the fly without converting it.';
 
   { La regla de ida y vuelta (David, 9-oct-2026), en los escritores
-    (Lsp.Patch.ReescrituraDenegada: los dos de Lsp.Patch y el del vault): los
+    (Lsp.Puertas.ReescrituraDenegada: uno en Lsp.Patch, otro en Lsp.Puertas y
+    el del vault): los
     bytes del fichero no vuelven iguales al leerlos y escribirlos en su
     codificacion. Era "BOM de UTF-8 con el cuerpo roto", y solo en la entrada
     de delphi_edit. %s = el fichero, %s = su codificacion. }
@@ -10002,7 +10003,7 @@ const
     ' [PAS-067] Its seat in the IDE (the registry key the IDE lists it ' +
     'from) was exported first to %s: opening that .reg puts it back.';
 
-  { la puerta del registro del IDE (Lsp.Patch.EscribeClaveDelIde y
+  { la puerta del registro del IDE (Lsp.RegistroDelIde.EscribeClaveDelIde y
     BorraClaveDelIde): sin copia no se toca. %s = la clave, %s = el motivo }
   SR_IDE_CLAVE_SIN_COPIA_FMT =
     '[PAS-068 INTERNAL] Nothing was changed in the IDE''s registry: I could ' +
@@ -10393,7 +10394,7 @@ const
   { Lo que el LECTOR del IDE no carga de un form escrito, cuando las tablas
     callan (una propiedad que la clase guarda por codigo, un frame en linea):
     lo mismo que DSGN-149 de set, como aviso de una escritura (DSGN-061 de la
-    1.20). %s = el form; %s = por que se le pregunto (Lsp.Patch.PorQueAlLector);
+    1.20). %s = el form; %s = por que se le pregunto (Lsp.JuicioDeForms.PorQueAlLector);
     debajo, lo que dijo el lector con su linea. }
   SN_EDIT_AVISO_LECTOR_FMT =
     '[EDIT-127] *** DESIGNER WARNING: the IDE''s own form reader does NOT ' +
@@ -10404,12 +10405,12 @@ const
     renderizador, un ancestro que no ve) o lo que salto no se puede situar en
     el form: lo que el lint dice con DSGN-154. Se callaba, y un agente leia el
     silencio como que el form carga (A3 de la 1.27). %s = el form; %s = por que
-    se le preguntaba (Lsp.Patch.PorQueAlLector); %s = por que no contesto. }
+    se le preguntaba (Lsp.JuicioDeForms.PorQueAlLector); %s = por que no contesto. }
   SN_EDIT_LECTOR_SIN_CONFIRMAR_FMT =
     '[EDIT-131] NOTE: it is NOT confirmed that the IDE loads %s as written ' +
     '(delphi_designer lint asks again): %s, and either it could not be asked ' +
     'or what it skipped cannot be pinned on this file: %s';
-  { Por que se le pregunta al LECTOR por un form (Lsp.Patch.PorQueAlLector, EL
+  { Por que se le pregunta al LECTOR por un form (Lsp.JuicioDeForms.PorQueAlLector, EL
     que lo compone para DSGN-154, EDIT-127 y EDIT-131): las lineas que la tabla
     no juzga, un frame en linea, o las dos. Con un frame en linea y ninguna
     linea, DSGN-154 decia '0 line(s) hold a property' (medido el 4-nov-2026). }
@@ -12076,7 +12077,7 @@ const
   // Textos que estaban en linea en Lsp.Patch.pas (el resto, 27-sep-2026)
   SF_EDIT_METRICAS_FMT =
     'bytes=%d breaks=%d CRLF=%d loneLF=%d accents=%d corruption(U+FFFD)=%d';
-  // los contadores cuando no hay nada que mirar (Lsp.Patch.Auditoria): sin
+  // los contadores cuando no hay nada que mirar (Lsp.Deteccion.Auditoria): sin
   // U+FFFD, sin CR suelto y un solo tipo de salto; los acentos se quedan,
   // dicen si la codificacion importa (revisor de tokens, 4-oct-2026)
   SF_EDIT_AUDITORIA_LIMPIA_FMT =
@@ -12381,7 +12382,7 @@ const
 
   SF_CFG_HAZARD_IMPORT_ILEGIBLE_FMT =
     'an <Import> that cannot be read to be checked (%s)';
-  { La puerta de leer (Lsp.Patch.LeeTexto): un Import que no es del IDE y
+  { La puerta de leer (Lsp.Puertas.LeeTexto): un Import que no es del IDE y
     cae FUERA de las raices no se lee para escanearlo - se leia, y limpio, el
     build lo cargaba de alli (decisions/puertas-diseno-2026-10-09). }
   SF_CFG_HAZARD_IMPORT_FUERA_FMT =

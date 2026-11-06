@@ -222,7 +222,7 @@ function FlotanteFmx(N: Integer): string;
   con la unidad en UTF-8 sin BOM el campo salia en la RTTI del exe leido en
   ANSI (otros bytes que su componente); las dos diciendo OK. Devuelve '' o
   la negativa (DSGN-111) con el fichero que no puede. APasEnc es la
-  codificacion en que se ESCRIBIRA la unidad (Lsp.Patch.EncAlEscribir: una
+  codificacion en que se ESCRIBIRA la unidad (Lsp.Puertas.EncAlEscribir: una
   unidad ASCII no tiene ninguna y la elige el nombre). Las codificaciones,
   con los nombres de EncName. }
 function NombreQueElFicheroNoLee(const ANombre, ADfm, ADfmEnc, APas, APasEnc: string): string;
@@ -237,7 +237,7 @@ function NombreQueElFicheroNoLee(const ANombre, ADfm, ADfmEnc, APas, APasEnc: st
   lista de lineas unida con CRLF: un .fmx de solo CR se juzgaba con otros
   bytes (revisor 2 de la noche, B-2/B-4). Un texto que no cabe en AEnc no se
   juzga aqui (eso lo dice su escritor). Lo preguntan el lint de un form
-  (Lsp.Patch.LintDeForm: el de delphi_designer, el que sigue a delphi_edit y
+  (Lsp.JuicioDeForms.LintDeForm: el de delphi_designer, el que sigue a delphi_edit y
   el que sigue a cada escritura del disenador) y el guardado de un form o un
   estilo (TStyleDoc.Guarda), que con un resultado que no se lee no escribe. }
 function ParserDeForm(const ATexto, AEnc: string; out ALinea: Integer;

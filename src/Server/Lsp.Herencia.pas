@@ -88,7 +88,7 @@ function MotorPara(const AFile: string): TLspClient;
 { El motor VEDADO en ESTE hilo mientras dure: MotorPara da nil, como sin
   ajustes de proyecto, y la cadena para en una base del usuario de otra
   unidad. Lo pide el lint que corre tras escribir con el cerrojo de escritura
-  cogido (Lsp.Patch.LintDeForm): arrancar o preguntar al motor ahi paraba
+  cogido (Lsp.JuicioDeForms.LintDeForm): arrancar o preguntar al motor ahi paraba
   TODAS las escrituras del servidor (V173a de la 1.23.1, medido). Un juez que
   se anada a ese lint la cumple sin acordarse; quien necesita el motor para
   decidir lo que escribe (add-unit, un rename) no esta vedado. En pares, con

@@ -119,7 +119,7 @@ try:
     # nodo corriendo EN LOCAL (delphi_desktop sin perfil); desde 1.0.16 el
     # escritorio se alcanza SOLO por un PAServer y un perfil (decision de
     # David, 21-sep), asi que sin PAServer no hay captura que medir en esta
-    # bateria. La regla vive en CaptureTarget (Lsp.Guard), la misma que ya
+    # bateria. La regla vive en CaptureTarget (Lsp.Capturas), la misma que ya
     # mide T2 con delphi_adb; y el defecto de delphi_desktop se midio EN
     # VIVO el 2026-09-22 contra windows-local y windows-remoto: las
     # capturas cayeron en __delphi-temp\<agente>\desktop del workspace.

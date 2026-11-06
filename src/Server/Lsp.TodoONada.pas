@@ -10,7 +10,7 @@ unit Lsp.TodoONada;
   movida sin cambiar una linea. Va ENCIMA de la jaula: para deshacer
   pregunta a las puertas de escritura (EscrituraDenegada) y usa los
   escritores de Lsp.Guard y, para devolver unos bytes, el atomico de la
-  jaula (Lsp.Patch.EscribeBytes); nada de Lsp.Guard la usa a ella. }
+  jaula (Lsp.Puertas.EscribeBytes); nada de Lsp.Guard la usa a ella. }
 
 interface
 

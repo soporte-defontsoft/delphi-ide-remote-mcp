@@ -445,7 +445,7 @@ function LeeRc(const ATexto: string): TLecturaRc;
 { LA segunda barrera sobre un .rc: cada fichero que nombra (LeeRc: los
   recursos, los #include y RCINCLUDE, y lo que parece una ruta), resuelto
   contra la carpeta del .rc, por la puerta de leer con ALugares (la jaula; el
-  build, Lsp.Patch.LUGARES_DEL_BUILD: lo que lee porque lo dice el proyecto),
+  build, Lsp.Puertas.LUGARES_DEL_BUILD: lo que lee porque lo dice el proyecto),
   siguiendo los #include hasta 8 niveles. ACarpetaDentro, si va: ademas,
   DENTRO de esa carpeta por las rutas reales (STYLE-052: delphi_styles build
   compila una COPIA de la carpeta de estilos y fuera de ella no hay nada).
@@ -594,7 +594,7 @@ begin
   // recuerda: Guarda lo rechaza, que guardar texto sobre un binario sin decirlo
   // es cambiarle el formato a escondidas; to-text lo hace a la vista.
   FBinaryOnDisk := IsBinaryDesignerFile(FPath);
-  // por EL lector de designers (Lsp.Patch.TextoDeDesigner): binario o texto
+  // por EL lector de designers (Lsp.Puertas.TextoDeDesigner): binario o texto
   Err := TextoDeDesigner(FPath, Text, FEnc);
   if Err <> '' then
     raise Exception.Create(Err);
@@ -820,7 +820,7 @@ var
 begin
   Rangos := RangosDePropiedad(AObj, Clasificadas, AProp);
   AWasThere := Length(Rangos) > 0;
-  // la sangria de la casa de esa linea (Lsp.Patch); la del nivel si es nueva
+  // la sangria de la casa de esa linea (Lsp.Lineas); la del nivel si es nueva
   if AWasThere then
     Sangria := LeadingWhite(FLines[Rangos[High(Rangos)].Ini])
   else

@@ -9,7 +9,7 @@ LOCAL, relativo a la carpeta de trabajo de paclient (la CASA del servidor): una 
 30-oct contra el PAServer local con un exe inofensivo; aqui con el stub de paclient, que imita su
 reparto por ',' y ';').
 
-El arreglo: UN juez en Lsp.Guard (NombreDeProyectoParaPaclientDenegado, PAS-071) que las puertas
+El arreglo: UN juez en Lsp.JuecesDeArgumentos (NombreDeProyectoParaPaclientDenegado, PAS-071) que las puertas
 llaman -remote-run, kill y output por la de Mcp.Tools.PAServer (EjecucionRemotaDenegada), y el
 segundo cerrojo dentro de Lsp.RemoteRun-. Un nombre con ',' ';' '"' o separador de ruta: PAS-071,
 y nada viaja a paclient.

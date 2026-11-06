@@ -440,7 +440,7 @@ function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: 
 function ColoresSinAlfaDeForm(const APath, ATexto, AEnc, AAntes: string;
   out AColores: TArray<TColorSinAlfa>; ADesde: UInt64): Boolean;
 { ...y su nota (DSGN-176 y una linea por color), o []: la del lint y la de
-  tras una edicion (Lsp.Patch.LintDeForm, con el lector) }
+  tras una edicion (Lsp.JuicioDeForms.LintDeForm, con el lector) }
 function NotaDeColoresSinAlfa(const APath, ATexto, AEnc, AAntes: string; ADesde: UInt64): TArray<string>;
 
 { CON el cerrojo, justo antes de escribir lo que juzgo el ayudante: '' si

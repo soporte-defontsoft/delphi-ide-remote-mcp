@@ -305,7 +305,7 @@ def ajustes_fabricados(dpr, appdata=None):
 
 def planta_intermedios(carpeta):
     """Dos intermedios del escritor atomico ('.<nombre>.<8 hex>' + su extension,
-    Lsp.Patch.TemporalDeSustitucion) en carpeta: uno de hace dos horas (un
+    Lsp.Puertas.TemporalDeSustitucion) en carpeta: uno de hace dos horas (un
     escritor que murio a medias: la purga de la casa lo quita) y uno de ahora
     (uno vivo: se queda). (viejo, fresco). V17 de la 1.23: las purgas de las
     tablas del disenador y de los ajustes del motor no los veian."""

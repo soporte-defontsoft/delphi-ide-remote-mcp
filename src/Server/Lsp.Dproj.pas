@@ -749,7 +749,7 @@ function ConfigDelBuild(const AInfo: TDprojInfo; const ARaw: string; out AConfig
 
 { El nombre de una configuracion que puede llegar a la linea de msbuild del
   build (/p:Config=): letras, digitos, espacio, ".", "_" y "-". UNA
-  definicion para la puerta (Lsp.Guard.BuildArgDenied) y el fondo
+  definicion para la puerta (Lsp.JuecesDeArgumentos.BuildArgDenied) y el fondo
   (ConfigDelBuild); '' no es un nombre malo (es "la de por defecto"). }
 { Los cuatro targets de delphi_build, con SU nombre: la puerta los admite
   (BuildArgDenied) y el build elige entre ellos el que va a /t: (UNA lista,
@@ -778,7 +778,7 @@ function PlataformaNoDeclarada(const AInfo: TDprojInfo; const APlatform: string;
 function PaclientPlatformsList: string;
 { ...y LA de la lista que es AValor, con su grafia (Linux64), o '' si no es
   ninguna: sin mayusculas y ORDINAL (SameText: solo pliega ASCII). La puerta
-  (Lsp.Guard.PAServerArgDenied) la juzgaba con MatchText - el locale, que da por
+  (Lsp.JuecesDeArgumentos.PAServerArgDenied) la juzgaba con MatchText - el locale, que da por
   igual 'Linu' + U+02E3 + '64', la x volada - y add-profile la buscaba con
   SameText: la puerta la aprobaba, add-profile no la encontraba y el perfil
   nacia con la plataforma por defecto (C4 del cierre de la 1.28, medido: de 6 a

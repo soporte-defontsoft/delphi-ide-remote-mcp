@@ -278,14 +278,13 @@ uses
   Lsp.Preproceso,
   Lsp.PascalDecl,
   Lsp.Pascal,           // CodigoPascal: el RTLVersion de System.pas
-  Lsp.Patch,            // PatchLoadText: el fuente con su codificacion real
   Lsp.Guard,            // CrearCarpeta
   Lsp.ConfigFabricator, // DEFAULT_NAMESPACES
   Lsp.NetDrives,        // NotaAlLog
   Lsp.Texts,
-  Lsp.Casa,             // ServerCacheDir (EscribeEnCasaDelServidor vive en Lsp.Patch)
+  Lsp.Casa,             // ServerCacheDir (EscribeEnCasaDelServidor vive en Lsp.Puertas)
   Lsp.Rutas,            // RutaDesde: EL resolutor de una ruta leida de un fichero
-  Lsp.Puertas;
+  Lsp.Puertas;          // PatchLoadText: el fuente con su codificacion real
 
 var
   // el servidor se cierra: el generador lo mira entre unidad y unidad

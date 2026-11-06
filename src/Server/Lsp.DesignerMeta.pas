@@ -335,7 +335,7 @@ function LintConTablaYSinJuez(M: TMetaTable; const AIsFmx: Boolean;
   set y el lint (H8 de la 1.19.2). AConMotor False: sin el motor, la cadena
   para en una base del usuario de otra unidad (quien la pide tras cada
   escritura no espera a un motor). El lint que corre con el cerrojo de escribir
-  cogido lo veda entero, se pida o no (Lsp.Patch.LintDeForm: VedaElMotor; V173a
+  cogido lo veda entero, se pida o no (Lsp.JuicioDeForms.LintDeForm: VedaElMotor; V173a
   de la 1.23.1, dos de sus jueces no pasaban el False). Nunca lanza. }
 function ClaseDeJuezDeRaiz(M: TMetaTable; const APas, APasTexto, AClase: string;
   out APropias: TArray<TPropiedadDelUsuario>; AConMotor: Boolean = True): string;
@@ -439,7 +439,6 @@ uses
   Lsp.Discovery,       // DiscoverRadStudio: el Delphi activo
   Lsp.DesignerMetaGen, // la tabla de ese Delphi, sacada de su fuente
   Lsp.DesignerBin,
-  Lsp.Patch, // LeeTexto: la puerta de leer
   Lsp.Guard, // ReadPathDenied: la puerta de leer el .pas del form
   Lsp.PascalDecl, // EL lector de clases: la raiz y sus bases
   Lsp.Pascal,
@@ -448,7 +447,7 @@ uses
   Lsp.Args,
   Lsp.Listas, // ExtractoDeLinea: la cita de una linea en una respuesta
   Lsp.Lineas,
-  Lsp.Puertas;
+  Lsp.Puertas; // LeeTexto: la puerta de leer
 
 type
   TJubilada = record

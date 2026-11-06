@@ -8,7 +8,7 @@ con la base del usuario en otra unidad, arrancaba el motor (Lsp.Herencia):
 un textedit de OTRO fichero esperaba (medido contra 13f78f3: 1,86 s de los 2,60
 del edit, con el motor frio). La regla "con el cerrojo, sin motor" vivia en
 cada llamador (AConMotor) y dos jueces del lint no la pasaban; ahora el lint,
-con el cerrojo cogido, veda el motor entero (Lsp.Patch.LintDeForm:
+con el cerrojo cogido, veda el motor entero (Lsp.JuicioDeForms.LintDeForm:
 VedaElMotor). Quien necesita el motor para decidir lo que escribe (add-unit,
 el rename de una unidad) no esta vedado: test_raiz_de_diseno_1202.
 

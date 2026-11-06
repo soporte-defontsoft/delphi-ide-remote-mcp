@@ -242,7 +242,7 @@ type
     class function MotorPierdeLaRuta(const APath: string): Boolean;
     { El texto de un fuente tal como se le da al motor y lo leen references y
       search, por EL detector. Pregunta ELLA a la puerta, con los lugares del
-      motor (Lsp.Patch.LUGARES_DEL_MOTOR: la jaula, el IDE y su biblioteca):
+      motor (Lsp.Puertas.LUGARES_DEL_MOTOR: la jaula, el IDE y su biblioteca):
       cargaba sin preguntar lo que le pasasen, tambien una ruta que daba el
       MOTOR (references, la definicion de un candidato: medida M1). Fuera de
       ahi lanza la negativa. Quien recorre carpetas pregunta ADEMAS la de la
@@ -1234,7 +1234,7 @@ begin
   // delphi_read, y SOLO el: el 20-sep se le delego el caso sin BOM y aqui
   // se quedaron tres ramas propias para los BOM (UTF-8 y UTF-16), asi que
   // search leia un .dfm en UTF-16 y delphi_read no (24-sep-2026). Ahora los
-  // BOM los conoce Lsp.Patch.DetectEnc y aqui no se decide nada (tampoco
+  // BOM los conoce Lsp.Deteccion.DetectEnc y aqui no se decide nada (tampoco
   // que un form de texto sin BOM es ANSI: se le dice que es un form).
   Result := DecodeSourceBytes(Bytes, EsRutaDeDesigner(AFilePath));
 end;

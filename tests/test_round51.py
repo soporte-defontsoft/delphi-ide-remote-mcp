@@ -12,7 +12,7 @@ El paisaje: los otros lectores UTF-8 estrictos eran los del vault. Una nota
 guardada en CP1252 por un editor viejo no se podia ni leer.
 
 La regla: nadie decodifica a mano. El lector de la casa es
-Lsp.Patch.DecodeSourceBytes / PatchLoadText (BOM, UTF-8 estricto, y CP1252 solo
+Lsp.Deteccion.DecodeSourceBytes / Lsp.Puertas.PatchLoadText (BOM, UTF-8 estricto, y CP1252 solo
 cuando algun byte alto no forma secuencia valida).
 """
 import os

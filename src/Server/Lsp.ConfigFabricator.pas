@@ -136,7 +136,7 @@ uses
   System.RegularExpressions,
   Lsp.ProjectUnits, // las units que nombra el .dpr
   Lsp.Puertas,  // LeeTexto: la puerta de leer
-  Lsp.Casa,   // la casa del servidor (EscribeEnCasaDelServidor vive en Lsp.Patch)
+  Lsp.Casa,   // la casa del servidor (EscribeEnCasaDelServidor vive en Lsp.Puertas)
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.Rutas;  // RutaDesde: EL resolutor de una ruta leida de un fichero
 

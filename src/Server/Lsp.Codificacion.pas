@@ -20,7 +20,7 @@ uses
   System.SysUtils; // Exception: ECaracterNoCabe es una de ellas
 
 { Las clases de codificacion de un fuente: las decide EL detector
-  (Lsp.Patch.DetectEnc) y las leen y escriben sus dos inversas, DecodeBytes y
+  (Lsp.Deteccion.DetectEnc) y las leen y escriben sus dos inversas, DecodeBytes y
   EncodeText (aqui abajo). UTF-16 (LE y BE, siempre con BOM: es como lo
   escribe el IDE cuando se elige ese formato al ver un .dfm como texto) entro
   el 24-sep-2026. UTF-32 (LE y BE, con BOM) el 9-oct-2026: el IDE deja
@@ -44,7 +44,7 @@ function BomUtf8En(const B: TArray<Byte>; AIndice: Integer): Boolean;
 { El BOM con el que EMPIEZA B, si lleva uno de los que conoce la casa: el de
   UTF-8 (ekUtf8Bom), el de UTF-16 o el de UTF-32, little o big endian. Sin
   BOM, False. Lo
-  preguntan EL detector (Lsp.Patch.DetectEnc) y el lector de settings.ini
+  preguntan EL detector (Lsp.Deteccion.DetectEnc) y el lector de settings.ini
   (Lsp.Settings, que no puede usar Patch): la pregunta de FE FF estaba
   escrita a mano en los dos (9.2 de la 1.18.0). }
 function KindDeBom(const B: TArray<Byte>; out AKind: TEncKind): Boolean;
@@ -54,14 +54,14 @@ function KindDeBom(const B: TArray<Byte>; out AKind: TEncKind): Boolean;
 function IsAscii(const S: string): Boolean;
 { Si algun byte de B pasa de 127 (un BOM tambien: todos llevan uno). Sin
   ninguno, el fichero no tiene codificacion que respetar: lo preguntan EL
-  detector (Lsp.Patch.DetectEnc) y el escritor que elige la del primer
-  caracter no ASCII (Lsp.Patch.EncAlEscribir). }
+  detector (Lsp.Deteccion.DetectEnc) y el escritor que elige la del primer
+  caracter no ASCII (Lsp.Puertas.EncAlEscribir). }
 function HayByteAlto(const B: TArray<Byte>): Boolean;
 { Si S cabe entero en la pagina ANSI: el codec lo escribe y, al leerlo, da
   el mismo texto (Windows APROXIMA lo que no cabe: una Omega sale 'O' en
   1252 y una e acentuada 'e' en 1251, medido el 9-oct-2026; la vuelta lo
   delata). Lo pregunta el escritor que elige la codificacion de un fuente
-  que no tenia ninguna (Lsp.Patch.EncAlEscribir: el primer caracter no
+  que no tenia ninguna (Lsp.Puertas.EncAlEscribir: el primer caracter no
   ASCII). to-binary ya no: da los bytes de disco al parser del IDE
   (DesignerAFlujo, tal cual; M2 del punto 4 de la 1.18.2). }
 function CabeEnAnsi(const S: string): Boolean;
@@ -117,7 +117,7 @@ function PaginaDeCharset(const AEtiqueta: string): Integer;
   UTF-8 con BOM y el cuerpo roto, un UTF-16 de longitud impar - cualquier
   byte que su codificacion no guarda - da False: reescribir el fichero
   cambiaria bytes que nadie toco. La pregunta de los escritores es
-  Lsp.Patch.ReescrituraDenegada, que la compone con EL detector (David,
+  Lsp.Puertas.ReescrituraDenegada, que la compone con EL detector (David,
   9-oct-2026: la regla de ida y vuelta, en el escritor); delphi_read la
   pregunta para avisar (READ-007). }
 function BytesVuelvenIgual(const B: TArray<Byte>; K: TEncKind): Boolean;
@@ -147,7 +147,7 @@ function PreambleLen(K: TEncKind): Integer;
   la de RFC 3629 (sin formas largas, sin sustitutos, nada por encima de
   U+10FFFF). Lo contesta el juez de la RTL, TEncoding.UTF8.IsBufferValid: el
   mismo con el que TFile.ReadAllText elige entre UTF-8 y ANSI. Lo pregunta
-  EL detector (Lsp.Patch.DetectEnc), para decidir: UTF-8 valido entero es
+  EL detector (Lsp.Deteccion.DetectEnc), para decidir: UTF-8 valido entero es
   UTF-8, cualquier otra cosa es ANSI - como el IDE, que detecta un UTF-8 sin
   BOM (medido el 9-oct-2026), y como dcc. Una regla propia ("UTF-8 danado":
   secuencias buenas junto a bytes que no lo son) contradecia a los dos: una
@@ -158,7 +158,7 @@ function ValidUtf8(const B: TArray<Byte>; AOffset: Integer): Boolean;
 { El byte ANSI de un caracter que la pagina escribe en UN byte, -1 si no lo
   hay (no cabe, o en una pagina de varios bytes va en dos): el mismo codec
   que EncodeText, leido y escrito byte a byte al fijar la pagina. Lo
-  pregunta el que busca mojibake (Lsp.Patch.MojibakeLines), que para
+  pregunta el que busca mojibake (Lsp.Deteccion.MojibakeLines), que para
   U+0080..U+00FF mira ademas la lectura Latin-1. }
 function ByteCp(C: Char): Integer;
 

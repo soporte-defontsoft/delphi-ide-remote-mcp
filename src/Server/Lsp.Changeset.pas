@@ -47,7 +47,7 @@ type
 { Lo mismo, y en AFormsEscritos los forms (y los .style, V173f) que un commit
   aplicado escribio: quien llama les pide el juicio del LECTOR del IDE (a un
   .style, el de FMX: Lsp.TextEdit.NotaDeEstiloFmx) al volver, ya FUERA de
-  los cerrojos (Lsp.Patch.AvisosDelLector: un proceso de segundos que dentro
+  los cerrojos (Lsp.JuicioDeForms.AvisosDelLector: un proceso de segundos que dentro
   paraba las escrituras de todos; DSGN-061 de la 1.20), con su texto de antes
   (los colores sin alfa que el lote trae, V154 de la 1.23.1). La tool lo usa;
   el rename, que no escribe valores de un form, va por ChangesetExecute. }
@@ -420,11 +420,11 @@ begin
       end;
     opCreate:
       begin
-        // la codificacion en que nace, la de todo el que crea (Lsp.Patch.
+        // la codificacion en que nace, la de todo el que crea (Lsp.Deteccion.
         // EncDeFicheroNuevo, A21): aqui un .dproj nacia SIN BOM
         Enc := EncDeFicheroNuevo(Op.Path);
         // un form nuevo, en una codificacion que EL parser del IDE lea, la
-        // misma regla que delphi_create (Lsp.Patch.EncDeFormNuevo; el create
+        // misma regla que delphi_create (Lsp.JuicioDeForms.EncDeFormNuevo; el create
         // de un changeset la saltaba: revisor 3 de la noche, M-3); si no lo
         // lee en ninguna, el commit deshace el lote (NegativaDelParser, sobre
         // lo que quedo: B3 de la 1.28), como delphi_create no lo escribe
@@ -1105,7 +1105,7 @@ begin
         // preview resolves against the original text, the commit applies
         // against the mutated one (field 2026-08-24). Every op is rebased
         // by what the previous ones did ABOVE its line in ITS file (the rule
-        // of the batch, Lsp.Patch.ZonaDelCambio): it moved by the change of
+        // of the batch, Lsp.Lineas.ZonaDelCambio): it moved by the change of
         // the WHOLE file, and a change BELOW shifted the line - COMMIT
         // COMPLETE on the wrong line (tenth review)
         Deltas2 := TDictionary<string, Integer>.Create;

@@ -1321,7 +1321,7 @@ end;
 //
 // Same hole as the .rc of delphi_styles, different door, same answer: every
 // path they name is resolved and checked against what the build may read (the
-// roots and the IDE's library, Lsp.Patch.LUGARES_DEL_BUILD) BEFORE msbuild
+// roots and the IDE's library, Lsp.Puertas.LUGARES_DEL_BUILD) BEFORE msbuild
 // starts. Wildcards ({$R *.res}, {$R *.dfm}) and relative names that stay
 // inside are untouched - that is what an ordinary project uses.
 //
@@ -1365,7 +1365,7 @@ begin
           [LineaCitada(D.Texto), TPath.GetFileName(AFichero)]));
       Continue; // no es una ruta: dcc tampoco la abre
     end;
-    // por EL juez de lo que el build lee (Lsp.Patch.LUGARES_DEL_BUILD): el
+    // por EL juez de lo que el build lee (Lsp.Puertas.LUGARES_DEL_BUILD): el
     // de la jaula del agente negaba aqui la biblioteca que el search path
     // dejaba leer con un $I suelto (A9 de la 1.27)
     if LugarDeLecturaDenegado(Cand, LUGARES_DEL_BUILD) <> '' then
@@ -1828,7 +1828,7 @@ end;
   lee: el ultimo del documento (un $(A)\..\fuera con A=.. y luego A=x), el
   de la tabla con la propiedad redefinida por el proyecto, el definido
   despues del uso. Resuelto contra la carpeta del proyecto, y juzgado por la
-  puerta de leer con los lugares del build (Lsp.Patch.LUGARES_DEL_BUILD: la
+  puerta de leer con los lugares del build (Lsp.Puertas.LUGARES_DEL_BUILD: la
   jaula y la biblioteca, sin los lugares del IDE desde A9 de la 1.27: lo
   mismo que dcc y brcc32 van a abrir). Se juzga exista o no:
   negar solo lo que existe seria un oraculo de fuera. Lo que no es una ruta

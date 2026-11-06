@@ -611,7 +611,7 @@ check('removeuses: quitar la nueva devuelve el ; a su sitio, delante del //',
       _src)
 # adduses + removeuses es la INVERSA tambien en una unit compacta ('interface' con el codigo justo
 # debajo, sin linea en blanco): la clausula nueva lleva la separacion que la palabra ya tenia
-# (Lsp.ProjectUnits.EstrenaClausula). Con dos saltos fijos delante ganaba una linea en blanco
+# (Lsp.ClausulaUses.EstrenaClausula). Con dos saltos fijos delante ganaba una linea en blanco
 # (test completo de Opus de la 1.22.0, en ANSI); la de la forma del IDE es el control
 for _nombre, _lineas in (('Compacta', ['unit Compacta;', 'interface', "const S = 'cancion';", 'implementation',
                                        'end.', '']),
@@ -1163,7 +1163,7 @@ check('tanda: "edits" que no es array -> RECHAZADO diciendo cuantos caracteres l
       mc.rechazado(out) and mc.es(out, 'SR_PATCH_EDITS_JSON_FMT') and '24 characters arrived' in out and '{"old": "x"' in out, out[:300])
 
 # 2026-10-06 (revision): LA sangria que el ancla deja fuera, una regla para
-# las dos tools (Lsp.Patch.SangraComoLaLinea). delphi_edit la ponia delante
+# las dos tools (Lsp.Lineas.SangraComoLaLinea). delphi_edit la ponia delante
 # de la PRIMERA linea de new SIEMPRE: con new ya sangrado salia doble (medido:
 # 4 + 4 = 8 espacios), y las demas lineas de new se quedaban sin ella.
 _san = os.path.join(DIR, 'Sangria.pas')
@@ -1461,7 +1461,7 @@ check('ida y vuelta: delete + create de un fichero roto: el preview no niega el 
 # en CP1252 - transcodificaba un fichero que SI tenia codificacion. Desde la B de
 # la 1.19.2 una unidad no se mueve por changeset (CHSET-033: el move suelto le
 # dejaba la cabecera, el form y los proyectos mal)... (revisor de baterias de la
-# 1.27) y con .txt el check no media nada: EncAlEscribir (Lsp.Patch) sale antes
+# 1.27) y con .txt el check no media nada: EncAlEscribir (Lsp.Puertas) sale antes
 # de OrigenDeLaLlamada para lo que no es un FUENTE. Desde la 1.23 (V19, CHSET-033
 # retirado) una unidad se mueve por changeset como el operador: vuelven a ser .pas
 _pm, _qm = os.path.join(DIR, 'movp.pas'), os.path.join(DIR, 'movq.pas')

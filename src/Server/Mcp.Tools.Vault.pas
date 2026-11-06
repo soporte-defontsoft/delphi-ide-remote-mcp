@@ -170,7 +170,7 @@ uses
   MCPServer.Registration,
   MCPServer.Logger,
   Lsp.Guard,
-  Lsp.Puertas, // DecodeSourceBytes y ReescrituraDenegada: el lector de la casa y la regla de sus escritores
+  Lsp.Puertas, // ReescrituraDenegada: la regla de los escritores de la casa
   Lsp.Codificacion, // DecodeBytes y TEncKind: los bytes ya leidos, en su codificacion
   Mcp.Vault.Session,
   Lsp.NetDrives,
@@ -547,7 +547,7 @@ begin
   // which left a stray CR at the end of every line (measured against a real
   // CRLF vault; an LF-only test fixture hid it).
   // ...y sin la linea fantasma del salto final: la MISMA regla que
-  // delphi_read (Lsp.Patch.LineasDelTexto; sexta revision: 5 lineas salian 6)
+  // delphi_read (Lsp.Lineas.LineasDelTexto; sexta revision: 5 lineas salian 6)
   Lines := LineasDelTexto(AText);
   ATotalLines := Length(Lines);
   First := 1;

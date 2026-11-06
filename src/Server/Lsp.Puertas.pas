@@ -34,7 +34,7 @@ type
                   de alli se ensena (P2). No es ltIde porque cargarla lee
                   rsvars.bat por la puerta con el IDE como lugar
       ltEntregables  la casa donde el servidor deja las capturas que hace para
-                  devolverlas (Lsp.Guard.EnCasaDeEntregables: su temporal, la
+                  devolverlas (Lsp.Capturas.EnCasaDeEntregables: su temporal, la
                   carpeta del workspace de quien llama), sin enlaces en el
                   camino. La juzga su nombrador y no la jaula: es trabajo
                   nuestro, no algo que el agente intente (1.18.2, 2b y 2af) }
