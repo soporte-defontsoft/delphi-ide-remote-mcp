@@ -29,6 +29,8 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ### Fixed
 
+- `delphi_designer set` says what else the IDE's writer changed in the component when it stored the property: `alsoWritten` (the lines it wrote or changed) and `alsoRemoved` (the ones it took out), with `DSGN-189`. Setting a `TextSettings` value of an FMX label also writes `StyledSettings` without that flag - it decides which of the label's text settings show - and the answer said only the line of what was set; Hermes found it only through a `get`, in two rounds of the 1.28 test. Both doors of `set`, one property and several (`props`).
+
 - A derived file that already says exactly what would be placed is no longer rewritten, and no copy of it is sealed in the trash: a `.bin.style` or `.res` of `delphi_styles build`, and what `out=` places for a preview, a capture or a logcat. Every repeated build sealed an identical copy of each derived file (measured: the same SHA-256, one more copy per build); the rule was already the one of every other writer (a file written whole that says the same is left as it is).
 
 - `delphi_paserver remote-run` took `job` and did nothing with it: only `kill` and `output` read a job, and an agent that passed one to `remote-run` believed it had. It now answers `PAS-051`, which says the commands `job` goes with, as every other parameter that does not belong to its command.

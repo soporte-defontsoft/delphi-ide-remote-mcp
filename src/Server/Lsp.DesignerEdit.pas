@@ -3001,6 +3001,71 @@ begin
   end;
 end;
 
+{ Lo que el escritor del IDE cambio en el bloque de ANombre ADEMAS de lo
+  puesto (APuestas: las propiedades que pidio el agente y donde guarda una
+  stored False, que ya dicen sus campos): lo que esta despues y no estaba, o
+  estaba con otro valor (alsoWritten, "Prop = valor"), y lo que estaba y se
+  fue (alsoRemoved), con su nota. Lo preguntan set de una y set de varias. El
+  StyledSettings que FMX quita al poner un TextSettings no salia en la
+  respuesta (dirigido de Hermes de la 1.28, dos rondas; I30 del cierre). }
+procedure PonLoQueTambienEscribio(AObj: TJSONObject; const ANombre: string;
+  const AAntes, ADespues: TArray<TPropiedadConClave>; const APuestas: TArray<string>);
+
+  function ValorEn(const AEn: TArray<TPropiedadConClave>; const AClave: string;
+    out AValor: string): Boolean;
+  begin
+    for var P in AEn do
+      if SameText(P.Clave, AClave) then
+      begin
+        AValor := P.Valor;
+        Exit(True);
+      end;
+    AValor := '';
+    Result := False;
+  end;
+
+var
+  Escritas, Quitadas: TJSONArray;
+  V: string;
+begin
+  Escritas := nil;
+  Quitadas := nil;
+  for var P in ADespues do
+    if not MatchText(P.Clave, APuestas) and
+       (not ValorEn(AAntes, P.Clave, V) or (V <> P.Valor)) then
+    begin
+      if Escritas = nil then
+        Escritas := TJSONArray.Create;
+      Escritas.Add(ContenidoTalCual(P.Clave + ' = ' + P.Valor));
+    end;
+  for var P in AAntes do
+    if not MatchText(P.Clave, APuestas) and not ValorEn(ADespues, P.Clave, V) then
+    begin
+      if Quitadas = nil then
+        Quitadas := TJSONArray.Create;
+      Quitadas.Add(P.Clave);
+    end;
+  if Escritas <> nil then
+    AObj.AddPair('alsoWritten', Escritas);
+  if Quitadas <> nil then
+    AObj.AddPair('alsoRemoved', Quitadas);
+  if (Escritas <> nil) or (Quitadas <> nil) then
+    AObj.AddPair('alsoNote', MsgFmt(SN_DESIGNER_IDE_TAMBIEN_ESCRIBE_FMT, [ANombre]));
+end;
+
+{ Las propiedades que dicen los campos de lo puesto: las pedidas y donde
+  guarda el IDE una stored False (storedIn). }
+function PropsPuestas(const AInfos: TArray<TValorPuesto>): TArray<string>;
+begin
+  Result := [];
+  for var I := 0 to High(AInfos) do
+  begin
+    Result := Result + [AInfos[I].Prop];
+    if AInfos[I].GuardadaEnProp <> '' then
+      Result := Result + [AInfos[I].GuardadaEnProp];
+  end;
+end;
+
 function PoneValor(const APath, AComponente, AProp, AValor: string): string;
 var
   F: TFormEnEdicion;
@@ -3028,6 +3093,8 @@ begin
     if Result <> '' then
       Exit;
     Nombre := NombreDe(Obj);
+    // lo que decia el componente, para lo que el escritor cambie ademas
+    var PropsAntes := F.Doc.PropiedadesConItems(Obj);
     Result := PonEnMemoria(F, Nombre, AProp, AValor, Info);
     if Result <> '' then
       Exit;
@@ -3074,6 +3141,9 @@ begin
         Ret.AddPair('readerNote', NotaLector);
       if NotaIde <> '' then
         Ret.AddPair('ideNote', NotaIde);
+      if Obj <> nil then
+        PonLoQueTambienEscribio(Ret, Nombre, PropsAntes, F.Doc.PropiedadesConItems(Obj),
+          PropsPuestas([Info]));
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
       Result := Ret.ToJSON;
     finally
@@ -3155,6 +3225,8 @@ begin
     if Result <> '' then
       Exit;
     Nombre := NombreDe(Obj);
+    // lo que decia el componente, para lo que el escritor cambie ademas
+    var PropsAntes := F.Doc.PropiedadesConItems(Obj);
     SetLength(Infos, Length(Props));
     for var I := 0 to High(Props) do
     begin
@@ -3211,6 +3283,11 @@ begin
         Ret.AddPair('readerNote', NotaLector);
       if NotaIde <> '' then
         Ret.AddPair('ideNote', NotaIde);
+      // el arbol se releyo al guardar: el componente, el de ahora
+      Obj := ObjetoPorNombre(F.Doc, Nombre);
+      if Obj <> nil then
+        PonLoQueTambienEscribio(Ret, Nombre, PropsAntes, F.Doc.PropiedadesConItems(Obj),
+          PropsPuestas(Infos));
       PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
       Result := Ret.ToJSON;
     finally

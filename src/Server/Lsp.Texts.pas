@@ -5684,7 +5684,8 @@ const
     'class BEFORE writing - one the class stores by code, by the IDE''s own ' +
     'form reader, and readerNote says when it could not judge it - and ' +
     'written as the IDE''s writer stores the component: notStored, storedAs ' +
-    'or storedIn say when that is not the value given; parent= ' +
+    'or storedIn say when that is not the value given, alsoWritten what else it ' +
+    'changed in the component; parent= ' +
     'alone moves the component; before=, ' +
     'after= or index= alone reorders it among its siblings; prop=Name ' +
     'renames it, its field, its default-named handlers and the form lines ' +
@@ -6528,6 +6529,17 @@ const
     'turns the value into that when the form loads (an Align that places ' +
     'it, a date without its time, the name of the same color...), so that is ' +
     'what is written and what the form loads with.';
+
+  { Lo que el escritor del IDE cambio en el componente ADEMAS de lo puesto
+    (alsoWritten / alsoRemoved, Lsp.DesignerEdit.PonLoQueTambienEscribio): el
+    StyledSettings que FMX quita al poner un TextSettings no salia en la
+    respuesta (dirigido de Hermes de la 1.28, dos rondas; I30 del cierre). Lleva
+    [nombre]; las lineas van en los campos, no en la frase (V103). }
+  SN_DESIGNER_IDE_TAMBIEN_ESCRIBE_FMT =
+    '[DSGN-189] Storing it as the IDE does also changed other lines of %s - alsoWritten ' +
+    'and alsoRemoved: the component itself does that when the property is set (a ' +
+    'TextSettings value takes its flag out of StyledSettings, for one), so they are ' +
+    'part of what the form says and loads with now.';
 
   { Lo que el agente puso en una propiedad que su clase declara stored False:
     el IDE no la guarda nunca por su nombre y lo que el form guarda de ella va

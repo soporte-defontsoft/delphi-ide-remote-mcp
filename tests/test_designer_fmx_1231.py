@@ -247,6 +247,9 @@ try:
     p = props(F, 'BtnSinTab')
     check('T2 control: uno escrito sin TabOrder sigue sin el tras un set (solo el soltado entra)',
           not mc.fallo(r) and p.get('Text') == "'Otro'" and 'TabOrder' not in p, (p, r[:400]))
+    # I30 del cierre (1.28), el control: un set que no cambia nada mas del componente no trae alsoWritten
+    check('I30 control: un set que solo cambia lo pedido no trae alsoWritten ni alsoRemoved',
+          not mc.fallo(r) and 'alsoWritten' not in r and 'alsoRemoved' not in r, r[:400])
 
     # B2 de la 1.28: StyledSettings, como lo deja el IDE
     r = d(command='insert', path=F, classname='TLabel', component='LblTitulo', parent='PnlAbajo')
@@ -257,6 +260,20 @@ try:
     check('S1 set Font.Size y FontColor de un TLabel: StyledSettings SIN Size ni FontColor, como el IDE',
           not mc.fallo(r) and ss.startswith('[') and 'Size' not in ss and 'FontColor' not in ss
           and p.get('TextSettings.FontColor') == 'claRed', (p, r[:500]))
+    # I30 del cierre (1.28): la respuesta dice lo que el escritor del IDE cambio ADEMAS de lo pedido (el
+    # StyledSettings que FMX quita al poner un TextSettings); callaba y solo un get lo ensenaba (dirigido de Hermes
+    # de la 1.28, dos rondas). ROJA contra e966dcc. set de varias...
+    j = mc.como_json(r) or {}
+    check('I30 set de varias: alsoWritten dice el StyledSettings que escribio el IDE, con su nota (DSGN-189)',
+          any(str(x).startswith('StyledSettings = ') for x in (j.get('alsoWritten') or []))
+          and mc.es(j.get('alsoNote', ''), 'SN_DESIGNER_IDE_TAMBIEN_ESCRIBE_FMT'), r[:600])
+    # ...y set de una (las dos puertas de set)
+    d(command='insert', path=F, classname='TLabel', component='LblDos', parent='PnlAbajo')
+    r = d(command='set', path=F, component='LblDos', prop='TextSettings.FontColor', value='claBlue')
+    j = mc.como_json(r) or {}
+    check('I30 set de una: alsoWritten dice el StyledSettings que escribio el IDE, con su nota (DSGN-189)',
+          any(str(x).startswith('StyledSettings = ') for x in (j.get('alsoWritten') or []))
+          and mc.es(j.get('alsoNote', ''), 'SN_DESIGNER_IDE_TAMBIEN_ESCRIBE_FMT'), r[:600])
     png = os.path.join(FMX, 'LblTitulo.png')
     r = d(command='preview', path=F, component='LblTitulo', out=png)
     rojos = 0
