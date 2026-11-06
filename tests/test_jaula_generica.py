@@ -214,7 +214,10 @@ def fuga_en(texto, marca):
 
 # ------------------------------------------------------------------ server
 
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='jaula-generica', t=60)
+# con destinos declarados (nombres que no existen): sin ellos tools/list no anuncia delphi_adb ni
+# delphi_desktop (B10 de la 1.28), J0 no encuentra sus pares y el suelo no se probaba en ellos
+srv = mc.Stdio(EXE, mc.entorno(dict({'DELPHI_MCP_ROOTS': JAIL}, **mc.DESTINOS_DECLARADOS)),
+               nombre='jaula-generica', t=60)
 try:
     m = srv.request('tools/list')
     ESQUEMA = {t['name']: t.get('inputSchema') or {} for t in ((m or {}).get('result') or {}).get('tools', [])}

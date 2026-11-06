@@ -44,7 +44,10 @@ from mcp_cliente import check
 
 BASE = mc.carpeta('docs_tokens')
 EXE = mc.copia_exe(BASE)
-srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='tokens', t=180)
+# la superficie ENTERA, la que carga un cliente que tiene a donde ir con delphi_adb y delphi_desktop
+# (B10 de la 1.28): sin destinos no se anuncian y T1 media ~10 KB menos que el peor caso
+ENTORNO = dict({'DELPHI_MCP_ROOTS': BASE}, **mc.DESTINOS_DECLARADOS)
+srv = mc.Stdio(EXE, mc.entorno(ENTORNO), nombre='tokens', t=180)
 call = srv.call
 
 TOOLS = srv.request('tools/list', {})['result']['tools']
@@ -193,7 +196,7 @@ print('NOTA: T9 no mide que un selectionRange DISTINTO del range se quede: Delph
 # medido el 16-oct-2026 contra Strata, un caracter cambiado en la primera tool
 # = 0 % reutilizado, y la misma lista = 100 %
 TOOLS_DESPUES = srv.request('tools/list', {})['result']['tools']
-otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='tokens-otro-cliente', t=180)
+otro = mc.Stdio(EXE, mc.entorno(ENTORNO), nombre='tokens-otro-cliente', t=180)
 TOOLS_OTRO = otro.request('tools/list', {})['result']['tools']
 otro.cierra()
 UNA = json.dumps(TOOLS, ensure_ascii=False)
