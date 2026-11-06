@@ -83,13 +83,16 @@ begin
 end;
 
 { Por que no se anuncia una tool sin nada declarado a donde ir (moSinDestino):
-  la clave que la abre. }
+  la clave que la abre. Cada una por su nombre: con un else, delphi_db (1.29)
+  habria dicho la clave del escritorio. }
 function SinDestinoDe(const ATool: string): string;
 begin
   if SameText(ATool, 'delphi_adb') then
     Result := MsgText(SF_HELP_SIN_DESTINO_ADB)
+  else if SameText(ATool, 'delphi_desktop') then
+    Result := MsgText(SF_HELP_SIN_DESTINO_DESKTOP)
   else
-    Result := MsgText(SF_HELP_SIN_DESTINO_DESKTOP);
+    Result := MsgText(SF_HELP_SIN_DESTINO_DB);
 end;
 
 { One tool in full: what tools/list would say about it, alone. }

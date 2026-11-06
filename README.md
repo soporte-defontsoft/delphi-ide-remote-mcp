@@ -11,7 +11,7 @@
 
 The Windows machine holds RAD Studio and the projects. You work from wherever you actually want to be: a Linux laptop, a Mac, a cloud agent, a CI runner. Understand the code, edit it safely, scaffold, build, run, package, fetch the binaries, commit — and then deploy to a real target and **watch your app run there, pressing its buttons yourself** — the whole cycle over MCP, with Delphi installed on **neither** the client nor the agent.
 
-It is not a language-server bridge. Semantic understanding is one capability of many, and it is the one that is genuinely hard, so it runs on Embarcadero's official `DelphiLSP.exe` — the same engine behind Code Insight in the RAD Studio IDE. But the language server backs **8 of the 42 tools**; the other 34 are the working day: the safe editing engine, MSBuild, git, the file tools, the project scaffolder, the deploy chain (PAServer, adb), the RAD Studio help, the knowledge vault. See [What each tool actually runs on](#what-each-tool-actually-runs-on) for the exact split.
+It is not a language-server bridge. Semantic understanding is one capability of many, and it is the one that is genuinely hard, so it runs on Embarcadero's official `DelphiLSP.exe` — the same engine behind Code Insight in the RAD Studio IDE. But the language server backs **8 of the 43 tools**; the other 35 are the working day: the safe editing engine, MSBuild, git, the file tools, the project scaffolder, the deploy chain (PAServer, adb), the RAD Studio help, the knowledge vault. See [What each tool actually runs on](#what-each-tool-actually-runs-on) for the exact split.
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well. It speaks MCP 2026-07-28, which has no handshake and no sessions, next to the sessions of the earlier revisions, on the same endpoint.
 
@@ -45,11 +45,11 @@ An agent can also be pointed at the **library read zone** (RTL/VCL sources and i
 
 ## What each tool actually runs on
 
-The language server is the hardest part to get right, but it is not most of the server. Of the 37 core tools, **exactly 8 are backed by DelphiLSP**; the other 29 never touch it (plus 5 optional `vault_*` tools, registered only when you configure a vault). This matters in practice: the LSP-backed tools are the only ones that need a resolvable project configuration — the rest work on any folder inside the roots.
+The language server is the hardest part to get right, but it is not most of the server. Of the 38 core tools, **exactly 8 are backed by DelphiLSP**; the other 30 never touch it (plus 5 optional `vault_*` tools, registered only when you configure a vault). This matters in practice: the LSP-backed tools are the only ones that need a resolvable project configuration — the rest work on any folder inside the roots.
 
 **Backed by DelphiLSP (8):** `delphi_symbols`, `delphi_definition`, `delphi_hover`, `delphi_completion`, `delphi_signature`, `delphi_diagnostics`, `delphi_references` (hybrid — LSP-validated, see the table) and `delphi_rename_symbol` (semantic rename built on definition + references; `mode=apply` writes it through the changeset engine).
 
-**NOT DelphiLSP (the other 29):** `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create`, `delphi_build`, `delphi_list`, `delphi_search`, `delphi_projects`, `delphi_workspace`, `delphi_move`, `delphi_delete`, `delphi_fetch`, `delphi_upload`, `delphi_package`, `delphi_git`, `delphi_installs`, `delphi_config`, `delphi_paserver`, `delphi_adb`, `delphi_desktop`, `delphi_components`, `delphi_styles`, `delphi_messages`, `delphi_changeset`, `delphi_designer`, `delphi_test`, `delphi_report`, `delphi_help`, `delphi_docs` — plus the 5 `vault_*` tools. These run on MSBuild, git, the filesystem, the registry, adb, the safe-editing engine, the installed RAD Studio help and your vault.
+**NOT DelphiLSP (the other 30):** `delphi_read`, `delphi_edit`, `delphi_textedit`, `delphi_create`, `delphi_build`, `delphi_list`, `delphi_search`, `delphi_projects`, `delphi_workspace`, `delphi_move`, `delphi_delete`, `delphi_fetch`, `delphi_upload`, `delphi_package`, `delphi_git`, `delphi_installs`, `delphi_config`, `delphi_paserver`, `delphi_adb`, `delphi_desktop`, `delphi_components`, `delphi_styles`, `delphi_messages`, `delphi_changeset`, `delphi_designer`, `delphi_test`, `delphi_report`, `delphi_help`, `delphi_docs`, `delphi_db` — plus the 5 `vault_*` tools. These run on MSBuild, git, the filesystem, the registry, adb, the safe-editing engine, the installed RAD Studio help and your vault.
 
 The table below says which engine each one uses and why it matters:
 
@@ -359,7 +359,7 @@ Each one is told with its measurements and its history in [docs/ARCHITECTURE.md]
 - **Project config made automatic** — the engine's settings made from the `.dproj` on every request, for the selected configuration and platform (Win32 for one that is not Windows), and given again to a running engine when they change (the IDE's `.delphilsp.json`, stale on a server, is never read).
 - **Warm engines** — one `DelphiLSP` per workspace, kept alive between agent sessions, stopped when idle or hung and started again on the next request.
 - **Correct source encoding** — BOM, strict UTF-8, and otherwise the machine's ANSI code page, as the IDE and the compiler read a file without BOM.
-- **One executable, three modes** — service, terminal and tray are the same binary and the same 42 tools.
+- **One executable, three modes** — service, terminal and tray are the same binary and the same 43 tools.
 - **What a tool answers is what the agent sees** — prose or JSON in `content`; `structuredContent` only when the answer is a JSON object or a call failed.
 - **Every message says what it is and how it ended** — a tag and an outcome (`INVALID_PARAM`, `NOT_FOUND`, `DENIED`, `INTERNAL`) declared by the code that writes it, from one catalog.
 - **"It isn't there" and "it isn't that kind of thing" are different answers.**

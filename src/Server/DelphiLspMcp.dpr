@@ -164,7 +164,10 @@ uses
   Lsp.Capturas in 'Lsp.Capturas.pas',
   Lsp.JuecesDeArgumentos in 'Lsp.JuecesDeArgumentos.pas',
   Lsp.PuertaDeLaLlamada in 'Lsp.PuertaDeLaLlamada.pas',
-  Lsp.PurgaDelArranque in 'Lsp.PurgaDelArranque.pas';
+  Lsp.PurgaDelArranque in 'Lsp.PurgaDelArranque.pas',
+  Lsp.Conexiones in 'Lsp.Conexiones.pas',
+  Lsp.BaseDeDatos in 'Lsp.BaseDeDatos.pas',
+  Mcp.Tools.Db in 'Mcp.Tools.Db.pas';
 
 {$R *.res}
 

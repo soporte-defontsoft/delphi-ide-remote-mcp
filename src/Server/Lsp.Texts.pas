@@ -4602,6 +4602,59 @@ const
     'ask for something, do it and, if appropriate, answer with ' +
     'delphi_report.)';
 
+  // ---- delphi_db: las bases de datos con nombre (1.29) ----
+  // Las define el operador en el fichero de conexiones del servidor y las
+  // abre a un workspace con DbAllowedProjects=; el agente ve el nombre
+  // <proyecto>/<alias>, el motor y si es de solo lectura, nunca el servidor,
+  // la base real ni la credencial (Lsp.Conexiones).
+
+  // %s = por que no se lee (un SF_DB_FICHERO_*)
+  SR_DB_FICHERO_FMT =
+    '[DB-001 DENIED] The database connections of this server cannot be ' +
+    'read: %s. Only the operator can fix that, in the connections file of ' +
+    'the server. Nothing was done.';
+  SF_DB_FICHERO_NO_HAY = 'there is no connections file';
+  SF_DB_FICHERO_NO_JSON = 'it is not a JSON object';
+  SF_DB_FICHERO_SIN_RAIZ = 'it has no "db-connections" object with its "projects"';
+
+  SR_DB_SIN_PROYECTOS =
+    '[DB-002 DENIED] This workspace has no database connections: the ' +
+    'operator gives it the projects of the connections file it may use ' +
+    '(DbAllowedProjects= in its section of settings.ini). Nothing was done.';
+
+  // %s = lo que el agente dio en db
+  SR_DB_DESCONOCIDA_FMT =
+    '[DB-003 INVALID_PARAM] "%s" is not a database of this workspace: db ' +
+    'takes a name exactly as delphi_db command=connections lists it ' +
+    '(project/alias). Nothing was done.';
+
+  // (DB-004, la base declarada mal al usarla, llega con la primera operacion
+  // que conecta; los porques ya los lista connections)
+  SF_DB_DEF_SIN_MOTOR = 'it has no "engine" (the FireDAC driver: MSSQL, PG...)';
+  // %s = el provider que declara
+  SF_DB_DEF_PROVEEDOR_FMT = 'its provider is "%s", and this server connects through FIREDAC only';
+  SF_DB_DEF_SOLO_LECTURA = 'its "readonly" is not true or false';
+  // %s = el motor declarado, %s = los que tiene el servidor
+  SF_DB_DEF_MOTOR_FMT = 'its engine "%s" is not one this server has (%s)';
+
+  SN_DB_CONNECTIONS =
+    '[DB-005] Your databases: "db" is the name every other command of ' +
+    'delphi_db takes. The server, the credentials and the real database ' +
+    'stay with the operator. readonly=true only reads.';
+
+  SR_DB_COMANDO =
+    '[DB-006 INVALID_PARAM] Command must be connections. Nothing was done.';
+
+  SD_DB =
+    'The databases the operator gave this workspace, used by NAME and through ' +
+    'operations - you never write SQL. command=connections lists them: "db" ' +
+    '(project/alias: the name every command takes), "engine" (the FireDAC ' +
+    'driver: MSSQL, PG...) and "readonly"; the ones declared wrong come in ' +
+    '"unusable" with why. The server, the credentials and the real database ' +
+    'stay with the operator.';
+  SP_DB_COMMAND =
+    'connections (the default): the databases of this workspace.';
+
   // ---- delphi_build: F2613 helper ----
 
   SN_BUILD_MISSING_UNITS_NOTE =
@@ -5055,7 +5108,8 @@ const
     '  compile ............................ delphi_build'#10 +
     '  know whether it WORKS .............. delphi_test'#10 +
     '  run the program .................... delphi_paserver remote-run ' +
-    '(on the target; nothing runs on the server)'#10#10 +
+    '(on the target; nothing runs on the server)'#10 +
+    '  its databases, by name (no SQL) .... delphi_db'#10#10 +
     'FORMS AND STYLES'#10 +
     '  what a class publishes ............. delphi_designer info / prop'#10 +
     '  review a .dfm/.fmx ................. delphi_designer lint / tree ' +
@@ -5107,6 +5161,8 @@ const
     'delphi_adb (no Android device: AdbAllowedDevices)';
   SF_HELP_SIN_DESTINO_DESKTOP =
     'delphi_desktop (no desktop host: DesktopAllowedHosts or DesktopViewHosts)';
+  SF_HELP_SIN_DESTINO_DB =
+    'delphi_db (no database project: DbAllowedProjects)';
   SF_HELP_TASKS_SOLO_LECTURA =
     #10#10'YOUR CREDENTIAL IS READ-ONLY: the tools that only write are not ' +
     'announced to you (they would refuse), and the mixed ones answer only ' +

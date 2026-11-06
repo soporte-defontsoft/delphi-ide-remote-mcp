@@ -99,6 +99,19 @@ function ServerCacheDir(const ASub: string = ''): string;
   tools no las usan: piden el buzon de la sesion (abajo). }
 function CarpetaDeMensajes: string;
 function CarpetaDeInformes: string;
+{ Las CONEXIONES con nombre que define el operador (1.29): con AApi=False
+  <casa>\connections\databases\db-connections.json (delphi_db), con
+  AApi=True <casa>\connections\apis\api-connections.json (delphi_api). En la
+  casa y fuera de toda raiz: el agente ni las ve ni las escribe, y las lee el
+  lector de las conexiones (Lsp.Conexiones), no una puerta. }
+function FicheroDeConexiones(AApi: Boolean): string;
+{ Las DLL cliente de un motor de FireDAC: <casa>\drivers\<DriverID>\ (David,
+  6-nov-2026: "drivers\<motor>\ del servidor", como una aplicacion que usa
+  FireDAC las lleva junto a su exe). Una DLL que carga el servidor es codigo que EJECUTA: la
+  ruta es completa y de un sitio donde ningun agente escribe, nunca buscada.
+  ADriverID es uno de los drivers ENLAZADOS (lo dice FireDAC), nunca texto
+  del agente. }
+function CarpetaDeDriverDeBd(const ADriverID: string): string;
 { EL BUZON de ESTA sesion: la carpeta de su workspace dentro de la de los
   mensajes o la de los informes y, con AAgente, la de ese agente debajo. La
   misma estructura de siempre separada por workspace (David, 10-oct-2026):
@@ -306,6 +319,19 @@ end;
 function CarpetaDeInformes: string;
 begin
   Result := ServerDir('reports');
+end;
+
+function FicheroDeConexiones(AApi: Boolean): string;
+begin
+  if AApi then
+    Result := ServerDir(TPath.Combine('connections', TPath.Combine('apis', 'api-connections.json')))
+  else
+    Result := ServerDir(TPath.Combine('connections', TPath.Combine('databases', 'db-connections.json')));
+end;
+
+function CarpetaDeDriverDeBd(const ADriverID: string): string;
+begin
+  Result := ServerDir(TPath.Combine('drivers', ADriverID));
 end;
 
 function CarpetaDeWorkspace(const AWorkspace: string): string;

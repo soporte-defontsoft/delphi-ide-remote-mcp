@@ -1,7 +1,10 @@
 """E2E battery for v1.13.0 - what an agent pays in tokens (the token reviewer
 of 4-oct-2026: ~27K fixed per session, tools/list 26.9K of it).
 
-  T1  tools/list stays under its budget: 105.000 characters (105.592 with the
+  T1  tools/list stays under its budget: 110.000 characters since 1.29 (David,
+      6-nov-2026: "tenemos nuevas tools, sube a 110k" - delphi_db and delphi_api;
+      measured with every destination declared: 105.389 with delphi_db's first
+      command alone, 93.840 with none). Before: 105.000 (105.592 with the
       1.12.1; 100.000 until 1.20.0, which closed at 99.964). Raising it is a
       decision, not an accident: David, 17-oct-2026, "if we can save, we save;
       if we lose quality, 105k" - the 1.20.1 added 1.047 and gave back 767 by
@@ -52,7 +55,7 @@ call = srv.call
 
 TOOLS = srv.request('tools/list', {})['result']['tools']
 TAM = len(json.dumps(TOOLS, ensure_ascii=False))
-check('T1 tools/list por debajo de su presupuesto (105.000 caracteres)', TAM < 105000, TAM)
+check('T1 tools/list por debajo de su presupuesto (110.000 caracteres)', TAM < 110000, TAM)
 
 
 def prop(tool, p):

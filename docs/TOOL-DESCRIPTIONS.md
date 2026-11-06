@@ -11,8 +11,11 @@ fills its window early.
 
 ## The budget
 
-`tests/test_docs_tokens.py` (T1) keeps `tools/list` under **105,000
-characters** (measured without a vault; the five `vault_*` tools come on top).
+`tests/test_docs_tokens.py` (T1) keeps `tools/list` under **110,000
+characters** (measured without a vault - the five `vault_*` tools come on top -
+and with every destination declared, so `delphi_adb`, `delphi_desktop` and
+`delphi_db` are in it). It was 105,000 until 1.29, which raised it for the new
+database and API tools.
 Going over it is a decision, not an accident: the battery fails and names the
 size. The same battery watches the answers too (one audit line in a clean edit,
 the backup path once a day...), because what accumulates round after round is

@@ -28,6 +28,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **Run the tests of a project** — [`delphi_test`](#delphi_test)
 - **The map, and the house rules** — [`delphi_help`](#delphi_help)
 - **Version control** — [`delphi_git`](#delphi_git)
+- **Databases by name (no SQL)** — [`delphi_db`](#delphi_db)
 - **Feedback** — [`delphi_report`](#delphi_report), [`delphi_messages`](#delphi_messages)
 - **Knowledge vault (optional)** — [`vault_read`](#vault_read), [`vault_search`](#vault_search), [`vault_append`](#vault_append), [`vault_create`](#vault_create), [`vault_patch`](#vault_patch)
 
@@ -946,6 +947,23 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 <!-- /contract -->
 
 **What the answer carries (hand-written).** A git that exits non-zero is an ERROR: `[GIT-036 DENIED] exit=N` with git's own output after it; a success starts with `exit=0`.
+
+## Databases
+
+### `delphi_db`
+
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+The databases the operator gave this workspace, used by NAME and through operations - you never write SQL. command=connections lists them: "db" (project/alias: the name every command takes), "engine" (the FireDAC driver: MSSQL, PG...) and "readonly"; the ones declared wrong come in "unusable" with why. The server, the credentials and the real database stay with the operator.
+
+*Access: mixed (`command` connections read-only; every other command read-write, refused to a read-only credential).*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | connections (the default): the databases of this workspace. |
+<!-- /contract -->
+
+The databases are the OPERATOR's: defined in the server's connections file (outside every root: the agent never sees it) and opened to a workspace with `DbAllowedProjects=<project>` in its section of `settings.ini` - a project gives all its databases. Without one, `delphi_db` is not in `tools/list` (it stays callable and answers `DB-002`). The agent names a database `project/alias` exactly as `connections` lists it, and sees its engine (the FireDAC driver) and whether it is read-only; never the server, the real database or the credentials. It works through operations: it never writes SQL (1.29).
 
 ## Feedback
 

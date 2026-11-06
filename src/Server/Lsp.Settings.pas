@@ -347,6 +347,12 @@ function DesktopHostAllowed(const AHost: string; AActua: Boolean): Boolean;
   sin mirar la red, como el vault. }
 function HayDispositivosAdb: Boolean;
 function HayHostsDeEscritorio: Boolean;
+{ Los proyectos de conexiones que puede usar ESTA sesion: DbAllowedProjects
+  (AApi=False, delphi_db) o ApiAllowedProjects (AApi=True, delphi_api) de su
+  workspace; DELPHI_MCP_DB_PROJECTS / DELPHI_MCP_API_PROJECTS en el modo local.
+  EL lector de las dos claves: el juez de cada tool (NombreEnLaLista, con su
+  comodin) y el anuncio de tools/list. }
+function ProyectosDeConexionDeLaSesion(AApi: Boolean): TArray<string>;
 
 { Las raices de ESCRITURA de todos los workspaces declarados, en el orden
   del settings.ini, y las del modo local de lanzamiento: lo que entra en la
@@ -428,6 +434,12 @@ type
     AdbDevices: TArray<string>;       // dispositivos delphi_adb; ausente = ninguno
     DesktopHosts: TArray<string>;     // hosts donde delphi_desktop ve y actua; ausente = ninguno
     DesktopViewHosts: TArray<string>; // hosts donde solo ve; ausente = ninguno
+    // los PROYECTOS de connections\databases\db-connections.json (delphi_db)
+    // y de connections\apis\api-connections.json (delphi_api) que usa este
+    // workspace: un proyecto da todas sus bases o APIs (David, 6-nov-2026:
+    // "un proyecto puede tener varias db"); ausente = ninguno
+    DbProjects: TArray<string>;
+    ApiProjects: TArray<string>;
   end;
 
 var
@@ -483,6 +495,8 @@ var
   GAdbDevices: TArray<string>;      // DELPHI_MCP_ADB_DEVICES (lanzamiento local)
   GDesktopHosts: TArray<string>;    // DELPHI_MCP_DESKTOP_HOSTS (lanzamiento local)
   GDesktopViewHosts: TArray<string>; // DELPHI_MCP_DESKTOP_VIEW_HOSTS (lanzamiento local)
+  GDbProjects: TArray<string>;      // DELPHI_MCP_DB_PROJECTS (lanzamiento local)
+  GApiProjects: TArray<string>;     // DELPHI_MCP_API_PROJECTS (lanzamiento local)
   GVaultPath: string = '';          // DELPHI_MCP_VAULT_PATH (lanzamiento local)
 
 threadvar
@@ -1299,6 +1313,8 @@ begin
   GAdbDevices := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_ADB_DEVICES'), True);
   GDesktopHosts := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_DESKTOP_HOSTS'), True);
   GDesktopViewHosts := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_DESKTOP_VIEW_HOSTS'), True);
+  GDbProjects := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_DB_PROJECTS'), True);
+  GApiProjects := EntradasDeLista(GetEnvironmentVariable('DELPHI_MCP_API_PROJECTS'), True);
   GAuthToken := GetEnvironmentVariable('DELPHI_MCP_TOKEN');
   GReadOnlyToken := GetEnvironmentVariable('DELPHI_MCP_READONLY_TOKEN');
   // los si/no por SU gramatica (EnvSiNo): el defecto y el lado que cierra
@@ -1485,6 +1501,8 @@ begin
             W.AdbDevices := EntradasDeLista(Ini.ReadString(S, 'AdbAllowedDevices', ''), True);
             W.DesktopHosts := EntradasDeLista(Ini.ReadString(S, 'DesktopAllowedHosts', ''), True);
             W.DesktopViewHosts := EntradasDeLista(Ini.ReadString(S, 'DesktopViewHosts', ''), True);
+            W.DbProjects := EntradasDeLista(Ini.ReadString(S, 'DbAllowedProjects', ''), True);
+            W.ApiProjects := EntradasDeLista(Ini.ReadString(S, 'ApiAllowedProjects', ''), True);
             W.OvSharedSet := Ini.ValueExists(S, 'SharedFolders');
             if W.OvSharedSet then
               W.OvSharedFolders := EntradasDeLista(LowerCase(Ini.ReadString(S, 'SharedFolders', '')), True);
@@ -2098,6 +2116,22 @@ var
 begin
   HostsDeEscritorioDeLaSesion(Actua, Ve);
   Result := (Length(Actua) > 0) or (Length(Ve) > 0);
+end;
+
+function ProyectosDeConexionDeLaSesion(AApi: Boolean): TArray<string>;
+begin
+  LoadSecurity;
+  if HasActiveWS then
+  begin
+    if AApi then
+      Result := ActiveWS.ApiProjects
+    else
+      Result := ActiveWS.DbProjects;
+  end
+  else if AApi then
+    Result := GApiProjects
+  else
+    Result := GDbProjects;
 end;
 
 function AdbTargetAllowed(const ATarget: string): Boolean;

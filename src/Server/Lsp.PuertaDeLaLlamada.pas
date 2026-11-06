@@ -20,7 +20,8 @@ uses
 
 type
   { POR QUE tools/list deja fuera una tool (moNinguna = la anuncia).
-    moSinDestino: delphi_adb o delphi_desktop sin nada declarado a donde ir. }
+    moSinDestino: delphi_adb, delphi_desktop o delphi_db sin nada declarado a
+    donde ir. }
   TMotivoOculta = (moNinguna, moSinVault, moVaultLectura, moCredencialLectura, moPerfil,
     moSinDestino);
 
@@ -835,6 +836,9 @@ begin
   // preview lee; apply escribe por el motor de changesets (lo negaba el
   // escritor al llegar a escribir; ahora la puerta, a la entrada, como a todas)
   AnadeAcceso('delphi_rename_symbol', atMixta, ['preview'], 'mode');
+  // las bases con nombre (1.29): connections lee la configuracion; lo que
+  // no esta en la lista se niega a una credencial de lectura, cerrado
+  AnadeAcceso('delphi_db', atMixta, ['connections']);
 end;
 
 function ComandoQueLee(const ATool, ACmd: string): Boolean;
@@ -1203,6 +1207,10 @@ begin
   if SameText(N, 'delphi_adb') and not HayDispositivosAdb then
     Exit(moSinDestino);
   if SameText(N, 'delphi_desktop') and not HayHostsDeEscritorio then
+    Exit(moSinDestino);
+  // delphi_db, solo donde el workspace nombra proyectos de bases
+  // (DbAllowedProjects, 1.29): sin ninguno toda llamada dice DB-002
+  if SameText(N, 'delphi_db') and (Length(ProyectosDeConexionDeLaSesion(False)) = 0) then
     Exit(moSinDestino);
   // A una credencial de SOLO LECTURA no se le anuncian las tools enteras de
   // escritura: la puerta se las niega siempre (LecturaDenegada) y solo

@@ -8,6 +8,10 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- `delphi_db`: the databases the operator gives a workspace, used by NAME and through operations - the agent never writes SQL. The operator defines them in the server's connections file (`connections\databases\db-connections.json`, next to `settings.ini` and outside every root: projects, each with its databases - server, database, user, password, port, engine, readonly) and opens projects to a workspace with `DbAllowedProjects=` in its section of `settings.ini` (`*` = all); without one, `delphi_db` is not in `tools/list` and a call answers `DB-002`. `command=connections` lists the databases of the workspace as `project/alias` - the name every command takes - with their engine (the FireDAC driver) and whether they are read-only; the ones declared wrong come under `unusable` with why (`DB-001`, `DB-005`). The agent never sees the server, the real database or the credentials. The engines are the FireDAC drivers the server links (MSSQL and PostgreSQL); a driver that needs a client library loads it from `drivers\<DriverID>\` of the server, never from anywhere else. The budget of `tools/list` rises to 110,000 characters for the new tools.
+
 ### Fixed
 
 - `delphi_config remove-deployfile` takes the entry as the project lists it, even one that points outside the workspace, as `remove-unit`, `remove-searchpath` and `remove-project` already did: a `DeployFile` that a project copied from another machine names on that machine's disk was refused with `GUARD-002`, and the `.dproj` - which only `delphi_config` writes - kept it, so `delphi_build` kept refusing the project with `BUILD-050` (found by an agent, 6-nov). The entry goes from the `.dproj` and the `.deployproj`, and the file it names is never opened. `BUILD-050` now says that `remove-deployfile` removes a file to ship.
