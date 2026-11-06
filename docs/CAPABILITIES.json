@@ -1,11 +1,12 @@
 {
   "generatedBy": "scripts/gen-capabilities.py (from the live tools/list)",
   "version": "1.28.0",
-  "tools": 43,
-  "coreTools": 38,
+  "tools": 44,
+  "coreTools": 39,
   "optionalTools": 5,
   "toolNames": [
     "delphi_adb",
+    "delphi_api",
     "delphi_build",
     "delphi_changeset",
     "delphi_completion",
@@ -58,6 +59,7 @@
   ],
   "access": {
     "delphi_adb": "mixed",
+    "delphi_api": "mixed",
     "delphi_build": "read-write",
     "delphi_changeset": "read-write",
     "delphi_completion": "read-only",

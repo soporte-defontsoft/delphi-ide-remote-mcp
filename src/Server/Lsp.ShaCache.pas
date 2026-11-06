@@ -18,6 +18,9 @@ function CachedFileSha256(const APath: string): string;
   distinguir de lo anterior (V129 de la 1.24). }
 function FileSha256(const APath: string): string;
 function Sha256DeBytes(const ABytes: TArray<Byte>): string;
+{ ...y sus 32 bytes crudos, para quien la escribe en otro formato (el pin
+  SPKI de delphi_api va en base64: Lsp.Conexiones.PinDeSpki). }
+function Sha256CrudoDeBytes(const ABytes: TArray<Byte>): TArray<Byte>;
 
 type
   { Que se mide de un ENLACE a un fichero: lo SUYO - su propia entrada, con su
@@ -194,6 +197,16 @@ begin
   if Length(ABytes) > 0 then
     H.Update(ABytes[0], Length(ABytes));
   Result := H.HashAsString;
+end;
+
+function Sha256CrudoDeBytes(const ABytes: TArray<Byte>): TArray<Byte>;
+var
+  H: THashSHA2;
+begin
+  H := THashSHA2.Create(THashSHA2.TSHA2Version.SHA256);
+  if Length(ABytes) > 0 then
+    H.Update(ABytes[0], Length(ABytes));
+  Result := H.HashAsBytes;
 end;
 
 function HuellaParaNombre(const ATexto: string): string;

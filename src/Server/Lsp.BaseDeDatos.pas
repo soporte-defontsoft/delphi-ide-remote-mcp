@@ -86,7 +86,8 @@ uses
   FireDAC.Stan.Async, FireDAC.Stan.Consts, FireDAC.Phys.Intf, FireDAC.Phys,
   FireDAC.Phys.MSSQL, FireDAC.Phys.PG, FireDAC.DApt, FireDAC.DatS,
   FireDAC.ConsoleUI.Wait,
-  Lsp.Texts, Lsp.Casa;
+  Lsp.Texts, Lsp.Casa,
+  Lsp.ConPlazo; // TrabajoConPlazo: el plazo lo pone el servidor, no el driver
 
 const
   // el fichero de contrasenas que se le da a libpq para que no lea el de la
@@ -180,33 +181,15 @@ begin
 end;
 
 type
-  { Una apertura con plazo: la conexion, el resultado y quien la libera. Estado
-    0 = esperando, 1 = quien esperaba se fue (la libera el hilo), 2 = el hilo
-    termino (la libera quien esperaba). }
+  { Una apertura con plazo (Lsp.ConPlazo): la conexion y su resultado. }
   TApertura = class
   public
     Conn: TFDConnection;
-    Listo: TEvent;
-    Estado: Integer;
     Fallo: Boolean;
     DelMotor: Boolean;
     Kind: TFDCommandExceptionKind;
     Mensaje: string;
-    constructor Create;
-    destructor Destroy; override;
   end;
-
-constructor TApertura.Create;
-begin
-  inherited Create;
-  Listo := TEvent.Create(nil, True, False, '');
-end;
-
-destructor TApertura.Destroy;
-begin
-  Listo.Free;
-  inherited;
-end;
 
 function AbreBase(const AConexion: TConexionDb; out AConn: TFDConnection): string;
 var
@@ -224,7 +207,7 @@ begin
     A.Free;
     raise;
   end;
-  TThread.CreateAnonymousThread(
+  if not TrabajoConPlazo(
     procedure
     begin
       try
@@ -243,20 +226,14 @@ begin
           A.Mensaje := E.Message;
         end;
       end;
-      if TInterlocked.CompareExchange(A.Estado, 2, 0) = 1 then
-      begin
-        A.Conn.Free;
-        A.Free;
-      end
-      else
-        A.Listo.SetEvent;
-    end).Start;
-  if A.Listo.WaitFor(PLAZO_CONEXION_DB * 1000) <> wrSignaled then
-  begin
-    if TInterlocked.CompareExchange(A.Estado, 1, 0) = 0 then
-      Exit(MsgFmt(SR_DB_NO_RESPONDE_FMT, [Nombre, PLAZO_CONEXION_DB]));
-    A.Listo.WaitFor(INFINITE); // termino a la vez: es nuestra
-  end;
+    end, PLAZO_CONEXION_DB * 1000, nil,
+    // vencido: la conexion que se abria ya no es de nadie
+    procedure
+    begin
+      A.Conn.Free;
+      A.Free;
+    end) then
+    Exit(MsgFmt(SR_DB_NO_RESPONDE_FMT, [Nombre, PLAZO_CONEXION_DB]));
   try
     if not A.Fallo then
     begin

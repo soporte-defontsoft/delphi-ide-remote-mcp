@@ -167,7 +167,10 @@ uses
   Lsp.PurgaDelArranque in 'Lsp.PurgaDelArranque.pas',
   Lsp.Conexiones in 'Lsp.Conexiones.pas',
   Lsp.BaseDeDatos in 'Lsp.BaseDeDatos.pas',
-  Mcp.Tools.Db in 'Mcp.Tools.Db.pas';
+  Mcp.Tools.Db in 'Mcp.Tools.Db.pas',
+  Lsp.ClienteHttp in 'Lsp.ClienteHttp.pas',
+  Mcp.Tools.Api in 'Mcp.Tools.Api.pas',
+  Lsp.ConPlazo in 'Lsp.ConPlazo.pas';
 
 {$R *.res}
 

@@ -270,6 +270,9 @@
         <DCCReference Include="Lsp.Conexiones.pas"/>
         <DCCReference Include="Lsp.BaseDeDatos.pas"/>
         <DCCReference Include="Mcp.Tools.Db.pas"/>
+        <DCCReference Include="Lsp.ClienteHttp.pas"/>
+        <DCCReference Include="Mcp.Tools.Api.pas"/>
+        <DCCReference Include="Lsp.ConPlazo.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

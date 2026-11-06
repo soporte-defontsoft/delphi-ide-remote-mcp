@@ -136,6 +136,7 @@ uses
   Lsp.Lugares,
   Lsp.Mascara,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
+  Lsp.Conexiones, // MetodoQueLee: si una peticion de delphi_api lee
   Lsp.JuecesDeArgumentos,
   // la ultima: lo suyo pesaba mas que lo de cualquier otra unidad cuando
   // vivia alli, y asi sigue
@@ -842,6 +843,12 @@ begin
   // insert, update y delete escriben (y la tool, ademas, solo donde el json
   // de conexiones dice readonly:false)
   AnadeAcceso('delphi_db', atMixta, ['connections', 'tables', 'fields', 'rows', 'summary']);
+  // las APIs con nombre (1.29): connections lee la configuracion; request LEE
+  // con GET, HEAD u OPTIONS y sin out= (MetodoQueLee, Lsp.Conexiones: la MISMA
+  // regla para la puerta, LlamadaLee, y para el anuncio) y escribe con los
+  // demas metodos
+  AnadeAcceso('delphi_api', atMixta, ['connections'], 'command',
+    ['request', MsgText(SF_ACCESO_API_REQUEST)]);
 end;
 
 function ComandoQueLee(const ATool, ACmd: string): Boolean;
@@ -934,6 +941,12 @@ begin
       AQue := Trim(AToolName + ' ' + Cmd) + ' ' + P + '=';
       Exit(False);
     end;
+  if SameText(AToolName, 'delphi_api') and SameText(Cmd, 'request') then
+  begin
+    // una peticion lee o escribe por su METODO (el out= ya se nego arriba)
+    AQue := AToolName + ' ' + Cmd + ' ' + MetodoDePeticion(ArgStr(AArguments, 'method'));
+    Exit(MetodoQueLee(ArgStr(AArguments, 'method')));
+  end;
   if SameText(AToolName, 'delphi_git') then
   begin
     // la mitad de consulta de git depende de los argumentos: la MISMA
@@ -1214,6 +1227,9 @@ begin
   // delphi_db, solo donde el workspace nombra proyectos de bases
   // (DbAllowedProjects, 1.29): sin ninguno toda llamada dice DB-002
   if SameText(N, 'delphi_db') and (Length(ProyectosDeConexionDeLaSesion(False)) = 0) then
+    Exit(moSinDestino);
+  // delphi_api, igual con ApiAllowedProjects (1.29): sin ninguno, API-002
+  if SameText(N, 'delphi_api') and (Length(ProyectosDeConexionDeLaSesion(True)) = 0) then
     Exit(moSinDestino);
   // A una credencial de SOLO LECTURA no se le anuncian las tools enteras de
   // escritura: la puerta se las niega siempre (LecturaDenegada) y solo

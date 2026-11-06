@@ -22,6 +22,11 @@ uses
   numero, una cadena), que se libera. Quien llama libera el resultado. }
 function ObjetoJson(const ATexto: string): TJSONObject;
 
+{ ATexto como valor JSON de cualquier clase (objeto, lista, numero, cadena,
+  booleano, null); nil si no es JSON. El cuerpo de una respuesta de
+  delphi_api, que puede ser una lista. Quien llama libera el resultado. }
+function ValorJson(const ATexto: string): TJSONValue;
+
 type
   TTraduceArg = reference to function(const ANombre, AValor: string): string;
 
@@ -60,11 +65,36 @@ function ListaJson(const ATexto: string): TJSONArray;
   casaba y dejaba el nombre de la maquina (revisor del paisaje de la 1.26, B). }
 function TextoEnJson(const ATexto: string): string;
 
+{ El texto de un valor JSON: una cadena tal cual, un numero como lo escribe el
+  JSON (ToString: con punto, sin la configuracion regional; en esta RTL un
+  TJSONNumber NO es un TJSONString, medido el 6-nov-2026), un booleano como
+  true/false; '' si no hay o es otra cosa. Estaba dos veces (el valor de un
+  filtro de delphi_db y un campo del fichero de conexiones) y delphi_api
+  hacia la tercera. }
+function TextoDeValor(const AValor: TJSONValue): string;
+
 implementation
 
 uses
   System.SysUtils,
   System.Classes; // TStringList: los pares a reescribir
+
+function TextoDeValor(const AValor: TJSONValue): string;
+begin
+  if AValor is TJSONBool then
+  begin
+    if TJSONBool(AValor).AsBoolean then
+      Result := 'true'
+    else
+      Result := 'false';
+  end
+  else if AValor is TJSONNumber then
+    Result := TJSONNumber(AValor).ToString
+  else if AValor is TJSONString then
+    Result := TJSONString(AValor).Value
+  else
+    Result := '';
+end;
 
 function TextoEnJson(const ATexto: string): string;
 var
@@ -79,11 +109,16 @@ begin
   end;
 end;
 
+function ValorJson(const ATexto: string): TJSONValue;
+begin
+  Result := TJSONObject.ParseJSONValue(ATexto);
+end;
+
 function ObjetoJson(const ATexto: string): TJSONObject;
 var
   V: TJSONValue;
 begin
-  V := TJSONObject.ParseJSONValue(ATexto);
+  V := ValorJson(ATexto);
   if V is TJSONObject then
     Exit(TJSONObject(V));
   V.Free;

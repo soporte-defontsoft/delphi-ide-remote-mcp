@@ -129,22 +129,6 @@ begin
   Result := T in [ftDate, ftTime, ftDateTime, ftTimeStamp, ftOraTimeStamp];
 end;
 
-{ El texto de un valor JSON: una cadena como viene, un numero como lo
-  escribe el JSON (ToString: con punto, sin la configuracion regional; en
-  esta RTL un TJSONNumber NO es un TJSONString: medido el 6-nov-2026, un
-  value 4.5 no llegaba), un booleano como true/false; '' si es otra cosa. }
-function ValorTexto(AValor: TJSONValue): string;
-begin
-  if AValor is TJSONBool then
-    Result := IfThen(TJSONBool(AValor).AsBoolean, 'true', 'false')
-  else if AValor is TJSONNumber then
-    Result := TJSONNumber(AValor).ToString
-  else if AValor is TJSONString then
-    Result := TJSONString(AValor).Value
-  else
-    Result := '';
-end;
-
 { AValor convertido al tipo de ACampo, con los jueces de la RTL (ISO 8601,
   el BCD y el flotante en la forma invariante) y LA gramatica del si/no; el
   parametro se tipa con el tipo del campo, que PG no compara un entero con un
@@ -162,7 +146,7 @@ begin
   AVar := Null;
   if not ((AValor is TJSONBool) or (AValor is TJSONNumber) or (AValor is TJSONString)) then
     Exit;
-  S := ValorTexto(AValor);
+  S := TextoDeValor(AValor);
   case ACampo.TipoDeCampo of
     ftBoolean:
       begin
@@ -330,7 +314,7 @@ begin
     Exit(False);
   end;
   AObj := TJSONObject(ALista.Items[I]);
-  Result := CampoDe(ACampos, ValorTexto(AObj.GetValue('field')), ATabla, ACampo, ANeg);
+  Result := CampoDe(ACampos, TextoDeValor(AObj.GetValue('field')), ATabla, ACampo, ANeg);
 end;
 
 { El WHERE de AFiltros (filters) y sus parametros, o la negativa. Cada campo
@@ -369,7 +353,7 @@ begin
     begin
       if not EntradaConCampo(Lista, 'filters', I, MsgText(SF_DB_FILTRO_FORMA), ACampos, ATabla, Obj, C, Neg) then
         Exit(Neg);
-      Op := SinMayusculas(ValorTexto(Obj.GetValue('op')));
+      Op := SinMayusculas(TextoDeValor(Obj.GetValue('op')));
       if not MatchText(Op, OPS_DE_FILTRO) then
         Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_FILTRO_OP_FMT, [Op])]));
       Q := CitaNombre(S.Conn, C.Nombre);
@@ -378,7 +362,7 @@ begin
       // empty pregunta si es nulo, que vale tambien para un binario
       if Op = 'empty' then
       begin
-        if not LeeSiNo(ValorTexto(Obj.GetValue('value')), B) then
+        if not LeeSiNo(TextoDeValor(Obj.GetValue('value')), B) then
           Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_VALOR_NO_CABE_FMT,
             [C.Nombre, 'true or false'])]));
         AWhere := AWhere + Q + IfThen(B, ' IS NULL', ' IS NOT NULL');
@@ -390,7 +374,7 @@ begin
       begin
         if not EsTexto(C.TipoDeCampo) then
           Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_FILTRO_TEXTO_FMT, [Op, C.Nombre, C.Tipo])]));
-        T := ValorTexto(Obj.GetValue('value'));
+        T := TextoDeValor(Obj.GetValue('value'));
         if Op = 'contains' then
           AWhere := AWhere + Como('%' + SinComodines(T) + '%')
         else if Op = 'starts_with' then
@@ -776,7 +760,7 @@ begin
               if not EntradaConCampo(Valores, 'values', I, MsgText(SF_DB_AGREGADO_FORMA), Campos, Tabla, Obj, C,
                 Neg) then
                 Exit(Neg);
-              Op := SinMayusculas(ValorTexto(Obj.GetValue('op')));
+              Op := SinMayusculas(TextoDeValor(Obj.GetValue('op')));
               if not MatchText(Op, OPS_DE_VALOR) then
                 Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['values', I + 1, MsgText(SF_DB_AGREGADO_FORMA)]));
               if MatchText(Op, ['sum', 'avg']) and not EsNumero(C.TipoDeCampo) then

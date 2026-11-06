@@ -35,6 +35,8 @@ def tools_list(exe=None):
         env['DELPHI_MCP_DESKTOP_VIEW_HOSTS'] = 'livetools-sin-host'
         # ...and delphi_db (1.29), announced only where a database project is declared
         env['DELPHI_MCP_DB_PROJECTS'] = 'livetools-sin-proyecto'
+        # ...and delphi_api (1.29), where an API project is declared
+        env['DELPHI_MCP_API_PROJECTS'] = 'livetools-sin-proyecto'
         proc = subprocess.Popen([copia], env=env, stdin=subprocess.PIPE, stdout=subprocess.PIPE,
                                 stderr=subprocess.DEVNULL, text=True, encoding='utf-8')
         q = queue.Queue()

@@ -2264,6 +2264,7 @@ const
   SF_ACCESO_GIT_TAG = 'without name or message (then it lists)';
   SF_ACCESO_GIT_ACTION_LIST = 'with action=list';
   SF_ACCESO_GIT_CONFIG = 'without message (then it reads the value)';
+  SF_ACCESO_API_REQUEST = 'with method GET, HEAD or OPTIONS and without out=';
   SF_ACCESO_REPORT_EFECTO = 'writes a report file on the server for the operator';
   SF_ACCESO_MESSAGES_EFECTO = 'command=read consumes (deletes) the message it delivers';
 
@@ -4608,14 +4609,16 @@ const
   // <proyecto>/<alias>, el motor y si es de solo lectura, nunca el servidor,
   // la base real ni la credencial (Lsp.Conexiones).
 
-  // %s = por que no se lee (un SF_DB_FICHERO_*)
+  // %s = por que no se lee (un SF_CONEXIONES_*)
   SR_DB_FICHERO_FMT =
     '[DB-001 DENIED] The database connections of this server cannot be ' +
     'read: %s. Only the operator can fix that, in the connections file of ' +
     'the server. Nothing was done.';
-  SF_DB_FICHERO_NO_HAY = 'there is no connections file';
-  SF_DB_FICHERO_NO_JSON = 'it is not a JSON object';
-  SF_DB_FICHERO_SIN_RAIZ = 'it has no "db-connections" object with its "projects"';
+  // los dos ficheros de conexiones (bases y APIs)
+  SF_CONEXIONES_NO_HAY = 'there is no connections file';
+  SF_CONEXIONES_NO_JSON = 'it is not a JSON object';
+  // %s = su raiz (db-connections, api-connections)
+  SF_CONEXIONES_SIN_RAIZ_FMT = 'it has no "%s" object with its "projects"';
 
   SR_DB_SIN_PROYECTOS =
     '[DB-002 DENIED] This workspace has no database connections: the ' +
@@ -4767,6 +4770,126 @@ const
     'summary: a list of {"field", "op"} - sum | avg | min | max | count; ' +
     'each group also carries n, its rows. insert, update: a list of ' +
     '{"field", "value"} to write (null writes NULL).';
+
+  // ---- delphi_api: las APIs HTTP con nombre (1.29) ----
+  // Las define el operador en su fichero de conexiones de APIs y las abre a
+  // un workspace con ApiAllowedProjects=; el agente ve <proyecto>/<alias> y
+  // sus metodos, nunca la URL base, la credencial ni el pin (Lsp.Conexiones).
+
+  // %s = por que no se lee (un SF_CONEXIONES_*)
+  SR_API_FICHERO_FMT =
+    '[API-001 DENIED] The API connections of this server cannot be read: ' +
+    '%s. Only the operator can fix that, in the API connections file of the ' +
+    'server. Nothing was sent.';
+  SR_API_SIN_PROYECTOS =
+    '[API-002 DENIED] This workspace has no API connections: the operator ' +
+    'gives it the projects of the API connections file it may use ' +
+    '(ApiAllowedProjects= in its section of settings.ini). Nothing was sent.';
+  // %s = lo que el agente dio en api
+  SR_API_DESCONOCIDA_FMT =
+    '[API-003 INVALID_PARAM] "%s" is not an API of this workspace: api ' +
+    'takes a name exactly as delphi_api command=connections lists it ' +
+    '(project/alias). Nothing was sent.';
+  // %s = el nombre, %s = por que no vale (un SF_API_DEF_*)
+  SR_API_INUTILIZABLE_FMT =
+    '[API-004 DENIED] The API "%s" cannot be used as the operator declared ' +
+    'it: %s. Only the operator can fix that. Nothing was sent.';
+  SF_API_DEF_URL =
+    'its "baseUrl" is not an http or https address with its host (and ' +
+    'without ? or #)';
+  // %s = el tipo de auth que declara
+  SF_API_DEF_AUTH_FMT =
+    'its auth "%s" is not basic (user, password), bearer (token), header ' +
+    'or query (name, value)';
+  SF_API_DEF_CABECERAS = 'its "headers" is not an object of texts';
+  SF_API_DEF_PIN = 'its "pin" is not sha256/ and the base64 of 32 bytes';
+  SF_API_DEF_METODOS =
+    'its "methods" is not a list of GET, HEAD, OPTIONS, POST, PUT, PATCH, ' +
+    'DELETE';
+  SF_API_DEF_PLAZO = 'its "timeout" is not a number of seconds from 1 to 300';
+  SN_API_CONNECTIONS =
+    '[API-005] Your APIs: "api" is the name command=request takes, with one ' +
+    'of its methods. The base address, the credentials and the certificate ' +
+    'pin stay with the operator.';
+  SR_API_COMANDO =
+    '[API-006 INVALID_PARAM] Command must be connections | request. Nothing ' +
+    'was sent.';
+  // %s = el metodo, %s = la API, %s = los que admite
+  SR_API_METODO_FMT =
+    '[API-007 DENIED] "%s" is not a method the operator allows on "%s" (%s). ' +
+    'Nothing was sent.';
+  // %s = lo dado
+  SR_API_RUTA_FMT =
+    '[API-008 INVALID_PARAM] path "%s" must be relative to the API: no ' +
+    'scheme or host, no "." or ".." segment, no backslash or control ' +
+    'character, and no ? or # (the query goes in query). Nothing was sent.';
+  // %s = el parametro
+  SR_API_LISTA_FMT =
+    '[API-009 INVALID_PARAM] %s is not a JSON list of {"name": ..., "value": ' +
+    '...} with a name in each. Nothing was sent.';
+  // %s = la cabecera, %s = por que (un SF_API_CABECERA_*)
+  SR_API_CABECERA_FMT =
+    '[API-010 INVALID_PARAM] header "%s": %s. Nothing was sent.';
+  SF_API_CABECERA_DEL_OPERADOR =
+    'the operator or the connection sets it (the server''s fixed headers, ' +
+    'the credential and the transport ones: Host, Content-Length...)';
+  SF_API_CABECERA_MAL =
+    'its name is not an HTTP token (RFC 9110) or its value has a line break';
+  SR_API_CUERPO_Y_FORM =
+    '[API-011 INVALID_PARAM] body and form go apart: body is the whole body, ' +
+    'form builds one. Nothing was sent.';
+  // %s = la API, %s = lo que dijo el cliente (enmascarado)
+  SR_API_NO_RESPONDE_FMT =
+    '[API-012 DENIED] The API "%s" did not answer: %s. Ask the operator ' +
+    'whether it is up.';
+  // en SR_API_NO_RESPONDE_FMT: %d = los segundos del plazo de la conexion
+  SF_API_PLAZO_FMT = 'no answer within its %d seconds (the operator''s timeout)';
+  // %s = la API, %s = el pin del certificado que presento
+  SR_API_CERTIFICADO_FMT =
+    '[API-013 DENIED] The certificate of "%s" is not one Windows trusts, and ' +
+    'the operator pinned none. If it is the right server, the operator can ' +
+    'pin it ("pin": "%s"). Nothing was sent.';
+  SR_API_PIN_FMT =
+    '[API-014 DENIED] "%s" presented a certificate that is not the one the ' +
+    'operator pinned (it presented %s): it may not be the right server. ' +
+    'Nothing was sent; tell the operator.';
+  // en SR_API_PIN_FMT, cuando no se pudo leer el certificado
+  SF_API_PIN_NO_VISTO = 'no certificate this server could read';
+  // %s = el parametro, %s = el comando
+  SR_API_FALTA_FMT =
+    '[API-015 INVALID_PARAM] command=%s needs "%s". Nothing was sent.';
+  SR_API_NO_VA_CON_COMANDO_FMT =
+    '[API-016 INVALID_PARAM] "%s" does not go with command=%s (it would be ' +
+    'ignored). Nothing was sent: %s takes %s.';
+  // %d = los bytes, %s = su tipo
+  SN_API_BINARIO_FMT =
+    '[API-017] The body is binary (%d bytes, %s): out= saves it to a file ' +
+    'of yours.';
+  SN_API_RECORTADO =
+    '[API-018] The body is longer than one answer: this is its beginning; ' +
+    'out= saves all of it to a file of yours.';
+
+  SD_API =
+    'The HTTP APIs the operator gave this workspace, by NAME - a mini ' +
+    'Postman. connections lists them ("api" = project/alias, and the ' +
+    'methods each allows); request sends a method, path, query, headers and ' +
+    'body, and answers with the status, headers, time and body (JSON as ' +
+    'JSON). The base address, the credentials and the certificate pin stay ' +
+    'with the operator; redirects come back, they are not followed.';
+  SP_API_COMMAND = 'connections (the default) | request.';
+  SP_API_API = 'request: the API, as connections lists it (project/alias).';
+  SP_API_METHOD = 'GET (the default) or another the API allows.';
+  SP_API_PATH =
+    'Relative to the API, as text (the server encodes it); no host, ".." or ?.';
+  SP_API_QUERY = 'A list of {"name", "value"}.';
+  SP_API_HEADERS =
+    'Yours, a list of {"name", "value"}; not the operator''s, the ' +
+    'credential or Host/Content-Length.';
+  SP_API_BODY =
+    'The body as text: JSON goes as application/json unless a Content-Type ' +
+    'header says otherwise.';
+  SP_API_FORM = 'A form body instead: a list of {"name", "value"}.';
+  SP_API_OUT = 'A file of yours to save the whole body to (binary too).';
 
   // ---- delphi_build: F2613 helper ----
 
@@ -5222,7 +5345,8 @@ const
     '  know whether it WORKS .............. delphi_test'#10 +
     '  run the program .................... delphi_paserver remote-run ' +
     '(on the target; nothing runs on the server)'#10 +
-    '  its databases, by name (no SQL) .... delphi_db'#10#10 +
+    '  its databases, by name (no SQL) .... delphi_db'#10 +
+    '  its HTTP APIs, by name ............. delphi_api'#10#10 +
     'FORMS AND STYLES'#10 +
     '  what a class publishes ............. delphi_designer info / prop'#10 +
     '  review a .dfm/.fmx ................. delphi_designer lint / tree ' +
@@ -5276,6 +5400,8 @@ const
     'delphi_desktop (no desktop host: DesktopAllowedHosts or DesktopViewHosts)';
   SF_HELP_SIN_DESTINO_DB =
     'delphi_db (no database project: DbAllowedProjects)';
+  SF_HELP_SIN_DESTINO_API =
+    'delphi_api (no API project: ApiAllowedProjects)';
   SF_HELP_TASKS_SOLO_LECTURA =
     #10#10'YOUR CREDENTIAL IS READ-ONLY: the tools that only write are not ' +
     'announced to you (they would refuse), and the mixed ones answer only ' +

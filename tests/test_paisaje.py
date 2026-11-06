@@ -1127,14 +1127,16 @@ REGLAS = [
     # un JSON leido a mano: 'ParseJSONValue(...) as TJSONObject' caia con un array (ronda 16) y estaba otra vez en
     # upload; el enmascarador recorre cualquier valor
     ('un JSON leido a mano', r"\bParseJSONValue\s*\(",
-     [('Lsp.Json.pas', 'ObjetoJson'), ('Lsp.Json.pas', 'ListaJson'), ('Lsp.Json.pas', 'ListaDeTextos'),
+     # (1.29: el parseo de un valor cualquiera, ValorJson, es el de ObjetoJson y el del cuerpo de delphi_api)
+     [('Lsp.Json.pas', 'ValorJson'), ('Lsp.Json.pas', 'ListaJson'), ('Lsp.Json.pas', 'ListaDeTextos'),
       ('Lsp.Mascara.pas', 'EnmascaraConCitas'), ('Lsp.Mascara.pas', 'EnmascaraJsonSalvo'),
       # el armazon MCP (vendor) lee SU protocolo: el cuerpo de una peticion, la respuesta de una tool, el log;
       # las que llevan 'as TJSONObject' leen un objeto (detras de un StartsWith('{'), o el ToJSON de un objeto), y
       # un JSON roto da nil, que el cast deja en nil
       ('MCPServer.JsonRpcProcessor.pas', '*'), ('MCPServer.IdHTTPServer.pas', '*'), ('MCPServer.ToolsManager.pas', '*'),
       ('MCPServer.Logger.pas', '*')],
-     'ObjetoJson, ListaJson y ListaDeTextos (Lsp.Json): un objeto, una lista (tambien dos veces codificada)'),
+     'ValorJson, ObjetoJson, ListaJson y ListaDeTextos (Lsp.Json): un valor, un objeto, una lista (tambien dos '
+     'veces codificada)'),
     # la papelera o la temporal como un trozo de una ruta, por su texto: el juez es EnPapelera / EnTemporal
     # (EnCarpetaLlamada, sobre la ruta canonica); SkipReason es el atajo de los recorredores, que juzgan el texto
     # de lo que recorren sin ir al disco por cada fichero

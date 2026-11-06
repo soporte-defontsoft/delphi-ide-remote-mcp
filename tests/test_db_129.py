@@ -86,15 +86,15 @@ try:
     try:
         r = srv.call('delphi_db', {'command': 'connections'})
         check('D2 con proyectos y sin fichero: DB-001 (no hay fichero)',
-              mc.abre(r, 'SR_DB_FICHERO_FMT') and cat['SF_DB_FICHERO_NO_HAY'] in r, r[:300])
+              mc.abre(r, 'SR_DB_FICHERO_FMT') and cat['SF_CONEXIONES_NO_HAY'] in r, r[:300])
         escribe_conexiones('{ esto no es json')
         r = srv.call('delphi_db', {'command': 'connections'})
         r2 = ''
-        if mc.abre(r, 'SR_DB_FICHERO_FMT') and cat['SF_DB_FICHERO_NO_JSON'] in r:
+        if mc.abre(r, 'SR_DB_FICHERO_FMT') and cat['SF_CONEXIONES_NO_JSON'] in r:
             escribe_conexiones({'otra-cosa': {}})
             r2 = srv.call('delphi_db', {'command': 'connections'})
         check('D3 un fichero que no es JSON, y uno sin db-connections.projects: DB-001 con su porque',
-              mc.abre(r2, 'SR_DB_FICHERO_FMT') and cat['SF_DB_FICHERO_SIN_RAIZ'] in r2, (r[:200], r2[:200]))
+              mc.abre(r2, 'SR_DB_FICHERO_FMT') and cat['SF_CONEXIONES_SIN_RAIZ_FMT'] % 'db-connections' in r2, (r[:200], r2[:200]))
 
         escribe_conexiones(CONEXIONES)
         r = srv.call('delphi_db', {'command': 'connections'})

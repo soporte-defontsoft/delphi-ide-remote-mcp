@@ -1360,12 +1360,14 @@ def sin_respuesta(t):
 # delphi_adb y delphi_desktop se anuncian solo donde se declara A DONDE ir (B10 de la 1.28): una bateria
 # que mide la superficie ENTERA los declara, con nombres que no existen en ninguna parte (nunca se llega a
 # ellos). En el entorno del modo local, y en la seccion [Workspace.*] de un settings.ini (lineas del ini)
-# (y delphi_db, desde la 1.29, solo donde se nombra un proyecto de bases: DbAllowedProjects)
+# (y delphi_db y delphi_api, desde la 1.29, solo donde se nombra un proyecto: DbAllowedProjects,
+# ApiAllowedProjects)
 DESTINOS_DECLARADOS = {'DELPHI_MCP_ADB_DEVICES': 'baterias-sin-dispositivo',
                        'DELPHI_MCP_DESKTOP_VIEW_HOSTS': 'baterias-sin-host',
-                       'DELPHI_MCP_DB_PROJECTS': 'baterias-sin-proyecto'}
+                       'DELPHI_MCP_DB_PROJECTS': 'baterias-sin-proyecto',
+                       'DELPHI_MCP_API_PROJECTS': 'baterias-sin-proyecto'}
 DESTINOS_DECLARADOS_INI = ('AdbAllowedDevices=baterias-sin-dispositivo\nDesktopViewHosts=baterias-sin-host\n'
-                           'DbAllowedProjects=baterias-sin-proyecto\n')
+                           'DbAllowedProjects=baterias-sin-proyecto\nApiAllowedProjects=baterias-sin-proyecto\n')
 
 
 def entorno(extra=None):

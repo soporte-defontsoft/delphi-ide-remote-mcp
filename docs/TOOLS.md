@@ -29,6 +29,7 @@ Every tool this MCP server exposes, with its parameters, types and access level.
 - **The map, and the house rules** — [`delphi_help`](#delphi_help)
 - **Version control** — [`delphi_git`](#delphi_git)
 - **Databases by name (no SQL)** — [`delphi_db`](#delphi_db)
+- **HTTP APIs by name (a mini Postman)** — [`delphi_api`](#delphi_api)
 - **Feedback** — [`delphi_report`](#delphi_report), [`delphi_messages`](#delphi_messages)
 - **Knowledge vault (optional)** — [`vault_read`](#vault_read), [`vault_search`](#vault_search), [`vault_append`](#vault_append), [`vault_create`](#vault_create), [`vault_patch`](#vault_patch)
 
@@ -975,6 +976,33 @@ The databases the operator gave this workspace, by NAME and through operations: 
 The databases are the OPERATOR's: defined in the server's connections file (outside every root: the agent never sees it) and opened to a workspace with `DbAllowedProjects=<project>` in its section of `settings.ini` - a project gives all its databases. Without one, `delphi_db` is not in `tools/list` (it stays callable and answers `DB-002`). The agent names a database `project/alias` exactly as `connections` lists it, and sees its engine (the FireDAC driver) and whether it is read-only; never the server, the real database or the credentials. It works through operations: it never writes SQL (1.29).
 
 Writing (`insert`, `update`, `delete`) is only for a database the connections file declares `"readonly": false`; on a read-only one it is refused before connecting (`DB-017`), and a read-only credential cannot ask for it at all. `update` and `delete` change only the rows their `filters` select and refuse to run without filters (an empty list included, `DB-011`). Values go as parameters typed by their field (`null` writes NULL; a binary field takes only `null`), each command runs in a transaction that is committed only when the database accepts it, and the answer says how many rows it touched (`affected`). No DDL and no procedures.
+
+## HTTP APIs
+
+### `delphi_api`
+
+<!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
+
+The HTTP APIs the operator gave this workspace, by NAME - a mini Postman. connections lists them ("api" = project/alias, and the methods each allows); request sends a method, path, query, headers and body, and answers with the status, headers, time and body (JSON as JSON). The base address, the credentials and the certificate pin stay with the operator; redirects come back, they are not followed.
+
+*Access: mixed (`command` connections read-only; request only with method GET, HEAD or OPTIONS and without out=; every other command read-write, refused to a read-only credential).*
+
+| Parameter | Type | Required | Description |
+|---|---|---|---|
+| `command` | string | optional | connections (the default) \| request. |
+| `api` | string | optional | request: the API, as connections lists it (project/alias). |
+| `method` | string | optional | GET (the default) or another the API allows. |
+| `path` | string | optional | Relative to the API, as text (the server encodes it); no host, ".." or ?. |
+| `query` | array | optional | A list of {"name", "value"}. |
+| `headers` | array | optional | Yours, a list of {"name", "value"}; not the operator's, the credential or Host/Content-Length. |
+| `body` | string | optional | The body as text: JSON goes as application/json unless a Content-Type header says otherwise. |
+| `form` | array | optional | A form body instead: a list of {"name", "value"}. |
+| `out` | string | optional | A file of yours to save the whole body to (binary too). |
+<!-- /contract -->
+
+The APIs are the OPERATOR's, like the databases: defined in the server's API connections file (`connections\apis\api-connections.json`, outside every root) - per project, each API with its `baseUrl`, its credential (`auth`: `basic`, `bearer`, a key in a `header` or in the `query`, or a list of them), fixed `headers`, a certificate `pin` (`sha256/` and the base64 of the SHA-256 of the server's SubjectPublicKeyInfo, the format of `--pinnedpubkey`), the `methods` it allows and a `timeout` - and opened to a workspace with `ApiAllowedProjects=<project>` in its section of `settings.ini`. Without one, `delphi_api` is not in `tools/list` (it answers `API-002`). An entry without `methods` is not used (fail closed).
+
+The agent composes what Postman would let it: the method (one the API allows), a path RELATIVE to the API (no host, no `..` - also encoded -, no `?`: the query goes in `query`), the query, its own headers (never the operator's, the credential's or the transport's: `Host`, `Content-Length`...) and a body (`body` as text, JSON sent as `application/json`; or `form`). It never sees the base address, the credential or the pin, and the answer hides them (a response that echoes the credential shows `<project/alias>` instead). Redirects come back with their `Location`; they are not followed, so the credential never travels elsewhere. With a `pin`, only the server holding that key is spoken to - a self-signed one included - and a mismatch sends nothing (`API-014`); without one, Windows judges the certificate, and one it does not trust is refused with the pin it presented, for the operator (`API-013`). The service's Windows account is never offered to an API. A binary body, or one longer than an answer, goes whole to a file of the workspace with `out=`. To a read-only credential, `request` answers with GET, HEAD or OPTIONS and without `out=` (1.29).
 
 ## Feedback
 

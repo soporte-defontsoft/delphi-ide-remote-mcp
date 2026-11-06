@@ -159,6 +159,8 @@ PROBAR = [
                            'out': AJENO_PNG}),
     ('delphi_adb', 'apk', {'command': 'install', 'device': DEV,
                            'apk': AJENO_APK}),
+    # 1.29: el FICHERO donde se guarda el cuerpo de una respuesta
+    ('delphi_api', 'out', {'command': 'request', 'api': 'r45-sin-proyecto/x', 'out': AJENO_PNG}),
     # LA PRUEBA DE QUE EL SUELO DE LA PUERTA VIVE (v1.0.14). Dentro de la
     # tool el rechazo del profile llega ANTES que el PathDenied de project,
     # asi que sin un PAServer vivo esta sonda era imposible. El suelo
@@ -232,6 +234,8 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     'AdbAllowedDevices=%s' % DEV,
     # delphi_db (1.29) se anuncia solo donde se nombra un proyecto de bases
     'DbAllowedProjects=r45-sin-proyecto',
+    # ...y delphi_api, donde se nombra uno de APIs
+    'ApiAllowedProjects=r45-sin-proyecto',
     # el vault tambien de escritura: tools/list no anuncia las de escritura de
     # un vault de solo lectura (6-oct-2026) y el descubridor no las veria
     'VaultPath=%s' % VAULT, 'VaultReadOnly=0', '',
