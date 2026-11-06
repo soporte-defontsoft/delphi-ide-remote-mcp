@@ -271,7 +271,8 @@ uses
   Lsp.Lineas,
   Lsp.Extensiones,
   Lsp.Papelera,
-  Lsp.Puertas;
+  Lsp.Puertas,
+  Lsp.PuertaDeLaLlamada;
 
 const
   // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo

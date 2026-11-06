@@ -108,7 +108,8 @@ uses
   Lsp.DesignerMetaGen, // CalientaTablasDelDisenador
   Lsp.Discovery, // NotasDeArranqueDelphi
   Lsp.Settings,
-  Lsp.Mascara;
+  Lsp.Mascara,
+  Lsp.PuertaDeLaLlamada;
 
 constructor TMcpHost.Create;
 begin

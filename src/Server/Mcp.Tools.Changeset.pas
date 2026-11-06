@@ -86,7 +86,8 @@ uses
   Lsp.Json,     // ListaJson: las ops, desenvueltas si llegaron dos veces codificadas
   Lsp.Changeset,
   Lsp.FormRender, // EmpiezaLaEspera: el reloj de lo que espera el cliente
-  Lsp.Extensiones;
+  Lsp.Extensiones,
+  Lsp.PuertaDeLaLlamada;
 
 constructor TDelphiChangesetTool.Create;
 begin

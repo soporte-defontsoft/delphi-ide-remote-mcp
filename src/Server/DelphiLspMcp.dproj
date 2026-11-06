@@ -265,6 +265,7 @@
         <DCCReference Include="Lsp.ClausulaUses.pas"/>
         <DCCReference Include="Lsp.Capturas.pas"/>
         <DCCReference Include="Lsp.JuecesDeArgumentos.pas"/>
+        <DCCReference Include="Lsp.PuertaDeLaLlamada.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

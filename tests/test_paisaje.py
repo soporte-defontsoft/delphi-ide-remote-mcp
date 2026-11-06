@@ -535,7 +535,7 @@ REGLAS = [
      'expansion en otro sitio es una excepcion sin declarar (era una lista de nombres, '
      'PARAMS_CON_CONTENIDO, y un value entre comillas llegaba como srvX: al .dfm)'),
     ('la expansion de ida de una llamada con otro predicado', r'\bExpandVirtualDrives\s*\(',
-     [('Lsp.Guard.pas', 'ExpandeUnidadesVirtuales')],
+     [('Lsp.PuertaDeLaLlamada.pas', 'ExpandeUnidadesVirtuales')],
      'la puerta expande cada llamada UNA vez, preguntando a las marcas [Contenido]: otra llamada con '
      'otro predicado seria una excepcion sin declarar (revisor de B-9, 10-oct-2026)'),
     ('un paseo del arbol por cada mascara',
@@ -547,7 +547,7 @@ REGLAS = [
     # deriva probable es otra normalizacion, no la misma; revisor de B-9)
     ('la clave tool|parametro de las marcas',
      r"'\|'\s*\+\s*TMCPSerializer\.NormalizeKey|\bLowerCase\([^)]*\)\s*\+\s*'\|'",
-     [('Lsp.Guard.pas', 'ClaveDeParam')],
+     [('Lsp.PuertaDeLaLlamada.pas', 'ClaveDeParam')],
      'ClaveDeParam: la clave de las marcas [RutaDelServidor] y [Contenido], con la normalizacion del '
      'binder; estaba a mano en cuatro sitios de Lsp.Guard (B-9, 10-oct-2026)'),
     ('GetTempPath suelto', r'\bGetTempPath\w*\s*\(', [],
@@ -1336,7 +1336,7 @@ REGLAS = [
       ('Lsp.Guard.pas', 'LugaresProtegidos'),
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
       ('Lsp.Guard.pas', 'RaizEnLetraNoConectada'), ('Lsp.Guard.pas', 'ReadOnlyRootOf'),
-      ('Lsp.Guard.pas', 'RootItselfDenied'),
+      ('Lsp.PuertaDeLaLlamada.pas', 'RootItselfDenied'),
       ('Lsp.Mascara.pas', 'ServedDriveLetters'), ('Lsp.Guard.pas', 'UncFueraDeLugares'),
       ('Lsp.BuildRunner.pas', 'UnitSourceFolders'),
       ('Lsp.References.pas', 'ProjectsSearching'), ('Lsp.Session.pas', 'TLspSession.FindDproj'),
@@ -2688,7 +2688,7 @@ def tools_sin_acceso(ficheros_texto):
     for f, t in ficheros_texto:
         c = '\n'.join(codigo(t))
         reg.update(REGISTRADA.findall(c))
-        if os.path.basename(f) == 'Lsp.Guard.pas':
+        if os.path.basename(f) == 'Lsp.PuertaDeLaLlamada.pas':
             i = c.find('procedure ConstruyeAccesos;')
             cuerpo = c[i:c.find('\nend;', i)] if i >= 0 else ''
             # una FILA: el primer argumento de AnadeAcceso, o un nombre de la lista de las enteras de lectura
@@ -2699,7 +2699,7 @@ def tools_sin_acceso(ficheros_texto):
     return sorted(reg - dec)
 check('mutante de la tabla de accesos: una tool registrada sin su fila se caza',
       tools_sin_acceso([('Plantada.pas', "initialization\n  TMCPRegistry.RegisterTool('delphi_nueva', nil);\n"),
-                        ('Lsp.Guard.pas', "procedure ConstruyeAccesos;\nbegin\n  AnadeAcceso('delphi_vieja', "
+                        ('Lsp.PuertaDeLaLlamada.pas', "procedure ConstruyeAccesos;\nbegin\n  AnadeAcceso('delphi_vieja', "
                                           "atLectura, []);\nend;\n")]) == ['delphi_nueva'])
 SIN_ACCESO = tools_sin_acceso(TEXTOS)
 check('la tabla de accesos (ConstruyeAccesos) declara TODAS las tools registradas: lo que falta seria de escritura',

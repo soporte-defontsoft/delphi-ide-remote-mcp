@@ -53,9 +53,10 @@ uses
   System.Math,
   System.JSON,
   MCPServer.Registration,
-  Lsp.Guard, // ToolHiddenFromList: la tabla dice lo que tools/list anuncia
+  Lsp.Guard, // ParametroQueNoVa: lo que no es del comando
   Lsp.Pascal, // EditDistance
-  Lsp.Settings; // IsReadOnlyNow
+  Lsp.Settings, // IsReadOnlyNow
+  Lsp.PuertaDeLaLlamada; // ToolHiddenFromList: la tabla dice lo que tools/list anuncia
 
 constructor TDelphiHelpTool.Create;
 begin
