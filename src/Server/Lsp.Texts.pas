@@ -4628,8 +4628,10 @@ const
     'takes a name exactly as delphi_db command=connections lists it ' +
     '(project/alias). Nothing was done.';
 
-  // (DB-004, la base declarada mal al usarla, llega con la primera operacion
-  // que conecta; los porques ya los lista connections)
+  // %s = el nombre, %s = por que no vale (un SF_DB_DEF_*)
+  SR_DB_INUTILIZABLE_FMT =
+    '[DB-004 DENIED] The database "%s" cannot be used as the operator ' +
+    'declared it: %s. Only the operator can fix that. Nothing was done.';
   SF_DB_DEF_SIN_MOTOR = 'it has no "engine" (the FireDAC driver: MSSQL, PG...)';
   // %s = el provider que declara
   SF_DB_DEF_PROVEEDOR_FMT = 'its provider is "%s", and this server connects through FIREDAC only';
@@ -4643,17 +4645,117 @@ const
     'stay with the operator. readonly=true only reads.';
 
   SR_DB_COMANDO =
-    '[DB-006 INVALID_PARAM] Command must be connections. Nothing was done.';
+    '[DB-006 INVALID_PARAM] Command must be connections | tables | fields | ' +
+    'rows | summary. Nothing was done.';
+
+  // %s = el nombre de la base, %d = los segundos
+  SR_DB_NO_RESPONDE_FMT =
+    '[DB-007 DENIED] The database "%s" did not answer within %d seconds: ' +
+    'ask the operator whether it is up. Nothing was done.';
+  SR_DB_LOGIN_FMT =
+    '[DB-008 DENIED] The database "%s" refused the login the operator ' +
+    'declared, or that database does not exist there: only the operator ' +
+    'can fix it. Nothing was done.';
+  // %s = el nombre, %s = lo que dijo la base (enmascarado)
+  SR_DB_NO_ABRE_FMT =
+    '[DB-009 DENIED] The database "%s" could not be opened: %s. Nothing ' +
+    'was done.';
+  SR_DB_RESPONDE_FMT =
+    '[DB-010 DENIED] The database "%s" refused it: %s. Nothing was ' +
+    'changed.';
+  // %s = el parametro, %s = el comando
+  SR_DB_FALTA_FMT =
+    '[DB-011 INVALID_PARAM] command=%s needs "%s". Nothing was done.';
+  // %s = lo dado, %s = la base
+  SR_DB_TABLA_FMT =
+    '[DB-012 INVALID_PARAM] "%s" is not a table or view of "%s": table ' +
+    'takes a name exactly as command=tables lists it. Nothing was done.';
+  // %s = lo dado, %s = la tabla
+  SR_DB_CAMPO_FMT =
+    '[DB-013 INVALID_PARAM] "%s" is not a field of %s: fields, filters, ' +
+    'order, group and values take names as command=fields lists them. ' +
+    'Nothing was done.';
+  // %d = el numero del filtro (desde 1), %s = por que (un SF_DB_FILTRO_*)
+  SR_DB_FILTRO_FMT =
+    '[DB-014 INVALID_PARAM] filters, entry %d: %s. Nothing was done.';
+  SF_DB_FILTRO_FORMA =
+    'each entry is {"field": ..., "op": ..., "value": ...}';
+  // %s = el op dado
+  SF_DB_FILTRO_OP_FMT =
+    '"%s" is not an op: equals, not_equals, contains, words, starts_with, ' +
+    'greater, less, greater_or_equal, less_or_equal, empty (value true or ' +
+    'false)';
+  // %s = el campo, %s = su tipo en la base
+  SF_DB_FILTRO_VALOR_FMT =
+    'the value does not fit field "%s" (%s; a date goes as ' +
+    'yyyy-mm-dd or yyyy-mm-ddThh:mm:ss)';
+  SF_DB_FILTRO_BINARIO_FMT = 'field "%s" holds binary data and is not compared';
+  // %s = el op, %s = el campo, %s = su tipo
+  SF_DB_FILTRO_TEXTO_FMT = '%s compares text, and "%s" is %s';
+  // %d = los bytes
+  SF_DB_BINARIO_FMT = '(binary, %d bytes)';
+  // Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa)
+  SR_DB_NO_VA_CON_COMANDO_FMT =
+    '[DB-020 INVALID_PARAM] "%s" does not go with command=%s (it would be ' +
+    'ignored). Nothing was done: %s takes %s.';
+  // %s = el parametro, %s = lo que lleva cada entrada
+  SR_DB_LISTA_FMT =
+    '[DB-015 INVALID_PARAM] %s is not a JSON list of %s. Nothing was done.';
+  // %s = lo dado
+  SR_DB_ORDEN_FMT =
+    '[DB-016 INVALID_PARAM] order takes "field" or "field desc", ' +
+    'separated by commas (summary: also n or a value as op_field): "%s". ' +
+    'Nothing was done.';
+  // %d = la entrada (desde 1), %s = por que
+  SR_DB_AGREGADO_FMT =
+    '[DB-017 INVALID_PARAM] values, entry %d: %s. Nothing was done.';
+  SF_DB_AGREGADO_FORMA =
+    'each entry is {"field": ..., "op": sum | avg | min | max | count}';
+  // %s = el campo
+  SF_DB_AGREGADO_NUMERO_FMT = 'sum and avg take a numeric field, and "%s" is not one';
+  // %s = lo dado
+  SR_DB_PARTE_FMT =
+    '[DB-018 INVALID_PARAM] group, "%s": an entry is "field", or ' +
+    '"field:year" / "field:month" / "field:day" / "field:hour" for a date ' +
+    'field. Nothing was done.';
+
+  SN_DB_ROWS =
+    '[DB-019] total counts every row the filters select; rows holds ' +
+    'those from offset, up to limit and to the size of one answer ' +
+    '(truncated says it was cut: ask for the next page with offset, or for ' +
+    'fewer fields). Text compares as the database does (its collation: ' +
+    'case and accents).';
 
   SD_DB =
-    'The databases the operator gave this workspace, used by NAME and through ' +
-    'operations - you never write SQL. command=connections lists them: "db" ' +
-    '(project/alias: the name every command takes), "engine" (the FireDAC ' +
-    'driver: MSSQL, PG...) and "readonly"; the ones declared wrong come in ' +
-    '"unusable" with why. The server, the credentials and the real database ' +
+    'The databases the operator gave this workspace, by NAME and through ' +
+    'operations: you never write SQL - the server composes it from these ' +
+    'fields and FireDAC turns it into each engine''s dialect. connections ' +
+    'lists them ("db" = project/alias, engine, readonly; the ones declared ' +
+    'wrong under "unusable"); tables and fields, what one holds; rows reads ' +
+    '(filters, fields, order, limit/offset, and always the total); summary ' +
+    'groups and adds up. The server, the credentials and the real database ' +
     'stay with the operator.';
   SP_DB_COMMAND =
-    'connections (the default): the databases of this workspace.';
+    'connections (the default) | tables | fields | rows | summary.';
+  SP_DB_DB = 'The database, as connections lists it (project/alias).';
+  SP_DB_TABLE = 'fields, rows, summary: a table or view as tables lists it.';
+  SP_DB_FIELDS = 'rows: the fields to return (default: all but binary ones).';
+  SP_DB_FILTERS =
+    'rows, summary: a list of {"field", "op", "value"}; all must hold. op: ' +
+    'equals, not_equals, greater, less, greater_or_equal, less_or_equal, ' +
+    'contains, starts_with, words (every word, any order), empty (value ' +
+    'true/false). A date as yyyy-mm-dd or yyyy-mm-ddThh:mm:ss.';
+  SP_DB_ORDER =
+    '"field" or "field desc", comma separated; summary: also n, or a value ' +
+    'as op_field (sum_total).';
+  SP_DB_LIMIT = 'rows (default 100) and summary (default 50); at most 500.';
+  SP_DB_OFFSET = 'rows: how many to skip, for the next page.';
+  SP_DB_GROUP =
+    'summary: the fields to group by; a date field also as field:year, ' +
+    'field:month, field:day or field:hour.';
+  SP_DB_VALUES =
+    'summary: a list of {"field", "op"} - sum | avg | min | max | count; ' +
+    'each group also carries n, its rows.';
 
   // ---- delphi_build: F2613 helper ----
 

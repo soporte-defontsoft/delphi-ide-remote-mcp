@@ -20,7 +20,29 @@
 interface
 
 uses
+  System.SysUtils, Data.DB, FireDAC.Comp.Client,
   Lsp.Conexiones;
+
+type
+  { Un campo de una tabla como lo dice el catalogo de la base (los metadatos
+    de FireDAC: mkTableFields y la clave), y el TFieldType con el que se tipa
+    un parametro contra el (ColumnDef2FieldDef): PG no compara un entero con
+    un texto (medido el 6-nov-2026), y la conversion la decide FireDAC. }
+  TCampoDb = record
+    Nombre: string;
+    Tipo: string;            // como lo llama la base (int, varchar, timestamp...)
+    TipoDeCampo: TFieldType; // el de FireDAC
+    Nulo: Boolean;
+    Clave: Boolean;
+    Longitud, Precision, Escala: Integer;
+  end;
+
+const
+  // segundos que espera el servidor a que una base abra: SQL Server con un
+  // host que no responde tardaba 42 s con LoginTimeout=5 (medido el 6-nov)
+  PLAZO_CONEXION_DB = 12;
+  // milisegundos de una orden: pasado, FireDAC la cancela
+  PLAZO_ORDEN_DB = 30000;
 
 { Los motores de este servidor: los DriverID de los drivers enlazados, como
   los dice FireDAC (FDManager.GetDriverNames). }
@@ -32,14 +54,44 @@ function MotoresDeBd: TArray<string>;
   la usa lo envuelve en DB-004. }
 function DefectoDeConexion(const AConexion: TConexionDb): string;
 
+{ Abre AConexion con lo que dice su json y nada mas: el puerto y el plazo,
+  solo si la tabla de parametros de su driver los tiene (lo que ensena el
+  editor de conexiones del IDE); y en un driver de libpq, sin el pgpass de la
+  cuenta del servidor (lo leia por su cuenta y conectaba sin contrasena,
+  medido el 6-nov). Con plazo PROPIO: si no abre en PLAZO_CONEXION_DB, DB-007
+  y el hilo que espera a la base la libera cuando termine. '' = abierta en
+  AConn (la libera quien llama); si no, la negativa ya enmascarada. }
+function AbreBase(const AConexion: TConexionDb; out AConn: TFDConnection): string;
+
+{ Las tablas (o las vistas, con AVistas) del esquema en que abre la conexion,
+  como las nombra FireDAC: en PG, sin el esquema, salian las 214 de
+  information_schema y pg_catalog (medido el 6-nov). }
+function TablasDeBase(AConn: TFDConnection; AVistas: Boolean): TArray<string>;
+
+{ Los campos de ATabla, en su orden. }
+function CamposDeTabla(AConn: TFDConnection; const ATabla: string): TArray<TCampoDb>;
+
+{ ANombre entrecomillado como lo pide el motor ([x] en MSSQL, "x" en PG): el
+  de FireDAC, nunca uno nuestro. }
+function CitaNombre(AConn: TFDConnection; const ANombre: string): string;
+
+{ DB-010 con lo que dijo la base, enmascarado. }
+function NegativaDeLaBase(E: Exception; const AConexion: TConexionDb): string;
+
 implementation
 
 uses
-  System.SysUtils, System.Classes, System.StrUtils,
+  System.Classes, System.StrUtils, System.SyncObjs, System.IOUtils, System.Variants,
   FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.Stan.Def,
-  FireDAC.Stan.Async, FireDAC.Phys.Intf, FireDAC.Phys, FireDAC.Phys.MSSQL,
-  FireDAC.Phys.PG, FireDAC.DApt, FireDAC.ConsoleUI.Wait, FireDAC.Comp.Client,
+  FireDAC.Stan.Async, FireDAC.Stan.Consts, FireDAC.Phys.Intf, FireDAC.Phys,
+  FireDAC.Phys.MSSQL, FireDAC.Phys.PG, FireDAC.DApt, FireDAC.DatS,
+  FireDAC.ConsoleUI.Wait,
   Lsp.Texts, Lsp.Casa;
+
+const
+  // el fichero de contrasenas que se le da a libpq para que no lea el de la
+  // cuenta: NO EXISTE (en la casa del motor, donde ningun agente escribe)
+  FICHERO_SIN_CLAVES = 'sin-claves.pgpass';
 
 var
   // los drivers que cargan su DLL de la casa, con el enlace que la fija:
@@ -70,6 +122,222 @@ begin
   if not MatchText(AConexion.Motor, Motores) then
     Exit(MsgFmt(SF_DB_DEF_MOTOR_FMT, [AConexion.Motor, string.Join(', ', Motores)]));
   Result := '';
+end;
+
+{ Los nombres de la tabla de parametros de un driver (GetConnParams). }
+function ParametrosDelDriver(const ADriverID: string): TArray<string>;
+var
+  Meta: IFDPhysDriverMetadata;
+  T: TFDDatSTable;
+  Col, R: Integer;
+begin
+  Result := [];
+  (FDPhysManager as IFDPhysManagerMetadata).CreateDriverMetadata(ADriverID, Meta);
+  T := Meta.GetConnParams(nil);
+  try
+    Col := -1;
+    for R := 0 to T.Columns.Count - 1 do
+      if SameText(T.Columns[R].Name, 'Name') then
+        Col := R;
+    if Col < 0 then
+      Exit;
+    for R := 0 to T.Rows.Count - 1 do
+      Result := Result + [VarToStr(T.Rows[R].GetData(Col))];
+  finally
+    T.Free;
+  end;
+end;
+
+procedure PonParametros(AConn: TFDConnection; const C: TConexionDb);
+var
+  Del: TArray<string>;
+begin
+  Del := ParametrosDelDriver(C.Motor);
+  AConn.LoginPrompt := False;
+  AConn.Params.Clear;
+  AConn.Params.DriverID := C.Motor;
+  AConn.Params.Database := C.Base;
+  AConn.Params.UserName := C.Usuario;
+  AConn.Params.Password := C.Clave;
+  if C.Servidor <> '' then
+    AConn.Params.Values[S_FD_ConnParam_Common_Server] := C.Servidor;
+  if (C.Puerto <> '') and MatchText(S_FD_ConnParam_Common_Port, Del) then
+    AConn.Params.Values[S_FD_ConnParam_Common_Port] := C.Puerto;
+  if MatchText(S_FD_ConnParam_Common_LoginTimeout, Del) then
+    AConn.Params.Values[S_FD_ConnParam_Common_LoginTimeout] := IntToStr(PLAZO_CONEXION_DB - 2);
+  if MatchText(S_FD_ConnParam_PG_PGAdvanced, Del) then
+    AConn.Params.Values[S_FD_ConnParam_PG_PGAdvanced] :=
+      'passfile=' + TPath.Combine(CarpetaDeDriverDeBd(C.Motor), FICHERO_SIN_CLAVES);
+  AConn.ResourceOptions.CmdExecTimeout := PLAZO_ORDEN_DB;
+end;
+
+type
+  { Una apertura con plazo: la conexion, el resultado y quien la libera. Estado
+    0 = esperando, 1 = quien esperaba se fue (la libera el hilo), 2 = el hilo
+    termino (la libera quien esperaba). }
+  TApertura = class
+  public
+    Conn: TFDConnection;
+    Listo: TEvent;
+    Estado: Integer;
+    Fallo: Boolean;
+    DelMotor: Boolean;
+    Kind: TFDCommandExceptionKind;
+    Mensaje: string;
+    constructor Create;
+    destructor Destroy; override;
+  end;
+
+constructor TApertura.Create;
+begin
+  inherited Create;
+  Listo := TEvent.Create(nil, True, False, '');
+end;
+
+destructor TApertura.Destroy;
+begin
+  Listo.Free;
+  inherited;
+end;
+
+function AbreBase(const AConexion: TConexionDb; out AConn: TFDConnection): string;
+var
+  A: TApertura;
+  Nombre: string;
+begin
+  AConn := nil;
+  Nombre := NombreDeConexion(AConexion);
+  A := TApertura.Create;
+  try
+    A.Conn := TFDConnection.Create(nil);
+    PonParametros(A.Conn, AConexion);
+  except
+    A.Conn.Free;
+    A.Free;
+    raise;
+  end;
+  TThread.CreateAnonymousThread(
+    procedure
+    begin
+      try
+        A.Conn.Open;
+      except
+        on E: EFDDBEngineException do
+        begin
+          A.Fallo := True;
+          A.DelMotor := True;
+          A.Kind := E.Kind;
+          A.Mensaje := E.Message;
+        end;
+        on E: Exception do
+        begin
+          A.Fallo := True;
+          A.Mensaje := E.Message;
+        end;
+      end;
+      if TInterlocked.CompareExchange(A.Estado, 2, 0) = 1 then
+      begin
+        A.Conn.Free;
+        A.Free;
+      end
+      else
+        A.Listo.SetEvent;
+    end).Start;
+  if A.Listo.WaitFor(PLAZO_CONEXION_DB * 1000) <> wrSignaled then
+  begin
+    if TInterlocked.CompareExchange(A.Estado, 1, 0) = 0 then
+      Exit(MsgFmt(SR_DB_NO_RESPONDE_FMT, [Nombre, PLAZO_CONEXION_DB]));
+    A.Listo.WaitFor(INFINITE); // termino a la vez: es nuestra
+  end;
+  try
+    if not A.Fallo then
+    begin
+      AConn := A.Conn;
+      Exit('');
+    end;
+    A.Conn.Free;
+    if A.DelMotor and (A.Kind in [ekUserPwdInvalid, ekUserPwdExpired]) then
+      Exit(MsgFmt(SR_DB_LOGIN_FMT, [Nombre]));
+    Result := MsgFmt(SR_DB_NO_ABRE_FMT, [Nombre, EnmascaraConexion(A.Mensaje, AConexion)]);
+  finally
+    A.Free;
+  end;
+end;
+
+function TablasDeBase(AConn: TFDConnection; AVistas: Boolean): TArray<string>;
+var
+  L: TStringList;
+  Tipos: TFDPhysTableKinds;
+begin
+  if AVistas then
+    Tipos := [tkView]
+  else
+    Tipos := [tkTable];
+  L := TStringList.Create;
+  try
+    AConn.GetTableNames('', AConn.CurrentSchema, '', L, [osMy, osOther], Tipos, False);
+    L.Sort;
+    Result := L.ToStringArray;
+  finally
+    L.Free;
+  end;
+end;
+
+function CamposDeTabla(AConn: TFDConnection; const ATabla: string): TArray<TCampoDb>;
+var
+  M: TFDMetaInfoQuery;
+  Claves: TStringList;
+  C: TCampoDb;
+  Atr: TFDDataAttributes;
+  N, P, S: Integer;
+  Tam: LongWord;
+begin
+  Result := [];
+  Claves := TStringList.Create;
+  M := TFDMetaInfoQuery.Create(nil);
+  try
+    AConn.GetKeyFieldNames('', AConn.CurrentSchema, ATabla, '', Claves);
+    M.Connection := AConn;
+    M.MetaInfoKind := mkTableFields;
+    M.SchemaName := AConn.CurrentSchema;
+    M.ObjectName := ATabla;
+    M.Open;
+    while not M.Eof do
+    begin
+      C := Default(TCampoDb);
+      C.Nombre := M.FieldByName('COLUMN_NAME').AsString;
+      C.Tipo := M.FieldByName('COLUMN_TYPENAME').AsString;
+      C.Longitud := M.FieldByName('COLUMN_LENGTH').AsInteger;
+      C.Precision := M.FieldByName('COLUMN_PRECISION').AsInteger;
+      C.Escala := M.FieldByName('COLUMN_SCALE').AsInteger;
+      N := M.FieldByName('COLUMN_ATTRIBUTES').AsInteger;
+      Atr := [];
+      Move(N, Atr, SizeOf(Atr));
+      C.Nulo := caAllowNull in Atr;
+      C.Clave := Claves.IndexOf(C.Nombre) >= 0;
+      Tam := 0;
+      P := 0;
+      S := 0;
+      AConn.FormatOptions.ColumnDef2FieldDef(TFDDataType(M.FieldByName('COLUMN_DATATYPE').AsInteger),
+        LongWord(C.Longitud), C.Precision, C.Escala, Atr, C.TipoDeCampo, Tam, P, S);
+      Result := Result + [C];
+      M.Next;
+    end;
+  finally
+    M.Free;
+    Claves.Free;
+  end;
+end;
+
+function CitaNombre(AConn: TFDConnection; const ANombre: string): string;
+begin
+  Result := AConn.ConnectionMetaDataIntf.QuoteObjName(ANombre, npObject);
+end;
+
+function NegativaDeLaBase(E: Exception; const AConexion: TConexionDb): string;
+begin
+  Result := MsgFmt(SR_DB_RESPONDE_FMT, [NombreDeConexion(AConexion),
+    EnmascaraConexion(E.Message, AConexion)]);
 end;
 
 initialization

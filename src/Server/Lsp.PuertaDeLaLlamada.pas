@@ -836,9 +836,10 @@ begin
   // preview lee; apply escribe por el motor de changesets (lo negaba el
   // escritor al llegar a escribir; ahora la puerta, a la entrada, como a todas)
   AnadeAcceso('delphi_rename_symbol', atMixta, ['preview'], 'mode');
-  // las bases con nombre (1.29): connections lee la configuracion; lo que
-  // no esta en la lista se niega a una credencial de lectura, cerrado
-  AnadeAcceso('delphi_db', atMixta, ['connections']);
+  // las bases con nombre (1.29): connections lee la configuracion y tables,
+  // fields, rows y summary leen la base (en una transaccion que se deshace);
+  // lo que no esta en la lista se niega a una credencial de lectura, cerrado
+  AnadeAcceso('delphi_db', atMixta, ['connections', 'tables', 'fields', 'rows', 'summary']);
 end;
 
 function ComandoQueLee(const ATool, ACmd: string): Boolean;

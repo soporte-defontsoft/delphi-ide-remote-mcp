@@ -115,8 +115,8 @@ try:
         check('D4 ...las de un proyecto NO permitido, en ninguna parte', 'ajeno' not in r, r[:600])
         check('D5 ...y ningun secreto del json en la respuesta', not [s for s in SECRETOS if s.lower() in r.lower()],
               [s for s in SECRETOS if s.lower() in r.lower()])
-        r = srv.call('delphi_db', {'command': 'tables'})
-        check('D7 un comando que no existe (todavia): DB-006', mc.abre(r, 'SR_DB_COMANDO'), r[:300])
+        r = srv.call('delphi_db', {'command': 'drop'})
+        check('D7 un comando que no existe: DB-006', mc.abre(r, 'SR_DB_COMANDO'), r[:300])
         a = anunciadas(srv)
         t = srv.call('delphi_help', {'command': 'tasks'})
         check('D8 con proyectos: tools/list anuncia delphi_db y tasks no dice que le falte',

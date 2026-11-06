@@ -104,14 +104,16 @@ begin
 end;
 
 { El valor de AClave como texto: una cadena, o un numero escrito como tal
-  ("port": 5432; TJSONNumber es un TJSONString); '' si no esta o es otra
-  cosa. }
+  ("port": 5432, como lo escribe el JSON; en esta RTL un TJSONNumber no es
+  un TJSONString, medido el 6-nov-2026); '' si no esta o es otra cosa. }
 function Campo(const AObj: TJSONObject; const AClave: string): string;
 var
   V: TJSONValue;
 begin
   V := AObj.GetValue(AClave);
-  if V is TJSONString then
+  if V is TJSONNumber then
+    Result := TJSONNumber(V).ToString
+  else if V is TJSONString then
     Result := TJSONString(V).Value
   else
     Result := '';

@@ -230,6 +230,8 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     # por su RUTA: desde la 1.22.2 un nombre a secas no autoriza (RUN-022)
     'RemoteRunProjects=%s' % AJENO_DPROJ, 'DesktopAllowedHosts=*',
     'AdbAllowedDevices=%s' % DEV,
+    # delphi_db (1.29) se anuncia solo donde se nombra un proyecto de bases
+    'DbAllowedProjects=r45-sin-proyecto',
     # el vault tambien de escritura: tools/list no anuncia las de escritura de
     # un vault de solo lectura (6-oct-2026) y el descubridor no las veria
     'VaultPath=%s' % VAULT, 'VaultReadOnly=0', '',

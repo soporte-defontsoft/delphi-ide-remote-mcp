@@ -954,13 +954,22 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-The databases the operator gave this workspace, used by NAME and through operations - you never write SQL. command=connections lists them: "db" (project/alias: the name every command takes), "engine" (the FireDAC driver: MSSQL, PG...) and "readonly"; the ones declared wrong come in "unusable" with why. The server, the credentials and the real database stay with the operator.
+The databases the operator gave this workspace, by NAME and through operations: you never write SQL - the server composes it from these fields and FireDAC turns it into each engine's dialect. connections lists them ("db" = project/alias, engine, readonly; the ones declared wrong under "unusable"); tables and fields, what one holds; rows reads (filters, fields, order, limit/offset, and always the total); summary groups and adds up. The server, the credentials and the real database stay with the operator.
 
-*Access: mixed (`command` connections read-only; every other command read-write, refused to a read-only credential).*
+*Access: mixed (`command` connections / tables / fields / rows / summary read-only; every other command read-write, refused to a read-only credential).*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
-| `command` | string | optional | connections (the default): the databases of this workspace. |
+| `command` | string | optional | connections (the default) \| tables \| fields \| rows \| summary. |
+| `db` | string | optional | The database, as connections lists it (project/alias). |
+| `table` | string | optional | fields, rows, summary: a table or view as tables lists it. |
+| `fields` | array | optional | rows: the fields to return (default: all but binary ones). |
+| `filters` | array | optional | rows, summary: a list of {"field", "op", "value"}; all must hold. op: equals, not_equals, greater, less, greater_or_equal, less_or_equal, contains, starts_with, words (every word, any order), empty (value true/false). A date as yyyy-mm-dd or yyyy-mm-ddThh:mm:ss. |
+| `order` | string | optional | "field" or "field desc", comma separated; summary: also n, or a value as op_field (sum_total). |
+| `limit` | integer | optional | rows (default 100) and summary (default 50); at most 500. |
+| `offset` | integer | optional | rows: how many to skip, for the next page. |
+| `group` | array | optional | summary: the fields to group by; a date field also as field:year, field:month, field:day or field:hour. |
+| `values` | array | optional | summary: a list of {"field", "op"} - sum \| avg \| min \| max \| count; each group also carries n, its rows. |
 <!-- /contract -->
 
 The databases are the OPERATOR's: defined in the server's connections file (outside every root: the agent never sees it) and opened to a workspace with `DbAllowedProjects=<project>` in its section of `settings.ini` - a project gives all its databases. Without one, `delphi_db` is not in `tools/list` (it stays callable and answers `DB-002`). The agent names a database `project/alias` exactly as `connections` lists it, and sees its engine (the FireDAC driver) and whether it is read-only; never the server, the real database or the credentials. It works through operations: it never writes SQL (1.29).
