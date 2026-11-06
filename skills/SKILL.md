@@ -332,6 +332,8 @@ session - a service lives in session 0, which has no desktop - and the
 session must be unlocked. On Linux the node names a locked session, or a
 desktop with no monitor (a remote desktop that disconnected), instead of
 failing in the portal; `command=status` says what to ask the operator for.
+On a Windows reached by Remote Desktop, a minimized remote desktop window or a
+disconnected session takes no input: `NODE-011` says which, and what to ask for.
 On GNOME the screen-capture permission must have been granted once: a
 mute screenshot timeout means exactly that.
 
