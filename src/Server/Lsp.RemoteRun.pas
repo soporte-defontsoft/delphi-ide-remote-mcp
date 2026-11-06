@@ -792,8 +792,24 @@ begin
     Result.AddPair('error', NombreMalo);
     Exit;
   end;
+  Plataforma := PlataformaDelPerfil(AProfile);
   if AExeName = '' then
-    ExeLeaf := ProjName
+  begin
+    // el binario de ESTE proyecto por EL nombrador (NombreDelBinario: su
+    // OutputExt de la plataforma del destino y de la configuracion que el
+    // proyecto tiene seleccionada, la que despliega un Deploy sin config).
+    // Era el nombre del proyecto a secas: con OutputExt en Linux64 no se
+    // encontraba, y en Windows el lanzador adivinaba el .exe (J18 de la 1.28)
+    ExeLeaf := ProjName;
+    try
+      var Xml := LeeTexto(ADprojPath, [ltJaula]);
+      ExeLeaf := NombreDelBinario(Xml, ProjName, Plataforma, InfoDeDproj(Xml).ConfigPorDefecto);
+    except
+      // un .dproj que no se lee aqui: el nombre del proyecto, como antes
+      on E: Exception do
+        ExeLeaf := ProjName;
+    end;
+  end
   else
     ExeLeaf := AExeName;
   ARemoteExe := DeployRel + '/' + ExeLeaf;
@@ -820,7 +836,6 @@ begin
   // comilla solo agrupa y no la puede recibir (revisor del paisaje de la 1.26, C;
   // medido con un eco Delphi: 'di "hola"' llegaba 'di \hola\'), ni uno vacio
   // (EL juez, LlegaAParamStr). El texto del nodo viaja codificado (Lsp.TextoDelNodo)
-  Plataforma := PlataformaDelPerfil(AProfile);
   if SistemaDePlataforma(Plataforma) = spWindows then
     for var I := 0 to High(AArgv) do
       if not LlegaAParamStr(AArgv[I]) then

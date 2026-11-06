@@ -74,6 +74,8 @@ type
     [Test] procedure LosValoresDelBuildSeExpandenEnSuPunto;
     [Test]
     procedure ElPaqueteDeAndroidComoLoComponeElJuez;
+    [Test]
+    procedure ElResDeVersionEsElDeEsteBuild;
   end;
 
   { EL analisis del XML de proyecto (1.20.1), lo que el oraculo contra MSXML
@@ -1499,6 +1501,32 @@ begin
     Assert.AreEqual('C:\NoExiste\Studio\99.9\SDKsA5', T.Values['BDSPLATFORMSDKSDIR']);
   finally
     T.Free;
+  end;
+end;
+
+procedure TXmlTextoTests.ElResDeVersionEsElDeEsteBuild;
+var
+  Carpeta, Proyecto: string;
+begin
+  // un BRCC_OutputDir por plataforma: el .res de version del build Win32 es el
+  // de Win32 (se tomaba el ULTIMO del documento, el de Win64, y la nota del
+  // .res hablaba de otro fichero: J16 del revisor de la 1.28)
+  Carpeta := TPath.Combine(ExtractFilePath(ParamStr(0)), 'res-' + TGUID.NewGuid.ToString);
+  Proyecto := TPath.Combine(Carpeta, 'App.dproj');
+  TDirectory.CreateDirectory(TPath.Combine(Carpeta, 'R32'));
+  TDirectory.CreateDirectory(TPath.Combine(Carpeta, 'R64'));
+  try
+    TFile.WriteAllText(Proyecto,
+      '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'#13#10 +
+      '  <PropertyGroup Condition="''$(Platform)''==''Win32''"><BRCC_OutputDir>.\R32</BRCC_OutputDir></PropertyGroup>'#13#10 +
+      '  <PropertyGroup Condition="''$(Platform)''==''Win64''"><BRCC_OutputDir>.\R64</BRCC_OutputDir></PropertyGroup>'#13#10 +
+      '</Project>'#13#10);
+    Assert.IsTrue(ResDeVersion(Proyecto, 'Win32', 'Debug').EndsWith('\R32\App.res', True),
+      ResDeVersion(Proyecto, 'Win32', 'Debug'));
+    Assert.IsTrue(ResDeVersion(Proyecto, 'Win64', 'Debug').EndsWith('\R64\App.res', True),
+      ResDeVersion(Proyecto, 'Win64', 'Debug'));
+  finally
+    TDirectory.Delete(Carpeta, True);
   end;
 end;
 

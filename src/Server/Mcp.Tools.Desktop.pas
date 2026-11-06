@@ -259,12 +259,14 @@ begin
   Result := SinMayusculas(Result);
 end;
 
-{ Una tecla de Windows se nombra (escape, enter, f4); un numero seria un
-  codigo de OTRO sistema y pulsaria otra tecla. }
+{ Una tecla de Windows se nombra (escape, enter, f4) o es una cifra SOLA, que
+  el nodo pulsa como su tecla (VK_0..VK_9: Mld.Win.TeclaPorNombre); un NUMERO
+  seria un codigo de OTRO sistema y pulsaria otra tecla. La cifra sola se
+  negaba aqui y el nodo la sabia pulsar (J19 del revisor de la 1.28). }
 function NombreDeTeclaValido(const ACode: string): Boolean;
 begin
   Result := (ACode <> '') and
-    ((ACode[Low(ACode)] < '0') or (ACode[Low(ACode)] > '9'));
+    ((Length(ACode) = 1) or (ACode[Low(ACode)] < '0') or (ACode[Low(ACode)] > '9'));
 end;
 
 { El gesto que se pide: vacio es screenshot, y "windows" se leia como el

@@ -694,8 +694,12 @@ end;
 procedure TNombradorTests.SelloYSuInversaTambienEncadenados;
 begin
   Assert.AreEqual('U.pas', TrashOriginalName(TrashStampedName('U.pas')));
-  // restaurar algo ya restaurado encadena sellos: la inversa los quita todos
-  Assert.AreEqual('U.pas', TrashOriginalName(TrashStampedName(TrashStampedName('U.pas'))));
+  // la inversa quita UN sello, el que pone el nombrador: una cadena vuelve con
+  // el nombre que tenia al entrar, y un nombre que ya acaba en 9 cifras es suyo
+  // (quitarlos todos devolvia lote-123456789 como lote: J13 de la 1.28)
+  var Uno := TrashStampedName('U.pas');
+  Assert.AreEqual(Uno, TrashOriginalName(TrashStampedName(Uno)));
+  Assert.AreEqual('lote-123456789', TrashOriginalName(TrashStampedName('lote-123456789')));
   Assert.AreEqual('', TrashOriginalName('U.pas'), 'un nombre sin sello no es una copia');
 end;
 

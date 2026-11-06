@@ -1161,6 +1161,19 @@ var
     end;
   end;
 
+  // los candidatos que la puerta deja leer: uno que no, no es de este
+  // workspace y no se adopta, tampoco el UNICO de una carpeta ni el de
+  // respaldo (se adoptaba sin preguntar: GUARD-041 en toda tool LSP de la
+  // carpeta por un .dproj que el agente ni nombro, en vez de seguir sin
+  // configuracion; J15 del revisor de la 1.28, medido)
+  function Legibles(const ACandidatos: TArray<string>): TArray<string>;
+  begin
+    Result := [];
+    for var X in ACandidatos do
+      if LugarDeLecturaDenegado(X, [ltJaula]) = '' then
+        Result := Result + [X];
+  end;
+
   // la respuesta, la de un juez (se guarda) o la de un respaldo (no), con la
   // huella de todo lo que se miro para darla
   function Elige(const ADproj: string; APorJuez: Boolean): string;
@@ -1197,7 +1210,7 @@ begin
       // la carpeta, sellada antes de listarla: un .dproj que aparezca en ella
       // cambia la respuesta
       Marca(PARTE_CARPETA + ClaveDeRuta(Dir));
-      Matches := TDirectory.GetFiles(Dir, '*.dproj');
+      Matches := Legibles(TDirectory.GetFiles(Dir, '*.dproj'));
       if Length(Matches) = 1 then
         Exit(Elige(Matches[0], True));
       if Length(Matches) > 1 then

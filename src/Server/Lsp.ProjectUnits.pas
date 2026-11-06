@@ -1847,6 +1847,23 @@ begin
   end;
 end;
 
+{ ...las de ANames como las toma dcc: cada nombre resuelto antes por EL juez
+  de que unidad es un nombre en un uses (ResolutorDeUnidades: los ambitos y el
+  search path del proyecto). EL juez de adduses y de removeuses en un .dpr:
+  removeuses preguntaba asi (V107) y adduses con el nombre crudo, y un
+  Graphics.pas de una subcarpeta que dcc no mira mandaba Graphics a add-unit
+  cuando dcc toma Vcl.Graphics (J17 de la 1.28, medido). }
+function UnidadesDelProyectoComoDcc(const ADpr: string; const ANames: TArray<string>;
+  const AResolutor: TResolutorDeUnidades): TArray<string>;
+var
+  Resueltas: TArray<string>;
+begin
+  Resueltas := nil;
+  for var N in ANames do
+    Resueltas := Resueltas + [AResolutor.Resuelve(N)];
+  Result := UnidadesDelProyecto(ADpr, Resueltas);
+end;
+
 { adduses en un .dpr (11.6, David 10-oct-2026: un muro medido moviendo
   SondaOrdenFmx): unidades de BIBLIOTECA - sin ruta: las encuentra el
   compilador por su search path - al uses del programa, por el mismo
@@ -1860,8 +1877,9 @@ var
   U: TUsesClause;
   Faltan, YaEstan: TArray<string>;
 begin
-  // una unidad del PROYECTO va por add-unit, con su ruta
-  var Propias := UnidadesDelProyecto(ADpr, ANames);
+  // una unidad del PROYECTO va por add-unit, con su ruta: la que dcc toma por
+  // ese nombre, como en removeuses
+  var Propias := UnidadesDelProyectoComoDcc(ADpr, ANames, ResolutorDeUnidades(ADpr));
   for var I := 0 to High(ANames) do
     if Propias[I] <> '' then
       Exit(MsgFmt(SR_ADDUSES_UNIDAD_DEL_PROYECTO_FMT, [ANames[I], Propias[I]]));
@@ -1992,10 +2010,7 @@ begin
   // con un Graphics.pas en una subcarpeta que dcc no mira, mandaba a
   // remove-unit una unidad de la biblioteca (V107)
   var R := ResolutorDeUnidades(ADpr);
-  var Resueltas: TArray<string> := nil;
-  for var N in ANames do
-    Resueltas := Resueltas + [R.Resuelve(N)];
-  var Propias := UnidadesDelProyecto(ADpr, Resueltas);
+  var Propias := UnidadesDelProyectoComoDcc(ADpr, ANames, R);
   EnterFileEdit;
   try
     if not TFile.Exists(ADpr) then

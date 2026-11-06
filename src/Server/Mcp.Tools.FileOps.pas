@@ -1191,8 +1191,12 @@ begin
       // copia doblaba el sello; 20-sep-2026), un ENLACE (viaja como enlace y lo
       // de detras no se toca; octava revision) o un enlace duro con un nombre
       // que la sesion no lee (copiarlo era leer el de fuera; 20-oct-2026)
+      // ...ni de un TEMPORAL, donde no hay papelera: de un temporal no se
+      // restaura nada, la regla de GuardaContenidoActual que esta copia
+      // rehacia sin ella (dejaba un __delphi-patch DENTRO de un __delphi-temp
+      // viejo: J14 del revisor de la 1.28, medido)
       if not DesdePapelera and not EsEnlace(SinBarraFinal(P.Origen)) and
-         (EnlaceDuroIlegible(P.Origen) = '') then
+         (EnlaceDuroIlegible(P.Origen) = '') and not EnTemporal(P.Origen) then
       begin
         var Copia := TrashPathFor(P.Origen, CAJON_BORRADOS);
         Copias := Copias + [Copia];

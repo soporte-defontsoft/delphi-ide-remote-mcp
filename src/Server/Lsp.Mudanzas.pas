@@ -260,9 +260,14 @@ end;
 function SitiosDeDproj: TArray<TSitioDeRutas>;
 begin
   Result := [];
+  // (con las rutas que escribe NUESTRO scaffold, Lsp.Scaffold: el icono de
+  // macOS, los logos UWP y el keystore de Android no se re-apuntaban y la
+  // respuesta decia que si; J20 de la 1.28. La lista sigue siendo propia: la
+  // forma sin lista, re-apuntar todo valor que resuelto cae en lo movido como
+  // juzga la puerta del build, queda en la lista de forma)
   for var E in TArray<string>.Create('DCC_UnitSearchPath', 'DCC_IncludePath',
     'DCC_ResourcePath', 'DCC_ObjPath', 'Icon_MainIcon', 'Manifest_File',
-    'CfgDependentOn') do
+    'CfgDependentOn', 'Icns_MainIcns', 'UWP_DelphiLogo44', 'UWP_DelphiLogo150', 'PF_KeyStore') do
     Result := Result + [Sitio(E)];
   for var E in BUILD_OUTPUT_TAGS do
     Result := Result + [Sitio(E)];

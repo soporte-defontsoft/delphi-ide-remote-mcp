@@ -3934,14 +3934,28 @@ end;
 
 function ResDeVersion(const ADprojPath, APlatform, AConfig: string): string;
 var
-  Dir: string;
+  Chain: TArray<string>;
+  Dir, Valor, Cand: string;
 begin
+  Result := '';
+  Chain := ProjectXmlChain(ADprojPath);
+  if Chain = nil then
+    Exit;
   Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
-  for var S in BuildOutputDirs(ADprojPath, APlatform, AConfig) do
-    if SameText(S.Tag, 'BRCC_OutputDir') then
-      Dir := S.Dir; // '' si no se sabe resolver
+  // el BRCC_OutputDir de ESTE build, por EL juez (EffectiveProperty), como la
+  // carpeta del binario (A19): se tomaba el ULTIMO del documento, y con uno
+  // por plataforma el build Win32 miraba el .res de Win64 (J16 de la 1.28).
+  // Sin el, la carpeta del proyecto, la de los targets
+  Valor := EffectiveProperty(Chain[0], 'BRCC_OutputDir', APlatform, AConfig).Trim;
+  if Valor <> '' then
+  begin
+    Cand := ExpandOutputMacros(Valor, Dir, TPath.GetFileNameWithoutExtension(ADprojPath), APlatform,
+      AConfig).Trim;
+    if Cand <> '' then
+      Dir := ResuelveSalida(Cand, Valor, Valor, Dir); // '' si no se sabe resolver
+  end;
   if Dir = '' then
-    Exit('');
+    Exit;
   Result := ResDeVersionEn(Dir, ADprojPath);
 end;
 

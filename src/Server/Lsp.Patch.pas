@@ -1234,7 +1234,9 @@ begin
           begin
             // Las de BLOQUE tambien: era la tercera puerta del mismo bug y
             // se quedo abierta cuando se cerraron las de una linea.
-            if Anc2.Contains(#10) then
+            // bloque = cualquier salto, un CR suelto tambien (TieneSalto: la
+            // misma pregunta que DoEdit; con solo el LF, J12 de la 1.28)
+            if TieneSalto(Anc2) then
               Ocurr[N] := NthBlockLine(APath, Anc2, Nth)
             else
               Ocurr[N] := NthOccurrenceLine(APath, Anc2, Nth);
@@ -1248,7 +1250,7 @@ begin
               while Hay < 500 do
               begin
                 var Sig: Integer;
-                if Anc2.Contains(#10) then
+                if TieneSalto(Anc2) then
                   Sig := NthBlockLine(APath, Anc2, Hay + 1)
                 else
                   Sig := NthOccurrenceLine(APath, Anc2, Hay + 1);
@@ -1382,7 +1384,7 @@ begin
           end;
           Nue := NueLinea;
         end;
-        var EsBloque := Anc.Contains(#10);
+        var EsBloque := TieneSalto(Anc);
         if EsBloque and (Hasta[N - 1] > 0) then
         begin
           Fallo := N;

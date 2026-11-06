@@ -22,8 +22,9 @@ function CopiaDiariaDe(const APath: string): string;
   delphi_delete aparca los ficheros como "UFicha.pas-215825250": el sello de
   hora va DETRAS de la extension, que es lo que impide que dos borrados del
   mismo fichero se pisen... y lo que rompe a todo el que mire la extension.
-  Quita tambien los sellos ENCADENADOS ("-215825250-215841305"), que es lo que
-  deja restaurar algo ya restaurado.
+  Quita UN sello, el que pone el nombrador: "x-215825250-215841305" vuelve
+  como "x-215825250", el nombre que tenia al entrar (quitarlos todos
+  devolvia "lote-123456789" como "lote": J13 de la 1.28).
 
   Medido el 2026-09-20 usando el servidor como cliente: TRES sintomas, UNA
   causa, y cada uno se habria "arreglado" por su lado en el sitio equivocado.
@@ -299,17 +300,14 @@ function TrashOriginalName(const AName: string): string;
 var
   M: TMatch;
 begin
-  Result := AName;
-  // hhnnsszzz = 9 digitos. En bucle, porque restaurar una copia restaurada
-  // encadena sellos.
-  while True do
-  begin
-    M := TRegEx.Match(Result, '^(.+)-\d{9}$');
-    if not M.Success then
-      Break;
-    Result := M.Groups[1].Value;
-  end;
-  if Result = AName then
+  // hhnnsszzz = 9 digitos, y UNO: el que pone el nombrador. Se quitaban en
+  // bucle (por las cadenas que dejaba restaurar DENTRO de la papelera) y un
+  // fichero llamado lote-123456789 volvia como "lote" (J13 del revisor de la
+  // 1.28, medido). Una cadena vuelve con el nombre que tenia al entrar.
+  M := TRegEx.Match(AName, '^(.+)-\d{9}$');
+  if M.Success then
+    Result := M.Groups[1].Value
+  else
     Result := '';
 end;
 
