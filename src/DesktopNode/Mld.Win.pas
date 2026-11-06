@@ -113,35 +113,89 @@ const
 function PrintWindow(hwnd: HWND; hdcBlt: HDC; nFlags: UINT): BOOL; stdcall;
   external user32 name 'PrintWindow';
 
-{ El estado del escritorio EN EL INSTANTE en que el DC de pantalla nego la
-  copia: el fallo es intermitente y no se provoca (medido 2026-09-22: ni el
-  cliente RDP minimizado ni el terminal de PAServer minimizado lo causan),
-  asi que la siguiente vez que ocurra tiene que contarse solo. Escritorio de
-  entrada (Default; Winlogon = escritorio seguro de un UAC o del bloqueo),
-  si la sesion es remota, y la ventana con el foco. }
-function EstadoDelEscritorio: string;
+function WTSQuerySessionInformationW(hServer: THandle; SessionId: DWORD;
+  WTSInfoClass: Integer; out ppBuffer: Pointer; out pBytesReturned: DWORD): BOOL;
+  stdcall; external 'wtsapi32.dll';
+procedure WTSFreeMemory(pMemory: Pointer); stdcall; external 'wtsapi32.dll';
+
+{ Si ESTA sesion esta desconectada, por el juez de Windows (WTSConnectState =
+  WTSDisconnected): un escritorio de entrada que no se deja abrir es tanto una
+  sesion desconectada como una bloqueada, y solo la primera se arregla
+  reconectando (medido el 6-nov-2026 con David: desconectada, la sesion dice
+  Disconnected y no se abre su escritorio de entrada). False si no lo dice. }
+function SesionDesconectada: Boolean;
+const
+  SESION_ACTUAL = DWORD(-1);   { WTS_CURRENT_SESSION }
+  WTS_CONNECT_STATE = 8;       { WTSConnectState }
+  WTS_DISCONNECTED = 4;        { WTSDisconnected }
+var
+  Buf: Pointer;
+  Bytes: DWORD;
+begin
+  Result := False;
+  if WTSQuerySessionInformationW(0, SESION_ACTUAL, WTS_CONNECT_STATE, Buf, Bytes) then
+  try
+    Result := (Bytes >= SizeOf(Integer)) and (PInteger(Buf)^ = WTS_DISCONNECTED);
+  finally
+    WTSFreeMemory(Buf);
+  end;
+end;
+
+{ El nombre del escritorio de ENTRADA (Default; Winlogon = el seguro de un
+  UAC o del bloqueo); '' si no lo dice, y en AFallo el motivo si no se deja
+  abrir. Lo leen EstadoDelEscritorio y el aviso de una entrada negada. }
+function NombreDelEscritorioDeEntrada(out AFallo: string): string;
 var
   D: HDESK;
   Nombre: array[0..255] of Char;
   Largo: DWORD;
-  Foco: HWND;
-  Titulo: array[0..255] of Char;
 begin
+  Result := '';
+  AFallo := '';
   D := OpenInputDesktop(0, False, DESKTOP_READOBJECTS);
   if D = 0 then
-    Result := MsgFmt(SF_NODE_ESCRITORIO_ENTRADA_NO_ABRIR_FMT, [SysErrorMessage(GetLastError)])
-  else
+  begin
+    AFallo := SysErrorMessage(GetLastError);
+    Exit;
+  end;
   try
     Largo := 0;
     if GetUserObjectInformation(D, UOI_NAME, @Nombre[0], SizeOf(Nombre), Largo) then
-      Result := MsgFmt(SF_NODE_ESCRITORIO_ENTRADA_FMT, [string(PChar(@Nombre[0]))])
-    else
-      Result := MsgText(SF_NODE_ESCRITORIO_ENTRADA_SIN_NOMBRE);
+      Result := string(PChar(@Nombre[0]));
   finally
     CloseDesktop(D);
   end;
+end;
+
+{ El estado del escritorio EN EL INSTANTE en que el DC de pantalla nego la
+  copia: se cuenta solo, para comparar los casos buenos con los malos.
+  Medido 2026-09-22: ni el cliente RDP minimizado ni el terminal de PAServer
+  minimizado lo causaban. Medido 2026-11-06 con David (su RDP, anidado: el
+  host de la VM y desde ahi este PC): con la ventana RDP de esta sesion
+  MINIMIZADA en su maquina, la copia de pantalla se niega Y la entrada
+  tambien (0 de N, Acceso denegado); restaurada, aunque sin foco, las dos
+  van - el aviso de EnviarEntradas lo dice. Escritorio de entrada (Default;
+  Winlogon = escritorio seguro de un UAC o del bloqueo), si la sesion es
+  remota, y la ventana con el foco. }
+function EstadoDelEscritorio: string;
+var
+  Foco: HWND;
+  Titulo: array[0..255] of Char;
+  Fallo, Nombre: string;
+begin
+  Nombre := NombreDelEscritorioDeEntrada(Fallo);
+  if Fallo <> '' then
+    Result := MsgFmt(SF_NODE_ESCRITORIO_ENTRADA_NO_ABRIR_FMT, [Fallo])
+  else if Nombre <> '' then
+    Result := MsgFmt(SF_NODE_ESCRITORIO_ENTRADA_FMT, [Nombre])
+  else
+    Result := MsgText(SF_NODE_ESCRITORIO_ENTRADA_SIN_NOMBRE);
   if GetSystemMetrics(SM_REMOTESESSION) <> 0 then
-    Result := Result + MsgText(SF_NODE_SESION_REMOTA)
+  begin
+    Result := Result + MsgText(SF_NODE_SESION_REMOTA);
+    if SesionDesconectada then
+      Result := Result + MsgText(SF_NODE_SESION_DESCONECTADA);
+  end
   else
     Result := Result + MsgText(SF_NODE_SESION_CONSOLA);
   Foco := GetForegroundWindow;
@@ -421,14 +475,33 @@ end;
 function TEscritorioWin.EnviarEntradas(var AEntradas: array of TInput): Boolean;
 var
   Enviadas: UINT;
+  Cod: DWORD;
+  Fallo: string;
 begin
   if Length(AEntradas) = 0 then
     Exit(False);
   Enviadas := SendInput(Length(AEntradas), AEntradas[0], SizeOf(TInput));
   Result := Enviadas = UINT(Length(AEntradas));
   if not Result then
+  begin
+    Cod := GetLastError;   { antes de formatear nada: FormatMessage lo pisa }
     FError := MsgFmt(SF_NODE_SISTEMA_ACEPTO_ENTRADAS_FMT,
-      [Enviadas, Length(AEntradas), SysErrorMessage(GetLastError)]);
+      [Enviadas, Length(AEntradas), SysErrorMessage(Cod)]);
+    { Ninguna aceptada, Acceso denegado, en una sesion REMOTA: lo que pedir
+      va en la negativa (B14 de la 1.28; medido el 6-nov-2026, ver
+      EstadoDelEscritorio). Desconectada (el juez, WTSConnectState): que se
+      reconecte. Conectada y con el escritorio de entrada normal (no el
+      seguro de un UAC o del bloqueo): su ventana esta minimizada en la
+      maquina del operador. }
+    if (Enviadas = 0) and (Cod = ERROR_ACCESS_DENIED) and
+       (GetSystemMetrics(SM_REMOTESESSION) <> 0) then
+    begin
+      if SesionDesconectada then
+        FError := FError + MsgText(SF_NODE_SESION_REMOTA_DESCONECTADA)
+      else if SameText(NombreDelEscritorioDeEntrada(Fallo), 'Default') then
+        FError := FError + MsgText(SF_NODE_SESION_REMOTA_SIN_PINTAR);
+    end;
+  end;
 end;
 
 function TEscritorioWin.Absolutas(AX, AY: Integer; out AAbsX, AAbsY: Integer): Boolean;

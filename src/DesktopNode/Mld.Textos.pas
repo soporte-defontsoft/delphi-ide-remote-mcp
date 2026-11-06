@@ -473,6 +473,27 @@ const
   SF_NODE_SISTEMA_ACEPTO_ENTRADAS_FMT =
     'the system accepted %d of %d inputs (%s)';
 
+  { ...y que pedir cuando la entrada se niega en una sesion REMOTA con el
+    escritorio de entrada normal (B14 de la 1.28): medido el 6-nov-2026 con
+    David, con su ventana de escritorio remoto minimizada la sesion no acepta
+    entrada (0 de N, Acceso denegado) y niega la copia de pantalla; restaurada,
+    aunque sin foco, las dos van. }
+  SF_NODE_SESION_REMOTA_SIN_PINTAR =
+    '. The window of this remote desktop session is most likely MINIMIZED on ' +
+    'the operator''s machine: a minimized remote session takes no input (and ' +
+    'refuses the screen copy). Ask the operator to restore that window - it ' +
+    'may stay behind others - and try again; retrying before that changes ' +
+    'nothing';
+  { ...y la sesion DESCONECTADA (WTSConnectState, el juez de Windows; medido
+    el mismo dia: el escritorio de entrada no se deja abrir, 0 de N entradas
+    y la copia de pantalla negada). }
+  SF_NODE_SESION_REMOTA_DESCONECTADA =
+    '. This remote desktop session is DISCONNECTED (nobody is connected to it): ' +
+    'it takes no input and refuses the screen copy. Ask the operator to ' +
+    'reconnect it and try again; retrying before that changes nothing';
+  SF_NODE_SESION_DESCONECTADA =
+    ' (disconnected)';
+
   SF_NODE_PIXEL_FUERA_CAPTURA_FMT =
     'pixel (%d,%d) is outside the screenshot (%dx%d)';
 
