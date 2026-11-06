@@ -76,12 +76,7 @@ Status page as of 2026-11-05 (current release v1.27.1; 42 tools).
 
 ## Next
 
-Stabilizing what is there, not adding to it:
-
-- Working from Linux: the desktop node on KDE Plasma. Measured in 1.27: the capture works through the desktop portal; the window list finds its X authorization by the name Mutter gives it (it works with the session's `XAUTHORITY`), and the screen scale and the hands go through GNOME's own interfaces (Mutter's); the three have to learn Plasma's. An FMX app deployed to Linux without the IDE's deploy files was measured end to end through PAServer in 1.27
-- The designer: what it already does, measured where it is not yet (preview at other DPIs and from the tray)
-- The jail measured, not only declared: the protections that need a privilege measured in the suite, and fewer rules of our own where a real judge can answer
-- Dead code by symbol, with the engine as the judge: what nothing in a file or a project references (uses, types, routines, fields), and what is used by name (RTTI, forms) told apart
+Nothing beyond the database and API access below: the list that was open closed with 1.28, each item done, measured, declared or parked by the operator.
 
 ## Open
 
@@ -89,6 +84,9 @@ Stabilizing what is there, not adding to it:
 
 ## Parked (the operator keeps them on the list, not now)
 
+- The designer measured where it is not yet: `preview` at other DPIs (it takes a machine at another scale) and from the tray (the operator starts the tray from his desktop)
+- The protections that need a privilege, measured in the suite: this machine creates symbolic links now and the Python batteries plant them; what is left are the unit tests run from the repository's own build output, where Windows refuses them, and an elevated console
+- Dead code by symbol, as an operation of the server: no agent asked for one (measured in 1.28 over some 41,000 calls of the test agents); the compiler's own hints already come through `delphi_diagnostics` and `delphi_build`
 - The designer beyond `insert` / `set` / `delete` (events, collections, non-visual components), and the defaults a component's constructor sets, read from its source (`preview` already draws them - it builds the real control - and since 1.27 `layout` judges the box the renderer measured; only without the renderer does it list such a control under `sizeNotWritten`)
 
 ## Declined by the operator (do not re-propose)
