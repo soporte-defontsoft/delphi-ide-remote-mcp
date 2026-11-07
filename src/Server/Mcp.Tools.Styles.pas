@@ -1453,8 +1453,14 @@ begin
   // dejan lo coloca ColocaDerivado (2s de la 1.18.2)
   Tmp := NuevaCarpetaDescarga(ServerTempDir(ESTILOS_SUB));
   Ret := TJSONObject.Create;
-  Arr := TJSONArray.Create;
   try
+    // cada pieza del JSON con su propietario desde que nace: Arr y cada E pasaban a
+    // Ret al final, y LeeBytes, EscribeBytes, ColocaDerivado o GetSize pueden
+    // lanzar antes (I14 de la depuracion de la 1.23, cerrado en la 1.29). El
+    // orden de la respuesta es el mismo
+    Ret.AddPair('stylesDir', MaskDriveText('', Dir));
+    Arr := TJSONArray.Create;
+    Ret.AddPair('converted', Arr);
     CrearCarpeta(Tmp);
     AllOk := True;
     N := 0;
@@ -1480,6 +1486,7 @@ begin
           Code := 1;
       end;
       E := TJSONObject.Create;
+      Arr.AddElement(E);
       E.AddPair('source', TPath.GetFileName(F));
       E.AddPair('binary', TPath.GetFileName(Bin));
       E.AddPair('ok', TJSONBool.Create(Code = 0));
@@ -1503,10 +1510,7 @@ begin
         E.AddPair('error', Out.Trim);
         AllOk := False;
       end;
-      Arr.AddElement(E);
     end;
-    Ret.AddPair('stylesDir', MaskDriveText('', Dir));
-    Ret.AddPair('converted', Arr);
     // Un estilo que no convirtio es un FALLO: salia exito con ok:false y una
     // nota que mandaba recompilar, y el .rc metia los .bin.style de antes
     // (tercera revision, 27-sep-2026)

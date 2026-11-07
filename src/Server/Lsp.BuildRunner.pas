@@ -1965,6 +1965,13 @@ var
     // el trozo como lo lee el build y, si es otro, como esta ESCRITO: la
     // entrada que toma remove-searchpath (un %2E%2E citado como .. no se
     // encontraba en el .dproj)
+    // un comodin no es un fichero: msbuild lo expande y no hay uno que juzgar.
+    // La puerta lo negaba por su anomalia y salia como "OUTSIDE" (I8 de la 1.21.2)
+    if TieneComodin(Cand) then
+      Exit(MsgFmt(SR_BUILD_LECTURA_COMODIN_FMT,
+        [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo,
+         IfThen(SameText(ATrozo.Trim, AValor.Escrito.Trim), '',
+           MsgFmt(SF_BUILD_LECTURA_ESCRITA_FMT, [AValor.Escrito]))]));
     if LugarDeLecturaDenegado(Cand, LUGARES_DEL_BUILD) <> '' then
       Exit(MsgFmt(SR_BUILD_LECTURA_FUERA_FMT,
         [AValor.Elemento, TPath.GetFileName(AFichero), ATrozo,

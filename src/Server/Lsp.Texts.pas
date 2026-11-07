@@ -7343,6 +7343,18 @@ const
     'project lists it, even one that points outside.';
 
   SF_BUILD_LECTURA_ESCRITA_FMT = ' (written in the project as %s)';
+  { Un trozo con comodin (* o ?) de lo que lee el build: msbuild lo expande a
+    ficheros que nadie nombro, y lo que lee el build se juzga fichero a
+    fichero. Salia como BUILD-050 "OUTSIDE", fuera o no (I8 de la 1.21.2,
+    cerrado en la 1.29). %s = el elemento, %s = el fichero de proyecto, %s =
+    el trozo como lo lee el build, %s = como esta escrito, si es otro. }
+  SR_BUILD_LECTURA_COMODIN_FMT =
+    '[BUILD-071 DENIED] I will not build this. <%s> in %s names %s%s, with a ' +
+    'wildcard (* or ?): msbuild would expand it into files nobody named, and ' +
+    'what a build reads is judged file by file. Name each file: delphi_config ' +
+    'add-unit, add-searchpath or add-deployfile take one at a time, and ' +
+    'remove-unit / remove-searchpath / remove-deployfile take this entry as ' +
+    'the project lists it.';
 
   SR_BUILD_LECTURA_NO_VERIFICABLE_FMT =
     '[BUILD-051 DENIED] I will not build this. <%s> in %s names %s, which ' +
