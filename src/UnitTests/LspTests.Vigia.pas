@@ -117,8 +117,8 @@ end;
 procedure TVigiaDeClaveTests.SiSePuede;
 begin
   if FSinRegistro then
-    NoSeMide('HKCU no se deja escribir desde este proceso (capa virtual): no se mide; ' +
-      'lo mide el servicio con el IDE');
+    NoSeMide('HKCU no se deja escribir desde este proceso en esta carpeta: no se mide aqui; ' +
+      'test_engine_dunitx corre la suite desde una copia donde se mide');
 end;
 
 procedure TVigiaDeClaveTests.TearDown;

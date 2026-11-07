@@ -1482,18 +1482,20 @@ end;
 { TPuestosDelContenedorTests }
 
 { Lo que contesta CreaContenedor o AbreEtapa, juzgado: 0 o un fallo. El perfil del
-  contenedor lo escribe Windows en HKCU y en %LOCALAPPDATA%, y lanzada la suite
-  desde una app MSIX (la consola de un agente y sus baterias) los dos son la capa
-  virtual del paquete: en ella hay casas cuyo perfil se niega con E_ACCESSDENIED.
-  Medido el 4-nov-2026: el mismo binario, 4/4 copiado en una carpeta nueva y 0/4 en
-  Win64\Debug, sin semaforos tomados ni perfil de esa casa a la vista, y el mismo
-  nombre creado a mano desde PowerShell. Ahi no se mide: lo real lo mide el
-  servicio, en vivo (C29 de la 1.27). Cualquier otro codigo es un fallo. }
+  contenedor lo escribe Windows en HKCU y en %LOCALAPPDATA%. Medido el 4-nov-2026:
+  el mismo binario, 4/4 copiado en una carpeta nueva y 0/4 en Win64\Debug (con
+  E_ACCESSDENIED). Se achaco a la capa virtual de la app MSIX desde la que se
+  lanzaba, y no era: el 7-nov-2026, desde la MISMA consola, la suite entera en una
+  carpeta hermana de Win64\Debug mide estos 4, los 12 de HKCU (LspTests.Vigia) y
+  los 5 del enlace (LspTests.Huella), y desde Win64\Debug ninguno: lo decide esa
+  carpeta, por una causa sin medir (C6 de la 1.29). Ahi no se mide;
+  test_engine_dunitx corre la suite desde la copia. Cualquier otro codigo es un
+  fallo. }
 procedure EsCero(ACodigo: DWORD; const AQue: string);
 begin
   if ACodigo = DWORD(E_ACCESSDENIED) then
     NoSeMide('Windows niega a este proceso el perfil del contenedor (' + AQue +
-      ': la capa virtual de una app MSIX): no se mide; lo mide el servicio en vivo');
+      ') en esta carpeta: no se mide aqui; test_engine_dunitx corre la suite desde una copia donde se mide');
   Assert.AreEqual(0, Integer(ACodigo), AQue);
 end;
 

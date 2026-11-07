@@ -623,7 +623,7 @@ def es_esta_maquina(host):
     return bool(host) and host.lower() == os.environ.get('COMPUTERNAME', '').lower()
 
 
-def borra(ruta):
+def borra(ruta, pasadas=20):
     """Borra un arbol aunque tenga ficheros de SOLO LECTURA (los objetos de un
     .git los son): rmtree con ignore_errors los dejaba ahi, y la pasada
     siguiente de la bateria reventaba en makedirs (medido 2026-09-26 en
@@ -645,8 +645,10 @@ def borra(ruta):
             pass
     # unas pasadas: un proceso que acaba de morir (el servidor, un
     # renderizador suyo) suelta sus ficheros un poco despues, y una sola
-    # pasada dejaba el arbol a medias en %TEMP% (segunda revision de la 1.17.0)
-    for i in range(20):
+    # pasada dejaba el arbol a medias en %TEMP% (segunda revision de la 1.17.0). pasadas: cada una con
+    # medio segundo; quien sabe que su arbol tarda mas en soltarse pide mas (la copia de la suite
+    # DUnitX: 12 s tras acabar, medido el 7-nov-2026)
+    for i in range(pasadas):
         shutil.rmtree(ruta, onexc=quita_ro)
         if not os.path.exists(ruta):
             return

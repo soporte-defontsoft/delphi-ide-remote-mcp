@@ -1,7 +1,7 @@
 ﻿unit LspTests.Comun;
 
 { Lo comun de la suite. Un test que en ESTA maquina no puede medir lo suyo (sin la
-  ayuda instalada, sin forma 8.3, con HKCU virtual...) lo DICE en una linea NOTA y
+  ayuda instalada, sin forma 8.3...) lo DICE en una linea NOTA y
   pasa: un Assert.Pass a secas contaba como pasado y no se veia, y la suite salia
   "todos pasados" sin haber medido esos. test_engine_dunitx reimprime las NOTA, y
   run_all las lista entre lo que no se midio (revisor de baterias de la 1.27). }

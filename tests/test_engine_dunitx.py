@@ -108,14 +108,36 @@ check('run: un filter con comodin no corre nada, y filterNote dice lo que casa (
 # que sus pruebas de la jaula usan
 EXE_SUITE = mc.real(j.get('binary') or '')
 check('run: dice que binario compilo y corrio, y existe', os.path.isfile(EXE_SUITE), str(j.get('binary')))
-r = subprocess.run([EXE_SUITE], cwd=os.path.dirname(EXE_SUITE), capture_output=True, timeout=300,
-                   env=mc.entorno({'DELPHI_MCP_ROOTS': REPO}))
+# ...desde una COPIA en una carpeta HERMANA de su salida (C6 de la 1.29). Desde la salida del repo
+# (src\UnitTests\Win64\Debug) Windows niega a la suite el enlace simbolico (1314, LspTests.Huella), el
+# perfil del contenedor (E_ACCESSDENIED, LspTests.Motor) y escribir en HKCU (LspTests.Vigia): 21 tests
+# salian "no se mide" y contaban como pasados. Medido el 7-nov-2026 con el mismo exe y la misma consola:
+# en una carpeta hermana los 21 se miden (573/573, ninguna NOTA); lo decide la carpeta, por una causa
+# sin medir (se achacaba a la capa virtual de la app MSIX, y no era: desde la copia la misma consola
+# escribe HKCU). Hermana y no en otro sitio: las fuentes de prueba se buscan desde el exe (DesignerMetaGen,
+# Dproj) y lo que crea junto a el tiene que caer en la jaula (medido: copiado al scratchpad, 34 fallos).
+COPIA = os.path.join(os.path.dirname(os.path.dirname(EXE_SUITE)), 'CopiaDeLaBateria')
+mc.borra(COPIA)
+os.makedirs(COPIA)
+EXE_COPIA = os.path.join(COPIA, os.path.basename(EXE_SUITE))
+shutil.copy2(EXE_SUITE, EXE_COPIA)
+try:
+    r = subprocess.run([EXE_COPIA], cwd=COPIA, capture_output=True, timeout=300,
+                       env=mc.entorno({'DELPHI_MCP_ROOTS': REPO}))
+finally:
+    # EL borrador de las baterias, con paciencia: medido el 7-nov-2026, la carpeta se suelta 12 s despues
+    # de acabar la suite (deja su __delphi-temp dentro; ningun proceso suyo sigue vivo, si el indexador de
+    # Windows), y las 20 pasadas por defecto son ~10 s (un rmtree a secas, que calla, la dejo en la salida)
+    mc.borra(COPIA, pasadas=120)
+check('la copia de la suite no se queda en la salida del repo', not os.path.exists(COPIA), COPIA)
 salida = (r.stdout + r.stderr).decode('utf-8', 'replace')
-# lo que la suite NO midio en esta maquina (LspTests.Comun.NoSeMide): cuenta como pasado
-# para DUnitX, y aqui se dice, para que run_all lo liste (revisor de baterias de la 1.27)
-for _l in salida.splitlines():
-    if _l.startswith('NOTA no se mide'):
-        print('NOTA suite entera: ' + _l[len('NOTA '):])
+# lo que la suite NO midio (LspTests.Comun.NoSeMide): para DUnitX cuenta como pasado; aqui se dice y,
+# desde la copia, es un FALLO: en esta maquina se mide todo (7-nov-2026)
+no_medidos = [_l[len('NOTA '):] for _l in salida.splitlines() if _l.startswith('NOTA no se mide')]
+for _l in no_medidos:
+    print('NOTA suite entera: ' + _l)
+check('suite entera desde la copia hermana: lo que pide un privilegio (enlace, contenedor, HKCU) se MIDE, '
+      'ninguna NOTA no se mide (C6)', not no_medidos, no_medidos[:5])
 
 
 def cuenta(nombre):
@@ -139,25 +161,9 @@ check('suite entera: al menos %d tests, todos pasados (hay %s)' % (MIN_TESTS, j.
       j.get('total', 0) >= MIN_TESTS and j.get('passed') == j.get('total'), str(j)[:300])
 check('suite entera: exitCode 0', r.returncode == 0, salida[-300:])
 
-# LspTests.Huella (C30 de la 1.28) planta un ENLACE SIMBOLICO junto al exe. Desde la carpeta de salida
-# del repo (src\UnitTests\Win64\Debug) Windows lo niega con 1314 aunque Developer Mode lo admita: el
-# mismo binario con otro nombre, o con otra carpeta actual, tambien; copiado a otra carpeta no, ni Python
-# en esa misma (medido el 5-nov-2026; la causa no esta medida). Arriba solo diria NOTA: se corre ademas
-# desde una COPIA del exe en la carpeta de esta bateria, donde se mide - y si ahi tampoco, su NOTA lo dice.
-COPIA = os.path.join(BASE, 'huella')
-os.makedirs(COPIA, exist_ok=True)
-EXE_COPIA = os.path.join(COPIA, os.path.basename(EXE_SUITE))
-shutil.copy2(EXE_SUITE, EXE_COPIA)
-r = subprocess.run([EXE_COPIA, '--run:LspTests.Huella'], cwd=COPIA, capture_output=True, timeout=120,
-                   env=mc.entorno({'DELPHI_MCP_ROOTS': COPIA}))
-salida = (r.stdout + r.stderr).decode('utf-8', 'replace')
-for _l in salida.splitlines():
-    if _l.startswith('NOTA no se mide'):
-        print('NOTA huella: ' + _l[len('NOTA '):])
-check('la huella de un fichero (LspTests.Huella), desde una copia fuera de la carpeta de salida: '
-      'corre y 0 fallos (%s tests)' % cuenta('Found'),
-      cuenta('Found') > 0 and cuenta('Failed') == 0 and cuenta('Errored') == 0 and r.returncode == 0,
-      salida[-1500:])
+# (LspTests.Huella, que planta un enlace simbolico, se corria aqui aparte desde una copia: la suite
+# entera ya corre desde la suya, C6 de la 1.29)
+
 
 srv.cierra()  # salida limpia: suelta el exe y la carpeta se puede borrar
 mc.borra(BASE)

@@ -72,7 +72,8 @@ function THuellaDeFicheroTests.PlantaEnlace: Boolean;
 begin
   Result := CreateSymbolicLink(PChar(FEnlace), PChar(FDetras), SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE);
   if not Result then
-    NoSeMide('esta cuenta no puede crear un enlace simbolico (' + SysErrorMessage(GetLastError) + ')');
+    NoSeMide('este proceso no puede crear un enlace simbolico en esta carpeta (' + SysErrorMessage(GetLastError) +
+      '): no se mide aqui; test_engine_dunitx corre la suite desde una copia donde se mide');
 end;
 
 procedure THuellaDeFicheroTests.UnEnlaceDaLaHuellaDeLoDeDetras;
