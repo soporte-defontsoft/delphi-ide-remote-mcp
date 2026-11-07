@@ -1836,9 +1836,13 @@ end;
   un RcCompile, por EL lector del .rc. Medido en la 1.20.1: un RcCompile y
   un Manifest_File de fuera acababan en el .res y en el exe; censo del
   20-oct-2026 sobre los 122 proyectos de las raices de produccion: 0 valores
-  de fuera. Parte 3 del gate del build (1.21.2). }
+  de fuera. Parte 3 del gate del build (1.21.2). ADespliega: este build
+  despliega (la segunda pasada, con el manifiesto completado): solo entonces
+  se juzga a que carpeta del destino va cada entrada (BUILD-070); un build que
+  solo compila no manda nada, y negaba un proyecto renombrado a mano cuyo
+  manifiesto aun decia la carpeta vieja (revisor de regresiones de la 1.29). }
 function LecturasDelBuildDenegadas(const ADprojPath, APlat, ACfg: string;
-  const AInfo: TRadStudioInfo; const ATemporal: string): string;
+  const AInfo: TRadStudioInfo; const ATemporal: string; ADespliega: Boolean = False): string;
 var
   Vars: TStringList;
   Xmls, Ficheros: TArray<string>;
@@ -2178,6 +2182,7 @@ begin
       end;
       // ...y los que despliega ESTE build, por donde caen en el destino: en la
       // carpeta del proyecto, no en la de otro ni en la del nodo (R1 de la 1.29)
+      if ADespliega then
       for var C in CamposRemotosDeDespliegue(Xmls[I], APlat, ACfg) do
       begin
         Result := CampoRemotoFueraDelProyectoDenegado(C.Elemento, C.Escrito,
@@ -2685,7 +2690,7 @@ begin
     // mano antes del primer Deploy no estaba en la cadena del escaneo (V217)
     if not Confiado then
     begin
-      var LecturaDelManifiesto := LecturasDelBuildDenegadas(ADprojPath, Plat, Cfg, Info, TemporalDelBuild);
+      var LecturaDelManifiesto := LecturasDelBuildDenegadas(ADprojPath, Plat, Cfg, Info, TemporalDelBuild, True);
       if LecturaDelManifiesto <> '' then
         raise Exception.Create(LecturaDelManifiesto);
     end;

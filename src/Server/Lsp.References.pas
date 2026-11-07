@@ -1256,11 +1256,28 @@ begin
           if not AllFiles.Contains(F) then
             AllFiles.Add(F);
       end;
-      for var Suya in DelProyecto do
-      begin
-        var Ruta := TPath.GetFullPath(Suya);
-        if TFile.Exists(Ruta) and (ReadPathDenied(Ruta) = '') and not AllFiles.Contains(Ruta) then
-          AllFiles.Add(Ruta);
+      // como el disco: el .dpr puede escribirla con otras mayusculas que el
+      // paseo (391 de 36.737 'in' de D:, medido por el revisor de
+      // regresiones de la 1.29), y se leia dos veces. LA lista de rutas como
+      // las compara NTFS (Lsp.Rutas), ordenada: una busqueda por unidad, no un
+      // recorrido de todo lo visto
+      var Vistas := TListaDeRutas.Create;
+      try
+        Vistas.Sorted := True;
+        Vistas.Duplicates := dupIgnore;
+        for var Vista in AllFiles do
+          Vistas.Add(Vista);
+        for var Suya in DelProyecto do
+        begin
+          var Ruta := TPath.GetFullPath(Suya);
+          if (Vistas.IndexOf(Ruta) < 0) and ExisteYSeLee(Ruta) then
+          begin
+            AllFiles.Add(Ruta);
+            Vistas.Add(Ruta);
+          end;
+        end;
+      finally
+        Vistas.Free;
       end;
     finally
       Dirs.Free;
@@ -1298,15 +1315,19 @@ begin
       try
         Lines.Text := Text;
         VistaLines.Text := Vista;
+        var IdentPlegado := SinMayusculas(Ident);
         for I := 0 to Lines.Count - 1 do
         begin
           if (LocalIni >= 0) and ((I < LocalIni) or (I > LocalFin)) then
             Continue;
           LineText := Lines[I];
           VistaLine := VistaLines[I];
+          // plegada UNA vez por linea, como en delphi_search: en cada vuelta
+          // era cuadratico en una linea larga (revisor de regresiones de la 1.29)
+          var LineaPlegada := SinMayusculas(LineText);
           ScanCol := 1;
           repeat
-            P := Pos(SinMayusculas(Ident), SinMayusculas(LineText), ScanCol);
+            P := Pos(IdentPlegado, LineaPlegada, ScanCol);
             if P = 0 then
               Break;
             // word boundaries; y si el identificador es una palabra reservada

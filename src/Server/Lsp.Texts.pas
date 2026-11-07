@@ -1607,18 +1607,12 @@ const
     'a file to this one.';
 
   SN_BUILD_DEPLOYED_FMT =
-    '[BUILD-006] Deployed through profile "%s". On the target machine ' +
-    'the files are under the PAServer scratch directory (default ' +
-    '~/PAServer/scratch-dir) in %s-%s/%s/ (PAServer names the folder ' +
-    '<windows user>-<profile>) - executables arrive with their exec bit ' +
-    'set, ready to run there. That folder is REWRITTEN on every deploy: ' +
-    'whatever the app stored next to its binary (a data\ folder, a local ' +
-    'database, a key file) is gone with it - copy it elsewhere before ' +
-    'redeploying if a test needs it. deployedFiles counts what this run ' +
-    'shipped (only with verbosity=verbose: quiet and normal do not print ' +
-    'the copies); if it is missing there, nothing was sent: delphi_config ' +
-    'command=view section=deploy lists what the project deploys ' +
-    '(deployFiles), and add-deployfile adds what is missing.';
+    '[BUILD-006] Deployed through profile "%s" to %s-%s/%s/ in the target''s ' +
+    'PAServer scratch directory, executables ready to run. Every deploy REWRITES ' +
+    'that folder: copy elsewhere what the app keeps next to its binary. ' +
+    'deployedFiles (verbosity=verbose) counts what was shipped; delphi_config ' +
+    'command=view section=deploy lists what the project deploys, and ' +
+    'add-deployfile adds to it.';
 
   { W1033 en un paquete: units de OTROS paquetes compiladas dentro del
     nuestro. El IDE ensena la lista y pregunta si anadirlos al requires
@@ -2211,18 +2205,14 @@ const
     'command=kill profile=%s project=<the same .dproj> job=%s. It kills ' +
     'only that job: nothing else on that machine.';
   SN_REMOTERUN_KILL_NOTE =
-    '[RUN-003] kill stops ONLY the program that job started (the ' +
-    'launcher reads the <job>.pid its watcher left, in the folder of ' +
-    'THAT project): with killed=false and the launcher''s JOB-006 note, ' +
-    'there was nothing to kill. The ___RC of the killed job is written ' +
-    'by its watcher into its own output: you read it with command=output ' +
-    'and the same job.';
+    '[RUN-003] kill stops ONLY the program that job started (its <job>.pid, ' +
+    'in THAT project''s folder); killed=false with JOB-006 = nothing to kill. ' +
+    'Its ___RC is read with command=output and the same job.';
   SN_REMOTERUN_OUTPUT_FMT =
-    '[RUN-004] What it writes from now on -an error on closing, its exit ' +
-    'code- you read with delphi_paserver command=output profile=%s ' +
-    'project=<the same .dproj> job=%s: while it lives, what it has so ' +
-    'far; once it ends, its output and its code, and then it is deleted ' +
-    'from the target.';
+    '[RUN-004] Read what it writes from now on with delphi_paserver ' +
+    'command=output profile=%s project=<the same .dproj> job=%s: partial while ' +
+    'it lives; once it ends, its output and its code (then it is deleted from ' +
+    'the target).';
   SN_REMOTERUN_OUTPUT_ALIVE_FMT =
     '[RUN-005] Still alive: this is what it has written so far. Ask ' +
     'again whenever you want; once it ends it brings its output and its ' +
@@ -2394,24 +2384,17 @@ const
     '(GTK, exit 134). An open session on the target with the SAME user ' +
     'that runs PAServer is needed';
   SN_REMOTERUN_TIMEOUT_FMT =
-    '[RUN-019] the program IS STILL RUNNING on the target: it had not ' +
-    'finished after %d s and it is NOT killed, because an application ' +
-    'with a window is meant to stay up. In "output" you have what it had ' +
-    'written so far, and what it writes later you read with ' +
-    'command=output (outputNote). If you expected something that ' +
-    'finishes, give it more time with timeoutms; if it is a GUI, it is ' +
-    'already running and you can operate it with delphi_desktop (folder ' +
-    '%s of the target).';
+    '[RUN-019] STILL RUNNING on the target after %d s, and not killed (an app ' +
+    'with a window stays up). "output" has what it wrote so far; command=output ' +
+    'reads the rest (outputNote). For something that should finish, raise ' +
+    'timeoutms; a GUI can be operated with delphi_desktop (folder %s of the ' +
+    'target).';
 
   SN_REMOTERUN_NOTE =
-    '[RUN-017] Run on the target by PAServer, with nothing installed ' +
-    'there. Only the NATIVE BINARY that project deployed is run, in its ' +
-    'folder of the scratch dir - never the rest of the machine, and ' +
-    'never a script in that folder (the file signature is checked, not ' +
-    'its extension). exitCode/output come from the program. If ' +
-    'stillRunning=true appears, it did not finish in time and is still ' +
-    'alive: "output" brings its PARTIAL output, and the rest -up to its ' +
-    'exit code- is read later with command=output.';
+    '[RUN-017] Run on the target by PAServer: only the NATIVE BINARY that ' +
+    'project deployed, in its folder (its signature is checked, not its ' +
+    'extension). exitCode/output come from the program; with stillRunning=true ' +
+    'it is still alive, "output" is PARTIAL and command=output reads the rest.';
 
   SR_SHELL_META_FMT =
     '[SYS-003 DENIED] The argument contains "%s", a shell metacharacter ' +
@@ -2974,12 +2957,10 @@ const
     'rectangle in pixels of THIS capture (tap inside one). To crop to ' +
     'one: screenshot window=<part of its title>.';
   SN_DESKTOP_WINDOWS_LINUX =
-    '[DESK-007] windows: the X11/Xwayland windows -every FMX application ' +
-    'is one-, title and rectangle in pixels of THIS capture. Native ' +
-    'Wayland windows (the terminal, Files, a browser) do NOT appear in ' +
-    'the list even though the capture shows them: for those, look at the ' +
-    'image and use region. To crop to one of the list: screenshot ' +
-    'window=<part of its title>.';
+    '[DESK-007] windows: the X11/Xwayland ones (every FMX app), title and ' +
+    'rectangle in pixels of THIS capture. Native Wayland windows (terminal, ' +
+    'Files, a browser) are not listed though the image shows them: use region. ' +
+    'To crop to one: screenshot window=<part of its title>.';
   { Super ABRE la vista general, o la CIERRA si ya estaba abierta: el
     segundo overview la cerro y esto decia que estaba abierta (Opus sobre la
     1.22.2, u). Quien lo sabe es GNOME Shell (OverviewActive): eso, a la 1.24 }
@@ -5802,8 +5783,9 @@ const
   SR_TEST_NOTATEST_FMT =
     '[TEST-018 INVALID_PARAM] %s does not look like a test project. What counts ' +
     'as one is a .dpr that uses DUnitX, or one with {$APPTYPE CONSOLE} ' +
-    'whose name has the word test, tests, testing, spec or specs ' +
-    '(MyAppTests, unit_tests - not Latest). If yours is one and I do not ' +
+    'whose name has the word test, tests, testing, spec or specs, starts with ' +
+    'test or spec, or ends with tests or specs (MyAppTests, unit_tests, ' +
+    'mormot2tests - not Latest). If yours is one and I do not ' +
     'detect it, say so with delphi_report: the criterion is refined with ' +
     'real cases.';
 
@@ -5823,7 +5805,8 @@ const
   SN_TEST_NONE =
     '[TEST-021] There are no test projects under there. What counts as ' +
     'one is a .dpr with DUnitX or a console one whose name has the word ' +
-    'test or spec (MyAppTests, unit_tests).';
+    'test or spec, starts with it or ends with tests or specs (MyAppTests, ' +
+    'unit_tests, mormot2tests).';
 
   SN_TEST_DISCOVER_NOTE =
     '[TEST-022] Run them with command=run project=<dir + name from the ' +
@@ -11680,6 +11663,20 @@ const
 
   SP_CREATE_ANCESTOR =
     'Forms/frames: the class of a form or frame of this project to inherit from';
+
+  SP_CFG_AUTOCREATE =
+    'add-unit of a form or a data module: no = the project does not create it at ' +
+    'startup (no Application.CreateForm in the .dpr - "Available forms" - and one it ' +
+    'had goes); default yes.';
+
+  SP_CREATE_AUTOCREATE =
+    'Forms and data modules: no = the project does not create it at startup (no ' +
+    'Application.CreateForm in the .dpr, the IDE''s "Available forms"); your code ' +
+    'creates it. Default yes, as the IDE does.';
+  // un si/no que no lo es (autocreate de delphi_create y de add-unit)
+  SR_CREATE_AUTOCREATE_NO_ES_SINO_FMT =
+    '[CREATE-041 INVALID_PARAM] autocreate="%s" is not a yes or a no: it takes yes/no ' +
+    '(also true/false, 1/0, on/off), or nothing for yes. Nothing was done.';
 
   SP_CREATE_CONTENT =
     'kind=unit optional: the FULL source, written as it comes (in eol) and ' +

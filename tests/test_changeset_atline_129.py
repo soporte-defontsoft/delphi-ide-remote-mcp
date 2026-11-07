@@ -47,6 +47,20 @@ try:
     hay = open(B, 'rb').read() if os.path.exists(B) else None
     check('C2 lo apilado sobre el destino de un move se recoloca por lo de antes del move. ROJO contra 958be0fe',
           mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and hay == b'l1\r\nextra\r\nl2\r\nL3\r\nl4\r\n', (r[:240], hay))
+    # C3 (revisor de regresiones de la 1.29): la ruta que un move deja libre es OTRO fichero; un create del mismo lote
+    # en ella no mueve las lineas del que se fue (con la identidad heredada, el atline=5 de D iba a la 4)
+    C = os.path.join(JAIL, 'c.txt')
+    D = os.path.join(JAIL, 'd.txt')
+    open(C, 'wb').write(b'a1\r\na2\r\na3\r\na4\r\na5\r\n')
+    r = lote([{'kind': 'move', 'path': C, 'dest': D},
+              {'kind': 'create', 'path': C, 'content': 'x1\r\nx2\r\n'},
+              {'kind': 'delete-line', 'path': C, 'atline': 1, 'old': 'x1'},
+              {'kind': 'delete-line', 'path': D, 'atline': 5, 'old': 'a5'}])
+    hay_c = open(C, 'rb').read() if os.path.exists(C) else None
+    hay_d = open(D, 'rb').read() if os.path.exists(D) else None
+    check('C3 move C->D, create C y quitar una linea de cada uno: cada atline en su fichero',
+          mc.abre(r, 'SN_CHANGESET_COMMITTED_FMT') and hay_c == b'x2\r\n' and hay_d == b'a1\r\na2\r\na3\r\na4\r\n',
+          (r[:240], hay_c, hay_d))
 finally:
     srv.cierra()
     mc.borra(BASE)

@@ -554,7 +554,9 @@ REGLAS = [
      [('Lsp.Mascara.pas', 'ExpandVirtualDrives'),  # la puerta: todo menos [Contenido]
       ('Lsp.Files.pas', 'ServeFile'),              # la ruta de /files, que no es un tools/call
       ('Lsp.DesignerEdit.pas', 'PonEnMemoria'),    # LA EXCEPCION: value y props, valor a valor
-      ('Mcp.Tools.Designer.pas', 'PreviewDeForm')],  # ...y el state de preview
+      ('Mcp.Tools.Designer.pas', 'PreviewDeForm'),   # ...y el state de preview
+      ('Mcp.Tools.Db.pas', 'ValorParaCampo'),        # delphi_db: el texto de cada valor de un campo (CH7 de la 1.29)
+      ('Mcp.Tools.Db.pas', 'ClausulaDeFiltros')],    # ...y el de un filtro de texto (contains, starts_with, words)
      'la puerta expande lo que no lleva [Contenido] y el disenador el TEXTO de cada valor: una '
      'expansion en otro sitio es una excepcion sin declarar (era una lista de nombres, '
      'PARAMS_CON_CONTENIDO, y un value entre comillas llegaba como srvX: al .dfm)'),

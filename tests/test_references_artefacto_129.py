@@ -43,6 +43,18 @@ try:
     check('A1 el uso en debug\\UEnDebug.pas (unidad del .dpr) sale. ROJO contra 958be0fe: no se escaneaba',
           'UEnDebug.pas' in ficheros, (ficheros, r[:300]))
     check('A2 control: debug\\Suelta.pas, que el proyecto no lista, sigue fuera', 'Suelta.pas' not in ficheros, ficheros)
+    # A3 (revisor de regresiones de la 1.29): el .dpr que escribe una unidad con otras mayusculas que el disco no
+    # hace que se lea dos veces (salian sus usos repetidos)
+    DPR = os.path.join(P, 'MideEH3.dpr')
+    texto = open(DPR, encoding='utf-8-sig').read()
+    open(DPR, 'w', encoding='utf-8-sig').write(texto.replace("'UFuente.pas'", "'UFUENTE.PAS'"))
+    r = srv.call('delphi_references', {'path': FUENTE, 'line': 4, 'character': 10}, t=150)
+    j = mc.como_json(r)
+    lineas = [(fi.get('name', '').lower(), h.get('line')) for d in j.get('confirmed', []) + j.get('unverified', [])
+              for fi in d.get('files', []) for h in fi.get('hits', [])]
+    check('A3 una unidad que el .dpr escribe con otras mayusculas no sale dos veces',
+          "'UFUENTE.PAS'" in open(DPR, encoding='utf-8-sig').read() and len(lineas) == len(set(lineas))
+          and ('uendebug.pas', 12) in lineas, (lineas, r[:200]))
 finally:
     srv.cierra()
     mc.borra(BASE)

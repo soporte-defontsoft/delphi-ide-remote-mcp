@@ -79,8 +79,13 @@ type
 { Si el nombre de un programa de consola dice que es de tests: tiene la
   PALABRA test, tests, testing, spec o specs (EsPalabraDelNombre: MyAppTests,
   unit_tests, Tests.Core); dentro de otra palabra no (Latest, Inspector, que
-  lo eran con una regex sin bordes: B4 de la 1.29). Politica de la casa,
-  declarada: no hay juez que diga si una consola es un test. }
+  lo eran con una regex sin bordes: B4 de la 1.29). Y lo que una palabra en
+  minusculas pegadas no deja ver: el nombre EMPIEZA por test o spec
+  (Testrunner) o ACABA en tests o specs (mormot2tests, el runner de mORMot2,
+  unittests): el revisor de regresiones de la 1.29 midio que la palabra sola
+  perdia el de mORMot2; con las dos formas, de las 1.359 consolas sin DUnitX
+  de esta maquina solo se pierden Inspect* frente a la 1.28. Politica de la
+  casa, declarada: no hay juez que diga si una consola es un test. }
 function NombreDiceTest(const AName: string): Boolean;
 const
   PALABRAS: array[0..4] of string = ('test', 'tests', 'testing', 'spec', 'specs');
@@ -90,6 +95,9 @@ var
 begin
   // LowerCase: solo ASCII y la misma longitud, que las posiciones casen
   Bajo := LowerCase(AName);
+  if Bajo.StartsWith('test') or Bajo.StartsWith('spec') or Bajo.EndsWith('tests') or
+     Bajo.EndsWith('specs') then
+    Exit(True);
   for var W in PALABRAS do
   begin
     P := Pos(W, Bajo);

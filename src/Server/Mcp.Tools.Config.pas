@@ -47,6 +47,7 @@ type
     FConfig: string;
     FName: string;
     FValue: string;
+    FAutoCreate: string;
   public
     [SchemaDescription(SP_CFG_PROJECT)]
     [Required]
@@ -111,6 +112,10 @@ type
     property Name: string read FName write FName;
     [SchemaDescription(SP_CFG_VALUE)]
     property Value: string read FValue write FValue;
+    // add-unit de un form o un data module: si el proyecto lo crea al arrancar
+    // (el autocreate de delphi_create; informe de un agente del 7-nov-2026)
+    [SchemaDescription(SP_CFG_AUTOCREATE)]
+    property AutoCreate: string read FAutoCreate write FAutoCreate;
   end;
 
   TDelphiConfigTool = class(TMCPToolBase<TDelphiConfigParams>)
@@ -149,7 +154,8 @@ uses
   Lsp.Puertas,
   Lsp.Mudanzas,
   Lsp.JuecesDeArgumentos,
-  Lsp.PuertaDeLaLlamada;
+  Lsp.PuertaDeLaLlamada,
+  Lsp.Settings;
 
 constructor TDelphiConfigTool.Create;
 begin
@@ -2341,7 +2347,7 @@ const
     'remove-property', 'name platform config',
     'get-property', 'name platform config',
     'add-requires', 'requires',
-    'add-unit', 'path',
+    'add-unit', 'path autocreate',
     'remove-unit', 'path',
     'fix-references', '',
     'add-project', 'path',
@@ -2353,7 +2359,8 @@ begin
      'remotedir', P.RemoteDir, '', 'version', P.Version, '',
      'include', IfThen(P.Include, 'true'), '',
      'output', P.Output, '', 'requires', P.Requires, '',
-     'config', P.Config, '', 'name', P.Name, '', 'value', P.Value, ''], ASuyos, AVaCon);
+     'config', P.Config, '', 'name', P.Name, '', 'value', P.Value, '',
+     'autocreate', P.AutoCreate, ''], ASuyos, AVaCon);
 end;
 
 function TDelphiConfigTool.ExecuteWithParams(const Params: TDelphiConfigParams): string;
@@ -2487,7 +2494,11 @@ begin
       Result := ReadPathDenied(Params.Path);
     if Result <> '' then
       Exit;
-    Exit(AddProjectUnit(Params.Project, Params.Path));
+    // sin decirlo, como el IDE: un form o un data module se crea al arrancar
+    var AutoCrea := True;
+    if (Params.AutoCreate.Trim <> '') and not LeeSiNo(Params.AutoCreate, AutoCrea) then
+      Exit(MsgFmt(SR_CREATE_AUTOCREATE_NO_ES_SINO_FMT, [Params.AutoCreate.Trim]));
+    Exit(AddProjectUnit(Params.Project, Params.Path, rdDesconocida, AutoCrea));
   end;
   if Cmd = 'fix-references' then
     Exit(ArreglaReferencias(Params.Project));

@@ -48,6 +48,12 @@ type
   private
     FPatron: PPCRE;
     FExtra: TPCREExtra; // el tope de recursion: sin el, PCRE desborda la pila
+    // la ultima linea buscada y su copia sin sustitutos sueltos: quien busca
+    // varias veces en la MISMA linea (delphi_search con wholeword, que salta
+    // una coincidencia y sigue) la limpiaba entera en cada llamada, cuadratico
+    // en una linea larga (revisor de regresiones de la 1.29). La referencia que
+    // se guarda hace que la misma direccion sea el mismo texto
+    FUltima, FLimpia: string;
   public
     // AError <> '': no compila, con el motivo del motor y su posicion
     constructor Create(const AExpr: string; out AError: string);
@@ -145,14 +151,27 @@ begin
     pasa a U+FFFD, uno por uno: las posiciones no se mueven. Y un inicio en
     mitad de una pareja (lo que avanza una coincidencia vacia) pasa al
     caracter siguiente. }
-  Texto := ATexto;
-  I := 1;
-  while SiguienteSuelto(Texto, I) <> #0 do
-    Texto[I - 1] := #$FFFD;
+  if (Pointer(ATexto) <> Pointer(FUltima)) or (Length(ATexto) <> Length(FUltima)) then
+  begin
+    FUltima := ATexto;
+    FLimpia := ATexto;
+    I := 1;
+    while SiguienteSuelto(FLimpia, I) <> #0 do
+      FLimpia[I - 1] := #$FFFD;
+  end;
+  Texto := FLimpia;
   Inicio := AInicio;
-  if (Inicio > 1) and (Inicio <= Length(Texto)) and Texto[Inicio].IsLowSurrogate and
-     Texto[Inicio - 1].IsHighSurrogate then
-    Inc(Inicio);
+  // los caracteres a una variable antes de preguntarles: un metodo de helper
+  // sobre Texto[i], una variable local que comparte su texto, hace que el
+  // compilador la copie entera (UniqueString) en CADA llamada - medido en la
+  // 1.29: 11,8 s en una linea de 150.000 caracteres con wholeword, 0,00 s asi
+  if (Inicio > 1) and (Inicio <= Length(Texto)) then
+  begin
+    var Ahora := Texto[Inicio];
+    var Antes := Texto[Inicio - 1];
+    if Ahora.IsLowSurrogate and Antes.IsHighSurrogate then
+      Inc(Inicio);
+  end;
 {$IFDEF MSWINDOWS}
   R := pcre_exec(FPatron, @FExtra, PCRE_STR(PChar(Texto)), Length(Texto), Inicio - 1,
     PCRE_NO_UTF8_CHECK, @Ofs[0], 3);

@@ -46,6 +46,23 @@ try:
     hits, r = busca('o.X', True)
     check('X3 "." se come UN sustituto suelto', hits == [(1, 2)], (hits, r[:200]))
     check('X4 el servidor sigue vivo', not mc.fallo(srv.call('delphi_list', {'root': JAIL})))
+    # X5 (revisor de regresiones de la 1.29): la limpieza de sueltos recorria la linea ENTERA en cada busqueda, y
+    # wholeword busca otra vez en la misma linea por cada coincidencia que rechaza: cuadratico en una linea larga
+    import time
+    open(os.path.join(JAIL, 'larga.pas'), 'w', encoding='ascii').write('a' * 300000)
+    t0 = time.time()
+    r = srv.call('delphi_search', {'root': JAIL, 'query': 'a', 'regex': True, 'wholeword': True,
+                                   'pattern': 'larga.pas'}, t=180)
+    dt = time.time() - t0
+    check('X5 regex + wholeword en una linea de 300.000 caracteres: lineal (< 20 s)', dt < 20 and not mc.fallo(r),
+          '%.1f s | %s' % (dt, r[:160]))
+    # X6: el camino literal plegaba la linea entera en cada vuelta (7 s en 100.000 caracteres, x4 al doblarla)
+    t0 = time.time()
+    r = srv.call('delphi_search', {'root': JAIL, 'query': 'a', 'regex': False, 'wholeword': True,
+                                   'pattern': 'larga.pas'}, t=180)
+    dt = time.time() - t0
+    check('X6 busqueda literal + wholeword en la misma linea: lineal (< 20 s)', dt < 20 and not mc.fallo(r),
+          '%.1f s | %s' % (dt, r[:160]))
 finally:
     srv.cierra()
     mc.borra(BASE)

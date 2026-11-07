@@ -907,7 +907,8 @@ begin
       Exit;
   Ini := U.StartPos + Length(U.Keyword);
   Cuerpo := Copy(Dpr, Ini, U.EndPos - Ini);
-  if (CodigoPascal(Cuerpo) = Cuerpo) or Cuerpo.Contains('{$') or Cuerpo.Contains('(*$') then
+  // las directivas, por SU lector (DirectivasPascal: LA forma de abrir una)
+  if (CodigoPascal(Cuerpo) = Cuerpo) or (Length(DirectivasPascal(Cuerpo)) > 0) then
     Exit;
   // el ';' cierra la ultima entrada, pegado a su nombre
   if (U.EndPos > Length(Dpr)) or (Dpr[U.EndPos] <> ';') or (U.EndPos - 1 < Ini) or

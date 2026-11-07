@@ -23,6 +23,7 @@ type
     FAncestor: string;
     FContent: string;
     FEol: string;
+    FAutoCreate: string;
   public
     [SchemaDescription(SP_CREATE_KIND)]
     [Required]
@@ -46,6 +47,8 @@ type
     property Content: string read FContent write FContent;
     [SchemaDescription(SP_CREATE_EOL)]
     property Eol: string read FEol write FEol;
+    [SchemaDescription(SP_CREATE_AUTOCREATE)]
+    property AutoCreate: string read FAutoCreate write FAutoCreate;
   end;
 
   TDelphiCreateTool = class(TMCPToolBase<TDelphiCreateParams>)
@@ -63,6 +66,7 @@ uses
   Lsp.Guard,     // ParametroQueNoVa: lo que no va con el kind se dice
   Lsp.Puertas,   // EnterFileEdit / LeaveFileEdit: el cerrojo de escritura
   Lsp.Pascal,    // SinMayusculas: EL pliegue de lo que no es una ruta
+  Lsp.Settings,  // LeeSiNo: LA gramatica del si/no
   Lsp.Scaffold;
 
 constructor TDelphiCreateTool.Create;
@@ -97,13 +101,15 @@ const
   KINDS: array [0 .. 23] of string = (
     'project-console', 'dir', 'project-vcl', 'dir', 'project-fmx', 'dir',
     'project-package', 'dir', 'project-test', 'dir',
-    'form-vcl', 'project formname dir ancestor', 'form-fmx', 'project formname dir ancestor',
+    'form-vcl', 'project formname dir ancestor autocreate',
+    'form-fmx', 'project formname dir ancestor autocreate',
     'frame-vcl', 'project formname dir ancestor', 'frame-fmx', 'project formname dir ancestor',
-    'datamodule', 'project formname dir',
+    'datamodule', 'project formname dir autocreate',
     'unit', 'project content dir eol',
     'include', 'project content dir eol');
 var
   K, Suyos, Sobra, VaCon: string;
+  AutoCrea: Boolean;
 begin
   K := SinMayusculas(Params.Kind.Trim);
   // lo que no es de este kind se dice (Lsp.Guard.ParametroQueNoVa): content
@@ -114,18 +120,23 @@ begin
   Sobra := ParametroQueNoVa(K, KINDS,
     ['dir', Params.Dir, '', 'project', Params.Project, '',
      'formname', Params.FormName, '', 'content', Params.Content, '',
-     'ancestor', Params.Ancestor, '', 'eol', Params.Eol, ''], Suyos, VaCon);
+     'ancestor', Params.Ancestor, '', 'eol', Params.Eol, '',
+     'autocreate', Params.AutoCreate, ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_CREATE_NO_VA_CON_KIND_FMT, [Sobra, Params.Kind.Trim,
       Params.Kind.Trim, 'name ' + Suyos]) + VaCon);
+  // sin decirlo, como el IDE: el proyecto lo crea al arrancar
+  AutoCrea := True;
+  if (Params.AutoCreate.Trim <> '') and not LeeSiNo(Params.AutoCreate, AutoCrea) then
+    Exit(MsgFmt(SR_CREATE_AUTOCREATE_NO_ES_SINO_FMT, [Params.AutoCreate.Trim]));
   if K.StartsWith('project-') then
     Result := CreateDelphiProject(Params.Dir, Params.Name, K.Substring(8))
   else if K.StartsWith('form-') then
     Result := CreateDelphiForm(Params.Project, Params.Name, Params.FormName,
-      K.Substring(5), Params.Dir, Params.Ancestor)
+      K.Substring(5), Params.Dir, Params.Ancestor, AutoCrea)
   else if K.StartsWith('frame-') or (K = 'datamodule') then
     Result := CreateDelphiForm(Params.Project, Params.Name, Params.FormName, K,
-      Params.Dir, Params.Ancestor)
+      Params.Dir, Params.Ancestor, AutoCrea)
   else if K = 'unit' then
     Result := CreateDelphiUnit(Params.Project, Params.Name, Params.Content,
       Params.Dir, Params.Eol)

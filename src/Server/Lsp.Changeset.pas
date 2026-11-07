@@ -939,13 +939,16 @@ begin
           Obj.AddPair('n', TJSONNumber.Create(I + 1));
           Obj.AddPair('kind', KindName(Op.Kind));
           Obj.AddPair('path', Op.Path);
-          if (Op.Kind in [opEdit, opDeleteLine]) and not TFile.Exists(Op.Path) then
+          if Op.Kind in [opEdit, opDeleteLine] then
           begin
             // un fichero que un move ANTERIOR del lote trae de otro sitio se
             // ensaya contra el ORIGEN del move: el mismo contenido, y su +R
             // viaja con el (el commit lo rechazaba con SYS-029 tras un preview
             // limpio; decima revision). Uno que un create del lote estrena no
-            // tiene contra que ensayar hasta el commit
+            // tiene contra que ensayar hasta el commit. Por el PLAN tambien
+            // cuando la ruta existe en el disco: la que un move deja libre y
+            // un create estrena se ensayaba contra el fichero que se fue
+            // (revisor de regresiones de la 1.29, C3)
             var Fuente := RutaHoy(C, I, Op.Path);
             if Fuente = '' then
             begin
@@ -1117,7 +1120,13 @@ begin
               Suya := ClaveDeRuta(C.Ops[I].Path);
             Identidad[I] := Suya;
             if C.Ops[I].Kind = opMove then
+            begin
               Alias.AddOrSetValue(ClaveDeRuta(C.Ops[I].Dest), Suya);
+              // ...y la ruta que deja libre es OTRO fichero desde ahora (un
+              // create del mismo lote en ella no es el que se movio: revisor
+              // de regresiones de la 1.29)
+              Alias.AddOrSetValue(ClaveDeRuta(C.Ops[I].Path), Suya + '|' + IntToStr(I));
+            end;
           end;
         finally
           Alias.Free;

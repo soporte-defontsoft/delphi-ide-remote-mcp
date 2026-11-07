@@ -202,9 +202,9 @@ try:
     # control: lo que escribe el IDE de verdad (medido en 62 manifiestos)
     manifiesto(dep, 'Dep', remotedir='$(PROJECTNAME).app\\..\\Contents\\', remotename='Default~ipad@2x.png')
     r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64'}, t=300)
-    # (1.29, R1: la forma del bundle de Apple en un build Win64 la niega ahora BUILD-070, por donde cae)
-    check('D9 control: $(PROJECTNAME), .., ~ y @ no los niega BUILD-066 (en Win64 la carpeta es de BUILD-070)',
-          not mc.es(r, 'SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT') and mc.es(r, 'SR_BUILD_CARPETA_REMOTA_FMT'), r[:240])
+    # (1.29: un build que no despliega no juzga a que carpeta del destino iria cada entrada, BUILD-070)
+    check('D9 control: $(PROJECTNAME), .., ~ y @ no los niega BUILD-066, y un build sin Deploy no juzga su carpeta',
+          not mc.es(r, 'SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT') and not mc.es(r, 'SR_BUILD_CARPETA_REMOTA_FMT'), r[:240])
     # ...pero $(PROJECTNAME) con un valor que el proyecto redefine mal, si
     texto = open(dep_proj, encoding='utf-8-sig').read()
     i = texto.index('<PropertyGroup')
@@ -258,6 +258,12 @@ try:
     r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64', 'target': 'Deploy', 'profile': PROF}, t=300)
     check('R1i control: el grupo de OSX64 (P.app\\..\\) no se juzga en un build Win64 (llega a msbuild)',
           not mc.fallo(r) or 'CodeGear.Deployment' in r, r[:240])
+    # R1k (revisor de regresiones de la 1.29): un build que NO despliega no juzga a que carpeta iria cada entrada:
+    # un proyecto renombrado a mano cuyo manifiesto aun dice la carpeta vieja compila como en la 1.28
+    manifiesto(dep, 'Dep', remotedir='Viejo\\')
+    r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64'}, t=300)
+    check('R1k un build sin Deploy con RemoteDir de otro nombre (proyecto renombrado): compila, sin BUILD-070',
+          mc.como_json(r).get('success') is True, r[:240])
     # R1j: el nombre reservado es para lo que nombra el AGENTE: el nodo del propio servidor (delphi_desktop sin
     # project) se despliega y corre. La 1.29 en desarrollo lo nego con PAS-074 en todo perfil remoto y dejo sin
     # escritorio a un agente (informe del 7-nov-2026): ninguna bateria pasaba delphi_desktop por un perfil

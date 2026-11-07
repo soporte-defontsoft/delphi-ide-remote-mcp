@@ -520,6 +520,12 @@ begin
         for I := 0 to High(Lines) do
         begin
           LineText := Lines[I];
+          // la linea plegada UNA vez: plegarla en cada vuelta era cuadratico en
+          // una linea larga con wholeword, que rechaza y sigue (medido en la
+          // 1.29: 7 s en 100.000 caracteres, x4 al doblarla)
+          var LineaPlegada := '';
+          if not Params.Regex then
+            LineaPlegada := SinMayusculas(LineText);
           ScanFrom := 1;
           repeat
             if Params.Regex then
@@ -535,7 +541,7 @@ begin
             end
             else
             begin
-              P := Pos(Q, SinMayusculas(LineText), ScanFrom);
+              P := Pos(Q, LineaPlegada, ScanFrom);
               Len := Length(Q);
             end;
             if P = 0 then

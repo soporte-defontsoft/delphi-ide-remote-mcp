@@ -114,9 +114,13 @@ function DccRefXml(const AInfo: TUnitInfo; const AInclude: string): string;
   an entry already present is left alone and reported. ARaizDelCreador: what
   its root is, when the caller wrote it (delphi_create); otherwise it is
   judged (JuzgaRaizDeDiseno) with the table as it is - who waits for it does
-  so before taking the write lock. }
+  so before taking the write lock. AAutoCreate: False = un form o un data
+  module que el proyecto NO crea al arrancar (sin su Application.CreateForm:
+  los "Available forms" del IDE); lo crea el codigo del usuario (informe de un
+  agente, 7-nov-2026: lo creaba a demanda una funcion y con los dos caminos se
+  creaba dos veces, EComponentError). }
 function AddProjectUnit(const AProject, APasPath: string;
-  ARaizDelCreador: TRaizDeDiseno = rdDesconocida): string;
+  ARaizDelCreador: TRaizDeDiseno = rdDesconocida; AAutoCreate: Boolean = True): string;
 
 { Takes the unit out of the .dpr (uses + CreateForm) and the .dproj. The
   file itself stays on disk. }
@@ -1018,7 +1022,7 @@ end;
 { ---- public operations ---- }
 
 function AddProjectUnitNucleo(const AProject, APasPath: string;
-  ARaizDelCreador: TRaizDeDiseno; APrevia: PUnitInfo): string;
+  ARaizDelCreador: TRaizDeDiseno; APrevia: PUnitInfo; AAutoCreate: Boolean): string;
 var
   Dpr, Dproj, Enc, Text, Include, Entry, Note: string;
   Info: TUnitInfo;
@@ -1117,12 +1121,16 @@ begin
   // pediria. Anunciaba "+ Application.CreateForm" y CFG-046 lo desmentia en
   // la linea siguiente (Hermes, 15-oct-2026, informe 1938c; gemelo de P9)
   ConCreateForm := False;
-  if Info.NeedsCreateForm and not EsPaquete then
+  if Info.NeedsCreateForm and not EsPaquete and AAutoCreate then
   begin
     ConCreateForm := InsertCreateForm(Text, Info);
     if not ConCreateForm then
       Note := MsgText(SN_UNIT_NO_RUN_ANCHOR);
-  end;
+  end
+  else if Info.NeedsCreateForm and not EsPaquete then
+    // sin crear al arrancar, como "Available forms" en las opciones del
+    // proyecto: el que ya tenia (una unit que se registra otra vez) se va
+    RemoveCreateForm(Text, Info.ClassName, Info.FormName);
   PatchSaveText(Dpr, Text, Enc);
 
   // .dproj
@@ -1196,7 +1204,7 @@ begin
 end;
 
 function AddProjectUnit(const AProject, APasPath: string;
-  ARaizDelCreador: TRaizDeDiseno): string;
+  ARaizDelCreador: TRaizDeDiseno; AAutoCreate: Boolean): string;
 begin
   // Registrar una unidad es leer el .dpr, modificarlo y escribirlo: dos
   // agentes creando unidades en el MISMO proyecto a la vez perdian entradas
@@ -1210,7 +1218,7 @@ begin
     Result := ProyectoTodoONada(AProject,
       function: string
       begin
-        Result := AddProjectUnitNucleo(AProject, APasPath, ARaizDelCreador, @Previa);
+        Result := AddProjectUnitNucleo(AProject, APasPath, ARaizDelCreador, @Previa, AAutoCreate);
       end);
   finally
     LeaveFileEdit;

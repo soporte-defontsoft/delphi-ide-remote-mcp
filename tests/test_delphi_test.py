@@ -166,7 +166,9 @@ end.
 
 # B4 de la 1.29: una consola es un test si su nombre tiene la PALABRA test, tests, testing, spec o specs
 # (MyAppTests, unit_tests); 'test' o 'spec' dentro de otra palabra no (Latest, Inspector: lo eran)
-for _n in ('Latest', 'Inspector', 'unit_tests'):
+# ...y lo que unas minusculas pegadas no dejan ver como palabra: empieza por test/spec o acaba en tests/specs
+# (mormot2tests, el runner de mORMot2: el revisor de regresiones de la 1.29 midio que se perdia)
+for _n in ('Latest', 'Inspector', 'unit_tests', 'mormot2tests', 'Testrunner'):
     os.makedirs(os.path.join(BASE, 'Nombres', _n), exist_ok=True)
     open(os.path.join(BASE, 'Nombres', _n, _n + '.dpr'), 'w', encoding='utf-8', newline='\r\n').write(
         'program %s;\n\n{$APPTYPE CONSOLE}\n\nbegin\nend.\n' % _n)
@@ -176,6 +178,8 @@ j = J(A.call('delphi_test', {'command': 'discover', 'path': BASE}))
 names = [p.get('name', '') for p in mc.ficheros(j, 'projects')]
 check('discover: Latest e Inspector (test y spec dentro de otra palabra) NO son tests; unit_tests si (B4 de la 1.29)',
       'Latest.dpr' not in names and 'Inspector.dpr' not in names and 'unit_tests.dpr' in names, names)
+check('discover: mormot2tests y Testrunner (minusculas pegadas: acaba en tests, empieza por test) SI son tests',
+      'mormot2tests.dpr' in names and 'Testrunner.dpr' in names, names)
 check('discover encuentra las dos suites', 'VerdeTest.dpr' in names and 'RojoTest.dpr' in names, str(j)[:300])
 check('discover NO cuenta un proyecto normal', 'NormalApp.dpr' not in names, names)
 check('discover dice el framework y el porque', mc.ficheros(j, 'projects') and all(p.get('framework') and p.get('why') for p in mc.ficheros(j, 'projects')), str(j)[:250])

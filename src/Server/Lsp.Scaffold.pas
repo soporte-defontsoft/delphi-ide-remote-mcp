@@ -17,7 +17,7 @@ function CreateDelphiProject(const ADir, AName, AKind: string): string;
 { AKind: vcl | fmx (forms) | frame-vcl | frame-fmx | datamodule. AAncestro: la clase
   de un form o frame del proyecto del que hereda (no en un data module; V76 de la 1.24). }
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
-  const ASubDir: string = ''; const AAncestro: string = ''): string;
+  const ASubDir: string = ''; const AAncestro: string = ''; AAutoCreate: Boolean = True): string;
 { A plain unit (interface/implementation skeleton) registered in the project.
   AEol: el salto en que nace, "crlf" (por defecto) o "lf" (Lsp.Lineas:
   EolDesconocido lo juzga, SaltoPedido lo da). }
@@ -1030,7 +1030,7 @@ begin
 end;
 
 function CreateDelphiForm(const ADprPath, AUnitName, AFormName, AKind: string;
-  const ASubDir, AAncestro: string): string;
+  const ASubDir, AAncestro: string; AAutoCreate: Boolean): string;
 var
   Kind, Dir, FormName, PasPath, DesignerExt, Have, Want, FrameworkNote: string;
   Fmx: Boolean;
@@ -1216,7 +1216,7 @@ begin
   else if MatchText(Kind, ['frame-vcl', 'frame-fmx']) then
     Raiz := rdFrame;
   try
-    Result := AddProjectUnit(ADprPath, PasPath, Raiz);
+    Result := AddProjectUnit(ADprPath, PasPath, Raiz, AAutoCreate);
   except
     on E: Exception do
       Result := MsgExcepcion(E.ClassName, E.Message);

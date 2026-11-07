@@ -364,6 +364,7 @@ Create a NEW Delphi project - console/VCL/FMX (.dpr + buildable .dproj + main fo
 | `ancestor` | string | optional | Forms/frames: the class of a form or frame of this project to inherit from |
 | `content` | string | optional | kind=unit optional: the FULL source, written as it comes (in eol) and registered in the same call - no empty skeleton first. Its `unit X;` must match "name" and it must end in `end.`. Without it, a standard empty skeleton. kind=include: REQUIRED, the text of the .inc. |
 | `eol` | string | optional | kind=unit or include: line endings, "crlf" (default, Delphi standard) or "lf" |
+| `autocreate` | string | optional | Forms and data modules: no = the project does not create it at startup (no Application.CreateForm in the .dpr, the IDE's "Available forms"); your code creates it. Default yes, as the IDE does. |
 <!-- /contract -->
 
 ## Manage files  (read-write only)
@@ -538,6 +539,7 @@ See and manage a project's build configurations and target PLATFORMS. view (read
 | `config` | string | optional | set-active: the one the project builds by default (one it declares: Debug, Release...). With platform= too, both at once. set-property / remove-property / get-property: the configuration of the group (with platform=, the group of that pair, as the IDE writes an option of Debug for Android64; empty: all; get-property reads the default). add/remove-deployfile: its config (add: the active one; remove: empty = all). |
 | `name` | string | optional | set-property / remove-property / get-property: the property, as the .dproj writes it (PF_KeyStoreDebug, DCC_Define...). To write, not the structure (Config, Platform, Base, Cfg_N...), a build event or a free compiler option. |
 | `value` | string | optional | set-property: the text the property takes, one line, as the IDE would write it. Judged when that build reads it, like the rest of the .dproj (outside your roots and the IDE's library: BUILD-050). |
+| `autocreate` | string | optional | add-unit of a form or a data module: no = the project does not create it at startup (no Application.CreateForm in the .dpr - "Available forms" - and one it had goes); default yes. |
 <!-- /contract -->
 
 `set-output` changes where the PROJECT builds; it does not touch the `.deployproj`, and a deploy entry already written for that configuration keeps the old path (a Deploy only adds entries for a configuration that has none).
