@@ -165,9 +165,13 @@ begin
     Result.Define('VER' + IntToStr(Round(V * 10)));
   Result.PonConstante('CompilerVersion', V);
   Result.PonConstante('RTLVersion', V);
-  // Los que el compilador de Windows define siempre (Predefined Conditionals)
+  // Los que el compilador de Windows define siempre, MEDIDOS con dcc 37.0 (un
+  // IFDEF por simbolo y un MESSAGE WARN, 7-nov-2026; EH10 de la 1.29: faltaban
+  // CPU386, WEAKREF y WEAKINTFREF). CONSOLE no: lo define el proyecto de
+  // consola, y esta tabla es la de los fuentes de los paquetes. La vigila
+  // test_defines_dcc_129 contra dcc
   for var S in ['DCC', 'CONDITIONALEXPRESSIONS', 'NATIVECODE', 'UNICODE',
-    'MSWINDOWS', 'ASSEMBLER'] do
+    'MSWINDOWS', 'ASSEMBLER', 'WEAKREF', 'WEAKINTFREF'] do
     Result.Define(S);
   if SameText(APlataforma, 'Win64') then
   begin
@@ -179,7 +183,7 @@ begin
   end
   else
   begin
-    for var S in ['WIN32', 'CPUX86', 'CPU32BITS', 'UNDERSCOREIMPORTNAME'] do
+    for var S in ['WIN32', 'CPUX86', 'CPU386', 'CPU32BITS', 'UNDERSCOREIMPORTNAME'] do
       Result.Define(S);
     Puntero := 4;
     Extendido := 10;
