@@ -753,6 +753,25 @@ end;
 
 { ---- los planes, sobre los textos ---- }
 
+{ Lo que casa APatron en ACodigo (la vista de codigo de una linea: sin
+  comentarios ni cadenas, mismas columnas), cambiado por ANuevo en la linea de
+  verdad (ALinea) y en su vista, para que otro cambio en la misma linea se
+  busque despues sobre las dos; False si no casa y nada cambia. EL cambio de un
+  identificador de una linea del .pas: el borrado de un campo con su coma, el
+  renombrado del campo y el de los manejadores lo escribian cada uno (C1-9 del
+  revisor del paisaje de la 1.28). }
+function CambiaEnLaLinea(var ALinea, ACodigo: string; const APatron, ANuevo: string): Boolean;
+var
+  M: TMatch;
+begin
+  M := TRegEx.Match(ACodigo, APatron, [roIgnoreCase]);
+  Result := M.Success;
+  if not Result then
+    Exit;
+  ALinea := Copy(ALinea, 1, M.Index - 1) + ANuevo + Copy(ALinea, M.Index + M.Length, MaxInt);
+  ACodigo := Copy(ACodigo, 1, M.Index - 1) + ANuevo + Copy(ACodigo, M.Index + M.Length, MaxInt);
+end;
+
 function PlanDeBorrado(ADoc: TStyleDoc; AObj: TStyleObj;
   const APasTexto, APasNombre: string; out AImp: TImpacto;
   out ADfm, APas: string; AJuez: TJuezDeReferencia = nil; ATabla: TMetaTable = nil): string;
@@ -763,7 +782,6 @@ var
   Lista: TList<string>;
   PasLineas, PasSaltos, CodLineas: TArray<string>;
   NuevasL, NuevasS: TList<string>;
-  M: TMatch;
 begin
   Result := '';
   ADfm := '';
@@ -828,16 +846,10 @@ begin
       Continue;
     end;
     // 'A, B: TButton;' y se va uno: solo su nombre, con su coma
-    M := TRegEx.Match(CodLineas[C.Ini], PatronIdentEntero(C.Nombre) + '\s*,\s*', [roIgnoreCase]);
-    if not M.Success then
-      M := TRegEx.Match(CodLineas[C.Ini], '\s*,\s*' + PatronIdentEntero(C.Nombre), [roIgnoreCase]);
-    if not M.Success then
+    // (las dos vistas a la vez: otro campo de la misma linea se busca despues)
+    if not CambiaEnLaLinea(PasLineas[C.Ini], CodLineas[C.Ini], PatronIdentEntero(C.Nombre) + '\s*,\s*', '') and
+       not CambiaEnLaLinea(PasLineas[C.Ini], CodLineas[C.Ini], '\s*,\s*' + PatronIdentEntero(C.Nombre), '') then
       Exit(MsgFmt(SR_DESIGNER_CAMPO_COMPARTIDO_FMT, [C.Nombre, Donde(APasNombre, C.Ini + 1)]));
-    // las dos vistas a la vez: otro campo de la misma linea se busca despues
-    PasLineas[C.Ini] := Copy(PasLineas[C.Ini], 1, M.Index - 1) +
-      Copy(PasLineas[C.Ini], M.Index + M.Length, MaxInt);
-    CodLineas[C.Ini] := Copy(CodLineas[C.Ini], 1, M.Index - 1) +
-      Copy(CodLineas[C.Ini], M.Index + M.Length, MaxInt);
   end;
   for K := 0 to High(AImp.Metodos) do
   begin
@@ -900,7 +912,6 @@ var
   I, Delta: Integer;
   Nom, Clave, NomObj, ClaseObj, Resto, V, Txt: string;
   Uno: TStringList;
-  M: TMatch;
   Form: TArray<TLineaForm>;
 begin
   Result := '';
@@ -1000,12 +1011,9 @@ begin
     begin
       PasLineas := SplitToLinesConSalto(APasTexto, PasSaltos);
       // el nombre en el codigo de su linea, no en un comentario delante
-      M := TRegEx.Match(SplitToLines(CodigoPascal(APasTexto))[C.Ini],
-        PatronIdentEntero(AObj.ObjName), [roIgnoreCase]);
-      if not M.Success then
+      var CodigoC := SplitToLines(CodigoPascal(APasTexto))[C.Ini];
+      if not CambiaEnLaLinea(PasLineas[C.Ini], CodigoC, PatronIdentEntero(AObj.ObjName), ANuevo) then
         Exit(MsgFmt(SR_DESIGNER_CAMPO_COMPARTIDO_FMT, [AObj.ObjName, Donde(APasNombre, C.Ini + 1)]));
-      PasLineas[C.Ini] := Copy(PasLineas[C.Ini], 1, M.Index - 1) + ANuevo +
-        Copy(PasLineas[C.Ini], M.Index + M.Length, MaxInt);
       APas := UneConSusSaltos(PasLineas, PasSaltos);
       Break;
     end;
@@ -1021,12 +1029,7 @@ begin
       var Suyas: TArray<Integer> := [Mt.DeclIni, Mt.ImplIni];
       for var L in Suyas do
         if (L >= 0) and (L <= High(PasLineas)) and (L <= High(CodigoL)) then
-        begin
-          M := TRegEx.Match(CodigoL[L], PatronIdentEntero(Mt.Nombre), [roIgnoreCase]);
-          if M.Success then
-            PasLineas[L] := Copy(PasLineas[L], 1, M.Index - 1) + Mt.Nuevo +
-              Copy(PasLineas[L], M.Index + M.Length, MaxInt);
-        end;
+          CambiaEnLaLinea(PasLineas[L], CodigoL[L], PatronIdentEntero(Mt.Nombre), Mt.Nuevo);
       APas := UneConSusSaltos(PasLineas, PasSaltos);
     end;
   // ...y el codigo que los llama sigue con el nombre viejo, como en el IDE: se
