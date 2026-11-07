@@ -259,8 +259,17 @@ end;
   negaba aqui y el nodo la sabia pulsar (J19 del revisor de la 1.28). }
 function NombreDeTeclaValido(const ACode: string): Boolean;
 begin
-  Result := (ACode <> '') and
-    ((Length(ACode) = 1) or (ACode[Low(ACode)] < '0') or (ACode[Low(ACode)] > '9'));
+  // una cifra sola, o un NOMBRE: letras y cifras empezando por letra. Se miraba
+  // solo el primer caracter, y '+5', '$1B' o '-1' llegaban al nodo, que los
+  // leia como un codigo virtual (StrToIntDef acepta signo, $ y x): '+5' era el
+  // boton "atras" del raton (R2 del revisor del paisaje de la 1.29)
+  Result := ACode <> '';
+  if not Result or ((Length(ACode) = 1) and CharInSet(ACode[Low(ACode)], ['0'..'9'])) then
+    Exit;
+  Result := CharInSet(ACode[Low(ACode)], ['A'..'Z', 'a'..'z']);
+  for var C in ACode do
+    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9']) then
+      Exit(False);
 end;
 
 { El gesto que se pide: vacio es screenshot, y "windows" se leia como el
@@ -379,7 +388,9 @@ begin
   end
   else if Cmd = 'type' then
   begin
-    if Params.Text.Trim = '' then
+    // vacio de verdad: unos blancos o un salto se teclean, como lo demas (se
+    // negaban con DESK-002 aunque el texto va tal cual; R5 de la 1.29)
+    if Params.Text = '' then
       Exit(MsgText(SR_ADBLINUX_NEEDTEXT));
     // Un salto de linea, como venga (CRLF, LF o CR suelto), es UNA pulsacion
     // de Intro: se deja en LF (ConSalto, EL normalizador) y viaja codificado

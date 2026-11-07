@@ -505,6 +505,16 @@ check('J19 key code=5 en Windows: pasa la validacion y llega a buscar el nodo (e
 r = call('delphi_desktop', {'command': 'key', 'profile': PROFILE, 'code': '28'}, t=180)
 check('J19 control: key code=28 en Windows sigue negado (un codigo evdev no es una tecla de Windows)',
       mc.es(r, 'SR_DESKTOP_NEEDCODE'), r[:300])
+# R2 del revisor del paisaje de la 1.29: la puerta miraba solo el primer caracter; '+5', '$1B' o '-1' llegaban al
+# nodo, que los leia como codigo virtual (el 5, un boton del raton)
+for code in ('+5', '$1B', '-1'):
+    r = call('delphi_desktop', {'command': 'key', 'profile': PROFILE, 'code': code}, t=180)
+    check('R2 key code=%s en Windows: negado (no es una cifra sola ni un nombre)' % code,
+          mc.es(r, 'SR_DESKTOP_NEEDCODE'), r[:300])
+# R5: un texto de solo blancos se teclea como lo demas (se negaba con DESK-002); aqui llega a buscar el nodo
+r = call('delphi_desktop', {'command': 'type', 'profile': PROFILE, 'text': '  '}, t=180)
+check('R5 type de solo blancos: no se niega por vacio, llega a buscar el nodo (DESK-021)',
+      mc.es(r, 'SR_ADBLINUX_NONODE') and not mc.es(r, 'SR_ADBLINUX_NEEDTEXT'), r[:300])
 
 # ---- 2ab de la 1.18.2 (revisor, R1): una credencial de SOLO LECTURA no
 # ejecuta. delphi_desktop screenshot/status con project= corre ESE proyecto en

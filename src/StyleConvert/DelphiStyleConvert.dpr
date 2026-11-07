@@ -169,6 +169,11 @@ end;
 var
   Cmd: string;
 begin
+  // la salida en UTF-8, como el renderizador y el nodo: el servidor la lee como
+  // UTF-8 y, si no lo es, en la pagina de la consola, y un nombre acentuado de
+  // un .style salia roto en lint y set (DH3 del revisor del paisaje de la 1.29)
+  SetTextCodePage(Output, CP_UTF8);
+  SetTextCodePage(ErrOutput, CP_UTF8);
   Writeln(SC_PROTOCOL + IntToStr(SC_PROTOCOLO_VERSION));
   try
     Cmd := LowerCase(ParamStr(1));

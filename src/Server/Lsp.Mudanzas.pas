@@ -914,9 +914,13 @@ begin
       Exit(MsgFmt(SN_GRUPO_YA_ESTABA_FMT, [TPath.GetFileName(Proj), TPath.GetFileName(AGroup)]));
   Texto := PatchLoadText(AGroup, Enc);
   NL := SaltoDominante(Texto);
-  Nombre := TPath.GetFileNameWithoutExtension(Proj);
-  // El IDE nombra los targets por el proyecto: dos con el mismo nombre en un
-  // grupo no caben. Se dice, no se inventa un sufijo.
+  // El IDE nombra los targets por el proyecto, con el punto cambiado por '_':
+  // msbuild no admite un '.' en el nombre de un target ($@()%*?. ) y el grupo
+  // dejaba de cargar con MakerAi.UI.dproj; el IDE escribe MakerAi_UI (medido
+  // por el revisor del paisaje de la 1.29, B2, en dos .groupproj del IDE).
+  // Dos con el mismo nombre en un grupo no caben: se dice, no se inventa un
+  // sufijo.
+  Nombre := TPath.GetFileNameWithoutExtension(Proj).Replace('.', '_');
   if TargetLlamado(Nombre, T) then
     Exit(MsgFmt(SR_GRUPO_TARGET_DUP_FMT, [Nombre, TPath.GetFileName(AGroup)]));
   Incl := IncludeFor(AGroup, Proj);

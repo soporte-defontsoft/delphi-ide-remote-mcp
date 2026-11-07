@@ -62,6 +62,15 @@ begin
   Result := TextoDelServidor(Result);
 end;
 
+{ Si S son solo cifras (y alguna): un numero escrito como tal, sin signo ni prefijo }
+function SoloCifras(const S: string): Boolean;
+begin
+  Result := S <> '';
+  for var C in S do
+    if not CharInSet(C, ['0'..'9']) then
+      Exit(False);
+end;
+
 { El pestillo: sin la clave del servidor, el nodo no mira ni toca nada.
   Ver NodeKey.inc para lo que esto protege de verdad (y lo que no). }
 function LlamaElServidor: Boolean;
@@ -191,7 +200,9 @@ begin
       for I := 2 to Args do
       begin
         Tecla := TeclaPorNombre(Arg(I));
-        if Tecla = 0 then
+        // el numero, solo de cifras: StrToIntDef acepta signo, $ y x, y 'x5' o
+        // '+5' pulsaban el codigo 5, un boton del raton (R2 de la 1.29)
+        if (Tecla = 0) and SoloCifras(Arg(I)) then
           Tecla := Word(StrToIntDef(Arg(I), 0));
         if Tecla = 0 then
           Break;

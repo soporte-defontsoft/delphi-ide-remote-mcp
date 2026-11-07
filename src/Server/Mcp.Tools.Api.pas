@@ -206,7 +206,13 @@ begin
     Enc := CodecDeCharset(Charset.Trim([' ', '"', '''']));
     if Enc <> nil then
     begin
-      ATexto := Enc.GetString(ABytes);
+      // el codec es nuevo y es de quien lo pide: se perdia uno por respuesta
+      // con charset (CH10 del revisor de la 1.29)
+      try
+        ATexto := Enc.GetString(ABytes);
+      finally
+        Enc.Free;
+      end;
       Exit(True);
     end;
   end;

@@ -706,7 +706,16 @@ begin
     Secretos := Secretos + [AConexion.UrlBase];
     U := TURI.Create(AConexion.UrlBase);
     Palabras := Palabras + [U.Host];
-    if U.Port > 0 then
+    // el puerto, solo si no es el de su esquema: TURI pone 443 u 80 cuando la
+    // URL no lo escribe, y se tapaba un "Content-Length: 443" (CH8 de la 1.29).
+    // El de su esquema lo dice el propio TURI, sin puerto
+    var PorDefecto := -1;
+    try
+      PorDefecto := TURI.Create(U.Scheme + '://' + U.Host).Port;
+    except
+      // un host que no vuelve a componerse: se tapa el puerto, por si acaso
+    end;
+    if (U.Port > 0) and (U.Port <> PorDefecto) then
       Palabras := Palabras + [IntToStr(U.Port)];
   end;
   Result := Tapa(ATexto, '<' + NombreDeConexion(AConexion) + '>', Secretos, Palabras);

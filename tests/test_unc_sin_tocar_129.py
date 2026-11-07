@@ -15,7 +15,9 @@ from mcp_cliente import check
 
 BASE = mc.carpeta('unc_sin_tocar_129')
 JAIL = os.path.join(BASE, 'jail')
-for d, v in (('unc', '\\\\192.0.2.1\\s'), ('local', 'D:\\NoExisteNada129\\s')):
+# un host DISTINTO por tool: Windows recuerda un host que no contesto, y la segunda tool contra el mismo salia
+# rapida tambien con el fallo (medido: diagnostics paso con el build de antes tras los 21 s de projects)
+for d, v in (('unc1', '\\\\192.0.2.1\\s'), ('unc2', '\\\\192.0.2.2\\s'), ('local', 'D:\\NoExisteNada129\\s')):
     os.makedirs(os.path.join(JAIL, d))
     with open(os.path.join(JAIL, d, 'P.dproj'), 'w', newline='\r\n') as f:
         f.write('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n  <PropertyGroup>\n'
@@ -27,14 +29,14 @@ EXE = mc.copia_exe(os.path.join(BASE, 'srv'), src=sys.argv[1] if len(sys.argv) >
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='unc129', t=120)
 TOPE = 8.0  # sin intento SMB, menos de un segundo (el motor, la primera vez, un par)
 try:
-    for tool, args in (('delphi_projects', lambda d: {'root': os.path.join(JAIL, d)}),
-                       ('delphi_diagnostics', lambda d: {'path': os.path.join(JAIL, d, 'P.dpr')})):
+    for tool, unc, args in (('delphi_projects', 'unc1', lambda d: {'root': os.path.join(JAIL, d)}),
+                            ('delphi_diagnostics', 'unc2', lambda d: {'path': os.path.join(JAIL, d, 'P.dpr')})):
         tiempos = {}
         r = ''
-        for d in ('local', 'unc'):
+        for d in ('local', unc):
             t0 = time.time()
             r = srv.call(tool, args(d), 120)
-            tiempos[d] = time.time() - t0
+            tiempos['unc' if d == unc else d] = time.time() - t0
         check('%s con un UNC en el search path del .dproj: no conecta antes de negar (%.1f s, local %.1f s)'
               % (tool, tiempos['unc'], tiempos['local']), tiempos['unc'] < TOPE, r[:200])
 finally:
