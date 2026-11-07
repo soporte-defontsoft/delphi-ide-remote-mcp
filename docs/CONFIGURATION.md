@@ -460,6 +460,30 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   `RemoteRunProjects` no longer grant it. Looking leaves traces of the server on
   the target: it deploys or updates the node there, uploads and deletes a job file and its
   launcher, and the node writes the capture it hands back.
+- **`DbAllowedProjects=` / `ApiAllowedProjects=` (per workspace, 1.29)**: the databases and
+  the HTTP APIs an agent may use by NAME (`delphi_db`, `delphi_api`). The operator writes
+  them in two files of the server's own house, next to `settings.ini` and outside every
+  root - the agent never sees a server, an address or a credential:
+  `connections\databases\db-connections.json`
+  (`{"db-connections": {"projects": {"<project>": {"databases": {"<alias>": {...}}}}}}`,
+  each database with `server`, `port` (optional), `database`, `user`, `password`, `engine` -
+  the FireDAC driver: `MSSQL`, `PG` - `provider: "FIREDAC"` and `readonly`) and
+  `connections\apis\api-connections.json`
+  (`{"api-connections": {"projects": {"<project>": {"apis": {"<alias>": {...}}}}}}`, each API
+  with `baseUrl`, `methods` - an entry without them is not used -, and optionally `auth`
+  - `basic`, `bearer`, a key in a `header` or in the `query`, or a list of them -, fixed
+  `headers`, a certificate `pin` (`sha256/<base64 of the SHA-256 of its
+  SubjectPublicKeyInfo>`, HTTPS only) and a `timeout` in seconds). A workspace sees the
+  projects its key lists (`;` or `,`; `*` = all); without the key the tool is not in its
+  `tools/list` (`DB-002`, `API-002`). The agent addresses each one as `project/alias`.
+  Writes (`insert`, `update`, `delete`) happen only where the database says
+  `"readonly": false`; the files are read at every call, so a change needs no restart.
+  A driver that loads a client library loads it from `drivers\<DriverID>\` of the server
+  and from nowhere else: PostgreSQL needs `drivers\PG\lib\libpq.dll` **16 or later** with
+  the DLLs it depends on (an older one refuses to open: the server asks it not to use the
+  account's client certificate, Kerberos or Windows identity); SQL Server uses the system's
+  ODBC driver. The server removes every `PG*` variable from its own environment when it
+  starts, so libpq takes from the file and nothing else.
 - **Reach lists (per workspace)**: `GitRemotes` limits which hosts git may reach - the URL
   written in a call and the network addresses of the repository's own remotes alike
   (clone/fetch/pull/push/ls-remote; a remote used by its name whose address is not listed gets `GIT-063`, naming the host), and the LFS endpoint of a tree a command materializes

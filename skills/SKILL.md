@@ -286,7 +286,11 @@ masked (`<project/alias>`).
   `total`) and `summary` (group and add up). You never write SQL: the
   server composes it for every engine. `insert`, `update` and `delete` only
   where the operator made the database writable; `update` and `delete`
-  need filters, and a text filter needs something to look for.
+  need filters, and a text filter needs something to look for. Pages
+  follow your `order` and then the primary key, so `offset` neither
+  repeats nor skips a row (`summary` pages too); `fields` also lists the
+  table's foreign keys and indexes, to join without guessing; a very long
+  text comes as `{text, length, truncated}`.
 - `delphi_api`: `request` with a method the API allows, a path RELATIVE to
   the API (no host, no `..`, no `?` - `query` is its own list), your own
   `headers` (never the operator's, the credential, Host, or one that
