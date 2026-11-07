@@ -4481,10 +4481,18 @@ const
     'the StyleBook of the form that hosts them. Their StyleLookup values ' +
     'are not judged here, nor counted in lookupsUsed.';
 
-  SN_STYLES_NO_DEFAULTS =
-    '[STYLE-017] The platform default style names could not be extracted ' +
-    '(converter missing): standard lookups such as buttonstyle may ' +
-    'appear as missing.';
+  { %s: por que (un SF_ESTILO_DEFECTO_; decia siempre que faltaba el
+    conversor, tambien cuando fallaba: A21 de la 1.29) }
+  SN_STYLES_NO_DEFAULTS_FMT =
+    '[STYLE-017] The platform default style names could not be read (%s): ' +
+    'standard lookups such as buttonstyle may appear as missing.';
+  { por que no hay estilo por defecto de la plataforma (PlatformDefaultStyleNames) }
+  SF_ESTILO_DEFECTO_SIN_CONVERSOR =
+    'the style converter, DelphiStyleConvert.exe, is not deployed with the server';
+  SF_ESTILO_DEFECTO_NO_SALIO_FMT =
+    'the style converter did not give it, code %d';
+  SF_ESTILO_DEFECTO_SIN_NOMBRES =
+    'the default style the converter gave names no style';
 
   SN_STYLES_BUILD_NOTE =
     '[STYLE-018] The .bin.style files are what the app embeds (.rc ' +
@@ -7644,6 +7652,15 @@ const
     como nota, en el lint, en designer set y tras una edicion, con lo que lo
     juzgaria entero. Un frame no: toma el StyleBook de la form que lo aloja
     (V151 de la 1.23.1) }
+  { sin el estilo por defecto de la plataforma, los StyleLookup no se juzgan y
+    el lint daba CLEAN (A21 de la 1.29): %d cuantos, %s el form, %s por que
+    (un SF_ESTILO_DEFECTO_) }
+  SN_DESIGNER_LOOKUPS_SIN_DEFECTO_FMT =
+    '[DSGN-199] Not judged: %d StyleLookup value(s) of %s. Their judge is the ' +
+    'platform''s default style, which says what FMX finds when no style of the ' +
+    'form defines a name, and this server could not read it: %s. preview draws ' +
+    'the form as FMX does.';
+
   SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT =
     '[DSGN-175] %0:s: %1:d StyleLookup value(s) that no style this form ' +
     'sees defines - not the platform''s default style, and the form takes no ' +

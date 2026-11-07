@@ -121,7 +121,7 @@ try:
     finally:
         otro.cierra()
     check('K5 control: el lint tiene el estilo por defecto de la plataforma (hay juez)',
-          not mc.fallo(r) and not mc.es(r, 'SN_STYLES_NO_DEFAULTS'), r[:400])
+          not mc.fallo(r) and not mc.es(r, 'SN_STYLES_NO_DEFAULTS_FMT'), r[:400])
     sin_estilo = json.dumps(mc.como_json(r).get('lookupsWithoutStyle', ''))
     check('K5 la cache vieja sin clave no se cree: falsoestilo sale sin estilo en el lint',
           'falsoestilo' in sin_estilo, r[:500])
@@ -146,7 +146,7 @@ try:
     finally:
         otro.cierra()
     check('K7 control: con raices que no contienen su casa, el lint tiene el estilo por defecto (hay juez)',
-          not mc.fallo(r) and not mc.es(r, 'SN_STYLES_NO_DEFAULTS'), r[:400])
+          not mc.fallo(r) and not mc.es(r, 'SN_STYLES_NO_DEFAULTS_FMT'), r[:400])
     quedan7 = caches_del_estilo(lad7)
     check('K7 la cache vieja se purga aunque la casa no este en las raices; lo ajeno se queda',
           not os.path.exists(plantada) and os.path.exists(ajena) and len(quedan7) == 1,

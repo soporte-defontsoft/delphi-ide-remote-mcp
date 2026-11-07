@@ -723,6 +723,7 @@ var
   Doc: TStyleDoc;
   O: TStyleObj;
   Names, Defaults: TDictionary<string, string>;
+  MotivoDefecto: string; // sin el estilo por defecto, por que (STYLE-017)
   Seen: TDictionary<string, Integer>;
   Ret, Issue: TJSONObject;
   Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas, NoCargan, ConStyleBookF, SinAlfa: TJSONArray;
@@ -841,7 +842,9 @@ begin
       end;
     end;
     // 2) StyleLookup used by the project against names + platform defaults
-    for D in PlatformDefaultStyleNames do
+    // (sin ellos, por que: uno que no sale corria el conversor dos veces, aqui
+    // y para la nota, que decia siempre que faltaba; A21 de la 1.29)
+    for D in PlatformDefaultStyleNames(MotivoDefecto) do
       Defaults.AddOrSetValue(D, '');
     Standard := 0;
     Used := 0;
@@ -1207,8 +1210,8 @@ begin
     Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
       (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0) and (PorFmx.Count = 0) and
       CarganTodos and ConAlfaTodos and (NFormas = 0)));
-    if Length(PlatformDefaultStyleNames) = 0 then
-      Ret.AddPair('note', MsgText(SN_STYLES_NO_DEFAULTS))
+    if Defaults.Count = 0 then
+      Ret.AddPair('note', MsgFmt(SN_STYLES_NO_DEFAULTS_FMT, [MotivoDefecto]))
     else
       Ret.AddPair('note', MsgText(SN_STYLES_LINT_NOTE));
     // por carpeta y fichero, y DESPUES de 'clean': el par libera la lista

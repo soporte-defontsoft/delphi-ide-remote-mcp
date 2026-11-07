@@ -351,8 +351,9 @@ function ColoresSinAlfa(const AFichero: string; out AColores: TArray<TColorSinAl
 
 { StyleNames of the Windows platform default style, extracted once through the
   helper and cached under LOCALAPPDATA. Empty when the helper is missing.
-  Ya como claves (ClaveDeEstilo). }
-function PlatformDefaultStyleNames: TArray<string>;
+  Ya como claves (ClaveDeEstilo). Vacio, con AMotivo el porque (un SF_ESTILO_
+  DEFECTO_): sin el, un StyleLookup no se juzga, y se dice (A21 de la 1.29). }
+function PlatformDefaultStyleNames(out AMotivo: string): TArray<string>;
 
 { LA clave del nombre de un estilo, la de FMX: su TStyleIndexer
   (FMX.Types) indexa StyleName.ToLowerInvariant, asi que 'BOTON' y 'Boton'
@@ -1689,7 +1690,7 @@ begin
       end;
 end;
 
-function PlatformDefaultStyleNames: TArray<string>;
+function PlatformDefaultStyleNames(out AMotivo: string): TArray<string>;
 var
   Cache: string;
   Code: Cardinal;
@@ -1697,14 +1698,21 @@ var
   L: TList<string>;
 begin
   Result := [];
+  AMotivo := '';
   Cache := CacheDelEstiloPorDefecto;
   if Cache = '' then
-    Exit; // sin conversor no hay juez
+  begin
+    AMotivo := MsgText(SF_ESTILO_DEFECTO_SIN_CONVERSOR); // sin conversor no hay juez
+    Exit;
+  end;
   if not TFile.Exists(Cache) then
   begin
     CorreStyleConvert(SC_DEFAULTS, nil, '', CONVERSOR_TIEMPO_MS, Producido, Code);
     if (Code <> SC_RC_OK) or (Producido = nil) then
+    begin
+      AMotivo := MsgFmt(SF_ESTILO_DEFECTO_NO_SALIO_FMT, [Code]);
       Exit;
+    end;
     // lo escribio en su etapa: a la cache, por la puerta de la casa
     CrearCarpeta(TPath.GetDirectoryName(Cache));
     EscribeBytes(Cache, Producido, ltCasa);
@@ -1726,6 +1734,8 @@ begin
   finally
     L.Free;
   end;
+  if Length(Result) = 0 then
+    AMotivo := MsgText(SF_ESTILO_DEFECTO_SIN_NOMBRES);
 end;
 
 function ClaveDeEstilo(const ANombre: string): string;
@@ -1784,25 +1794,34 @@ end;
 function NotaDeLookupsSinEstilo(const ADesigner: string; const ALineas, AAntes: TArray<string>;
   const AEstilos: TArray<string>): TArray<string>;
 var
-  Lookups: TArray<TLookupDeForm>;
+  Lookups, Nuevos: TArray<TLookupDeForm>;
   Defecto: TArray<string>;
   ConStyleBook: Boolean;
+  Motivo: string;
 begin
   Result := [];
   Lookups := LookupsDeDesigner(ADesigner, ALineas, ConStyleBook);
   // con los estilos que el agente dice que ve, se juzga aunque tome un StyleBook
   if (ConStyleBook and (Length(AEstilos) = 0)) or (Length(Lookups) = 0) then
     Exit;
-  Defecto := PlatformDefaultStyleNames;
-  if Length(Defecto) = 0 then
-    Exit; // sin el juez no se dice nada
-  Defecto := Defecto + AEstilos;
   // los que ya estaban (el componente y su lookup) no los trae la edicion
-  for var L in TLoQueTraeLaEdicion.Filtra<TLookupDeForm>(Lookups, LookupsDeForm(AAntes, ConStyleBook),
+  Nuevos := TLoQueTraeLaEdicion.Filtra<TLookupDeForm>(Lookups, LookupsDeForm(AAntes, ConStyleBook),
     function(AL: TLookupDeForm): string
     begin
       Result := AL.Componente + #0 + ClaveDeEstilo(AL.Lookup);
-    end) do
+    end);
+  if Length(Nuevos) = 0 then
+    Exit;
+  // sin el juez no se juzgan, y se dice: el lint daba CLEAN de un lookup que
+  // nadie miro (A21 de la 1.29, medido sin el conversor junto al servidor)
+  Defecto := PlatformDefaultStyleNames(Motivo);
+  if Length(Defecto) = 0 then
+  begin
+    Result := [MsgFmt(SN_DESIGNER_LOOKUPS_SIN_DEFECTO_FMT, [Length(Nuevos), ExtractFileName(ADesigner), Motivo])];
+    Exit;
+  end;
+  Defecto := Defecto + AEstilos;
+  for var L in Nuevos do
     if IndexStr(ClaveDeEstilo(L.Lookup), Defecto) < 0 then
       Result := Result + [MsgFmt(SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [L.Componente, L.Lookup, L.Linea])];
   if Length(Result) = 0 then
