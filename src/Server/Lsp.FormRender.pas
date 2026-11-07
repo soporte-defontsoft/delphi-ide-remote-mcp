@@ -246,6 +246,10 @@ function RaizParaElRender(const ARuta: string): string;
   clase de raiz que dijo (RaizTipo: frame o form): su frame o su form. La
   componian igual, a mano, lo que no cargo (LoQueNoCargo) y preview. }
 function ClaseDelSustituto(const ARaizTipo: string): string;
+{ Si el ayudante pinto por WM_PRINT (su FIDELITY=, la palabra del protocolo):
+  la nota de preview lo dice. Se comparaba con un 'print' a mano (C2-3 de la
+  1.28) }
+function EsFidelidadDeImpresion(const AFidelidad: string): Boolean;
 
 { Un mensaje del lector EN PARTES (FR_PARTES_SEP, de IGNORED= y NOTLOADED=)
   -> TIgnorada: EL lector, inverso de FormRender.Comun.LecturaEnPartes.
@@ -571,8 +575,8 @@ begin
   // EL lector de la raiz de un designer (Lsp.ProjectUnits); lo que no sabe,
   // que lo mire el ayudante
   case RaizDeDesigner(ARuta) of
-    rdFrame: Result := 'frame';
-    rdForm, rdModulo: Result := 'form';
+    rdFrame: Result := FR_RAIZ_FRAME;
+    rdForm, rdModulo: Result := FR_RAIZ_FORM;
   else
     Result := '';
   end;
@@ -582,10 +586,15 @@ function ClaseDelSustituto(const ARaizTipo: string): string;
 begin
   // el frame que crea el ayudante es el del marco (Lsp.DesignerMeta), y su
   // form oculta, una TForm
-  if SameText(ARaizTipo, 'frame') then
+  if SameText(ARaizTipo, FR_RAIZ_FRAME) then
     Result := DesignClassDeFrame(False)
   else
     Result := 'TForm';
+end;
+
+function EsFidelidadDeImpresion(const AFidelidad: string): Boolean;
+begin
+  Result := AFidelidad = FR_FIDELIDAD_PRINT;
 end;
 
 function PlazoDeRender(const APeticion: TPeticionRender): Integer;
@@ -639,7 +648,8 @@ begin
   AOrden := ComillasSinEscape(AExe) + Arg(FR_ARG_PATH, APeticion.Path);
   // el conversor (V71) ni carga ni pinta: los bytes de --path, en --out
   if APeticion.Convierte <> '' then
-    AOrden := AOrden + ' ' + FR_ARG_CONVERT + ' ' + (if APeticion.Convierte = 'text' then 'text' else 'binary') +
+    AOrden := AOrden + ' ' + FR_ARG_CONVERT + ' ' +
+      (if APeticion.Convierte = FR_CONVIERTE_TEXTO then FR_CONVIERTE_TEXTO else FR_CONVIERTE_BINARIO) +
       Arg(FR_ARG_OUT, APeticion.Salida)
   // el juez no pinta: sin --out (3.11)
   else if APeticion.Escribe then
@@ -671,7 +681,7 @@ begin
     for var P in APeticion.Puestas do
       if P <> '' then
         AOrden := AOrden + Arg(FR_ARG_SET, P);
-  if (APeticion.Raiz = 'form') or (APeticion.Raiz = 'frame') then
+  if (APeticion.Raiz = FR_RAIZ_FORM) or (APeticion.Raiz = FR_RAIZ_FRAME) then
     AOrden := AOrden + ' ' + FR_ARG_ROOT + ' ' + APeticion.Raiz;
   if APeticion.Estilo <> '' then
     AOrden := AOrden + Arg(FR_ARG_STYLE, APeticion.Estilo);
@@ -2345,7 +2355,7 @@ begin
       // la copia no hay .pas que leer
       Pet := PeticionDeRender(TPath.Combine(Dir, 'form.dfm'), 'vcl');
       Pet.Salida := TPath.Combine(Dir, 'convertido');
-      Pet.Convierte := (if AATexto then 'text' else 'binary');
+      Pet.Convierte := (if AATexto then FR_CONVIERTE_TEXTO else FR_CONVIERTE_BINARIO);
       EscribeBytes(Pet.Path, ABytes, ltTemporal);
       R := CorreRender(Pet);
       if R.NoCarga then

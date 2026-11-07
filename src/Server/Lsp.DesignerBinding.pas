@@ -162,6 +162,18 @@ begin
       Exit(ClaseDeJuezDeRaiz(M, APas, APasTexto, AForm[I].ClaseObj, Propias, False));
 end;
 
+const
+  { las listas del informe de binding: las ESCRIBE BindingReport y las LEE
+    DesignerBindingWarnings, que las recorria por una lista de nombres a mano
+    (C1-5 del revisor del paisaje de la 1.28) }
+  BINDING_SIN_CAMPO = 'componentsWithoutField';
+  BINDING_EVENTO_SIN_METODO = 'eventsWithoutMethod';
+  BINDING_METODO_NO_PUBLICADO = 'eventsWithMethodNotPublished';
+  BINDING_CAMPO_SIN_OBJETO = 'fieldsWithoutComponent';
+  BINDING_NOMBRES_DUPLICADOS = 'duplicateNames';
+  BINDING_EVENTO_VACIO = 'eventsWithNoHandler';
+  BINDING_SIN_PRESENTACION = 'presentationUnitsMissing';
+
 function BindingReport(const DfmLines: TArray<string>; const APasTexto, Pas: string;
   AIsFmx: Boolean; const ADfm: string): string;
 var
@@ -350,19 +362,19 @@ begin
     Ret.AddPair('inheritanceChain', Chain);
 
     Miss := TJSONArray.Create;
-    Ret.AddPair('componentsWithoutField', Miss);
+    Ret.AddPair(BINDING_SIN_CAMPO, Miss);
     MissEv := TJSONArray.Create;
-    Ret.AddPair('eventsWithoutMethod', MissEv);
+    Ret.AddPair(BINDING_EVENTO_SIN_METODO, MissEv);
     NotPub := TJSONArray.Create;
-    Ret.AddPair('eventsWithMethodNotPublished', NotPub);
+    Ret.AddPair(BINDING_METODO_NO_PUBLICADO, NotPub);
     Extra := TJSONArray.Create;
-    Ret.AddPair('fieldsWithoutComponent', Extra);
+    Ret.AddPair(BINDING_CAMPO_SIN_OBJETO, Extra);
     Dups := TJSONArray.Create;
-    Ret.AddPair('duplicateNames', Dups);
+    Ret.AddPair(BINDING_NOMBRES_DUPLICADOS, Dups);
     Empty := TJSONArray.Create;
-    Ret.AddPair('eventsWithNoHandler', Empty);
+    Ret.AddPair(BINDING_EVENTO_VACIO, Empty);
     SinPresentacion := TJSONArray.Create;
-    Ret.AddPair('presentationUnitsMissing', SinPresentacion);
+    Ret.AddPair(BINDING_SIN_PRESENTACION, SinPresentacion);
     // sus dos uses: la unidad que registra la presentacion estilada de un
     // componente tiene que estar en el programa (V69)
     var UL := LeeFuentePascal(APasTexto);
@@ -466,10 +478,11 @@ begin
           Extra.Add(Fields.Names[I]);
 
     // clean = el form cuadra. Se llamaba ok, el mismo nombre que "la llamada
-    // fue bien" en toda tool: dos significados en un campo (novena revision)
-    Ret.AddPair('clean', TJSONBool.Create(ClassFound and (Miss.Count = 0) and
-      (MissEv.Count = 0) and (NotPub.Count = 0) and (Extra.Count = 0) and
-      (Dups.Count = 0) and (Empty.Count = 0) and (SinPresentacion.Count = 0)));
+    // fue bien" en toda tool: dos significados en un campo (novena revision).
+    // Que las listas esten vacias, UNA vez (lo decian aqui y la nota: C1-5)
+    var Cuadra := (Miss.Count = 0) and (MissEv.Count = 0) and (NotPub.Count = 0) and
+      (Extra.Count = 0) and (Dups.Count = 0) and (Empty.Count = 0) and (SinPresentacion.Count = 0);
+    Ret.AddPair('clean', TJSONBool.Create(ClassFound and Cuadra));
     if not ClassFound then
       Ret.AddPair('note', MsgFmt(SN_DESIGNER_BINDING_NOCLASS_FMT,
         [RootClass, TPath.GetFileName(Pas)]))
@@ -478,10 +491,7 @@ begin
       if not Complete then
         Ret.AddPair('partialNote', MsgFmt(SN_DESIGNER_BINDING_PARTIAL_FMT,
           [Chain]));
-      Ret.AddPair('note', IfThen((Miss.Count = 0) and (MissEv.Count = 0) and
-        (NotPub.Count = 0) and (Extra.Count = 0) and (Dups.Count = 0) and
-        (Empty.Count = 0) and (SinPresentacion.Count = 0), MsgText(SN_DESIGNER_BINDING_OK),
-        MsgText(SN_DESIGNER_BINDING_BAD)));
+      Ret.AddPair('note', IfThen(Cuadra, MsgText(SN_DESIGNER_BINDING_OK), MsgText(SN_DESIGNER_BINDING_BAD)));
     end;
     Result := Ret.ToJSON;
   finally
@@ -546,13 +556,13 @@ begin
     Exit;
   Res := TStringList.Create;
   try
-    for Nombre in ['eventsWithMethodNotPublished', 'eventsWithoutMethod',
-                   'eventsWithNoHandler', 'componentsWithoutField', 'duplicateNames',
-                   'presentationUnitsMissing'] do
+    for Nombre in [BINDING_METODO_NO_PUBLICADO, BINDING_EVENTO_SIN_METODO,
+                   BINDING_EVENTO_VACIO, BINDING_SIN_CAMPO, BINDING_NOMBRES_DUPLICADOS,
+                   BINDING_SIN_PRESENTACION] do
       if O.TryGetValue<TJSONArray>(Nombre, Arr) then
         for I := 0 to Arr.Count - 1 do
           Res.Add('  ' + Arr.Items[I].Value);
-    if O.TryGetValue<TJSONArray>('fieldsWithoutComponent', Arr) then
+    if O.TryGetValue<TJSONArray>(BINDING_CAMPO_SIN_OBJETO, Arr) then
       for I := 0 to Arr.Count - 1 do
         Res.Add(MsgFmt(SF_DSGN_CAMPO_SIN_OBJETO_FMT, [Arr.Items[I].Value]));
     if (Res.Count = 0) and not O.GetValue<Boolean>('clean', True) and

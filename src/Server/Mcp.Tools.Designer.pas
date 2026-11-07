@@ -1994,7 +1994,7 @@ begin
     Raiz.AddPair('kind', R.RaizTipo);
     Return.AddPair('root', Raiz);
     Return.AddPair('fidelity', R.Fidelidad);
-    if R.Fidelidad = 'print' then
+    if EsFidelidadDeImpresion(R.Fidelidad) then
       Return.AddPair('fidelityNote', MsgText(SN_DESIGNER_FIDELIDAD_PRINT));
     // LA nota de codificacion, por su casa (W9 del revisor de cierre: preview
     // la componia a mano y sin READ-009)

@@ -1438,7 +1438,7 @@ begin
       begin
         Info := DiscoverRadStudio;
         if not Info.Found then
-          Exit(MsgText(SR_COMPONENTS_MISSING));
+          Exit(MsgText(SR_SIN_RAD_STUDIO));
         try
           EnsureDeployManifest(ADproj, Plat, Info.RootDir, Generated);
         except
@@ -1890,7 +1890,7 @@ begin
     Exit(MsgFmt(SR_CONFIG_SDK_LOCAL_FMT, [APlatform]));
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(MsgText(SR_COMPONENTS_MISSING));
+    Exit(MsgText(SR_SIN_RAD_STUDIO));
   Disponibles := ONinguno(string.Join(', ', SdksDePlataforma(Info.Version, APlatform)));
 
   Sdk := ARawSdk.Trim;
@@ -1956,7 +1956,7 @@ begin
     Exit(MsgFmt(SR_CONFIG_PROFILE_SIN_PASERVER_FMT, [APlatform]));
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(MsgText(SR_COMPONENTS_MISSING));
+    Exit(MsgText(SR_SIN_RAD_STUDIO));
   // EL lector de la lista de perfiles (Lsp.Discovery.PerfilesDelIde)
   Disponibles := ONinguno(string.Join(', ', PerfilesDelIde(Info.Version))); // nunca "Registered: ."
 

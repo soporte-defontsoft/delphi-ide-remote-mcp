@@ -3047,7 +3047,8 @@ check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
 # 1.27-, y uno que ParseaArgumentos leyera a mano). Si cambia uno sin
 # subirlo, un ayudante viejo y un servidor nuevo se creen iguales. Cambia: sube FR_PROTOCOLO_VERSION y
 # pon aqui el numero y la firma que dice el fallo
-FIRMA_DEL_PROTOCOLO = (8, '4db27184c2ae05cb')  # la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9)
+FIRMA_DEL_PROTOCOLO = (9, '4821724fa86686f3')  # la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+# la 9: los valores de los argumentos y las claves como constantes del .inc (C2-3 de la 1.28)
 # (un campo nuevo en el VALOR de una clave no cambia la firma, que mira claves y argumentos: ese
 # numero se sube a mano, y el lector exige los campos de su version: BOX= de ocho no se lee)
 

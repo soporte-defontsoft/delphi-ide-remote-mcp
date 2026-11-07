@@ -9150,6 +9150,12 @@ const
   SR_COMPONENTS_MISSING =
     '[COMP-010 INTERNAL] No RAD Studio installation was found on the ' +
     'server - without an IDE there are no packages to list.';
+  { El mismo hecho para quien no es delphi_components: delphi_config y
+    delphi_paserver contestaban con el de los paquetes (COMP-010) o el de
+    paclient (PAS-020), textos de otro asunto (E11 del revisor de la 1.28) }
+  SR_SIN_RAD_STUDIO =
+    '[SYS-039 INTERNAL] No RAD Studio installation was found on this server, and this ' +
+    'needs one: the profiles, SDKs and settings it reads are the IDE''s. Nothing was done.';
 
   SN_COMPONENTS_NONE_FMT =
     '[COMP-005] Neither a registered package nor a folder of the Library ' +

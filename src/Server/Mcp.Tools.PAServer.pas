@@ -1036,7 +1036,7 @@ begin
     Exit(MsgFmt(SR_PASERVER_NAME_FMT, [ProfName]));
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(MsgText(SR_COMPONENTS_MISSING));
+    Exit(MsgText(SR_SIN_RAD_STUDIO));
   var DelIde: string;
   Result := PerfilElegido(Info.Version, ProfName, DelIde);
   if Result <> '' then
@@ -1845,7 +1845,7 @@ begin
   CopiasHechas := nil;
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(MsgText(SR_PASERVER_NO_PACLIENT));
+    Exit(MsgText(SR_SIN_RAD_STUDIO));
   // el SDK lo nombra "sdk", como dice su descripcion: "name" valia de
   // reserva y, llamado "profile" (1.17.0), nombraria un SDK con un perfil
   if Params.Sdk.Trim <> '' then
@@ -1955,7 +1955,7 @@ begin
     Exit(MsgText(SR_PASERVER_NEED_SDK));
   Info := DiscoverRadStudio;
   if not Info.Found then
-    Exit(MsgText(SR_COMPONENTS_MISSING));
+    Exit(MsgText(SR_SIN_RAD_STUDIO));
   // el que YA existe, elegido de las listas de profiles (SdkExistente): se
   // deformaba con el formador de un nombre nuevo y no se encontraba nunca uno
   // con punto o guion bajo; el eco, el nombre tal como lo escribio el agente

@@ -498,7 +498,7 @@ begin
       RegistraEstandar;
       Cargados := 0;
       Conocidos := 0;
-      if GPeticion.Paquetes = 'all' then
+      if GPeticion.Paquetes = FR_PAQUETES_TODOS then
         CargaPaquetesDelIde(Cargados, Conocidos);
       Reloj := TStopwatch.StartNew;
       Cargando := True;

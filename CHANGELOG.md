@@ -18,6 +18,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 - `delphi_desktop type` presses Enter for each line break in `text` (LF, CRLF or a lone CR: one press each), on Windows and on Linux: the Enter key, as a person presses it - not a character, so a dialog's default button and a key handler see it - and on Linux the same key whatever the keyboard layout. In 1.28 a line break was refused with `DESK-027`, which now refuses only a NUL character (it does not travel to the target). What the node echoes it typed shows each line break as `\n`, on one line. Measured on Fedora 44 with KDE Plasma (a Spanish layout: three lines in a new document) and on Windows 11 (the Enter of a typed line launched the search result, which a character 13 does not do).
 - `delphi_build deviceid` must be one of the devices the workspace allows (`AdbAllowedDevices`, the list `delphi_adb` already uses): it reached msbuild's line (`/p:DeviceId=`) as free text with only its characters judged. Outside the list it is refused with `ADB-005` before anything runs.
+- The two form renderers speak protocol 9: the values their arguments and answers share with the server (form or frame, the fidelity, the packages, text or binary) are named once in the protocol; on the wire they are the same. Deploy them with the server, as always: a renderer of protocol 8 is refused by name.
 
 ### Fixed
 

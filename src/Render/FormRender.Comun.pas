@@ -616,9 +616,9 @@ begin
   AUso := TextoDeUso(ExtractFileName(ParamStr(0)));
   GPeticion := Default(TPeticion);
   GPeticion.Bds := '37.0';
-  GPeticion.Paquetes := 'auto';
-  GPeticion.Fidelidad := 'auto';
-  GPeticion.Raiz := 'auto';
+  GPeticion.Paquetes := FR_AUTO;
+  GPeticion.Fidelidad := FR_AUTO;
+  GPeticion.Raiz := FR_AUTO;
   // UN solo defecto, el de delphi_designer: off (era on, como el designer, y
   // la tool off - dos defectos para lo mismo: 3.4 de la 1.18.0)
   GPeticion.NoVisuales := False;
@@ -635,9 +635,9 @@ begin
       else if P = FR_ARG_BDS then GPeticion.Bds := Valor
       else if P = FR_ARG_BDSROOT then GPeticion.RaizBds := Valor
       else if P = FR_ARG_KNOWNFILE then GPeticion.FicheroPaquetes := Valor
-      else if P = FR_ARG_PACKAGES then GPeticion.Paquetes := Entre(Valor, ['auto', 'none', 'all'])
-      else if P = FR_ARG_FIDELITY then GPeticion.Fidelidad := Entre(Valor, ['auto', 'window', 'print'])
-      else if P = FR_ARG_ROOT then GPeticion.Raiz := Entre(Valor, ['auto', 'form', 'frame'])
+      else if P = FR_ARG_PACKAGES then GPeticion.Paquetes := Entre(Valor, [FR_AUTO, FR_PAQUETES_NINGUNO, FR_PAQUETES_TODOS])
+      else if P = FR_ARG_FIDELITY then GPeticion.Fidelidad := Entre(Valor, [FR_AUTO, FR_FIDELIDAD_WINDOW, FR_FIDELIDAD_PRINT])
+      else if P = FR_ARG_ROOT then GPeticion.Raiz := Entre(Valor, [FR_AUTO, FR_RAIZ_FORM, FR_RAIZ_FRAME])
       else if P = FR_ARG_STATE then GPeticion.Estados := GPeticion.Estados + [Valor]
       else if P = FR_ARG_NONVISUAL then
       begin
@@ -651,7 +651,7 @@ begin
       end
       else if P = FR_ARG_DROPPED then GPeticion.Soltado := Valor
       else if P = FR_ARG_SET then GPeticion.Puestas := GPeticion.Puestas + [Valor]
-      else if P = FR_ARG_CONVERT then GPeticion.Convierte := Entre(Valor, ['text', 'binary'])
+      else if P = FR_ARG_CONVERT then GPeticion.Convierte := Entre(Valor, [FR_CONVIERTE_TEXTO, FR_CONVIERTE_BINARIO])
       else if P = FR_ARG_UNREADABLE_CLASSES then GPeticion.ClasesSinLeer := True
       else if P = FR_ARG_BOXES then GPeticion.Cajas := True
       else if P = FR_ARG_TIMEOUT then GPeticion.TiempoMs := StrToInt(Valor)
@@ -704,7 +704,7 @@ end;
 
 procedure RespondeRaiz(const ANombre, AClase: string; AEsFrame: Boolean);
 begin
-  Responde(FR_ROOT, Format('%s:%s:%s', [ANombre, AClase, (if AEsFrame then 'frame' else 'form')]));
+  Responde(FR_ROOT, Format('%s:%s:%s', [ANombre, AClase, (if AEsFrame then FR_RAIZ_FRAME else FR_RAIZ_FORM)]));
 end;
 
 procedure RespondePaquetes(ACargados, AConocidos: Integer);
@@ -1173,9 +1173,9 @@ function EsFrame(const AFichero, AClase: string; AFrame: TClass): Boolean;
 var
   C: TPersistentClass;
 begin
-  if GPeticion.Raiz = 'frame' then
+  if GPeticion.Raiz = FR_RAIZ_FRAME then
     Exit(True);
-  if GPeticion.Raiz = 'form' then
+  if GPeticion.Raiz = FR_RAIZ_FORM then
     Exit(False);
   // sin --root (el servidor no lo sabe, o llama otro): la clase CARGADA del
   // ancestro - la del marco o la de un paquete -, no su nombre ('frame' en
@@ -1462,7 +1462,7 @@ function LeeConLosPaquetes(var ACargador: TCargador; const ANuevo: TFunc<TCargad
 
   function ConPaquetes: Boolean;
   begin
-    Result := (GPeticion.Paquetes = 'auto') and (ACargador.Sustituidas.Count > 0);
+    Result := (GPeticion.Paquetes = FR_AUTO) and (ACargador.Sustituidas.Count > 0);
   end;
 
 begin
@@ -2187,7 +2187,7 @@ begin
     try
       Bytes := TFile.ReadAllBytes(GPeticion.Path);
       try
-        if GPeticion.Convierte = 'text' then
+        if GPeticion.Convierte = FR_CONVIERTE_TEXTO then
           Salida := TEncoding.UTF8.GetBytes(DesignerBinarioATexto(Bytes))
         else
           Salida := DesignerTextoARecurso(Bytes);

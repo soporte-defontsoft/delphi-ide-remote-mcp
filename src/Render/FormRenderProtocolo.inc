@@ -7,7 +7,8 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 8; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9)
+  FR_PROTOCOLO_VERSION = 9; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+                            // la 9: los VALORES de abajo como constantes (C2-3 de la 1.28; en el cable, los mismos)
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
@@ -38,6 +39,18 @@
   FR_ARG_VERBOSE = '--verbose';
   FR_ARG_SI = 'on';              // el valor de un interruptor si/no que compone el servidor
   FR_ARG_NO = 'off';
+  { Los VALORES de los argumentos y las claves que escriben y leen los dos lados:
+    estaban a mano en el servidor y en los renderizadores (C2-3 del revisor del
+    paisaje de la 1.28) }
+  FR_AUTO = 'auto';              // --root, --fidelity, --packages: lo decide el ayudante
+  FR_RAIZ_FORM = 'form';         // --root y ROOT=: una form (o un modulo de datos)
+  FR_RAIZ_FRAME = 'frame';       // ...o un frame
+  FR_FIDELIDAD_WINDOW = 'window'; // --fidelity y FIDELITY=: la ventana pintada de verdad
+  FR_FIDELIDAD_PRINT = 'print';  // ...o por WM_PRINT (la sesion 0, sin escritorio)
+  FR_PAQUETES_NINGUNO = 'none';  // --packages: sin los paquetes de diseno del IDE
+  FR_PAQUETES_TODOS = 'all';     // ...o todos
+  FR_CONVIERTE_TEXTO = 'text';   // --convert: a texto
+  FR_CONVIERTE_BINARIO = 'binary'; // ...o a binario
   FR_CAPTURE = 'CAPTURE=';       // CAPTURE=<ruta del png> (la misma clave que el nodo de escritorio)
   FR_SIZE = 'SIZE=';             // SIZE=<ancho>x<alto> del png
   FR_DPI = 'DPI=';               // DPI=96: el proceso no es consciente del DPI, un pixel = una unidad del dfm

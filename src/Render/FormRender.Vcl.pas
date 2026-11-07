@@ -269,7 +269,7 @@ begin
     Result.Canvas.Brush.Color := AForm.Color;
     Result.Canvas.FillRect(Rect(0, 0, Result.Width, Result.Height));
     Bien := False;
-    if ACaptor = 'window' then
+    if ACaptor = FR_FIDELIDAD_WINDOW then
     begin
       DC := GetDC(AForm.Handle);
       try
@@ -282,7 +282,7 @@ begin
     end;
     if not Bien then
     begin
-      AUsado := 'print';
+      AUsado := FR_FIDELIDAD_PRINT;
       ImprimeArbol(AForm, AForm, Result.Canvas.Handle);
     end;
   finally
@@ -508,7 +508,7 @@ begin
       RegistraEstandar;
       Cargados := 0;
       Conocidos := 0;
-      if GPeticion.Paquetes = 'all' then
+      if GPeticion.Paquetes = FR_PAQUETES_TODOS then
         CargaPaquetesDelIde(Cargados, Conocidos);
       // estilo VCL: .vsf por TStyleManager, el mecanismo global de la VCL
       if (GPeticion.Estilo <> '') and not SameText(GPeticion.Estilo, 'none') then
@@ -560,13 +560,13 @@ begin
       end;
       // captor: la pintada real si hay DWM (sesion interactiva); si no, impresion
       Captor := GPeticion.Fidelidad;
-      if Captor = 'auto' then
+      if Captor = FR_AUTO then
         if (SesionActual <> 0) and HayDwm then
-          Captor := 'window'
+          Captor := FR_FIDELIDAD_WINDOW
         else
-          Captor := 'print';
+          Captor := FR_FIDELIDAD_PRINT;
       Reloj := TStopwatch.StartNew;
-      Muestra(F, Captor = 'window');
+      Muestra(F, Captor = FR_FIDELIDAD_WINDOW);
       // el estado de vista va DESPUES de mostrar: un ActivePage puesto antes
       // llega al control nativo con la seleccion vieja
       for var S in GPeticion.Estados do
