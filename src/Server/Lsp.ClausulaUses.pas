@@ -1364,7 +1364,11 @@ function FinDeSeccion(const ACodigo, ASec: string): Integer;
 var
   M: TMatch;
 begin
-  M := TRegEx.Match(ACodigo, '(?<![\w.])' + ASec + '\b', [roIgnoreCase]);
+  // entera por EL limite de un identificador (PatronIdentEntero, con acentos):
+  // con \w y \b, que son ASCII, la palabra de 'procedure MenuImplementation;'
+  // con su acento era la seccion, y adduses escribio el uses dentro de esa
+  // declaracion del interface (revisor del paisaje de la 1.29, EH2)
+  M := TRegEx.Match(ACodigo, '(?<!\.)' + PatronIdentEntero(ASec), [roIgnoreCase]);
   if M.Success then
     Result := M.Index + M.Length
   else

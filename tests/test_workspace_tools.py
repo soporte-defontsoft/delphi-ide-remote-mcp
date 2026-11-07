@@ -546,6 +546,11 @@ try:
                                  "chunkbase64": "AAAA"})
     check('upload: offset>0 sobre fichero inexistente rechaza',
           mc.resultado(out) in ('INVALID_PARAM', 'NOT_FOUND') and mc.es(out, 'SR_WS_OFFSET_FICHERO_NO_EXISTE'), out[:120])
+    # P6 (revisor del paisaje de la 1.29): la carpeta se creaba ANTES de negar el trozo, y se quedaba
+    out = call('delphi_upload', {"path": os.path.join(tmpup, 'nueva_p6', 'mas', 'X.bin'), "offset": 99,
+                                 "chunkbase64": "AAAA"})
+    check('upload P6: offset>0 en una carpeta que no existe: negado y la carpeta no se crea',
+          mc.es(out, 'SR_WS_OFFSET_FICHERO_NO_EXISTE') and not os.path.exists(os.path.join(tmpup, 'nueva_p6')), out[:120])
     out = call('delphi_upload', {"path": os.path.join(tmpup, 'Y.bin'), "offset": 0,
                                  "chunkbase64": "no-es-base64!!"})
     check('upload: base64 invalido rechaza (no escribe basura)',

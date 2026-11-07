@@ -192,6 +192,19 @@ try:
           mc.abre(r, 'SN_GRUPO_ANADIDO_FMT') and 'Targets="Otro;App"' in g7 and
           'Targets="App:Clean"' in g7 and 'Targets="App:Make"' in g7 and not mc.es(r, 'SN_GRUPO_SIN_AGREGADO_FMT'),
           r[:200] + ' | ' + g7[-500:])
+    # G8 (B2 del revisor del paisaje de la 1.29) un proyecto con puntos en el nombre: msbuild no admite un '.' en el
+    # nombre de un target y el grupo dejaba de cargar; el IDE escribe Mi_App_Ui (medido en dos .groupproj del IDE:
+    # MakerAi.UI.dproj -> MakerAi_UI, MakerAi.RAG.Drivers.dproj -> MakerAi_RAG_Drivers)
+    G8P = ruta('G8.groupproj')
+    open(G8P, 'w', encoding='utf-8-sig', newline='').write(GRUPO_VACIO)
+    os.makedirs(ruta('punto'), exist_ok=True)
+    open(ruta('punto', 'Mi.App.Ui.dproj'), 'w', encoding='utf-8').write('<Project/>')
+    r = call('delphi_config', {'project': G8P, 'command': 'add-project', 'path': ruta('punto', 'Mi.App.Ui.dproj')})
+    g8 = open(G8P, encoding='utf-8-sig').read()
+    check('G8 un proyecto con puntos: sus targets como los escribe el IDE (Mi_App_Ui), ninguno con punto',
+          mc.abre(r, 'SN_GRUPO_ANADIDO_FMT') and '<Target Name="Mi_App_Ui">' in g8 and
+          '<Target Name="Mi_App_Ui:Make">' in g8 and 'Target Name="Mi.App' not in g8 and
+          'Targets="Mi_App_Ui"' in g8, r[:200] + ' | ' + g8[-500:])
 
     # ------------------------------------------------------------ M: la mudanza
     # Como un operador (V19 de la 1.23; David, 17-oct-2026): lo nombrado se muda
@@ -595,6 +608,20 @@ try:
     r = call('delphi_create', {'kind': 'include', 'name': 'vacio', 'dir': ruta('w', 'comun')})
     check('W2c kind=include sin content: rechazado', mc.rechazado(r) and mc.es(r, 'SR_CREATE_INCLUDE_CONTENT') and
           not os.path.exists(ruta('w', 'comun', 'vacio.inc')), r[:200])
+    # B5 (revisor del paisaje de la 1.29): el nombre de un .inc es un nombre de FICHERO, el que {$I} escribe;
+    # se juzgaba como el de una unit y mis-defs o Vcl.Defs se negaban (CREATE-007)
+    for n in ('mis-defs', 'Vcl.Defs'):
+        r = call('delphi_create', {'kind': 'include', 'name': n, 'dir': ruta('w', 'comun'), 'content': '// %s' % n})
+        check('W2d B5 kind=include name=%s: creado (se negaba como unit)' % n,
+              mc.abre(r, 'SN_CREATE_INCLUDE_FMT') and os.path.exists(ruta('w', 'comun', n + '.inc')), r[:200])
+    for n in ('sub\\x', '..\\x', 'x:s'):
+        r = call('delphi_create', {'kind': 'include', 'name': n, 'dir': ruta('w', 'comun'), 'content': '// x'})
+        check('W2e B5 kind=include name=%s: negado como nombre de fichero y nada creado' % n,
+              mc.rechazado(r) and mc.es(r, 'SR_CREATE_SUELTO_NOMBRE_FMT') and
+              not os.path.exists(ruta('w', 'comun', 'sub')) and not os.path.exists(ruta('w', 'x.inc')), r[:200])
+    r = call('delphi_create', {'kind': 'unit', 'name': 'mi-unit', 'dir': ruta('w', 'comun')})
+    check('W1c B5 una unit SUELTA sigue juzgando su nombre como unit (CREATE-007)',
+          mc.rechazado(r) and mc.es(r, 'SR_CREATE_BADNAME_FMT') and not os.path.exists(ruta('w', 'comun', 'mi-unit.pas')), r[:200])
 
     # un .dpr con el uses partido en ramas, como el del nodo (cada rama con su ';')
     call('delphi_create', {'kind': 'project-console', 'name': 'Ramas', 'dir': ruta('w', 'ramas')})

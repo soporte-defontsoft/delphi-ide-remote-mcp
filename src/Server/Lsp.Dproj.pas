@@ -2482,8 +2482,17 @@ begin
   while AClean.EndsWith('\') do AClean := AClean.Substring(0, AClean.Length - 1);
   if AClean = '' then Exit;
   if AClean.Contains('..') or AClean.Contains(':') then Exit; // no escape, no drive
+  // de ASCII, la lista de siempre; fuera de ASCII, lo que Unicode llama letra,
+  // cifra o marca (la tilde de una forma descompuesta), de cualquier alfabeto.
+  // Lo que inyecta en el XML, en msbuild o en el literal del .dpr es ASCII y
+  // sigue fuera, y tambien lo que el XML no admite (U+FFFE) o no se ve (un
+  // espacio duro, un control C1). Gramatica de la casa: no hay juez de "apta
+  // para nuestros escritores". "Modulos" con su acento se negaba (revisor del
+  // paisaje de la 1.29, B6)
   for C in AClean do
-    if not CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.', ' ', '\']) then
+    if not (CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '_', '-', '.', ' ', '\']) or
+       ((Ord(C) >= $80) and (C.IsLetterOrDigit or (C.GetUnicodeCategory in
+         [TUnicodeCategory.ucNonSpacingMark, TUnicodeCategory.ucCombiningMark])))) then
       Exit;
   for Seg in AClean.Split(['\']) do
     if Seg.Trim = '' then Exit; // no empty segments (\\ , trailing, etc.)

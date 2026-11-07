@@ -135,6 +135,19 @@ class Eco(http.server.BaseHTTPRequestHandler):
             return self._manda(200, b'tarde', 'text/plain')
         if ruta.endswith('/fallo'):
             return self._manda(500, b'{"error": "roto"}', 'application/json')
+        # CH1: la credencial devuelta como la escribe otro codificador: JSON con todo lo que no es letra o cifra
+        # como \u00XX (.NET), JSON con la barra como \/ (PHP), y en una URL con %XX en mayusculas y en minusculas
+        auth = self.headers.get('Authorization') or ''
+        if ruta.endswith('/escapa'):
+            esc = ''.join(c if c.isalnum() else '\\u%04X' % ord(c) for c in auth)
+            return self._manda(200, ('{"auth": "%s"}' % esc).encode(), 'application/json')
+        if ruta.endswith('/barra'):
+            return self._manda(200, ('{"auth": "%s"}' % auth.replace('/', '\\/')).encode(), 'application/json')
+        if ruta.endswith('/urlcod'):
+            q = urllib.parse.quote(auth, safe='')
+            minus = ''.join(c if c.isalnum() or c in '-._~' else ''.join('%%%02x' % b for b in c.encode())
+                            for c in auth)
+            return self._manda(200, ('next=/x?auth=%s y %s' % (q, minus)).encode(), 'text/plain')
         eco = {'method': self.command, 'path': self.path, 'headers': dict(self.headers),
                'body': cuerpo.decode('utf-8', 'replace')}
         self._manda(200, json.dumps(eco).encode(), 'application/json')
@@ -157,8 +170,10 @@ plano = http.server.ThreadingHTTPServer(('127.0.0.1', P_HTTP), Eco)
 for s in (tls, plano):
     threading.Thread(target=s.serve_forever, daemon=True).start()
 
+TOKEN_RARO = 'tok/en+raro=129'
+# (por POSICION: SECRETOS[5] es la basica; lo nuevo, al final)
 SECRETOS = ['usuario-129', 'clave-secreta-129', 'clave-api-secreta-129', 'token-secreto-129', 'clave-query-129',
-            base64.b64encode(b'usuario-129:clave-secreta-129').decode(), URL_TLS, URL_HTTP]
+            base64.b64encode(b'usuario-129:clave-secreta-129').decode(), URL_TLS, URL_HTTP, TOKEN_RARO]
 BASICA = {'type': 'basic', 'user': 'usuario-129', 'password': 'clave-secreta-129'}
 CLAVE = {'type': 'header', 'name': 'X-Api-Key', 'value': 'clave-api-secreta-129'}
 TODOS = ['GET', 'POST', 'PUT', 'DELETE']
@@ -187,7 +202,9 @@ CONEXIONES = {'api-connections': {'projects': {
         'auth_mala': api(URL_TLS, auth={'type': 'oauth'}),
         'plazo_malo': api(URL_TLS, timeout=0),
         # CH2 del revisor de la 1.29: un pin sobre http no comprueba nada y el POST salia en claro con su credencial
-        'pin_http': api(URL_HTTP, pin=PIN_A, methods=['post'], auth={'type': 'bearer', 'token': 'token-pin-http-129'})}},
+        'pin_http': api(URL_HTTP, pin=PIN_A, methods=['post'], auth={'type': 'bearer', 'token': 'token-pin-http-129'}),
+        # CH1 del revisor de la 1.29: un token con caracteres que un codificador escapa
+        'raro': api(URL_HTTP, auth={'type': 'bearer', 'token': TOKEN_RARO})}},
     'ajeno': {'apis': {'oculta': api(URL_TLS)}}}}}
 os.makedirs(os.path.dirname(FICHERO))
 io.open(FICHERO, 'w', encoding='utf-8').write(json.dumps(CONEXIONES, indent=2))
@@ -234,7 +251,7 @@ try:
     malas = {x.get('api'): x.get('why', '') for x in j.get('unusable', [])}
     check('A2 connections: las buenas con sus metodos (en mayusculas)',
           set(apis) == {'pruebas/' + n for n in ('eco', 'solo_get', 'pin_malo', 'sin_pin', 'lenta', 'portador',
-                                                 'consulta', 'cerrada')}
+                                                 'consulta', 'cerrada', 'raro')}
           and apis['pruebas/solo_get'] == ['GET'] and apis['pruebas/eco'] == TODOS
           and mc.es(j.get('note', ''), 'SN_API_CONNECTIONS'), r[:600])
     check('A2 ...las declaradas mal en unusable con su porque, y ninguna de otro proyecto',
@@ -246,6 +263,13 @@ try:
     r = pide('pin_http', method='POST', path='eco', body='{}')
     check('A2b CH2 un pin con baseUrl http: la entrada no se usa y al servidor no llega nada (llegaba con su token)',
           mc.rechazado(r) and not llegaron(n) and 'token-pin-http-129' not in r, (r[:300], llegaron(n)))
+    # CH9 (revisor del paisaje de la 1.29): el fichero abierto con escritura por otro proceso (un editor) se lee
+    # igual; su lector era TFile.ReadAllBytes, que niega la escritura a otro, y la llamada moria en una excepcion.
+    # r+b abre con lectura y escritura y no toca un byte.
+    with open(FICHERO, 'r+b'):
+        r = llama(srv, {'command': 'connections'})
+    check('A2c CH9 connections con el fichero abierto para escribir por otro: contesta igual',
+          {x.get('api') for x in mc.como_json(r).get('apis', [])} == set(apis), r[:300])
 
     n = len(LOG)
     r = pide('eco', path='eco', query=[{'name': 'q', 'value': 'a b&c'}], headers=[{'name': 'X-Mio', 'value': '1'}])
@@ -313,6 +337,15 @@ try:
         r = pide('eco', path='eco', headers=[{'name': nombre, 'value': valor}])
         check('A7 la cabecera %r: API-010, no llega nada' % nombre,
               mc.abre(r, 'SR_API_CABECERA_FMT') and cat[sf] in r and not llegaron(n), r[:300])
+    # CH5 (revisor del paisaje de la 1.29): una cabecera que reescribe el metodo o la ruta salta "methods" y el juicio
+    # de la ruta en un servidor que la atiende: en una API de solo GET, un GET con X-HTTP-Method-Override: DELETE
+    # llegaba
+    for nombre, valor in (('X-HTTP-Method-Override', 'DELETE'), ('x-http-method', 'DELETE'),
+                          ('X-Original-URL', '/admin'), ('X-Rewrite-URL', '/admin')):
+        n = len(LOG)
+        r = pide('solo_get', path='eco', headers=[{'name': nombre, 'value': valor}])
+        check('A7b CH5 la cabecera %r en una API de solo GET: API-010, no llega nada (llegaba)' % nombre,
+              mc.abre(r, 'SR_API_CABECERA_FMT') and cat['SF_API_CABECERA_REESCRIBE'] in r and not llegaron(n), r[:300])
 
     n = len(LOG)
     r = pide('eco', path='redir')
@@ -391,6 +424,18 @@ try:
     check('A17 una clave por query: llega en la URL y no en el path que ve el agente',
           vio.get('path') == '/v2/eco?x=1&api_key=clave-query-129' and mc.como_json(r).get('path') == '/eco?x=1',
           (vio.get('path'), r[:300]))
+
+    # CH1 (revisor del paisaje de la 1.29): la credencial se tapaba solo como se escribe; una API que la devuelve
+    # escapada en JSON (+, \/) o codificada en una URL (%2B, %2b) la dejaba ver, y el JSON parseado la daba
+    # en claro. Ningun trozo suyo sale: 'raro' solo esta en el token y en el nombre pruebas/raro (y su marca)
+    for camino in ('escapa', 'barra', 'urlcod'):
+        r = pide('raro', path=camino)
+        check('A22 CH1 %s: la credencial no sale en ninguna forma (salia)' % camino,
+              '<pruebas/raro>' in r and 'raro' not in r.replace('pruebas/raro', '').lower(), r[:300])
+    salida = os.path.join(JAIL, 'raro.json')
+    r = pide('raro', path='escapa', out=salida)
+    check('A22 CH1 ...ni en lo que guarda out=',
+          os.path.isfile(salida) and b'raro' not in open(salida, 'rb').read().replace(b'pruebas/raro', b''), r[:300])
 
     r = llama(srv, {'command': 'connections', 'api': 'pruebas/eco'})
     check('A20 un parametro que no es del comando: API-016', mc.abre(r, 'SR_API_NO_VA_CON_COMANDO_FMT'), r[:300])

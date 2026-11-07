@@ -1766,6 +1766,13 @@ begin
   // la coma del locale no es la de un form; lo que se lleva algo detras no es uno
   Assert.IsFalse(LeeFlotanteDeForm('10,5', F) or LeeFlotanteDeForm('1 2', F) or
     LeeFlotanteDeForm('abc', F) or LeeFlotanteDeForm('', F));
+  // el signo lo lee el parser, como al cargar el form: '--5' y '- 5' los niega
+  // el del IDE (medido por delphi_edit, DSGN-124) y aqui eran 5 y -5 (DH2 del
+  // revisor del paisaje de la 1.29)
+  Assert.IsFalse(LeeFlotanteDeForm('--5', F), '--5');
+  Assert.IsFalse(LeeFlotanteDeForm('- 5', F), '- 5');
+  Assert.IsFalse(LeeFlotanteDeForm('-', F), '-');
+  Assert.IsTrue(LeeFlotanteDeForm('-2.5E3', F) and (F = -2500), '-2.5E3');
 end;
 
 procedure TDesignerEditTests.LasVistasLasDiceLaDirectiva;

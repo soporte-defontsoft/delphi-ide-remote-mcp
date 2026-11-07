@@ -135,6 +135,19 @@ try:
     check('D5 la barra normal tambien vale como separador',
           os.path.exists(os.path.join(PROY, 'Nucleo', 'Modelos',
                                       'UProducto.pas')), r[:200])
+    # B6 (revisor del paisaje de la 1.29): una letra de otro alfabeto es una letra; la lista blanca era solo ASCII
+    # y "Modulos" con su acento se negaba (CREATE-001). Lo que el XML no admite (U+FFFE) o no se ve (un espacio
+    # duro) sigue fuera. D6, detras, compila el proyecto con ellas dentro.
+    for carpeta, unit in (('M' + chr(0xF3) + 'dulos', 'UModulo'), (chr(0x41C) + chr(0x43E) + chr(0x434), 'UCirilica')):
+        r = call('delphi_create', {'kind': 'unit', 'name': unit, 'project': DPR, 'dir': carpeta})
+        dpr, dproj = proyecto()
+        check('D5b B6 "dir"=%s: la unit se crea y se registra con su carpeta' % carpeta.encode('unicode_escape').decode(),
+              os.path.exists(os.path.join(PROY, carpeta, unit + '.pas')) and
+              (carpeta + SEP + unit + '.pas') in dpr and ('Include="%s"' % (carpeta + SEP + unit + '.pas')) in dproj, r[:200])
+    for malo in ('a' + chr(0xFFFE) + 'b', 'a' + chr(0xA0) + 'b'):
+        r = call('delphi_create', {'kind': 'unit', 'name': 'UMalaB6', 'project': DPR, 'dir': malo})
+        check('D5c B6 "dir" con %s: negada por la lista blanca' % malo.encode('unicode_escape').decode(),
+              mc.rechazado(r) and mc.es(r, 'SR_CREATE_SUBDIR_REL_FMT') and not os.path.exists(os.path.join(PROY, malo)), r[:160])
     ok, det = compila()
     check('D6 y el proyecto COMPILA con las units repartidas en carpetas',
           ok, det)

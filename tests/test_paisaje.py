@@ -1402,10 +1402,9 @@ REGLAS = [
       ('Lsp.Chm.pas', 'TChm.Create'),
       # settings.ini: su lector es Lsp.Settings y no es lugar de ninguna puerta (C1)
       ('Lsp.Settings.pas', 'ComprobarDuplicadosIni'), ('Lsp.Settings.pas', 'LoadSecurity'),
+      # (y el fichero de conexiones del operador, que lleva credenciales: desde CH9 de la 1.29 lo lee
+      # BytesDelIni, el lector de la configuracion del servidor, y su casa propia se fue)
       ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'), ('Lsp.Settings.pas', 'BytesDelIni'),
-      # el fichero de conexiones del operador (1.29, delphi_db): lleva credenciales, su lector es
-      # Lsp.Conexiones y no es lugar de ninguna puerta, como settings.ini
-      ('Lsp.Conexiones.pas', 'TextoDeConexiones'),
       # LA puerta (LeeBytes, y su trozo LeeTrozoDeBytes: V80 de la 1.23.1) y el
       # decodificador que usan ella y LeeTexto, tras la puerta
       ('Lsp.Puertas.pas', 'LeeBytes'), ('Lsp.Puertas.pas', 'LeeTrozoDeBytes'), ('Lsp.Puertas.pas', 'TextoDeFichero'),

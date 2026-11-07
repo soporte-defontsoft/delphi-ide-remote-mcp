@@ -364,6 +364,10 @@ const
   SR_CREATE_SUELTO_DIR =
     '[CREATE-003 INVALID_PARAM] Without "project", "dir" must be the ABSOLUTE ' +
     'folder in which to create the file (inside your roots).';
+  SR_CREATE_SUELTO_NOMBRE_FMT =
+    '[CREATE-040 INVALID_PARAM] "%s" is not a file name: a name and nothing ' +
+    'else - no folder, drive or stream, and no trailing dot or space. The ' +
+    'folder goes in "dir" (or in "project").';
   SN_CREATE_UNIT_SUELTA_FMT =
     '[CREATE-004] CREATED unit %s (%s), %d lines, encoding %s, %s, ' +
     'STANDALONE: no project ' +
@@ -4838,8 +4842,14 @@ const
   SF_API_CABECERA_DEL_OPERADOR =
     'the operator or the connection sets it (the server''s fixed headers, ' +
     'the credential and the transport ones: Host, Content-Length...)';
+  // lo que se juzga de verdad (CH12 del revisor de la 1.29: prometia el token
+  // de RFC 9110, que no se juzgaba)
   SF_API_CABECERA_MAL =
-    'its name is not an HTTP token (RFC 9110) or its value has a line break';
+    'its name has a space, a colon or a control character, or its value has ' +
+    'a line break';
+  SF_API_CABECERA_REESCRIBE =
+    'it changes the method or the path the API serves, and both are the ' +
+    'operator''s ("methods" and the base URL of the API)';
   SR_API_CUERPO_Y_FORM =
     '[API-011 INVALID_PARAM] body and form go apart: body is the whole body, ' +
     'form builds one. Nothing was sent.';
@@ -4889,7 +4899,8 @@ const
   SP_API_QUERY = 'A list of {"name", "value"}.';
   SP_API_HEADERS =
     'Yours, a list of {"name", "value"}; not the operator''s, the ' +
-    'credential or Host/Content-Length.';
+    'credential, Host/Content-Length or one that overrides the method or ' +
+    'the path (X-HTTP-Method-Override, X-Original-URL...).';
   SP_API_BODY =
     'The body as text: JSON goes as application/json unless a Content-Type ' +
     'header says otherwise.';

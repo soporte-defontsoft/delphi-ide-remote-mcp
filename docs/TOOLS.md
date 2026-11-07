@@ -994,7 +994,7 @@ The HTTP APIs the operator gave this workspace, by NAME - a mini Postman. connec
 | `method` | string | optional | GET (the default) or another the API allows. |
 | `path` | string | optional | Relative to the API, as text (the server encodes it); no host, ".." or ?. |
 | `query` | array | optional | A list of {"name", "value"}. |
-| `headers` | array | optional | Yours, a list of {"name", "value"}; not the operator's, the credential or Host/Content-Length. |
+| `headers` | array | optional | Yours, a list of {"name", "value"}; not the operator's, the credential, Host/Content-Length or one that overrides the method or the path (X-HTTP-Method-Override, X-Original-URL...). |
 | `body` | string | optional | The body as text: JSON goes as application/json unless a Content-Type header says otherwise. |
 | `form` | array | optional | A form body instead: a list of {"name", "value"}. |
 | `out` | string | optional | A file of yours to save the whole body to (binary too). |

@@ -185,6 +185,8 @@ EXCLUIDOS = {
         'compone un fichero local (<job>.out en Lsp.RemoteRun) y lo guarda JobIdValido, hex y guiones; '
         'lo prueba test_remoterun',
     ('delphi_move', 'copy'): 'booleano (copiar en vez de mover); la ruta es path/dest, probados arriba',
+    ('delphi_api', 'headers'): 'las cabeceras del agente, pares nombre/valor; el "path" de su descripcion es '
+        'la ruta HTTP que reescribe X-Original-URL (CH5 de la 1.29), no un fichero',
     ('delphi_desktop', 'inline'): 'booleano (imagen en la respuesta o fichero); la ruta es out, probada aparte',
     ('delphi_adb', 'inline'): 'idem delphi_desktop: la entrega de la captura (Lsp.InlineImages)',
     ('delphi_designer', 'inline'): 'idem: la entrega del PNG de preview; la ruta es out, probada arriba',

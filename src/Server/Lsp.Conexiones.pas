@@ -195,7 +195,7 @@ end;
   como settings.ini. UTF-8 con o sin BOM. }
 function TextoDeConexiones(AApi: Boolean; out ATexto, ANegativa: string): Boolean;
 var
-  Ruta: string;
+  Ruta, Motivo: string;
   B: TBytes;
   Ini: Integer;
 begin
@@ -207,7 +207,14 @@ begin
     ANegativa := NegativaDelFichero(AApi, MsgText(SF_CONEXIONES_NO_HAY));
     Exit(False);
   end;
-  B := TFile.ReadAllBytes(Ruta);
+  // EL lector de la configuracion del servidor: ReadAllBytes negaba la
+  // escritura a otro y, con el fichero abierto en un editor, subia una
+  // excepcion (CH9 del revisor del paisaje de la 1.29)
+  if not BytesDelIni(Ruta, B, Motivo) then
+  begin
+    ANegativa := NegativaDelFichero(AApi, Motivo);
+    Exit(False);
+  end;
   Ini := 0;
   if BomUtf8En(B, 0) then
     Ini := 3;
@@ -649,18 +656,77 @@ begin
   Result := Result + Copy(ATexto, Desde, MaxInt);
 end;
 
-{ ATexto con cada secreto (de CLAVE_LARGA o mas, donde aparezca; mas corto,
-  como palabra entera) y cada palabra (como palabra entera) cambiados por
-  AMarca, en el orden dado: lo entero antes que sus trozos. EL tapado de las
-  dos conexiones, bases y APIs. }
+{ ASecreto como puede volver escrito: tal cual; dentro de un JSON, como lo
+  escribe EL codificador de la casa (TextoEnJson: el valor de un cuerpo JSON
+  se tapa despues de pasar por el, Mcp.Tools.Api.JsonTapado), con la barra
+  como \/ y con todo lo que no es letra ni cifra como \uXXXX (en mayusculas
+  y en minusculas), que es como escriben otros codificadores el texto que
+  queda crudo (lo recortado, out=); y en una URL - cada byte UTF-8 que no es
+  de los no reservados de RFC 3986 como %XX, en mayusculas y en minusculas, y
+  como lo codifica nuestra query (EncodeForm, QueryDe). Gramatica nuestra,
+  declarada: el codificador de la API de otro no es un juez al que preguntar.
+  Se tapaba solo tal cual: una API que devolvia la credencial con su + escrito
+  como \u y 002B, o como %2B, la dejaba ver (CH1 del revisor del paisaje de la
+  1.29). Sin repetidas. }
+function FormasDelSecreto(const ASecreto: string): TArray<string>;
+var
+  Mayus, Minus: string;
+  procedure Pon(const AForma: string);
+  begin
+    if (AForma <> '') and (IndexStr(AForma, Result) < 0) then
+      Result := Result + [AForma];
+  end;
+begin
+  Result := [];
+  Pon(ASecreto);
+  Pon(TextoEnJson(ASecreto));
+  Pon(TextoEnJson(ASecreto).Replace('/', '\/'));
+  Mayus := '';
+  Minus := '';
+  for var Ch in ASecreto do
+    if CharInSet(Ch, ['A'..'Z', 'a'..'z', '0'..'9']) then
+    begin
+      Mayus := Mayus + Ch;
+      Minus := Minus + Ch;
+    end
+    else
+    begin
+      Mayus := Mayus + '\u' + IntToHex(Ord(Ch), 4);
+      Minus := Minus + '\u' + LowerCase(IntToHex(Ord(Ch), 4));
+    end;
+  Pon(Mayus);
+  Pon(Minus);
+  Mayus := '';
+  Minus := '';
+  for var B in TEncoding.UTF8.GetBytes(ASecreto) do
+    if CharInSet(Char(B), ['A'..'Z', 'a'..'z', '0'..'9', '-', '.', '_', '~']) then
+    begin
+      Mayus := Mayus + Char(B);
+      Minus := Minus + Char(B);
+    end
+    else
+    begin
+      Mayus := Mayus + '%' + IntToHex(B, 2);
+      Minus := Minus + '%' + LowerCase(IntToHex(B, 2));
+    end;
+  Pon(Mayus);
+  Pon(Minus);
+  Pon(TNetEncoding.URL.EncodeForm(ASecreto));
+end;
+
+{ ATexto con cada secreto, en cada una de sus formas (FormasDelSecreto; de
+  CLAVE_LARGA o mas, donde aparezca; mas corto, como palabra entera) y cada
+  palabra (como palabra entera) cambiados por AMarca, en el orden dado: lo
+  entero antes que sus trozos. EL tapado de las dos conexiones, bases y APIs. }
 function Tapa(const ATexto, AMarca: string; const ASecretos, APalabras: array of string): string;
 begin
   Result := ATexto;
-  for var S in ASecretos do
-    if Length(S) >= CLAVE_LARGA then
-      Result := StringReplace(Result, S, AMarca, [rfReplaceAll])
-    else
-      Result := CambiaPalabra(Result, S, AMarca);
+  for var Secreto in ASecretos do
+    for var S in FormasDelSecreto(Secreto) do
+      if Length(S) >= CLAVE_LARGA then
+        Result := StringReplace(Result, S, AMarca, [rfReplaceAll])
+      else
+        Result := CambiaPalabra(Result, S, AMarca);
   for var S in APalabras do
     Result := CambiaPalabra(Result, S, AMarca);
 end;

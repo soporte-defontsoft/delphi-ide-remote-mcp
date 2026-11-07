@@ -164,13 +164,26 @@ begin
       TNetEncoding.URL.EncodeForm(P.Valor);
 end;
 
+const
+  { Las cabeceras que cambian el METODO o la RUTA que sirve una API detras de
+    su puerta: los dos son del operador ("methods", la baseUrl y el juicio de
+    la ruta), y un servidor que las atiende los saltaba (CH5 del revisor del
+    paisaje de la 1.29). Politica NUESTRA, declarada, como la del transporte:
+    no hay juez de que cabeceras atiende el servidor de otro; son las familias
+    conocidas, los override del metodo y la reescritura de la URL. }
+  CABECERAS_QUE_REESCRIBEN: array [0 .. 4] of string = ('X-HTTP-Method-Override',
+    'X-HTTP-Method', 'X-Method-Override', 'X-Original-URL', 'X-Rewrite-URL');
+
 { '' si el agente puede poner la cabecera A; si no, la negativa: un nombre o
-  un valor que inyectaria otra cabecera, o una que pone el transporte o la
-  conexion (sus fijas y las de su credencial). }
+  un valor que inyectaria otra cabecera, una que pone el transporte o la
+  conexion (sus fijas y las de su credencial), o una que reescribe el metodo o
+  la ruta. }
 function CabeceraDelAgente(const C: TConexionApi; const A: TNombreValor): string;
 begin
   if (A.Nombre.IndexOfAny([':', ' ']) >= 0) or TieneControl(A.Nombre, False) or TieneControl(A.Valor, True) then
     Exit(MsgFmt(SR_API_CABECERA_FMT, [A.Nombre, MsgText(SF_API_CABECERA_MAL)]));
+  if MatchText(A.Nombre, CABECERAS_QUE_REESCRIBEN) then
+    Exit(MsgFmt(SR_API_CABECERA_FMT, [A.Nombre, MsgText(SF_API_CABECERA_REESCRIBE)]));
   Result := MsgFmt(SR_API_CABECERA_FMT, [A.Nombre, MsgText(SF_API_CABECERA_DEL_OPERADOR)]);
   if MatchText(A.Nombre, CABECERAS_DEL_TRANSPORTE) then
     Exit;
@@ -178,6 +191,29 @@ begin
     if SameText(F.Nombre, A.Nombre) then
       Exit;
   Result := '';
+end;
+
+{ Un cuerpo JSON como valor, tapado en la forma de la casa: parseado, escrito
+  por EL codificador (un secreto que la API escapa a su manera, un + como \u y
+  002B o una barra como \/, mezclados o no, queda como lo conoce Tapa),
+  tapado y parseado otra vez. Se tapaba
+  el texto crudo y se parseaba despues: el parseo deshacia el escape y daba el
+  secreto en claro (CH1 del revisor del paisaje de la 1.29). nil si no es JSON;
+  quien llama lo libera. }
+function JsonTapado(const ATexto: string; const C: TConexionApi): TJSONValue;
+var
+  V: TJSONValue;
+  Canonico: string;
+begin
+  V := ValorJson(ATexto);
+  if V = nil then
+    Exit(nil);
+  try
+    Canonico := V.ToJSON;
+  finally
+    V.Free;
+  end;
+  Result := ValorJson(EnmascaraApi(Canonico, C, False));
 end;
 
 { El cuerpo como texto, si lo es: con el charset que declara su tipo (su
@@ -402,6 +438,10 @@ begin
     if SameText(H.Nombre, CABECERA_TIPO) then
       Tipo := H.Valor;
   EsTexto := TextoDelCuerpo(Resp.Cuerpo, Tipo, Texto);
+  // el texto, tapado con las formas en que puede volver un secreto
+  // (FormasDelSecreto, Lsp.Conexiones): es lo que va recortado y lo que
+  // guarda out=. El valor JSON se tapa aparte, en la forma de la casa
+  // (JsonTapado): CH1 del revisor del paisaje de la 1.29
   Tapado := EnmascaraApi(Texto, C, False);
   if P.Out.Trim <> '' then
   try
@@ -437,7 +477,7 @@ begin
     begin
       V := nil;
       if SinMayusculas(Tipo).Contains('json') then
-        V := ValorJson(Tapado);
+        V := JsonTapado(Texto, C);
       if V <> nil then
         R.AddPair('body', V)
       else if Tapado <> '' then

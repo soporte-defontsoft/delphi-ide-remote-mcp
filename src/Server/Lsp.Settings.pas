@@ -375,6 +375,12 @@ function ToolsProfileNow: string;
   no es de ella. Del settings.ini y del entorno, y de un parametro de si/no de
   una tool (active de get-sdk tenia la suya: J11 de la 1.28). }
 function LeeSiNo(const ATexto: string; out AValor: Boolean): Boolean;
+{ Los bytes de un fichero de configuracion del servidor (settings.ini, los de
+  conexiones): sin negar nada a otro proceso que lo tenga abierto, y si no se
+  puede leer, False y el motivo del sistema. EL lector de esos ficheros:
+  el de conexiones tenia el suyo, con TFile.ReadAllBytes (revisor del paisaje
+  de la 1.29, CH9). }
+function BytesDelIni(const APath: string; out ABytes: TArray<Byte>; out AMotivo: string): Boolean;
 
 implementation
 

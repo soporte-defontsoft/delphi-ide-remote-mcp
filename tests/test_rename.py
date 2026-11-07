@@ -14,7 +14,7 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 BASE = mc.carpeta('rename')
-EXE = mc.copia_exe(BASE)
+EXE = mc.copia_exe(BASE, con_render=True)  # EH5: un .dfm binario lo convierte el ayudante de 32 bits (V71)
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': BASE}), nombre='rn', t=300)
 call = srv.call
@@ -173,6 +173,19 @@ j = J(call('delphi_references', {'path': UCALC, 'line': 4, 'character': 9}))
 # respuesta tiene que ser la de references, con sus usos confirmados
 check('...y sin el form, references no trae designer',
       len(mc.aciertos(j, 'confirmed')) > 0 and 'designer' not in j, str(j)[:300])
+# EH5 (revisor del paisaje de la 1.29): un .dfm BINARIO se leia como texto. Sus usos salian con los bytes del
+# binario por texto ('\x07OnClick\x07\x05Doble') y una linea sin sentido, o no salian si el byte de al lado era
+# una letra. Se lee por EL lector de un designer: el texto y la linea son los de to-text. El mismo form de arriba,
+# en binario: TPF0, la clase y el nombre, OnClick como identificador (vaIdent, 7), fin de propiedades y de hijos.
+open(DFM, 'wb').write(b'TPF0\x02TF\x01F\x07OnClick\x07\x05Doble\x00\x00')
+j = J(call('delphi_references', {'path': UCALC, 'line': 4, 'character': 9}))
+_dsg = mc.aciertos(j, 'designer')
+check('EH5 references en un .dfm BINARIO: el uso con el texto y la linea de to-text (salian los bytes)',
+      any((h.get('text') or '').strip() == 'OnClick = Doble' and h.get('line') == 2 for h in _dsg), str(j)[:400])
+j = J(call('delphi_rename_symbol', {'path': UCALC, 'line': 4, 'character': 9, 'newname': 'Duplica'}))
+check('EH5 ...y rename sigue bloqueando por el (RENAME-019)',
+      j.get('applicable') is False and any(mc.es(b, 'SR_RENAME_DESIGNER_FMT') for b in j.get('blockers', [])), str(j)[:400])
+os.remove(DFM)
 
 # 6. RTL symbol refused (definition outside the jail): IntToStr usage
 s = open(UCALC, encoding='utf-8-sig').read().replace(

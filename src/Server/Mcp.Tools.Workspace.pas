@@ -1798,6 +1798,11 @@ begin
      IsBinaryDesignerBytes(Bytes) then // el nombrador de la forma: Lsp.DesignerBin
     Exit(MsgText(SR_UPLOAD_BINARY_DESIGNER));
 
+  // un trozo con offset CONTINUA un fichero que ya esta: se niega antes de
+  // crear su carpeta, que se quedaba vacia (P6 del revisor del paisaje de la
+  // 1.29). La pregunta de abajo, al abrirlo, se queda: segunda barrera
+  if (Params.Offset > 0) and not TFile.Exists(FullPath) then
+    Exit(MsgText(SR_WS_OFFSET_FICHERO_NO_EXISTE));
   Dir := TPath.GetDirectoryName(FullPath);
   if (Dir <> '') and not TDirectory.Exists(Dir) then
     CrearCarpeta(Dir);

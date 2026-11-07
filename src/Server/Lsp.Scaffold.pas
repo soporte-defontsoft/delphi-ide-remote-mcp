@@ -1276,11 +1276,14 @@ end;
 function CreaFuenteSuelto(const ADir, ANombre, AExt, ABody: string; out ARuta: string): string;
 begin
   ARuta := '';
-  Result := BadUnitName(ANombre);
-  if Result <> '' then
-    Exit;
   if (ADir.Trim = '') or not EsRutaAbsoluta(ADir.Trim) then
     Exit(MsgText(SR_CREATE_SUELTO_DIR));
+  // aqui se juzga el FICHERO, con EL juez de un nombre suelto; el nombre de
+  // una UNIT lo juzga quien crea la unit (BadUnitName). Un .inc es un fichero
+  // que {$I} nombra: mis-defs.inc o Vcl.Defs.inc se negaban como units
+  // (revisor del paisaje de la 1.29, B5)
+  if not EsNombreSueltoEn(TPath.GetFullPath(ADir.Trim), ANombre + AExt) then
+    Exit(MsgFmt(SR_CREATE_SUELTO_NOMBRE_FMT, [ANombre]));
   ARuta := TPath.Combine(TPath.GetFullPath(ADir.Trim), ANombre + AExt);
   Result := WriteTargetDenied(ARuta);
   if Result <> '' then
@@ -1310,6 +1313,9 @@ begin
     if (ASubDir.Trim = '') or not EsRutaAbsoluta(ASubDir.Trim) then
       Exit(MsgText(SR_CREATE_UNIT_NEED_PROJECT));
     Result := CuerpoDeUnit(AUnitName, AContent, SaltoPedido(AEol), Body);
+    if Result <> '' then
+      Exit;
+    Result := BadUnitName(AUnitName);
     if Result <> '' then
       Exit;
     Result := CreaFuenteSuelto(ASubDir, AUnitName, '.pas', Body, PasPath);

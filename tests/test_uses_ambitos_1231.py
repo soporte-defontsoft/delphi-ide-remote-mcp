@@ -79,6 +79,21 @@ try:
     check('U5 removeuses Forms quita la que hay (Vcl.Forms, la misma unidad)',
           mc.abre(r, 'SN_REMOVEUSES_REMOVED_FMT') and b'Forms' not in bytes_de(VACIA), r[:300])
 
+    # EH2 (revisor del paisaje de la 1.29): la palabra de la seccion se buscaba con \w y \b, que son ASCII; en
+    # 'procedure MenuImplementation;' con su acento, 'Implementation' era la seccion y adduses escribio el uses
+    # dentro de esa declaracion del interface ('procedure MenuImplementation uses System.Classes;;'). U6 compila.
+    ident = 'Men' + chr(0xFA) + 'Implementation'
+    r = call('delphi_create', {'kind': 'unit', 'name': 'UAcento', 'project': DPR,
+                               'content': 'unit UAcento;\r\n\r\ninterface\r\n\r\nprocedure %s;\r\n\r\n'
+                                          'implementation\r\n\r\nprocedure %s;\r\nbegin\r\nend;\r\n\r\nend.\r\n' % (ident, ident)})
+    ACENTO = os.path.join(PROY, 'UAcento.pas')
+    r = call('delphi_edit', {'path': ACENTO, 'adduses': 'System.Classes', 'section': 'implementation'})
+    t = open(ACENTO, encoding='utf-8-sig').read()
+    check('U7 EH2 adduses en implementation con un %s en el interface: el uses va detras de implementation'
+          % ident.encode('unicode_escape').decode(),
+          mc.abre(r, 'SN_ADDUSES_ADDED_FMT') and ('procedure %s;' % ident) in t and
+          re.search(r'implementation\s+uses\s+System\.Classes;', t) is not None, (r[:300], t[:400]))
+
     r = call('delphi_build', {'project': DPR, 'platform': 'Win32', 'config': 'Debug'}, t=240)
     check('U6 el proyecto compila despues de todo (sin E2004)', '"success":true' in r.replace(' ', ''), r[:600])
 finally:

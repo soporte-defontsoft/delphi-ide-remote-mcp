@@ -1699,7 +1699,16 @@ begin
       // un designer cogido por otro proceso tumbaba el rename: no se sabe si
       // lo nombra (revisor 7, M3)
       try
-        Texto := PatchLoadText(P, Enc);
+        // EL lector de un designer (TextoDeDesigner): un .dfm binario se leia
+        // como texto y sus usos salian con los bytes del binario por texto, o
+        // no salian si el byte de al lado era una letra (EH5 del revisor de
+        // la 1.29). Su linea es la del texto que da to-text; un binario danado
+        // no se sabe si lo nombra
+        if TextoDeDesigner(P, Texto, Enc) <> '' then
+        begin
+          AIlegibles := AIlegibles + [P];
+          Continue;
+        end;
       except
         AIlegibles := AIlegibles + [P];
         Continue;
@@ -1851,7 +1860,9 @@ begin
         var Hecho := False;
         for var I := 0 to High(Lineas) do
         begin
-          if EnInterface and TRegEx.IsMatch(Lineas[I], '(?i)(?<![\w.])implementation\b') then
+          // LA regla de la seccion (FinDeSeccion): aqui estaba otra vez, con
+          // el \b ASCII que un acento engana (EH2 del revisor de la 1.29)
+          if EnInterface and (FinDeSeccion(Lineas[I], 'implementation') > 0) then
             EnInterface := False;
           for var M in TRegEx.Matches(Lineas[I], Patron) do
           begin
