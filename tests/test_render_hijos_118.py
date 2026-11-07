@@ -1,18 +1,16 @@
 # -*- coding: utf-8 -*-
-"""MANUAL: RENDER_REACH_HELPER = copia VCL con URenderReachDummy y vigia interno apagado.
-El producto no enlaza esa unidad. Mide el limite REAL exterior (RENDER_TIEMPO_MS, del fuente).
+"""El renderizador VCL con un componente DUMMY que lanza un hijo y espera (URenderReachDummy, de
+src\\Render\\Pruebas: el producto no la enlaza) y su vigia interno apagado: la variante la hace y la compila el
+propio servidor (mc.variante_del_renderizador; hasta la 1.29 era un exe a mano y la bateria salia sin checks,
+I10). Mide el limite REAL exterior (RENDER_TIEMPO_MS, del fuente) y que el Job mata al hijo.
 Mutante: omitir AssignProcessToJobObject en la rama sin AppContainer de RunCore.
 El arnes limpia solo sus PID verificados, tambien con el mutante.
 """
 import atexit,ctypes,json,os,shutil,threading,time
 import mcp_cliente as mc
-HELPER=os.environ.get('RENDER_REACH_HELPER','')
-if not HELPER:
-    mc.fin('render hijos 118',sin_checks='manual: falta RENDER_REACH_HELPER DUMMY sin vigia interno')
 BASE=mc.carpeta('render-hijos-118');atexit.register(mc.borra,BASE)
 JAIL=os.path.join(BASE,'jail');os.makedirs(JAIL)
 exe=mc.copia_exe(os.path.join(BASE,'srv'),con_render=True,con_conversor=True)
-shutil.copyfile(HELPER,os.path.join(os.path.dirname(exe),'DelphiFormRenderVcl.exe'))
 srv=mc.Stdio(exe,mc.entorno({'DELPHI_MCP_ROOTS':JAIL}),nombre='render-hijos',t=110)
 k=ctypes.WinDLL('kernel32',use_last_error=True)
 k.OpenProcess.argtypes=[ctypes.c_uint32,ctypes.c_int,ctypes.c_uint32];k.OpenProcess.restype=ctypes.c_void_p
@@ -50,6 +48,11 @@ def tick(path):
     return None
 pids=[];result={};counter=''
 try:
+    HELPER=mc.variante_del_renderizador(srv.call,JAIL,'Vcl',
+        cambios=[('FormRender.Comun.pas','  if AMs <= 0 then','  if True then // DUMMY: el vigia interno apagado')],
+        unidades=['URenderReachDummy.pas'])
+    shutil.copyfile(HELPER,os.path.join(os.path.dirname(exe),'DelphiFormRenderVcl.exe'))
+    mc.check('la variante DUMMY la compila el servidor',os.path.isfile(HELPER))
     f=os.path.join(JAIL,'DUMMY-wait.dfm')
     with open(f,'w') as file:
         file.write("object Dummy: TDummy\n ClientWidth = 160\n ClientHeight = 100\n object Hold: TDummyReach\n Accion = 'espera'\n end\nend\n")
@@ -77,7 +80,11 @@ try:
              not worker.is_alive() and PLAZO-1<elapsed<PLAZO+MARGEN,str(elapsed))
     mc.check('rechazo etiquetado del vigia exterior',mc.es(result.get('out',''),'SR_DESIGNER_RENDER_TIEMPO_FMT'),result)
     last=tick(counter) if counter else None;time.sleep(.7);after=tick(counter) if counter else None
-    mc.check('contador se detiene',last is not None and after==last,(last,after))
+    # (o ya no hay carpeta: el servidor borra la del render al acabar, y Windows no deja borrar el directorio
+    # actual de un proceso vivo, el del hijo que escribia ahi)
+    carpeta_viva=bool(counter) and os.path.isdir(os.path.dirname(counter))
+    mc.check('contador se detiene (o su carpeta ya se borro)',
+             bool(counter) and ((last is not None and after==last) or not carpeta_viva),(last,after,carpeta_viva))
     mc.check('fixture identifica padre e hijo',len(pids)==2,pids)
     mc.check('ningun PID DUMMY sigue vivo',len(pids)==2 and not any(alive(p) for p in pids))
     mc.check('servidor sigue contestando',not mc.fallo(srv.call('delphi_list',{'root':JAIL})))

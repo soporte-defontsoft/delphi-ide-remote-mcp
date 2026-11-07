@@ -1635,15 +1635,51 @@ def tabla_lista(r):
     return not es(r, 'SR_DESIGNER_GENERANDOSE_FMT') and not fallo(r)
 
 
-def build_ok(call, dproj):
-    """delphi_build de un proyecto (Win64 Debug Build): (exito, errores). Estaba
-    escrito en tres baterias."""
-    out = call('delphi_build', {"project": dproj, "platform": "Win64",
-                                "config": "Debug", "target": "Build"}, 600)
+def build_ok(call, dproj, platform='Win64', config='Debug'):
+    """delphi_build de un proyecto (Build; Win64 Debug si no se dice): (exito,
+    errores). Estaba escrito en tres baterias."""
+    out = call('delphi_build', {"project": dproj, "platform": platform,
+                                "config": config, "target": "Build"}, 600)
     d = como_json(out)
     if not d:
         return False, out[:300]
     return d.get('success') is True, json.dumps(d.get('errors'))[:300]
+
+
+def variante_del_renderizador(call, jail, fw, cambios=(), unidades=(), etiqueta=''):
+    """Una variante de PRUEBA del renderizador de forms fw ('Vcl' o 'Fmx'), hecha y compilada POR EL SERVIDOR,
+    como la haria un agente: sus fuentes se copian a <jail>\\variante<fw><etiqueta>\\Render (y las del servidor que su .dpr
+    nombra por ..\\Server, a ...\\Server); cada cambio (fichero, linea de antes, linea de despues) entra con
+    delphi_edit, que lo niega si esa linea no esta UNA vez -la variante no se hace a ciegas sobre un fuente que
+    cambio-; cada unidad de src\\Render\\Pruebas entra al proyecto con delphi_config add-unit; y delphi_build lo
+    compila en Win32 Release, como BuildGroup. La ruta del exe; AssertionError con la respuesta si un paso no
+    salio. I10 de la 1.29: las baterias de render que miden lo que el producto no enlaza salian sin checks
+    porque nadie compilaba su variante."""
+    nombre = 'DelphiFormRender' + fw
+    src = os.path.join(REPO, 'src', 'Render')
+    base = os.path.join(jail, 'variante' + fw + etiqueta)
+    dst = os.path.join(base, 'Render')
+    os.makedirs(os.path.join(dst, 'Pruebas'))
+    os.makedirs(os.path.join(base, 'Server'))
+    for f in os.listdir(src):
+        if os.path.splitext(f)[1].lower() in ('.pas', '.inc') or f.startswith(nombre + '.'):
+            shutil.copy(os.path.join(src, f), dst)
+    dpr = open(os.path.join(src, nombre + '.dpr'), encoding='latin-1').read()
+    for rel in re.findall(r"in '\.\.\\Server\\([^']+)'", dpr):
+        shutil.copy(os.path.join(REPO, 'src', 'Server', rel), os.path.join(base, 'Server'))
+    for f, antes, despues in cambios:
+        r = call('delphi_edit', {'path': os.path.join(dst, f), 'old': antes, 'new': despues})
+        assert not fallo(r), 'cambio en %s: %s' % (f, r[:400])
+    dproj = os.path.join(dst, nombre + '.dproj')
+    for u in unidades:
+        shutil.copy(os.path.join(src, 'Pruebas', u), os.path.join(dst, 'Pruebas'))
+        r = call('delphi_config', {'command': 'add-unit', 'project': dproj, 'path': os.path.join(dst, 'Pruebas', u)})
+        assert not fallo(r), 'add-unit %s: %s' % (u, r[:400])
+    ok, err = build_ok(call, dproj, 'Win32', 'Release')
+    assert ok, 'build de la variante: %s' % err
+    exe = os.path.join(dst, 'Win32', 'Release', nombre + '.exe')
+    assert os.path.isfile(exe), 'sin el exe de la variante: %s' % exe
+    return exe
 
 
 def lee(p):
