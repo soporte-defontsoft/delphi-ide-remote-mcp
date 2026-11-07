@@ -69,6 +69,18 @@ r = S.call('delphi_designer', {'command': 'preview', 'path': FMX, 'component': '
                                'inline': False, 'out': os.path.join(BASE, 'cap') + os.sep}, 300)
 check('E4 (V173k) Opacity=0,5: negado (RENDER-024), no pintado por el locale',
       mc.abre(r, 'SR_RENDER_ESTADO_FLOTANTE_FMT') and 'componentRect' not in r, r[:300])
+# Prueba en vivo de la 1.29: un entero que el parser de forms no lee (--5) y un enumerado que no es de su tipo salian
+# DSGN-061 INTERNAL (EVariantTypeCastError); son el valor del agente: INVALID_PARAM con su porque. Y su control: un
+# entero como lo escribe un form ($1F) y un enumerado del tipo se dibujan
+for estado, cte in (('Rect1.Tag=--5', 'SR_RENDER_ESTADO_ENTERO_FMT'), ('Rect1.Tag=- 5', 'SR_RENDER_ESTADO_ENTERO_FMT'),
+                    ('Rect1.Align=NoEsUnAlign', 'SR_RENDER_ESTADO_VALOR_FMT')):
+    r = S.call('delphi_designer', {'command': 'preview', 'path': FMX, 'component': 'Rect1', 'state': estado,
+                                   'inline': False, 'out': os.path.join(BASE, 'cap') + os.sep}, 300)
+    check('E5 %s: INVALID_PARAM con su porque (salia DSGN-061 INTERNAL)' % estado,
+          mc.abre(r, cte) and 'INTERNAL' not in r and 'componentRect' not in r, r[:300])
+for estado in ('Rect1.Tag=$1F', 'Rect1.Tag=-5', 'Rect1.Align=Client'):
+    p, j = rect(estado)
+    check('E5b control: %s se dibuja' % estado, p is not None, str(j)[:300])
 
 S.cierra()
 mc.borra(BASE)

@@ -1773,6 +1773,14 @@ begin
   Assert.IsFalse(LeeFlotanteDeForm('- 5', F), '- 5');
   Assert.IsFalse(LeeFlotanteDeForm('-', F), '-');
   Assert.IsTrue(LeeFlotanteDeForm('-2.5E3', F) and (F = -2500), '-2.5E3');
+  // ...y el entero, por el mismo parser: el $hex del form si, un flotante o
+  // un signo suelto no (prueba en vivo de la 1.29: salian DSGN-061 INTERNAL)
+  var N: Int64;
+  Assert.IsTrue(LeeEnteroDeForm('-5', N) and (N = -5), '-5');
+  Assert.IsTrue(LeeEnteroDeForm('$1F', N) and (N = 31), '$1F');
+  Assert.IsTrue(LeeEnteroDeForm(' 10 ', N) and (N = 10), ' 10 ');
+  for var Malo in TArray<string>.Create('--5', '- 5', '1.5', 'abc', '', '5x') do
+    Assert.IsFalse(LeeEnteroDeForm(Malo, N), Malo);
 end;
 
 procedure TDesignerEditTests.LasVistasLasDiceLaDirectiva;

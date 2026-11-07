@@ -96,6 +96,13 @@ const
   SR_RENDER_ESTADO_FLOTANTE_FMT =
     '[RENDER-024 INVALID_PARAM] state: %s is not a number as a form writes ' +
     'it, the type of %s (decimal point, never a comma: 0.5).';
+  // ...y un entero, y lo que la RTL no convierte al tipo de la propiedad: los
+  // dos salian DSGN-061 INTERNAL (prueba en vivo de la 1.29)
+  SR_RENDER_ESTADO_ENTERO_FMT =
+    '[RENDER-028 INVALID_PARAM] state: %s is not an integer as a form writes ' +
+    'it (10, -5, $1F) nor a name its type knows (clRed), the type of %s.';
+  SR_RENDER_ESTADO_VALOR_FMT =
+    '[RENDER-029 INVALID_PARAM] state: %s is not a value of %s: %s';
 
   SN_RENDER_EXCEPCION_BUCLE_FMT =
     '[RENDER-014] An exception reached the message loop and was recorded ' +

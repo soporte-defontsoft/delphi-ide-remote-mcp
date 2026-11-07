@@ -73,6 +73,11 @@ function LineaDeErrorDelParser(const AMensaje: string): Integer;
   105 (V121 de la 1.23.1, medido). La inversa de FlotanteDeForm (el escritor,
   Lsp.DesignerBin); aqui y no alli porque el ayudante de render la usa. }
 function LeeFlotanteDeForm(const AValor: string; out AF: Extended): Boolean;
+{ ...y un ENTERO de form (10, -5, $1F) por el mismo parser: False si no es un
+  entero (un flotante, '--5', '- 5'). El state= del preview convertia un
+  entero por un Variant y lo que no casaba salia DSGN-061 INTERNAL, con el
+  valor del agente (prueba en vivo de la 1.29). }
+function LeeEnteroDeForm(const AValor: string; out AN: Int64): Boolean;
 
 { Un designer BINARIO, con o sin la cabecera de recurso, como el texto que
   escribe el IDE ("Ver como texto": ASCII con CRLF, lo que no cabe como #N).
@@ -281,14 +286,20 @@ begin
   end;
 end;
 
-function LeeFlotanteDeForm(const AValor: string; out AF: Extended): Boolean;
+{ AValor, si es UN numero y nada mas, como lo lee EL parser de forms (TParser,
+  invariante): su token (toInteger o toFloat) y su valor. El juez de
+  LeeFlotanteDeForm y de LeeEnteroDeForm, escrito una vez. }
+function NumeroDeForm(const AValor: string; out AToken: Char; out AEntero: Int64;
+  out AFlotante: Extended): Boolean;
 var
   V: string;
   Flujo: TStringStream;
   P: TParser;
 begin
   Result := False;
-  AF := 0;
+  AToken := toEOF;
+  AEntero := 0;
+  AFlotante := 0;
   V := AValor.Trim;
   // el signo es del numero y lo lee EL parser, como al cargar el form: se
   // quitaba a mano y '--5' era 5 y '- 5' era -5, que el parser del IDE niega
@@ -300,9 +311,14 @@ begin
     try
       P := TParser.Create(Flujo, TFormatSettings.Invariant);
       try
-        case P.Token of
-          toInteger: AF := P.TokenInt;
-          toFloat: AF := P.TokenFloat;
+        AToken := P.Token;
+        case AToken of
+          toInteger:
+            begin
+              AEntero := P.TokenInt;
+              AFlotante := AEntero;
+            end;
+          toFloat: AFlotante := P.TokenFloat;
         else
           Exit;
         end;
@@ -316,6 +332,22 @@ begin
   finally
     Flujo.Free;
   end;
+end;
+
+function LeeFlotanteDeForm(const AValor: string; out AF: Extended): Boolean;
+var
+  T: Char;
+  N: Int64;
+begin
+  Result := NumeroDeForm(AValor, T, N, AF);
+end;
+
+function LeeEnteroDeForm(const AValor: string; out AN: Int64): Boolean;
+var
+  T: Char;
+  F: Extended;
+begin
+  Result := NumeroDeForm(AValor, T, AN, F) and (T = toInteger);
 end;
 
 function LineaDeErrorDelParser(const AMensaje: string): Integer;

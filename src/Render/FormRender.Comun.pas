@@ -1586,13 +1586,28 @@ begin
       raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_SIN_REFERIDO_FMT, [Valor, Comp]));
     SetObjectProp(Obj, PI, Ref);
   end
-  // un entero con NOMBRE (clRed en un TColor, crHandPoint en un TCursor,
-  // claRed en un TAlphaColor), como lo lee TReader: el lector que registra
-  // su tipo (RegisterIntegerConsts). SetPropValue con el texto salia
-  // DSGN-061, EVariantTypeCastError (3.5 de la 1.18.0, Hermes)
-  else if (PI.PropType^.Kind in [tkInteger, tkInt64]) and not TryStrToInt64(Valor, N64) and
-          Assigned(FindIdentToInt(PI.PropType^)) and FindIdentToInt(PI.PropType^)(Valor, Entero) then
-    SetOrdProp(Obj, PI, Entero)
+  // un entero: como lo lee EL parser de forms (LeeEnteroDeForm: 10, -5, $1F),
+  // o con NOMBRE (clRed en un TColor, crHandPoint en un TCursor, claRed en un
+  // TAlphaColor), como lo lee TReader: el lector que registra su tipo
+  // (RegisterIntegerConsts). SetPropValue con el texto salia DSGN-061,
+  // EVariantTypeCastError (3.5 de la 1.18.0, Hermes), y con lo que no es
+  // ninguna de las dos (--5) tambien (prueba en vivo de la 1.29)
+  else if PI.PropType^.Kind in [tkInteger, tkInt64] then
+  begin
+    if LeeEnteroDeForm(Valor, N64) then
+    begin
+      if PI.PropType^.Kind = tkInt64 then
+        SetInt64Prop(Obj, PI, N64)
+      else if (N64 >= Low(Integer)) and (N64 <= High(Cardinal)) then
+        SetOrdProp(Obj, PI, N64)
+      else
+        raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_ENTERO_FMT, [Valor, Hoja]));
+    end
+    else if Assigned(FindIdentToInt(PI.PropType^)) and FindIdentToInt(PI.PropType^)(Valor, Entero) then
+      SetOrdProp(Obj, PI, Entero)
+    else
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_ENTERO_FMT, [Valor, Hoja]));
+  end
   // un numero de coma flotante como lo escribe un form, por EL lector
   // (Lsp.DesignerForma.LeeFlotanteDeForm: el parser de forms, punto decimal
   // siempre): SetPropValue lo convertia por un Variant con el LOCALE del
@@ -1607,7 +1622,15 @@ begin
     SetFloatProp(Obj, PI, Flotante);
   end
   else
+  try
     SetPropValue(Obj, Hoja, Valor);
+  except
+    // lo que la RTL no convierte al tipo (un enumerado que no es suyo, un
+    // conjunto mal escrito) es el valor del agente, no un fallo nuestro: salia
+    // DSGN-061 INTERNAL (prueba en vivo de la 1.29)
+    on E: Exception do
+      raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_VALOR_FMT, [Valor, Hoja, E.Message]));
+  end;
 end;
 
 { ---- iconos de los no visuales ---- }
