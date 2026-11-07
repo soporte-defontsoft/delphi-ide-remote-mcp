@@ -23,12 +23,18 @@ junto a la copia del exe, y nunca se imprimen. La tabla t_db129 la crea y la bor
   L11 una base que no responde: DB-007 dentro del plazo (MSSQL tardaba 42 s con LoginTimeout=5)
   L12 una contrasena mala en PG: DB-009, enmascarado
   L13 PG SIN contrasena no conecta: libpq no lee el pgpass de la cuenta (lo leia, medido el 6-nov)
+  L14 PG con el servidor por NOMBRE: la negativa no trae la direccion que resolvio libpq ni la de este
+      servidor en el pg_hba de la base (salian: '(fe80::...)', CH4 de la 1.29, medido el 7-nov-2026);
+      localhost en un puerto cerrado siempre, y el host de PG por su nombre si la red lo resuelve
 
 Uso:  python tests/test_db_lecturas_129.py [ruta-a-DelphiLspMcp.exe]
 """
 import io
+import ipaddress
 import json
 import os
+import re
+import socket
 import time
 import db_arnes as arnes
 import mcp_cliente as mc
@@ -44,7 +50,37 @@ arnes.escribe_conexiones(SRV, {
     'caida': {'server': '192.0.2.1', 'database': 'x', 'user': 'x', 'password': 'x', 'engine': 'MSSQL',
               'provider': 'FIREDAC', 'readonly': True},
     'pg_mala': arnes.entrada(PG, password='clave-mal-129', readonly=True),
-    'pg_sin_clave': arnes.entrada(PG, password='', readonly=True)})
+    'pg_sin_clave': arnes.entrada(PG, password='', readonly=True),
+    'pg_local': arnes.entrada(PG, server='localhost', port='59999', readonly=True)})
+
+
+def nombre_del_host(ip):
+    """El nombre del host de PG si la red lo resuelve y vuelve a su IP (None si no): el caso real de L14."""
+    try:
+        n = socket.gethostbyaddr(ip)[0]
+        return n if ip in socket.gethostbyname_ex(n)[2] else None
+    except (OSError, UnicodeError):
+        return None
+
+
+NOMBRE_PG = nombre_del_host(PG.get('server', ''))
+if NOMBRE_PG:
+    arnes.escribe_conexiones(SRV, dict(json.load(io.open(os.path.join(
+        SRV, 'connections', 'databases', 'db-connections.json'), encoding='utf-8'))['db-connections']['projects'][
+        arnes.PROYECTO]['databases'], pg_nombrado=arnes.entrada(PG, server=NOMBRE_PG, database='nope_l14',
+                                                               readonly=True)))
+
+
+def direcciones(texto):
+    """Las direcciones IP que hay en texto, como las lee ipaddress (con su zona %n fuera)."""
+    res = []
+    for c in re.findall(r'[0-9A-Fa-f.:%]+', texto):
+        try:
+            ipaddress.ip_address(c.rstrip('.:').partition('%')[0])
+            res.append(c)
+        except ValueError:
+            pass
+    return res
 
 
 def sql_mssql(sql):
@@ -208,6 +244,16 @@ try:
         r = db({'command': 'tables', 'db': 'pruebas/pg_sin_clave'})
         check('L13 PG SIN contrasena NO conecta (libpq no lee el pgpass de la cuenta)',
               mc.abre(r, 'SR_DB_NO_ABRE_FMT') and 'tables' not in mc.como_json(r), r[:400])
+        r = db({'command': 'tables', 'db': 'pruebas/pg_local'})
+        check('L14 PG por nombre (localhost, puerto cerrado): DB-009 sin las direcciones que resolvio libpq',
+              mc.abre(r, 'SR_DB_NO_ABRE_FMT') and 'pruebas/pg_local' in r and not direcciones(r),
+              (direcciones(r), r[:400]))
+        if NOMBRE_PG:
+            r = db({'command': 'tables', 'db': 'pruebas/pg_nombrado'})
+            check('L14 PG por el nombre de su host: DB-009 sin su direccion ni la de este servidor',
+                  mc.abre(r, 'SR_DB_NO_ABRE_FMT') and not direcciones(r), len(direcciones(r)))
+        else:
+            print('NOTA: L14 el host de PG no tiene un nombre que la red resuelva: solo se mide localhost')
     # el detalle de un fallo dice CUALES (su posicion en SECRETOS), nunca el secreto ni un trozo
     fugas = arnes.fugas(SECRETOS, respuestas)
     check('L10 ningun secreto del json en ninguna respuesta (%d respuestas)' % len(respuestas), not fugas,

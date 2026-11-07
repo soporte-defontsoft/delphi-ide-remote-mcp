@@ -58,9 +58,11 @@ def escribe_conexiones(srv, bases):
 
 def secretos(ms, pg):
     """Lo que ninguna respuesta puede traer: claves, servidores, la base real y los usuarios como los citan
-    los errores de cada motor."""
+    los errores de cada motor, tambien en su idioma: un PostgreSQL en espanol cita con comillas latinas
+    (el usuario salia en claro y esta lista solo lo buscaba entre las inglesas: 7-nov-2026)."""
     s = [x for x in {ms['password'], pg['password'], ms['server'], pg['server'], ms['database']} if x]
-    return s + ms['server'].split('\\') + ["'%s'" % ms['user'], '"%s"' % pg['user']]
+    return s + ms['server'].split('\\') + ["'%s'" % ms['user'], '"%s"' % pg['user'],
+                                          chr(0xAB) + pg['user'] + chr(0xBB)]
 
 
 def fugas(secr, respuestas):

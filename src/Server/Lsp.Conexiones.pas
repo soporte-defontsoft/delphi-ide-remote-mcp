@@ -94,7 +94,9 @@ function ConexionDbDeLaSesion(const ANombre: string; out AConexion: TConexionDb;
 { ATexto con lo que el json sabe y el agente no (servidor, base real,
   usuario, puerto, contrasena) cambiado por <nombre de la conexion>: lo que
   vuelve de la base. Un error de FireDAC trae el usuario, y en PG el host y
-  el puerto (medido el 6-nov-2026). }
+  el puerto (medido el 6-nov-2026); y cualquier direccion IP: la que
+  resolvio libpq para un servidor dado por nombre y la de este servidor
+  (TapaDireccionesIp, 7-nov). }
 function EnmascaraConexion(const ATexto: string; const AConexion: TConexionDb): string;
 
 { Las APIs de los proyectos que ESTA sesion puede usar, como las bases; la
@@ -137,12 +139,13 @@ function PinDeSpki(const ADer: TArray<Byte>): string;
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.JSON, System.StrUtils, System.NetEncoding,
+  System.SysUtils, System.IOUtils, System.JSON, System.StrUtils, System.NetEncoding, System.Character,
   Lsp.ShaCache, // Sha256CrudoDeBytes: el SHA-256, en su casa
   System.Net.URLClient, // TURI: el juez de una URL base
   Lsp.Texts, Lsp.Casa, Lsp.Settings, Lsp.Json,
-  Lsp.Pascal, // EsCaracterDeIdent: que es pegarse a una palabra
-  Lsp.Codificacion; // BomUtf8En: el BOM lo lee el de la casa
+  Lsp.Pascal, // SinMayusculas
+  Lsp.Codificacion, // BomUtf8En: el BOM lo lee el de la casa
+  Winapi.Winsock2; // inet_pton: el juez de que es una direccion IP
 
 const
   // el proveedor por el que conecta el servidor; ausente = este
@@ -623,10 +626,22 @@ begin
 end;
 
 
-{ ATexto con cada aparicion de ABuscado como palabra ENTERA (sin un
-  caracter de identificador pegado delante o detras: EsCaracterDeIdent, que
-  cuenta tambien lo no ASCII), sin mayusculas, cambiada por AMarca: un
-  usuario 'sa' no se come 'casa' ni 'Base'. }
+{ Si C, pegado a una palabra del texto de un motor, la alarga: una letra o
+  una cifra de cualquier alfabeto, la marca que acentua a la anterior, o
+  '_'. Por su categoria Unicode: un PostgreSQL en espanol cita al usuario
+  entre comillas latinas, y con EsCaracterDeIdent (la regla de Pascal, que
+  cuenta todo lo no ASCII) el usuario del json salia en claro en DB-009
+  (medido el 7-nov-2026). LA frontera de CambiaPalabra y de
+  TapaDireccionesIp. }
+function PegadoAPalabra(C: Char): Boolean;
+begin
+  Result := C.IsLetterOrDigit or (C = '_') or
+    (C.GetUnicodeCategory in [TUnicodeCategory.ucNonSpacingMark, TUnicodeCategory.ucCombiningMark]);
+end;
+
+{ ATexto con cada aparicion de ABuscado como palabra ENTERA (sin nada que
+  la alargue pegado delante o detras: PegadoAPalabra), sin mayusculas,
+  cambiada por AMarca: un usuario 'sa' no se come 'casa' ni 'Base'. }
 function CambiaPalabra(const ATexto, ABuscado, AMarca: string): string;
 var
   I, Desde, L: Integer;
@@ -643,8 +658,8 @@ begin
   I := PosEx(Buscado, Mayus, 1);
   while I > 0 do
   begin
-    if ((I = 1) or not EsCaracterDeIdent(ATexto[I - 1])) and
-       ((I + L > Length(ATexto)) or not EsCaracterDeIdent(ATexto[I + L])) then
+    if ((I = 1) or not PegadoAPalabra(ATexto[I - 1])) and
+       ((I + L > Length(ATexto)) or not PegadoAPalabra(ATexto[I + L])) then
     begin
       Result := Result + Copy(ATexto, Desde, I - Desde) + AMarca;
       Desde := I + L;
@@ -731,8 +746,92 @@ begin
     Result := CambiaPalabra(Result, S, AMarca);
 end;
 
+{ ATexto con cada direccion IP (v4, o v6 con su zona %n) cambiada por AMarca:
+  libpq pone junto al nombre del servidor la direccion que resolvio
+  ('connection to server at "<x>" (fe80::...)') y la base, en su pg_hba, la
+  de ESTE servidor; con el servidor por nombre en el json salian las dos (CH4
+  de la 1.29, medido el 7-nov-2026). Que es una direccion lo dice el
+  analizador de Windows (inet_pton, estricto: ni 15.0.2000.5, ni 10:30:00,
+  ni una MAC, ni 01.2.3.4). Lo nuestro, declarado, es solo donde empieza y
+  acaba un candidato: la tira mas larga de cifras hexadecimales, '.', ':' y
+  '%' sin nada que la alargue pegado (PegadoAPalabra: la base cita la
+  direccion de este servidor entre comillas latinas), sin su
+  punto final, con alguna cifra (un '::' suelto no dice nada) y sin la zona,
+  que inet_pton no lee; y una IPv4 seguida de :puerto. }
+function TapaDireccionesIp(const ATexto, AMarca: string): string;
+
+  function EsDireccion(const ACandidato: string): Boolean;
+  var
+    Buf: array[0..15] of Byte;
+    A: AnsiString;
+  begin
+    // solo ASCII: el candidato son cifras hexadecimales, '.', ':' y '%'
+    A := AnsiString(ACandidato);
+    Result := (inet_pton(AF_INET, MarshaledAString(A), @Buf) = 1) or
+      (inet_pton(AF_INET6, MarshaledAString(A), @Buf) = 1);
+  end;
+
+  { Cuantos caracteres del principio de ARun son una direccion (0 = ninguno). }
+  function LargoDeDireccion(const ARun: string): Integer;
+  var
+    Cand, Nucleo: string;
+    P: Integer;
+    ConCifra: Boolean;
+  begin
+    Cand := ARun.TrimRight(['.']);
+    if Cand.EndsWith(':') and not Cand.EndsWith('::') then
+      Cand := Cand.Substring(0, Cand.Length - 1);
+    Nucleo := Cand;
+    P := Nucleo.IndexOf('%');
+    if P >= 0 then
+      Nucleo := Nucleo.Substring(0, P);
+    ConCifra := False;
+    for var C in Nucleo do
+      ConCifra := ConCifra or CharInSet(C, ['0'..'9', 'A'..'F', 'a'..'f']);
+    if ConCifra and EsDireccion(Nucleo) then
+      Exit(Cand.Length);
+    // una IPv4 con su puerto: 10.0.0.1:5432
+    P := Cand.IndexOf(':');
+    if (P > 0) and Cand.Substring(0, P).Contains('.') and EsDireccion(Cand.Substring(0, P)) then
+      Exit(P);
+    Result := 0;
+  end;
+
+const
+  DE_DIRECCION = ['0'..'9', 'A'..'F', 'a'..'f', '.', ':', '%'];
+var
+  I, J, N, L: Integer;
+  Run: string;
+begin
+  Result := '';
+  N := Length(ATexto);
+  I := 1;
+  while I <= N do
+  begin
+    if not CharInSet(ATexto[I], DE_DIRECCION) then
+    begin
+      Result := Result + ATexto[I];
+      Inc(I);
+      Continue;
+    end;
+    J := I;
+    while (J <= N) and CharInSet(ATexto[J], DE_DIRECCION) do
+      Inc(J);
+    Run := Copy(ATexto, I, J - I);
+    L := 0;
+    if not (((I > 1) and PegadoAPalabra(ATexto[I - 1])) or ((J <= N) and PegadoAPalabra(ATexto[J]))) then
+      L := LargoDeDireccion(Run);
+    if L > 0 then
+      Result := Result + AMarca + Copy(Run, L + 1, MaxInt)
+    else
+      Result := Result + Run;
+    I := J;
+  end;
+end;
+
 function EnmascaraConexion(const ATexto: string; const AConexion: TConexionDb): string;
 var
+  Marca: string;
   Host, Resto: string;
   P: Integer;
 begin
@@ -745,8 +844,9 @@ begin
     Resto := Host.Substring(P + 1);
     Host := Host.Substring(0, P);
   end;
-  Result := Tapa(ATexto, '<' + NombreDeConexion(AConexion) + '>', [AConexion.Clave],
-    [AConexion.Servidor, Resto, Host, AConexion.Base, AConexion.Usuario, AConexion.Puerto]);
+  Marca := '<' + NombreDeConexion(AConexion) + '>';
+  Result := TapaDireccionesIp(Tapa(ATexto, Marca, [AConexion.Clave],
+    [AConexion.Servidor, Resto, Host, AConexion.Base, AConexion.Usuario, AConexion.Puerto]), Marca);
 end;
 
 function EnmascaraApi(const ATexto: string; const AConexion: TConexionApi; ADireccion: Boolean): string;
