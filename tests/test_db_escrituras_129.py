@@ -125,6 +125,13 @@ try:
                     motor, cmd, 'sin filters' if filtros is None else 'con filters = []'),
                     mc.abre(r, 'SR_DB_FALTA_FMT') and fs == [{'id': 1, 'importe': 99.99}, {'id': 2, 'importe': 7.5}],
                     (r[:300], fs))
+        # CH6 del revisor del paisaje de la 1.29: un filtro de texto SIN nada que buscar (contains sin value, words de
+        # blancos) casaba con todas las filas no nulas (LIKE '%%') y pasaba la guarda del WHERE: un delete borraba la
+        # fila 1 (su nombre no es nulo). Negado antes de tocar nada
+        for filtro in ({'field': 'nombre', 'op': 'contains'}, {'field': 'nombre', 'op': 'words', 'value': '  '}):
+            r = db({'command': 'delete', 'db': D, 'table': TABLA, 'filters': [filtro]})
+            check('E7b %s delete con %s sin nada que buscar: negado y ninguna fila tocada' % (motor, filtro['op']),
+                  mc.abre(r, 'SR_DB_ENTRADA_FMT') and ids() == [1, 2], (r[:300], ids()))
         r = db({'command': 'delete', 'db': D, 'table': TABLA, 'filters': [{'field': 'id', 'op': 'equals', 'value': 2}]})
         check('E6 %s delete por filtro: affected 1, queda la otra' % motor, afectadas(r) == 1 and ids() == [1], r[:300])
         DR = D + '_ro'

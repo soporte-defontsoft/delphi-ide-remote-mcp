@@ -185,7 +185,9 @@ CONEXIONES = {'api-connections': {'projects': {
         'url_mala': api('ftp://127.0.0.1/x'),
         'pin_mal': api(URL_TLS, pin='sha256/no-es-un-pin'),
         'auth_mala': api(URL_TLS, auth={'type': 'oauth'}),
-        'plazo_malo': api(URL_TLS, timeout=0)}},
+        'plazo_malo': api(URL_TLS, timeout=0),
+        # CH2 del revisor de la 1.29: un pin sobre http no comprueba nada y el POST salia en claro con su credencial
+        'pin_http': api(URL_HTTP, pin=PIN_A, methods=['post'], auth={'type': 'bearer', 'token': 'token-pin-http-129'})}},
     'ajeno': {'apis': {'oculta': api(URL_TLS)}}}}}
 os.makedirs(os.path.dirname(FICHERO))
 io.open(FICHERO, 'w', encoding='utf-8').write(json.dumps(CONEXIONES, indent=2))
@@ -238,7 +240,12 @@ try:
     check('A2 ...las declaradas mal en unusable con su porque, y ninguna de otro proyecto',
           malas == {'pruebas/sin_metodos': cat['SF_API_DEF_METODOS'], 'pruebas/url_mala': cat['SF_API_DEF_URL'],
                     'pruebas/pin_mal': cat['SF_API_DEF_PIN'], 'pruebas/auth_mala': cat['SF_API_DEF_AUTH_FMT'] % 'oauth',
-                    'pruebas/plazo_malo': cat['SF_API_DEF_PLAZO']} and 'ajeno' not in r, malas)
+                    'pruebas/plazo_malo': cat['SF_API_DEF_PLAZO'],
+                    'pruebas/pin_http': cat['SF_API_DEF_PIN_SIN_TLS']} and 'ajeno' not in r, malas)
+    n = len(LOG)
+    r = pide('pin_http', method='POST', path='eco', body='{}')
+    check('A2b CH2 un pin con baseUrl http: la entrada no se usa y al servidor no llega nada (llegaba con su token)',
+          mc.rechazado(r) and not llegaron(n) and 'token-pin-http-129' not in r, (r[:300], llegaron(n)))
 
     n = len(LOG)
     r = pide('eco', path='eco', query=[{'name': 'q', 'value': 'a b&c'}], headers=[{'name': 'X-Mio', 'value': '1'}])

@@ -88,6 +88,16 @@ JUEZ = nombres_listables(ENL)
 print('NOTA: aqui Windows %s los nombres de un fichero: se espera %s' % (
     'lista' if JUEZ else 'NO lista (error 50)', 'GUARD-041' if JUEZ else 'GUARD-042'))
 NEGATIVA = 'SR_JAIL_ENLACE_DURO_FMT' if JUEZ else 'SR_JAIL_ENLACE_DURO_SIN_NOMBRES_FMT'
+# P3 del revisor del paisaje de la 1.29: un SYMLINK dentro de la jaula al enlace duro. El juez contaba los nombres del
+# symlink (abre sin seguirlo: uno) y lo dejaba leer: medido contra produccion el 7-nov-2026, delphi_read devolvio el
+# fichero de fuera. Crear un symlink pide el modo desarrollador o el privilegio: sin el, se dice y no se mide
+SIM = os.path.join(JAIL, 'symlink-al-enlace.txt')
+try:
+    os.symlink(ENL, SIM)
+    HAY_SIM = True
+except OSError as e:
+    HAY_SIM = False
+    print('NOTA: no se pudo crear el symlink (%s): P3 no se mide aqui' % e)
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_READONLY_ROOTS': REF}),
                nombre='enlace-duro-lectura', t=180)
@@ -95,6 +105,13 @@ try:
     r = srv.call('delphi_read', {'path': ENL})
     check('H1 delphi_read del enlace: %s y el secreto no sale' % ('GUARD-041' if JUEZ else 'GUARD-042'),
           mc.es(r, NEGATIVA) and 'SECRETO-H2' not in r, r[:300])
+    if HAY_SIM:
+        r = srv.call('delphi_read', {'path': SIM})
+        check('H1b P3 delphi_read de un symlink al enlace duro: negado y el secreto no sale (lo leia)',
+              mc.rechazado(r) and 'SECRETO-H2' not in r, r[:300])
+        r = srv.call('delphi_textedit', {'path': SIM, 'old': SECRETO, 'new': 'PISADO'})
+        check('H5b P3 delphi_textedit por el symlink: negado y el de fuera intacto',
+              mc.rechazado(r) and open(SEC).read() == SECRETO, r[:300])
     r = srv.call('delphi_search', {'root': STY, 'query': 'SECRETO-H2-1211', 'pattern': '*.txt'})
     check('H2 delphi_search no encuentra el secreto y dice que se salto el enlace (SEARCH-003)',
           'SECRETO-H2' not in r and '"total":0' in r and mc.es(r, 'SN_SEARCH_ILEGIBLES_FMT') and 'leak.txt' in r,

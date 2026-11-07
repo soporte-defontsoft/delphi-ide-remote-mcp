@@ -2262,9 +2262,13 @@ begin
     if (Cmd = 'push') and (Campo = 'ref') and RefspecQueDestruye(Valor.Trim) then
       Exit(MsgFmt(SR_GIT_PUSH_NOMBRE_FMT, [Valor.Trim]));
   end;
+  // al log, el HOST de la direccion (la de un clone, en message), nunca la
+  // direccion entera: puede llevar usuario:clave@ y el token quedaba escrito
+  // en el log (B3 del revisor del paisaje de la 1.29; la regla, la de
+  // ProgramaDe en Lsp.BuildRunner)
   if EsOrdenDeRed(Cmd) then
     TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT,
-      [Cmd, Repo, Params.Message]));
+      [Cmd, Repo, GitUrlHost(Params.Message)]));
 
   // Lo que REESCRIBE el arbol en local (switch, merge, stash, reset,
   // restore, worktree...) toma el cerrojo de escritura, como todo escritor:

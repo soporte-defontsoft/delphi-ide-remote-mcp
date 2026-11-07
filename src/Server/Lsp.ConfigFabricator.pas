@@ -194,6 +194,18 @@ end;
 function MotorPuedeEnsenar(const APath: string): Boolean;
 begin
   Result := LugarDeLecturaDenegado(APath, LUGARES_DEL_MOTOR) = '';
+  // ...y nunca la carpeta de datos del usuario del IDE (la de IdeProfilesDir):
+  // guarda los .profile, con la contrasena del PAServer, y el motor, como dcc,
+  // cita lo que lee; al build ya se le negaba (A9 de la 1.27). Por la ruta REAL:
+  // una union de la jaula que lleve alli tambien cuenta (P4 del revisor del
+  // paisaje de la 1.29). Despues de la puerta, que niega un UNC sin tocarlo
+  if Result then
+  begin
+    var Info := DiscoverRadStudio;
+    if Info.Found and EsRutaAbsoluta(IdeProfilesDir(Info.Version).Trim) and
+       EnLugar(RealPath(APath), IdeProfilesDir(Info.Version)) then
+      Result := False;
+  end;
 end;
 
 { Las carpetas del search path del proyecto para ESE build (APlat/ACfg, por

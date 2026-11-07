@@ -493,6 +493,14 @@ begin
     Result.Defecto := MsgText(SF_API_DEF_PIN);
     Exit;
   end;
+  // un pin es de un certificado: sin TLS no hay ninguno que comprobar, y la
+  // peticion salia en claro (con su credencial) antes de saberlo; la negativa
+  // de despues decia que no se habia mandado nada (CH2 del revisor de la 1.29)
+  if (Result.Pin <> '') and not SameText(TURI.Create(Result.UrlBase).Scheme, TURI.SCHEME_HTTPS) then
+  begin
+    Result.Defecto := MsgText(SF_API_DEF_PIN_SIN_TLS);
+    Exit;
+  end;
   V := AObj.GetValue('methods');
   if not (V is TJSONArray) or (TJSONArray(V).Count = 0) then
   begin

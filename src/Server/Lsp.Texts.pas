@@ -4696,6 +4696,9 @@ const
   SF_DB_FILTRO_BINARIO_FMT = 'field "%s" holds binary data and is not compared';
   // %s = el op, %s = el campo, %s = su tipo
   SF_DB_FILTRO_TEXTO_FMT = '%s compares text, and "%s" is %s';
+  // contains, starts_with o words sin nada que buscar: casaria con todas las
+  // filas, y un update o un delete las tocaria todas (CH6 de la 1.29)
+  SF_DB_FILTRO_VACIO_FMT = '%s on "%s" needs a value with something to look for: an empty one matches every row';
   // %d = los bytes
   SF_DB_BINARIO_FMT = '(binary, %d bytes)';
   // Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa)
@@ -4803,6 +4806,8 @@ const
     'or query (name, value)';
   SF_API_DEF_CABECERAS = 'its "headers" is not an object of texts';
   SF_API_DEF_PIN = 'its "pin" is not sha256/ and the base64 of 32 bytes';
+  SF_API_DEF_PIN_SIN_TLS = 'it has a "pin" but its "baseUrl" is not https: a pin checks a certificate, and ' +
+    'over http there is none (the request would travel in clear)';
   SF_API_DEF_METODOS =
     'its "methods" is not a list of GET, HEAD, OPTIONS, POST, PUT, PATCH, ' +
     'DELETE';

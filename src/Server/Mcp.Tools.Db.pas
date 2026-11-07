@@ -375,6 +375,11 @@ begin
         if not EsTexto(C.TipoDeCampo) then
           Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_FILTRO_TEXTO_FMT, [Op, C.Nombre, C.Tipo])]));
         T := TextoDeValor(Obj.GetValue('value'));
+        // sin nada que buscar casaria con TODAS las filas: LIKE '%%', y un
+        // update o un delete con ese filtro las tocaba todas pasando la guarda
+        // del WHERE (CH6 del revisor del paisaje de la 1.29)
+        if T.Trim = '' then
+          Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_FILTRO_VACIO_FMT, [Op, C.Nombre])]));
         if Op = 'contains' then
           AWhere := AWhere + Como('%' + SinComodines(T) + '%')
         else if Op = 'starts_with' then

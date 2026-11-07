@@ -361,7 +361,8 @@ uses
   Lsp.RegistroDelIde, // GuardaCopiaDelIde: la copia de un fichero del IDE antes de pisarlo
   Lsp.Papelera,       // BackupFile, GuardaContenidoActual: las copias de la jaula
   Lsp.Deteccion,      // DetectEnc, EncDeFicheroNuevo: EL detector de codificacion
-  Lsp.Capturas;
+  Lsp.Capturas,
+  Lsp.NetDrives;
 
 var
   GLock: TCriticalSection;
@@ -992,6 +993,19 @@ function EnLugarDeTexto(const APath: string; ALugar: TLugarDeTexto;
       Result := RutaDelEnlace(APath);
   end;
 
+  // los sitios de ALugar POR TEXTO, para un UNC: la casa, el temporal y los
+  // entregables son carpetas locales del servidor (ninguno)
+  function SitiosDeTexto: TArray<string>;
+  begin
+    case ALugar of
+      ltIde: Result := [InstalacionDelIde] + LugaresDelIde(AParaEscribir) + SysrootsDeLosSdk;
+      ltVault: Result := [VaultPath];
+      ltBiblioteca: Result := LugaresDeLaBiblioteca;
+    else
+      Result := [];
+    end;
+  end;
+
 var
   R: string;
 begin
@@ -1000,6 +1014,21 @@ begin
   // trabajo del proceso (System32 en el servicio)
   if not EsRutaAbsoluta(APath.Trim) then
     Exit;
+  // un UNC solo se resuelve en disco (RealPath) si por TEXTO cae en un sitio de
+  // ese lugar: resolverlo conecta por SMB, con la cuenta del servicio, con el
+  // host que nombre el agente (un $I, el search path de un .dproj), ANTES de
+  // negar - la jaula ya lo niega asi, por texto (UncFueraDeLugares). P1 del
+  // revisor del paisaje de la 1.29, medido: 23 s con \\192.0.2.1 en un search
+  // path, contra 2 s con una ruta local que no existe
+  if EsUnc(ConBarrasDeWindows(APath.Trim)) then
+  begin
+    var PorTexto := False;
+    for var S in SitiosDeTexto do
+      if EnLugar(ConBarrasDeWindows(APath.Trim), ConBarrasDeWindows(S.Trim), False) then
+        PorTexto := True;
+    if not PorTexto then
+      Exit;
+  end;
   case ALugar of
     // del IDE: primero lo que se mide sin leer; los sysroots de sus .sdk (que
     // piden leerlos) solo si no cae ahi

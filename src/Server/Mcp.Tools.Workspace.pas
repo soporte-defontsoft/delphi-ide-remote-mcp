@@ -1300,8 +1300,11 @@ begin
     L.Duplicates := dupIgnore;
     L.Sorted := True;
     for var R in RutasDeBusqueda(ADproj, Xml) do
-      if (R.Carpeta <> '') and TDirectory.Exists(R.Carpeta) and
-         (ReadPathDenied(R.Carpeta) = '') then
+      // la jaula PRIMERO, que niega un UNC ajeno por texto: mirar antes si
+      // existe conectaba por SMB con el host del search path de un .dproj (P2
+      // del revisor del paisaje de la 1.29, medido: 21 s con \\192.0.2.1)
+      if (R.Carpeta <> '') and (ReadPathDenied(R.Carpeta) = '') and
+         TDirectory.Exists(R.Carpeta) then
         L.Add(R.Carpeta);
     Result := L.ToStringArray;
   finally

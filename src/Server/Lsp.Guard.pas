@@ -3176,6 +3176,12 @@ begin
   Result := '';
   try
     Full := TPath.GetFullPath(APath);
+    // un ENLACE se juzga por el fichero de detras: NombresDelFichero abre sin
+    // seguir el enlace y contaba el symlink (un nombre), y un symlink a un
+    // enlace duro de fuera leia el fichero de fuera (P3 del revisor del
+    // paisaje de la 1.29, medido contra produccion: delphi_read lo devolvio)
+    if EsEnlace(Full) then
+      Full := RealPath(Full);
   except
     Exit; // la jaula ya dijo lo suyo de una ruta invalida
   end;
@@ -3218,8 +3224,12 @@ begin
   if not HayJaula then
     Exit;
   // medido el 20-oct-2026: delphi_upload sobre un enlace duro dejo lo subido
-  // en el fichero de FUERA de las raices
-  Nombres := NombresDelFichero(APath);
+  // en el fichero de FUERA de las raices; y por un symlink a el, el fichero de
+  // detras, el que se escribiria (P3 de la 1.29)
+  if EsEnlace(APath) then
+    Nombres := NombresDelFichero(RealPath(APath))
+  else
+    Nombres := NombresDelFichero(APath);
   if Nombres > 1 then
     Result := MsgFmt(SR_ESCRITURA_EN_ENLACE_DURO_FMT, [APath, Nombres]);
 end;
