@@ -4613,6 +4613,12 @@ const
   SF_CONEXIONES_NO_JSON = 'it is not a JSON object';
   // %s = su raiz (db-connections, api-connections)
   SF_CONEXIONES_SIN_RAIZ_FMT = 'it has no "%s" object with its "projects"';
+  { una entrada cuyo proyecto o nombre esta vacio o lleva el separador del
+    nombre que usa el agente (%s, NombreCompuesto): a/b + c y a + b/c eran el
+    mismo (CH15 del revisor del paisaje de la 1.29) }
+  SF_CONEXIONES_NOMBRE_FMT =
+    'its project or its name is empty or holds "%s", which joins them in the ' +
+    'name the agent uses';
 
   SR_DB_SIN_PROYECTOS =
     '[DB-002 DENIED] This workspace has no database connections: the ' +
@@ -4718,6 +4724,13 @@ const
     '[DB-016 INVALID_PARAM] order takes "field" or "field desc", ' +
     'separated by commas (summary: also n or a value as op_field): "%s". ' +
     'Nothing was done.';
+  { summary: dos columnas de un grupo con la misma etiqueta (un campo agrupado
+    n, o sum_x junto a la suma de x): eran dos claves iguales en cada objeto
+    (CH15 de la 1.29). %s = la etiqueta }
+  SR_DB_ETIQUETA_REPETIDA_FMT =
+    '[DB-027 INVALID_PARAM] summary: two of the columns of each group would be ' +
+    'called "%s" (a field to group by and a value, or the count n). Leave one ' +
+    'out. Nothing was done.';
   // %s = la base, %s = el comando
   SR_DB_SOLO_LECTURA_FMT =
     '[DB-017 DENIED] The database "%s" is read-only (so the operator ' +
@@ -4871,7 +4884,8 @@ const
   SF_API_DEF_METODOS =
     'its "methods" is not a list of GET, HEAD, OPTIONS, POST, PUT, PATCH, ' +
     'DELETE';
-  SF_API_DEF_PLAZO = 'its "timeout" is not a number of seconds from 1 to 300';
+  // %d = el plazo mas largo (Lsp.Conexiones.PLAZO_API_MAXIMO): estaba escrito aqui (CH14 de la 1.29)
+  SF_API_DEF_PLAZO_FMT = 'its "timeout" is not a number of seconds from 1 to %d';
   SN_API_CONNECTIONS =
     '[API-005] Your APIs: "api" is the name command=request takes, with one ' +
     'of its methods. The base address, the credentials and the certificate ' +

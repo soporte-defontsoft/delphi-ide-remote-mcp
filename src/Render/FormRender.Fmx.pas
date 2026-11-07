@@ -130,8 +130,8 @@ const
     ('android', 'fmxdesigner', 'ANDROIDSTYLE'), ('ios', 'fmxdesigner', 'IOSSTYLE'),
     ('ios-dark', 'fmxdesigner', 'IOS15DARKSTYLE'), ('osx', 'fmxdesigner', 'OSXSTYLE'),
     ('linux', 'fmxdesigner', 'UBUNTUSTYLE'), ('gnome', 'fmxdesigner', 'GNOMESTYLE'));
-  { el estilo por defecto de Windows: sin StyleBook (el que no esta en la tabla) }
-  ESTILO_WINDOWS = 'windows';
+  // (el estilo por defecto de Windows, sin StyleBook, el que no esta en la
+  // tabla: FR_ESTILO_WINDOWS del protocolo; DH4 de la 1.29)
 
 function RecursoDePlataforma(const ANombre: string; out ABpl, ARecurso: string): Boolean;
 begin
@@ -147,7 +147,7 @@ end;
 
 function NombresDePlataforma: string;
 begin
-  Result := ESTILO_WINDOWS;
+  Result := FR_ESTILO_WINDOWS;
   for var I := Low(ESTILOS_DE_PLATAFORMA) to High(ESTILOS_DE_PLATAFORMA) do
     Result := Result + '|' + ESTILOS_DE_PLATAFORMA[I, 0];
 end;
@@ -194,7 +194,7 @@ begin
     Exit(MsgFmt(SF_RENDER_ESTILO_PROPIO_FMT, [AForm.StyleBook.Name, AForm.StyleBook.Styles.Count]));
   end;
   Lleva := LoQueLlevaLaForm(AForm);
-  if SameText(GPeticion.Estilo, 'none') or SameText(GPeticion.Estilo, ESTILO_WINDOWS) then
+  if SameText(GPeticion.Estilo, FR_ESTILO_NINGUNO) or SameText(GPeticion.Estilo, FR_ESTILO_WINDOWS) then
   begin
     AForm.StyleBook := nil;
     Exit(MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, [MsgText(SF_RENDER_ESTILO_WINDOWS), Lleva]));
@@ -572,7 +572,7 @@ begin
       else
         Bmp.SaveToFile(GPeticion.Salida);
       MsPintado := Reloj.ElapsedMilliseconds;
-      RespondeElPintado('canvas (' + Bmp.Canvas.ClassName + ')', Bmp.Width, Bmp.Height, MsCarga, MsPintado);
+      RespondeElPintado(FR_FIDELIDAD_CANVAS + ' (' + Bmp.Canvas.ClassName + ')', Bmp.Width, Bmp.Height, MsCarga, MsPintado);
     except
       on E: Exception do
         Result := RespondeFallo(E, Cargador, Cargando, YaLeido);

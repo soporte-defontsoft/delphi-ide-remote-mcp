@@ -409,7 +409,10 @@ begin
   DestDir := TPath.GetDirectoryName(Dest);
   if not TDirectory.Exists(DestDir) then
     CrearCarpeta(DestDir);
-  TFile.Copy(AFull, Dest);
+  // por EL escritor de la casa con el vault como lugar: la puerta de ESCRIBIR,
+  // entera o nada. Era TFile.Copy tras la pregunta de leer (P7 del revisor del
+  // paisaje de la 1.29); la de arriba se queda de segunda barrera
+  EscribeBytes(Dest, LeeBytes(AFull, [ltVault]), ltVault);
   Result := Dest;
 end;
 

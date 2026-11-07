@@ -178,6 +178,19 @@ begin
   Result := AProyecto + SEPARADOR_DE_NOMBRE + AAlias;
 end;
 
+{ '' si el par AProyecto/AAlias vuelve como ese par al leer su NombreCompuesto
+  (PosicionDelNombre); si no, por que la entrada no se usa: un trozo vacio o con
+  el separador (a/b + c y a + b/c eran el mismo nombre, y el primero tapaba al
+  otro: CH15 del revisor del paisaje de la 1.29). Lo preguntan los dos lectores
+  de una entrada, el de bases y el de APIs. }
+function NombreDeEntradaDenegado(const AProyecto, AAlias: string): string;
+begin
+  Result := '';
+  if (AProyecto.Trim = '') or (AAlias.Trim = '') or AProyecto.Contains(SEPARADOR_DE_NOMBRE) or
+     AAlias.Contains(SEPARADOR_DE_NOMBRE) then
+    Result := MsgFmt(SF_CONEXIONES_NOMBRE_FMT, [SEPARADOR_DE_NOMBRE]);
+end;
+
 function NombreDeConexion(const AConexion: TConexionDb): string;
 begin
   Result := NombreCompuesto(AConexion.Proyecto, AConexion.Alias);
@@ -245,6 +258,9 @@ begin
   Result.Proyecto := AProyecto;
   Result.Alias := AAlias;
   Result.SoloLectura := True; // falla cerrado
+  Result.Defecto := NombreDeEntradaDenegado(AProyecto, AAlias);
+  if Result.Defecto <> '' then
+    Exit;
   if AObj = nil then
   begin
     Result.Defecto := MsgText(SF_DB_DEF_SIN_MOTOR);
@@ -456,6 +472,9 @@ begin
   Result.Proyecto := AProyecto;
   Result.Alias := AAlias;
   Result.Plazo := PLAZO_API_POR_DEFECTO;
+  Result.Defecto := NombreDeEntradaDenegado(AProyecto, AAlias);
+  if Result.Defecto <> '' then
+    Exit;
   if (AObj = nil) or not UrlBaseDe(Campo(AObj, 'baseUrl'), Url) then
   begin
     Result.Defecto := MsgText(SF_API_DEF_URL);
@@ -545,7 +564,7 @@ begin
     if not (V is TJSONNumber) or not TryStrToInt(TJSONNumber(V).ToString, N) or (N < 1) or
        (N > PLAZO_API_MAXIMO) then
     begin
-      Result.Defecto := MsgText(SF_API_DEF_PLAZO);
+      Result.Defecto := MsgFmt(SF_API_DEF_PLAZO_FMT, [PLAZO_API_MAXIMO]);
       Exit;
     end;
     Result.Plazo := N;

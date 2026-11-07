@@ -642,7 +642,9 @@ end;
 // el dueno de un trabajo: su perfil y la ruta larga de su proyecto
 function DuenoDeTrabajo(const AProfile, ADprojPath: string): string;
 begin
-  Result := LowerCase(AProfile.Trim) + #9 + ClaveDeRuta(FormaLarga(ADprojPath));
+  // EL pliegue de lo que no es una ruta (Lsp.Pascal): era LowerCase (R9 del
+  // revisor del paisaje de la 1.29; lo que crece sin purga va con A22)
+  Result := SinMayusculas(AProfile.Trim) + #9 + ClaveDeRuta(FormaLarga(ADprojPath));
 end;
 
 procedure ApuntaTrabajo(const AJobId, AProfile, ADprojPath: string);
@@ -994,9 +996,9 @@ begin
   // Zorin). Un nombre que no exista no es un error que importe.
   if Terminado or not AGuardaSiSigue then
     Ops := PaclientRemove([DeployRel + '/' + NombreDeLaSalida(JobId), DeployRel + '/' + RemotoLanzador,
-      DeployRel + '/' + MASCARA_DE_LOS_VIGIAS])
+      DeployRel + '/' + MascaraDeLosVigias])
   else
-    Ops := PaclientRemove([DeployRel + '/' + RemotoLanzador, DeployRel + '/' + MASCARA_DE_LOS_VIGIAS]);
+    Ops := PaclientRemove([DeployRel + '/' + RemotoLanzador, DeployRel + '/' + MascaraDeLosVigias]);
   Paclient(Pc, Ops, AProfile, Output);
 
   Result.AddPair('note', MsgText(SN_REMOTERUN_NOTE));

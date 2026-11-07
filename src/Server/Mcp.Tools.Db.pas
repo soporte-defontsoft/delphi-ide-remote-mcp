@@ -595,10 +595,20 @@ begin
   AUsados := [];
   for var Trozo in AOrden.Split([',']) do
   begin
-    Partes := Trozo.Trim.Split([' '], TStringSplitOptions.ExcludeEmpty);
-    if Length(Partes) = 0 then
+    // el campo y, si la ultima palabra lo es, su direccion: un campo puede
+    // llevar un espacio (SQL Server: [Order Date]) y partir por espacios lo
+    // negaba (CH13 del revisor del paisaje de la 1.29)
+    var T := Trozo.Trim;
+    if T = '' then
       Continue;
-    if (Length(Partes) > 2) or ((Length(Partes) = 2) and not MatchText(Partes[1], ['asc', 'desc'])) then
+    Partes := [T];
+    var K := T.LastIndexOf(' ');
+    if (K > 0) and MatchText(T.Substring(K + 1), ['asc', 'desc']) then
+      Partes := [T.Substring(0, K).Trim, T.Substring(K + 1)];
+    // ...y un espacio que no es el de un campo de verdad es la forma de order
+    // (DB-016), como antes: 'id sideways'
+    if (Length(AEtiquetas) = 0) and Partes[0].Contains(' ') and
+       not CampoDe(ACampos, Partes[0], ATabla, C, Neg) then
       Exit(MsgFmt(SR_DB_ORDEN_FMT, [AOrden]));
     if Length(AEtiquetas) > 0 then
     begin
@@ -983,6 +993,13 @@ begin
     end;
     Sel := Sel + IfThen(Sel <> '', ', ') + 'COUNT(*)';
     Etiquetas := Etiquetas + ['n'];
+    // cada etiqueta UNA vez: son las claves de cada grupo en la respuesta y lo
+    // que nombra order. Un campo agrupado llamado n, o uno sum_x junto a la suma
+    // de x, salian dos veces en el mismo objeto (CH15 del revisor de la 1.29)
+    for I := 1 to High(Etiquetas) do
+      for var J := 0 to I - 1 do
+        if SameText(Etiquetas[I], Etiquetas[J]) then
+          Exit(MsgFmt(SR_DB_ETIQUETA_REPETIDA_FMT, [Etiquetas[I]]));
     Pars := [];
     Result := ClausulaDeFiltros(S, Tabla, Campos, P.Filters, Pars, Where);
     if Result <> '' then

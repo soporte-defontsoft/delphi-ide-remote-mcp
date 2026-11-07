@@ -1884,9 +1884,11 @@ begin
 
   // style: none, el NOMBRE de una plataforma del designer (la lista la tiene
   // el renderizador FMX: UNA tabla) o un fichero por ruta completa
+  // (none, por EL juez de la palabra del protocolo: el renderizador la lee sin
+  // mayusculas; se escribia aqui a mano, DH4 de la 1.29)
   Estilo := Params.Style.Trim;
-  if SameText(Estilo, 'none') then
-    Estilo := 'none'
+  if EsEstiloNinguno(Estilo) then
+    // sin estilo: nada que juzgar
   else if TRegEx.IsMatch(Estilo, '^[A-Za-z0-9-]+$') then
   begin
     if Fw = 'vcl' then
@@ -1915,16 +1917,17 @@ begin
   Estados := [];
   for var E in Trozos do
   begin
-    var P := Pos('=', E);
-    var Texto: string;
-    var Valor := Copy(E, P + 1, MaxInt).Trim;
+    // por EL lector de la forma y su compositor (Lsp.DesignerForma; DH7 de la
+    // 1.29): una que no la tiene va tal cual y el ayudante dice por que
+    var RutaE, ValorE, Texto: string;
     // y su texto con la unidad virtual de una ruta expandida: la excepcion
     // declarada de [Contenido], la de value / props (PonEnMemoria, B-9)
-    if (P > 0) and (Valor.StartsWith('''') or Valor.StartsWith('#')) and
-       LeeLiteralDeForm(Valor, Texto) then
-      Estados := Estados + [Copy(E, 1, P - 1).Trim + '=' + ExpandDriveValue(Texto)]
-    else if (P > 0) and (ExpandDriveValue(Valor) <> Valor) then
-      Estados := Estados + [Copy(E, 1, P - 1).Trim + '=' + ExpandDriveValue(Valor)]
+    if not LeePuestaDeRuta(E, RutaE, ValorE) then
+      Estados := Estados + [E]
+    else if (ValorE.StartsWith('''') or ValorE.StartsWith('#')) and LeeLiteralDeForm(ValorE, Texto) then
+      Estados := Estados + [PuestaDeRuta(RutaE, ExpandDriveValue(Texto))]
+    else if ExpandDriveValue(ValorE) <> ValorE then
+      Estados := Estados + [PuestaDeRuta(RutaE, ExpandDriveValue(ValorE))]
     else
       Estados := Estados + [E];
   end;

@@ -21,6 +21,10 @@ function Sha256DeBytes(const ABytes: TArray<Byte>): string;
 { ...y sus 32 bytes crudos, para quien la escribe en otro formato (el pin
   SPKI de delphi_api va en base64: Lsp.Conexiones.PinDeSpki). }
 function Sha256CrudoDeBytes(const ABytes: TArray<Byte>): TArray<Byte>;
+{ S tiene la forma de lo que dan FileSha256 y Sha256DeBytes: 64 hexadecimales,
+  sin mirar mayusculas. Su lector: estaba a mano dos veces en delphi_upload
+  (menores de A del revisor del paisaje de la 1.29). }
+function EsSha256(const S: string): Boolean;
 
 type
   { Que se mide de un ENLACE a un fichero: lo SUYO - su propia entrada, con su
@@ -197,6 +201,15 @@ begin
   if Length(ABytes) > 0 then
     H.Update(ABytes[0], Length(ABytes));
   Result := H.HashAsString;
+end;
+
+function EsSha256(const S: string): Boolean;
+begin
+  Result := Length(S) = 64;
+  if Result then
+    for var C in S do
+      if not CharInSet(C, ['0'..'9', 'a'..'f', 'A'..'F']) then
+        Exit(False);
 end;
 
 function Sha256CrudoDeBytes(const ABytes: TArray<Byte>): TArray<Byte>;

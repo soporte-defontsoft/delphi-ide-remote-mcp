@@ -87,7 +87,9 @@ end;
   el y no por la frase, que sale en el idioma del destino (V85 de la 1.23.1). }
 procedure NoPude(const AMotivo: string; ACodigo: Cardinal = 0);
 begin
-  Writeln('  ', NODO_NO_PUDE, ' ', AMotivo);
+  // en UNA linea, la que el servidor lee tras NODO_NO_PUDE (R6 del revisor
+  // del paisaje de la 1.29)
+  Writeln('  ', NODO_NO_PUDE, ' ', TextoEnUnaLinea(AMotivo));
   if ACodigo <> 0 then
     Writeln('  ', NODO_CODIGO_WIN, ACodigo);
 end;

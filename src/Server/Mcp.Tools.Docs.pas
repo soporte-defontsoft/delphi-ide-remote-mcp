@@ -219,7 +219,7 @@ begin
       Arr := TJSONArray.Create;
       for var E in Pag.Enlaces do
       begin
-        var EId := IdDeEnlace(E.Href, Corto);
+        var EId := IdDeEnlace(E.Href, Corto, AAyudas);
         if EId <> '' then
           Arr.AddElement(TJSONObject.Create.AddPair('id', EId).AddPair('title', E.Texto));
       end;

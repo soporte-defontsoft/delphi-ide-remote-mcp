@@ -455,6 +455,22 @@ begin
   Assert.AreEqual('', IdDeEnlace('#Seccion', 'vcl'), 'un ancla de la misma pagina');
   Assert.AreEqual('', IdDeEnlace('imagen.png', 'vcl'), 'no es una pagina');
   Assert.AreEqual('', IdDeEnlace('mailto:x@y.htm', 'vcl'));
+  // dos ayudas con el mismo fichero (dos fabricantes con su IDE.chm): la
+  // segunda se llama ide2, y su ms-its: a IDE.chm es el de SU carpeta, donde lo
+  // busca HTML Help; se leia el nombre del fichero y llevaba a la primera (B13
+  // de la 1.29; en esta maquina no hay dos, medido en el registro del IDE)
+  var Ayudas: TArray<TAyudaInstalada>;
+  SetLength(Ayudas, 3);
+  Ayudas[0].Corto := 'vcl';
+  Ayudas[0].Fichero := 'C:\Ide\Help\vcl.chm';
+  Ayudas[1].Corto := 'ide';
+  Ayudas[1].Fichero := 'C:\FabricanteA\Help\IDE.chm';
+  Ayudas[2].Corto := 'ide2';
+  Ayudas[2].Fichero := 'C:\FabricanteB\Help\IDE.chm';
+  Assert.AreEqual('ide2:x.htm', IdDeEnlace('ms-its:IDE.chm::/x.htm', 'ide2', Ayudas), 'el de su carpeta');
+  Assert.AreEqual('ide:x.htm', IdDeEnlace('ms-its:IDE.chm::/x.htm', 'vcl', Ayudas), 'de otra carpeta, el primero');
+  Assert.AreEqual('system:x.htm', IdDeEnlace('ms-its:system.chm::/x.htm', 'vcl', Ayudas),
+    'uno que no esta instalado: su nombre base, como sin lista');
 end;
 
 procedure TDocsPurasTests.UnIdSoloNombraPaginasDeDentro;

@@ -544,7 +544,7 @@ begin
       if GPeticion.Paquetes = FR_PAQUETES_TODOS then
         CargaPaquetesDelIde(Cargados, Conocidos);
       // estilo VCL: .vsf por TStyleManager, el mecanismo global de la VCL
-      if (GPeticion.Estilo <> '') and not SameText(GPeticion.Estilo, 'none') then
+      if (GPeticion.Estilo <> '') and not SameText(GPeticion.Estilo, FR_ESTILO_NINGUNO) then
       begin
         if not TFile.Exists(GPeticion.Estilo) then
           raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [MsgFmt(SF_RENDER_FICHERO_DE_ESTILO_FMT,

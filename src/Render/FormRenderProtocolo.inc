@@ -7,9 +7,10 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 10; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+  FR_PROTOCOLO_VERSION = 11; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
                             // la 9: los VALORES de abajo como constantes (C2-3 de la 1.28; en el cable, los mismos);
-                            // la 10: --scale y SCALE= (C2 de la 1.29)
+                            // la 10: --scale y SCALE= (C2 de la 1.29); la 11: el estilo none y windows
+                            // y la fidelidad canvas como constantes (DH4 de la 1.29; en el cable, los mismos)
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
@@ -57,6 +58,12 @@
   FR_RAIZ_FRAME = 'frame';       // ...o un frame
   FR_FIDELIDAD_WINDOW = 'window'; // --fidelity y FIDELITY=: la ventana pintada de verdad
   FR_FIDELIDAD_PRINT = 'print';  // ...o por WM_PRINT (la sesion 0, sin escritorio)
+  FR_FIDELIDAD_CANVAS = 'canvas'; // ...o el lienzo de FMX: FIDELITY=canvas (<su clase>)
+  { --style: los nombres que no son un fichero ni una plataforma del designer;
+    estaban a mano en el servidor y en los dos (DH4 del revisor del paisaje de
+    la 1.29). Se leen sin mayusculas }
+  FR_ESTILO_NINGUNO = 'none';    // sin estilo: el del designer (VCL sin .vsf; FMX, el de Windows)
+  FR_ESTILO_WINDOWS = 'windows'; // FMX: el de Windows, sin StyleBook
   FR_PAQUETES_NINGUNO = 'none';  // --packages: sin los paquetes de diseno del IDE
   FR_PAQUETES_TODOS = 'all';     // ...o todos
   FR_CONVIERTE_TEXTO = 'text';   // --convert: a texto

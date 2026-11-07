@@ -1368,7 +1368,7 @@ REGLAS = [
       ('Lsp.Guard.pas', 'LugaresProtegidos'),
       ('Lsp.Guard.pas', 'PathDenied'), ('Lsp.Guard.pas', 'RaicesDisponibles'),
       ('Lsp.Guard.pas', 'RaizEnLetraNoConectada'), ('Lsp.Guard.pas', 'ReadOnlyRootOf'),
-      ('Lsp.PuertaDeLaLlamada.pas', 'RootItselfDenied'),
+      # (RootItselfDenied salio el 8-nov-2026: pregunta RaizQueContiene, menores de A de la 1.29)
       ('Lsp.Mascara.pas', 'ServedDriveLetters'), ('Lsp.Guard.pas', 'UncFueraDeLugares'),
       ('Lsp.BuildRunner.pas', 'UnitSourceFolders'),
       ('Lsp.References.pas', 'ProjectsSearching'), ('Lsp.Session.pas', 'TLspSession.FindDproj'),
@@ -1521,9 +1521,9 @@ REGLAS = [
       # ...y la vuelta de una copia del ayudante cuyo manifiesto Windows no acepto
       ('Lsp.FormRender.pas', 'DaSusClasesAlContenedor'),
       ('Mcp.Tools.FileOps.pas', 'MoverNucleo'),
-      # la copia de la regla 11 dentro del vault (DentroDelVault antes) y la subida por
-      # trozos de delphi_upload (la puerta de la jaula a la entrada; no atomica)
-      ('Mcp.Tools.Vault.pas', 'VaultBackup'), ('Mcp.Tools.Workspace.pas', 'SubirNucleo'),
+      # la subida por trozos de delphi_upload (la puerta de la jaula a la entrada; no
+      # atomica). La copia de la regla 11 del vault ya escribe por la puerta (P7 de la 1.29)
+      ('Mcp.Tools.Workspace.pas', 'SubirNucleo'),
       # el log rota sus bloques y anade al vivo (C5: su propio fichero, append)
       ('Lsp.LogSink.pas', 'CierraBloque'), ('Lsp.LogSink.pas', 'Anade'),
       # la restauracion de la foto va por la puerta (EscribeBytes) salvo
@@ -3048,9 +3048,9 @@ check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
 # 1.27-, y uno que ParseaArgumentos leyera a mano). Si cambia uno sin
 # subirlo, un ayudante viejo y un servidor nuevo se creen iguales. Cambia: sube FR_PROTOCOLO_VERSION y
 # pon aqui el numero y la firma que dice el fallo
-FIRMA_DEL_PROTOCOLO = (10, 'bc3ca7f14251dada')  # la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+FIRMA_DEL_PROTOCOLO = (11, 'ef03b8633fb79618')  # la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
 # la 9: los valores de los argumentos y las claves como constantes del .inc (C2-3 de la 1.28); la 10: --scale y SCALE= (C2
-# de la 1.29)
+# de la 1.29); la 11: el estilo none/windows y la fidelidad canvas como constantes (DH4 de la 1.29)
 # (un campo nuevo en el VALOR de una clave no cambia la firma, que mira claves y argumentos: ese
 # numero se sube a mano, y el lector exige los campos de su version: BOX= de ocho no se lee)
 

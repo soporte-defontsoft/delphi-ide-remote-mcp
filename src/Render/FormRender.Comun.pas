@@ -685,10 +685,13 @@ begin
     // ...y con una propiedad detras del ultimo punto: Button1.=x llegaba a
     // ObjetoDeRuta con la ruta vacia y leia fuera del array (EAccessViolation,
     // medido en vivo el 18-oct-2026)
+    // (por EL lector de la forma, el del servidor: Lsp.DesignerForma; DH7 de la 1.29)
     for var E in GPeticion.Estados do
-      if (E.IndexOf('=') < 1) or (E.IndexOf('.') < 1) or (E.IndexOf('.') > E.IndexOf('=')) or
-         E.Substring(0, E.IndexOf('=')).Trim.EndsWith('.') then
+    begin
+      var RutaE, ValorE: string;
+      if not LeePuestaDeRuta(E, RutaE, ValorE) then
         raise ERender.Create(MsgFmt(SR_RENDER_ESTADO_FORMA_FMT, [E]));
+    end;
     GVerbose := GPeticion.Verbose;
   except
     on E: Exception do
@@ -1566,8 +1569,10 @@ var
   Entero: Longint;
   Flotante: Extended;
 begin
-  Comp := AEspec.Substring(0, AEspec.IndexOf('=')).Trim;
-  Valor := AEspec.Substring(AEspec.IndexOf('=') + 1).Trim;
+  // por EL lector de la forma: las de --state ya las juzgo ParseaArgumentos, y
+  // las de --set las compone el servidor (PuestaDeRuta); sin propiedad, la
+  // segunda barrera de abajo
+  LeePuestaDeRuta(AEspec, Comp, Valor);
   // el componente es el prefijo MAS LARGO que nombra uno, como lee la RTL una
   // referencia: Marco1.LblAviso.Caption, dentro de un frame inline; lo que
   // sigue es la propiedad (revision de la 1.17.0: no se llegaba a los hijos

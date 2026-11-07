@@ -17,8 +17,10 @@
     1.20: ~1.300 caracteres repetidos en cada tap, medido en Hermes). Un
     mensaje nuevo que se diga en cada arranque se anade AQUI; el que no este,
     se ensena (falla contando de mas, nunca de menos). test_catalogo lo vigila. }
+  // (NODE-031 y NODE-047: la escala que mide el nodo donde el escritorio no la
+  // da, en cada arranque en Plasma, hermanas de NODE-030; R8 de la 1.29)
   NODO_RUTINA = 'NODE-002 NODE-003 NODE-004 NODE-017 NODE-020 NODE-024 ' +
-    'NODE-026 NODE-027 NODE-029 NODE-030 NODE-032 NODE-036';
+    'NODE-026 NODE-027 NODE-029 NODE-030 NODE-031 NODE-032 NODE-036 NODE-047';
   { El uso de consola del nodo (y sus lineas de continuacion): nunca al
     agente. Un agente lo tomo por comandos de la tool (command=tecla, escribe;
     Hermes, 16-oct-2026). }

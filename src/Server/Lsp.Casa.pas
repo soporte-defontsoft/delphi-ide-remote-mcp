@@ -216,6 +216,11 @@ function Slug(const S: string): string;
   del otro. }
 function NombreDeAgente(const AName: string): string;
 function SlugDeAgente(const S: string): string;
+{ ...y su lector, para quien lista los buzones: ANombre (el de una carpeta) es
+  el de la carpeta de un agente, sin mirar mayusculas (otra no la escribe el
+  servidor). Estaba a mano dos veces en delphi_report, con LowerCase (menores
+  de A del revisor del paisaje de la 1.29). }
+function EsCarpetaDeAgente(const ANombre: string): Boolean;
 
 { El nombre de la carpeta de copias ('__delphi-patch'), para quien tenga que
   reconocerla. Estaba declarada DOS veces, en Lsp.Patch y en Mcp.Tools.FileOps. }
@@ -486,6 +491,11 @@ end;
 function SlugDeAgente(const S: string): string;
 begin
   Result := SinMayusculas(NombreDeAgente(S));
+end;
+
+function EsCarpetaDeAgente(const ANombre: string): Boolean;
+begin
+  Result := (ANombre <> '') and (SlugDeAgente(ANombre) = SinMayusculas(ANombre));
 end;
 
 function Slug(const S: string): string;

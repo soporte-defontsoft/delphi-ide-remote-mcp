@@ -29,6 +29,10 @@ type
   (un agente contaba 37 tools donde la documentacion dice 42 y creyo que se
   habian fusionado: la VM no declara vault; Hermes, validacion de la 1.16.0). }
 function MotivoToolOculta(const AToolName: string): TMotivoOculta;
+{ La clave que abre una tool que solo se anuncia con un destino declarado
+  (moSinDestino), lo que dice delphi_help; '' si ATool no es de esas. De LA
+  tabla de MotivoToolOculta (B12 de la 1.29). }
+function ClaveQueAbreLaTool(const ATool: string): string;
 { True = leave this tool OUT of tools/list under the active [Tools] profile
   or allowlist. Listing only - the tool stays callable; permissions are
   ToolCallDenied's job. delphi_help/messages/report always stay listed. }
@@ -147,20 +151,22 @@ uses
   nothing is refused - same model as PathDenied. }
 function RootItselfDenied(const APath: string): string;
 var
-  R, Full: string;
+  Raiz, Full: string;
 begin
   Result := '';
   if APath.Trim = '' then
     Exit;
   try
-    Full := IncludeTrailingPathDelimiter(TPath.GetFullPath(APath));
+    Full := SinBarraFinal(FormaLarga(TPath.GetFullPath(APath)));
   except
     Exit; // an unparseable path is PathDenied's business, not ours
   end;
-  var FullLargo := FormaLarga(Full);
-  for R in WorkspaceRoots do
-    if SameFileName(R, Full) or SameFileName(FormaLarga(R), FullLargo) then
-      Exit(MsgFmt(SR_ROOT_ITSELF_FMT, [SinBarraFinal(R)]));
+  // por EL juez de la raiz que contiene una ruta (Lsp.Lugares.RaizQueContiene,
+  // en su forma larga): aqui se comparaba raiz a raiz y en las dos formas, a
+  // mano (menores de A del revisor del paisaje de la 1.29)
+  Raiz := RaizQueContiene(Full);
+  if (Raiz <> '') and SameFileName(Raiz, Full) then
+    Result := MsgFmt(SR_ROOT_ITSELF_FMT, [Raiz]);
 end;
 
 // Parameter ALIASES, per tool, applied only when the real name is absent:
@@ -1187,6 +1193,42 @@ begin
     Result := ArgPathOutsideDenied(AToolName, AArguments, True);
 end;
 
+type
+  { Una tool que solo se anuncia donde el workspace declara A DONDE ir
+    (moSinDestino): su nombre, si lo declara y la clave que la abre (lo que dice
+    delphi_help). UNA tabla: la leian MotivoToolOculta y delphi_help, cada uno
+    con sus nombres (B12 del revisor del paisaje de la 1.29) }
+  TToolConDestino = record
+    Tool: string;
+    Clave: string;
+    Hay: function: Boolean;
+  end;
+
+function HayProyectosDeBases: Boolean;
+begin
+  Result := Length(ProyectosDeConexionDeLaSesion(False)) > 0;
+end;
+
+function HayProyectosDeApis: Boolean;
+begin
+  Result := Length(ProyectosDeConexionDeLaSesion(True)) > 0;
+end;
+
+const
+  TOOLS_CON_DESTINO: array[0..3] of TToolConDestino = (
+    (Tool: 'delphi_adb'; Clave: SF_HELP_SIN_DESTINO_ADB; Hay: HayDispositivosAdb),
+    (Tool: 'delphi_desktop'; Clave: SF_HELP_SIN_DESTINO_DESKTOP; Hay: HayHostsDeEscritorio),
+    (Tool: 'delphi_db'; Clave: SF_HELP_SIN_DESTINO_DB; Hay: HayProyectosDeBases),
+    (Tool: 'delphi_api'; Clave: SF_HELP_SIN_DESTINO_API; Hay: HayProyectosDeApis));
+
+function ClaveQueAbreLaTool(const ATool: string): string;
+begin
+  for var D in TOOLS_CON_DESTINO do
+    if SameText(D.Tool, ATool.Trim) then
+      Exit(MsgText(D.Clave));
+  Result := '';
+end;
+
 function MotivoToolOculta(const AToolName: string): TMotivoOculta;
 const
   // the mailbox and the manual never disappear: they are how an agent asks
@@ -1220,17 +1262,11 @@ begin
   // llamada se niega, y eran ~10 KB de cada tools/list (B10 de la 1.28, medido
   // en superficie-tools-1-27). Como el vault: siguen llamables y la llamada
   // dice que falta; delphi_help dice que no estan y por que.
-  if SameText(N, 'delphi_adb') and not HayDispositivosAdb then
-    Exit(moSinDestino);
-  if SameText(N, 'delphi_desktop') and not HayHostsDeEscritorio then
-    Exit(moSinDestino);
-  // delphi_db, solo donde el workspace nombra proyectos de bases
-  // (DbAllowedProjects, 1.29): sin ninguno toda llamada dice DB-002
-  if SameText(N, 'delphi_db') and (Length(ProyectosDeConexionDeLaSesion(False)) = 0) then
-    Exit(moSinDestino);
-  // delphi_api, igual con ApiAllowedProjects (1.29): sin ninguno, API-002
-  if SameText(N, 'delphi_api') and (Length(ProyectosDeConexionDeLaSesion(True)) = 0) then
-    Exit(moSinDestino);
+  // delphi_db y delphi_api, igual con DbAllowedProjects / ApiAllowedProjects
+  // (1.29): sin ninguno, DB-002 / API-002. Las cuatro, por LA tabla
+  for var D in TOOLS_CON_DESTINO do
+    if SameText(N, D.Tool) and not D.Hay() then
+      Exit(moSinDestino);
   // A una credencial de SOLO LECTURA no se le anuncian las tools enteras de
   // escritura: la puerta se las niega siempre (LecturaDenegada) y solo
   // ocupaban sitio. Las mixtas se quedan, sus lecturas valen (David,

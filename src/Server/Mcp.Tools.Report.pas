@@ -182,7 +182,7 @@ begin
   TArray.Sort<string>(Dirs);
   for var D in Dirs do
     // la carpeta de un agente es su SlugDeAgente: otra cosa no la escribe la tool
-    if SlugDeAgente(TPath.GetFileName(D)) = LowerCase(TPath.GetFileName(D)) then
+    if EsCarpetaDeAgente(TPath.GetFileName(D)) then
       Anade(D, TPath.Combine('.', TPath.GetFileName(D)));
 end;
 
@@ -236,7 +236,7 @@ begin
   if (Length(Partes) = 1) and EsNombreDeInforme(Partes[0]) then
     Result := TPath.Combine(BuzonDeInformes, Partes[0])
   else if (Length(Partes) = 2) and (Partes[0] <> '') and
-     (SlugDeAgente(Partes[0]) = LowerCase(Partes[0])) and EsNombreDeInforme(Partes[1]) then
+     EsCarpetaDeAgente(Partes[0]) and EsNombreDeInforme(Partes[1]) then
     Result := TPath.Combine(BuzonDeInformes(Partes[0]), Partes[1]);
 end;
 

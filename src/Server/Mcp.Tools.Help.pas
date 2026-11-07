@@ -84,17 +84,12 @@ end;
 
 { Por que no se anuncia una tool sin nada declarado a donde ir (moSinDestino):
   la clave que la abre. Cada una por su nombre: con un else, delphi_db (1.29)
-  habria dicho la clave del escritorio, y delphi_api la de las bases. }
+  habria dicho la clave del escritorio, y delphi_api la de las bases. Por LA
+  tabla de la puerta (ClaveQueAbreLaTool): los nombres estaban aqui otra vez
+  (B12 del revisor del paisaje de la 1.29). }
 function SinDestinoDe(const ATool: string): string;
 begin
-  case IndexText(ATool, ['delphi_adb', 'delphi_desktop', 'delphi_db', 'delphi_api']) of
-    0: Result := MsgText(SF_HELP_SIN_DESTINO_ADB);
-    1: Result := MsgText(SF_HELP_SIN_DESTINO_DESKTOP);
-    2: Result := MsgText(SF_HELP_SIN_DESTINO_DB);
-    3: Result := MsgText(SF_HELP_SIN_DESTINO_API);
-  else
-    Result := '';
-  end;
+  Result := ClaveQueAbreLaTool(ATool);
 end;
 
 { One tool in full: what tools/list would say about it, alone. }

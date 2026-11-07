@@ -1752,11 +1752,11 @@ begin
   // so a half-typed call landed here, opened the file with fmCreate and left
   // it at 0 bytes reporting success (field round 8). Nothing destructive may
   // ride on a call that carries no content.
-  if (Params.Sha256.Trim <> '') and
-     not TRegEx.IsMatch(Params.Sha256.Trim, '^[0-9A-Fa-f]{64}$') then
+  // (los dos por EL lector de un sha, Lsp.ShaCache.EsSha256: era una regex aqui
+  // dos veces)
+  if (Params.Sha256.Trim <> '') and not EsSha256(Params.Sha256.Trim) then
     Exit(MsgFmt(SR_UPLOAD_BAD_SHA_FMT, [Params.Sha256.Trim]));
-  if (Params.ChunkSha256.Trim <> '') and
-     not TRegEx.IsMatch(Params.ChunkSha256.Trim, '^[0-9A-Fa-f]{64}$') then
+  if (Params.ChunkSha256.Trim <> '') and not EsSha256(Params.ChunkSha256.Trim) then
     Exit(MsgFmt(SR_UPLOAD_BAD_SHA_FMT, [Params.ChunkSha256.Trim]));
   if Params.ChunkBase64.Trim = '' then
   begin

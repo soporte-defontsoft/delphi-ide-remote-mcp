@@ -2883,12 +2883,14 @@ begin
       EventArg := EventArg + ' /p:' + E + '=';
   // Config entre comillas: su nombre puede llevar un espacio ("Release Plus")
   // y msbuild lo partia en dos argumentos (MSB1008); las comillas no las
-  // puede traer, NombreDeConfigNoValido ya lo ha dicho (ConfigDelBuild).
+  // puede traer, NombreDeConfigNoValido ya lo ha dicho (ConfigDelBuild). Por
+  // EL compositor de un /p:, como Profile, PlatformSDK y DeviceId (iba a mano:
+  // B11 del revisor del paisaje de la 1.29)
   // msbuild.exe por su ruta y sin shell (2an, arriba): un metacaracter en un
   // valor es solo un caracter, y los jueces de cada valor siguen como segunda
   // barrera (David, 11-oct)
-  var Orden := Format('%s %s /t:%s /p:Config="%s" /p:Platform=%s%s%s%s%s%s %s%s',
-    [EnComillas(MsBuildExe), EnComillas(TPath.GetFullPath(ADprojPath)), TargetsMsBuild, Cfg,
+  var Orden := Format('%s %s /t:%s /p:Config=%s /p:Platform=%s%s%s%s%s%s %s%s',
+    [EnComillas(MsBuildExe), EnComillas(TPath.GetFullPath(ADprojPath)), TargetsMsBuild, ComillasSinEscape(Cfg),
      Plat, SdkArg, ProfileArg, DeviceArg, EventArg, SalidaArg, Verb, LogsArg]);
   // la carpeta del proyecto como cwd: sin ella, msbuild hereda la del proceso
   // (el servicio: la casa del servidor) y lo que una tarea escribe RELATIVO -el

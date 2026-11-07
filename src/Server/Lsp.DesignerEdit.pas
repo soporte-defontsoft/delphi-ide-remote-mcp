@@ -2015,7 +2015,7 @@ function ConLasPropiedadesDelIde(var F: TFormEnEdicion; const ALineas: TArray<st
       // EsLiteralDeForm), no por el primer caracter (C1-3 del revisor de la 1.28)
       if not Hay or (Valor = '') or EsValorDeBloque(Valor) or EsLiteralDeForm(Valor) then
         Continue;
-      var Puesta := ANomObj + '.' + Rg.Prop + '=' + Valor;
+      var Puesta := PuestaDeRuta(ANomObj + '.' + Rg.Prop, Valor); // EL compositor (DH7)
       if not ValorDeLaCasaLlega(Puesta) then
         Continue;
       ASueltas := ASueltas + [Puesta];

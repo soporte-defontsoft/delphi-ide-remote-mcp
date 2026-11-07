@@ -1211,6 +1211,11 @@ begin
   Assert.AreEqual(Int64(0), PidDelNombreDeVigia(JOB, NombreDelVigia('20261025-000000000-00000000', 2692)),
     'el vigia de OTRO trabajo no da su pid');
   Assert.AreEqual(JOB + '.wait.*.exe', MascaraDeLosVigiasDe(JOB));
+  // la de todos: los vigias de cualquier trabajo y nada que despliegue el
+  // usuario (era *.wait*.exe: Bus.waitlist.exe caia en el barrido; R7 de la 1.29)
+  Assert.IsTrue(MatchesMask(NombreDelVigia(SelloUnico, 4242), MascaraDeLosVigias), 'el vigia de un trabajo');
+  Assert.IsFalse(MatchesMask('Bus.waitlist.exe', MascaraDeLosVigias), 'un binario del usuario');
+  Assert.IsFalse(MatchesMask('MiApp.wait.1.exe', MascaraDeLosVigias), 'sin la forma de un id');
   // el id: lo que compone SelloUnico, y nada mas (eran dos gemelos, uno sin tope)
   Assert.IsTrue(EsIdDeTrabajo(JOB) and EsIdDeTrabajo(SelloUnico));
   Assert.IsFalse(EsIdDeTrabajo('') or EsIdDeTrabajo('..\x') or EsIdDeTrabajo(StringOfChar('a', 65)));

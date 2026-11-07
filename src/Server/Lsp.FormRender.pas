@@ -354,6 +354,11 @@ function TextoDeIgnorada(const AI: TIgnorada): string;
 { La salida del renderizador -> sus campos (las lineas '#' son traza). }
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
 
+{ AEstilo (el style= de preview) es la palabra del protocolo que pide sin
+  estilo (FR_ESTILO_NINGUNO, sin mayusculas, como la lee el renderizador): la
+  tenia a mano delphi_designer (DH4 de la 1.29). }
+function EsEstiloNinguno(const AEstilo: string): Boolean;
+
 { Lanza el renderizador y lee lo que contesta. Fallo = '' si hay imagen en
   APeticion.Salida; si no, el mensaje que toca (el ERROR= del ayudante tal
   cual si ya lleva su etiqueta). Nunca lanza.
@@ -783,6 +788,11 @@ begin
     AAncho := StrToIntDef(Trozos[2], 0);
     AAlto := StrToIntDef(Trozos[3], 0);
   end;
+end;
+
+function EsEstiloNinguno(const AEstilo: string): Boolean;
+begin
+  Result := SameText(AEstilo.Trim, FR_ESTILO_NINGUNO);
 end;
 
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;

@@ -257,7 +257,9 @@ try:
     check('A2 ...las declaradas mal en unusable con su porque, y ninguna de otro proyecto',
           malas == {'pruebas/sin_metodos': cat['SF_API_DEF_METODOS'], 'pruebas/url_mala': cat['SF_API_DEF_URL'],
                     'pruebas/pin_mal': cat['SF_API_DEF_PIN'], 'pruebas/auth_mala': cat['SF_API_DEF_AUTH_FMT'] % 'oauth',
-                    'pruebas/plazo_malo': cat['SF_API_DEF_PLAZO'],
+                    # el plazo mas largo, el del fuente: estaba escrito en el texto (CH14 de la 1.29)
+                    'pruebas/plazo_malo': cat['SF_API_DEF_PLAZO_FMT'] % mc.entero_del_fuente(
+                        'Server/Lsp.Conexiones.pas', 'PLAZO_API_MAXIMO'),
                     'pruebas/pin_http': cat['SF_API_DEF_PIN_SIN_TLS']} and 'ajeno' not in r, malas)
     n = len(LOG)
     r = pide('pin_http', method='POST', path='eco', body='{}')

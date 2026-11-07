@@ -584,7 +584,7 @@ begin
   CompruebaCaptura(R, '920x700');
   Assert.AreEqual('LoginForm:TLoginForm:form', R.Valor(FR_ROOT));
   Assert.AreEqual('65', R.Valor(FR_COMPONENTS));
-  Assert.IsTrue(R.Valor(FR_FIDELITY).StartsWith('canvas'), R.Valor(FR_FIDELITY));
+  Assert.IsTrue(R.Valor(FR_FIDELITY).StartsWith(FR_FIDELIDAD_CANVAS), R.Valor(FR_FIDELITY));
   Assert.IsTrue(R.Valor(FR_STYLE).Contains('StyleBook'), 'el estilo es el de la form: ' + R.Valor(FR_STYLE));
 end;
 
@@ -602,7 +602,7 @@ begin
     R.Valor(FR_STYLE).Contains('EMPTY StyleBook ' + NombrePrivado('stylebook')), R.Valor(FR_STYLE));
   R := Fmx(Format('--path "%s" --out "%s" --style none', [Cobaya(NombrePrivado('login')), Salida('login_none')]));
   CompruebaCaptura(R, '920x700');
-  Assert.IsTrue(R.Valor(FR_STYLE).StartsWith('none'), R.Valor(FR_STYLE));
+  Assert.IsTrue(R.Valor(FR_STYLE).StartsWith(FR_ESTILO_NINGUNO), R.Valor(FR_STYLE));
 end;
 
 procedure TRenderPrivadasTests.Fmx_estilo_de_plataforma;

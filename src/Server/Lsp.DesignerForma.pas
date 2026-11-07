@@ -122,6 +122,16 @@ function LineaDeObjeto(const ALinea: string; out AClave, ANombre, AClase, AResto
   sin nombre, 'object TClase'). Sin sangria: la pone quien la coloca. }
 function ComponeLineaDeObjeto(const AClave, ANombre, AClase: string): string;
 
+{ LA forma de lo que se pone en un componente al dibujar o al escribir un form
+  (--state y --set del renderizador, el state= de preview): 'Ruta=Valor', la
+  Ruta el componente (con su frame: Frame1.Edit1) y la propiedad, con puntos.
+  PuestaDeRuta la compone y LeePuestaDeRuta es su inversa: la ruta y el valor,
+  sin blancos a los lados; False sin '=' detras de algo, sin un punto antes del
+  '=' o con la ruta acabada en punto. Las dos mitades estaban a mano en el
+  servidor y en el ayudante (DH7 del revisor del paisaje de la 1.29). }
+function PuestaDeRuta(const ARuta, AValor: string): string;
+function LeePuestaDeRuta(const APuesta: string; out ARuta, AValor: string): Boolean;
+
 { La unidad de un form: el .pas de al lado con el mismo nombre (la regla del
   IDE). Escrita a mano en cuatro sitios hasta la 1.17.0. Una VISTA de un form
   FMX (UMain.Windows.fmx) no tiene .pas propio: la suya es la del maestro
@@ -451,6 +461,29 @@ var
   Resto: string;
 begin
   Result := LineaDeObjeto(ALinea, AClave, ANombre, AClase, Resto);
+end;
+
+function PuestaDeRuta(const ARuta, AValor: string): string;
+begin
+  Result := ARuta.Trim + '=' + AValor;
+end;
+
+function LeePuestaDeRuta(const APuesta: string; out ARuta, AValor: string): Boolean;
+var
+  Igual, Punto: Integer;
+begin
+  ARuta := '';
+  AValor := '';
+  Igual := APuesta.IndexOf('=');
+  Punto := APuesta.IndexOf('.');
+  if Igual >= 0 then
+  begin
+    ARuta := APuesta.Substring(0, Igual).Trim;
+    AValor := APuesta.Substring(Igual + 1).Trim;
+  end;
+  // la propiedad detras del ultimo punto: Button1.=x llegaba al ayudante con
+  // la ruta vacia y leia fuera del array (EAccessViolation, 18-oct-2026)
+  Result := (Igual >= 1) and (Punto >= 1) and (Punto < Igual) and not ARuta.EndsWith('.');
 end;
 
 function EsDesignerFmx(const ADesigner: string): Boolean;

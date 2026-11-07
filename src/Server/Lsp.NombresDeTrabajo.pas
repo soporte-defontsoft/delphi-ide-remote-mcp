@@ -19,11 +19,7 @@
 interface
 
 const
-  { Los vigias de TODOS los trabajos de una carpeta, como mascara (lo que barre
-    el --Remove de un trabajo que acabo; tambien la forma vieja,
-    <job>.wait.exe)... }
-  MASCARA_DE_LOS_VIGIAS = '*.wait*.exe';
-  { ...y como patron detras del de un id (la nota del deploy bloqueado lo
+  { Los vigias como patron detras del de un id (la nota del deploy bloqueado lo
     busca en lo que contesta msbuild, Lsp.Casa.SELLO_UNICO_PATRON delante). }
   PATRON_DEL_VIGIA_TRAS_EL_ID = '\.wait(?:\.[0-9]+)?\.exe';
   { Las ordenes del lanzador van en la linea del binario del .job y empiezan
@@ -59,6 +55,13 @@ function NombreDelPid(const AJob: string): string;
 function NombreDelVigia(const AJob: string; APid: Int64): string;
 { Los vigias del trabajo AJob, como mascara: <job>.wait.*.exe. }
 function MascaraDeLosVigiasDe(const AJob: string): string;
+{ ...y los de TODOS los trabajos de una carpeta: lo que barre el --Remove de un
+  trabajo que acabo, en la carpeta del proyecto en el destino. Con la forma de
+  un id (Lsp.Casa.SelloUnico: tres tramos con guion) y solo con '*', el
+  comodin que ya barria: era '*.wait*.exe', y un fichero desplegado del usuario
+  como Bus.waitlist.exe caia en el barrido (R7 del revisor del paisaje de la
+  1.29). La forma vieja <job>.wait.exe, de antes de la 1.23, ya no. }
+function MascaraDeLosVigias: string;
 { La inversa de NombreDelVigia: el pid de un vigia de AJob por su nombre, o 0
   si ANombre no lo es. }
 function PidDelNombreDeVigia(const AJob, ANombre: string): Int64;
@@ -139,6 +142,11 @@ end;
 function MascaraDeLosVigiasDe(const AJob: string): string;
 begin
   Result := AJob + MARCA_VIGIA + '*' + EXT_EXE;
+end;
+
+function MascaraDeLosVigias: string;
+begin
+  Result := MascaraDeLosVigiasDe('*-*-*');
 end;
 
 function PidDelNombreDeVigia(const AJob, ANombre: string): Int64;

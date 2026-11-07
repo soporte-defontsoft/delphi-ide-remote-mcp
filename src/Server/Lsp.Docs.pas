@@ -89,8 +89,17 @@ function PaginaComoTexto(const AHtml, AAncla: string): TPaginaDoc;
 
 { El id de un enlace de una pagina de la ayuda ACorto: 'X.htm#a' ->
   'corto:X.htm#a'; 'ms-its:system.chm::/X.htm' -> 'system:X.htm'. '' si no
-  lleva a una pagina de la ayuda (http, mailto, un ancla de la misma). }
-function IdDeEnlace(const AHref, ACorto: string): string;
+  lleva a una pagina de la ayuda (http, mailto, un ancla de la misma). Un
+  ms-its: nombra el fichero sin carpeta: con AAyudas, la de ese nombre en la
+  carpeta de ACorto (donde la busca HTML Help) y si no la primera, por el nombre
+  que le dio AyudasInstaladas (con dos de un nombre, la segunda es base2: se
+  leia el del fichero y llevaba a la primera; B13 de la 1.29). }
+function IdDeEnlace(const AHref, ACorto: string;
+  const AAyudas: TArray<TAyudaInstalada> = nil): string;
+
+{ EL nombre de una ayuda por su fichero ('C:\..\Indy10.chm' -> 'indy10'), el
+  primero de los que da AyudasInstaladas (a otra con el mismo, un numero). }
+function NombreBaseDeAyuda(const AFichero: string): string;
 
 { El id partido: la ayuda, la pagina y el ancla. False si no tiene forma de
   id de pagina (sin ':', con '..', con unidad, con barra delante, con un
@@ -584,7 +593,36 @@ begin
   end;
 end;
 
-function IdDeEnlace(const AHref, ACorto: string): string;
+function NombreBaseDeAyuda(const AFichero: string): string;
+begin
+  Result := LowerCase(ChangeFileExt(ExtractFileName(AFichero), ''));
+end;
+
+{ El nombre de la ayuda que abre un ms-its: a AFichero desde la de ACorto
+  (IdDeEnlace); sin lista, o si ninguna se llama asi, su nombre base. }
+function CortoDelEnlace(const AAyudas: TArray<TAyudaInstalada>; const AFichero, ACorto: string): string;
+var
+  Carpeta: string;
+begin
+  Carpeta := '';
+  for var A in AAyudas do
+    if A.Corto = ACorto then
+      Carpeta := ExtractFilePath(A.Fichero);
+  Result := '';
+  for var A in AAyudas do
+    if SameFileName(ExtractFileName(A.Fichero), ExtractFileName(AFichero)) then
+    begin
+      if (Carpeta <> '') and SameFileName(ExtractFilePath(A.Fichero), Carpeta) then
+        Exit(A.Corto);
+      if Result = '' then
+        Result := A.Corto;
+    end;
+  if Result = '' then
+    Result := NombreBaseDeAyuda(AFichero);
+end;
+
+function IdDeEnlace(const AHref, ACorto: string;
+  const AAyudas: TArray<TAyudaInstalada>): string;
 var
   H, Fichero, Pagina, Ancla: string;
   K: Integer;
@@ -602,8 +640,7 @@ begin
     if not EsPagina(Pagina) then
       Exit;
     // la ayuda por el nombre de su fichero: un enlace ms-its: no lleva carpeta
-    Result := IdDePagina(LowerCase(ChangeFileExt(ExtractFileName(Fichero), '')),
-      Pagina, Ancla);
+    Result := IdDePagina(CortoDelEnlace(AAyudas, Fichero, ACorto), Pagina, Ancla);
     Exit;
   end;
   if (H = '') or H.StartsWith('#') or H.Contains(':') or not EsPagina(H) then
@@ -1325,7 +1362,7 @@ begin
       // ruta en la otra) es una ayuda, no dos
       if not TFile.Exists(F) or Vista(F) then
         Continue;
-      Base := LowerCase(ChangeFileExt(ExtractFileName(F), ''));
+      Base := NombreBaseDeAyuda(F); // EL nombre, el que lee IdDeEnlace (B13)
       // dos ayudas con el mismo nombre de fichero: la segunda, con numero
       A.Corto := Base;
       N := 2;
@@ -1536,7 +1573,7 @@ begin
           // con barras invertidas salia distinta de la de un enlace, o no
           // salia (revision de la 1.10.0)
           if P > 0 then
-            Suma(IdDeEnlace(E.Local, A.Corto), P);
+            Suma(IdDeEnlace(E.Local, A.Corto, AAyudas), P);
         end;
     end;
     // Clase.Miembro heredado: la lista de miembros de la clase lo enlaza
@@ -1568,7 +1605,7 @@ begin
             begin
               Destino := AtributoDe(Copy(Html, P - 1, 400), 'href');
               if EndsText('.' + Miembro + '.htm', SinAncla(Destino)) then
-                Suma(IdDeEnlace(Destino, A.Corto), 90);
+                Suma(IdDeEnlace(Destino, A.Corto, AAyudas), 90);
               P := PosMin('href=', Html, P + 5);
             end;
           end;
@@ -1626,7 +1663,7 @@ begin
         var Pag := PaginaComoTexto(Html, '');
         if not PartesDeId(Id, Corto, Pagina, Ancla) then
           Continue;
-        Id := IdDeEnlace(Pag.Redirige, Corto);
+        Id := IdDeEnlace(Pag.Redirige, Corto, AAyudas);
         if (Id = '') or not Abiertos.Html(Id, Html) then
           Continue;
       end;
@@ -1674,7 +1711,7 @@ begin
     if APagina.Redirige <> '' then
     begin
       AnclaPedida := Ancla;
-      var Destino := IdDeEnlace(APagina.Redirige, Corto);
+      var Destino := IdDeEnlace(APagina.Redirige, Corto, AAyudas);
       var Html2: string;
       if (Destino <> '') and Abiertos.Html(Destino, Html2) then
       begin

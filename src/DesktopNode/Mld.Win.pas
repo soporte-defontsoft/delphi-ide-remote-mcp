@@ -97,7 +97,8 @@ uses
   System.Generics.Collections,
   Winapi.Dwmapi,
   Mld.Captura,
-  Mld.Textos;
+  Mld.Textos,
+  Lsp.TextoDelNodo; // TextoEnUnaLinea: un titulo con un salto no parte la linea STATE
 
 const
   { No estan en Winapi.Windows de esta version; valores de la API de Win32. }
@@ -200,7 +201,9 @@ begin
     Result := Result + MsgText(SF_NODE_SESION_CONSOLA);
   Foco := GetForegroundWindow;
   if (Foco <> 0) and (GetWindowText(Foco, Titulo, Length(Titulo)) > 0) then
-    Result := Result + MsgFmt(SF_NODE_FOCO_EN_FMT, [string(PChar(@Titulo[0]))])
+    // por EL codificador de una linea del nodo, como la lista de ventanas
+    // (R6 del revisor del paisaje de la 1.29: iba tal cual)
+    Result := Result + MsgFmt(SF_NODE_FOCO_EN_FMT, [TextoEnUnaLinea(string(PChar(@Titulo[0])))])
   else
     Result := Result + MsgText(SF_NODE_SIN_VENTANA_FOCO);
 end;
