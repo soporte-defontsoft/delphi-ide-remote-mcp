@@ -60,6 +60,8 @@ type
     [Test] procedure LasPalabrasDeUnaRutina;
     [Test] procedure LaClaveNoLlevaElIdiomaDelUsuario;
     [Test] procedure ElPliegueNoLlevaElIdiomaDelUsuario;
+    [Test]
+    procedure LaPalabraDelNombre;
   end;
 
   // LA cabecera y LOS end. de un fuente (Lsp.Pascal): eran cinco lectores de
@@ -586,6 +588,27 @@ begin
   // la marca de DirectivasPascal, que miraba la apertura a mano
   Assert.IsTrue(AbreDirectiva('{%CLASSGROUP ''x''}', 1, '%'), 'llave-porcentaje');
   Assert.IsFalse(AbreDirectiva('{$R a}', 1, '%'), 'otra marca no es esta');
+end;
+
+procedure TIdentificadorTests.LaPalabraDelNombre;
+begin
+  // la del disenador: Ok no es de Lookup ni de OkayClick, Edit1 no es de Edit10Change
+  Assert.IsTrue(EsPalabraDelNombre('OkClick', 1, 2), 'Ok de OkClick');
+  Assert.IsFalse(EsPalabraDelNombre('Lookup', 3, 2), 'ok de Lookup');
+  Assert.IsFalse(EsPalabraDelNombre('OkayClick', 1, 2), 'Ok de OkayClick');
+  Assert.IsTrue(EsPalabraDelNombre('Edit1Click', 1, 5), 'Edit1 de Edit1Click');
+  Assert.IsFalse(EsPalabraDelNombre('Edit10Change', 1, 5), 'Edit1 de Edit10Change');
+  Assert.IsTrue(EsPalabraDelNombre('Edit1_Change', 1, 5), 'Edit1 de Edit1_Change');
+  // la de delphi_test (B4 de la 1.29): la palabra, no un trozo de otra
+  Assert.IsTrue(EsPalabraDelNombre('MyAppTests', 6, 5), 'Tests de MyAppTests');
+  Assert.IsTrue(EsPalabraDelNombre('unit_tests', 6, 5), 'tests de unit_tests');
+  Assert.IsTrue(EsPalabraDelNombre('Tests.Core', 1, 5), 'Tests de Tests.Core');
+  Assert.IsFalse(EsPalabraDelNombre('Latest', 3, 4), 'test de Latest');
+  Assert.IsFalse(EsPalabraDelNombre('Inspector', 3, 4), 'spec de Inspector');
+  Assert.IsFalse(EsPalabraDelNombre('MyAppTests', 6, 4), 'Test de MyAppTests: detras va una s');
+  // fuera del nombre, nunca
+  Assert.IsFalse(EsPalabraDelNombre('Ok', 2, 2), 'se sale por detras');
+  Assert.IsFalse(EsPalabraDelNombre('Ok', 0, 2), 'antes del principio');
 end;
 
 initialization

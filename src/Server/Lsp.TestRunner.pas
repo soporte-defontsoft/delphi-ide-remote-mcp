@@ -10,7 +10,8 @@ unit Lsp.TestRunner;
 //
 // What counts as a test project (discovery, in this order):
 // - a .dpr whose uses clause mentions DUnitX (the framework), or
-// - a .dpr marked {$APPTYPE CONSOLE} whose name says Test/Tests/Spec.
+// - a .dpr marked {$APPTYPE CONSOLE} whose name has the WORD Test, Tests,
+//   Testing, Spec or Specs (MyAppTests, unit_tests; not Latest: NombreDiceTest).
 // Anything else is not a test project and is not run.
 //
 // Running it is EXECUTION, and execution is opt-in on this server. It has its
@@ -75,6 +76,33 @@ uses
 type
   TTestKind = (tkNone, tkDUnitX, tkConsole);
 
+{ Si el nombre de un programa de consola dice que es de tests: tiene la
+  PALABRA test, tests, testing, spec o specs (EsPalabraDelNombre: MyAppTests,
+  unit_tests, Tests.Core); dentro de otra palabra no (Latest, Inspector, que
+  lo eran con una regex sin bordes: B4 de la 1.29). Politica de la casa,
+  declarada: no hay juez que diga si una consola es un test. }
+function NombreDiceTest(const AName: string): Boolean;
+const
+  PALABRAS: array[0..4] of string = ('test', 'tests', 'testing', 'spec', 'specs');
+var
+  Bajo: string;
+  P: Integer;
+begin
+  // LowerCase: solo ASCII y la misma longitud, que las posiciones casen
+  Bajo := LowerCase(AName);
+  for var W in PALABRAS do
+  begin
+    P := Pos(W, Bajo);
+    while P > 0 do
+    begin
+      if EsPalabraDelNombre(AName, P, Length(W)) then
+        Exit(True);
+      P := Pos(W, Bajo, P + 1);
+    end;
+  end;
+  Result := False;
+end;
+
 { What kind of test project a .dpr is (tkNone = not one). }
 function KindOf(const ADpr: string; out AWhy: string): TTestKind;
 var
@@ -102,8 +130,7 @@ begin
   for var D in DirectivasPascal(Text) do
     if (D.Nombre = 'APPTYPE') and SameText(D.Argumento.Trim, 'CONSOLE') then
       Consola := True;
-  if Consola and
-     TRegEx.IsMatch(Name, '(?i)(test|tests|spec)') then
+  if Consola and NombreDiceTest(Name) then
   begin
     AWhy := MsgText(SF_TEST_CONSOLA_NOMBRE_TEST);
     Exit(tkConsole);

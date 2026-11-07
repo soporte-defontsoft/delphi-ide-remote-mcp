@@ -5793,7 +5793,8 @@ const
   SR_TEST_NOTATEST_FMT =
     '[TEST-018 INVALID_PARAM] %s does not look like a test project. What counts ' +
     'as one is a .dpr that uses DUnitX, or one with {$APPTYPE CONSOLE} ' +
-    'whose name says test/tests/spec. If yours is one and I do not ' +
+    'whose name has the word test, tests, testing, spec or specs ' +
+    '(MyAppTests, unit_tests - not Latest). If yours is one and I do not ' +
     'detect it, say so with delphi_report: the criterion is refined with ' +
     'real cases.';
 
@@ -5812,8 +5813,8 @@ const
 
   SN_TEST_NONE =
     '[TEST-021] There are no test projects under there. What counts as ' +
-    'one is a .dpr with DUnitX or a console one whose name says ' +
-    'test/spec.';
+    'one is a .dpr with DUnitX or a console one whose name has the word ' +
+    'test or spec (MyAppTests, unit_tests).';
 
   SN_TEST_DISCOVER_NOTE =
     '[TEST-022] Run them with command=run project=<dir + name from the ' +

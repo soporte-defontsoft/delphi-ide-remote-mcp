@@ -397,12 +397,10 @@ begin
       while P > 0 do
       begin
         Detras := P + Length(N);
-        // por sus bordes de palabra, como escribe el IDE: delante el
-        // principio, una mayuscula o un '_'; detras el final, una mayuscula o
-        // un '_' (Ok no es de Lookup ni de OkayClick, que se borraban vacios
-        // con el: revision de la 1.17.0; Edit1 no es de Edit10Change)
-        if ((P = 1) or (AMetodo[P - 1] = '_') or AMetodo[P].IsUpper or not AMetodo[P].IsLetter) and
-           ((Detras > Length(AMetodo)) or (AMetodo[Detras] = '_') or AMetodo[Detras].IsUpper) then
+        // por sus bordes de palabra, como escribe el IDE (EsPalabraDelNombre:
+        // Ok no es de Lookup ni de OkayClick, que se borraban vacios con el:
+        // revision de la 1.17.0; Edit1 no es de Edit10Change)
+        if EsPalabraDelNombre(AMetodo, P, Length(N)) then
         begin
           T.Ini := P;
           T.Fin := Detras - 1;

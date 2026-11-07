@@ -244,6 +244,16 @@ function InicioDelIdentificador(const ATexto: string; AHasta: Integer): Integer;
 // S entero es UN identificador; con APuntos, uno o varios unidos por puntos
 // (el nombre de una unit con su espacio de nombres)
 function EsIdentificador(const S: string; APuntos: Boolean = False): Boolean;
+// Si ANombre[AIni..AIni+ALargo-1] es una PALABRA del nombre, como se escribe un
+// identificador o el nombre de un fichero: delante el principio, algo que no es
+// letra ni cifra ('_', '.', '-', un blanco), o la palabra empieza en mayuscula o
+// no por letra; detras el final, algo que no es letra ni cifra, o una
+// mayuscula (una marca que acentua cuenta como la letra que acentua). Ok no es
+// de Lookup ni de OkayClick, Edit1 no es de Edit10Change, test no es de Latest
+// ni spec de Inspector. LA regla del disenador (que eventos son de un
+// componente) y de delphi_test (que nombre dice test: B4 de la 1.29, donde una
+// regex sin bordes se comia Latest); estaba escrita en el primero.
+function EsPalabraDelNombre(const ANombre: string; AIni, ALargo: Integer): Boolean;
 // El patron de AIdent como PALABRA entera, escapado: ni delante ni detras
 // puede seguir el identificador. Es el '\b' + Escape + '\b' de antes, que no
 // casaba con un acento al principio o al final del nombre.
@@ -391,6 +401,24 @@ end;
 function EsCaracterDeIdent(C: Char): Boolean;
 begin
   Result := EsLetraDeIdent(C) or CharInSet(C, ['0'..'9']);
+end;
+
+function EsPalabraDelNombre(const ANombre: string; AIni, ALargo: Integer): Boolean;
+
+  function DeLaPalabra(C: Char): Boolean;
+  begin
+    Result := C.IsLetterOrDigit or
+      (C.GetUnicodeCategory in [TUnicodeCategory.ucNonSpacingMark, TUnicodeCategory.ucCombiningMark]);
+  end;
+
+var
+  Detras: Integer;
+begin
+  Detras := AIni + ALargo;
+  Result := (AIni >= 1) and (ALargo > 0) and (Detras - 1 <= Length(ANombre)) and
+    ((AIni = 1) or not DeLaPalabra(ANombre[AIni - 1]) or ANombre[AIni].IsUpper or
+     not ANombre[AIni].IsLetter) and
+    ((Detras > Length(ANombre)) or not DeLaPalabra(ANombre[Detras]) or ANombre[Detras].IsUpper);
 end;
 
 function EsIdentificador(const S: string; APuntos: Boolean): Boolean;
