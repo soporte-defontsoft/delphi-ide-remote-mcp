@@ -1193,12 +1193,23 @@ begin
       if ReadPathDenied(Raiz) = '' then
         Dirs.Add(Raiz);
       var Extra: TArray<string> := [TPath.GetDirectoryName(FullPath)];
+      // ...y los ficheros mismos: una unidad del proyecto en una carpeta que se
+      // llama como un artefacto (debug\, release\, win32\) se la saltaba el paseo
+      // de la raiz que la cubre, y un rename dejaba alli la referencia vieja (EH3
+      // del revisor del paisaje de la 1.29, medido). Lo que el proyecto lista es
+      // suyo, este donde este
+      var DelProyecto: TArray<string> := [];
       var Dproj := Session.FindDproj(FullPath);
       if Dproj <> '' then
         for var PU in ProjectUnits(Dproj, False) do
+        begin
           // por EL lector de lo que lista el proyecto ('' si no se resuelve:
           // su carpeta vacia se salta abajo)
-          Extra := Extra + [TPath.GetDirectoryName(RutaDeInclude(Dproj, PU.Include))];
+          var Suya := RutaDeInclude(Dproj, PU.Include);
+          Extra := Extra + [TPath.GetDirectoryName(Suya)];
+          if Suya <> '' then
+            DelProyecto := DelProyecto + [Suya];
+        end;
       for var D in Extra do
       begin
         if (D = '') or not TDirectory.Exists(D) then
@@ -1244,6 +1255,12 @@ begin
         for F in WalkBajoLaRaiz(D, MascarasDe(SOURCE_EXTS)) do
           if not AllFiles.Contains(F) then
             AllFiles.Add(F);
+      end;
+      for var Suya in DelProyecto do
+      begin
+        var Ruta := TPath.GetFullPath(Suya);
+        if TFile.Exists(Ruta) and (ReadPathDenied(Ruta) = '') and not AllFiles.Contains(Ruta) then
+          AllFiles.Add(Ruta);
       end;
     finally
       Dirs.Free;
