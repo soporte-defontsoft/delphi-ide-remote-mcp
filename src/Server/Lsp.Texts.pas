@@ -6001,16 +6001,14 @@ const
     'its Name - the IDE''s Button1, Button2... by default; parent - the ' +
     'form by default; placed at 10,10 (an aligned one, where its Align puts ' +
     'it) where the IDE keeps it among its ' +
-    'siblings (its own writer is asked; the last one, with orderNote, when ' +
-    'it cannot be), its properties as the IDE''s writer stores them (ideNote ' +
-    'says when it cannot be asked), with its published ' +
+    'siblings, its properties as the IDE''s writer stores them, with its published ' +
     'field in the form''s class and its unit in the uses (in FMX also the one ' +
     'that registers its styled presentation, FMX.Grid.Style for a grid); the ' +
     'answer is its ' +
     'numbered block) | set (ONE property: prop + value, checked against the ' +
     'property''s type and the ' +
     'class BEFORE writing - one the class stores by code, by the IDE''s own ' +
-    'form reader, and readerNote says when it could not judge it - and ' +
+    'form reader - and ' +
     'written as the IDE''s writer stores the component: notStored, storedAs ' +
     'or storedIn say when that is not the value given, alsoWritten what else it ' +
     'changed in the component; parent= ' +
@@ -6082,14 +6080,13 @@ const
     'srvd:\... is drawn with the real drive.';
 
   SP_DESIGNER_STYLE =
-    'preview optional. VCL: a .vsf file (the form is then drawn out of ' +
-    'design mode: VCL styles never apply to designed controls) or none (the ' +
+    'preview optional. VCL: a .vsf file (drawn out of design mode: VCL ' +
+    'styles skip designed controls) or none (the ' +
     'default, as the designer). FMX: empty = the form''s own StyleBook (as ' +
     'the designer), none = the Windows default, a .style file, or a ' +
     'platform of the designer''s Style list (android, ios, win11...; an ' +
-    'unknown name is answered with the list). A file goes by absolute path. ' +
-    'It is for THAT image only: nothing is written, and the app runs with ' +
-    'the form''s own, which the answer''s style names.';
+    'unknown name gets the list). A file goes by absolute path. Only for ' +
+    'THAT image: nothing is written.';
 
   SP_DESIGNER_NONVISUAL =
     'preview optional: true = draw the non-visual components (TTimer, ' +
@@ -6102,8 +6099,12 @@ const
   SP_DESIGNER_INLINE =
     'preview, default true: the PNG' + SP_CAPTURE_INLINE_RULE;
   SP_DESIGNER_MAXWIDTH =
-    SP_CAPTURE_MAXWIDTH_RULE + ' (form units), or convert with the ' +
+    SP_CAPTURE_MAXWIDTH_RULE + ', or convert to form units with the ' +
     'answer''s frame.';
+  { la escala de pantalla de la preview (C2 de la 1.29) }
+  SP_DESIGNER_SCALE =
+    'preview optional: the Windows display scale to draw at, in percent ' +
+    '(150, 200...); frame and componentRect stay in form units.';
 
   { insert / set (1.17.0) }
   SP_DESIGNER_PARENT =
@@ -6385,13 +6386,34 @@ const
     '[DSGN-070] frame (<imgW>x<imgH>@<srcW>x<srcH>+<ox>+<oy>) maps this ' +
     'image to the form: a point (x,y) measured ON THIS IMAGE is at ' +
     'ox + x*srcW/imgW, oy + y*srcH/imgH of the form''s client area, in ' +
-    '.dfm/.fmx units (the renderer is not DPI-aware: 1 pixel = 1 unit). ' +
+    '.dfm/.fmx units, whatever the scale of the image (scale=, a form ' +
+    'saved at another PixelsPerInch). ' +
     'Left/Top in the file are relative to the control''s parent: subtract ' +
     'the parent''s componentRect.';
 
   SN_DESIGNER_INLINE_NOTE_FMT =
     '[DSGN-071] The image is IN this answer (scaled %s of the render). ' +
     'Measure on it and convert with frame (below).';
+
+  { preview scale= fuera de las escalas de pantalla de Windows que pinta el
+    renderizador (Lsp.FormRender.EscalaDenegada; C2 de la 1.29) }
+  SR_DESIGNER_ESCALA_FUERA_FMT =
+    '[DSGN-190 INVALID_PARAM] scale=%d: a Windows display scale goes from %d ' +
+    'to %d percent (125, 150, 200...). Without scale the form is drawn as ' +
+    'the designer shows it.';
+
+  { preview con scale=: lo que es la imagen y como se mide en ella. %d la escala,
+    %s lo de la VCL (SF_DESIGNER_ESCALA_VCL) o nada }
+  SN_DESIGNER_ESCALA_FMT =
+    '[DSGN-191] Drawn at %d%%, as a DPI-aware application shows it on a ' +
+    'display at that Windows scale, whatever the display of this server. ' +
+    'frame and componentRect convert to form units. A wide form comes ' +
+    'inline scaled down to maxwidth: crop it with component=, or take it ' +
+    'whole with out=.%s';
+  SF_DESIGNER_ESCALA_VCL =
+    ' VCL: the native parts of a control that Windows paints (the square ' +
+    'of a check box, the arrow of a combo box) stay at their 100% size: ' +
+    'the renderer does not follow the DPI of the machine.';
 
   SR_DESIGNER_STYLE_VCL_FMT =
     '[DSGN-072 INVALID_PARAM] A VCL form takes a .vsf file as style (by ' +

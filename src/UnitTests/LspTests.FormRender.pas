@@ -56,6 +56,8 @@ type
     procedure LaCabezaYSusPartesTienenUnLector;
     [Test]
     procedure UnProgramaSeReconocePorSuCabecera;
+    [Test]
+    procedure LaEscalaDelPngTieneLector;
   end;
 
 { Una UNION de carpeta (punto de montaje) AUnion -> ADestino, para las pruebas
@@ -841,6 +843,48 @@ begin
   Assert.IsFalse(EsEjecutable(TEncoding.ASCII.GetBytes('RIFF....AVI ')));
   Assert.IsFalse(EsEjecutable(TEncoding.ASCII.GetBytes('M')));
   Assert.IsFalse(EsEjecutable(nil));
+end;
+
+procedure TFormRenderTests.LaEscalaDelPngTieneLector;
+var
+  R: TRespuestaRender;
+  P: TPeticionRender;
+  O: string;
+begin
+  // SCALE=<pixeles>/<unidades> (C2 de la 1.29), como lo escribe el ayudante
+  // (RespondeEscala): un form guardado a 120 y pintado a 144
+  R := LeeRespuestaDeRender(FR_SCALE + '144/120'#13#10 + FR_RECT + 'OKBtn=450,12,113,37'#13#10);
+  Assert.AreEqual(144, R.EscalaPixeles);
+  Assert.AreEqual(120, R.EscalaUnidades);
+  // la inversa: el RECT= del png, en unidades del fichero (375,10,94,31 en el .dfm)
+  Assert.AreEqual(375, EnUnidadesDelFichero(R, R.RectX));
+  Assert.AreEqual(10, EnUnidadesDelFichero(R, R.RectY));
+  Assert.AreEqual(94, EnUnidadesDelFichero(R, R.RectW));
+  Assert.AreEqual(31, EnUnidadesDelFichero(R, R.RectH));
+  Assert.AreEqual(120 / 144, UnidadesPorPixel(R), 1E-9);
+  // sin SCALE=, y con uno que no son dos enteros positivos: uno por uno
+  for var Salida in TArray<string>.Create('', FR_SCALE + '0/96'#13#10, FR_SCALE + '150'#13#10,
+    FR_SCALE + 'x/y'#13#10) do
+  begin
+    R := LeeRespuestaDeRender(Salida + FR_RECT + 'B=7,8,9,10'#13#10);
+    Assert.AreEqual(1, R.EscalaPixeles, Salida);
+    Assert.AreEqual(1, R.EscalaUnidades, Salida);
+    Assert.AreEqual(7, EnUnidadesDelFichero(R, R.RectX), Salida);
+  end;
+  // el juez de scale=: 0 es sin ella; los extremos del protocolo valen
+  for var Vale in TArray<Integer>.Create(0, 100, 125, 500) do
+    Assert.AreEqual('', EscalaDenegada(Vale), IntToStr(Vale));
+  for var NoVale in TArray<Integer>.Create(-150, 1, 99, 501, 1000) do
+    Assert.StartsWith('[DSGN-190', EscalaDenegada(NoVale), IntToStr(NoVale));
+  // la orden: --scale solo si se pide
+  P := Default(TPeticionRender);
+  P.Path := 'C:\w\F.dfm';
+  P.Salida := 'C:\w\o.png';
+  Assert.AreEqual('', ComponeOrdenDeRender('C:\r\DelphiFormRenderVcl.exe', P, O));
+  Assert.DoesNotContain(O, FR_ARG_SCALE);
+  P.Escala := 150;
+  Assert.AreEqual('', ComponeOrdenDeRender('C:\r\DelphiFormRenderVcl.exe', P, O));
+  Assert.Contains(O, ' ' + FR_ARG_SCALE + ' 150');
 end;
 
 initialization

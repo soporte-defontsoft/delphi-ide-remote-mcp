@@ -67,6 +67,9 @@ type
     ClasesSinLeer: Boolean;
     // --boxes: donde queda cada control (BOX=), sin png: lo pide delphi_designer layout
     Cajas: Boolean;
+    // --scale <porcentaje>: la escala de pantalla a la que se pinta (FR_ESCALA_MIN..MAX); 0 = sin
+    // ella, la de siempre (C2 de la 1.29)
+    Escala: Integer;
   end;
 
   { Donde esta escrito un componente: el fichero que lo nombro y la raiz en la que
@@ -264,6 +267,8 @@ procedure RespondeRaiz(const ANombre, AClase: string; AEsFrame: Boolean);
 procedure RespondePaquetes(ACargados, AConocidos: Integer);
 procedure RespondeRect(const ANombre: string; AX, AY, AAncho, AAlto: Integer);
 procedure RespondeTamano(AAncho, AAlto: Integer);
+{ SCALE=<pixeles>/<unidades>: cuantos pixeles del png por unidades del fichero }
+procedure RespondeEscala(APixeles, AUnidades: Integer);
 procedure RespondeMs(ACarga, APintado: Int64);
 { <x>,<y>,<ancho>,<alto>: EL formato de una medida, el de RECT= y BOX=; lo lee
   Lsp.FormRender.LeeCuatroEnteros }
@@ -657,6 +662,13 @@ begin
       else if P = FR_ARG_TIMEOUT then GPeticion.TiempoMs := StrToInt(Valor)
       else if P = FR_ARG_PACKAGES_TIMEOUT then GPeticion.TiempoPaquetesMs := StrToInt(Valor)
       else if P = FR_ARG_VERBOSE then GPeticion.Verbose := True
+      else if P = FR_ARG_SCALE then
+      begin
+        // la segunda barrera: el servidor ya la juzga (delphi_designer preview scale=)
+        GPeticion.Escala := StrToIntDef(Valor, 0);
+        if (GPeticion.Escala < FR_ESCALA_MIN) or (GPeticion.Escala > FR_ESCALA_MAX) then
+          raise ERender.Create(MsgFmt(SR_RENDER_ESCALA_FUERA_FMT, [ParamStr(I), FR_ESCALA_MIN, FR_ESCALA_MAX]));
+      end
       else
         raise ERender.Create(MsgFmt(SR_RENDER_ARG_DESCONOCIDO_FMT, [P]));
       Inc(I);
@@ -720,6 +732,11 @@ end;
 procedure RespondeTamano(AAncho, AAlto: Integer);
 begin
   Responde(FR_SIZE, Format('%dx%d', [AAncho, AAlto]));
+end;
+
+procedure RespondeEscala(APixeles, AUnidades: Integer);
+begin
+  Responde(FR_SCALE, Format('%d/%d', [APixeles, AUnidades]));
 end;
 
 procedure RespondeMs(ACarga, APintado: Int64);

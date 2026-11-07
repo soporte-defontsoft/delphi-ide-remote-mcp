@@ -7,8 +7,9 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 9; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
-                            // la 9: los VALORES de abajo como constantes (C2-3 de la 1.28; en el cable, los mismos)
+  FR_PROTOCOLO_VERSION = 10; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+                            // la 9: los VALORES de abajo como constantes (C2-3 de la 1.28; en el cable, los mismos);
+                            // la 10: --scale y SCALE= (C2 de la 1.29)
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
@@ -37,6 +38,15 @@
   FR_ARG_TIMEOUT = '--timeout';
   FR_ARG_PACKAGES_TIMEOUT = '--packagestimeout';
   FR_ARG_VERBOSE = '--verbose';
+  // --scale <porcentaje>: la escala de pantalla de Windows a la que se pinta (C2 de la 1.29). Lo que
+  // hace cada marco con ella es SU juez: la VCL, ScaleForPPI (lo que hace un form al cambiar de
+  // monitor, WMDpiChanged, y que no toca un form con Scaled = False); FMX, la escala forzada de la
+  // ventana (TWinWindowHandle.SetForcedScaleForForm) y el bitmap a esa escala. Por debajo de 100 no
+  // hay: FMX no fuerza menos de 1 y la VCL no escala por debajo de 96 PPI fuera del disenador
+  // (cMinVCLPPIValue). Por arriba, lo que deja la escala personalizada de Windows (500 %)
+  FR_ARG_SCALE = '--scale';
+  FR_ESCALA_MIN = 100;
+  FR_ESCALA_MAX = 500;
   FR_ARG_SI = 'on';              // el valor de un interruptor si/no que compone el servidor
   FR_ARG_NO = 'off';
   { Los VALORES de los argumentos y las claves que escriben y leen los dos lados:
@@ -53,7 +63,12 @@
   FR_CONVIERTE_BINARIO = 'binary'; // ...o a binario
   FR_CAPTURE = 'CAPTURE=';       // CAPTURE=<ruta del png> (la misma clave que el nodo de escritorio)
   FR_SIZE = 'SIZE=';             // SIZE=<ancho>x<alto> del png
-  FR_DPI = 'DPI=';               // DPI=96: el proceso no es consciente del DPI, un pixel = una unidad del dfm
+  FR_DPI = 'DPI=';               // DPI=96: el proceso no es consciente del DPI (la maquina no cuenta; la escala
+                                 // del png la dice SCALE=)
+  FR_SCALE = 'SCALE=';           // SCALE=<pixeles>/<unidades>: cuantos pixeles del png (y de RECT=) por cuantas
+                                 // unidades del fichero. VCL: el PPI del form al pintarlo / el del fichero
+                                 // (PixelsPerInch; uno a 120 con un .vsf se pinta a 96: 96/120); FMX, el
+                                 // --scale / 100. 100/100 = un pixel por unidad
   FR_ROOT = 'ROOT=';             // ROOT=<Nombre>:<Clase>:<form|frame>
   FR_FIDELITY = 'FIDELITY=';     // FIDELITY=window (pintada real, sesion interactiva) | print (WM_PRINT, sesion 0) | canvas (FMX)
   FR_SESSION = 'SESSION=';       // SESSION=<id de sesion de Windows> (0 = servicio)
@@ -76,6 +91,7 @@
   FR_NONVISUALS = 'NONVISUALS='; // NONVISUALS=<Nombre:Clase,...> los no visuales de la raiz, se dibujen o no: el
                                  // agente necesita saber que existen aunque no los vea (David, 7-oct-2026)
   FR_RECT = 'RECT=';             // RECT=<Nombre>=<izq>,<arriba>,<ancho>,<alto> del componente pedido, en pixeles del png
+                                 // (a unidades del fichero, con SCALE=)
   FR_STYLE = 'STYLE=';           // STYLE=<que estilo se aplico y de donde>
   FR_WARNING = 'WARNING=';       // WARNING=<aviso> (repetible)
   FR_PARTIAL = 'PARTIAL=';       // PARTIAL=<ancestro o fichero> sin el que se leyo el form (repetible): el

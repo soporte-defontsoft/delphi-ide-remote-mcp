@@ -45,8 +45,18 @@ type
   { Una form que NUNCA aparece: el cambio de Showing se traga aqui; la
     ventana y las de sus hijos existen y se ensenan a mano donde conviene }
   TFormOculta = class(TForm)
+  private
+    FPpiDeLasUnidades: Integer;
   protected
     procedure CMShowingChanged(var Message: TMessage); message CM_SHOWINGCHANGED;
+    procedure Loaded; override;
+  public
+    { El PPI en el que lo leido esta en unidades del fichero: el PixelsPerInch que
+      escribe el fichero de un form (el lector lo pone antes de que Loaded lo lleve
+      al de la pantalla: en ejecucion uno a 120 queda a 96), o el de esta form
+      vacia si lo leido es un frame (que la VCL no escala al leerlo: medido). Lo pone
+      quien la crea, y Loaded si se lee en ella (C2 de la 1.29) }
+    property PpiDeLasUnidades: Integer read FPpiDeLasUnidades write FPpiDeLasUnidades;
   end;
 
   TCrackCombo = class(TCustomComboBox);
@@ -67,6 +77,25 @@ type
 procedure TFormOculta.CMShowingChanged(var Message: TMessage);
 begin
   // a proposito: ni ShowWindow ni activacion
+end;
+
+procedure TFormOculta.Loaded;
+begin
+  // antes de que TCustomForm.Loaded (ScaleForCurrentDPI) lo lleve al de la pantalla
+  FPpiDeLasUnidades := PixelsPerInch;
+  inherited;
+end;
+
+var
+  // la escala del png respecto al fichero (SCALE=, EnPixeles): la de lo que la VCL no
+  // escala, el sitio de un no visual (C2 de la 1.29)
+  GPixeles: Integer = 1;
+  GUnidades: Integer = 1;
+
+{ Una medida del fichero (el Left/Top de un no visual) en pixeles del png }
+function EnPixeles(A: Integer): Integer;
+begin
+  Result := MulDiv(A, GPixeles, GUnidades);
 end;
 
 procedure TSinCuadro.Excepcion(Sender: TObject; E: Exception);
@@ -307,10 +336,11 @@ begin
   try
     ABmp.Canvas.Font.Name := 'Segoe UI';
     ABmp.Canvas.Font.Size := 7;
+    ABmp.Canvas.Font.Height := EnPixeles(ABmp.Canvas.Font.Height);
     for var C in NoVisualesDe(ARaiz, TControl) do
     begin
       P := PosicionDeNoVisual(C);
-      R := Rect(P.X, P.Y, P.X + LADO, P.Y + LADO);
+      R := Rect(EnPixeles(P.X), EnPixeles(P.Y), EnPixeles(P.X + LADO), EnPixeles(P.Y + LADO));
       ABmp.Canvas.Brush.Color := clWindow;
       ABmp.Canvas.Pen.Color := clGray;
       ABmp.Canvas.Rectangle(R);
@@ -322,7 +352,7 @@ begin
           M.WriteBuffer(Png[0], Length(Png));
           M.Position := 0;
           Imagen.LoadFromStream(M);
-          ABmp.Canvas.StretchDraw(Rect(P.X + 2, P.Y + 2, P.X + LADO - 2, P.Y + LADO - 2), Imagen);
+          ABmp.Canvas.StretchDraw(Rect(R.Left + 2, R.Top + 2, R.Right - 2, R.Bottom - 2), Imagen);
         finally
           M.Free;
           Imagen.Free;
@@ -333,12 +363,12 @@ begin
         // sin icono en ningun paquete: las iniciales de la clase
         ABmp.Canvas.Brush.Style := bsClear;
         var Ini := C.ClassName.Substring(1, 3);
-        ABmp.Canvas.TextOut(P.X + (LADO - ABmp.Canvas.TextWidth(Ini)) div 2,
-          P.Y + (LADO - ABmp.Canvas.TextHeight(Ini)) div 2, Ini);
+        ABmp.Canvas.TextOut(R.Left + (R.Width - ABmp.Canvas.TextWidth(Ini)) div 2,
+          R.Top + (R.Height - ABmp.Canvas.TextHeight(Ini)) div 2, Ini);
         ABmp.Canvas.Brush.Style := bsSolid;
       end;
       ABmp.Canvas.Brush.Style := bsClear;
-      ABmp.Canvas.TextOut(P.X + (LADO - ABmp.Canvas.TextWidth(C.Name)) div 2, P.Y + LADO + 1, C.Name);
+      ABmp.Canvas.TextOut(R.Left + (R.Width - ABmp.Canvas.TextWidth(C.Name)) div 2, R.Bottom + 1, C.Name);
       ABmp.Canvas.Brush.Style := bsSolid;
       Inc(Result);
     end;
@@ -380,7 +410,8 @@ begin
         if N = C then
         begin
           P := PosicionDeNoVisual(C);
-          R := Rect(P.X, P.Y, P.X + LADO_DE_NO_VISUAL, P.Y + LADO_DE_NO_VISUAL + 12);
+          R := Rect(EnPixeles(P.X), EnPixeles(P.Y), EnPixeles(P.X + LADO_DE_NO_VISUAL),
+            EnPixeles(P.Y + LADO_DE_NO_VISUAL + 12));
           Exit(True);
         end;
 end;
@@ -446,6 +477,8 @@ begin
   ActivateClassGroup(Vcl.Controls.TControl);
   Cab := Cabecera(GPeticion.Path);
   Result := TFormOculta.CreateNew(nil);
+  // el de la form vacia; si se lee un form en ella, su Loaded pone el del fichero
+  TFormOculta(Result).PpiDeLasUnidades := Result.PixelsPerInch;
   try
     if ADesigning then
       PonEnDiseno(Result);
@@ -566,6 +599,27 @@ begin
         else
           Captor := FR_FIDELIDAD_PRINT;
       Reloj := TStopwatch.StartNew;
+      // la escala de pantalla pedida (C2 de la 1.29): lo que hace la VCL con un form que pasa
+      // a un monitor de ese DPI (WMDpiChanged -> ScaleForPPIRect), y nada si dice
+      // Scaled = False. ANTES de mostrarlo, ya cargado: el orden de una aplicacion que escala
+      // sus forms (tras crear el form y antes de Show; David: "el orden importa"). Medido el
+      // 7-nov-2026 con una variante que escala despues: aqui da lo mismo (anclados abajo a la
+      // derecha, a lo ancho, alBottom: las mismas cajas), porque es UN escalado desde lo
+      // cargado; se sigue el de la aplicacion. Lo leido ya esta en el DPI de
+      // la pantalla de este proceso (ejecucion) o en el de su fichero (diseno, como el IDE).
+      // Un frame va en esta form, que lo escala con ella
+      if GPeticion.Escala > 0 then
+      begin
+        F.ScaleForPPI(MulDiv(Screen.DefaultPixelsPerInch, GPeticion.Escala, 100));
+        if not F.Scaled then
+          Aviso(MsgFmt(SN_RENDER_SIN_ESCALAR_FMT, [Raiz.Name]));
+      end;
+      // cuantos pixeles por unidad del fichero: el PPI de la form al pintarla, que la VCL
+      // pone en cada escalado (CurrentPPI no: en un proceso ajeno al DPI dice el de la
+      // ventana, 96), y aquel en el que lo leido estaba en unidades del fichero
+      GPixeles := F.PixelsPerInch;
+      GUnidades := TFormOculta(F).PpiDeLasUnidades;
+      RespondeEscala(GPixeles, GUnidades);
       Muestra(F, Captor = FR_FIDELIDAD_WINDOW);
       // el estado de vista va DESPUES de mostrar: un ActivePage puesto antes
       // llega al control nativo con la seleccion vieja

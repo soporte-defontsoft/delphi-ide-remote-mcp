@@ -53,6 +53,7 @@ type
     FNonVisual: Boolean;
     FInline: Boolean;
     FMaxWidth: Integer;
+    FScale: Integer;
     FOut: string;
     FParent: string;
     FValue: string;
@@ -99,6 +100,8 @@ type
     property Inline_: Boolean read FInline write FInline;
     [SchemaDescription(SP_DESIGNER_MAXWIDTH)]
     property MaxWidth: Integer read FMaxWidth write FMaxWidth;
+    [SchemaDescription(SP_DESIGNER_SCALE)]
+    property Scale: Integer read FScale write FScale;
     [SchemaDescription(SP_DESIGNER_OUT)]
     [RutaDelServidor]
     property Out_: string read FOut write FOut;
@@ -1813,6 +1816,10 @@ begin
     Exit(MsgText(SR_DESIGNER_NOT_FORM));
   if (Params.Framework.Trim <> '') and not SameText(Params.Framework.Trim, Fw) then
     Exit(MsgFmt(SR_DESIGNER_FW_NO_CASA_FMT, [Params.Framework.Trim, TPath.GetFileName(Ruta)]));
+  // scale=, por el juez del protocolo (Lsp.FormRender), antes de lanzar nada
+  Fallo := EscalaDenegada(Params.Scale);
+  if Fallo <> '' then
+    Exit(Fallo);
   // la puerta de lectura, la de siempre (la entrada ya la paso: por si la
   // tool llega por otro camino)
   Fallo := ReadPathDenied(Ruta);
@@ -1915,6 +1922,7 @@ begin
   Peticion.Estilo := Estilo;
   Peticion.NoVisuales := Params.NonVisual;
   Peticion.Estados := Estados;
+  Peticion.Escala := Params.Scale;
   R := CorreRender(Peticion);
   if R.Fallo <> '' then
   begin
@@ -1959,8 +1967,10 @@ begin
       Exit(MsgEnvuelve(SR_DESIGNER_RECORTE_FALLO_FMT, Fallo, [TPath.GetFileName(Ruta), Peticion.Componente,
         Fallo]));
     end;
-    OX := RX;
-    OY := RY;
+    // el origen del recorte, en unidades del fichero (el png puede ir a otra escala:
+    // scale=, o un form guardado a otro PPI y pintado fuera de diseno)
+    OX := EnUnidadesDelFichero(R, RX);
+    OY := EnUnidadesDelFichero(R, RY);
     Recortada := True;
   end;
 
@@ -2103,8 +2113,15 @@ begin
     if Recortada then
     begin
       Return.AddPair('component', Peticion.Componente);
-      Return.AddPair('componentRect', Format('%d,%d,%d,%d', [R.RectX, R.RectY, R.RectW, R.RectH]));
+      Return.AddPair('componentRect', Format('%d,%d,%d,%d', [EnUnidadesDelFichero(R, R.RectX),
+        EnUnidadesDelFichero(R, R.RectY), EnUnidadesDelFichero(R, R.RectW), EnUnidadesDelFichero(R, R.RectH)]));
       Return.AddPair('croppedFrom', Format('%dx%d', [AnchoOrig, AltoOrig]));
+    end;
+    if Params.Scale > 0 then
+    begin
+      Return.AddPair('scale', TJSONNumber.Create(Params.Scale));
+      Return.AddPair('scaleNote', MsgFmt(SN_DESIGNER_ESCALA_FMT, [Params.Scale,
+        (if Fw = 'vcl' then MsgText(SF_DESIGNER_ESCALA_VCL) else '')]));
     end;
     Ms := TJSONObject.Create;
     Ms.AddPair('load', TJSONNumber.Create(R.MsCarga));
@@ -2117,7 +2134,7 @@ begin
     // fichero + enlace. El frame lleva el origen del recorte: pixeles de la
     // imagen -> unidades de la form, sin cuentas del agente
     DeliverCapture('delphi_designer', Propia, Params.Inline_, Params.MaxWidth,
-      OX, OY, 1.0, 1.0, Return, MsgText(SN_DESIGNER_INLINE_NOTE_FMT),
+      OX, OY, UnidadesPorPixel(R), UnidadesPorPixel(R), Return, MsgText(SN_DESIGNER_INLINE_NOTE_FMT),
       MsgText(SN_DESIGNER_FRAME_NOTE));
     Result := Return.ToJSON;
     except
@@ -2205,7 +2222,7 @@ begin
       'tree', 'path maxdepth', 'lint', 'path', 'layout', 'path',
       'get', 'path component',
       'check-binding', 'path unit',
-      'preview', 'path component framework state style nonvisual inline maxwidth out',
+      'preview', 'path component framework state style nonvisual inline maxwidth scale out',
       'insert', 'path classname component parent props',
       'set', 'path component prop value parent props before after index',
       'delete', 'path component',
@@ -2217,6 +2234,7 @@ begin
      'state', Params.State, '', 'style', Params.Style, '',
      'nonvisual', IfThen(Params.NonVisual, 'true'), '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
+     'scale', IfThen(Params.Scale <> 0, IntToStr(Params.Scale)), '',
      'out', Params.Out_, '', 'parent', Params.Parent, '', 'value', Params.Value, '',
      'props', Params.Props, '', 'before', Params.Before, '', 'after', Params.After, '',
      'index', IfThen(Params.Index >= 0, IntToStr(Params.Index)), ''], Suyos, VaCon);

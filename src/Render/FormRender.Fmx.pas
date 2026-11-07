@@ -289,7 +289,7 @@ end;
 
 { El nombre como lee la RTL una referencia (FindNestedComponent): uno de
   dentro de un frame inline va como Marco1.LblAviso (revision de la 1.17.0) }
-function RectDe(AForm: TForm; ARaiz: TComponent; const ANombre: string; out R: TRect): Boolean;
+function RectDe(AForm: TForm; ARaiz: TComponent; const ANombre: string; AEscala: Single; out R: TRect): Boolean;
 var
   C: TComponent;
   P: TPoint;
@@ -303,8 +303,10 @@ begin
     Exit;
   if C is TControl then
   begin
+    // en pixeles del png, que va a AEscala (las unidades del form por ella)
     RF := TControl(C).AbsoluteRect;
-    R := Rect(Round(RF.Left), Round(RF.Top), Round(RF.Right), Round(RF.Bottom));
+    R := Rect(Round(RF.Left * AEscala), Round(RF.Top * AEscala), Round(RF.Right * AEscala),
+      Round(RF.Bottom * AEscala));
     Result := True;
   end
   else
@@ -316,7 +318,8 @@ begin
         if N = C then
         begin
           P := PosicionDeNoVisual(C);
-          R := Rect(P.X, P.Y, P.X + LADO_DE_NO_VISUAL, P.Y + LADO_DE_NO_VISUAL + 14);
+          R := Rect(Round(P.X * AEscala), Round(P.Y * AEscala), Round((P.X + LADO_DE_NO_VISUAL) * AEscala),
+            Round((P.Y + LADO_DE_NO_VISUAL + 14) * AEscala));
           Exit(True);
         end;
 end;
@@ -472,6 +475,7 @@ var
   Reloj: TStopwatch;
   MsCarga, MsPintado, Cargados, Conocidos: Integer;
   R: TRect;
+  Escala: Single;
   // mientras lee el form (lo que falle ahi y sea del lector es el fichero:
   // NOTLOADED=) y si lo leido ya se dijo (RespondeFallo, DSGN-061 de la 1.20)
   Cargando, YaLeido: Boolean;
@@ -527,11 +531,26 @@ begin
         EscribeComoElIde(Raiz);
         Exit;
       end;
+      // la escala de pantalla pedida (C2 de la 1.29), la de FMX: la de la ventana FORZADA,
+      // que la escena da a todo lo que pinta (los objetos del estilo eligen por ella su
+      // bitmap de varias resoluciones), antes del estilo y de pintar nada, y el bitmap a esa
+      // escala. Medido en la sonda MideEscala129: igual en un proceso ajeno al DPI y en uno
+      // que lo sigue (0,00 %); solo el canvas a escala estira los bitmaps de 1x, y
+      // TScaledLayout deja costuras en los de 9 piezas
+      Escala := 1;
+      if GPeticion.Escala > 0 then
+      begin
+        Escala := GPeticion.Escala / 100;
+        F.HandleNeeded;
+        WindowHandleToPlatform(F.Handle).SetForcedScaleForForm(Escala);
+      end;
+      RespondeEscala(Round(Escala * 100), 100);
       Responde(FR_STYLE, AplicaEstilo(F));
       for var S in GPeticion.Estados do
         AplicaEstado(Cargador, Raiz, S); // sus mensajes, con la clase que escribe el fichero
       Reloj := TStopwatch.StartNew;
-      Bmp := TBitmap.Create(Round(F.ClientWidth), Round(F.ClientHeight));
+      Bmp := TBitmap.Create(Round(F.ClientWidth * Escala), Round(F.ClientHeight * Escala));
+      Bmp.BitmapScale := Escala;
       if Bmp.Canvas.BeginScene then
       try
         Bmp.Canvas.Clear(TAlphaColors.White);
@@ -544,7 +563,7 @@ begin
       if GPeticion.NoVisuales then
         Responde(FR_NONVISUAL, IntToStr(DibujaNoVisuales(Raiz, Bmp)));
       if GPeticion.Componente <> '' then
-        if RectDe(F, Raiz, GPeticion.Componente, R) then
+        if RectDe(F, Raiz, GPeticion.Componente, Escala, R) then
           RespondeRect(GPeticion.Componente, R.Left, R.Top, R.Width, R.Height)
         else
           Aviso(MsgFmt(SN_RENDER_SIN_COMPONENTE_FMT, [GPeticion.Componente, Raiz.Name]));

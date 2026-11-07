@@ -115,6 +115,16 @@ const
   SN_RENDER_SIN_COMPONENTE_FMT =
     '[RENDER-016] component: there is no %s in %s.';
 
+  // --scale fuera de FR_ESCALA_MIN..MAX (la segunda barrera: el servidor lo juzga antes)
+  SR_RENDER_ESCALA_FUERA_FMT =
+    '[RENDER-030 INVALID_PARAM] --scale: %s is not a percentage from %d to %d.';
+
+  // --scale con un form que dice Scaled = False: la VCL no lo escala (ScaleForPPIRect), en un
+  // monitor a esa escala tampoco (C2 de la 1.29)
+  SN_RENDER_SIN_ESCALAR_FMT =
+    '[RENDER-031] %s has Scaled = False: the VCL does not scale it to another DPI, so it is ' +
+    'drawn at its own size, as an application would show it at that scale.';
+
   SR_RENDER_ESTILO_DESCONOCIDO_FMT =
     '[RENDER-017 INVALID_PARAM] style: %s is neither a file nor a designer ' +
     'platform (%s).';
@@ -207,7 +217,7 @@ const
     '[--component Name] [--style <file|platform|none>] [--nonvisual on|off (off)] ' +
     '[--packages auto|none|all] [--root auto|form|frame] ' +
     '[--fidelity auto|window|print] [--bds 37.0] [--bdsroot <dir>] [--knownfile <file>] ' +
-    '[--timeout ms] [--packagestimeout ms] [--verbose] | ' +
+    '[--timeout ms] [--packagestimeout ms] [--scale <percent>] [--verbose] | ' +
     '%s --path <dfm|fmx> --writeback on ' +
     '[--component Name] [--dropped Name] ' +
     '[--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout ms] [--packagestimeout ms] | ' +

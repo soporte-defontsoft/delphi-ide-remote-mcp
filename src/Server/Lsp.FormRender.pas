@@ -92,6 +92,9 @@ type
     ClasesSinLeer: Boolean;
     // --boxes: sin png, donde queda cada control (BOX=). Lo pone delphi_designer layout
     Cajas: Boolean;
+    // --scale: la escala de pantalla de Windows a la que se pinta, en porcentaje
+    // (FR_ESCALA_MIN..MAX); 0 = la de siempre. Lo pone preview scale= (C2 de la 1.29)
+    Escala: Integer;
     // cuanto puede tardar la llamada, todas sus vueltas, si no es RENDER_TIEMPO_MS:
     // quien tiene otra respuesta que dar no espera lo que espera un preview. El
     // vigia del ayudante sale de el (VigiaDelAyudante)
@@ -176,8 +179,11 @@ type
     Ignoradas: TArray<TIgnorada>;
     NoVisuales: TArray<TNoVisual>; // NONVISUALS=
     NoVisualesDibujados: Integer; // NONVISUAL=
-    HayRect: Boolean;          // RECT= del componente pedido
+    HayRect: Boolean;          // RECT= del componente pedido, en pixeles del png
     RectX, RectY, RectW, RectH: Integer;
+    // SCALE=: cuantos pixeles del png por cuantas unidades del fichero (1/1 si no lo
+    // dijo). EnUnidadesDelFichero y UnidadesPorPixel, los que las usan (C2 de la 1.29)
+    EscalaPixeles, EscalaUnidades: Integer;
     MsCarga, MsPintado: Integer; // MS=
     MsTotal: Int64;            // lo que tardo de verdad, lanzamiento incluido
     Escrito: TArray<string>;   // WRITTEN=: el form como lo guarda el IDE, con sus blancos
@@ -231,6 +237,16 @@ function FormRenderExe(const AFramework: string; out ANombre: string): string;
   interruptor (un --out fuera de la jaula). }
 function ComponeOrdenDeRender(const AExe: string; const APeticion: TPeticionRender;
   out AOrden: string): string;
+
+{ Una medida del png (RECT=) en unidades del fichero, por el SCALE= de su render:
+  la inversa de la escala que aplico el ayudante (C2 de la 1.29) }
+function EnUnidadesDelFichero(const ARespuesta: TRespuestaRender; APixeles: Integer): Integer;
+{ ...y las unidades del fichero por pixel del png, para el frame de la entrega }
+function UnidadesPorPixel(const ARespuesta: TRespuestaRender): Double;
+{ '' si AEscala (porcentaje; 0 = sin ella) es una escala que el renderizador pinta
+  (FR_ESCALA_MIN..MAX, las del protocolo); si no, DSGN-190. El juez de preview scale=,
+  antes de lanzar nada; el renderizador lo vuelve a juzgar (RENDER-030) }
+function EscalaDenegada(AEscala: Integer): string;
 
 { El --root de un render (form | frame): lo que es la raiz de la unidad para
   el IDE, por sus jueces (Lsp.ProjectUnits.RaizDeDesigner, EL lector: su cadena
@@ -614,6 +630,25 @@ begin
   Result := Max(APlazoMs - MARGEN_DEL_VIGIA_MS, APlazoMs div 2);
 end;
 
+function EnUnidadesDelFichero(const ARespuesta: TRespuestaRender; APixeles: Integer): Integer;
+begin
+  Result := Round(APixeles * UnidadesPorPixel(ARespuesta));
+end;
+
+function EscalaDenegada(AEscala: Integer): string;
+begin
+  Result := '';
+  if (AEscala <> 0) and ((AEscala < FR_ESCALA_MIN) or (AEscala > FR_ESCALA_MAX)) then
+    Result := MsgFmt(SR_DESIGNER_ESCALA_FUERA_FMT, [AEscala, FR_ESCALA_MIN, FR_ESCALA_MAX]);
+end;
+
+function UnidadesPorPixel(const ARespuesta: TRespuestaRender): Double;
+begin
+  Result := 1;
+  if (ARespuesta.EscalaPixeles > 0) and (ARespuesta.EscalaUnidades > 0) then
+    Result := ARespuesta.EscalaUnidades / ARespuesta.EscalaPixeles;
+end;
+
 function DijoOtraVersion(const ADijo: string; AVersion: Integer; const ASalida: string;
   ACodigo, AUltimoCodigo: Cardinal; AVencido: Boolean): Boolean;
 begin
@@ -683,6 +718,8 @@ begin
         AOrden := AOrden + Arg(FR_ARG_SET, P);
   if (APeticion.Raiz = FR_RAIZ_FORM) or (APeticion.Raiz = FR_RAIZ_FRAME) then
     AOrden := AOrden + ' ' + FR_ARG_ROOT + ' ' + APeticion.Raiz;
+  if APeticion.Escala > 0 then
+    AOrden := AOrden + ' ' + FR_ARG_SCALE + ' ' + IntToStr(APeticion.Escala);
   if APeticion.Estilo <> '' then
     AOrden := AOrden + Arg(FR_ARG_STYLE, APeticion.Estilo);
 end;
@@ -774,6 +811,8 @@ var
 begin
   Result := Default(TRespuestaRender);
   Result.Sesion := -1;
+  Result.EscalaPixeles := 1;
+  Result.EscalaUnidades := 1;
   for var Linea in LineasDelTexto(ASalida) do
   begin
     L := Linea;
@@ -850,6 +889,17 @@ begin
     end
     else if Es(FR_STYLE) then
       Result.Estilo := V
+    else if Es(FR_SCALE) then
+    begin
+      // <pixeles>/<unidades>, la inversa de FormRender.Comun.RespondeEscala; lo que no
+      // sean dos enteros positivos se queda en 1/1
+      Trozos := V.Split(['/']);
+      if (Length(Trozos) = 2) and (StrToIntDef(Trozos[0], 0) > 0) and (StrToIntDef(Trozos[1], 0) > 0) then
+      begin
+        Result.EscalaPixeles := StrToInt(Trozos[0]);
+        Result.EscalaUnidades := StrToInt(Trozos[1]);
+      end;
+    end
     else if Es(FR_WARNING) then
       Result.Avisos := Result.Avisos + [V]
     else if Es(FR_MS) then
