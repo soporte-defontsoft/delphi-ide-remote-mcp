@@ -284,6 +284,9 @@ function EsNombreNuevo(const S: string): Boolean;
 function MismoIdentificador(const A, B: string): Boolean;
 // uno de ALista que sea ANombre, por MismoIdentificador (eran dos bucles a mano)
 function IdentificadorEnLista(const ANombre: string; const ALista: array of string): Boolean;
+// ...y donde: el indice del primero, -1 si ninguno (el orden de los hermanos de
+// un form lo comparaba con SameText: B-C4 de la 1.29)
+function IndiceDeIdentificador(const ANombre: string; const ALista: array of string): Integer;
 // (si una unidad ya esta en un uses lo dice EL juez de dcc, con los ambitos
 // del proyecto: Lsp.ProjectUnits.TResolutorDeUnidades, V79 de la 1.23.1)
 // La CLAVE de un identificador para un diccionario o un conjunto: dos tienen
@@ -556,10 +559,15 @@ end;
 
 function IdentificadorEnLista(const ANombre: string; const ALista: array of string): Boolean;
 begin
-  for var N in ALista do
-    if MismoIdentificador(N, ANombre) then
-      Exit(True);
-  Result := False;
+  Result := IndiceDeIdentificador(ANombre, ALista) >= 0;
+end;
+
+function IndiceDeIdentificador(const ANombre: string; const ALista: array of string): Integer;
+begin
+  for var I := 0 to High(ALista) do
+    if MismoIdentificador(ALista[I], ANombre) then
+      Exit(I);
+  Result := -1;
 end;
 
 

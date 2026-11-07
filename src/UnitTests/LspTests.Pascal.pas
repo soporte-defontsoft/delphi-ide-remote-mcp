@@ -361,6 +361,11 @@ begin
   Assert.IsFalse(MismoIdentificador('Tamaño', 'Tamano'), 'sin la enye es otro');
   Assert.IsFalse(MismoIdentificador('Año', 'Años'), 'otro largo');
   Assert.AreEqual(ClaveDeIdentificador('año'), ClaveDeIdentificador('AÑO'), 'la clave');
+  // ...y en una lista, donde: el orden de los hermanos de un form lo buscaba
+  // con SameText (B-C4 de la 1.29; dcc da E2004 con Ñandu y ñandu, medido)
+  Assert.AreEqual(1, IndiceDeIdentificador('ÁRBOL', ['x', 'árbol', 'Árbol']), 'el primero, por la caja de la acentuada');
+  Assert.AreEqual(-1, IndiceDeIdentificador('Arbol', ['árbol']), 'sin el acento es otro');
+  Assert.IsTrue(IdentificadorEnLista('ÑANDU1', ['Ñandu1']), 'esta');
 end;
 
 procedure TIdentificadorTests.ElUltimoTrozoYLasReservadas;

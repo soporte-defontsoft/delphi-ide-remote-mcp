@@ -2101,7 +2101,7 @@ begin
       else if Length(R.Orden) = 0 then
         Motivo := MsgText(SF_DESIGNER_IDE_SIN_ORDEN);
       for var S in R.Sustituidas do
-        if (Motivo = '') and SameText(S, O.ClassName_) then
+        if (Motivo = '') and MismoIdentificador(S, O.ClassName_) then
           Motivo := MsgFmt(SF_DESIGNER_IDE_SUSTITUIDA_FMT, [O.ClassName_]);
       // un salto de su lector sin dueno (el error del codigo de un componente)
       // podria ser de ANomObj: su linea se daria por no guardada y se perderia
@@ -2187,8 +2187,8 @@ begin
               if SameText(V, Valor) then
                 Queda := True;
             for var Ig in R.Ignoradas do
-              if LeidoEnElForm(Ig.Fichero, F.Dfm) and SameText(Ig.Componente, ANomObj) and
-                 (SameText(Ig.Propiedad, N.Prop) or SameText(Ig.Propiedad, ArribaDe(N.Prop))) then
+              if LeidoEnElForm(Ig.Fichero, F.Dfm) and MismoIdentificador(Ig.Componente, ANomObj) and
+                 (MismoIdentificador(Ig.Propiedad, N.Prop) or MismoIdentificador(Ig.Propiedad, ArribaDe(N.Prop))) then
                 Queda := True;
             if not Queda then
             begin
@@ -2364,7 +2364,7 @@ begin
       Exit;
   end;
   // un frame en si mismo no llega al juez: FrameDelProyecto busca otro que el propio
-  if SameText(AClase.Trim, ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_)) and (RaizDeDesigner(F.Dfm) = rdFrame) then
+  if MismoIdentificador(AClase.Trim, ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_)) and (RaizDeDesigner(F.Dfm) = rdFrame) then
     Exit(MsgFmt(SR_DESIGNER_INSERT_FRAME_CICLICO_FMT, [AClase.Trim, MsgFmt(SF_DESIGNER_ES_ESTE_FRAME_FMT, [AClase.Trim])]));
   // la clase: de la tabla del Delphi activo, y un control; o un frame de SU proyecto,
   // que la tabla no tiene, con lo que publica un TFrame (V77 de la 1.24)
@@ -3904,7 +3904,7 @@ begin
   N := 0;
   for var H in APadre.Children do
   begin
-    if (H.ObjName = '') and SameText(H.ClassName_, AHijo.ClassName_) then
+    if (H.ObjName = '') and MismoIdentificador(H.ClassName_, AHijo.ClassName_) then
       Inc(N);
     if H = AHijo then
       Break;
@@ -3937,7 +3937,7 @@ procedure HijosAlineados(const ATexto, AEscrito, ANomPadre: string; out ANuestro
     Result := 0;
     if P <> nil then
       for var H in P.Children do
-        if (H.ObjName = '') and SameText(H.ClassName_, AClase) then
+        if (H.ObjName = '') and MismoIdentificador(H.ClassName_, AClase) then
           Inc(Result);
   end;
 
@@ -3980,15 +3980,6 @@ begin
   end;
 end;
 
-// la posicion de AN en AL (un Name: sin mayusculas), -1 si no esta
-function NombreEn(const AL: TArray<string>; const AN: string): Integer;
-begin
-  for var I := 0 to High(AL) do
-    if SameText(AL[I], AN) then
-      Exit(I);
-  Result := -1;
-end;
-
 { El juez guarda a ANombre donde lo pusimos. Con before=/after= (ARef, el
   hermano que nombra el agente): respecto a ARef queda del lado pedido, y
   respecto a CADA hermano que la orden le hace SALTAR (el que estaba delante y
@@ -4003,18 +3994,21 @@ function MismaPosicion(const ANombre, ARef: string; const AOriginal, ANuestro, A
 var
   PO, PN, PS: Integer;
 begin
-  PO := NombreEn(AOriginal, ANombre);
-  PN := NombreEn(ANuestro, ANombre);
-  PS := NombreEn(ASuyo, ANombre);
+  // un Name, por EL juez de un identificador (Lsp.Pascal): dcc no distingue la
+  // caja de una letra acentuada (E2004, medido el 7-nov-2026); aqui era
+  // SameText (B-C4 de la 1.29)
+  PO := IndiceDeIdentificador(ANombre, AOriginal);
+  PN := IndiceDeIdentificador(ANombre, ANuestro);
+  PS := IndiceDeIdentificador(ANombre, ASuyo);
   if (PO < 0) or (PN < 0) or (PS < 0) then
     Exit(False);
   for var S in ANuestro do
-    if not SameText(S, ANombre) then
+    if not MismoIdentificador(S, ANombre) then
     begin
-      var Delante := NombreEn(ANuestro, S) < PN;
-      if (ARef = '') or SameText(S, ARef) or (Delante <> (NombreEn(AOriginal, S) < PO)) then
+      var Delante := IndiceDeIdentificador(S, ANuestro) < PN;
+      if (ARef = '') or MismoIdentificador(S, ARef) or (Delante <> (IndiceDeIdentificador(S, AOriginal) < PO)) then
       begin
-        var SS := NombreEn(ASuyo, S);
+        var SS := IndiceDeIdentificador(S, ASuyo);
         if (SS < 0) or ((SS < PS) <> Delante) then
           Exit(False);
       end;
@@ -4084,10 +4078,10 @@ begin
     if P <> nil then
       for var S in Sustituidas do
       begin
-        if SameText(P.ClassName_, S) then
+        if MismoIdentificador(P.ClassName_, S) then
           Exit(MsgFmt(SR_DESIGNER_ORDEN_SIN_CLASE_FMT, [ANomObj, P.ClassName_, ANomPadre]));
         for var H in P.Children do
-          if SameText(H.ClassName_, S) then
+          if MismoIdentificador(H.ClassName_, S) then
             Exit(MsgFmt(SR_DESIGNER_ORDEN_SIN_CLASE_FMT, [ANomObj, H.ClassName_, NombreDe(H)]));
       end;
   finally
@@ -4099,7 +4093,7 @@ begin
   // form a medias (revisor 5 de la noche, A2 y B6)
   Faltan := [];
   for var N in ANuestro do
-    if NombreEn(ASuyo, N) < 0 then
+    if IndiceDeIdentificador(N, ASuyo) < 0 then
       Faltan := Faltan + [N];
   if (Length(ANuestro) = 0) or (Length(Faltan) > 0) then
     Exit(MsgFmt(SR_DESIGNER_ORDEN_INCOMPLETO_FMT, [ANomObj,
@@ -4175,7 +4169,7 @@ begin
     var SuyoP: TArray<string> := [];
     for var N in Suyo do
       for var H in P.Children do
-        if SameText(ClaveDeHijo(P, H), N) then
+        if MismoIdentificador(ClaveDeHijo(P, H), N) then
         begin
           SuyoP := SuyoP + [N];
           Break;
@@ -4186,13 +4180,13 @@ begin
     var OP := ObjetoPorNombre(Doc, ANomObj);
     if (OP <> nil) and (OP.Parent = P) then
       ClaveObj := ClaveDeHijo(P, OP);
-    var PS := NombreEn(SuyoP, ClaveObj);
+    var PS := IndiceDeIdentificador(ClaveObj, SuyoP);
     if (PS < 0) or (PS = High(SuyoP)) then
       Exit; // el IDE tambien lo deja el ultimo de los que estan: donde ya esta
     var NomAncla := SuyoP[(if PS > 0 then PS - 1 else 1)];
     var Ancla: TStyleObj := nil;
     for var H in P.Children do
-      if SameText(ClaveDeHijo(P, H), NomAncla) then
+      if MismoIdentificador(ClaveDeHijo(P, H), NomAncla) then
         Ancla := H;
     var Dest := (if PS > 0 then Ancla.EndLine else Ancla.StartLine - 1);
     Result := ConBloqueMovido(ALineas, Copy(ALineas, AIni, ALargo), AIni, ALargo, Dest);
@@ -4692,9 +4686,9 @@ begin
   // y leyendo ESTE form: el de un ancestro o el fichero de un frame se llama
   // igual y no es este valor (C9 de la 1.28, medido: DSGN-149 de un claRed sano)
   var Suyo := ObjetoPorNombre(F.Doc, ANombre);
-  if (Suyo <> nil) and LeidoEnElForm(Lectura.Fichero, F.Dfm) and SameText(Lectura.Componente, Suyo.ObjName) then
+  if (Suyo <> nil) and LeidoEnElForm(Lectura.Fichero, F.Dfm) and MismoIdentificador(Lectura.Componente, Suyo.ObjName) then
     for var I := 0 to High(AInfos) do
-      if AInfos[I].SinJuez and SameText(AInfos[I].Prop, Lectura.Propiedad) then
+      if AInfos[I].SinJuez and MismoIdentificador(AInfos[I].Prop, Lectura.Propiedad) then
         Exit(MsgFmt(SR_DESIGNER_SET_NO_CARGA_FMT, [ANombre, AInfos[I].Prop, AInfos[I].Valor,
           Lectura.Motivo]));
   // el ayudante no dijo nada (no se le dio el form - un literal que nombra un

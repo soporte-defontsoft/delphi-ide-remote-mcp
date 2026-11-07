@@ -2093,7 +2093,7 @@ begin
             TPath.GetFileName(Suya.Fichero) + ')'
         else if DeClaseSustituida(Ficheros, Ig, R.Sustituidas) then
           Continue
-        else if (R.RaizNombre <> '') and SameText(Ig.Componente, R.RaizNombre) and
+        else if (R.RaizNombre <> '') and MismoIdentificador(Ig.Componente, R.RaizNombre) and
                 DeLaRaizQueElLectorNoVe(RaizL, Sustituto, Ig.Propiedad) then
           NoVistas := NoVistas + IfThen(NoVistas <> '', ', ') + Ig.Propiedad
         // una excepcion del codigo de un componente (no del lector), o bajo las
