@@ -584,6 +584,9 @@ begin
   try
     if Doc.Root = nil then
       Exit(MsgText(SR_DESIGNER_EMPTY));
+    // en un form heredado, cuales de sus inherited son frames (A2 de la 1.29):
+    // Frame11.Edit1 decia DSGN-078 con su bloque ahi
+    MarcaFramesSegunElIde(Doc, APath);
     O := Doc.ObjetoDeNombre(AName.Trim);
     if O = nil then
     begin

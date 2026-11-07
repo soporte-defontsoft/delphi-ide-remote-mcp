@@ -133,6 +133,14 @@ function ComponenteQueNoEsta(ADoc: TStyleDoc; const ANombre, AFichero: string): 
   entonces la negativa es la de que no esta. Decia DSGN-078 (A16-G1). }
 function HeredadoParaGet(ADoc: TStyleDoc; const ADfm, ANombre: string): string;
 
+{ Los inherited de ADoc que son frames puestos en linea en un ancestro, como
+  los escribe el lector del IDE (inline, en el form entero): marcados en ADoc
+  (TStyleDoc.MarcaFramesHeredados), para que lo de dentro se nombre por su
+  ruta (Frame11.Edit1) y no sea del form. Solo pregunta al juez si ADoc tiene
+  inherited de dentro (un form heredado). True si marco alguno (A2 de la
+  1.29: el texto dice inherited Frame11, y get de Frame11.Edit1 daba DSGN-078). }
+function MarcaFramesSegunElIde(ADoc: TStyleDoc; const ADfm: string; ADesde: UInt64 = 0): Boolean;
+
 implementation
 
 uses
@@ -245,7 +253,7 @@ begin
   // campo y las referencias del Edit1 del form: revision de la 1.17.0). Con
   // AConRutas van con su RUTA desde el form (Frame11.Edit1, la que toman set
   // y get, ObjetoDeNombre): el form los cambia en su bloque inherited
-  if (O.Clave = 'inline') and not AConRutas then
+  if O.EsFrameIncrustado and not AConRutas then
     Exit;
   for var K in O.Children do
     RecogeNombres(K, L, AConRutas);
@@ -291,7 +299,7 @@ begin
   var P := O.Parent;
   while P <> nil do
   begin
-    if P.Clave = 'inline' then
+    if P.EsFrameIncrustado then
       Result := P;
     P := P.Parent;
   end;
@@ -1082,6 +1090,9 @@ begin
   if (F.Doc.Root = nil) or (F.Doc.Root.ClassName_ = '') then
     Exit(MsgText(SR_DESIGNER_EMPTY));
   F.TextoAntes := F.Doc.TextoDe(F.Doc.Leidas);
+  // en un form heredado, cuales de sus inherited son frames (lo dice el
+  // lector del IDE): lo de dentro va por su ruta (A2 de la 1.29)
+  MarcaFramesSegunElIde(F.Doc, APath);
   // su unidad: la del mismo nombre, la que crea el IDE
   F.Pas := UnidadDeDesigner(APath);
   F.PasNombre := TPath.GetFileName(F.Pas);
@@ -1160,7 +1171,7 @@ var
 
   procedure Recorre(O: TStyleObj);
   begin
-    if (O.Clave = 'inline') and (Primero = nil) then
+    if O.EsFrameIncrustado and (Primero = nil) then
       Primero := O;
     if (ANombre <> '') and (InlineQueLoContiene(O) <> nil) and MismoIdentificador(O.ObjName, ANombre) then
       Rutas := Rutas + [O.Ruta];
@@ -1254,6 +1265,9 @@ type
     su Name, su ruta (NombreDe: Marco1.Dentro en un frame en linea) y su clase }
   TEslabonHeredado = record
     Nombre, Ruta, Clase: string;
+    // la clase la dice el texto de lo leido (un frame: ClaseDeFrameEnLoLeido),
+    // no el lector, que lo carga con un sustituto
+    ClaseDelTexto: Boolean;
   end;
 
   { Lo que dice el lector del IDE de un componente que el texto no tiene }
@@ -1265,6 +1279,99 @@ type
     Bloque, Sustituidas: TArray<string>; // sus lineas como lo carga; las clases que no cargo
     Leidos: TArray<TLeidoPorElJuez>;
   end;
+
+{ Las CadenaDesdeLaRaiz de los frames en linea de ADoc, el form ENTERO que
+  escribe el lector del IDE (ComoLoEscribeElIde: los del ancestro, inline). }
+function FramesDe(ADoc: TStyleDoc): TArray<string>;
+
+  procedure Recorre(O: TStyleObj);
+  begin
+    if (O.Parent <> nil) and (O.Clave = 'inline') then
+      Result := Result + [O.CadenaDesdeLaRaiz];
+    for var K in O.Children do
+      Recorre(K);
+  end;
+
+begin
+  Result := [];
+  if ADoc.Root <> nil then
+    Recorre(ADoc.Root);
+end;
+
+function MarcaFramesSegunElIde(ADoc: TStyleDoc; const ADfm: string; ADesde: UInt64): Boolean;
+var
+  Escrito, ErrorAyudante: string;
+  Sustituidas, Avisos, SinLeer: TArray<string>;
+  Leidos: TArray<TLeidoPorElJuez>;
+  Parada: TIgnorada;
+
+  function HayInheritedDeDentro(O: TStyleObj): Boolean;
+  begin
+    for var K in O.Children do
+      if (K.Clave = 'inherited') or HayInheritedDeDentro(K) then
+        Exit(True);
+    Result := False;
+  end;
+
+begin
+  Result := False;
+  if (ADoc = nil) or (ADoc.Root = nil) or not HayInheritedDeDentro(ADoc.Root) then
+    Exit;
+  if ComoLoEscribeElIde(ADfm, ADoc.TextoDe(ADoc.Lines), ADoc.Encoding, Escrito, Sustituidas, Avisos,
+    SinLeer, Leidos, ErrorAyudante, Parada, '', '', ADesde) <> '' then
+    Exit;
+  var Suyo := TStyleDoc.DeTexto(Escrito);
+  try
+    ADoc.MarcaFramesHeredados(FramesDe(Suyo));
+    Result := Length(ADoc.FramesHeredados) > 0;
+  finally
+    Suyo.Free;
+  end;
+end;
+
+{ La clase con la que esta escrito el frame en linea de ACadena (su
+  CadenaDesdeLaRaiz) en lo que leyo el lector para cargar el form (ALeidos: el
+  form, sus ancestros y sus frames): la de su bloque inline en el primero que
+  lo tiene. El lector carga un frame del proyecto como TFrame (ninguna unidad
+  registra TFrame1: medido el 24-oct y el 7-nov-2026), y el IDE escribe en la
+  heredada su clase (inherited Frame11: TFrame1). '' si no esta. }
+function ClaseDeFrameEnLoLeido(const ALeidos: TArray<TLeidoPorElJuez>; const ACadena: string): string;
+
+  function Busca(O: TStyleObj): TStyleObj;
+  begin
+    if (O.Parent <> nil) and (O.Clave = 'inline') and MismoIdentificador(O.CadenaDesdeLaRaiz, ACadena) then
+      Exit(O);
+    for var K in O.Children do
+    begin
+      Result := Busca(K);
+      if Result <> nil then
+        Exit;
+    end;
+    Result := nil;
+  end;
+
+begin
+  Result := '';
+  for var L in ALeidos do
+  begin
+    if not (EsDesignerVcl(L.Ruta) or EsDesignerFmx(L.Ruta)) then
+      Continue;
+    var Doc: TStyleDoc := nil;
+    try
+      try
+        if (TStyleDoc.Lee(L.Ruta, Doc) <> '') or (Doc = nil) or (Doc.Root = nil) then
+          Continue;
+        var O := Busca(Doc.Root);
+        if O <> nil then
+          Exit(O.ClassName_);
+      except
+        // uno que no se deja leer no dice nada
+      end;
+    finally
+      Doc.Free;
+    end;
+  end;
+end;
 
 { ANombre, que el texto de ADoc no tiene: si el lector del IDE (el juez de
   ComoLoEscribeElIde, que carga el form con sus ancestros y sus frames) lo
@@ -1290,14 +1397,18 @@ begin
     Exit;
   Suyo := TStyleDoc.DeTexto(Escrito);
   try
+    // cuales de sus inherited son frames, como los escribe el lector (inline)
+    ADoc.MarcaFramesHeredados(FramesDe(Suyo));
     // la raiz es la form, no algo de un ancestro
     var O := ObjetoPorNombre(Suyo, ANombre.Trim);
     if (O = nil) or (O = Suyo.Root) then
       Exit;
     AH.Bloque := Copy(Suyo.Lines, O.StartLine - 1, O.EndLine - O.StartLine + 1);
     // los que faltan, de dentro a fuera. Uno sin Name no se compone (ni se
-    // busca: NombreDe daria su clase), ni un frame en linea de dentro de otro:
-    // el IDE lo escribe como inherited y con eso su ruta ya no seria esa
+    // busca: NombreDe daria su clase). Un frame en linea tambien: el IDE lo
+    // escribe en la heredada como inherited (medido el 7-nov-2026), y ADoc ya
+    // sabe cuales de sus inherited son frames (arriba) - aqui se salia, y get
+    // o set de Frame11 o de Frame11.Edit1 decian DSGN-078 (A18 de la 1.29)
     var P := O;
     while (P <> nil) and (P <> Suyo.Root) do
     begin
@@ -1305,11 +1416,18 @@ begin
         Exit;
       if ObjetoPorNombre(ADoc, NombreDe(P)) <> nil then
         Break;
-      if P.Clave = 'inline' then
-        Exit;
       E.Nombre := P.ObjName;
       E.Ruta := NombreDe(P);
       E.Clase := P.ClassName_;
+      E.ClaseDelTexto := False;
+      // un frame, con la clase con que esta escrito, no la del lector (TFrame)
+      if P.Clave = 'inline' then
+      begin
+        E.Clase := ClaseDeFrameEnLoLeido(AH.Leidos, P.CadenaDesdeLaRaiz);
+        if E.Clase = '' then
+          Exit;
+        E.ClaseDelTexto := True;
+      end;
       AH.Cadena := [E] + AH.Cadena;
       P := P.Parent;
     end;
@@ -1320,7 +1438,7 @@ begin
     var EnTexto := ADoc.Root;
     if P <> Suyo.Root then
       EnTexto := ObjetoPorNombre(ADoc, NombreDe(P));
-    if (EnTexto = nil) or ((EnTexto.Clave = 'inline') <> (P.Clave = 'inline')) then
+    if (EnTexto = nil) or (EnTexto.EsFrameIncrustado <> P.EsFrameIncrustado) then
       Exit;
     AH.Ancla := NombreDe(EnTexto);
     // de donde llega: el frame, con su clase del texto (el juez lo carga
@@ -1331,8 +1449,12 @@ begin
     begin
       AH.Frame := NombreDe(Fr);
       var FrTexto := ObjetoPorNombre(ADoc, AH.Frame);
-      AH.Origen := MsgFmt(SF_DESIGNER_DE_SU_FRAME_FMT, [AH.Frame,
-        (if FrTexto <> nil then FrTexto.ClassName_ else Fr.ClassName_)]);
+      var ClaseFr := '';
+      if FrTexto <> nil then
+        ClaseFr := FrTexto.ClassName_
+      else
+        ClaseFr := ClaseDeFrameEnLoLeido(AH.Leidos, Fr.CadenaDesdeLaRaiz);
+      AH.Origen := MsgFmt(SF_DESIGNER_DE_SU_FRAME_FMT, [AH.Frame, IfThen(ClaseFr <> '', ClaseFr, Fr.ClassName_)]);
     end;
     Result := Length(AH.Cadena) > 0;
   finally
@@ -1385,7 +1507,7 @@ begin
   // una clase que el juez no cargo la escribio su sustituto: ese nombre no
   // es el de la clase de verdad
   for var E in H.Cadena do
-    if IndexText(E.Clase, H.Sustituidas) >= 0 then
+    if not E.ClaseDelTexto and (IndexText(E.Clase, H.Sustituidas) >= 0) then
       Exit(MsgFmt(SR_DESIGNER_HEREDADO_SIN_CLASE_FMT, [AName.Trim, H.Origen, E.Clase, E.Nombre]));
   var Padre := ObjetoPorNombre(F.Doc, H.Ancla);
   if Padre = nil then
@@ -1438,7 +1560,7 @@ var
 begin
   Result := '';
   var Fr := InlineQueLoContiene(P);
-  if (Fr = nil) and (P.Clave = 'inline') then
+  if (Fr = nil) and P.EsFrameIncrustado then
     Fr := P;
   if Fr <> nil then
     Exit(MsgFmt(SR_DESIGNER_DENTRO_DE_INLINE_FMT, [NombreDe(P), NombreDe(Fr)]));
@@ -2577,7 +2699,7 @@ begin
   begin
     if F.Tabla.ClaseDeNombre(AObj.ClassName_, AClsId) then
       Exit;
-    if (AObj.Clave = 'inline') and
+    if AObj.EsFrameIncrustado and
        F.Tabla.ClaseDeNombre(IfThen(F.EsFmx, ID_FMX_FRAME, ID_VCL_FRAME), AClsId) then
       Exit;
     Exit(MsgFmt(SR_DESIGNER_CLASE_SIN_TABLA_FMT, [NombreDe(AObj), AObj.ClassName_,
@@ -2641,7 +2763,7 @@ var
   begin
     if (O.ObjName <> '') and (ClaseDeJuez(F, O, Id) = '') and F.Tabla.Desciende(Id, ATipoId) then
       L.Add(O.ObjName);
-    if O.Clave = 'inline' then
+    if O.EsFrameIncrustado then
       Exit; // lo de dentro es del frame
     for var K in O.Children do
       Mira(K);

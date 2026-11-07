@@ -53,6 +53,9 @@ type
     Depth: Integer;       // 0 = TStyleContainer, 1 = a style, 2+ = parts
     Parent: TStyleObj;
     Children: TObjectList<TStyleObj>;
+    // un bloque inherited que es un frame puesto en linea en un ancestro: lo
+    // marca TStyleDoc.MarcaFramesHeredados (A2 de la 1.29)
+    FrameHeredado: Boolean;
     constructor Create;
     destructor Destroy; override;
     { The part named AName (StyleName or object name), direct child. }
@@ -63,6 +66,15 @@ type
       (1.22.2: set de Frame11.Edit1 la perdia por el camino y cambiaba el
       Edit1 del form, medido) }
     function Ruta: string;
+    { EL predicado de "frame puesto en linea": su bloque inline o, en un form
+      heredado, el inherited que TWriter escribe por el (medido el 7-nov-2026:
+      inherited Frame11: TFrame1 con inherited Edit1 dentro). Lo de dentro es
+      del frame y se nombra por su ruta. Los sitios que miraban la palabra
+      'inline' lo preguntan aqui: con un inherited sin marcar, lo de siempre. }
+    function EsFrameIncrustado: Boolean;
+    { Los Name desde la raiz (sin ella) hasta el suyo, con punto: la clave con
+      la que se marca un frame heredado (la Ruta ya depende de los frames). }
+    function CadenaDesdeLaRaiz: string;
   end;
 
   TStyleDoc = class
@@ -80,8 +92,11 @@ type
     // las lineas como se leyeron (Reload): Guarda dice con ellas si el
     // fichero ya no se leia ANTES del cambio
     FLeidas: TArray<string>;
+    // las CadenaDesdeLaRaiz de los inherited que son frames (MarcaFramesHeredados)
+    FFramesHeredados: TArray<string>;
     function Clasificadas: TArray<TLineaForm>;
     procedure Parse;
+    procedure AplicaFramesHeredados;
     constructor CreateVacio;
   public
     constructor Create(const APath: string);
@@ -204,6 +219,12 @@ type
       su unidad (Lsp.DesignerEdit, EscribeFormYUnidad: insert, delete,
       rename), que no pasa por Guarda. }
     function JuicioDelParser(const ATexto: string): string;
+    { Los bloques inherited de AClaves (CadenaDesdeLaRaiz) son frames puestos
+      en linea en un ancestro: se recuerda y vale tras Reparsea y Reload, que
+      rehacen el arbol. Lo dice el lector del IDE (Lsp.DesignerEdit,
+      FramesSegunElIde); el texto del form heredado no lo dice (A2 de la 1.29). }
+    procedure MarcaFramesHeredados(const AClaves: TArray<string>);
+    property FramesHeredados: TArray<string> read FFramesHeredados;
     { Re-parses after an edit (line numbers moved). }
     procedure Reload;
     { Re-reads the TREE from the lines as they are now, without the disk:
@@ -523,8 +544,24 @@ begin
   var P := Parent;
   while P <> nil do
   begin
-    if P.Clave = 'inline' then
+    if P.EsFrameIncrustado then
       Result := P.ObjName + '.' + Result;
+    P := P.Parent;
+  end;
+end;
+
+function TStyleObj.EsFrameIncrustado: Boolean;
+begin
+  Result := (Clave = 'inline') or FrameHeredado;
+end;
+
+function TStyleObj.CadenaDesdeLaRaiz: string;
+begin
+  Result := ObjName;
+  var P := Parent;
+  while (P <> nil) and (P.Parent <> nil) do
+  begin
+    Result := P.ObjName + '.' + Result;
     P := P.Parent;
   end;
 end;
@@ -675,6 +712,34 @@ begin
     FRoot := TStyleObj.Create;
     FRoot.ClassName_ := '';
   end;
+  AplicaFramesHeredados;
+end;
+
+procedure TStyleDoc.AplicaFramesHeredados;
+
+  procedure Marca(O: TStyleObj);
+  begin
+    if (O.Parent <> nil) and SameText(O.Clave, 'inherited') and (O.ObjName <> '') then
+    begin
+      var Clave := O.CadenaDesdeLaRaiz;
+      O.FrameHeredado := False;
+      for var S in FFramesHeredados do
+        if MismoIdentificador(S, Clave) then
+          O.FrameHeredado := True;
+    end;
+    for var K in O.Children do
+      Marca(K);
+  end;
+
+begin
+  if (FRoot <> nil) and (Length(FFramesHeredados) > 0) then
+    Marca(FRoot);
+end;
+
+procedure TStyleDoc.MarcaFramesHeredados(const AClaves: TArray<string>);
+begin
+  FFramesHeredados := Copy(AClaves);
+  AplicaFramesHeredados;
 end;
 
 function TStyleDoc.Styles: TArray<TStyleObj>;
@@ -938,7 +1003,7 @@ function TStyleDoc.ObjetoDeNombre(const AName: string; ATambienEnFrames: Boolean
     begin
       if (K.ObjName <> '') and MismoIdentificador(K.ObjName, ANombre) then
         Exit(K);
-      if K.Clave <> 'inline' then
+      if not K.EsFrameIncrustado then
       begin
         Result := BuscaEnSuDueno(K, ANombre);
         if Result <> nil then
@@ -970,7 +1035,7 @@ begin
   for var I := 0 to High(Trozos) do
   begin
     Result := BuscaEnSuDueno(Result, Trozos[I].Trim);
-    if (Result = nil) or ((I < High(Trozos)) and (Result.Clave <> 'inline')) then
+    if (Result = nil) or ((I < High(Trozos)) and not Result.EsFrameIncrustado) then
       Exit(nil);
   end;
 end;
