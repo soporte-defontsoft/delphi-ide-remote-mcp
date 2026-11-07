@@ -71,10 +71,13 @@ type
   escritor del IDE y por eso va solo con ALector, tambien (V154). ADesde: el
   instante en que empezo la llamada que espera (Lsp.FormRender.EmpiezaLaEspera),
   y los jueces del IDE tienen lo que le queda (PlazoDelCliente); 0, sin plazo de
-  cliente. Nunca lanza. }
+  cliente. AEstilos: los estilos que el agente dice que ve el form (delphi_designer
+  lint styles=, Lsp.Styles.EstilosDeclarados): sus StyleLookup se juzgan contra
+  ellos aunque tome un StyleBook que no se lee o sea un frame (C3 de la 1.29).
+  Nunca lanza. }
 function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
   AEsperaMs: Cardinal = ESPERA_TABLA_MS; ALector: Boolean = False;
-  const AAntes: string = ''; ADesde: UInt64 = 0): TLintDeForm;
+  const AAntes: string = ''; ADesde: UInt64 = 0; const AEstilos: TArray<string> = nil): TLintDeForm;
 { POR QUE se le pregunta al lector del IDE por el form de AL: las lineas que la
   tabla no juzga (SinJuez), el frame en linea (FrameInline) o las dos. EL que lo
   compone para DSGN-154 del lint y EDIT-127 / EDIT-131 de una escritura: con un
@@ -409,7 +412,8 @@ begin
 end;
 
 function LosJuecesDeUnForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
-  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string; ADesde: UInt64): TLintDeForm;
+  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string; ADesde: UInt64;
+  const AEstilos: TArray<string>): TLintDeForm;
 var
   Lineas: TArray<string>;
 begin
@@ -436,7 +440,7 @@ begin
   // delphi_styles lint (V75 de la 1.23.1: set los escribia y el lint daba
   // CLEAN); tras una edicion, los que ella trae (V143)
   if EsDesignerFmx(ADfm) then
-    Result.Lookups := NotaDeLookupsSinEstilo(ADfm, Lineas, LineasDelTexto(AAntes));
+    Result.Lookups := NotaDeLookupsSinEstilo(ADfm, Lineas, LineasDelTexto(AAntes), AEstilos);
   // ...y lo que preview negaria luego: EL juez de preview (DSGN-115); tras una
   // edicion, lo que ella trae. Por el texto: nada que pida salir del cerrojo
   Result.Literales := NotaDeLiteralesQuePreviewNiega(ADfm, Lineas, LineasDelTexto(AAntes));
@@ -447,7 +451,8 @@ begin
     Result.Colores := NotaDeColoresSinAlfa(ADfm, ATexto, AEnc, AAntes, ADesde);
     var ConStyleBook: Boolean;
     var Usados := LookupsDeDesigner(ADfm, Lineas, ConStyleBook);
-    if ConStyleBook then
+    // con los estilos que el agente dice que ve, ya se juzgaron (C3 de la 1.29)
+    if ConStyleBook and (Length(AEstilos) = 0) then
       Result.LookupsSinJuzgar := Length(Usados);
   end;
   // ...y EL parser del IDE con los bytes del disco (8.10 de la 1.18.0): un //
@@ -476,7 +481,8 @@ begin
 end;
 
 function LintDeForm(const ADfm, ATexto, AEnc: string; AJuzga: Boolean;
-  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string; ADesde: UInt64): TLintDeForm;
+  AEsperaMs: Cardinal; ALector: Boolean; const AAntes: string; ADesde: UInt64;
+  const AEstilos: TArray<string>): TLintDeForm;
 begin
   // con el cerrojo de escritura cogido (DesignerLint de delphi_edit y del
   // changeset, delete del disenador), ningun juez arranca ni pregunta al
@@ -485,10 +491,10 @@ begin
   // raiz con su base en otra unidad queda sin juzgar, como sin ajustes de
   // proyecto; el lint de fuera (delphi_designer lint) la juzga entera
   if not EnCerrojoDeEscritura then
-    Exit(LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes, ADesde));
+    Exit(LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes, ADesde, AEstilos));
   VedaElMotor;
   try
-    Result := LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes, ADesde);
+    Result := LosJuecesDeUnForm(ADfm, ATexto, AEnc, AJuzga, AEsperaMs, ALector, AAntes, ADesde, AEstilos);
   finally
     LevantaElMotor;
   end;

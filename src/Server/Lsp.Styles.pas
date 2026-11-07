@@ -416,8 +416,22 @@ function LookupsDeDesigner(const ADesigner: string; const ALineas: TArray<string
   nota entera (DSGN-175 y una linea por lookup), o [] si no hay ninguno, si
   no hay juez (sin el conversor) o si ningun StyleLookup lleva valor (entonces
   ni se le pregunta). ADesigner: el fichero, cuyo nombre da la nota. V75 de
-  la 1.23.1. }
-function NotaDeLookupsSinEstilo(const ADesigner: string; const ALineas, AAntes: TArray<string>): TArray<string>;
+  la 1.23.1. AEstilos: los estilos que el agente dice que ve el form
+  (EstilosDeclarados, delphi_designer lint styles=; nil = ninguno): se juzga
+  contra ellos y el de la plataforma AUNQUE tome un StyleBook que no se lee o
+  sea un frame, con su cabecera (DSGN-192; C3 de la 1.29). }
+function NotaDeLookupsSinEstilo(const ADesigner: string; const ALineas, AAntes: TArray<string>;
+  const AEstilos: TArray<string> = nil): TArray<string>;
+{ Los estilos que un agente dice que ve un form (delphi_designer lint styles=):
+  ARuta, un .style de texto o una carpeta con ellos (TextStylesIn, los de
+  delphi_styles lint), por la puerta de leer. '' y en ANombres sus StyleName
+  como claves (ClaveDeEstilo), por EL lector de un .style (TStyleDoc.Lee); uno
+  que el parser del IDE no leeria por lineas como ese lector (FormaDistinta) no
+  se cuenta y va en ASinLeer. Si no, la negativa: la puerta, que no exista, que
+  no sea un .style de texto o que no salga ningun nombre (DSGN-193). Un frame y
+  un form con un StyleBook que no se lee no tenian quien juzgara sus lookups
+  (informe del 7-nov: 167 sin juzgar). C3 de la 1.29 }
+function EstilosDeclarados(const ARuta: string; out ANombres, ASinLeer: TArray<string>): string;
 
 type
   TClaseRc = (crRecurso, crInclude);
@@ -1767,7 +1781,8 @@ begin
     AStyleBookQueNoSeLee := RaizDeDesigner(ADesigner) = rdFrame;
 end;
 
-function NotaDeLookupsSinEstilo(const ADesigner: string; const ALineas, AAntes: TArray<string>): TArray<string>;
+function NotaDeLookupsSinEstilo(const ADesigner: string; const ALineas, AAntes: TArray<string>;
+  const AEstilos: TArray<string>): TArray<string>;
 var
   Lookups: TArray<TLookupDeForm>;
   Defecto: TArray<string>;
@@ -1775,11 +1790,13 @@ var
 begin
   Result := [];
   Lookups := LookupsDeDesigner(ADesigner, ALineas, ConStyleBook);
-  if ConStyleBook or (Length(Lookups) = 0) then
+  // con los estilos que el agente dice que ve, se juzga aunque tome un StyleBook
+  if (ConStyleBook and (Length(AEstilos) = 0)) or (Length(Lookups) = 0) then
     Exit;
   Defecto := PlatformDefaultStyleNames;
   if Length(Defecto) = 0 then
     Exit; // sin el juez no se dice nada
+  Defecto := Defecto + AEstilos;
   // los que ya estaban (el componente y su lookup) no los trae la edicion
   for var L in TLoQueTraeLaEdicion.Filtra<TLookupDeForm>(Lookups, LookupsDeForm(AAntes, ConStyleBook),
     function(AL: TLookupDeForm): string
@@ -1788,9 +1805,70 @@ begin
     end) do
     if IndexStr(ClaveDeEstilo(L.Lookup), Defecto) < 0 then
       Result := Result + [MsgFmt(SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [L.Componente, L.Lookup, L.Linea])];
-  if Length(Result) > 0 then
+  if Length(Result) = 0 then
+    Exit;
+  if Length(AEstilos) > 0 then
+    Result := [MsgFmt(SN_DESIGNER_LOOKUPS_FUERA_DE_STYLES_FMT, [ExtractFileName(ADesigner), Length(Result)])] + Result
+  else
     Result := [MsgFmt(SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT, [ExtractFileName(ADesigner), Length(Result),
       SufijoDeLaEdicion(Length(AAntes) > 0)])] + Result;
+end;
+
+function EstilosDeclarados(const ARuta: string; out ANombres, ASinLeer: TArray<string>): string;
+var
+  Ruta: string;
+  Ficheros: TArray<string>;
+  Doc: TStyleDoc;
+begin
+  ANombres := [];
+  ASinLeer := [];
+  Ruta := TPath.GetFullPath(ARuta.Trim);
+  Result := ReadPathDenied(Ruta);
+  if Result <> '' then
+    Exit;
+  if TDirectory.Exists(Ruta) then
+  begin
+    Ficheros := TextStylesIn(Ruta);
+    if Length(Ficheros) = 0 then
+      Exit(MsgFmt(SR_DESIGNER_STYLES_NO_VALE_FMT, [Ruta, MsgText(SF_DESIGNER_STYLES_SIN_ESTILOS)]));
+  end
+  else if not TFile.Exists(Ruta) then
+    Exit(MsgFmt(SR_NO_EXISTE_FMT, [Ruta]))
+  else if not TieneExtension(Ruta, ['.style']) or IsBinaryStyle(Ruta) then
+    Exit(MsgFmt(SR_DESIGNER_STYLES_NO_VALE_FMT, [Ruta, MsgText(SF_DESIGNER_STYLES_NO_ES_ESTILO)]))
+  else
+    Ficheros := [Ruta];
+  for var F in Ficheros do
+  begin
+    // cada uno por la puerta: uno de la carpeta puede ser un enlace a otro sitio
+    if ReadPathDenied(F) <> '' then
+    begin
+      ASinLeer := ASinLeer + [F];
+      Continue;
+    end;
+    var Forma: string;
+    try
+      Forma := TStyleDoc.Lee(F, Doc);
+    except
+      // uno que no se deja leer no tumba el lint: va con los que no se leen
+      Forma := '-';
+      Doc := nil;
+    end;
+    if Forma <> '' then
+    begin
+      ASinLeer := ASinLeer + [F];
+      Continue;
+    end;
+    try
+      for var O in Doc.Styles do
+        if O.StyleName <> '' then
+          ANombres := ANombres + [ClaveDeEstilo(O.StyleName)];
+    finally
+      Doc.Free;
+    end;
+  end;
+  if Length(ANombres) = 0 then
+    Result := MsgFmt(SR_DESIGNER_STYLES_NO_VALE_FMT, [Ruta, MsgText(SF_DESIGNER_STYLES_SIN_NOMBRES)]);
 end;
 
 class function TLoQueTraeLaEdicion.Filtra<T>(const ALista, AAntes: TArray<T>; const AClave: TFunc<T, string>): TArray<T>;

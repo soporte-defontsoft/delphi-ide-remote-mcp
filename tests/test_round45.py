@@ -84,6 +84,9 @@ open(os.path.join(JAIL, 'propio.exe'), 'wb').write(b'MZ')
 # ...y una form DENTRO para preview: el path pasa y la negativa es la de out/style
 PROPIO_DFM = os.path.join(JAIL, 'Propia.dfm')
 open(PROPIO_DFM, 'w', newline='\r\n').write('object Form1: TForm1\nend\n')
+# ...y una FMX DENTRO para lint styles= (1.29, C3): en un .dfm la negativa es la de VCL (DSGN-193), no la de styles
+PROPIO_FMX = os.path.join(JAIL, 'Propia.fmx')
+open(PROPIO_FMX, 'w', newline='\r\n').write('object Form1: TForm1\nend\n')
 # ...y un proyecto DENTRO para que la negativa de 'paths' sea la de paths (1.21.4)
 PROPIO_DPROJ = os.path.join(JAIL, 'Propio.dproj')
 open(PROPIO_DPROJ, 'w', newline='\r\n').write(
@@ -147,6 +150,7 @@ PROBAR = [
     ('delphi_styles', 'path', {'command': 'view', 'path': AJENO_STYLE}),
     ('delphi_designer', 'out', {'command': 'preview', 'path': PROPIO_DFM, 'out': AJENO_PNG}),
     ('delphi_designer', 'style', {'command': 'preview', 'path': PROPIO_DFM, 'style': AJENO_STYLE}),
+    ('delphi_designer', 'styles', {'command': 'lint', 'path': PROPIO_FMX, 'styles': AJENO_STYLE}),
     ('delphi_git', 'repo', {'repo': FUERA, 'command': 'status'}),
     # 1.19.0: una LISTA de rutas; el suelo mira cada una (CadenasDeValor)
     ('delphi_git', 'paths', {'repo': JAIL, 'command': 'add', 'paths': [AJENO_TXT]}),

@@ -50,6 +50,7 @@ type
     FMaxDepth: Integer;
     FState: string;
     FStyle: string;
+    FStyles: string;
     FNonVisual: Boolean;
     FInline: Boolean;
     FMaxWidth: Integer;
@@ -94,6 +95,10 @@ type
     [RutaDelServidor]
     [RutaRelativa]
     property Style: string read FStyle write FStyle;
+    // lint: el .style (o su carpeta) del que el form toma sus estilos (C3 de la 1.29)
+    [SchemaDescription(SP_DESIGNER_STYLES)]
+    [RutaDelServidor]
+    property Styles: string read FStyles write FStyles;
     [SchemaDescription(SP_DESIGNER_NONVISUAL)]
     property NonVisual: Boolean read FNonVisual write FNonVisual;
     [SchemaDescription(SP_DESIGNER_INLINE)]
@@ -1552,14 +1557,28 @@ end;
 { ADesde: el instante en que empezo la llamada (EmpiezaLaEspera): el lector del IDE
   tiene lo que le queda a su cliente, como tras una edicion (A3 de la 1.27); tenia el
   plazo de un preview }
-function LintForm(const APath: string; ADesde: UInt64): string;
+function LintForm(const APath: string; ADesde: UInt64; const AStyles: string = ''): string;
 var
   Denied, EncName, Text: string;
-  Warns: TArray<string>;
+  Warns, Estilos, SinLeer: TArray<string>;
 begin
   Denied := EntradaDeFormDenegada(APath, False);
   if Denied <> '' then
     Exit(Denied);
+  // styles=: los estilos que el agente dice que ve el form, contra los que se
+  // juzgan sus StyleLookup aunque tome un StyleBook que no se lee o sea un frame
+  // (C3 de la 1.29). EL lector, el de Lsp.Styles
+  Estilos := nil;
+  SinLeer := nil;
+  if AStyles.Trim <> '' then
+  begin
+    // StyleLookup es de FMX: en un form VCL se ignoraba en silencio
+    if not EsDesignerFmx(APath) then
+      Exit(MsgFmt(SR_DESIGNER_STYLES_NO_VALE_FMT, [AStyles.Trim, MsgText(SF_DESIGNER_STYLES_SOLO_FMX)]));
+    Denied := EstilosDeclarados(AStyles, Estilos, SinLeer);
+    if Denied <> '' then
+      Exit(Denied);
+  end;
   // Un .dfm binario se lee al vuelo (Lsp.DesignerBin); uno danado se rechaza.
   // (por EL lector de designers, Lsp.Puertas.TextoDeDesigner)
   var Motivo := TextoDeDesigner(APath, Text, EncName);
@@ -1571,7 +1590,8 @@ begin
   // binario ya paso su conversion. lint = todo lo que el compilador no mira
   // ...y lo que la tabla no sabe juzgar (lo que la clase guarda por codigo),
   // el lector del IDE: CLEAN solo si carga (DSGN-061 de la 1.20)
-  var L := LintDeForm(APath, Text, EncName, not IsBinaryDesigner(APath), ESPERA_TABLA_MS, True, '', ADesde);
+  var L := LintDeForm(APath, Text, EncName, not IsBinaryDesigner(APath), ESPERA_TABLA_MS, True, '', ADesde,
+    Estilos);
   var Falta := L.Falta;
   var Notas := L.Notas;
   Warns := L.Propiedades + L.Lector + L.Enlace;
@@ -1640,6 +1660,9 @@ begin
   // lo que dice CLEAN no habla de ellos, y un agente lo leia como "lookups bien" (V156)
   if L.LookupsSinJuzgar > 0 then
     Result := Result + #13#10 + MsgFmt(SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT, [L.LookupsSinJuzgar]);
+  // los .style de styles= que no se leyeron: sus estilos no contaron
+  if Length(SinLeer) > 0 then
+    Result := Result + #13#10 + MsgFmt(SN_DESIGNER_STYLES_SIN_LEER_FMT, [string.Join(', ', SinLeer)]);
 end;
 
 { TDelphiDesignerTool }
@@ -2219,7 +2242,7 @@ begin
       // ensenaba con ese nombre (Hermes, 28-sep-2026, F2)
       'info', 'classname framework filter',
       'prop', 'classname framework prop',
-      'tree', 'path maxdepth', 'lint', 'path', 'layout', 'path',
+      'tree', 'path maxdepth', 'lint', 'path styles', 'layout', 'path',
       'get', 'path component',
       'check-binding', 'path unit',
       'preview', 'path component framework state style nonvisual inline maxwidth scale out',
@@ -2231,7 +2254,7 @@ begin
      'component', Params.Component, '', 'unit', Params.Unit_, '',
      'framework', Params.Framework, '', 'filter', Params.Filter, '',
      'maxdepth', IfThen(Params.MaxDepth <> 0, IntToStr(Params.MaxDepth)), '',
-     'state', Params.State, '', 'style', Params.Style, '',
+     'state', Params.State, '', 'style', Params.Style, '', 'styles', Params.Styles, '',
      'nonvisual', IfThen(Params.NonVisual, 'true'), '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
      'scale', IfThen(Params.Scale <> 0, IntToStr(Params.Scale)), '',
@@ -2278,7 +2301,7 @@ begin
       if ReadPathDenied(TPath.GetFullPath(Params.Path)) = '' then
         Result := FormAnchoQueNoCarga(TPath.GetFullPath(Params.Path));
       if Result = '' then
-        Result := ConNotaDeFormAncho(LintForm(Params.Path, ADesde), Params.Path);
+        Result := ConNotaDeFormAncho(LintForm(Params.Path, ADesde, Params.Styles), Params.Path);
     end
     else if Params.Component.Trim = '' then
       Result := MsgText(SR_DESIGNER_NEED_COMPONENT)

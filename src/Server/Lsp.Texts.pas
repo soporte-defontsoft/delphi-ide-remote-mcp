@@ -6009,9 +6009,7 @@ const
     'property''s type and the ' +
     'class BEFORE writing - one the class stores by code, by the IDE''s own ' +
     'form reader - and ' +
-    'written as the IDE''s writer stores the component: notStored, storedAs ' +
-    'or storedIn say when that is not the value given, alsoWritten what else it ' +
-    'changed in the component; parent= ' +
+    'written as the IDE''s writer stores the component; parent= ' +
     'alone moves the component; before=, ' +
     'after= or index= alone reorders it among its siblings; prop=Name ' +
     'renames it, its field, its default-named handlers and the form lines ' +
@@ -6087,6 +6085,11 @@ const
     'platform of the designer''s Style list (android, ios, win11...; an ' +
     'unknown name gets the list). A file goes by absolute path. Only for ' +
     'THAT image: nothing is written.';
+
+  { lint styles= (C3 de la 1.29) }
+  SP_DESIGNER_STYLES =
+    'lint optional: the .style file or folder the form takes its styles ' +
+    'from; its StyleLookups are judged against it.';
 
   SP_DESIGNER_NONVISUAL =
     'preview optional: true = draw the non-visual components (TTimer, ' +
@@ -7259,7 +7262,8 @@ const
   SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT =
     '[DSGN-178] Not judged: its %d StyleLookup value(s). They come from a StyleBook ' +
     'this lint does not read - one of its own kept in binary, another form''s, its ' +
-    'ancestor''s or, in a frame, the one of the form that hosts it.';
+    'ancestor''s or, in a frame, the one of the form that hosts it. styles=<its ' +
+    '.style or folder> judges them against it.';
 
   SN_DESIGNER_LINT_BAD_FMT =
     '[DSGN-038] %d designer warnings in %s (unpublished ' +
@@ -7576,7 +7580,8 @@ const
     'StyleBook (none of its own, no StyleBook = <another form>.<its StyleBook>, ' +
     'not inherited). FMX then draws the control with its class''s own style, ' +
     'as preview shows. If the project loads a style of its own, delphi_styles ' +
-    'lint with path=<its styles folder> checks them against it%2:s:';
+    'lint with path=<its styles folder>, or this lint with styles=<it>, checks ' +
+    'them against it%2:s:';
   { lo que va en %2:s de DSGN-175 tras una edicion: la nota dice solo los que
     ella trae, y el lint los da todos (V143 de la 1.23.1) }
   SF_DESIGNER_LOOKUPS_DE_LA_EDICION =
@@ -7585,6 +7590,27 @@ const
   { %0:s: el componente; %1:s: su StyleLookup; %2:d: su linea (una linea de
     la nota DSGN-175, sin etiqueta propia) }
   SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT = '  %0:s: StyleLookup = ''%1:s'' (line %2:d)';
+  { lint con styles=: la cabecera de los StyleLookup que ni esos estilos ni el de
+    la plataforma definen, se tome o no un StyleBook (C3 de la 1.29). %0:s: el
+    fichero; %1:d: cuantos. Sus lineas, SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT }
+  SN_DESIGNER_LOOKUPS_FUERA_DE_STYLES_FMT =
+    '[DSGN-192] %0:s: %1:d StyleLookup value(s) that neither the styles given ' +
+    '(styles=) nor the platform''s default style define. FMX draws such a ' +
+    'control with its class''s own style, with no error:';
+  { lint styles= que no da estilos que juzgar (Lsp.Styles.EstilosDeclarados).
+    %0:s: la ruta; %1:s: por que (SF_DESIGNER_STYLES_*) }
+  SR_DESIGNER_STYLES_NO_VALE_FMT =
+    '[DSGN-193 INVALID_PARAM] styles=%0:s: %1:s. It takes a text .style, or ' +
+    'a folder with them: the form''s StyleLookups are judged against their ' +
+    'StyleNames and the platform''s default style.';
+  SF_DESIGNER_STYLES_SIN_ESTILOS = 'there is no text .style in that folder';
+  SF_DESIGNER_STYLES_NO_ES_ESTILO = 'it is not a text .style';
+  SF_DESIGNER_STYLES_SIN_NOMBRES = 'none of its styles has a StyleName that this lint reads';
+  SF_DESIGNER_STYLES_SOLO_FMX = 'StyleLookup is FMX''s, and this form is VCL';
+  { lint styles= con .style que no se leen (la puerta, o el parser del IDE no los
+    leeria por lineas como el lector: DSGN-160); sus nombres no cuentan. %s: cuales }
+  SN_DESIGNER_STYLES_SIN_LEER_FMT =
+    '[DSGN-194] Not read, so their styles do not count: %s.';
 
   { %0:s: el fichero; %1:d: cuantos; %2:s: '' en el lint, o
     SF_DESIGNER_LOOKUPS_DE_LA_EDICION tras una edicion. Un valor que es una ruta
