@@ -7422,6 +7422,15 @@ const
     'macro other than $(PROJECTNAME) cannot be checked. Nothing was built. Fix ' +
     'that entry of the deployment manifest.';
 
+  { un RemoteDir/RemoteName que deja el fichero fuera de la carpeta del proyecto
+    en el destino (R1 de la 1.29) }
+  SR_BUILD_CARPETA_REMOTA_FMT =
+    '[BUILD-070 DENIED] I will not build this. %s in %s is "%s": on the target ' +
+    'that file would land outside the folder of project %s, in the folder of ' +
+    'another project or of the server. On %s a deployment entry goes into the ' +
+    'project''s own folder (its RemoteDir starts with %s\ and has no ..). ' +
+    'Nothing was built. Fix that entry of the deployment manifest.';
+
   SN_BUILD_LOCKED_OUTPUT =
     '[BUILD-032] F2039 "Could not create output file" is almost never a ' +
     'fault in your code: the binary this build wants to write is OPEN. ' +
@@ -8528,6 +8537,14 @@ const
     'target: its name goes into the fields of the transfer, and only letters, ' +
     'digits, spaces and _ - . ( ) + are safe there. Nothing was sent. Rename ' +
     'the project (its .dproj) and try again.';
+
+  { el nombre de la carpeta del nodo de escritorio en el destino: es del
+    servidor (R1 de la 1.29) }
+  SR_PACLIENT_NOMBRE_RESERVADO_FMT =
+    '[PAS-074 DENIED] The project name "%s" is the one the server uses on ' +
+    'every target for its desktop node, so a project with that name cannot be ' +
+    'deployed, run or read there. Nothing was sent. Rename the project (its ' +
+    '.dproj) and try again.';
 
   SR_GIT_REMOTE_OFF_FMT =
     '[GIT-004 DENIED] This server does not talk to "%s". An explicit URL ' +

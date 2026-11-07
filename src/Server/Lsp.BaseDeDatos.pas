@@ -82,12 +82,14 @@ function NegativaDeLaBase(E: Exception; const AConexion: TConexionDb): string;
 implementation
 
 uses
+  Winapi.Windows, // el entorno del proceso: QuitaEntornoDeLibpq
   System.Classes, System.StrUtils, System.SyncObjs, System.IOUtils, System.Variants,
   FireDAC.Stan.Intf, FireDAC.Stan.Option, FireDAC.Stan.Error, FireDAC.Stan.Def,
   FireDAC.Stan.Async, FireDAC.Stan.Consts, FireDAC.Phys.Intf, FireDAC.Phys,
   FireDAC.Phys.MSSQL, FireDAC.Phys.PG, FireDAC.DApt, FireDAC.DatS,
   FireDAC.ConsoleUI.Wait,
   Lsp.Texts, Lsp.Casa,
+  Lsp.Sandbox,  // LineasDelEntorno: EL recorrido del entorno del proceso
   Lsp.ConPlazo; // TrabajoConPlazo: el plazo lo pone el servidor, no el driver
 
 const
@@ -175,9 +177,16 @@ begin
     AConn.Params.Values[S_FD_ConnParam_Common_Port] := C.Puerto;
   if MatchText(S_FD_ConnParam_Common_LoginTimeout, Del) then
     AConn.Params.Values[S_FD_ConnParam_Common_LoginTimeout] := IntToStr(PLAZO_CONEXION_DB - 2);
+  // ...y ni el certificado de cliente ni la identidad de Windows o Kerberos de
+  // la cuenta del servidor: el json da usuario y contrasena, y libpq usaria por
+  // su cuenta postgresql.crt de su perfil, GSS para cifrar y SSPI/GSS para
+  // entrar (CH3 de la 1.29). Son claves de libpq 16 o posterior: una mas vieja
+  // no abre y lo dice (invalid connection option), en vez de entrar como ella
+  // quiera.
   if MatchText(S_FD_ConnParam_PG_PGAdvanced, Del) then
     AConn.Params.Values[S_FD_ConnParam_PG_PGAdvanced] :=
-      'passfile=' + TPath.Combine(CarpetaDeDriverDeBd(C.Motor), FICHERO_SIN_CLAVES);
+      'passfile=' + TPath.Combine(CarpetaDeDriverDeBd(C.Motor), FICHERO_SIN_CLAVES) +
+      ';sslcertmode=disable;gssencmode=disable;require_auth=!gss,!sspi';
   AConn.ResourceOptions.CmdExecTimeout := PLAZO_ORDEN_DB;
 end;
 
@@ -334,7 +343,49 @@ begin
     TextoDelMotor(E.Message, AConexion)]);
 end;
 
+{ CH3 de la 1.29: libpq rellena lo que el json no dice con el ENTORNO de la
+  cuenta del servidor - medido el 7-nov-2026: con el mismo json,
+  PGSSLMODE=require cambiaba la conexion (de abrir a DB-009), y PGHOSTADDR
+  la mandaria a otra maquina. Lo que abre una base es su json y nada mas
+  (David). Las variables de libpq son las PG* (su documentacion: "Environment
+  Variables", todas con ese prefijo, tambien las que lee sin ser claves de
+  conexion, PGSERVICEFILE o PGSYSCONFDIR), y este servidor no usa ninguna:
+  se quitan de SU entorno al arrancar, de las dos copias que hay - la de
+  Windows y la de la CRT que usa libpq (ucrtbase: la copia la primera vez
+  que alguien la lee, y despues no ve un SetEnvironmentVariable). }
+procedure QuitaEntornoDeLibpq;
+type
+  TWPutEnvS = function(ANombre, AValor: PWideChar): Integer; cdecl;
+const
+  PREFIJO_DE_LIBPQ = 'PG';
+var
+  Nombres: TArray<string>;
+  PonEnLaCrt: TWPutEnvS;
+  Crt: HMODULE;
+begin
+  Nombres := [];
+  for var Linea in LineasDelEntorno do
+  begin
+    // desde 1: una entrada de unidad empieza por '=' (=C:=C:\)
+    var Igual := Linea.IndexOf('=', 1);
+    if (Igual > 0) and Linea.StartsWith(PREFIJO_DE_LIBPQ, True) then
+      Nombres := Nombres + [Linea.Substring(0, Igual)];
+  end;
+  PonEnLaCrt := nil;
+  Crt := GetModuleHandle('ucrtbase.dll');
+  if Crt <> 0 then
+    @PonEnLaCrt := GetProcAddress(Crt, '_wputenv_s');
+  for var N in Nombres do
+  begin
+    SetEnvironmentVariableW(PWideChar(N), nil);
+    // un valor vacio la QUITA de la tabla de la CRT
+    if Assigned(PonEnLaCrt) then
+      PonEnLaCrt(PWideChar(N), '');
+  end;
+end;
+
 initialization
+  QuitaEntornoDeLibpq;
   GPg := TFDPhysPgDriverLink.Create(nil);
   GPg.VendorHome := CarpetaDeDriverDeBd(GPg.BaseDriverID);
   GMsSql := TFDPhysMSSQLDriverLink.Create(nil);

@@ -1059,8 +1059,13 @@ function ValoresQueLeeElBuild(const AXml, APlatform, AConfig: string;
   (RemoteDir, RemoteName), como estan escritos: hijos del item, asi que
   ValoresQueLeeElBuild, que lee el Include, no los ve. Solo Elemento y Escrito:
   VeredictosDeElementos no expande metadatos, y quien los juzga no se fia de una
-  macro. De todos los grupos: un manifiesto del IDE pasa en cualquiera. }
-function CamposRemotosDeDespliegue(const AXml: string): TArray<TValorDelProyecto>;
+  macro. De todos los grupos: un manifiesto del IDE pasa en cualquiera. Con
+  APlatform, solo los que despliega ESE build: fuera los de un ItemGroup o un
+  DeployFile cuya Condition es falsa para APlatform/AConfig (el .deployproj
+  del IDE pone uno por plataforma y config, DeployGroupCondition); lo que no
+  se sabe, cuenta (prudencia, como la puerta del build). }
+function CamposRemotosDeDespliegue(const AXml: string; const APlatform: string = '';
+  const AConfig: string = ''): TArray<TValorDelProyecto>;
 
 { Los textos del .dproj y de cada fichero DEL PROYECTO que importa (un
   .optset), recursivo hasta 4 niveles, con el fichero de cada texto en el
@@ -4793,15 +4798,46 @@ begin
   end;
 end;
 
-function CamposRemotosDeDespliegue(const AXml: string): TArray<TValorDelProyecto>;
+function CamposRemotosDeDespliegue(const AXml, APlatform, AConfig: string): TArray<TValorDelProyecto>;
 var
   Mal: string;
   V: TValorDelProyecto;
+  Elementos: TArray<TElementoXml>;
+  Grupos: TArray<TGrupoXml>;
+  Busca: TBuscaBandera;
+
+  // la Condition de su ItemGroup o de su DeployFile dice que es de OTRO build
+  function DeOtroBuild(const E: TElementoXml): Boolean;
+  begin
+    Result := False;
+    if APlatform = '' then
+      Exit;
+    for var G in Grupos do
+      if (E.Tramo.Abre > G.Ini) and (E.Tramo.Cierra < G.Fin) and
+         (EvaluaCondicion(G.Condicion, APlatform, AConfig, Busca) = vNo) then
+        Exit(True);
+    for var D in Elementos do
+      if SameText(D.Nombre, 'DeployFile') and not D.Tramo.Vacio and
+         (D.Tramo.Abre < E.Tramo.Abre) and (D.Tramo.Cierra > E.Tramo.Cierra) and
+         (EvaluaCondicion(AtributoDeTramo(AXml, D.Tramo, D.Escrito, 'Condition'),
+          APlatform, AConfig, Busca) = vNo) then
+        Exit(True);
+  end;
+
 begin
   Result := nil;
-  for var E in ElementosDe(AXml, Mal) do
+  // fuera de Platform y Config (que EvaluaCondicion sabe), nada se sabe aqui
+  Busca := function(const ANombre: string): TBanderaDelBuild
+    begin
+      Result.Valor := '';
+      Result.Estado := eDesconocida;
+    end;
+  Elementos := ElementosDe(AXml, Mal);
+  Grupos := GruposDe(AXml, 'ItemGroup');
+  for var E in Elementos do
     if (Length(E.Ruta) > 0) and (E.Ruta[High(E.Ruta)] = 'deployfile') and
-       MatchText(E.Nombre, ['RemoteDir', 'RemoteName']) and not E.Tramo.Vacio then
+       MatchText(E.Nombre, ['RemoteDir', 'RemoteName']) and not E.Tramo.Vacio and
+       not DeOtroBuild(E) then
     begin
       V := Default(TValorDelProyecto);
       V.Elemento := E.Escrito;

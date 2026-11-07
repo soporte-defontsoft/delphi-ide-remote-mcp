@@ -808,14 +808,28 @@ end;
   rev-parse --verify --quiet --end-of-options, que entiende HEAD^, @{1} y
   x^{commit}. --end-of-options protege un nombre que empieza por '-' sin
   lista. Un fallo de git al juzgar no es un "vale": Codigo<>0 (timeout, o no
-  hay git -EOSError, que sube-) es "no". Por el lanzador de la casa. *)
-function EsNombreDeRef(const ARepo, AFijado, ANombre: string; AConRevision: Boolean): Boolean;
+  hay git -EOSError, que sube-) es "no". Por el lanzador de la casa.
+  ASinLeerRepo: el nombre de una rama que se juzga SIN el repo de ARepo (clone:
+  su destino aun no existe y ARepo es la carpeta de encima, que puede estar en
+  un repo FUERA de las raices). --branch le pregunta a ese repo (@{-1} lee su
+  reflog, y el si o el no decia si tenia rama anterior: B9 del revisor del
+  paisaje de la 1.29, medido); la ref entera refs/heads/<n> la comprueba git
+  sin leer ninguno. Lo que --branch negaba ademas, un '-' delante, se niega
+  aqui. *)
+function EsNombreDeRef(const ARepo, AFijado, ANombre: string; AConRevision: Boolean;
+  ASinLeerRepo: Boolean = False): Boolean;
 var
   Codigo: Cardinal;
 begin
   if AConRevision then
     GitCorre(ARepo, AFijado,
       'rev-parse --verify --quiet --end-of-options ' + EnComillas(ANombre), 60000, Codigo)
+  else if ASinLeerRepo then
+  begin
+    if ANombre.StartsWith('-') then
+      Exit(False);
+    GitCorre(ARepo, AFijado, 'check-ref-format ' + EnComillas('refs/heads/' + ANombre), 60000, Codigo);
+  end
   else
     GitCorre(ARepo, AFijado, 'check-ref-format --branch ' + EnComillas(ANombre), 60000, Codigo);
   Result := Codigo = 0;
@@ -833,11 +847,13 @@ end;
 
 { ...y uno que es un NOMBRE de rama o de tag (la rama de un switch o un
   pull, el tag nuevo): '' si git lo admite (check-ref-format: tampoco uno
-  que empieza por '-', que git leeria como opcion); si no, GIT-071. }
-function NombreDenegado(const ARepo, AFijado, ACampo, AValor: string): string;
+  que empieza por '-', que git leeria como opcion); si no, GIT-071.
+  ASinLeerRepo, el de EsNombreDeRef (clone). }
+function NombreDenegado(const ARepo, AFijado, ACampo, AValor: string;
+  ASinLeerRepo: Boolean = False): string;
 begin
   Result := '';
-  if (AValor.Trim <> '') and not EsNombreDeRef(ARepo, AFijado, AValor.Trim, False) then
+  if (AValor.Trim <> '') and not EsNombreDeRef(ARepo, AFijado, AValor.Trim, False, ASinLeerRepo) then
     Result := MsgFmt(SR_GIT_NOMBRE_NO_VALE_FMT, [ACampo, AValor.Trim]);
 end;
 
@@ -1924,8 +1940,9 @@ begin
     if TieneGit(Repo) then
       Exit(MsgFmt(SR_GIT_YA_ES_REPOSITORIO_FMT, [Repo]));
     // la rama o el tag que deja, un nombre que git admite; se le pregunta desde
-    // lo que ya existe, que el destino aun no
-    Result := NombreDenegado(PrimerAncestroQueExiste(Repo), '', 'branch', Params.Branch);
+    // lo que ya existe, que el destino aun no, y SIN leer el repo que pueda
+    // haber encima (B9 de la 1.29: puede estar fuera de las raices)
+    Result := NombreDenegado(PrimerAncestroQueExiste(Repo), '', 'branch', Params.Branch, True);
     if Result <> '' then
       Exit;
     // El destino se crea AQUI, pasadas todas las negativas: un rechazo no

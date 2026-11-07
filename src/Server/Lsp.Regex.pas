@@ -62,6 +62,8 @@ implementation
 
 uses
   System.SysUtils,
+  System.Character,  // IsLowSurrogate: un inicio en mitad de una pareja
+  Lsp.Codificacion,  // SiguienteSuelto: EL buscador de sustitutos sueltos
   Lsp.Texts; // SF_REGEX_ERROR_EN_FMT: el texto, en el catalogo
 
 function GrupoDe(const AMatch: TMatch; AIndice: Integer): string;
@@ -126,21 +128,39 @@ function TExprDelAgente.Busca(const ATexto: string; AInicio: Integer;
   out AIndice, ALongitud: Integer): TResultadoBusqueda;
 var
   Ofs: array [0 .. 2] of Integer; // solo la coincidencia entera
-  R: Integer;
+  R, I, Inicio: Integer;
+  Texto: string;
 {$IFNDEF MSWINDOWS}
   U: UTF8String;
 {$ENDIF}
 begin
   AIndice := 0;
   ALongitud := 0;
+  { PCRE_NO_UTF8_CHECK (no revalidar la linea en cada busqueda) pide un texto
+    UTF-16 valido y un inicio en un limite de caracter. Un fuente UTF-16 trae
+    sus sustitutos sueltos tal cual (delphi_read los cuenta como corrupcion),
+    y PCRE juntaba dos sueltos como si fueran una pareja: [^a]X daba otra
+    posicion o ninguna (EH8 del revisor del paisaje de la 1.29, medido el
+    7-nov-2026). Cada suelto -por EL buscador de sueltos de Lsp.Codificacion-
+    pasa a U+FFFD, uno por uno: las posiciones no se mueven. Y un inicio en
+    mitad de una pareja (lo que avanza una coincidencia vacia) pasa al
+    caracter siguiente. }
+  Texto := ATexto;
+  I := 1;
+  while SiguienteSuelto(Texto, I) <> #0 do
+    Texto[I - 1] := #$FFFD;
+  Inicio := AInicio;
+  if (Inicio > 1) and (Inicio <= Length(Texto)) and Texto[Inicio].IsLowSurrogate and
+     Texto[Inicio - 1].IsHighSurrogate then
+    Inc(Inicio);
 {$IFDEF MSWINDOWS}
-  R := pcre_exec(FPatron, @FExtra, PCRE_STR(PChar(ATexto)), Length(ATexto), AInicio - 1,
+  R := pcre_exec(FPatron, @FExtra, PCRE_STR(PChar(Texto)), Length(Texto), Inicio - 1,
     PCRE_NO_UTF8_CHECK, @Ofs[0], 3);
 {$ELSE}
   // en UTF-8 el motor cuenta en bytes: lo que ocupan los caracteres de delante
-  U := UTF8String(ATexto);
+  U := UTF8String(Texto);
   R := pcre_exec(FPatron, @FExtra, PCRE_STR(PAnsiChar(U)), Length(U),
-    Length(UTF8String(Copy(ATexto, 1, AInicio - 1))), PCRE_NO_UTF8_CHECK, @Ofs[0], 3);
+    Length(UTF8String(Copy(Texto, 1, Inicio - 1))), PCRE_NO_UTF8_CHECK, @Ofs[0], 3);
 {$ENDIF}
   // (0: casa, pero no caben los grupos; aqui no hacen falta)
   if R >= 0 then

@@ -370,7 +370,9 @@ begin
      ValorRompeCampoDePaclient(ARelPath) then
     Exit(MsgText(SR_FETCHTARGET_BADPATH));
   ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
-  Result := NombreDeProyectoParaPaclientDenegado(ADprojPath); // V217: no a un campo de paclient
+  // V217: no a un campo de paclient. Lo llama el servidor (el nodo, sus capturas):
+  // la carpeta del nodo es suya
+  Result := NombreDeProyectoParaPaclientDenegado(ADprojPath, True);
   if Result <> '' then
     Exit;
   CrearCarpeta(ADestDir);

@@ -162,6 +162,11 @@ function CuentaDeEsteProceso: string;
   del hijo. No modifica el entorno del servidor ni carreras entre llamadas. }
 function EntornoSinConfiguracion(const AFijas: TArray<string> = nil): string;
 
+{ Las lineas NOMBRE=valor del entorno de ESTE proceso, en el orden del bloque
+  (GetEnvironmentStrings): EL recorrido del bloque, el de
+  EntornoSinConfiguracion y el de Lsp.BaseDeDatos.QuitaEntornoDeLibpq. }
+function LineasDelEntorno: TArray<string>;
+
 { EL entorno de un hijo del servidor: el que se le da o, sin darlo, el de este
   proceso sin la configuracion (EntornoSinConfiguracion). Sin darlo, paclient,
   adb y su demonio, reg.exe y el motor heredaban el entorno ENTERO, el token
@@ -509,10 +514,30 @@ end;
   con su propia AC\Temp -existente y escribible, borrada con el perfil- y la
   API GetTempPath la devuelve (medido 2-oct-2026; solo TPath.GetTempPath de la
   RTL sale vacio bajo AppContainer, y eso es del binario del test). }
-function EntornoSinConfiguracion(const AFijas: TArray<string>): string;
+function LineasDelEntorno: TArray<string>;
 var
   P, Q: PChar;
   Linea: string;
+begin
+  Result := [];
+  P := GetEnvironmentStrings;
+  if P = nil then
+    Exit;
+  try
+    Q := P;
+    while Q^ <> #0 do
+    begin
+      Linea := Q;
+      Result := Result + [Linea];
+      Inc(Q, Length(Linea) + 1);
+    end;
+  finally
+    FreeEnvironmentStrings(P);
+  end;
+end;
+
+function EntornoSinConfiguracion(const AFijas: TArray<string>): string;
+var
   Lineas: TStringList;
   Sustituida: Boolean;
 begin
@@ -521,23 +546,14 @@ begin
   try
     Lineas.Sorted := True;
     Lineas.CaseSensitive := False;
-    P := GetEnvironmentStrings;
-    if P <> nil then
-    try
-      Q := P;
-      while Q^ <> #0 do
-      begin
-        Linea := Q;
-        Sustituida := StartsText(PREFIJO_DE_CONFIGURACION, Linea);
-        for var Fija in AFijas do
-          if StartsText(Copy(Fija, 1, Pos('=', Fija)), Linea) then
-            Sustituida := True;
-        if not Sustituida then
-          Lineas.Add(Linea);
-        Inc(Q, Length(Linea) + 1);
-      end;
-    finally
-      FreeEnvironmentStrings(P);
+    for var Linea in LineasDelEntorno do
+    begin
+      Sustituida := StartsText(PREFIJO_DE_CONFIGURACION, Linea);
+      for var Fija in AFijas do
+        if StartsText(Copy(Fija, 1, Pos('=', Fija)), Linea) then
+          Sustituida := True;
+      if not Sustituida then
+        Lineas.Add(Linea);
     end;
     // una fija vacia ('NOMBRE=') QUITA la variable, como SET NOMBRE= en cmd:
     // rsvars.bat vacia asi PLATFORM y PlatformSDK, y el build ya no lo lee
@@ -558,7 +574,7 @@ begin
       if Ultima and (Pos('=', AFijas[I]) < Length(AFijas[I])) then
         Lineas.Add(AFijas[I]);
     end;
-    for Linea in Lineas do
+    for var Linea in Lineas do
       Result := Result + Linea + #0;
     if Result = '' then
       Result := #0;

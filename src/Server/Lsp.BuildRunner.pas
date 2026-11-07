@@ -2176,6 +2176,15 @@ begin
         if Result <> '' then
           Exit;
       end;
+      // ...y los que despliega ESTE build, por donde caen en el destino: en la
+      // carpeta del proyecto, no en la de otro ni en la del nodo (R1 de la 1.29)
+      for var C in CamposRemotosDeDespliegue(Xmls[I], APlat, ACfg) do
+      begin
+        Result := CampoRemotoFueraDelProyectoDenegado(C.Elemento, C.Escrito,
+          TPath.GetFileNameWithoutExtension(ADprojPath), APlat, Ficheros[I]);
+        if Result <> '' then
+          Exit;
+      end;
     end;
   finally
     Vars.Free;

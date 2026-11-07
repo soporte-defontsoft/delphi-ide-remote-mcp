@@ -61,8 +61,33 @@ function ValorRompeCampoDePaclient(const V: string): Boolean;
   todas las puertas que mandan ese nombre a paclient -Lsp.RemoteRun
   (FetchFromTarget, RemoteRun, RemoteOutput; RemoteKill por RemoteRun), la
   puerta de Mcp.Tools.PAServer (EjecucionRemotaDenegada) y el Deploy de
-  Lsp.BuildRunner-, para que ninguna derive a mano una regla que drifte. }
-function NombreDeProyectoParaPaclientDenegado(const ADprojPath: string): string;
+  Lsp.BuildRunner-, para que ninguna derive a mano una regla que drifte.
+  Y el nombre de la carpeta del nodo de escritorio (NODE_PROJECT) es del
+  servidor: un proyecto del agente con ese nombre se desplegaba ENCIMA del
+  nodo, que luego ejecutan las sesiones de escritorio de otros agentes en ese
+  perfil (R1 del revisor del paisaje de la 1.29): PAS-074. ADelServidor: la
+  llamada es del propio servidor (la comprobacion y las capturas del nodo, por
+  FetchFromTarget), que si usa esa carpeta. }
+function NombreDeProyectoParaPaclientDenegado(const ADprojPath: string;
+  ADelServidor: Boolean = False): string;
+
+{ Un RemoteDir o un RemoteName (AElemento, su valor AValor) de un DeployFile que
+  despliega el proyecto AProyecto para APlataforma: '' si el fichero queda en la
+  carpeta del proyecto en el destino, o BUILD-070. PAServer deja un DeployFile
+  relativo a la carpeta del PERFIL (<usuario>-<perfil>/), y el IDE empieza
+  RemoteDir por el nombre del proyecto (AppB9\). Medido el 7-nov-2026 en los 68
+  .deployproj de esta maquina (ejemplos del IDE y proyectos): las 1.393 entradas
+  de Linux64, Win32, Win64 y Android, TODAS en la carpeta del proyecto y
+  ninguna con '..' ni con una macro. Otra primera carpeta pisaba la de OTRO
+  proyecto: la del nodo de escritorio, que ejecutan las sesiones de escritorio
+  de otros agentes, o la de un proyecto que el operador deja ejecutar (el
+  homonimo de Fable de la 1.22.2, reabierto por RemoteDir): R1 de la 1.29.
+  Apple (macOS, iOS) es la excepcion medida: el bundle se nombra P.app\..\ y
+  $(PROJECTNAME); ahi se niega lo que sube por encima de la carpeta del perfil
+  y la del nodo. Sin juez a quien preguntar (donde deja PAServer un fichero es
+  suyo, medido en el destino): una gramatica NUESTRA, UNA, aqui. }
+function CampoRemotoFueraDelProyectoDenegado(const AElemento, AValor, AProyecto,
+  APlataforma, AFichero: string): string;
 
 { Lo que la puerta de la llamada (Lsp.Guard) pregunta de los argumentos, cada
   uno explicado en su cuerpo. Publicos desde que se mudaron aqui (B6 de la
@@ -85,6 +110,7 @@ uses
   Lsp.Texts,
   Lsp.Settings,
   Lsp.ProcessLaunch, // EnComillas: la linea de una orden
+  Lsp.RemoteRun,     // NODE_PROJECT: la carpeta del nodo en el destino, del servidor
   System.Character;
 
 { Reads a tools/call argument the SAME WAY the RTTI binder resolves it
@@ -184,14 +210,61 @@ begin
       Exit(True);
 end;
 
-function NombreDeProyectoParaPaclientDenegado(const ADprojPath: string): string;
+function NombreDeProyectoParaPaclientDenegado(const ADprojPath: string;
+  ADelServidor: Boolean): string;
 var
   Nombre: string;
 begin
   Result := '';
   Nombre := TPath.GetFileNameWithoutExtension(ADprojPath);
   if NombreRompeCampoDePaclient(Nombre) then
-    Result := MsgFmt(SR_PACLIENT_NOMBRE_FMT, [Nombre]);
+    Result := MsgFmt(SR_PACLIENT_NOMBRE_FMT, [Nombre])
+  else if not ADelServidor and SameText(Nombre.Trim, NODE_PROJECT) then
+    Result := MsgFmt(SR_PACLIENT_NOMBRE_RESERVADO_FMT, [Nombre]);
+end;
+
+function CampoRemotoFueraDelProyectoDenegado(const AElemento, AValor, AProyecto,
+  APlataforma, AFichero: string): string;
+const
+  MACRO_DEL_IDE = '$(PROJECTNAME)';
+var
+  Pila: TArray<string>;
+  Apple, Mal: Boolean;
+begin
+  Result := '';
+  Apple := SistemaDePlataforma(APlataforma) in [spMacOS, spIOS];
+  Mal := False;
+  Pila := [];
+  var Valor := AValor;
+  if Apple then
+    Valor := StringReplace(Valor, MACRO_DEL_IDE, AProyecto, [rfReplaceAll, rfIgnoreCase])
+  else
+    Mal := Valor.Contains('$');
+  // los pasos, como los da PAServer: '' y '.' no mueven, '..' sube
+  for var Paso in Valor.Split(['\', '/']) do
+    if (Paso.Trim = '') or (Paso.Trim = '.') then
+      Continue
+    else if Paso.Trim = '..' then
+    begin
+      // un RemoteName no sube nunca; fuera de Apple, nada sube; y nada sube
+      // por encima de la carpeta del perfil
+      if SameText(AElemento, 'RemoteName') or not Apple or (Length(Pila) = 0) then
+        Mal := True
+      else
+        SetLength(Pila, Length(Pila) - 1);
+    end
+    else
+      Pila := Pila + [Paso.Trim];
+  if not Mal and SameText(AElemento, 'RemoteDir') then
+  begin
+    if Apple then
+      Mal := (Length(Pila) > 0) and SameText(Pila[0], NODE_PROJECT)
+    else
+      Mal := (Length(Pila) = 0) or not SameText(Pila[0], AProyecto);
+  end;
+  if Mal then
+    Result := MsgFmt(SR_BUILD_CARPETA_REMOTA_FMT,
+      [AElemento, TPath.GetFileName(AFichero), AValor, AProyecto, APlataforma, AProyecto]);
 end;
 
 { The identifier rule for a device address or serial (adb's ip:port or a

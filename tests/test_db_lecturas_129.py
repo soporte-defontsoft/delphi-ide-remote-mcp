@@ -26,6 +26,8 @@ junto a la copia del exe, y nunca se imprimen. La tabla t_db129 la crea y la bor
   L14 PG con el servidor por NOMBRE: la negativa no trae la direccion que resolvio libpq ni la de este
       servidor en el pg_hba de la base (salian: '(fe80::...)', CH4 de la 1.29, medido el 7-nov-2026);
       localhost en un puerto cerrado siempre, y el host de PG por su nombre si la red lo resuelve
+  L15 PG no toma del ENTORNO del servidor lo que el json no dice (PGSSLMODE, PGSERVICE, PGHOSTADDR,
+      PGOPTIONS): CH3 de la 1.29, medido el 7-nov-2026
 
 Uso:  python tests/test_db_lecturas_129.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -254,6 +256,21 @@ try:
                   mc.abre(r, 'SR_DB_NO_ABRE_FMT') and not direcciones(r), len(direcciones(r)))
         else:
             print('NOTA: L14 el host de PG no tiene un nombre que la red resuelva: solo se mide localhost')
+        # L15 (CH3 de la 1.29): lo que el json no dice, libpq lo tomaba del ENTORNO del servidor. Un servidor
+        # con variables PG* hostiles abre la base como uno sin ellas. ROJO contra 958be0fe: DB-009 (medido:
+        # PGSSLMODE=require cambiaba la conexion; PGSERVICE pide un servicio que no existe). 192.0.2.1 es de
+        # documentacion: no responde nunca.
+        hostil = mc.Stdio(EXE, mc.entorno({
+            'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_DB_PROJECTS': 'pruebas', 'PGSSLMODE': 'require',
+            'PGSERVICE': 'no_existe_l15', 'PGHOSTADDR': '192.0.2.1', 'PGOPTIONS': '-c search_path=no_existe_l15'}),
+            nombre='db-hostil', t=120)
+        try:
+            r = hostil.call('delphi_db', {'command': 'tables', 'db': 'pruebas/pg'})
+            respuestas.append(r)
+        finally:
+            hostil.cierra()
+        check('L15 PG con PGSSLMODE, PGSERVICE, PGHOSTADDR y PGOPTIONS en el entorno del servidor: abre como sin '
+              'ellas (la tabla de la bateria en su esquema)', TABLA in mc.como_json(r).get('tables', []), r[:400])
     # el detalle de un fallo dice CUALES (su posicion en SECRETOS), nunca el secreto ni un trozo
     fugas = arnes.fugas(SECRETOS, respuestas)
     check('L10 ningun secreto del json en ninguna respuesta (%d respuestas)' % len(respuestas), not fugas,

@@ -37,6 +37,8 @@ type
     procedure LaTablaDelIdeNoVuelveAMirarLoNuestro;
     [Test]
     procedure LaCarpetaDeLosSdkEsUnaRespuesta;
+    [Test]
+    procedure LoQueDespliegaUnBuildCaeEnSuProyecto;
   end;
 
   { UN escritor del texto de un elemento (XmlElemento) y sus lectores, que
@@ -105,7 +107,7 @@ implementation
 
 uses
   System.SysUtils, System.Classes, System.IOUtils,
-  Lsp.Dproj, Lsp.Puertas, Lsp.Discovery;
+  Lsp.Dproj, Lsp.Puertas, Lsp.Discovery, Lsp.JuecesDeArgumentos;
 
 const
   RUTA = 'C:\Proyecto\App.dproj';
@@ -1504,6 +1506,65 @@ begin
   finally
     T.Free;
   end;
+end;
+
+{ R1 de la 1.29: un DeployFile de un .deployproj cae, en el destino, relativo a
+  la carpeta del PERFIL, y el IDE lo empieza por el nombre del proyecto (medido
+  en los 68 .deployproj de la maquina). Otra primera carpeta pisaba la de otro
+  proyecto o la del nodo de escritorio. Y solo cuenta lo que despliega ESTE
+  build: el grupo de otra plataforma no se juzga con la regla de esta. }
+procedure TDprojHazardTests.LoQueDespliegaUnBuildCaeEnSuProyecto;
+const
+  MANIFIESTO =
+    '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">'#13#10 +
+    '  <ItemGroup Condition="''$(Platform)''==''Linux64'' And ''$(Config)''==''Debug''">'#13#10 +
+    '    <DeployFile Include="Linux64\Debug\App" Condition="''$(Config)''==''Debug''">'#13#10 +
+    '      <RemoteDir>App\</RemoteDir><RemoteName>App</RemoteName></DeployFile>'#13#10 +
+    '  </ItemGroup>'#13#10 +
+    '  <ItemGroup Condition="''$(Platform)''==''OSX64'' And ''$(Config)''==''Debug''">'#13#10 +
+    '    <DeployFile Include="OSX64\Debug\App.info.plist" Condition="''$(Config)''==''Debug''">'#13#10 +
+    '      <RemoteDir>App.app\..\</RemoteDir><RemoteName>Info.plist</RemoteName></DeployFile>'#13#10 +
+    '  </ItemGroup>'#13#10 +
+    '</Project>'#13#10;
+
+  function Niega(const AElem, AValor, APlat: string): Boolean;
+  begin
+    Result := CampoRemotoFueraDelProyectoDenegado(AElem, AValor, 'App', APlat, 'App.deployproj') <> '';
+  end;
+
+var
+  Campos: TArray<TValorDelProyecto>;
+begin
+  // lo que despliega cada build: el grupo de la otra plataforma (y config) no entra
+  Campos := CamposRemotosDeDespliegue(MANIFIESTO, 'Linux64', 'Debug');
+  Assert.AreEqual<Integer>(2, Length(Campos), 'Linux64 Debug: RemoteDir y RemoteName de su grupo');
+  Assert.AreEqual('App\', Campos[0].Escrito);
+  Assert.AreEqual<Integer>(0, Length(CamposRemotosDeDespliegue(MANIFIESTO, 'Linux64', 'Release')),
+    'Linux64 Release: ningun grupo es suyo');
+  Campos := CamposRemotosDeDespliegue(MANIFIESTO, 'OSX64', 'Debug');
+  Assert.AreEqual('App.app\..\', Campos[0].Escrito, 'OSX64: el suyo');
+  Assert.AreEqual<Integer>(4, Length(CamposRemotosDeDespliegue(MANIFIESTO)), 'sin plataforma: todos, como antes');
+  // fuera de Apple: la carpeta del proyecto, sin .. ni macros
+  Assert.IsFalse(Niega('RemoteDir', 'App\', 'Linux64'), 'la del IDE');
+  Assert.IsFalse(Niega('RemoteDir', 'app\datos\', 'Win64'), 'una subcarpeta (sin distinguir mayusculas)');
+  Assert.IsFalse(Niega('RemoteDir', '.\App\', 'Linux64'), '. no mueve');
+  Assert.IsTrue(Niega('RemoteDir', 'McpDesktopNode\', 'Linux64'), 'la del nodo');
+  Assert.IsTrue(Niega('RemoteDir', 'Otro\', 'Linux64'), 'la de otro proyecto');
+  Assert.IsTrue(Niega('RemoteDir', 'App\..\McpDesktopNode\', 'Linux64'), 'sube y entra en otra');
+  Assert.IsTrue(Niega('RemoteDir', 'App\..\App\', 'Linux64'), 'fuera de Apple nada sube');
+  Assert.IsTrue(Niega('RemoteDir', '.\', 'Linux64'), 'la carpeta del perfil');
+  Assert.IsTrue(Niega('RemoteDir', '$(PROJECTNAME)\', 'Linux64'), 'una macro que el IDE no escribe ahi');
+  Assert.IsTrue(Niega('RemoteName', '..\..\McpDesktopNode\McpDesktopNode', 'Linux64'), 'un nombre que sube');
+  Assert.IsFalse(Niega('RemoteName', 'App', 'Linux64'), 'un nombre');
+  // Apple: el bundle sube un nivel y usa $(PROJECTNAME); nada por encima del perfil
+  Assert.IsFalse(Niega('RemoteDir', 'App.app\..\', 'OSX64'), 'el Info.plist del IDE');
+  Assert.IsFalse(Niega('RemoteDir', 'App.app\..\$(PROJECTNAME).app.dSYM\Contents\', 'iOSDevice64'), 'el dSYM del IDE');
+  Assert.IsTrue(Niega('RemoteDir', '..\', 'OSX64'), 'por encima de la carpeta del perfil');
+  Assert.IsTrue(Niega('RemoteDir', 'McpDesktopNode\', 'OSX64'), 'la del nodo, tambien ahi');
+  // el nombre del nodo es del servidor: el agente no lo usa, el servidor si
+  Assert.AreNotEqual('', NombreDeProyectoParaPaclientDenegado('C:\x\McpDesktopNode.dproj'));
+  Assert.AreEqual('', NombreDeProyectoParaPaclientDenegado('C:\x\McpDesktopNode.dproj', True));
+  Assert.AreEqual('', NombreDeProyectoParaPaclientDenegado('C:\x\App.dproj'));
 end;
 
 procedure TXmlTextoTests.ElResDeVersionEsElDeEsteBuild;

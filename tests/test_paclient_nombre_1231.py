@@ -201,7 +201,9 @@ try:
     # control: lo que escribe el IDE de verdad (medido en 62 manifiestos)
     manifiesto(dep, 'Dep', remotedir='$(PROJECTNAME).app\\..\\Contents\\', remotename='Default~ipad@2x.png')
     r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64'}, t=300)
-    check('D9 control: $(PROJECTNAME), .., ~ y @ no se niegan', not mc.es(r, 'SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT'), r[:240])
+    # (1.29, R1: la forma del bundle de Apple en un build Win64 la niega ahora BUILD-070, por donde cae)
+    check('D9 control: $(PROJECTNAME), .., ~ y @ no los niega BUILD-066 (en Win64 la carpeta es de BUILD-070)',
+          not mc.es(r, 'SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT') and mc.es(r, 'SR_BUILD_CARPETA_REMOTA_FMT'), r[:240])
     # ...pero $(PROJECTNAME) con un valor que el proyecto redefine mal, si
     texto = open(dep_proj, encoding='utf-8-sig').read()
     i = texto.index('<PropertyGroup')
@@ -209,6 +211,52 @@ try:
         texto[:i] + '<PropertyGroup><ProjectName>Dep;' + SIN_CAMPO + '</ProjectName></PropertyGroup>' + texto[i:])
     r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64'}, t=300)
     check('D10 $(PROJECTNAME) con un ";" puesto por el proyecto: BUILD-066', mc.es(r, 'SR_BUILD_CAMPO_DE_DESPLIEGUE_FMT'), r[:240])
+    open(dep_proj, 'w', encoding='utf-8').write(texto)
+
+    # R1 (1.29): la carpeta del nodo de escritorio en el destino es del servidor. Un proyecto con su
+    # nombre, o un DeployFile cuya carpeta no es la de su proyecto, se desplegaba ENCIMA del nodo (o
+    # de otro proyecto permitido), y las sesiones de escritorio de otros agentes lo ejecutaban.
+    # ROJOS contra 958be0fe.
+    nodo = dproj('McpDesktopNode')
+    r = call('delphi_paserver', {'command': 'remote-run', 'name': PROF, 'project': nodo, 'timeoutms': 3000}, t=60)
+    check('R1a remote-run de un proyecto llamado como el nodo: PAS-074', mc.es(r, 'SR_PACLIENT_NOMBRE_RESERVADO_FMT'), r[:200])
+    r = call('delphi_paserver', {'command': 'output', 'name': PROF, 'project': nodo, 'job': JOB}, t=60)
+    check('R1b ...y output, por la misma puerta', mc.es(r, 'SR_PACLIENT_NOMBRE_RESERVADO_FMT'), r[:200])
+    nodo_dir = os.path.join(JAIL, 'NodoFalso')
+    call('delphi_create', {'kind': 'project-console', 'name': 'McpDesktopNode', 'dir': nodo_dir})
+    r = call('delphi_build', {'project': os.path.join(nodo_dir, 'McpDesktopNode.dproj'), 'platform': 'Win64',
+                              'target': 'Deploy', 'profile': PROF}, t=300)
+    check('R1c el Deploy de un proyecto llamado como el nodo: PAS-074', mc.es(r, 'SR_PACLIENT_NOMBRE_RESERVADO_FMT'), r[:240])
+    for etiqueta, campos in [
+            ('R1d RemoteDir en la carpeta del nodo', {'remotedir': 'McpDesktopNode\\'}),
+            ('R1e RemoteDir en la carpeta de otro proyecto', {'remotedir': 'Otro\\'}),
+            ('R1f RemoteDir que sube y entra en la del nodo', {'remotedir': 'Dep\\..\\McpDesktopNode\\'}),
+            ('R1g RemoteName que sube a la del nodo', {'remotename': '..\\..\\McpDesktopNode\\McpDesktopNode'})]:
+        manifiesto(dep, 'Dep', **campos)
+        r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64', 'target': 'Deploy', 'profile': PROF}, t=300)
+        check(etiqueta + ': BUILD-070', mc.es(r, 'SR_BUILD_CARPETA_REMOTA_FMT'), r[:240])
+    manifiesto(dep, 'Dep', remotedir='Dep\\datos\\')
+    r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64', 'target': 'Deploy', 'profile': PROF}, t=300)
+    # (llega a msbuild: el Deploy lo intenta y el paclient falso no lo acaba; "no se niega" solo pasaba
+    # con cualquier otra negativa)
+    check('R1h control: una subcarpeta del proyecto no se niega (el Deploy llega a msbuild)',
+          not mc.fallo(r) or 'CodeGear.Deployment' in r, r[:240])
+    # control: lo de OTRA plataforma no lo despliega este build y no se juzga con su regla
+    open(os.path.join(dep, 'Dep.deployproj'), 'w', encoding='utf-8').write(
+        '<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003">\n'
+        '  <Import Condition="Exists(\'$(BDS)\\bin\\CodeGear.Deployment.targets\')" Project="$(BDS)\\bin\\CodeGear.Deployment.targets"/>\n'
+        '  <ItemGroup Condition="\'$(Platform)\'==\'Win64\'">\n'
+        '    <DeployFile Include="x.txt"><RemoteDir>Dep\\</RemoteDir><RemoteName>x.txt</RemoteName>'
+        '<Operation>1</Operation><Overwrite>True</Overwrite></DeployFile>\n'
+        '  </ItemGroup>\n'
+        '  <ItemGroup Condition="\'$(Platform)\'==\'OSX64\'">\n'
+        '    <DeployFile Include="x.txt"><RemoteDir>Dep.app\\..\\</RemoteDir><RemoteName>x.txt</RemoteName>'
+        '<Operation>1</Operation><Overwrite>True</Overwrite></DeployFile>\n'
+        '  </ItemGroup>\n'
+        '</Project>\n')
+    r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64', 'target': 'Deploy', 'profile': PROF}, t=300)
+    check('R1i control: el grupo de OSX64 (P.app\\..\\) no se juzga en un build Win64 (llega a msbuild)',
+          not mc.fallo(r) or 'CodeGear.Deployment' in r, r[:240])
 finally:
     srv.mata()
 
