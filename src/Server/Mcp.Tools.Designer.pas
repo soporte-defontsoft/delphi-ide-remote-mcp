@@ -172,7 +172,8 @@ uses
   Lsp.Papelera,
   Lsp.Puertas,
   Lsp.JuicioDeForms,
-  Lsp.Capturas;
+  Lsp.Capturas,
+  Lsp.PascalDecl;
 
 const
   MAX_PROPS = 400;
@@ -458,6 +459,11 @@ begin
     // REFERENCIA a un componente (PopupMenu) no: toma un Name, no lleva punto
     if (R.Kind = 'c') and M.EsObjetoPropio(R.TypeId) then
       Ret.AddPair('note', MsgFmt(SN_DESIGNER_PROP_CLASE_FMT, [R.TypeName, AFramework, AProp.Trim]));
+    // un evento: la firma que tiene que tener su manejador, la que juzga set
+    // al enlazarlo (hecho F; C7 de la 1.29)
+    var Firma: string;
+    if (R.Kind = 'm') and M.Firmas.TryGetValue(ClaveDeIdentificador(R.TypeId), Firma) then
+      Ret.AddPair('signature', FirmaLegible(Firma));
     Result := Ret.ToJSON;
   finally
     Ret.Free;

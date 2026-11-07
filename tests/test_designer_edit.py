@@ -229,7 +229,8 @@ try:
     check('V4 un entero que no lo es: DSGN-093', mc.abre(r, 'SR_DESIGNER_SET_TIPO_FMT') and
           bytes_de(VDFM) == antes, r[:300])
     r = dsg(command='set', path=VDFM, component='Button1', prop='OnClick', value='Algo')
-    check('V4 un evento: DSGN-088 (set no ata eventos)', mc.abre(r, 'SR_DESIGNER_SET_EVENTO_FMT'), r[:300])
+    check('V4 un evento a un metodo que no existe: DSGN-088 (C7 de la 1.29: set enlaza un manejador publicado)',
+          mc.abre(r, 'SR_DESIGNER_SET_EVENTO_FMT'), r[:300])
     r = dsg(command='set', path=VDFM, component='NoHay', prop='Caption', value='x')
     check('V4 un componente que no esta: DSGN-078 con los que si y "insert"',
           mc.abre(r, 'SR_DESIGNER_COMPONENTE_NO_ESTA_FMT') and 'Button1' in r and 'insert' in r, r[:300])

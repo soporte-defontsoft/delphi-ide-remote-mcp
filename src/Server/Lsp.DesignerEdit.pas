@@ -3152,14 +3152,28 @@ begin
   end
   else
     Juicio := JuzgaPropiedad(F.Tabla, ClsId, Prop, V, Hoja, HayHoja);
-  if HayHoja and (Hoja.Kind = 'm') then
-    Exit(MsgFmt(SR_DESIGNER_SET_EVENTO_FMT, [Prop, NombreDe(Obj), Prop]));
-  // nil, sin comillas, solo vacia una REFERENCIA a otro componente (la quita:
-  // el IDE no la escribe). En una propiedad que no lo es se escribia como el
-  // texto 'nil' (StyleLookup = 'nil': H1 de Hermes, 1.18.2); se dice como se
-  // escribe ese texto y como se quita la propiedad. Lo que la tabla no conoce
-  // ('?') no se juzga
-  if SameText(V, 'nil') and HayHoja and (Hoja.Kind <> '?') and not HojaDeReferencia(F.Tabla, Hoja) then
+  // un evento se enlaza a un manejador por EL juez de check-binding
+  // (JuicioDeManejador: el primer metodo publicado de su nombre en la cadena
+  // de la clase del form, de instancia y con la firma del evento) y se
+  // escribe su nombre, sin comillas, por la cola de todas; nil quita la
+  // linea. Se negaba siempre (DSGN-088), y el agente escribia la linea a
+  // mano: C7 de la 1.29
+  if HayHoja and (Hoja.Kind = 'm') and not SameText(V, 'nil') then
+  begin
+    var Esperada: string;
+    var Motivo := JuicioDeManejador(F.Tabla, Hoja.TypeId, V,
+      MiembrosDeLaCadena(F.PasTexto, ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_)), Esperada);
+    if Motivo <> '' then
+      Exit(MsgFmt(SR_DESIGNER_SET_EVENTO_FMT, [NombreDe(Obj), Prop, V, Motivo,
+        IfThen(Esperada <> '', MsgFmt(SF_MANEJADOR_CON_FIRMA_FMT, [Esperada]))]));
+  end;
+  // nil, sin comillas, solo vacia una REFERENCIA a otro componente o un
+  // evento (la quita: el IDE no la escribe). En una propiedad que no lo es se
+  // escribia como el texto 'nil' (StyleLookup = 'nil': H1 de Hermes, 1.18.2);
+  // se dice como se escribe ese texto y como se quita la propiedad. Lo que la
+  // tabla no conoce ('?') no se juzga
+  if SameText(V, 'nil') and HayHoja and not CharInSet(Hoja.Kind, ['?', 'm']) and
+     not HojaDeReferencia(F.Tabla, Hoja) then
     Exit(MsgFmt(SR_DESIGNER_SET_NIL_FMT, [NombreDe(Obj), Prop]));
   // una cadena (o un caracter): un literal del form ('Acci'#243'n', 'a' +
   // 'b') se lee y se vuelve a escribir como el IDE (TrozosDeLiteral: los
@@ -3256,8 +3270,8 @@ begin
   end;
   if Length(Trozos) = 0 then
     Trozos := [V];
-  // nil en una referencia la quita: el IDE no la escribe
-  Quita := HayHoja and (Hoja.Kind = 'c') and SameText(V, 'nil');
+  // nil en una referencia o en un evento la quita: el IDE no la escribe
+  Quita := HayHoja and CharInSet(Hoja.Kind, ['c', 'm']) and SameText(V, 'nil');
   // lo que habia, entero: un bloque de varias lineas no se reescribe con uno
   Antes := '';
   if F.Doc.PropLines(Obj, Prop, Ini, Fin) then

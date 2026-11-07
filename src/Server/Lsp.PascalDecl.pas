@@ -70,6 +70,8 @@ type
     // ';' de la declaracion ('A, B: TButton;' lo comparten). Para quitarla
     LineaIni: Integer;
     LineaFin: Integer;
+    // rutina: su firma (FirmaNormalizada: 'procedure(:TObject)'); '' en un campo
+    Firma: string;
   end;
 
   // una rutina CON CUERPO del implementation (o de un programa), de las de la
@@ -147,6 +149,9 @@ type
     Secciones: TArray<TSeccionPas>;
     Campos: TArray<TMiembroPas>;
     Rutinas: TArray<TMiembroPas>;
+    // ctMetodo y ctProcedimiento: la firma de su declaracion (FirmaNormalizada:
+    // TNotifyEvent = 'procedure(:TObject)'); el juez de un manejador (C7 de la 1.29)
+    Firma: string;
     // 'TCustomButton.TButtonStyle' o 'TButton': el nombre con su contenedor
     function NombreCompleto: string;
     // ALinea esta dentro: entre la linea de su nombre y la de su fin
@@ -251,6 +256,30 @@ function CadenaDeAncestros(const AMapa: TDictionary<string, string>;
   como un homonimo (medido el 4-oct-2026). }
 function ClaseDeImplementacion(const ALinea, ARutina: string): string;
 
+{ LA firma de una rutina o de un tipo de rutina, desde los tokens de su lista
+  de parametros (sin los parentesis) y su tipo de resultado: la palabra, y por
+  cada parametro su modo y su tipo, sin nombres ni valores por defecto -
+  'procedure(Sender: TObject; var Done: Boolean)' = 'procedure(:TObject,
+  var:Boolean)'; 'A, B: Integer' son dos; const [ref] es constref; el tipo,
+  su ultimo tramo (System.TObject = TObject); un array abierto, 'X[]'. Sin
+  espacios: viaja en un hecho de las tablas del disenador. Para un manejador
+  de evento no hay juez (el compilador no lo mira: el .dfm se enlaza al
+  ejecutar, por el nombre), asi que esta es LA gramatica, una (C7 de la 1.29). }
+function FirmaNormalizada(const APalabra: string; const AParams: TArray<string>;
+  const AResultado: string): string;
+
+{ AFirma como se lee: 'procedure(TObject; var Boolean)'. }
+function FirmaLegible(const AFirma: string): string;
+
+{ Las dos firmas tienen la misma FORMA: la palabra, cuantos parametros, el
+  modo de cada uno, si es un array abierto y si hay resultado; los nombres de
+  los tipos no. Es lo que se juzga de un manejador: que dos tipos son el mismo
+  lo sabe el compilador, que aqui no se pregunta, y el IDE escribe el nombre
+  de RTTI donde la declaracion dice otro (medido el 7-nov-2026: TKeyEvent de
+  FMX declara var KeyChar: WideChar y los 12 manejadores de los Samples, que
+  escribio el IDE, dicen Char). }
+function MismaFirma(const A, B: string): Boolean;
+
 implementation
 
 uses
@@ -273,6 +302,7 @@ type
     FEnImpl: Boolean;
     FUltimaAridad: Integer; // la de los <...> del ultimo LeeNombreDeTipo
     FUltimoIdent: Integer;  // el indice del ultimo identificador que tomo
+    FUltimaFirma: string;   // la de la ultima cabecera de SaltaCabeceraDeRutina
     // donde empieza cada linea de FTxt (1-based): la linea de un token
     FLineas: TArray<Integer>;
     // las rutinas con cuerpo del implementation (LeeRutinaConCuerpo)
@@ -296,6 +326,7 @@ type
     function LeeNombreDeTipo: string;
     function LeeUses: TArray<string>;
     function SaltaCabeceraDeRutina: Boolean;
+    function LeeFirma(const APalabra: string): string;
     function SaltaDirectivas: Boolean;
     procedure SaltaRutina(out ACuerpo: Integer; out ALocales: Boolean);
     procedure LeeRutinaConCuerpo;
@@ -329,6 +360,174 @@ begin
     if S = X then
       Exit(True);
   Result := False;
+end;
+
+function FirmaNormalizada(const APalabra: string; const AParams: TArray<string>;
+  const AResultado: string): string;
+var
+  Partes: TArray<string>;
+  I, Nombres, Prof: Integer;
+  Modo, Tipo, T: string;
+
+  function Es(const APalabraDe: string): Boolean;
+  begin
+    Result := (I <= High(AParams)) and SameText(AParams[I], APalabraDe);
+  end;
+
+begin
+  Partes := [];
+  I := 0;
+  while I <= High(AParams) do
+  begin
+    // el modo, y el atributo [ref] (const [ref] es constref)
+    Modo := '';
+    if Es('const') or Es('var') or Es('out') or Es('constref') then
+    begin
+      Modo := LowerCase(AParams[I]);
+      Inc(I);
+    end;
+    if (I <= High(AParams)) and (AParams[I] = '[') then
+    begin
+      while (I <= High(AParams)) and (AParams[I] <> ']') do
+      begin
+        if Es('ref') and (Modo = 'const') then
+          Modo := 'constref';
+        Inc(I);
+      end;
+      Inc(I);
+    end;
+    // los nombres del grupo: cuantos parametros son
+    Nombres := 0;
+    while (I <= High(AParams)) and (AParams[I] <> ':') and (AParams[I] <> ';') do
+    begin
+      if AParams[I] <> ',' then
+        Inc(Nombres);
+      Inc(I);
+    end;
+    // su tipo (ninguno en un var o un const sin tipo): el ultimo tramo de
+    // A.B.C, con lo generico tal cual; un array abierto, 'X[]'
+    Tipo := '';
+    if (I <= High(AParams)) and (AParams[I] = ':') then
+    begin
+      Inc(I);
+      var Abierto := False;
+      if Es('array') and (I + 1 <= High(AParams)) and SameText(AParams[I + 1], 'of') then
+      begin
+        Abierto := True;
+        Inc(I, 2);
+      end;
+      T := '';
+      Prof := 0;
+      while (I <= High(AParams)) and not ((Prof = 0) and ((AParams[I] = ';') or (AParams[I] = '='))) do
+      begin
+        if AParams[I] = '<' then
+          Inc(Prof)
+        else if AParams[I] = '>' then
+          Dec(Prof);
+        if (Prof = 0) and (AParams[I] = '.') then
+          T := ''
+        else
+          T := T + AParams[I];
+        Inc(I);
+      end;
+      Tipo := T;
+      if Abierto then
+        Tipo := Tipo + '[]';
+    end;
+    // su valor por defecto, hasta el ';' del grupo
+    Prof := 0;
+    while (I <= High(AParams)) and not ((Prof = 0) and (AParams[I] = ';')) do
+    begin
+      if (AParams[I] = '(') or (AParams[I] = '[') then
+        Inc(Prof)
+      else if (AParams[I] = ')') or (AParams[I] = ']') then
+        Dec(Prof);
+      Inc(I);
+    end;
+    Inc(I);
+    for var K := 1 to Nombres do
+      Partes := Partes + [Modo + ':' + Tipo];
+  end;
+  Result := LowerCase(APalabra) + '(' + string.Join(',', Partes) + ')';
+  if AResultado <> '' then
+    Result := Result + ':' + AResultado;
+end;
+
+{ LA inversa de FirmaNormalizada: la palabra con su '(' ('procedure('), cada
+  parametro ('var:Boolean'; las comas de un tipo generico no parten) y lo de
+  detras del ')' (':Integer'; '' en un procedimiento). False si AFirma no es
+  una firma. La leen FirmaLegible y la forma de MismaFirma. }
+function PartesDeFirma(const AFirma: string; out ACabeza, ACola: string;
+  out AParams: TArray<string>): Boolean;
+var
+  Abre, Cierra, Prof, Ini: Integer;
+  Dentro: string;
+begin
+  AParams := [];
+  ACabeza := '';
+  ACola := '';
+  Abre := Pos('(', AFirma);
+  Cierra := LastDelimiter(')', AFirma);
+  Result := (Abre > 0) and (Cierra > Abre);
+  if not Result then
+    Exit;
+  ACabeza := Copy(AFirma, 1, Abre);
+  ACola := Copy(AFirma, Cierra + 1, MaxInt);
+  Dentro := Copy(AFirma, Abre + 1, Cierra - Abre - 1);
+  Prof := 0;
+  Ini := 1;
+  for var I := 1 to Length(Dentro) do
+    if Dentro[I] = '<' then
+      Inc(Prof)
+    else if Dentro[I] = '>' then
+      Dec(Prof)
+    else if (Dentro[I] = ',') and (Prof = 0) then
+    begin
+      AParams := AParams + [Copy(Dentro, Ini, I - Ini)];
+      Ini := I + 1;
+    end;
+  if Dentro <> '' then
+    AParams := AParams + [Copy(Dentro, Ini, MaxInt)];
+end;
+
+function FirmaLegible(const AFirma: string): string;
+var
+  Cabeza, Cola: string;
+  Partes: TArray<string>;
+begin
+  if not PartesDeFirma(AFirma, Cabeza, Cola, Partes) then
+    Exit(AFirma);
+  for var I := 0 to High(Partes) do
+    Partes[I] := Partes[I].Replace(':', ' ').Trim;
+  Result := Cabeza + string.Join('; ', Partes) + ')' + Cola.Replace(':', ': ');
+end;
+
+{ La forma de AFirma (MismaFirma): 'procedure(:TObject,var:X[])' es
+  'procedure(:,var:[])'. }
+function FormaDeFirma(const AFirma: string): string;
+var
+  Cabeza, Cola, Forma: string;
+  Partes: TArray<string>;
+begin
+  // EL pliegue de lo que no es una ruta (Lsp.Pascal)
+  if not PartesDeFirma(AFirma, Cabeza, Cola, Partes) then
+    Exit(SinMayusculas(AFirma));
+  for var I := 0 to High(Partes) do
+  begin
+    // el modo, hasta su ':', y la marca de un array abierto
+    Forma := Copy(Partes[I], 1, Pos(':', Partes[I]));
+    if Partes[I].EndsWith('[]') then
+      Forma := Forma + '[]';
+    Partes[I] := Forma;
+  end;
+  Result := SinMayusculas(Cabeza) + string.Join(',', Partes) + ')';
+  if Cola.StartsWith(':') then
+    Result := Result + ':';
+end;
+
+function MismaFirma(const A, B: string): Boolean;
+begin
+  Result := (A <> '') and (FormaDeFirma(A) = FormaDeFirma(B));
 end;
 
 { TTipoPas }
@@ -960,8 +1159,11 @@ end;
   [(params)] [: tipo]; y sus directivas. True si no lleva cuerpo. La
   clausula de resolucion (procedure IFoo.Bar = Baz;) tambien. }
 function TLectorPas.SaltaCabeceraDeRutina: Boolean;
+var
+  Palabra: string;
 begin
-  Toma; // la palabra de la rutina
+  FUltimaFirma := '';
+  Palabra := Toma; // la palabra de la rutina
   while EsIdent do
   begin
     Toma;
@@ -977,10 +1179,57 @@ begin
     SaltaHastaPuntoYComa;
     Exit(True);
   end;
-  if Mira = '(' then
-    SaltaBalanceado('(', ')');
-  SaltaHastaPuntoYComa; // el tipo de resultado, si lo hay, va dentro
+  // sus parametros y su resultado, por LA firma (C7 de la 1.29: el juez de un
+  // manejador de evento); el ';' y lo que quede, como antes
+  FUltimaFirma := LeeFirma(Palabra);
+  SaltaHastaPuntoYComa;
   Result := SaltaDirectivas;
+end;
+
+{ La firma de una cabecera desde aqui: sus parametros si Mira = '(' y su tipo
+  de resultado si sigue ':', consumidos (FirmaNormalizada); lo de detras - el
+  ';', 'of object', las directivas - se queda. }
+function TLectorPas.LeeFirma(const APalabra: string): string;
+var
+  Params: TArray<string>;
+  Prof: Integer;
+  Resultado: string;
+begin
+  Params := [];
+  if Mira = '(' then
+  begin
+    Toma;
+    Prof := 0;
+    while not Fin do
+    begin
+      if (Mira = ')') and (Prof = 0) then
+      begin
+        Toma;
+        Break;
+      end;
+      if (Mira = '(') or (Mira = '[') then
+        Inc(Prof)
+      else if ((Mira = ')') or (Mira = ']')) and (Prof > 0) then
+        Dec(Prof);
+      Params := Params + [Toma];
+    end;
+  end;
+  Resultado := '';
+  if Mira = ':' then
+  begin
+    Toma;
+    while EsIdent do
+    begin
+      Resultado := Toma;
+      if Mira = '<' then
+        SaltaBalanceado('<', '>');
+      if Mira = '.' then
+        Toma
+      else
+        Break;
+    end;
+  end;
+  Result := FirmaNormalizada(APalabra, Params, Resultado);
 end;
 
 { Un bloque de sentencias desde su begin/asm/try/case hasta su end. Dentro
@@ -1440,8 +1689,8 @@ begin
     else if (P = 'procedure') or (P = 'function') then
     begin
       Toma;
-      if Mira = '(' then
-        SaltaBalanceado('(', ')');
+      // sus parametros y su resultado: la firma que un manejador tiene que tener
+      T.Firma := LeeFirma(P);
       T.Clase := ctProcedimiento;
       // el tipo de resultado y 'of object', hasta el ';'
       while not Fin and (Mira <> ';') do
@@ -1670,6 +1919,7 @@ var
     if Anota then
     begin
       M.LineaFin := LineaDeTok(FI - 1);
+      M.Firma := FUltimaFirma;
       LasRutinas.Add(M);
     end;
   end;

@@ -16,7 +16,33 @@ interface
 
 uses
   Lsp.DesignerMeta, // la tabla: que es una propiedad, y donde acaban las clases del usuario
-  Lsp.DesignerBin; // TLineaForm: las lineas de un form, por EL lector
+  Lsp.DesignerBin, // TLineaForm: las lineas de un form, por EL lector
+  Lsp.PascalDecl; // EL lector de clases y LA cadena de ancestros (TMiembroPas)
+
+type
+  { Lo que declaran la clase de un form y sus ancestros del MISMO .pas, de ella
+    hacia arriba: lo que mira el cargador (campos para los componentes,
+    MethodAddress para los eventos). Cadena: las clases; con Sale, la cadena
+    sigue en otra unidad y la ultima es la que ya no esta aqui (la de la
+    instalacion, o una base del usuario que no se ve). Lo comparten
+    check-binding y el set de un evento (C7 de la 1.29). }
+  TMiembrosDeCadena = record
+    Cadena: TArray<string>;
+    Sale: Boolean;
+    Campos, Rutinas: TArray<TMiembroPas>;
+  end;
+
+{ LA cadena de AClase en APasTexto con sus miembros (TMiembrosDeCadena). }
+function MiembrosDeLaCadena(const APasTexto, AClase: string): TMiembrosDeCadena;
+
+{ EL juez de enlazar AMetodo a un evento de tipo ATipoEvento (Hoja.TypeId: su
+  firma, de la tabla M, hecho F; C7 de la 1.29): '' si vale - una rutina de
+  instancia de la cadena AMC (la primera de su nombre, como la busca el
+  cargador), publicada y con la firma del evento -; si no, por que (un SF_).
+  AEsperada: la firma del evento, legible; '' si la tabla no la sabe, y
+  entonces la firma no se juzga. }
+function JuicioDeManejador(M: TMetaTable; const ATipoEvento, AMetodo: string;
+  const AMC: TMiembrosDeCadena; out AEsperada: string): string;
 
 { El informe JSON de check-binding. APas vacio = el .pas del mismo nombre. La
   jaula del segundo path es de la tool, no de aqui. }
@@ -73,7 +99,6 @@ uses
   Lsp.DesignerForma, // UnidadDeDesigner: el .pas de un form
   System.Generics.Collections,
   Lsp.Pascal,
-  Lsp.PascalDecl, // EL lector de clases y LA cadena de ancestros
   Lsp.ProjectUnits, // ResolutorDeUnidades: EL juez de "es la misma unidad" (V79)
   Lsp.Json,
   Lsp.Lineas,
@@ -87,6 +112,24 @@ const
   LINEA_DE_EVENTO_RE = '^(' + PATRON_IDENT + ')\s*=\s*(' + PATRON_IDENT + ')\s*$';
   LINEA_SIN_VALOR_RE = '^(' + PATRON_IDENT + ')\s*=\s*$';
 
+{ La hoja de la propiedad AProp de un objeto de clase AClase (su nombre o su
+  identidad), si la tabla la sabe: False sin tabla, sin la clase o si no
+  conoce la propiedad ('?'). Lo que preguntan EsEvento y check-binding (el
+  tipo de un evento, por su firma: C7 de la 1.29). }
+function HojaDeLaTabla(M: TMetaTable; const AClase, AProp: string; out AHoja: TPropRec): Boolean;
+var
+  Id: string;
+  Hay: Boolean;
+begin
+  Result := False;
+  AHoja := Default(TPropRec);
+  if (M <> nil) and (AClase <> '') and M.ClaseDeNombre(AClase, Id) then
+  begin
+    JuzgaPropiedad(M, Id, AProp, '', AHoja, Hay);
+    Result := Hay and (AHoja.Kind <> '?');
+  end;
+end;
+
 { La propiedad AProp de un objeto de clase AClase es un evento: lo dice la
   tabla (Kind 'm'), si conoce la clase y llega a la propiedad; si no, el
   nombre (On...: la gramatica de la casa donde no hay juez, declarada). }
@@ -94,16 +137,10 @@ function EsEvento(M: TMetaTable; const AClase, AProp: string): Boolean;
 const
   EVENTO_POR_EL_NOMBRE = '\AOn' + PATRON_IDENT + '\z';
 var
-  Id: string;
   Hoja: TPropRec;
-  Hay: Boolean;
 begin
-  if (M <> nil) and (AClase <> '') and M.ClaseDeNombre(AClase, Id) then
-  begin
-    JuzgaPropiedad(M, Id, AProp, '', Hoja, Hay);
-    if Hay and (Hoja.Kind <> '?') then
-      Exit(Hoja.Kind = 'm');
-  end;
+  if HojaDeLaTabla(M, AClase, AProp, Hoja) then
+    Exit(Hoja.Kind = 'm');
   Result := TRegEx.IsMatch(AProp, EVENTO_POR_EL_NOMBRE);
 end;
 
@@ -162,6 +199,127 @@ begin
       Exit(ClaseDeJuezDeRaiz(M, APas, APasTexto, AForm[I].ClaseObj, Propias, False));
 end;
 
+function MiembrosDeLaCadena(const APasTexto, AClase: string): TMiembrosDeCadena;
+var
+  U: TUnidadPas;
+  Mapa: TDictionary<string, string>;
+  T: TTipoPas;
+begin
+  Result := Default(TMiembrosDeCadena);
+  U := LeeFuentePascal(APasTexto);
+  Mapa := TDictionary<string, string>.Create;
+  try
+    AnotaAncestros(U, Mapa);
+    Result.Cadena := CadenaDeAncestros(Mapa, AClase, Result.Sale);
+    for var K := 0 to High(Result.Cadena) do
+    begin
+      // con Sale, la ultima es la de fuera aunque se llame como una de aqui
+      // (la de fuera de una interpuesta)
+      if Result.Sale and (K = High(Result.Cadena)) then
+        Break;
+      T := U.Clase(UltimoTrozo(Result.Cadena[K]));
+      if T <> nil then
+      begin
+        Result.Campos := Result.Campos + T.Campos;
+        Result.Rutinas := Result.Rutinas + T.Rutinas;
+      end;
+    end;
+  finally
+    Mapa.Free;
+    U.Free;
+  end;
+end;
+
+type
+  // lo que dice el juez de un manejador (FalloDeManejador)
+  TFalloDeManejador = (fmNinguno, fmNoEsNombre, fmNoEsta, fmFuera, fmNoPublicado,
+    fmDeClase, fmOtraFirma);
+
+{ EL juez de un manejador: el del set de un evento y el de check-binding (C7
+  de la 1.29). Lo que hace el cargador - MethodAddress: el primer metodo
+  PUBLICADO de ese nombre, de la clase hacia arriba - y, si la tabla sabe la
+  firma del tipo del evento ATipoEvento (hecho F), su forma (MismaFirma: los
+  nombres de los tipos no se juzgan): el cargador no la mira y el evento
+  llamaria al metodo con otros parametros. Un constructor
+  no es un manejador, y uno de clase recibiria la instancia como su clase.
+  AMotivo, el porque (un SF_MANEJADOR_); AEsperada, la firma legible del
+  evento, '' si la tabla no la sabe (y entonces no se juzga). }
+function FalloDeManejador(M: TMetaTable; const ATipoEvento, AMetodo: string;
+  const AMC: TMiembrosDeCadena; out AMotivo, AEsperada: string): TFalloDeManejador;
+var
+  Firma, Id, Ultima, Clase: string;
+  Hallado, Oculto: Integer;
+begin
+  AMotivo := '';
+  AEsperada := '';
+  Firma := '';
+  if (M <> nil) and (ATipoEvento <> '') and
+     M.Firmas.TryGetValue(ClaveDeIdentificador(ATipoEvento), Firma) then
+    AEsperada := FirmaLegible(Firma);
+  if not EsIdentificador(AMetodo) then
+  begin
+    AMotivo := MsgFmt(SF_MANEJADOR_NO_ES_NOMBRE_FMT, [AMetodo]);
+    Exit(fmNoEsNombre);
+  end;
+  Hallado := -1;
+  Oculto := -1;
+  for var K := 0 to High(AMC.Rutinas) do
+    if MatchStr(AMC.Rutinas[K].Rutina, ['procedure', 'function']) and
+       MismoIdentificador(AMC.Rutinas[K].Nombre, AMetodo) then
+    begin
+      if AMC.Rutinas[K].Visibilidad in [vpDefecto, vpPublicada] then
+      begin
+        Hallado := K;
+        Break;
+      end;
+      if Oculto < 0 then
+        Oculto := K;
+    end;
+  if Hallado < 0 then
+  begin
+    // declarado, pero donde el cargador no lo ve
+    if Oculto >= 0 then
+    begin
+      AMotivo := MsgFmt(SF_MANEJADOR_NO_PUBLICADO_FMT, [AMC.Rutinas[Oculto].Nombre]);
+      Exit(fmNoPublicado);
+    end;
+    // la cadena sale de esta unidad a una clase que no es de la instalacion
+    // (o la clase no esta aqui): alli puede estar
+    Ultima := '';
+    if AMC.Sale and (Length(AMC.Cadena) > 0) then
+      Ultima := AMC.Cadena[High(AMC.Cadena)];
+    if (Ultima <> '') and not ((M <> nil) and M.ClaseDeNombre(UltimoTrozo(Ultima), Id)) then
+    begin
+      AMotivo := MsgFmt(SF_MANEJADOR_FUERA_FMT, [AMetodo, Ultima]);
+      Exit(fmFuera);
+    end;
+    Clase := '';
+    if Length(AMC.Cadena) > 0 then
+      Clase := AMC.Cadena[0];
+    AMotivo := MsgFmt(SF_MANEJADOR_NO_ESTA_FMT, [AMetodo, Clase]);
+    Exit(fmNoEsta);
+  end;
+  if AMC.Rutinas[Hallado].DeClase then
+  begin
+    AMotivo := MsgFmt(SF_MANEJADOR_DE_CLASE_FMT, [AMC.Rutinas[Hallado].Nombre]);
+    Exit(fmDeClase);
+  end;
+  if (Firma <> '') and (AMC.Rutinas[Hallado].Firma <> '') and
+     not MismaFirma(AMC.Rutinas[Hallado].Firma, Firma) then
+  begin
+    AMotivo := MsgFmt(SF_MANEJADOR_OTRA_FIRMA_FMT, [AMC.Rutinas[Hallado].Nombre,
+      FirmaLegible(AMC.Rutinas[Hallado].Firma), AEsperada]);
+    Exit(fmOtraFirma);
+  end;
+  Result := fmNinguno;
+end;
+
+function JuicioDeManejador(M: TMetaTable; const ATipoEvento, AMetodo: string;
+  const AMC: TMiembrosDeCadena; out AEsperada: string): string;
+begin
+  FalloDeManejador(M, ATipoEvento, AMetodo, AMC, Result, AEsperada);
+end;
+
 const
   { las listas del informe de binding: las ESCRIBE BindingReport y las LEE
     DesignerBindingWarnings, que las recorria por una lista de nombres a mano
@@ -173,14 +331,15 @@ const
   BINDING_NOMBRES_DUPLICADOS = 'duplicateNames';
   BINDING_EVENTO_VACIO = 'eventsWithNoHandler';
   BINDING_SIN_PRESENTACION = 'presentationUnitsMissing';
+  BINDING_OTRA_FIRMA = 'eventsWithOtherSignature';
 
 function BindingReport(const DfmLines: TArray<string>; const APasTexto, Pas: string;
   AIsFmx: Boolean; const ADfm: string): string;
 var
   L, Nm, Cl2, Ev, Handler, RootClass, Chain, OClave: string;
   Ret: TJSONObject;
-  Miss, MissEv, NotPub, Extra, Dups, Empty, SinPresentacion: TJSONArray;
-  Fields, PubMethods, AnyMethods, Seen, Objetos: TStringList;
+  Miss, MissEv, NotPub, OtraFirma, Extra, Dups, Empty, SinPresentacion: TJSONArray;
+  Fields, Seen, Objetos: TStringList;
   I, Depth, SkipBelow: Integer;
   AncestorOutside, ClassFound, Complete: Boolean;
   Form: TArray<TLineaForm>;
@@ -188,29 +347,24 @@ var
   Tabla: TMetaTable;
   FaltaTabla: TFaltaTabla;
   UsosDeLaUnidad: TArray<string>; // los dos uses de la unidad del form
+  MC: TMiembrosDeCadena; // la cadena de la raiz: sus campos y los manejadores
 
-  { Los campos y metodos publicados de UNA clase, del lector de clases
-    (Lsp.PascalDecl): lo que va antes de cualquier palabra de visibilidad es
-    published en una clase $M+, que es justo donde el IDE escribe los campos
-    del designer. "A, B: TButton;" son dos componentes, y el tipo puede ir
-    cualificado (Vcl.StdCtrls.TButton); uno generico (una lista) no es un
-    componente. Cada clase con lo SUYO: se leia por lineas hasta el primer
-    'end;', y un record anidado la cortaba (censo del 4-oct-2026). }
-  procedure LeeMiembros(AClase: TTipoPas);
+  { Los campos publicados de la cadena, del lector de clases (Lsp.PascalDecl,
+    por MiembrosDeLaCadena): lo que va antes de cualquier palabra de
+    visibilidad es published en una clase $M+, que es justo donde el IDE
+    escribe los campos del designer. "A, B: TButton;" son dos componentes, y
+    el tipo puede ir cualificado (Vcl.StdCtrls.TButton); uno generico (una
+    lista) no es un componente. Cada clase con lo SUYO: se leia por lineas
+    hasta el primer 'end;', y un record anidado la cortaba (censo del
+    4-oct-2026). Los manejadores los juzga FalloDeManejador. }
+  procedure LeeCampos(const ACampos: TArray<TMiembroPas>);
   begin
-    for var C in AClase.Campos do
+    for var C in ACampos do
       // un class var no es el campo de un componente: el streaming busca
       // campos de la instancia
       if (C.Visibilidad in [vpDefecto, vpPublicada]) and (C.Tipo <> '') and not C.Generico and
          not C.DeClase then
         Fields.Values[C.Nombre] := UltimoTrozo(C.Tipo);
-    for var R in AClase.Rutinas do
-      if not R.DeClase and ((R.Rutina = 'procedure') or (R.Rutina = 'function')) then
-      begin
-        AnyMethods.Add(R.Nombre);
-        if R.Visibilidad in [vpDefecto, vpPublicada] then
-          PubMethods.Add(R.Nombre);
-      end;
   end;
 
   { Algun campo publicado de la cadena es de la clase AClase (sin unidad
@@ -253,63 +407,43 @@ var
     Result := (M <> nil) and M.ClaseDeNombre(UltimoTrozo(AClase), Id);
   end;
 
-  { La clase y sus ancestros HASTA DONDE LLEGA ESTA UNIDAD (LA cadena,
-    Lsp.PascalDecl.CadenaDeAncestros). Un form cuyo ancestro vive en otra
-    unidad hereda componentes que este fichero no ve: llamarlos ausentes seria
-    mentir, asi que se para y se dice. }
+  { La clase y sus ancestros HASTA DONDE LLEGA ESTA UNIDAD, con sus miembros
+    (MiembrosDeLaCadena: la misma que juzga el set de un evento). Un form
+    cuyo ancestro vive en otra unidad hereda componentes que este fichero no
+    ve: llamarlos ausentes seria mentir, asi que se para y se dice. }
   procedure CollectClass(const AName: string);
-  var
-    U: TUnidadPas;
-    Mapa: TDictionary<string, string>;
-    Cadena: TArray<string>;
-    Sale: Boolean;
-    T: TTipoPas;
   begin
-    U := LeeFuentePascal(APasTexto);
-    Mapa := TDictionary<string, string>.Create;
-    try
-      AnotaAncestros(U, Mapa);
-      Cadena := CadenaDeAncestros(Mapa, AName, Sale);
-      for var K := 0 to High(Cadena) do
+    MC := MiembrosDeLaCadena(APasTexto, AName);
+    for var K := 0 to High(MC.Cadena) do
+    begin
+      if MC.Sale and (K = High(MC.Cadena)) then
       begin
-        if Sale and (K = High(Cadena)) then
+        // por donde sale de la unidad: o la clase no esta declarada aqui, o
+        // su cadena sigue en otra unidad (una de la instalacion no:
+        // Vcl.Forms.TForm tambien lo es)
+        if K = 0 then
+          ClassFound := False
+        else if not DeLaInstalacion(MC.Cadena[K]) then
         begin
-          // por donde sale de la unidad: o la clase no esta declarada aqui, o
-          // su cadena sigue en otra unidad (una de la instalacion no:
-          // Vcl.Forms.TForm tambien lo es)
-          if K = 0 then
-            ClassFound := False
-          else if not DeLaInstalacion(Cadena[K]) then
-          begin
-            AncestorOutside := True;
-            Chain := Chain + ' -> ' + Cadena[K];
-          end;
-          Break;
+          AncestorOutside := True;
+          Chain := Chain + ' -> ' + MC.Cadena[K];
         end;
-        if Chain <> '' then
-          Chain := Chain + ' -> ';
-        Chain := Chain + Cadena[K];
-        T := U.Clase(UltimoTrozo(Cadena[K]));
-        if T <> nil then
-          LeeMiembros(T);
+        Break;
       end;
-    finally
-      Mapa.Free;
-      U.Free;
+      if Chain <> '' then
+        Chain := Chain + ' -> ';
+      Chain := Chain + MC.Cadena[K];
     end;
+    LeeCampos(MC.Campos);
   end;
 
 begin
   Fields := TStringList.Create;
-  PubMethods := TStringList.Create;
-  AnyMethods := TStringList.Create;
   Seen := TStringList.Create;
   Objetos := TStringList.Create;
   Ret := TJSONObject.Create;
   try
     Fields.CaseSensitive := False;
-    PubMethods.CaseSensitive := False;
-    AnyMethods.CaseSensitive := False;
     Seen.CaseSensitive := False;
     Objetos.CaseSensitive := False;
     // EL lector de las lineas (Lsp.DesignerBin.LineasDeForm): el end de un
@@ -375,6 +509,10 @@ begin
     Ret.AddPair(BINDING_EVENTO_VACIO, Empty);
     SinPresentacion := TJSONArray.Create;
     Ret.AddPair(BINDING_SIN_PRESENTACION, SinPresentacion);
+    // un manejador con otra firma o de clase: compila y carga, y al
+    // dispararse el evento recibe otros parametros (C7 de la 1.29)
+    OtraFirma := TJSONArray.Create;
+    Ret.AddPair(BINDING_OTRA_FIRMA, OtraFirma);
     // sus dos uses: la unidad que registra la presentacion estilada de un
     // componente tiene que estar en el programa (V69)
     var UL := LeeFuentePascal(APasTexto);
@@ -458,14 +596,26 @@ begin
       end;
       if EventoDeObjeto(Tabla, Clases[I], L, Ev, Handler) then
       begin
-        if PubMethods.IndexOf(Handler) >= 0 then
-          Continue;
-        // Declared, but not where the form loader can find it: the one case
-        // the compiler and the first version of this tool both waved through.
-        if AnyMethods.IndexOf(Handler) >= 0 then
-          NotPub.Add(MsgFmt(SF_DSGN_NO_ESTA_EN_PUBLISHED_FMT, [Ev, Handler, I + 1, Handler]))
-        else if Complete then
-          MissEv.Add(MsgFmt(SF_DSGN_METODO_NO_DECLARADO_FMT, [Ev, Handler, I + 1, Handler]));
+        // EL juez del set de un evento (FalloDeManejador): el primer metodo
+        // publicado de su nombre, de instancia y con la firma del tipo del
+        // evento si la tabla la sabe. Uno que no se ve porque la cadena sale
+        // de la unidad (fmFuera) lo dice partialNote
+        var HojaEv: TPropRec;
+        var TipoEv := '';
+        if HojaDeLaTabla(Tabla, Clases[I], Ev, HojaEv) and (HojaEv.Kind = 'm') then
+          TipoEv := HojaEv.TypeId;
+        var Motivo, Esperada: string;
+        case FalloDeManejador(Tabla, TipoEv, Handler, MC, Motivo, Esperada) of
+          // Declared, but not where the form loader can find it: the one case
+          // the compiler and the first version of this tool both waved through.
+          fmNoPublicado:
+            NotPub.Add(MsgFmt(SF_DSGN_NO_ESTA_EN_PUBLISHED_FMT, [Ev, Handler, I + 1, Handler]));
+          fmNoEsta:
+            if Complete then
+              MissEv.Add(MsgFmt(SF_DSGN_METODO_NO_DECLARADO_FMT, [Ev, Handler, I + 1, Handler]));
+          fmDeClase, fmOtraFirma:
+            OtraFirma.Add(MsgFmt(SF_DSGN_OTRA_FIRMA_FMT, [Ev, Handler, I + 1, Motivo]));
+        end;
       end;
     end;
 
@@ -481,7 +631,8 @@ begin
     // fue bien" en toda tool: dos significados en un campo (novena revision).
     // Que las listas esten vacias, UNA vez (lo decian aqui y la nota: C1-5)
     var Cuadra := (Miss.Count = 0) and (MissEv.Count = 0) and (NotPub.Count = 0) and
-      (Extra.Count = 0) and (Dups.Count = 0) and (Empty.Count = 0) and (SinPresentacion.Count = 0);
+      (OtraFirma.Count = 0) and (Extra.Count = 0) and (Dups.Count = 0) and (Empty.Count = 0) and
+      (SinPresentacion.Count = 0);
     Ret.AddPair('clean', TJSONBool.Create(ClassFound and Cuadra));
     if not ClassFound then
       Ret.AddPair('note', MsgFmt(SN_DESIGNER_BINDING_NOCLASS_FMT,
@@ -498,8 +649,6 @@ begin
     Ret.Free;
     Objetos.Free;
     Seen.Free;
-    AnyMethods.Free;
-    PubMethods.Free;
     Fields.Free;
   end;
 end;
@@ -556,7 +705,7 @@ begin
     Exit;
   Res := TStringList.Create;
   try
-    for Nombre in [BINDING_METODO_NO_PUBLICADO, BINDING_EVENTO_SIN_METODO,
+    for Nombre in [BINDING_METODO_NO_PUBLICADO, BINDING_OTRA_FIRMA, BINDING_EVENTO_SIN_METODO,
                    BINDING_EVENTO_VACIO, BINDING_SIN_CAMPO, BINDING_NOMBRES_DUPLICADOS,
                    BINDING_SIN_PRESENTACION] do
       if O.TryGetValue<TJSONArray>(Nombre, Arr) then

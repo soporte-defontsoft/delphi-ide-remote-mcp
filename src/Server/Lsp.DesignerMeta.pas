@@ -103,6 +103,10 @@ type
     // clase lower -> el ControlStyle de su constructor (K): 'AS', A de
     // csAcceptsControls y S de csSetCaption, '+', '-', '?' o '.'
     Estilos: TDictionary<string, string>;
+    // tipo de evento, por su identidad lower ('system.classes:tnotifyevent') ->
+    // su firma (F, Lsp.PascalDecl.FirmaNormalizada: 'procedure(:TObject)'): la
+    // que tiene que tener su manejador (C7 de la 1.29)
+    Firmas: TDictionary<string, string>;
     // el marco de una tabla de la instalacion ('VCL' o 'FMX': lo pone
     // MetaTable); '' en una hecha a mano (las pruebas), que no tiene otro
     // marco al que preguntar (PistaDelOtroMarco)
@@ -610,6 +614,7 @@ begin
   ConstantesShow := TDictionary<string, string>.Create;
   FormasAbiertas := TDictionary<string, string>.Create;
   Estilos := TDictionary<string, string>.Create;
+  Firmas := TDictionary<string, string>.Create;
   for F in AFacts do
   begin
     P := F.Split([' ']);
@@ -693,6 +698,8 @@ begin
     end
     else if (P[0] = 'K') and (Length(P) >= 3) and (Length(P[2]) = 2) then
       Estilos.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2])
+    else if (P[0] = 'F') and (Length(P) >= 3) then
+      Firmas.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2])
     else if (P[0] = 'X') and (Length(P) >= 3) then
       Ambiguas.AddOrSetValue(ClaveDeIdentificador(P[1]), P[1] + '|' + P[2])
     else if (P[0] = 'D') and (Length(P) >= 3) then
@@ -713,6 +720,7 @@ end;
 destructor TMetaTable.Destroy;
 begin
   Estilos.Free;
+  Firmas.Free;
   FormasAbiertas.Free;
   ConstantesShow.Free;
   Constantes.Free;
@@ -1718,6 +1726,11 @@ begin
   for var K in M.Classes.Keys do
     if K.EndsWith(':' + Clave) then
       Hallados := Hallados + ['c' + K];
+  // ...o un tipo de evento: set lo enlaza por EL juez de un manejador (C7 de
+  // la 1.29); se escribia sin juzgar
+  for var K in M.Firmas.Keys do
+    if K.EndsWith(':' + Clave) then
+      Hallados := Hallados + ['m' + K];
   if Length(Hallados) = 1 then
   begin
     AHoja.Kind := Hallados[0][1];

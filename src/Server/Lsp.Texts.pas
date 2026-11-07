@@ -6028,8 +6028,9 @@ const
     '- a class not in the table, or ambiguous - go apart as notes, as do ' +
     'unknown StyleLookups) | ' +
     'check-binding (does the .dfm agree with the class in the .pas: ' +
-    'components with no published field, events naming a method that is ' +
-    'not published, published fields with no component, duplicate names, an ' +
+    'components with no published field, events naming a method not ' +
+    'published or of another signature, published fields with no ' +
+    'component, duplicate names, an ' +
     'FMX control whose styled presentation unit the .pas does not use - ' +
     'all of which COMPILE and then fail when the form is created) | ' +
     'layout (WHERE things end up on a form: resolves Align and returns ' +
@@ -6047,8 +6048,8 @@ const
     'form by default; placed at 10,10 (an aligned one, where its Align puts ' +
     'it) where the IDE keeps it among its ' +
     'siblings, its properties as the IDE''s writer stores them, with its published ' +
-    'field in the form''s class and its unit in the uses (in FMX also the unit ' +
-    'of its styled presentation, FMX.Grid.Style for a grid); the ' +
+    'field in the form''s class and its unit in the uses (in FMX also its ' +
+    'styled presentation''s, FMX.Grid.Style for a grid); the ' +
     'answer is its ' +
     'numbered block) | set (ONE property: prop + value, checked against the ' +
     'property''s type and the ' +
@@ -6115,7 +6116,7 @@ const
     'goes in single quotes as in a form (Edit1.Text=''a;b''; a quote inside ' +
     'is written twice); a quote that does not start the value is just a ' +
     'letter (Label1.Caption=It''s). A property that holds a component takes ' +
-    'the component''s name. No double quotes. A value that starts with ' +
+    'its name. No double quotes. A value that starts with ' +
     'srvd:\... is drawn with the real drive.';
 
   SP_DESIGNER_STYLE =
@@ -6165,8 +6166,9 @@ const
 
   SP_DESIGNER_VALUE =
     'set: the new value, as the form file writes it: 120, True, alClient, ' +
-    '[akLeft, akTop], clRed, the Name of another component (PopupMenu1), nil ' +
-    'to clear such a reference. A string goes quoted (''OK'', ''Acci''#243''n'') or not ' +
+    '[akLeft, akTop], clRed, the Name of another component (PopupMenu1) or of ' +
+    'an event''s handler (published, with its signature); nil clears either. ' +
+    'A string goes quoted (''OK'', ''Acci''#243''n'') or not ' +
     '(OK): set writes it the way the IDE does, accents as #N and a long one ' +
     'in pieces; so does a number as typed (0.7). A path shown as srvd:\... ' +
     'is written with its real drive.';
@@ -6645,11 +6647,33 @@ const
     '"%s" is published by your %s (%s): set does not follow a path into ' +
     'it; write the line with delphi_edit.';
 
+  { set de un evento (C7 de la 1.29): %s.%s = %s el componente, el evento y
+    el metodo; %s el motivo (un SF_MANEJADOR_); %s SF_MANEJADOR_CON_FIRMA_FMT
+    o '' si la tabla no sabe la firma del evento }
   SR_DESIGNER_SET_EVENTO_FMT =
-    '[DSGN-088 INVALID_PARAM] %s is an event of %s: set does not bind ' +
-    'events. To handle it: delphi_edit insert=metodo visibility=published in ' +
-    'the form''s class, then the line %s = <method> in the component''s ' +
-    'block (check-binding verifies the pair).';
+    '[DSGN-088 INVALID_PARAM] %s.%s = %s cannot be bound: %s. A handler is ' +
+    'a published method of the form''s class%s: create it with delphi_edit ' +
+    'insert=metodo visibility=published, then set again; nil removes the ' +
+    'binding.';
+  SF_MANEJADOR_CON_FIRMA_FMT =
+    ' with the event''s signature, %s';
+  { los motivos de EL juez de un manejador (Lsp.DesignerBinding.
+    FalloDeManejador), que dicen set (DSGN-088) y check-binding }
+  SF_MANEJADOR_NO_ES_NOMBRE_FMT =
+    '%s is not the name of a method';
+  SF_MANEJADOR_NO_ESTA_FMT =
+    '%s is not declared in %s or its ancestors';
+  SF_MANEJADOR_FUERA_FMT =
+    '%s is not declared in this unit, and the class goes on in %s, which ' +
+    'this unit does not declare: set cannot see it there (delphi_edit ' +
+    'writes the line)';
+  SF_MANEJADOR_NO_PUBLICADO_FMT =
+    '%s is declared but not in published, and the form loader only finds ' +
+    'published methods';
+  SF_MANEJADOR_DE_CLASE_FMT =
+    '%s is a class method, and a handler is a method of the object';
+  SF_MANEJADOR_OTRA_FIRMA_FMT =
+    '%s is %s and the event needs %s';
 
   { nil, sin comillas, en una propiedad que no guarda una referencia a otro
     componente: set lo escribia como el texto 'nil' (StyleLookup = 'nil', H1
@@ -13465,6 +13489,12 @@ const
 
   SF_DSGN_METODO_NO_DECLARADO_FMT =
     '%s = %s (line %d of the form file): the method %s is not declared';
+
+  { un manejador con otra firma o de clase (C7 de la 1.29): %s el motivo, un
+    SF_MANEJADOR_ }
+  SF_DSGN_OTRA_FIRMA_FMT =
+    '%s = %s (line %d of the form file): %s; it compiles and loads, and when ' +
+    'the event fires the method gets other parameters';
 
   SF_DSGN_CAMPO_SIN_OBJETO_FMT =
     '  published field with no object in the designer: %s';

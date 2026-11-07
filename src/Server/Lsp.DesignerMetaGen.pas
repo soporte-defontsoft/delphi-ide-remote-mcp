@@ -90,8 +90,13 @@ const
     '*' a quien nombra TReader en su DefineProperties (THeaderStrings; V17).
     18 (1.23.1): la unidad que registra la presentacion estilada de una clase
     y que la de la clase no arrastra (hecho U): insert la anade al uses y
-    check-binding avisa si falta (FMX.Grid.Style de un TStringGrid; V69). }
-  GENERACION_TABLAS = 18; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
+    check-binding avisa si falta (FMX.Grid.Style de un TStringGrid; V69).
+    19 (1.29): la firma de cada tipo de evento (hecho F, FirmaNormalizada): set
+    enlaza un manejador y check-binding lo juzga por ella (C7).
+    20 (1.29): un tipo de evento es por su identidad con la unidad, como un
+    enumerado: la tabla FMX lee tambien editores VCL, y su TKeyEvent y el de
+    FMX.Types eran uno con dos firmas, que no se juzgaba (C7, medido). }
+  GENERACION_TABLAS = 20; // 13: un subrango Low(T)..High(T) toma la base de T (TModalResult; 1.19.1, Hermes 15-oct); 3: constantes del cuerpo, '?', ayudantes (revision de la 1.12.0); 4: los tipos de un DefineProperties, T y mayuscula (1.12.1); 5: EL identificador de Lsp.Pascal, con letras de cualquier alfabeto; Declared() de los tipos del compilador; la plataforma del IDE; una etiqueta @@END de un asm no cierra la rutina; 6: las comas de las restricciones de un generico no son parametros (su aridad), los class helpers aparte (revision de la 1.13.0); 7: el SetName de cada clase (T), si el Text sigue al nombre (delphi_designer insert, 1.17.0); 8: la base de cada tipo 'o' (B) y las constantes con nombre de los tipos enteros (I): set juzga un valor por lo que acepta TReader (delphi_designer set, 1.17.0); 9: la base single aparte de float (se escribe redondeada a Single, FlotanteDeForm; 1.17.0)
   // (10: las listas ABIERTAS de constantes - I *a,b: la de TAlphaColor, con
   // sus nombres - y el ControlStyle de los constructores - K: csAcceptsControls,
   // el padre de un insert; csSetCaption, si el texto sigue al nombre en la
@@ -984,6 +989,9 @@ type
     // valor: integer, int64, char, single, float, string o variant; '' = no
     // se sabe (single aparte: el IDE lo escribe redondeado a Single)
     Base: string;
+    // 'm': la firma de su declaracion (Lsp.PascalDecl.FirmaNormalizada), la
+    // que tiene que tener un manejador (hecho F; C7 de la 1.29)
+    FirmaDeMetodo: string;
   end;
 
   TUnidadLeida = class
@@ -1069,7 +1077,7 @@ type
     procedure ResuelveAyudantes;
     function HechosDeClase(ATipo: TTipoPas; const ACadena: TArray<TTipoPas>;
       AEnums, ASets: TDictionary<string, TArray<string>>;
-      ABases: TDictionary<string, string>): TArray<string>;
+      ABases, AFirmas: TDictionary<string, string>): TArray<string>;
     function NombresDeConstantes(AUnidad: TUnidadLeida; const AFuncion: string;
       AProf: Integer): string;
   public
@@ -1708,6 +1716,7 @@ begin
   Result.Miembros := AMiembros;
   Result.Unidad := '';
   Result.Base := '';
+  Result.FirmaDeMetodo := '';
 end;
 
 // un tipo 'o' y su base: lo que es para TReader (integer, char, string...)
@@ -2005,7 +2014,10 @@ begin
           Result := Destino;
       end;
     ctMetodo:
-      Result := Info('m', T.NombreCompleto);
+      begin
+        Result := Info('m', T.NombreCompleto);
+        Result.FirmaDeMetodo := T.Firma;
+      end;
   else
     Result := Info('o', T.NombreCompleto);
   end;
@@ -2329,7 +2341,7 @@ type
   enumerados y los conjuntos que usa van a AEnums/ASets. }
 function TGenerador.HechosDeClase(ATipo: TTipoPas; const ACadena: TArray<TTipoPas>;
   AEnums, ASets: TDictionary<string, TArray<string>>;
-  ABases: TDictionary<string, string>): TArray<string>;
+  ABases, AFirmas: TDictionary<string, string>): TArray<string>;
 var
   Lineas, Orden: TList<string>;
   Pub: TDictionary<string, string>;
@@ -2410,10 +2422,11 @@ begin
         I := Clasifica(Ref.Tipo, U, Ref.Clase, Ref.Clase.EnImplementation)
       else
         I := Info('?', '?');
-      // una clase, un enumerado o un conjunto, por su identidad con la
-      // unidad: el de otra unidad con el mismo nombre es OTRO tipo
+      // una clase, un enumerado, un conjunto o un tipo de evento, por su
+      // identidad con la unidad: el de otra unidad con el mismo nombre es OTRO
+      // tipo (el TKeyEvent de la VCL y el de FMX: C7 de la 1.29)
       Id := I.Nombre;
-      if CharInSet(I.Kind, ['c', 'e', 's']) then
+      if CharInSet(I.Kind, ['c', 'e', 's', 'm']) then
         Id := IdDeTipo(I.Unidad, I.Nombre);
       Lineas.Add(Format('P %s %s %s %s', [IdDeClase(ATipo), Pub[K], I.Kind, Id]));
       // y la base de un tipo 'o', una vez por tipo (B); dos con el mismo
@@ -2425,6 +2438,17 @@ begin
           ABases.Add(ClaveDeIdentificador(Id), Id + ' ' + I.Base)
         else if not SameText(Ya, Id + ' ' + I.Base) then
           ABases[ClaveDeIdentificador(Id)] := Id + ' ?';
+      end;
+      // y la firma de un tipo de metodo (F), como la base: lo que tiene que
+      // tener un manejador del evento (C7 de la 1.29); dos con el mismo
+      // nombre y otra firma no se juzgan
+      if (I.Kind = 'm') and (I.FirmaDeMetodo <> '') then
+      begin
+        var Ya: string;
+        if not AFirmas.TryGetValue(ClaveDeIdentificador(Id), Ya) then
+          AFirmas.Add(ClaveDeIdentificador(Id), Id + ' ' + I.FirmaDeMetodo)
+        else if not SameText(Ya, Id + ' ' + I.FirmaDeMetodo) then
+          AFirmas[ClaveDeIdentificador(Id)] := Id + ' ?';
       end;
       if (I.Kind = 'e') and (Length(I.Miembros) > 0) and not AEnums.ContainsKey(Id) then
         AEnums.Add(Id, I.Miembros)
@@ -2489,7 +2513,7 @@ var
   Lineas: array [TMarcoDisenador] of TList<string>;
   Primeras: array [TMarcoDisenador] of TDictionary<string, TArray<TPrimera>>;
   Enums, Sets: array [TMarcoDisenador] of TDictionary<string, TArray<string>>;
-  Bases, Consts: array [TMarcoDisenador] of TDictionary<string, string>;
+  Bases, Consts, Firmas: array [TMarcoDisenador] of TDictionary<string, string>;
   Ms: TMarcosDisenador;
   Hechos, Pres: TArray<string>;
   Cad: TArray<TTipoPas>;
@@ -2517,6 +2541,7 @@ begin
     Sets[M] := TDictionary<string, TArray<string>>.Create;
     Bases[M] := TDictionary<string, string>.Create;
     Consts[M] := TDictionary<string, string>.Create;
+    Firmas[M] := TDictionary<string, string>.Create;
   end;
   try
     Orden.AddRange(FUnidades.Values);
@@ -2568,7 +2593,7 @@ begin
           begin
             if Emitidas[M].ContainsKey(K) then
               Continue;
-            Hechos := HechosDeClase(T, Cad, Enums[M], Sets[M], Bases[M]);
+            Hechos := HechosDeClase(T, Cad, Enums[M], Sets[M], Bases[M], Firmas[M]);
             // lo que guarda por codigo, en ELLA (no en cada descendiente: el
             // lint sube por la herencia, y la tabla no engorda)
             for var Def in U.Definidas do
@@ -2685,11 +2710,16 @@ begin
           Lineas[M].Add('B ' + Bs);
       for var Cn in Consts[M].Values do
         Lineas[M].Add('I ' + Cn);
+      // la firma de cada tipo de evento (F): el juez de un manejador
+      for var Fi in Firmas[M].Values do
+        if not Fi.EndsWith(' ?') then
+          Lineas[M].Add('F ' + Fi);
       Result.Hechos[M] := Lineas[M].ToArray;
     end;
   finally
     for M := Low(TMarcoDisenador) to High(TMarcoDisenador) do
     begin
+      Firmas[M].Free;
       Consts[M].Free;
       Bases[M].Free;
       Sets[M].Free;
