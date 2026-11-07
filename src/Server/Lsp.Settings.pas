@@ -312,6 +312,13 @@ function LibraryZoneEnabled: Boolean; // DELPHI_MCP_LIBRARY_ZONE=0 / LibraryZone
 procedure SetProcessReadOnly(AValue: Boolean);
 procedure SetRequestReadOnly(AValue: Boolean);
 
+{ Lo que el transporte fijo en ESTE hilo para su peticion, tal cual: el
+  workspace (el indice de SetRequestWorkspace, sin el del proceso stdio que
+  suma TWorkspaceIx1) y la solo lectura de su credencial. Es la inversa de
+  los dos Set: Lsp.Identidad.LlamadaDelHilo la lleva al hilo que hace el
+  trabajo de una llamada (Lsp.ConPlazo), que nace sin ella. }
+procedure PeticionDelHilo(out AWorkspaceIx: Integer; out ASoloLectura: Boolean);
+
 { Whether the CURRENT request/process is read-only (for delphi_workspace). }
 function IsReadOnlyNow: Boolean;
 
@@ -901,6 +908,12 @@ end;
 procedure SetRequestReadOnly(AValue: Boolean);
 begin
   GRequestReadOnly := AValue;
+end;
+
+procedure PeticionDelHilo(out AWorkspaceIx: Integer; out ASoloLectura: Boolean);
+begin
+  AWorkspaceIx := TRequestWorkspaceIx1 - 1;
+  ASoloLectura := GRequestReadOnly;
 end;
 
 function IsReadOnlyNow: Boolean;

@@ -279,6 +279,16 @@ type
     [Test] procedure ElTextoDelNodoVaYVuelveSinComillas;
   end;
 
+  { El hilo que hace el trabajo de una llamada con plazo (Lsp.ConPlazo) la
+    lleva: quien llama, su workspace y su solo lectura. Nacia sin ella, y sin
+    agente un hilo es el operador (CH11 de la 1.29: el trabajo entero de
+    delphi_db pasa a ese hilo) }
+  [TestFixture]
+  TLlamadaDelHiloTests = class
+  public
+    [Test] procedure ElTrabajoConPlazoLlevaLaLlamada;
+  end;
+
 implementation
 
 uses
@@ -306,7 +316,9 @@ uses
   System.Classes,
   System.Types,
   LspTests.Comun,
-  Lsp.Capturas;
+  Lsp.Capturas,
+  Lsp.Settings,
+  Lsp.ConPlazo;
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;
@@ -1823,6 +1835,37 @@ begin
   Assert.IsFalse(EsDeOtroAgente('Luis'), '...ni de otro: el operador puede con todo');
 end;
 
+{ TLlamadaDelHiloTests }
+
+procedure TLlamadaDelHiloTests.ElTrabajoConPlazoLlevaLaLlamada;
+var
+  Agente: string;
+  Ix: Integer;
+  SoloLectura: Boolean;
+begin
+  SetThreadIdentity('Ana');
+  SetRequestWorkspace(3);
+  SetRequestReadOnly(True);
+  try
+    Agente := '?';
+    Ix := -9;
+    SoloLectura := False;
+    Assert.IsTrue(TrabajoConPlazo(
+      procedure
+      begin
+        Agente := CurrentAgent;
+        PeticionDelHilo(Ix, SoloLectura);
+      end, 10000, nil, nil), 'el trabajo acaba a tiempo');
+    Assert.AreEqual('Ana', Agente, 'quien llama: sin el, el hilo es el operador');
+    Assert.AreEqual(3, Ix, 'el workspace de la peticion');
+    Assert.IsTrue(SoloLectura, 'la solo lectura de su credencial');
+  finally
+    ClearThreadIdentity;
+    SetRequestWorkspace(-1);
+    SetRequestReadOnly(False);
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFinalDeUnTrabajoTests);
   TDUnitX.RegisterTestFixture(TLectoresDeJaulaTests);
@@ -1831,6 +1874,7 @@ initialization
   TDUnitX.RegisterTestFixture(TFormaDeclaradaEnTextoTests);
   TDUnitX.RegisterTestFixture(TBarridoDeUnidadesTests);
   TDUnitX.RegisterTestFixture(TClaveDeCarpetaTests);
+  TDUnitX.RegisterTestFixture(TLlamadaDelHiloTests);
   TDUnitX.RegisterTestFixture(TSelloUnicoTests);
   TDUnitX.RegisterTestFixture(TPuertaDeLeerTests);
   TDUnitX.RegisterTestFixture(TPuertaDeEscribirTests);

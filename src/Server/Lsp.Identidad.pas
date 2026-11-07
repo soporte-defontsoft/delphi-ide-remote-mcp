@@ -65,6 +65,23 @@ function EsDelAgente(const ANombre: string): Boolean;
   (tres veces) y el confinamiento (forma 15 de la 1.26). }
 function EsDeOtroAgente(const ADueno: string): Boolean;
 
+{ La LLAMADA de este hilo como el transporte la fijo: quien llama (tal cual,
+  sin pasar otra vez por NombreDeAgente), su workspace y si entro de solo
+  lectura (Lsp.Settings.PeticionDelHilo). Un hilo nuevo nace sin nada de eso,
+  y sin agente es el OPERADOR: el que hace el trabajo de una llamada
+  (Lsp.ConPlazo) la toma de quien lo lanza con PonLlamadaDelHilo. Desde la
+  1.29 (CH11) el trabajo entero de delphi_db corre en ese hilo, y sin ella
+  el workspace que decide las unidades que se sirven (la inversa de la
+  mascara de sus valores) seria el del proceso. }
+type
+  TLlamadaDelHilo = record
+    Agente: string;
+    WorkspaceIx: Integer;
+    SoloLectura: Boolean;
+  end;
+function LlamadaDelHilo: TLlamadaDelHilo;
+procedure PonLlamadaDelHilo(const ALlamada: TLlamadaDelHilo);
+
 { El REGISTRO de sesiones HTTP - uno solo, el mismo que guarda la identidad
   (hasta 1.0.16 el servidor HTTP llevaba un anillo aparte de ids conocidos:
   dos escritores para la misma cosa). Una sesion nace en initialize
@@ -316,6 +333,19 @@ end;
 function CurrentAgent: string;
 begin
   Result := TCurrentAgent;
+end;
+
+function LlamadaDelHilo: TLlamadaDelHilo;
+begin
+  Result.Agente := TCurrentAgent;
+  PeticionDelHilo(Result.WorkspaceIx, Result.SoloLectura);
+end;
+
+procedure PonLlamadaDelHilo(const ALlamada: TLlamadaDelHilo);
+begin
+  TCurrentAgent := ALlamada.Agente;
+  SetRequestWorkspace(ALlamada.WorkspaceIx);
+  SetRequestReadOnly(ALlamada.SoloLectura);
 end;
 
 function EsDelAgente(const ANombre: string): Boolean;

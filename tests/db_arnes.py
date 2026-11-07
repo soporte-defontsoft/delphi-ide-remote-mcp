@@ -9,7 +9,10 @@ import io
 import json
 import os
 import shutil
+import socket
 import subprocess
+import threading
+import time
 import mcp_cliente as mc
 
 PROD_JSON = r'C:\Delphi-mcp-Server\connections\databases\db-connections.json'
@@ -109,3 +112,128 @@ def sql_pg(base, pg, sql):
     if r.returncode != 0:
         print('  (arnes PG: %s)' % r.stderr.strip()[:200].replace(pg['password'], '***'))
     return r.returncode == 0
+
+
+def sql_de_mensaje(msg):
+    """El SQL de un mensaje del cliente de PG: Q (consulta simple: el texto) y P (parse: nombre y texto); ''
+    en los demas."""
+    tipo = chr(msg[0])
+    trozos = msg[5:].split(b'\x00')
+    if tipo == 'Q':
+        return trozos[0].decode('utf-8', 'replace')
+    if tipo == 'P' and len(trozos) > 1:
+        return trozos[1].decode('utf-8', 'replace')
+    return ''
+
+
+class ProxyPg:
+    """Un proxy TCP entre el servidor y el PostgreSQL de pruebas que CALLA a mitad de una llamada: la red que
+    se queda muda (ni contesta ni cierra), CH11 de la 1.29. arma(calla_en) prepara el corte: la primera
+    conexion que mande un mensaje con calla_en(tipo, sql) verdadero deja de pasar al servidor desde ese mensaje
+    (lo retiene, no cierra) y queda en self.callada; suelta() le deja pasar lo retenido y lo que siga. Lo del
+    servidor pasa siempre, y las demas conexiones (la cancelacion de libpq, otra llamada) pasan enteras. Lee
+    el protocolo de PG: tras el arranque, sin tipo, cada mensaje es su tipo y su longitud."""
+
+    def __init__(self, destino):
+        self.destino = destino
+        self.ls = socket.socket()
+        self.ls.bind(('127.0.0.1', 0))
+        self.ls.listen(16)
+        self.puerto = self.ls.getsockname()[1]
+        self.lock = threading.Lock()
+        self.calla_en = None
+        self.callada = None
+        self.socks = []
+        threading.Thread(target=self._acepta, daemon=True).start()
+
+    def arma(self, calla_en):
+        with self.lock:
+            self.calla_en = calla_en
+            self.callada = None
+
+    def _acepta(self):
+        while True:
+            try:
+                c, _ = self.ls.accept()
+            except OSError:
+                return
+            s = socket.create_connection(self.destino, timeout=10)
+            s.settimeout(None)
+            self.socks += [c, s]
+            t = Tramo(self, s)
+            threading.Thread(target=t.del_cliente, args=(c,), daemon=True).start()
+            threading.Thread(target=t.del_servidor, args=(s, c), daemon=True).start()
+
+    def cierra(self):
+        for x in [self.ls] + self.socks:
+            try:
+                x.close()
+            except OSError:
+                pass
+
+
+class Tramo:
+    """Una conexion a traves de ProxyPg: si callo (orden: el mensaje en que callo), lo retenido, y cuando
+    la cerro el cliente (cerrada: su hora)."""
+
+    def __init__(self, proxy, s):
+        self.proxy, self.s = proxy, s
+        self.retenido = []
+        self.callado = False
+        self.orden = ''
+        self.cerrada = None
+
+    def suelta(self):
+        with self.proxy.lock:
+            self.callado = False
+            for m in self.retenido:
+                self.s.sendall(m)
+            self.retenido = []
+
+    def del_cliente(self, c):
+        buf, arranque = b'', True
+        try:
+            while True:
+                b = c.recv(65536)
+                if not b:
+                    return
+                buf += b
+                while True:
+                    if arranque:
+                        if len(buf) < 8 or len(buf) < int.from_bytes(buf[:4], 'big'):
+                            break
+                        n = int.from_bytes(buf[:4], 'big')
+                        # SSLRequest y GSSENCRequest van antes del arranque, tambien sin tipo
+                        arranque = int.from_bytes(buf[4:8], 'big') in (80877103, 80877104)
+                        tipo, sql = '', ''
+                    else:
+                        if len(buf) < 5 or len(buf) < int.from_bytes(buf[1:5], 'big') + 1:
+                            break
+                        n = int.from_bytes(buf[1:5], 'big') + 1
+                        tipo, sql = chr(buf[0]), sql_de_mensaje(buf[:n])
+                    msg, buf = buf[:n], buf[n:]
+                    with self.proxy.lock:
+                        p = self.proxy
+                        if tipo and not self.callado and p.calla_en and p.calla_en(tipo, sql):
+                            p.calla_en = None
+                            p.callada = self
+                            self.callado = True
+                            self.orden = '%s %s' % (tipo, sql[:80])
+                        if self.callado:
+                            self.retenido.append(msg)
+                        else:
+                            self.s.sendall(msg)
+        except OSError:
+            return
+        finally:
+            self.cerrada = time.time()
+
+    def del_servidor(self, s, c):
+        try:
+            while True:
+                b = s.recv(65536)
+                if not b:
+                    return
+                c.sendall(b)
+        except OSError:
+            return

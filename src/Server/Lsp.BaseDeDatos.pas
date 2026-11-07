@@ -60,6 +60,13 @@ const
   PLAZO_CONEXION_DB = 12;
   // milisegundos de una orden: pasado, FireDAC la cancela
   PLAZO_ORDEN_DB = 30000;
+  // segundos de una llamada ya abierta la base (Mcp.Tools.Db, EnLaBase): las
+  // ordenes de la CONEXION (BEGIN, COMMIT, ROLLBACK) no llevan el plazo de
+  // las de un comando, la cancelacion de una que si lo lleva vuelve por la
+  // misma conexion, y con la red callada la llamada no volvia en 240 s (CH11
+  // de la 1.29, medido el 7-nov-2026 con un proxy que calla). Caben dos
+  // ordenes con su plazo entero (rows: el COUNT y la pagina) y un margen.
+  PLAZO_LLAMADA_DB = 2 * (PLAZO_ORDEN_DB div 1000) + 5;
 
 { Los motores de este servidor: los DriverID de los drivers enlazados, como
   los dice FireDAC (FDManager.GetDriverNames). }
@@ -79,6 +86,14 @@ function DefectoDeConexion(const AConexion: TConexionDb): string;
   y el hilo que espera a la base la libera cuando termine. '' = abierta en
   AConn (la libera quien llama); si no, la negativa ya enmascarada. }
 function AbreBase(const AConexion: TConexionDb; out AConn: TFDConnection): string;
+
+{ EL trabajo con una base con plazo sobre su conexion AConn (Lsp.ConPlazo,
+  TrabajoConPlazo: el mismo protocolo): el de abrir (AbreBase, DB-007) y el
+  de la llamada entera (Mcp.Tools.Db, DB-022). Ademas apunta las conexiones
+  de los que se abandonan y siguen esperando a una base callada: al salir, el
+  servidor las despierta antes que FireDAC (ver la finalization). }
+function TrabajoConLaBase(AConn: TFDConnection; const ATrabajo: TProc; APlazoMs: Cardinal;
+  const AAlVencer, ALibera: TProc): Boolean;
 
 { Las tablas (o las vistas, con AVistas) del esquema en que abre la conexion,
   como las nombra FireDAC: en PG, sin el esquema, salian las 214 de
@@ -111,7 +126,10 @@ uses
   FireDAC.ConsoleUI.Wait,
   Lsp.Texts, Lsp.Casa,
   Lsp.Sandbox,  // LineasDelEntorno: EL recorrido del entorno del proceso
-  Lsp.ConPlazo; // TrabajoConPlazo: el plazo lo pone el servidor, no el driver
+  Lsp.ConPlazo, // TrabajoConPlazo: el plazo lo pone el servidor, no el driver
+  System.Generics.Collections, // las conexiones abandonadas
+  Winapi.WinSock2, // closesocket: despertar a una abandonada al salir
+  FireDAC.Phys.PGWrapper; // TPgConnection: el socket de libpq de una conexion PG
 
 const
   // el fichero de contrasenas que se le da a libpq para que no lea el de la
@@ -131,6 +149,11 @@ var
   // ella: 0xC0000005 al cerrar y sus atomos del RTL sin borrar (medido el
   // 7-nov-2026 con cdb y el visor de eventos: odbc32.dll_unloaded+0x2f490)
   GMsSql: TFDPhysMSSQLDriverLink = nil;
+  // las conexiones de los trabajos con una base abandonados por su plazo que
+  // siguen esperando a la base (TrabajoConLaBase), bajo su cerrojo: al salir,
+  // la finalization las despierta
+  GAbandonadas: TList<TFDConnection> = nil;
+  GAbandonadasLock: TCriticalSection = nil;
 
 function MotoresDeBd: TArray<string>;
 var
@@ -230,6 +253,105 @@ type
     Mensaje: string;
   end;
 
+{ AConn entra (AEsta) o sale de las abandonadas. }
+procedure ApuntaAbandonada(AConn: TFDConnection; AEsta: Boolean);
+begin
+  GAbandonadasLock.Enter;
+  try
+    if AEsta then
+      GAbandonadas.Add(AConn)
+    else
+      GAbandonadas.Remove(AConn);
+  finally
+    GAbandonadasLock.Leave;
+  end;
+end;
+
+function TrabajoConLaBase(AConn: TFDConnection; const ATrabajo: TProc; APlazoMs: Cardinal;
+  const AAlVencer, ALibera: TProc): Boolean;
+var
+  AlVencer, Libera: TProc;
+  Apuntada: Boolean;
+begin
+  AlVencer := AAlVencer;
+  Libera := ALibera;
+  Apuntada := False;
+  Result := TrabajoConPlazo(ATrabajo, APlazoMs,
+    // vencido: se apunta aqui, en el hilo de quien pide y ANTES de irse; el
+    // hilo no la libera hasta que quien pide se haya ido
+    procedure
+    begin
+      ApuntaAbandonada(AConn, True);
+      Apuntada := True;
+      if Assigned(AlVencer) then
+        AlVencer();
+    end,
+    // ...y la quita antes de liberarla
+    procedure
+    begin
+      ApuntaAbandonada(AConn, False);
+      Libera();
+    end);
+  // acabo a la vez que vencia: es de quien pide, que la libera
+  if Result and Apuntada then
+    ApuntaAbandonada(AConn, False);
+end;
+
+{ Al salir, los trabajos abandonados que siguen esperando a una base callada
+  tienen su conexion abierta en su hilo, y FireDAC al destruir su gestor la
+  cierra desde el principal con su cerrojo tomado: el hilo que despierta no
+  puede soltarla (interbloqueo, medido con cdb el 7-nov-2026) o usa lo que se
+  acaba de liberar (0xC0000005 a los 2 s, medido el mismo dia). Ni shutdown
+  ni CancelIoEx despiertan un select de Winsock (medido: el primero no lo
+  toca, el segundo le da WSAEINTR y libpq reintenta); closesocket si. Con el
+  socket cerrado, libpq vuelve con error EN SU HILO, el trabajo se deshace
+  solo y suelta la conexion, y FireDAC sale. CH11 de la 1.29. }
+procedure DespiertaLasAbandonadas;
+var
+  Cerradas: Integer;
+  Hasta: UInt64;
+begin
+  Cerradas := 0;
+  GAbandonadasLock.Enter;
+  try
+    for var C in GAbandonadas do
+    begin
+      // ConnectionIntf y no CliObj: CliObj comprueba que este activa y puede
+      // ABRIRLA
+      var Fisica := C.ConnectionIntf;
+      if (Fisica <> nil) and SameText(C.Params.DriverID, GPg.ActualDriverID) and
+         (TObject(Fisica.CliObj) is TPgConnection) then
+      begin
+        var Pg := TPgConnection(Fisica.CliObj);
+        if Pg.FHandle <> nil then
+        begin
+          var Sock := Pg.Lib.FPQsocket(Pg.FHandle);
+          if Sock >= 0 then
+          begin
+            closesocket(TSocket(Sock));
+            Inc(Cerradas);
+          end;
+        end;
+      end;
+    end;
+  finally
+    GAbandonadasLock.Leave;
+  end;
+  if Cerradas = 0 then
+    Exit;
+  // a que se deshagan y la suelten
+  Hasta := GetTickCount64 + 10000;
+  repeat
+    Sleep(20);
+    GAbandonadasLock.Enter;
+    try
+      Cerradas := GAbandonadas.Count;
+    finally
+      GAbandonadasLock.Leave;
+    end;
+  until (Cerradas = 0) or (GetTickCount64 > Hasta);
+end;
+
 function AbreBase(const AConexion: TConexionDb; out AConn: TFDConnection): string;
 var
   A: TApertura;
@@ -246,7 +368,7 @@ begin
     A.Free;
     raise;
   end;
-  if not TrabajoConPlazo(
+  if not TrabajoConLaBase(A.Conn,
     procedure
     begin
       try
@@ -500,9 +622,25 @@ initialization
   GPg.VendorHome := CarpetaDeDriverDeBd(GPg.BaseDriverID);
   GMsSql := TFDPhysMSSQLDriverLink.Create(nil);
   GMsSql.ListServers := False;
+  GAbandonadas := TList<TFDConnection>.Create;
+  GAbandonadasLock := TCriticalSection.Create;
 
 finalization
+  // Antes que FireDAC (DespiertaLasAbandonadas). Una de SQL Server no se puede
+  // despertar: su ODBC no da el socket, y SQLCancel solo le pide a la base
+  // que cancele. Con una base de SQL Server callada a mitad, el servidor sigue
+  // sin salir solo, como antes de la 1.29 (medido el 7-nov-2026 con un proxy
+  // que calla al abrir: DB-007 a los 12 s y el proceso vivo a los 30 s; el
+  // servicio lo termina el SCM).
+  DespiertaLasAbandonadas;
   FreeAndNil(GMsSql);
   FreeAndNil(GPg);
+  // la lista y su cerrojo, solo si quedo vacia: un hilo que aun espera a su
+  // base los usa al acabar, y se van con el proceso
+  if GAbandonadas.Count = 0 then
+  begin
+    FreeAndNil(GAbandonadas);
+    FreeAndNil(GAbandonadasLock);
+  end;
 
 end.

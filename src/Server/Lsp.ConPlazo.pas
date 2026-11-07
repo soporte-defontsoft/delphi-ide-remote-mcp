@@ -14,7 +14,11 @@
   con False; el hilo, al acabar, llama a ALibera, porque lo que tenia ya no
   es de nadie. El protocolo de quien libera, escrito una vez (era el de
   AbreBase, en Lsp.BaseDeDatos): un estado que cambian los dos por
-  TInterlocked, y si acaban a la vez gana el hilo y lo recoge quien pidio. }
+  TInterlocked, y si acaban a la vez gana el hilo y lo recoge quien pidio.
+
+  El hilo hace el trabajo DE LA LLAMADA, y la lleva: quien llama, su
+  workspace y su solo lectura (Lsp.Identidad.LlamadaDelHilo). Un hilo nuevo
+  nace sin ella, y sin agente es el operador (CH11 de la 1.29). }
 
 interface
 
@@ -31,7 +35,8 @@ function TrabajoConPlazo(const ATrabajo: TProc; APlazoMs: Cardinal; const AAlVen
 implementation
 
 uses
-  System.Classes, System.SyncObjs;
+  System.Classes, System.SyncObjs,
+  Lsp.Identidad; // LlamadaDelHilo: la llamada de quien pide, al hilo
 
 type
   { La cita entre quien pide y el hilo. Estado 0 = esperando, 1 = quien pedia
@@ -60,14 +65,17 @@ function TrabajoConPlazo(const ATrabajo: TProc; APlazoMs: Cardinal; const AAlVen
 var
   C: TCita;
   Trabajo, Libera: TProc;
+  Llamada: TLlamadaDelHilo;
 begin
   C := TCita.Create;
   Trabajo := ATrabajo;
   Libera := ALibera;
+  Llamada := LlamadaDelHilo;
   TThread.CreateAnonymousThread(
     procedure
     begin
       try
+        PonLlamadaDelHilo(Llamada);
         Trabajo();
       finally
         if TInterlocked.CompareExchange(C.Estado, 2, 0) = 1 then

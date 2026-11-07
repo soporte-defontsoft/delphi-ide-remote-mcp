@@ -4646,6 +4646,14 @@ const
   SR_DB_NO_RESPONDE_FMT =
     '[DB-007 DENIED] The database "%s" did not answer within %d seconds: ' +
     'ask the operator whether it is up. Nothing was done.';
+  // ...y la que abrio y callo a mitad de la llamada (CH11 de la 1.29): %s = el
+  // nombre, %d = los segundos (PLAZO_LLAMADA_DB)
+  SR_DB_CALLA_FMT =
+    '[DB-022 DENIED] The database "%s" stopped answering in the middle of ' +
+    'the call: no reply within %d seconds, and the server stopped waiting. ' +
+    'Nothing more of this call will be committed; after an insert, update ' +
+    'or delete, read the rows to see whether the change got in before. Ask ' +
+    'the operator whether it is up.';
   SR_DB_LOGIN_FMT =
     '[DB-008 DENIED] The database "%s" refused the login the operator ' +
     'declared, or that database does not exist there: only the operator ' +
