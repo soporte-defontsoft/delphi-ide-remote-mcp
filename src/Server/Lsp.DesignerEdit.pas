@@ -110,6 +110,10 @@ function PlanDeRenombre(ADoc: TStyleDoc; AObj: TStyleObj;
 // insert, o varias de set de una vez; todo o nada, cada una juzgada como set
 function InsertaComponente(const APath, AClase, AComponente, AParent: string;
   const AProps: string = ''): string;
+// AItems (C4 de la 1.29): varios insert en UNA escritura, todo o nada, cada uno
+// como uno suelto (sus jueces) sobre lo que deja el anterior: [{classname,
+// component, parent, props}, ...]
+function InsertaVarios(const APath, AItems: string): string;
 // ABefore / AAfter / AIndex (3.11 de la 1.18.0): el orden del componente entre
 // sus hermanos, si el IDE lo guarda ahi (AIndex 1 = el primero; -1 = no se pide)
 function CambiaPropiedad(const APath, AComponente, AProp, AValor, AParent: string;
@@ -174,7 +178,8 @@ uses
   Lsp.ProcessLaunch,
   Lsp.Lineas,          // los troceadores
   Lsp.Puertas,         // PatchLoadText/PatchSaveText
-  Lsp.JuicioDeForms;
+  Lsp.JuicioDeForms,
+  Lsp.Json;
 
 const
   // (las identidades de la tabla, ID_VCL_CONTROL y las demas: Lsp.DesignerMeta)
@@ -259,13 +264,6 @@ begin
     RecogeNombres(K, L, AConRutas);
 end;
 
-function EstaEn(const ANombre: string; L: TStringList): Boolean;
-begin
-  for var S in L do
-    if MismoIdentificador(S, ANombre) then
-      Exit(True);
-  Result := False;
-end;
 
 function NombreDe(O: TStyleObj): string;
 begin
@@ -420,7 +418,7 @@ begin
     end;
     for var A in Tramos do
     begin
-      if not EstaEn(A.Nombre, ASub) then
+      if not IdentificadorEnLista(A.Nombre, ASub.ToStringArray) then
         Continue;
       var Cubierto := False;
       for var B in Tramos do
@@ -651,7 +649,8 @@ begin
       for K := 0 to High(Clase.Campos) do
       begin
         var C := Clase.Campos[K];
-        if C.DeClase or not (C.Visibilidad in [vpDefecto, vpPublicada]) or not EstaEn(C.Nombre, Sub) then
+        if C.DeClase or not (C.Visibilidad in [vpDefecto, vpPublicada]) or
+           not IdentificadorEnLista(C.Nombre, Sub.ToStringArray) then
           Continue;
         var CP: TCampoPropio;
         CP.Nombre := C.Nombre;
@@ -2318,23 +2317,43 @@ begin
   end;
 end;
 
-function InsertaComponente(const APath, AClase, AComponente, AParent: string;
-  const AProps: string): string;
+type
+  { Lo que deja un insert EN MEMORIA (InsertaEnMemoria) para su respuesta
+    (RespuestaDeInsertado): el insert de uno y el de varios en una escritura
+    (items, C4 de la 1.29) la componen igual }
+  TInsertado = record
+    Nombre, Clase, Padre: string;
+    Props: TArray<string>;          // las propiedades iniciales pedidas
+    Infos: TArray<TValorPuesto>;    // ...y como quedaron
+    UsesAnadida, UsesNota: string;
+    NotaOrden, NotaHeredado, NotaLector, NotaIde: string;
+    SitioX: string;                 // la propiedad de su sitio (Position.X en FMX); '' en la VCL (Left)
+    EsPagina: Boolean;              // una TTabSheet de la VCL: la nota dice cual abre
+  end;
+
+{ UN insert sobre el form ABIERTO F (AbreFormParaJuzgar), EN MEMORIA y con
+  todos sus jueces: la clase, el padre (un heredado sin bloque recibe el suyo),
+  el nombre, el campo y el uses de la unidad, el bloque como lo deja el IDE (sus
+  propiedades por su escritor, su sitio entre los hermanos por el juez del
+  orden). F.Doc y F.PasTexto quedan como quedaria todo: el siguiente insert de
+  una tanda se aplica sobre ellos (su padre puede ser uno de antes) y la
+  escritura sale de ellos. '' y AH, o la negativa (y entonces F no vale para
+  escribir). Era el cuerpo de InsertaComponente (C4 de la 1.29) }
+function InsertaEnMemoria(var F: TFormEnEdicion; const AClase, AComponente, AParent, AProps: string;
+  out AH: TInsertado): string;
 var
-  F: TFormEnEdicion;
   Padre: TStyleObj;
-  ClsId, Clase, Unidad, Nombre, Ind, Texto, PasNuevo, Sangria, UsesAnadida, UsesNota: string;
+  ClsId, Clase, Unidad, Nombre, Ind, Texto, PasNuevo, Sangria: string;
   Bloque, DfmLineas, PasLineas, Faltan, YaEstan, EnOtra: TArray<string>;
   UPas: TUnidadPas;
   Cls: TTipoPas;
-  Detras, Ini, LineaCampo, FinBloque: Integer;
+  Detras, Ini, FinBloque: Integer;
   Creada: Boolean;
-  Ret: TJSONObject;
   Props, Valores: TArray<string>;
   Infos: TArray<TValorPuesto>;
-  Antes, AntesPas: TArray<Byte>;
   NotaOrden, NotaLector: string;
 begin
+  AH := Default(TInsertado);
   if AClase.Trim = '' then
     Exit(MsgText(SR_DESIGNER_NEED_CLASS));
   // las propiedades iniciales, lo que se mira sin abrir nada (3.10)
@@ -2344,288 +2363,463 @@ begin
     if Result <> '' then
       Exit;
   end;
+  // un frame en si mismo no llega al juez: FrameDelProyecto busca otro que el propio
+  if SameText(AClase.Trim, ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_)) and (RaizDeDesigner(F.Dfm) = rdFrame) then
+    Exit(MsgFmt(SR_DESIGNER_INSERT_FRAME_CICLICO_FMT, [AClase.Trim, MsgFmt(SF_DESIGNER_ES_ESTE_FRAME_FMT, [AClase.Trim])]));
+  // la clase: de la tabla del Delphi activo, y un control; o un frame de SU proyecto,
+  // que la tabla no tiene, con lo que publica un TFrame (V77 de la 1.24)
+  var Frame: TFormDelProyecto;
+  var EsFrame := not F.Tabla.ClaseDeNombre(AClase.Trim, ClsId) and
+    FrameDelProyecto(F, AClase.Trim, Frame) and F.Tabla.ClaseDeNombre(IfThen(F.EsFmx, ID_FMX_FRAME, ID_VCL_FRAME), ClsId);
+  if not EsFrame and not F.Tabla.ClaseDeNombre(AClase.Trim, ClsId) then
+    Exit(ClaseQueNoEsta(F.Tabla, AClase.Trim, F.Marco) +
+      MsgFmt(SF_DESIGNER_INSERT_SIN_TABLA_FMT, [MsgText(SF_DESIGNER_A_MANO)]));
+  Clase := (if EsFrame then Frame.Clase else F.Tabla.Classes[ClsId]);
+  if not F.Tabla.Desciende(ClsId, IfThen(F.EsFmx, ID_FMX_CONTROL, ID_VCL_CONTROL)) then
+    Exit(MsgFmt(SR_DESIGNER_INSERT_NO_VISUAL_FMT, [Clase, IfThen(F.EsFmx, ID_FMX_CONTROL, ID_VCL_CONTROL),
+      MsgText(SF_DESIGNER_A_MANO)]));
+  // un padre heredado sin bloque recibe el suyo, como en el IDE (A16-G1)
+  var NotaHeredado := '';
+  if AParent.Trim = '' then
+    Padre := F.Doc.Root
+  else
+  begin
+    Result := BuscaOPonHeredado(F, AParent, Padre, NotaHeredado);
+    if Result <> '' then
+      Exit;
+  end;
+  Result := PadreQueNoVale(F, Padre, False, ClsId);
+  if Result <> '' then
+    Exit;
+  // la unidad: el nombre libre, el campo y el uses
+  AH.UsesAnadida := '';
+  AH.UsesNota := '';
+  UPas := LeeFuentePascal(F.PasTexto);
+  try
+    Cls := UPas.Clase(ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_));
+    // el nombre que se pide, con las reglas del renombrado; si no, el del IDE
+    if AComponente.Trim <> '' then
+    begin
+      Result := NombreQueNoVale(F, Cls, AComponente, nil, Nombre);
+      if Result <> '' then
+        Exit;
+    end
+    else
+    begin
+      Nombre := NombreLibre(F.Doc, Cls, Clase, NombresHeredados(F, Cls));
+      Result := NombreQueLaCodificacionNoLleva(F, Nombre);
+      if Result <> '' then
+        Exit;
+    end;
+    PasLineas := SplitToLines(F.PasTexto);
+    SitioDelCampo(Cls, PasLineas, Detras, Sangria);
+    // la linea del campo, por el compositor de todos (era su gemelo a mano):
+    // las demas con su salto, la nueva con el dominante
+    PasNuevo := CambiaLineasEnSuTexto(F.PasTexto, Detras + 1, 0,
+      [Sangria + Nombre + ': ' + Clase + ';'], SaltoDominante(F.PasTexto));
+    // la de su clase y las que registran su presentacion estilada si la suya
+    // no las arrastra, como al soltarlo en el IDE: sin FMX.Grid.Style un
+    // TStringGrid compila y FMX pinta su aviso en su lugar (V69)
+    var Unidades: TArray<string> := [];
+    if EsFrame then
+      Unidades := [Frame.Unidad]
+    else if EsIdDeTipo(ClsId) then
+      Unidades := [UnidadDeIdDeTipo(F.Tabla.IdEscrito[ClsId])] + F.Tabla.UnidadesDePresentacion(ClsId);
+    var Pedidas: TArray<string> := [];
+    // "ya esta" por EL juez de dcc, con los ambitos de SU proyecto (V79): el
+    // ultimo trozo de cualquier ambito era otra regla
+    var Resolutor := ResolutorDeUnidades(F.Pas);
+    for Unidad in Unidades do
+      if (Unidad <> '') and not Resolutor.EnUses(UPas.UsesInterface, Unidad) then
+      begin
+        if Resolutor.EnUses(UPas.UsesImplementation, Unidad) then
+          AH.UsesNota := (AH.UsesNota + ' ' + MsgFmt(SF_DESIGNER_USES_EN_IMPL_FMT, [Unidad, F.PasNombre])).Trim
+        else
+          Pedidas := Pedidas + [Unidad];
+      end;
+    if Length(Pedidas) > 0 then
+    begin
+      Result := UsesConUnidades(PasNuevo, Pedidas, 'interface', F.PasNombre, Resolutor,
+        Faltan, YaEstan, EnOtra, Creada);
+      if Result <> '' then
+        Exit(Result + MsgFmt(SF_DESIGNER_INSERT_TRAS_USES_FMT, [string.Join(', ', Pedidas)]));
+      AH.UsesAnadida := string.Join(', ', Pedidas);
+    end;
+  finally
+    UPas.Free;
+  end;
+  // el bloque, con lo minimo que escribe el IDE, ultimo hijo de su padre (su
+  // sitio entre los hermanos lo dice el juez del orden, abajo)
+  Ind := SangriaDeNivel(Padre.Depth + 1);
+  // sus propiedades, un nivel por debajo: por EL nombrador de la sangria (era
+  // Ind + '  ' a mano siete veces; C1-6 del revisor de la 1.28)
+  var IndProp := SangriaDeNivel(Padre.Depth + 2);
+  // cada linea por sus compositores (Lsp.DesignerBin): la de objeto, la de
+  // una propiedad, el literal, el flotante
+  Bloque := [Ind + ComponeLineaDeObjeto((if EsFrame then 'inline' else 'object'), Nombre, Clase)];
+  // su sitio por LA regla de set y el lint (SitioFmxDeLeftTop): Position.X/Y
+  // en un control FMX, Left/Top en la VCL (lo decidia aqui un if propio;
+  // C1-7 del revisor de la 1.28). insert solo pone controles (DSGN-079)
+  var SitioX := SitioFmxDeLeftTop(F.Tabla, F.EsFmx, ClsId, 'Left');
+  var SitioY := SitioFmxDeLeftTop(F.Tabla, F.EsFmx, ClsId, 'Top');
+  if SitioX <> '' then
+    Bloque := Bloque + LineasDePropiedad(IndProp, SitioX, [FlotanteFmx(INSERT_X)]) +
+      LineasDePropiedad(IndProp, SitioY, [FlotanteFmx(INSERT_Y)])
+  else
+    Bloque := Bloque + LineasDePropiedad(IndProp, 'Left', [IntToStr(INSERT_X)]) +
+      LineasDePropiedad(IndProp, 'Top', [IntToStr(INSERT_Y)]);
+  // su texto, con su nombre, si su SetName lo hace: EL juez
+  // (PropiedadesDeTexto, el mismo del renombrado)
+  Texto := '';
+  var Textos := PropiedadesDeTexto(F.Tabla, F.EsFmx, ClsId);
+  if Length(Textos) = 1 then
+    Texto := Textos[0];
+  if not F.EsFmx and (Texto <> '') then
+    Bloque := Bloque + LineasDePropiedad(IndProp, Texto, TrozosDeLiteral(Nombre));
+  // el TabOrder: el ultimo del tabulador de su padre, el que diga el juez
+  // (abajo, DondeLoDejaElIde, que le pregunta SIN esta linea); el propio,
+  // el que lleva el bloque, si no contesta o si su escritor no lo escribe
+  var ConTab := Publica(F.Tabla, ClsId, 'TabOrder');
+  if ConTab then
+    Bloque := Bloque + LineasDePropiedad(IndProp, 'TabOrder', [IntToStr(SiguienteTabOrder(F.Doc, Padre))]);
+  if F.EsFmx and (Texto <> '') then
+    Bloque := Bloque + LineasDePropiedad(IndProp, Texto, TrozosDeLiteral(Nombre));
+  Bloque := Bloque + [Ind + 'end'];
+  DfmLineas := Copy(F.Doc.Lines);
+  Ini := Padre.EndLine - 1;
+  Insert(Bloque, DfmLineas, Ini);
+  FinBloque := Ini + High(Bloque);
+  // el nombre del padre AHORA: Reparsea (abajo) libera los objetos leidos
+  var NombrePadre := NombreDe(Padre);
+  // las propiedades iniciales sobre el bloque nuevo, EN MEMORIA, cada una
+  // juzgada como la juzga set (PonEnMemoria) y todo o nada con el resto
+  // (3.10 de la 1.18.0: Hermes replicaba un form a golpe de insert + set)
+  if Length(Props) > 0 then
+  begin
+    F.Doc.SetLines(DfmLineas);
+    F.Doc.Reparsea;
+    SetLength(Infos, Length(Props));
+    for var I := 0 to High(Props) do
+    begin
+      Result := PonEnMemoria(F, Nombre, Props[I], Valores[I], Infos[I]);
+      if Result <> '' then
+        Exit(MsgFmt(SR_DESIGNER_PROPS_ENTRADA_FMT, [I + 1, Props[I], Result]));
+    end;
+    DfmLineas := Copy(F.Doc.Lines);
+    Result := CargaLoPuesto(F, Nombre, Infos, NotaLector);
+    if Result <> '' then
+      Exit;
+    var Nuevo := ObjetoPorNombre(F.Doc, Nombre);
+    if Nuevo <> nil then
+      FinBloque := Nuevo.EndLine - 1;
+  end;
+  // donde lo deja el IDE entre sus hermanos, no siempre el ultimo (3.11: el
+  // juez del orden; la VCL escribe un TLabel delante de los TButton)
+  var Largo := FinBloque - Ini + 1;
+  var TabDelIde: Integer;
+  // un TabOrder que puso el agente (props) es suyo: el juez lo ve y se queda
+  var TabDelAgente := False;
+  for var P in Props do
+    if SameText(P.Trim, 'TabOrder') then
+      TabDelAgente := True;
+  // ...y con la unidad como quedara: un frame del proyecto solo se toma si el uses
+  // lo nombra, y en un insert lo nombra la propuesta, no el disco (dirigido de
+  // Hermes de la 1.24, punto 2: DSGN-145 en cada frame)
+  DfmLineas := DondeLoDejaElIde(F, DfmLineas, Nombre, NombrePadre, Ini, Largo, ConTab and not TabDelAgente,
+    NotaOrden, TabDelIde, PasNuevo);
+  // solo un frame cierra un ciclo: un control en un form que ya lo tenia no es culpable
+  if EsFrame and (F.FrameCiclico <> '') then
+    Exit(MsgFmt(SR_DESIGNER_INSERT_FRAME_CICLICO_FMT, [Clase, F.FrameCiclico]));
+  // el segundo juez, abajo, puede tardar otro tanto: si ya no se va a escribir, ahora
+  Result := JuezQueTardo(F);
+  if Result <> '' then
+    Exit;
+  if ConTab and not TabDelAgente and (TabDelIde >= 0) then
+    PonSuTabOrder(F, DfmLineas, Nombre, TabDelIde);
+  // sus propiedades como las guarda el escritor del IDE (1.22.1: el tamano
+  // del constructor, su orden); el bloque cambia de largo y se vuelve a medir
+  var NotaIde: string;
+  var NoGuarda: TArray<string>;
+  var Otras: TArray<TGuardadaComo>;
+  DfmLineas := ConLasPropiedadesDelIde(F, DfmLineas, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras);
+  for var I := 0 to High(Infos) do
+    MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
+  // el form y la unidad como quedarian: de ellos sale la escritura, y sobre
+  // ellos se aplica el siguiente de una tanda
+  F.Doc.SetLines(DfmLineas);
+  F.Doc.Reparsea;
+  F.PasTexto := PasNuevo;
+  AH.Nombre := Nombre;
+  AH.Clase := Clase;
+  AH.Padre := NombrePadre;
+  AH.Props := Props;
+  AH.Infos := Infos;
+  AH.NotaOrden := NotaOrden;
+  AH.NotaHeredado := NotaHeredado;
+  AH.NotaLector := NotaLector;
+  AH.NotaIde := NotaIde;
+  AH.SitioX := SitioX;
+  AH.EsPagina := not F.EsFmx and F.Tabla.Desciende(ClsId, ID_VCL_TABSHEET);
+end;
+
+{ La respuesta de UN insert ya escrito (AH) con el form como quedo (F.Doc) y la
+  unidad (F.PasTexto): donde quedo su bloque y su campo, como guardo su escritor
+  lo puesto y su nota; ALint, lo que el lint dice tras la escritura (nil en una
+  tanda, que lo dice una vez). Quien llama libera el objeto }
+function RespuestaDeInsertado(const F: TFormEnEdicion; const AH: TInsertado;
+  const ALint: TArray<string>; AConBloque: Boolean): TJSONObject;
+var
+  Ini, FinBloque, LineaCampo: Integer;
+  ConSitio: Boolean;
+  Alineado: string;
+  UPas: TUnidadPas;
+  Cls: TTipoPas;
+begin
+  // y si guardo su posicion: sin ella no hay 10,10 que decir (una pagina);
+  // y su Align, que lo coloca (V68)
+  Ini := 0;
+  FinBloque := 0;
+  ConSitio := True;
+  Alineado := '';
+  var Puesto := ObjetoPorNombre(F.Doc, AH.Nombre);
+  if Puesto <> nil then
+  begin
+    Ini := Puesto.StartLine - 1;
+    FinBloque := Puesto.EndLine - 1;
+    F.Doc.ValorDe(Puesto, IfThen(AH.SitioX <> '', AH.SitioX, 'Left'), ConSitio);
+    var HayAlign: Boolean;
+    var ValorAlign := F.Doc.ValorDe(Puesto, 'Align', HayAlign);
+    if HayAlign then
+      Alineado := ValorAlign;
+  end;
+  // la linea del campo, en la unidad como ha quedado
+  LineaCampo := 0;
+  UPas := LeeFuentePascal(F.PasTexto);
+  try
+    Cls := UPas.Clase(ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_));
+    if Cls <> nil then
+      for var C in Cls.Campos do
+        if MismoIdentificador(C.Nombre, AH.Nombre) then
+          LineaCampo := C.Linea + 1;
+  finally
+    UPas.Free;
+  end;
+  Result := TJSONObject.Create;
+  try
+    Result.AddPair('inserted', AH.Nombre);
+    Result.AddPair('class', AH.Clase);
+    Result.AddPair('parent', AH.Padre);
+    Result.AddPair('file', F.DfmNombre);
+    Result.AddPair('line', TJSONNumber.Create(Ini + 1));
+    Result.AddPair('endLine', TJSONNumber.Create(FinBloque + 1));
+    if AConBloque then
+      PonLista(Result, 'block', BloqueNumerado(F.Doc.Lines, Ini, FinBloque));
+    if Length(AH.Infos) > 0 then
+    begin
+      var Lista := TJSONArray.Create;
+      Result.AddPair('props', Lista);
+      for var I := 0 to High(AH.Infos) do
+      begin
+        var Una := TJSONObject.Create;
+        Lista.AddElement(Una);
+        Una.AddPair('prop', AH.Infos[I].Prop);
+        PonValorPuesto(Una, AH.Nombre, AH.Infos[I]);
+      end;
+    end;
+    Result.AddPair('field', AH.Nombre + ': ' + AH.Clase);
+    Result.AddPair('fieldAt', Donde(F.PasNombre, LineaCampo));
+    if AH.UsesAnadida <> '' then
+      Result.AddPair('usesAdded', AH.UsesAnadida);
+    if AH.UsesNota <> '' then
+      Result.AddPair('usesNote', AH.UsesNota);
+    if ALint <> nil then
+      PonLista(Result, 'lint', ALint);
+    // la nota, por lo que guardo su escritor; una pagina dice ademas cual abre
+    var Nota: string;
+    if ConSitio or (Alineado <> '') then
+    begin
+      // el 10,10, salvo que props le diera su sitio o que lo coloque su Align
+      // (decia 10,10 de un alineado: V68)
+      var Sitio := MsgText(SF_DESIGNER_INSERT_EN_10_10);
+      for var P in AH.Props do
+        if MatchText(P.Trim, ['Left', 'Top', 'Position.X', 'Position.Y']) then
+          Sitio := '';
+      if Alineado <> '' then
+        Sitio := MsgFmt(SF_DESIGNER_INSERT_ALINEADO_FMT, [Alineado]);
+      Nota := MsgFmt(SN_DESIGNER_INSERT_FMT, [Sitio]);
+    end
+    else
+      Nota := MsgText(SN_DESIGNER_INSERT_SIN_SITIO_NOTE);
+    if AH.EsPagina then
+      Nota := Nota + MsgFmt(SF_DESIGNER_INSERT_PAGINA_FMT, [AH.Padre, AH.Nombre]);
+    // en una tanda la nota general va una vez (DSGN-197); cada uno, lo suyo
+    if AConBloque then
+      Result.AddPair('note', Nota);
+    if AH.NotaOrden <> '' then
+      Result.AddPair('orderNote', AH.NotaOrden);
+    if AH.NotaHeredado <> '' then
+      Result.AddPair('inheritedNote', AH.NotaHeredado);
+    if AH.NotaLector <> '' then
+      Result.AddPair('readerNote', AH.NotaLector);
+    if AH.NotaIde <> '' then
+      Result.AddPair('ideNote', AH.NotaIde);
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
+function InsertaComponente(const APath, AClase, AComponente, AParent: string;
+  const AProps: string): string;
+var
+  F: TFormEnEdicion;
+  H: TInsertado;
+  Antes, AntesPas: TArray<Byte>;
+begin
+  if AClase.Trim = '' then
+    Exit(MsgText(SR_DESIGNER_NEED_CLASS));
   // los bytes que se juzgan (el juez del orden, abajo), leidos con el cerrojo
   Result := AbreFormParaJuzgar(APath, True, True, F, Antes, AntesPas);
   if Result <> '' then
     Exit;
   try
-    // un frame en si mismo no llega al juez: FrameDelProyecto busca otro que el propio
-    if SameText(AClase.Trim, ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_)) and (RaizDeDesigner(F.Dfm) = rdFrame) then
-      Exit(MsgFmt(SR_DESIGNER_INSERT_FRAME_CICLICO_FMT, [AClase.Trim, MsgFmt(SF_DESIGNER_ES_ESTE_FRAME_FMT, [AClase.Trim])]));
-    // la clase: de la tabla del Delphi activo, y un control; o un frame de SU proyecto,
-    // que la tabla no tiene, con lo que publica un TFrame (V77 de la 1.24)
-    var Frame: TFormDelProyecto;
-    var EsFrame := not F.Tabla.ClaseDeNombre(AClase.Trim, ClsId) and
-      FrameDelProyecto(F, AClase.Trim, Frame) and F.Tabla.ClaseDeNombre(IfThen(F.EsFmx, ID_FMX_FRAME, ID_VCL_FRAME), ClsId);
-    if not EsFrame and not F.Tabla.ClaseDeNombre(AClase.Trim, ClsId) then
-      Exit(ClaseQueNoEsta(F.Tabla, AClase.Trim, F.Marco) +
-        MsgFmt(SF_DESIGNER_INSERT_SIN_TABLA_FMT, [MsgText(SF_DESIGNER_A_MANO)]));
-    Clase := (if EsFrame then Frame.Clase else F.Tabla.Classes[ClsId]);
-    if not F.Tabla.Desciende(ClsId, IfThen(F.EsFmx, ID_FMX_CONTROL, ID_VCL_CONTROL)) then
-      Exit(MsgFmt(SR_DESIGNER_INSERT_NO_VISUAL_FMT, [Clase, IfThen(F.EsFmx, ID_FMX_CONTROL, ID_VCL_CONTROL),
-        MsgText(SF_DESIGNER_A_MANO)]));
-    // un padre heredado sin bloque recibe el suyo, como en el IDE (A16-G1)
-    var NotaHeredado := '';
-    if AParent.Trim = '' then
-      Padre := F.Doc.Root
-    else
-    begin
-      Result := BuscaOPonHeredado(F, AParent, Padre, NotaHeredado);
-      if Result <> '' then
-        Exit;
-    end;
-    Result := PadreQueNoVale(F, Padre, False, ClsId);
+    Result := InsertaEnMemoria(F, AClase, AComponente, AParent, AProps, H);
     if Result <> '' then
       Exit;
-    // la unidad: el nombre libre, el campo y el uses
-    UsesAnadida := '';
-    UsesNota := '';
-    UPas := LeeFuentePascal(F.PasTexto);
-    try
-      Cls := UPas.Clase(ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_));
-      // el nombre que se pide, con las reglas del renombrado; si no, el del IDE
-      if AComponente.Trim <> '' then
-      begin
-        Result := NombreQueNoVale(F, Cls, AComponente, nil, Nombre);
-        if Result <> '' then
-          Exit;
-      end
-      else
-      begin
-        Nombre := NombreLibre(F.Doc, Cls, Clase, NombresHeredados(F, Cls));
-        Result := NombreQueLaCodificacionNoLleva(F, Nombre);
-        if Result <> '' then
-          Exit;
-      end;
-      PasLineas := SplitToLines(F.PasTexto);
-      SitioDelCampo(Cls, PasLineas, Detras, Sangria);
-      // la linea del campo, por el compositor de todos (era su gemelo a mano):
-      // las demas con su salto, la nueva con el dominante
-      PasNuevo := CambiaLineasEnSuTexto(F.PasTexto, Detras + 1, 0,
-        [Sangria + Nombre + ': ' + Clase + ';'], SaltoDominante(F.PasTexto));
-      // la de su clase y las que registran su presentacion estilada si la suya
-      // no las arrastra, como al soltarlo en el IDE: sin FMX.Grid.Style un
-      // TStringGrid compila y FMX pinta su aviso en su lugar (V69)
-      var Unidades: TArray<string> := [];
-      if EsFrame then
-        Unidades := [Frame.Unidad]
-      else if EsIdDeTipo(ClsId) then
-        Unidades := [UnidadDeIdDeTipo(F.Tabla.IdEscrito[ClsId])] + F.Tabla.UnidadesDePresentacion(ClsId);
-      var Pedidas: TArray<string> := [];
-      // "ya esta" por EL juez de dcc, con los ambitos de SU proyecto (V79): el
-      // ultimo trozo de cualquier ambito era otra regla
-      var Resolutor := ResolutorDeUnidades(F.Pas);
-      for Unidad in Unidades do
-        if (Unidad <> '') and not Resolutor.EnUses(UPas.UsesInterface, Unidad) then
-        begin
-          if Resolutor.EnUses(UPas.UsesImplementation, Unidad) then
-            UsesNota := (UsesNota + ' ' + MsgFmt(SF_DESIGNER_USES_EN_IMPL_FMT, [Unidad, F.PasNombre])).Trim
-          else
-            Pedidas := Pedidas + [Unidad];
-        end;
-      if Length(Pedidas) > 0 then
-      begin
-        Result := UsesConUnidades(PasNuevo, Pedidas, 'interface', F.PasNombre, Resolutor,
-          Faltan, YaEstan, EnOtra, Creada);
-        if Result <> '' then
-          Exit(Result + MsgFmt(SF_DESIGNER_INSERT_TRAS_USES_FMT, [string.Join(', ', Pedidas)]));
-        UsesAnadida := string.Join(', ', Pedidas);
-      end;
-    finally
-      UPas.Free;
-    end;
-    // el bloque, con lo minimo que escribe el IDE, ultimo hijo de su padre (su
-    // sitio entre los hermanos lo dice el juez del orden, abajo)
-    Ind := SangriaDeNivel(Padre.Depth + 1);
-    // sus propiedades, un nivel por debajo: por EL nombrador de la sangria (era
-    // Ind + '  ' a mano siete veces; C1-6 del revisor de la 1.28)
-    var IndProp := SangriaDeNivel(Padre.Depth + 2);
-    // cada linea por sus compositores (Lsp.DesignerBin): la de objeto, la de
-    // una propiedad, el literal, el flotante
-    Bloque := [Ind + ComponeLineaDeObjeto((if EsFrame then 'inline' else 'object'), Nombre, Clase)];
-    // su sitio por LA regla de set y el lint (SitioFmxDeLeftTop): Position.X/Y
-    // en un control FMX, Left/Top en la VCL (lo decidia aqui un if propio;
-    // C1-7 del revisor de la 1.28). insert solo pone controles (DSGN-079)
-    var SitioX := SitioFmxDeLeftTop(F.Tabla, F.EsFmx, ClsId, 'Left');
-    var SitioY := SitioFmxDeLeftTop(F.Tabla, F.EsFmx, ClsId, 'Top');
-    if SitioX <> '' then
-      Bloque := Bloque + LineasDePropiedad(IndProp, SitioX, [FlotanteFmx(INSERT_X)]) +
-        LineasDePropiedad(IndProp, SitioY, [FlotanteFmx(INSERT_Y)])
-    else
-      Bloque := Bloque + LineasDePropiedad(IndProp, 'Left', [IntToStr(INSERT_X)]) +
-        LineasDePropiedad(IndProp, 'Top', [IntToStr(INSERT_Y)]);
-    // su texto, con su nombre, si su SetName lo hace: EL juez
-    // (PropiedadesDeTexto, el mismo del renombrado)
-    Texto := '';
-    var Textos := PropiedadesDeTexto(F.Tabla, F.EsFmx, ClsId);
-    if Length(Textos) = 1 then
-      Texto := Textos[0];
-    if not F.EsFmx and (Texto <> '') then
-      Bloque := Bloque + LineasDePropiedad(IndProp, Texto, TrozosDeLiteral(Nombre));
-    // el TabOrder: el ultimo del tabulador de su padre, el que diga el juez
-    // (abajo, DondeLoDejaElIde, que le pregunta SIN esta linea); el propio,
-    // el que lleva el bloque, si no contesta o si su escritor no lo escribe
-    var ConTab := Publica(F.Tabla, ClsId, 'TabOrder');
-    if ConTab then
-      Bloque := Bloque + LineasDePropiedad(IndProp, 'TabOrder', [IntToStr(SiguienteTabOrder(F.Doc, Padre))]);
-    if F.EsFmx and (Texto <> '') then
-      Bloque := Bloque + LineasDePropiedad(IndProp, Texto, TrozosDeLiteral(Nombre));
-    Bloque := Bloque + [Ind + 'end'];
-    DfmLineas := Copy(F.Doc.Lines);
-    Ini := Padre.EndLine - 1;
-    Insert(Bloque, DfmLineas, Ini);
-    FinBloque := Ini + High(Bloque);
-    // el nombre del padre AHORA: Reparsea (abajo) libera los objetos leidos
-    var NombrePadre := NombreDe(Padre);
-    // las propiedades iniciales sobre el bloque nuevo, EN MEMORIA, cada una
-    // juzgada como la juzga set (PonEnMemoria) y todo o nada con el resto
-    // (3.10 de la 1.18.0: Hermes replicaba un form a golpe de insert + set)
-    if Length(Props) > 0 then
-    begin
-      F.Doc.SetLines(DfmLineas);
-      F.Doc.Reparsea;
-      SetLength(Infos, Length(Props));
-      for var I := 0 to High(Props) do
-      begin
-        Result := PonEnMemoria(F, Nombre, Props[I], Valores[I], Infos[I]);
-        if Result <> '' then
-          Exit(MsgFmt(SR_DESIGNER_PROPS_ENTRADA_FMT, [I + 1, Props[I], Result]));
-      end;
-      DfmLineas := Copy(F.Doc.Lines);
-      Result := CargaLoPuesto(F, Nombre, Infos, NotaLector);
-      if Result <> '' then
-        Exit;
-      var Nuevo := ObjetoPorNombre(F.Doc, Nombre);
-      if Nuevo <> nil then
-        FinBloque := Nuevo.EndLine - 1;
-    end;
-    // donde lo deja el IDE entre sus hermanos, no siempre el ultimo (3.11: el
-    // juez del orden; la VCL escribe un TLabel delante de los TButton)
-    var Largo := FinBloque - Ini + 1;
-    var TabDelIde: Integer;
-    // un TabOrder que puso el agente (props) es suyo: el juez lo ve y se queda
-    var TabDelAgente := False;
-    for var P in Props do
-      if SameText(P.Trim, 'TabOrder') then
-        TabDelAgente := True;
-    // ...y con la unidad como quedara: un frame del proyecto solo se toma si el uses
-    // lo nombra, y en un insert lo nombra la propuesta, no el disco (dirigido de
-    // Hermes de la 1.24, punto 2: DSGN-145 en cada frame)
-    DfmLineas := DondeLoDejaElIde(F, DfmLineas, Nombre, NombrePadre, Ini, Largo, ConTab and not TabDelAgente,
-      NotaOrden, TabDelIde, PasNuevo);
-    FinBloque := Ini + Largo - 1;
-    // solo un frame cierra un ciclo: un control en un form que ya lo tenia no es culpable
-    if EsFrame and (F.FrameCiclico <> '') then
-      Exit(MsgFmt(SR_DESIGNER_INSERT_FRAME_CICLICO_FMT, [Clase, F.FrameCiclico]));
-    // el segundo juez, abajo, puede tardar otro tanto: si ya no se va a escribir, ahora
-    Result := JuezQueTardo(F);
-    if Result <> '' then
-      Exit;
-    if ConTab and not TabDelAgente and (TabDelIde >= 0) then
-      PonSuTabOrder(F, DfmLineas, Nombre, TabDelIde);
-    // sus propiedades como las guarda el escritor del IDE (1.22.1: el tamano
-    // del constructor, su orden); el bloque cambia de largo y se vuelve a medir
-    var NotaIde: string;
-    var NoGuarda: TArray<string>;
-    var Otras: TArray<TGuardadaComo>;
-    DfmLineas := ConLasPropiedadesDelIde(F, DfmLineas, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras);
-    for var I := 0 to High(Infos) do
-      MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
-    // y si guardo su posicion: sin ella no hay 10,10 que decir (una pagina);
-    // y su Align, que lo coloca (V68)
-    var ConSitio := True;
-    var Alineado := '';
-    var DocI := TStyleDoc.DeTexto(F.Doc.TextoDe(DfmLineas));
-    try
-      var Puesto := ObjetoPorNombre(DocI, Nombre);
-      if Puesto <> nil then
-      begin
-        Ini := Puesto.StartLine - 1;
-        FinBloque := Puesto.EndLine - 1;
-        DocI.ValorDe(Puesto, IfThen(SitioX <> '', SitioX, 'Left'), ConSitio);
-        var HayAlign: Boolean;
-        var ValorAlign := DocI.ValorDe(Puesto, 'Align', HayAlign);
-        if HayAlign then
-          Alineado := ValorAlign;
-      end;
-    finally
-      DocI.Free;
-    end;
     // con el cerrojo: el form y la unidad son los que se juzgaron
+    var Texto := F.Doc.TextoDe(F.Doc.Lines);
+    var Pas := F.PasTexto;
     Result := EscribeLoJuzgado(F, Antes, AntesPas,
       function: string
       begin
-        Result := EscribeFormYUnidad(F, F.Doc.TextoDe(DfmLineas), PasNuevo, True);
+        Result := EscribeFormYUnidad(F, Texto, Pas, True);
       end);
     if Result <> '' then
       Exit;
-    // la linea del campo, en la unidad como ha quedado
-    LineaCampo := 0;
-    UPas := LeeFuentePascal(PasNuevo);
+    var Ret := RespuestaDeInsertado(F, H, AvisosDespues(F, Texto), True);
     try
-      Cls := UPas.Clase(ClaseEnSuUnidad(F.Dfm, F.Doc.Root.ClassName_));
-      if Cls <> nil then
-        for var C in Cls.Campos do
-          if MismoIdentificador(C.Nombre, Nombre) then
-            LineaCampo := C.Linea + 1;
+      Result := Ret.ToJSON;
     finally
-      UPas.Free;
+      Ret.Free;
     end;
-    Ret := TJSONObject.Create;
-    try
-      Ret.AddPair('inserted', Nombre);
-      Ret.AddPair('class', Clase);
-      Ret.AddPair('parent', NombrePadre);
-      Ret.AddPair('file', F.DfmNombre);
-      Ret.AddPair('line', TJSONNumber.Create(Ini + 1));
-      Ret.AddPair('endLine', TJSONNumber.Create(FinBloque + 1));
-      PonLista(Ret, 'block', BloqueNumerado(DfmLineas, Ini, FinBloque));
-      if Length(Infos) > 0 then
+  finally
+    F.Doc.Free;
+  end;
+end;
+
+type
+  { Una entrada de items: lo que toma un insert suelto }
+  TEntradaDeInsert = record
+    Clase, Componente, Padre, Props: string;
+  end;
+
+const
+  { LOS campos de una entrada de items: los que se leen y los que dice DSGN-195 }
+  CAMPOS_DE_UN_INSERT: array [0 .. 3] of string = ('classname', 'component', 'parent', 'props');
+
+{ La lista de items (el texto de un [JsonComoTexto], por EL lector de una lista:
+  Lsp.Json.ListaJson) en sus entradas: '' y AEntradas, o DSGN-195 con por que,
+  sin abrir el form. Cada campo, un texto; uno que no existe se niega (lo que no
+  se lee no se ignora en silencio, como EDIT-012 en una tanda) }
+function EntradasDeInsert(const AItems: string; out AEntradas: TArray<TEntradaDeInsert>): string;
+var
+  Lista: TJSONArray;
+begin
+  Result := '';
+  AEntradas := [];
+  Lista := ListaJson(AItems);
+  if Lista = nil then
+    Exit(MsgFmt(SR_DESIGNER_ITEMS_FORMA_FMT, [MsgText(SF_DESIGNER_ITEMS_NO_LISTA),
+      string.Join(', ', CAMPOS_DE_UN_INSERT)]));
+  try
+    if Lista.Count = 0 then
+      Exit(MsgFmt(SR_DESIGNER_ITEMS_FORMA_FMT, [MsgText(SF_DESIGNER_ITEMS_VACIA),
+        string.Join(', ', CAMPOS_DE_UN_INSERT)]));
+    SetLength(AEntradas, Lista.Count);
+    for var I := 0 to Lista.Count - 1 do
+    begin
+      if not (Lista.Items[I] is TJSONObject) then
+        Exit(MsgFmt(SR_DESIGNER_ITEMS_FORMA_FMT, [MsgFmt(SF_DESIGNER_ITEMS_NO_OBJETO_FMT, [I + 1]),
+          string.Join(', ', CAMPOS_DE_UN_INSERT)]));
+      var Obj := TJSONObject(Lista.Items[I]);
+      for var Par in Obj do
       begin
-        var Lista := TJSONArray.Create;
-        Ret.AddPair('props', Lista);
-        for var I := 0 to High(Infos) do
-        begin
-          var Una := TJSONObject.Create;
-          Lista.AddElement(Una);
-          Una.AddPair('prop', Infos[I].Prop);
-          PonValorPuesto(Una, Nombre, Infos[I]);
+        var Clave := Par.JsonString.Value;
+        if IndexStr(Clave, CAMPOS_DE_UN_INSERT) < 0 then
+          Exit(MsgFmt(SR_DESIGNER_ITEMS_FORMA_FMT, [MsgFmt(SF_DESIGNER_ITEMS_CAMPO_FMT, [I + 1, Clave]),
+            string.Join(', ', CAMPOS_DE_UN_INSERT)]));
+        if not (Par.JsonValue is TJSONString) then
+          Exit(MsgFmt(SR_DESIGNER_ITEMS_FORMA_FMT, [MsgFmt(SF_DESIGNER_ITEMS_NO_TEXTO_FMT, [I + 1, Clave]),
+            string.Join(', ', CAMPOS_DE_UN_INSERT)]));
+        var Valor := TJSONString(Par.JsonValue).Value;
+        case IndexStr(Clave, CAMPOS_DE_UN_INSERT) of
+          0: AEntradas[I].Clase := Valor;
+          1: AEntradas[I].Componente := Valor;
+          2: AEntradas[I].Padre := Valor;
+          3: AEntradas[I].Props := Valor;
         end;
       end;
-      Ret.AddPair('field', Nombre + ': ' + Clase);
-      Ret.AddPair('fieldAt', Donde(F.PasNombre, LineaCampo));
-      if UsesAnadida <> '' then
-        Ret.AddPair('usesAdded', UsesAnadida);
-      if UsesNota <> '' then
-        Ret.AddPair('usesNote', UsesNota);
-      PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(DfmLineas)));
-      // la nota, por lo que guardo su escritor; una pagina dice ademas cual abre
-      var Nota: string;
-      if ConSitio or (Alineado <> '') then
+    end;
+  finally
+    Lista.Free;
+  end;
+end;
+
+function InsertaVarios(const APath, AItems: string): string;
+var
+  F: TFormEnEdicion;
+  Antes, AntesPas: TArray<Byte>;
+  Entradas: TArray<TEntradaDeInsert>;
+  Hechos: TArray<TInsertado>;
+begin
+  // la forma de la lista, antes de abrir nada
+  Result := EntradasDeInsert(AItems, Entradas);
+  if Result <> '' then
+    Exit;
+  Result := AbreFormParaJuzgar(APath, True, True, F, Antes, AntesPas);
+  if Result <> '' then
+    Exit;
+  try
+    // uno detras de otro sobre el form y la unidad como los deja el anterior
+    // (el padre de uno puede ser uno de antes), cada uno con sus jueces, y todo
+    // o nada: una negativa, o el plazo del cliente agotado, y no se escribe
+    SetLength(Hechos, Length(Entradas));
+    for var I := 0 to High(Entradas) do
+    begin
+      Result := InsertaEnMemoria(F, Entradas[I].Clase, Entradas[I].Componente, Entradas[I].Padre,
+        Entradas[I].Props, Hechos[I]);
+      if Result <> '' then
       begin
-        // el 10,10, salvo que props le diera su sitio o que lo coloque su Align
-        // (decia 10,10 de un alineado: V68)
-        var Sitio := MsgText(SF_DESIGNER_INSERT_EN_10_10);
-        for var P in Props do
-          if MatchText(P.Trim, ['Left', 'Top', 'Position.X', 'Position.Y']) then
-            Sitio := '';
-        if Alineado <> '' then
-          Sitio := MsgFmt(SF_DESIGNER_INSERT_ALINEADO_FMT, [Alineado]);
-        Nota := MsgFmt(SN_DESIGNER_INSERT_FMT, [Sitio]);
-      end
-      else
-        Nota := MsgText(SN_DESIGNER_INSERT_SIN_SITIO_NOTE);
-      if not F.EsFmx and F.Tabla.Desciende(ClsId, ID_VCL_TABSHEET) then
-        Nota := Nota + MsgFmt(SF_DESIGNER_INSERT_PAGINA_FMT, [NombrePadre, Nombre]);
-      Ret.AddPair('note', Nota);
-      if NotaOrden <> '' then
-        Ret.AddPair('orderNote', NotaOrden);
-      if NotaHeredado <> '' then
-        Ret.AddPair('inheritedNote', NotaHeredado);
-      if NotaLector <> '' then
-        Ret.AddPair('readerNote', NotaLector);
-      if NotaIde <> '' then
-        Ret.AddPair('ideNote', NotaIde);
+        // sin tiempo: cuantos cupieron, para partir la lista
+        if EsMsg(Result, SR_DESIGNER_JUEZ_TARDO_FMT) then
+          Result := Result + MsgFmt(SF_DESIGNER_ITEMS_SIN_TIEMPO_FMT, [I, Length(Entradas)]);
+        Exit(MsgConCausa(SR_DESIGNER_ITEMS_ENTRADA_FMT, Result, [I + 1, Length(Entradas), Entradas[I].Clase,
+          Result]));
+      end;
+    end;
+    var Texto := F.Doc.TextoDe(F.Doc.Lines);
+    var Pas := F.PasTexto;
+    Result := EscribeLoJuzgado(F, Antes, AntesPas,
+      function: string
+      begin
+        Result := EscribeFormYUnidad(F, Texto, Pas, True);
+      end);
+    if Result <> '' then
+      Exit;
+    var Ret := TJSONObject.Create;
+    try
+      var Nombres := TJSONArray.Create;
+      Ret.AddPair('inserted', Nombres);
+      var Lista := TJSONArray.Create;
+      Ret.AddPair('items', Lista);
+      for var H in Hechos do
+      begin
+        Nombres.Add(H.Nombre);
+        Lista.AddElement(RespuestaDeInsertado(F, H, nil, False));
+      end;
+      Ret.AddPair('file', F.DfmNombre);
+      PonLista(Ret, 'lint', AvisosDespues(F, Texto));
+      Ret.AddPair('note', MsgFmt(SN_DESIGNER_ITEMS_FMT, [Length(Hechos), F.DfmNombre, F.PasNombre]));
       Result := Ret.ToJSON;
     finally
       Ret.Free;

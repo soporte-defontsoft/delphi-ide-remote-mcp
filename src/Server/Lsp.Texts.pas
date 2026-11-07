@@ -5989,29 +5989,28 @@ const
     'all of which COMPILE and then fail when the form is created) | ' +
     'layout (WHERE things end up on a form: resolves Align and returns ' +
     'every control''s rectangle plus those of size zero, outside their ' +
-    'container, overlapping or clipped by the bands around them - a form ' +
-    'can bind perfectly and still be unusable) | to-text (a BINARY .dfm, ' +
+    'container, overlapping or clipped by the bands around them) | ' +
+    'to-text (a BINARY .dfm, ' +
     'or a UTF-16/32 text form the IDE won''t load, becomes the IDE''s text, ' +
     'backup first; reading never needs it) | to-binary (the way back, the ' +
     'resource-wrapped form the IDE writes) | preview (a PNG of what the IDE ' +
     'designer shows for the .dfm/.fmx, in this answer: built in design mode ' +
     'with the IDE''s installed packages, none of the project''s code run and nothing on any ' +
-    'screen; nonVisual lists the non-visual components, fidelity says how ' +
+    'screen; fidelity says how ' +
     'it was painted) | insert (a NEW visual control: classname; component, ' +
-    'its Name - the IDE''s Button1, Button2... by default; parent - the ' +
+    'its Name; parent - the ' +
     'form by default; placed at 10,10 (an aligned one, where its Align puts ' +
     'it) where the IDE keeps it among its ' +
     'siblings, its properties as the IDE''s writer stores them, with its published ' +
-    'field in the form''s class and its unit in the uses (in FMX also the one ' +
-    'that registers its styled presentation, FMX.Grid.Style for a grid); the ' +
+    'field in the form''s class and its unit in the uses (in FMX also the unit ' +
+    'of its styled presentation, FMX.Grid.Style for a grid); the ' +
     'answer is its ' +
     'numbered block) | set (ONE property: prop + value, checked against the ' +
     'property''s type and the ' +
     'class BEFORE writing - one the class stores by code, by the IDE''s own ' +
     'form reader - and ' +
-    'written as the IDE''s writer stores the component; parent= ' +
-    'alone moves the component; before=, ' +
-    'after= or index= alone reorders it among its siblings; prop=Name ' +
+    'written as the IDE''s writer stores the component; parent=, before=, ' +
+    'after= or index= alone move or reorder it; prop=Name ' +
     'renames it, its field, its default-named handlers and the form lines ' +
     'that name it) | delete (the ' +
     'component and what is inside it, the references to it in the form, its ' +
@@ -6020,8 +6019,8 @@ const
     'Default: info';
 
   SP_DESIGNER_PATH =
-    'tree/get/lint/check-binding/layout/preview/insert/set/delete/to-text/' +
-    'to-binary: the .dfm or .fmx file. The reading commands and preview ' +
+    'every command but info/prop: the .dfm or .fmx file. The reading ' +
+    'commands and preview ' +
     'read a binary .dfm too, on the fly; insert, set and delete edit a text ' +
     'form (command=to-text converts it, backup first). insert, delete and a ' +
     'rename also write its unit, the .pas of the same name';
@@ -6090,6 +6089,12 @@ const
   SP_DESIGNER_STYLES =
     'lint optional: the .style file or folder the form takes its styles ' +
     'from; its StyleLookups are judged against it.';
+
+  { insert items= (C4 de la 1.29) }
+  SP_DESIGNER_ITEMS =
+    'insert optional: several in ONE write, all or nothing - a list of ' +
+    '{classname, component, parent, props}, each as a single insert takes them; ' +
+    'a parent may be an earlier entry.';
 
   SP_DESIGNER_NONVISUAL =
     'preview optional: true = draw the non-visual components (TTimer, ' +
@@ -7607,6 +7612,37 @@ const
   SF_DESIGNER_STYLES_NO_ES_ESTILO = 'it is not a text .style';
   SF_DESIGNER_STYLES_SIN_NOMBRES = 'none of its styles has a StyleName that this lint reads';
   SF_DESIGNER_STYLES_SOLO_FMX = 'StyleLookup is FMX''s, and this form is VCL';
+
+  { insert items= (C4 de la 1.29): la forma de la lista (Lsp.DesignerEdit.EntradasDeInsert).
+    %0:s: por que (SF_DESIGNER_ITEMS_*); %1:s: los campos de una entrada }
+  SR_DESIGNER_ITEMS_FORMA_FMT =
+    '[DSGN-195 INVALID_PARAM] items: %0:s. It is the list of the inserts to make in ' +
+    'ONE write, each an object with %1:s as a single insert takes them (classname ' +
+    'required). Nothing was written.';
+  SF_DESIGNER_ITEMS_NO_LISTA = 'it is not a JSON list';
+  { items junto a classname/component/parent/props: lo de fuera de la lista se perderia }
+  SR_DESIGNER_ITEMS_Y_SUELTO =
+    '[DSGN-198 INVALID_PARAM] insert takes items OR classname/component/parent/props, ' +
+    'not both: put that insert in the list too. Nothing was written.';
+  SF_DESIGNER_ITEMS_VACIA = 'the list is empty';
+  SF_DESIGNER_ITEMS_NO_OBJETO_FMT = 'entry %d is not an object';
+  SF_DESIGNER_ITEMS_CAMPO_FMT = 'entry %0:d has the field "%1:s", which does not exist';
+  SF_DESIGNER_ITEMS_NO_TEXTO_FMT = 'the field "%1:s" of entry %0:d is not a text';
+  { una entrada de items negada: no se escribe ninguna. %0:d cual, %1:d de cuantas,
+    %2:s su clase, %3:s su negativa (su resultado manda: MsgConCausa) }
+  SR_DESIGNER_ITEMS_ENTRADA_FMT =
+    '[DSGN-196 DENIED] items: entry %0:d of %1:d (%2:s) was refused, so nothing was ' +
+    'written, not even the entries before it: %3:s';
+  { ...y si fue el plazo del cliente (DSGN-185): cuantas cupieron }
+  SF_DESIGNER_ITEMS_SIN_TIEMPO_FMT =
+    ' %0:d of the %1:d entries were judged in that time: send them in calls of about ' +
+    'that many.';
+  { la nota de un insert items= escrito. %0:d cuantos, %1:s el form, %2:s su unidad }
+  SN_DESIGNER_ITEMS_FMT =
+    '[DSGN-197] Inserted %0:d controls in ONE write of %1:s and %2:s, each as a single ' +
+    'insert puts it - its properties as the IDE''s writer stores them, its place among ' +
+    'its siblings, its field and its units -; items lists them in order. Change one ' +
+    'with command=set, see them with command=preview.';
   { lint styles= con .style que no se leen (la puerta, o el parser del IDE no los
     leeria por lineas como el lector: DSGN-160); sus nombres no cuentan. %s: cuales }
   SN_DESIGNER_STYLES_SIN_LEER_FMT =

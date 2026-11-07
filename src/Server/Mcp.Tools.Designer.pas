@@ -59,6 +59,7 @@ type
     FParent: string;
     FValue: string;
     FProps: string;
+    FItems: string;
     FBefore: string;
     FAfter: string;
     FIndex: Integer;
@@ -118,6 +119,11 @@ type
     [SchemaDescription(SP_DESIGNER_PROPS)]
     [Contenido]
     property Props: string read FProps write FProps;
+    // insert: varios en UNA escritura (C4 de la 1.29); un JSON, como edits
+    [SchemaDescription(SP_DESIGNER_ITEMS)]
+    [JsonComoTexto]
+    [Contenido]
+    property Items: string read FItems write FItems;
     [SchemaDescription(SP_DESIGNER_BEFORE)]
     property Before: string read FBefore write FBefore;
     [SchemaDescription(SP_DESIGNER_AFTER)]
@@ -2191,7 +2197,15 @@ begin
   if Ret = nil then
     Exit;
   try
-    if not (Ret.TryGetValue<string>('inserted', Nombre) or Ret.TryGetValue<string>('moved', Nombre)) then
+    // el insertado o el movido; o los de un insert items= (C4 de la 1.29), con UN layout
+    var Propios: TArray<string> := [];
+    var Lista: TJSONArray;
+    if Ret.TryGetValue<string>('inserted', Nombre) or Ret.TryGetValue<string>('moved', Nombre) then
+      Propios := [Nombre]
+    else if Ret.TryGetValue<TJSONArray>('inserted', Lista) then
+      for var V in Lista do
+        Propios := Propios + [V.Value];
+    if Length(Propios) = 0 then
       Exit;
     Lay := ObjetoJson(LayoutOf(APath.Trim, Nombres, True));
     if Lay = nil then
@@ -2200,7 +2214,7 @@ begin
       Suyas := nil;
       if Lay.TryGetValue<TJSONArray>('outsideParent', Fuera) then
         for var I := 0 to Min(Fuera.Count, Length(Nombres)) - 1 do
-          if MismoIdentificador(Nombres[I], Nombre) then // como se comparan dos nombres (A2 de la 1.27)
+          if IdentificadorEnLista(Nombres[I], Propios) then // como se comparan dos nombres (A2 de la 1.27)
           begin
             if Suyas = nil then
             begin
@@ -2246,7 +2260,7 @@ begin
       'get', 'path component',
       'check-binding', 'path unit',
       'preview', 'path component framework state style nonvisual inline maxwidth scale out',
-      'insert', 'path classname component parent props',
+      'insert', 'path classname component parent props items',
       'set', 'path component prop value parent props before after index',
       'delete', 'path component',
       'to-text', 'path', 'to-binary', 'path'],
@@ -2259,7 +2273,7 @@ begin
      'maxwidth', IfThen(Params.MaxWidth <> 0, IntToStr(Params.MaxWidth)), '',
      'scale', IfThen(Params.Scale <> 0, IntToStr(Params.Scale)), '',
      'out', Params.Out_, '', 'parent', Params.Parent, '', 'value', Params.Value, '',
-     'props', Params.Props, '', 'before', Params.Before, '', 'after', Params.After, '',
+     'props', Params.Props, '', 'items', Params.Items, '', 'before', Params.Before, '', 'after', Params.After, '',
      'index', IfThen(Params.Index >= 0, IntToStr(Params.Index)), ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_DESIGNER_NO_VA_CON_COMANDO_FMT, [Sobra, Modo, Modo, Suyos]) + VaCon);
@@ -2332,7 +2346,15 @@ begin
       if Result <> '' then
         Exit;
     end;
-    if Cmd = 'insert' then
+    if (Cmd = 'insert') and (Params.Items.Trim <> '') then
+    begin
+      // items o el insert suelto, no los dos: lo de fuera de items se perderia
+      if (Params.ClassName_.Trim <> '') or (Params.Component.Trim <> '') or (Params.Parent.Trim <> '') or
+         (Params.Props.Trim <> '') then
+        Exit(MsgText(SR_DESIGNER_ITEMS_Y_SUELTO));
+      Result := ConFueraDelPadre(InsertaVarios(Params.Path, Params.Items), Params.Path);
+    end
+    else if Cmd = 'insert' then
       Result := ConFueraDelPadre(InsertaComponente(Params.Path, Params.ClassName_,
         Params.Component, Params.Parent, Params.Props), Params.Path)
     else if Cmd = 'set' then

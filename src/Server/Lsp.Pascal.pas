@@ -282,6 +282,8 @@ function EsNombreNuevo(const S: string): Boolean;
 // en mayusculas llama a Tamano); SameText, CompareText y LowerCase solo
 // pliegan A-Z. Para nombres de unit, de clase, de metodo: esta.
 function MismoIdentificador(const A, B: string): Boolean;
+// uno de ALista que sea ANombre, por MismoIdentificador (eran dos bucles a mano)
+function IdentificadorEnLista(const ANombre: string; const ALista: array of string): Boolean;
 // (si una unidad ya esta en un uses lo dice EL juez de dcc, con los ambitos
 // del proyecto: Lsp.ProjectUnits.TResolutorDeUnidades, V79 de la 1.23.1)
 // La CLAVE de un identificador para un diccionario o un conjunto: dos tienen
@@ -550,6 +552,14 @@ end;
 function MismoIdentificador(const A, B: string): Boolean;
 begin
   Result := (Length(A) = Length(B)) and (ClaveDeIdentificador(A) = ClaveDeIdentificador(B));
+end;
+
+function IdentificadorEnLista(const ANombre: string; const ALista: array of string): Boolean;
+begin
+  for var N in ALista do
+    if MismoIdentificador(N, ANombre) then
+      Exit(True);
+  Result := False;
 end;
 
 
