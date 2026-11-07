@@ -21,6 +21,9 @@ los filtros; el servidor compone y FireDAC traduce. Las bases y su arnes, en db_
   E12 una credencial de solo lectura (--readonly): insert, update y delete negados en la puerta (READ-002);
       rows si
   E13 ningun secreto del json en ninguna respuesta
+  E14 tras usar las bases, el servidor sale LIMPIO al cerrarle stdin (rc 0, al momento): la tabla de
+      parametros del driver de MSSQL lanzaba una busqueda de servidores por la red que seguia viva al salir y
+      volvia a odbc32.dll ya descargada (0xC0000005 a los 16 s y los atomos del RTL sin borrar; 7-nov-2026)
 
 Uso:  python tests/test_db_escrituras_129.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -176,7 +179,12 @@ try:
     seg = time.time() - t0
     check('E8 una readonly que no responde: DB-017 al momento, antes de conectar (%.1f s)' % seg,
           mc.abre(r, 'SR_DB_SOLO_LECTURA_FMT') and seg < 5, (round(seg, 1), r[:300]))
+    t0 = time.time()
     srv.cierra()
+    seg = time.time() - t0
+    check('E14 tras usar %s, el servidor sale limpio al cerrarle stdin: rc %s en %.1f s' % (
+          ' y '.join(m for m in ('mssql', 'pg') if hay[m]) or 'ninguna base', srv.p.returncode, seg),
+          srv.p.returncode == 0 and seg < 5, (srv.p.returncode, round(seg, 1)))
     srv = None
     medidos = [m for m in ('mssql', 'pg') if hay[m]]
     if medidos:

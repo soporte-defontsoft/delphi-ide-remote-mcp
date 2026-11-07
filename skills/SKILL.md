@@ -270,6 +270,30 @@ it. With no name, each request of that protocol is a stranger to the one before.
   once; act on them and, when an answer is due, reply with
   `delphi_report`.
 
+## The operator's databases and HTTP APIs (`delphi_db`, `delphi_api`)
+
+Only where the operator opened them: if `tools/list` does not show them,
+your workspace does not have them (the operator opens them with
+`DbAllowedProjects` / `ApiAllowedProjects`). Everything goes by NAME:
+`command=connections` lists `project/alias`,
+the name every other command takes. You never see the server, the real
+database, the base URL or the credential, and what comes back has them
+masked (`<project/alias>`).
+
+- `delphi_db`: `tables`, `fields`, `rows` (`filters` as a list of
+  `{field, op, value}` with ops such as equals, contains, starts_with,
+  words, empty; plus `fields`, `order`, `limit`/`offset`, and always the
+  `total`) and `summary` (group and add up). You never write SQL: the
+  server composes it for every engine. `insert`, `update` and `delete` only
+  where the operator made the database writable; `update` and `delete`
+  need filters, and a text filter needs something to look for.
+- `delphi_api`: `request` with a method the API allows, a path RELATIVE to
+  the API (no host, no `..`, no `?` - `query` is its own list), your own
+  `headers` (never the operator's, the credential, Host, or one that
+  overrides the method or the path) and a `body` (JSON goes as
+  application/json) or a `form`. Redirects come back, never followed; a
+  binary or long body is saved whole with `out=`.
+
 ## Running on the target (not on this server)
 
 - `delphi_build target=Deploy` ships the binary to the host of its PAServer
@@ -323,7 +347,9 @@ dialog - go back to the whole desktop whenever something may have opened
 elsewhere. `key` takes an evdev code on Linux and a key NAME on Windows
 (the tool reads the profile's platform); `modifiers=ctrl` holds keys while
 it goes down. `type` on Linux uses the desktop's own keymap, accents
-included; the text is typed, never run.
+included; the text is typed, never run. A line break in `text` presses
+Enter, one per break, on Linux and on Windows: a multi-line text is ONE
+`type`.
 
 It needs `AllowRemoteRun` and the profile's host in `RemoteHosts`, as remote-run,
 and that host in `DesktopAllowedHosts` (`DesktopViewHosts` only lets you

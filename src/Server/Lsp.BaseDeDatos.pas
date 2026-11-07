@@ -14,7 +14,8 @@
   driver CON casa la carga SIEMPRE de ahi, aunque la carpeta no este -
   falla, nunca se busca: una DLL que carga el servidor es codigo que ejecuta
   (David, 6-nov: "drivers\<motor>\ del servidor"). MSSQL va por el ODBC del
-  sistema y no lleva casa. Anadir un motor = enlazar su driver y, si carga
+  sistema y no lleva casa (su enlace solo apaga la busqueda de servidores
+  por la red, ver GMsSql). Anadir un motor = enlazar su driver y, si carga
   una DLL cliente, su enlace con su casa en la initialization. }
 
 interface
@@ -99,6 +100,14 @@ var
   // uno por motor enlazado que la necesita. Se crean al arrancar (abajo) y
   // no al primer uso: dos peticiones a la vez no crean dos.
   GPg: TFDPhysPgDriverLink = nil;
+  // el de MSSQL no lleva casa (ODBC del sistema) pero apaga ListServers:
+  // sin el, la tabla de parametros del driver (GetConnParams, la que lee
+  // ParametrosDelDriver) lanza una TTask que BUSCA servidores SQL por la red
+  // (SQLBrowseConnect -> NetServerEnum, unos 16 s) y queda viva; al salir el
+  // servidor, FireDAC ya habia descargado odbc32.dll y la tarea volvia a
+  // ella: 0xC0000005 al cerrar y sus atomos del RTL sin borrar (medido el
+  // 7-nov-2026 con cdb y el visor de eventos: odbc32.dll_unloaded+0x2f490)
+  GMsSql: TFDPhysMSSQLDriverLink = nil;
 
 function MotoresDeBd: TArray<string>;
 var
@@ -328,8 +337,11 @@ end;
 initialization
   GPg := TFDPhysPgDriverLink.Create(nil);
   GPg.VendorHome := CarpetaDeDriverDeBd(GPg.BaseDriverID);
+  GMsSql := TFDPhysMSSQLDriverLink.Create(nil);
+  GMsSql.ListServers := False;
 
 finalization
+  FreeAndNil(GMsSql);
   FreeAndNil(GPg);
 
 end.
