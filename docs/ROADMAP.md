@@ -88,7 +88,6 @@ Nothing beyond the database and API access below: the list that was open closed 
 
 - The designer measured where it is not yet: `preview` at other DPIs (it takes a machine at another scale) and from the tray (the operator starts the tray from his desktop)
 - The protections that need a privilege, measured in the suite: this machine creates symbolic links now and the Python batteries plant them; what is left are the unit tests run from the repository's own build output, where Windows refuses them, and an elevated console
-- Dead code by symbol, as an operation of the server: no agent asked for one (measured in 1.28 over some 41,000 calls of the test agents); the compiler's own hints already come through `delphi_diagnostics` and `delphi_build`
 - The designer beyond `insert` / `set` / `delete` (events, collections, non-visual components), and the defaults a component's constructor sets, read from its source (`preview` already draws them - it builds the real control - and since 1.27 `layout` judges the box the renderer measured; only without the renderer does it list such a control under `sizeNotWritten`)
 
 ## Declined by the operator (do not re-propose)
@@ -105,3 +104,4 @@ Nothing beyond the database and API access below: the list that was open closed 
 - Attaching a style to a StyleBook as the IDE does (an embedded style): styles are worked on as text `.style` files and built with `delphi_styles build`
 - Watching a running application from inside (accessibility trees): what runs is seen through the captures of the desktop node and `delphi_adb`
 - Renaming a unit as one operation: a move touches only what it names, and `delphi_config fix-references` re-points the projects
+- Dead code by symbol as an operation of the server: no agent asked for one (measured in 1.28 over some 41,000 calls of the test agents), and the compiler's own hints already come through `delphi_diagnostics` and `delphi_build`
