@@ -3551,6 +3551,12 @@ const
   SF_CFG_PROPERTY_PISADA_FMT =
     ' For that build msbuild reads %s instead: an element with a Condition ' +
     'of its own in that group, or a later group, wins.';
+  { set-property sin el build entero (A15 de la 1.29): los grupos mas
+    concretos que tambien la ponen ganan para sus builds. %s = donde esta. }
+  SF_CFG_PROPERTY_OTROS_GRUPOS_FMT =
+    ' Other groups set it too, and for their own builds the more specific ' +
+    'one wins, as in the IDE: %s. set-property with platform= and config= ' +
+    'changes one build; remove-property takes one away.';
 
   SR_CFG_CLAVE_INVALIDA_FMT =
     '[CFG-141 DENIED] The key "%s" of configuration %s (BuildConfiguration) ' +
@@ -4716,14 +4722,12 @@ const
     '"field:year" / "field:month" / "field:day" / "field:hour" for a date ' +
     'field. Nothing was done.';
 
+  // (va en CADA pagina: corta, como las notas fijas del informe 3 de la 1.29)
   SN_DB_ROWS =
-    '[DB-019] total counts every row the filters select; rows holds ' +
-    'those from offset, up to limit and to the size of one answer ' +
-    '(truncated says it was cut: ask for the next page with offset, or for ' +
-    'fewer fields). A very long text comes as {"text" (its beginning), ' +
-    '"length", "truncated"}. Pages follow your order and then the primary ' +
-    'key, so the next page neither repeats nor skips a row. Text compares as ' +
-    'the database does (its collation: case and accents).';
+    '[DB-019] total = all rows the filters select; rows = from offset, up to ' +
+    'limit and one answer''s size (truncated: next page with offset). Pages ' +
+    'follow your order, then the primary key. A long text comes as {"text", ' +
+    '"length", "truncated"}. Text compares as the database''s collation does.';
   // una tabla sin clave primaria: sus paginas no tienen un orden que se repita
   SN_DB_SIN_CLAVE =
     '[DB-021] This table has no primary key, so its rows have no order the ' +

@@ -2177,6 +2177,14 @@ begin
     Result := MsgFmt(SF_CFG_PROPERTY_DONDE_FMT, [Result]);
 end;
 
+{ Cuantos grupos del .dproj ponen <ATag>: los de DondeEsta, contados. }
+function GruposQueLaPonen(const AXml, ATag: string): Integer;
+begin
+  Result := 0;
+  for var G in GruposDePropiedades(AXml) do
+    Inc(Result, Length(TramosEnGrupo(AXml, ATag, G, True)));
+end;
+
 { El build que nombran platform y config de la llamada: la plataforma
   canonica y la configuracion con el nombre que declara el proyecto ('' =
   sin esa mitad); la negativa si no valen. }
@@ -2265,6 +2273,12 @@ begin
       Pisada := MsgFmt(SF_CFG_PROPERTY_PISADA_FMT, [ONinguno(Leido)]);
     end;
   end;
+  // sin el build entero (todas las plataformas, o todas las configuraciones de
+  // una): un grupo mas concreto que ya la pone gana para sus builds, como en el
+  // IDE, y la respuesta lo dice. Decia "for all platforms" y el build de Win64
+  // Release seguia leyendo la de su grupo (A15 de la 1.29, medido)
+  if ((Plat = '') or (Cfg = '')) and (GruposQueLaPonen(Xml, Nombre) > 1) then
+    Pisada := Pisada + MsgFmt(SF_CFG_PROPERTY_OTROS_GRUPOS_FMT, [DondeEsta(Xml, Nombre)]);
   // un $(X) del valor que queda ENCIMA de la definicion de X: msbuild lo lee
   // vacio ahi (de arriba abajo; F2613 sin aviso, Opus en Hermes 22-oct-2026).
   // En el build pedido, o en el que el proyecto hace por defecto

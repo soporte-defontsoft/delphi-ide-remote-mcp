@@ -286,7 +286,11 @@ const
   tres (revisor propio de la 4.1, 9-oct-2026). }
 function MascarasPorDefecto: TArray<string>;
 begin
-  Result := MascarasDe(SOURCE_EXTS) + MascarasDe(DESIGNER_EXTS) + MascarasDe(PROJECT_EXTS);
+  // ...y el manifiesto de despliegue del IDE, el otro fichero del proyecto:
+  // una busqueda sin pattern escaneaba 2 de los 3 ficheros de un proyecto y no
+  // veia sus RemoteDir (WATCH del 6-nov, cerrado en la 1.29)
+  Result := MascarasDe(SOURCE_EXTS) + MascarasDe(DESIGNER_EXTS) + MascarasDe(PROJECT_EXTS) +
+    MascarasDe([EXT_MANIFIESTO]);
 end;
 
 { EL lector del "pattern" de delphi_list y delphi_search: una mascara de
