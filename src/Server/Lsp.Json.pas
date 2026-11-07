@@ -57,6 +57,12 @@ function ListaDeTextos(const ATexto: string; out ALista: TArray<string>): Boolea
   el resultado. }
 function ListaJson(const ATexto: string): TJSONArray;
 
+{ La primera clave de AObj que no es una de ACampos ('' si todas lo son), con
+  sus mayusculas: lo que una entrada de una lista no lee no se ignora en
+  silencio. Estaba tres veces (las entradas de edits, EDIT-012; las de items
+  de delphi_designer; las columnas de delphi_db create-table, C5 de la 1.29). }
+function ClaveQueNoVa(const AObj: TJSONObject; const ACampos: array of string): string;
+
 { ATexto como lo escribe DENTRO de una cadena el codificador JSON de la casa
   (TJSONString.ToJSON, sin sus comillas): las barras dobladas y lo que no es
   ASCII como \uXXXX. EL juez de como viaja una ruta en el JSON de una tool: lo
@@ -229,6 +235,20 @@ begin
     Exit(TJSONArray(V));
   V.Free;
   Result := nil;
+end;
+
+function ClaveQueNoVa(const AObj: TJSONObject; const ACampos: array of string): string;
+begin
+  for var Par in AObj do
+  begin
+    var Esta := False;
+    for var Campo in ACampos do
+      if Par.JsonString.Value = Campo then
+        Esta := True;
+    if not Esta then
+      Exit(Par.JsonString.Value);
+  end;
+  Result := '';
 end;
 
 function ListaDeTextos(const ATexto: string; out ALista: TArray<string>): Boolean;

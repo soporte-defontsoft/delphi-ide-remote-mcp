@@ -17,7 +17,8 @@
   Lo decidido por David (5 y 6-nov-2026): las credenciales en claro en el
   servidor; se conecta SOLO con lo que dice el json; escribir o no lo dice
   el "readonly" del json, no los permisos del login. Sin "readonly", o con
-  algo que no es true/false, la entrada no se usa (falla cerrado).
+  algo que no es true/false, la entrada no se usa (falla cerrado). Crear
+  tablas y vistas, su "allowCreate" (C5 de la 1.29: opcional, falta = no).
 
   LAS APIS CON NOMBRE (1.29, delphi_api): el mismo lector y el mismo
   recorrido (RecorreConexiones) sobre su propio fichero, abierto a cada
@@ -34,6 +35,9 @@ type
     Alias: string;        // la clave de la base dentro de su proyecto
     Motor: string;        // "engine": el DriverID de FireDAC (MSSQL, PG...)
     SoloLectura: Boolean; // "readonly"
+    // "allowCreate": crear tablas y vistas (C5 de la 1.29); sin el, no; con
+    // readonly:true tampoco
+    CreaObjetos: Boolean;
     Servidor: string;     // "server"
     Base: string;         // "database": la base REAL
     Usuario: string;      // "user"
@@ -258,6 +262,13 @@ begin
     Result.SoloLectura := TJSONBool(Ro).AsBoolean
   else
     Result.Defecto := MsgText(SF_DB_DEF_SOLO_LECTURA);
+  // el de crear es opcional (falta = no), pero uno que no es true/false no se
+  // adivina: la entrada no se usa, como con readonly
+  var Crea := AObj.GetValue('allowCreate');
+  if Crea is TJSONBool then
+    Result.CreaObjetos := TJSONBool(Crea).AsBoolean
+  else if Crea <> nil then
+    Result.Defecto := MsgText(SF_DB_DEF_CREAR);
   if Result.Motor = '' then
     Result.Defecto := MsgText(SF_DB_DEF_SIN_MOTOR)
   else if (Prov <> '') and not SameText(Prov, PROVEEDOR_FIREDAC) then

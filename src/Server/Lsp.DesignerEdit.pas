@@ -2742,12 +2742,13 @@ begin
         Exit(MsgFmt(SR_DESIGNER_ITEMS_FORMA_FMT, [MsgFmt(SF_DESIGNER_ITEMS_NO_OBJETO_FMT, [I + 1]),
           string.Join(', ', CAMPOS_DE_UN_INSERT)]));
       var Obj := TJSONObject(Lista.Items[I]);
+      var Ajena := ClaveQueNoVa(Obj, CAMPOS_DE_UN_INSERT);
+      if Ajena <> '' then
+        Exit(MsgFmt(SR_DESIGNER_ITEMS_FORMA_FMT, [MsgFmt(SF_DESIGNER_ITEMS_CAMPO_FMT, [I + 1, Ajena]),
+          string.Join(', ', CAMPOS_DE_UN_INSERT)]));
       for var Par in Obj do
       begin
         var Clave := Par.JsonString.Value;
-        if IndexStr(Clave, CAMPOS_DE_UN_INSERT) < 0 then
-          Exit(MsgFmt(SR_DESIGNER_ITEMS_FORMA_FMT, [MsgFmt(SF_DESIGNER_ITEMS_CAMPO_FMT, [I + 1, Clave]),
-            string.Join(', ', CAMPOS_DE_UN_INSERT)]));
         if not (Par.JsonValue is TJSONString) then
           Exit(MsgFmt(SR_DESIGNER_ITEMS_FORMA_FMT, [MsgFmt(SF_DESIGNER_ITEMS_NO_TEXTO_FMT, [I + 1, Clave]),
             string.Join(', ', CAMPOS_DE_UN_INSERT)]));

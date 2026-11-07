@@ -28,7 +28,7 @@ uses
 type
   TDelphiDbParams = class
   private
-    FCommand, FDb, FTable, FFields, FFilters, FOrder, FGroup, FValues: string;
+    FCommand, FDb, FTable, FFields, FFilters, FOrder, FGroup, FValues, FColumns, FView: string;
     FLimit, FOffset: Integer;
   public
     [SchemaDescription(SP_DB_COMMAND)]
@@ -55,6 +55,12 @@ type
     [SchemaDescription(SP_DB_VALUES)]
     [JsonComoTexto]
     property Values: string read FValues write FValues;
+    // create-table y create-view (C5 de la 1.29)
+    [SchemaDescription(SP_DB_COLUMNS)]
+    [JsonComoTexto]
+    property Columns: string read FColumns write FColumns;
+    [SchemaDescription(SP_DB_VIEW)]
+    property View: string read FView write FView;
   end;
 
   TDelphiDbTool = class(TMCPToolBase<TDelphiDbParams>)
@@ -68,6 +74,10 @@ implementation
 
 uses
   System.JSON, System.StrUtils, System.Variants, System.DateUtils, System.Math,
+  System.Classes, // TStrings: el SQL del generador
+  // GetEnumValue: el tipo de una columna nueva por su nombre en FireDAC. ANTES
+  // de Data.DB: TypInfo tiene su propio ftSingle/ftDouble (TFloatType)
+  System.TypInfo,
   Data.DB, Data.FmtBcd,
   FireDAC.Comp.Client,
   MCPServer.Registration,
@@ -80,7 +90,8 @@ uses
   Lsp.Mascara, // ExpandDriveValue: EL inverso de la mascara de unidades
   Lsp.BaseDeDatos, // TrabajoConLaBase: el plazo de la llamada entera (EnLaBase)
   System.Rtti, // CopiaDeParams: los parametros, campo a campo
-  System.SyncObjs; // TInterlocked: la llamada abandonada
+  System.SyncObjs, // TInterlocked: la llamada abandonada
+  FireDAC.Stan.Intf, FireDAC.Phys.Intf, FireDAC.DatS; // create-table: EL generador de FireDAC
 
 const
   LIMITE_FILAS_DB = 100;
@@ -142,6 +153,11 @@ type
 
   { Lo que hace una orden con la base ya abierta. }
   TOperacionDb = reference to function(const S: TSesionDb; const P: TDelphiDbParams): string;
+
+  { Lo que una orden pide de la base: leer, escribir filas (donde el json dice
+    readonly:false) o crear tablas y vistas (ademas allowCreate:true, C5 de la
+    1.29). }
+  TAccesoDb = (adLee, adEscribe, adCrea);
 
 function EsTexto(T: TFieldType): Boolean;
 begin
@@ -291,10 +307,10 @@ begin
 end;
 
 { La base que nombra ADb, abierta, o la negativa: de la sesion, usable, y la
-  conexion con su plazo (Lsp.BaseDeDatos.AbreBase). Para escribir
-  (AEscribe), una que el json no declara de solo lectura: la primera
-  barrera, antes de conectar. }
-function AbreLaBase(const ACmd, ADb: string; AEscribe: Boolean; out S: TSesionDb): string;
+  conexion con su plazo (Lsp.BaseDeDatos.AbreBase). Para escribir o crear
+  (AAcceso), una que el json no declara de solo lectura, y para crear, una a
+  la que da allowCreate: la primera barrera, antes de conectar. }
+function AbreLaBase(const ACmd, ADb: string; AAcceso: TAccesoDb; out S: TSesionDb): string;
 var
   Por: string;
 begin
@@ -306,8 +322,10 @@ begin
   Por := DefectoDeConexion(S.Conexion);
   if Por <> '' then
     Exit(MsgFmt(SR_DB_INUTILIZABLE_FMT, [NombreDeConexion(S.Conexion), Por]));
-  if AEscribe and S.Conexion.SoloLectura then
+  if (AAcceso <> adLee) and S.Conexion.SoloLectura then
     Exit(MsgFmt(SR_DB_SOLO_LECTURA_FMT, [NombreDeConexion(S.Conexion), ACmd]));
+  if (AAcceso = adCrea) and not S.Conexion.CreaObjetos then
+    Exit(MsgFmt(SR_DB_SIN_CREAR_FMT, [NombreDeConexion(S.Conexion), ACmd]));
   Result := AbreBase(S.Conexion, S.Conn);
 end;
 
@@ -356,7 +374,7 @@ end;
   con un proxy que calla
   tras abrir (CH11 de la 1.29): sin este plazo, tables no volvia en 240 s.
   Lo que dice la base, como siempre: NegativaDeLaBase. }
-function EnLaBase(const ACmd: string; const AParams: TDelphiDbParams; AEscribe: Boolean;
+function EnLaBase(const ACmd: string; const AParams: TDelphiDbParams; AAcceso: TAccesoDb;
   const AOperacion: TOperacionDb): string;
 var
   L: TLlamadaDb;
@@ -365,7 +383,7 @@ var
 begin
   L := TLlamadaDb.Create;
   try
-    Result := AbreLaBase(ACmd, AParams.Db, AEscribe, L.S);
+    Result := AbreLaBase(ACmd, AParams.Db, AAcceso, L.S);
     if Result = '' then
       L.P := CopiaDeParams(AParams);
   except
@@ -757,17 +775,44 @@ function Fields(const P: TDelphiDbParams): string;
 begin
   if P.Table.Trim = '' then
     Exit(MsgFmt(SR_DB_FALTA_FMT, ['fields', 'table']));
-  Result := EnLaBase('fields', P, False, FieldsEn);
+  Result := EnLaBase('fields', P, adLee, FieldsEn);
+end;
+
+{ Los campos de ATabla que nombra AFields (fields: una lista de nombres, cada
+  uno como lo da el catalogo) o, sin ella, todos (los binarios solo con
+  AConBinarios); '' o la negativa. Lo leian rows y create-view (C5 de la
+  1.29). }
+function CamposElegidos(const ACampos: TArray<TCampoDb>; const AFields, ATabla: string;
+  AConBinarios: Boolean; out AElegidos: TArray<TCampoDb>): string;
+var
+  Nombres: TArray<string>;
+  C: TCampoDb;
+begin
+  Result := '';
+  AElegidos := [];
+  if AFields.Trim <> '' then
+  begin
+    if not ListaDeTextos(AFields, Nombres) then
+      Exit(MsgFmt(SR_DB_LISTA_FMT, ['fields', 'field names']));
+    for var N in Nombres do
+    begin
+      if not CampoDe(ACampos, N, ATabla, C, Result) then
+        Exit;
+      AElegidos := AElegidos + [C];
+    end;
+  end
+  else
+    for var Cada in ACampos do
+      if AConBinarios or not EsBinario(Cada.TipoDeCampo) then
+        AElegidos := AElegidos + [Cada];
 end;
 
 function RowsEn(const S: TSesionDb; const P: TDelphiDbParams): string;
 var
   Campos, Elegidos: TArray<TCampoDb>;
   Pars: TArray<TParametroDb>;
-  Nombres: TArray<string>;
   Tabla, Neg, Where, OrderBy, Cols, Desde: string;
   Ordenados: TArray<string>;
-  C: TCampoDb;
   Q: TFDQuery;
   R: TJSONObject;
   Filas: TJSONArray;
@@ -781,22 +826,9 @@ begin
     if not TablaDe(S, P.Table, Tabla, Neg) then
       Exit(Neg);
     Campos := CamposDeTabla(S.Conn, Tabla);
-    Elegidos := [];
-    if P.Fields.Trim <> '' then
-    begin
-      if not ListaDeTextos(P.Fields, Nombres) then
-        Exit(MsgFmt(SR_DB_LISTA_FMT, ['fields', 'field names']));
-      for var N in Nombres do
-      begin
-        if not CampoDe(Campos, N, Tabla, C, Neg) then
-          Exit(Neg);
-        Elegidos := Elegidos + [C];
-      end;
-    end
-    else
-      for var Cada in Campos do
-        if not EsBinario(Cada.TipoDeCampo) then
-          Elegidos := Elegidos + [Cada];
+    Result := CamposElegidos(Campos, P.Fields, Tabla, False, Elegidos);
+    if Result <> '' then
+      Exit;
     Cols := '';
     for var Cada in Elegidos do
       Cols := Cols + IfThen(Cols <> '', ', ') + CitaNombre(S.Conn, Cada.Nombre);
@@ -875,7 +907,7 @@ function Rows(const P: TDelphiDbParams): string;
 begin
   if P.Table.Trim = '' then
     Exit(MsgFmt(SR_DB_FALTA_FMT, ['rows', 'table']));
-  Result := EnLaBase('rows', P, False, RowsEn);
+  Result := EnLaBase('rows', P, adLee, RowsEn);
 end;
 
 function SummaryEn(const S: TSesionDb; const P: TDelphiDbParams): string;
@@ -1007,7 +1039,7 @@ function Summary(const P: TDelphiDbParams): string;
 begin
   if P.Table.Trim = '' then
     Exit(MsgFmt(SR_DB_FALTA_FMT, ['summary', 'table']));
-  Result := EnLaBase('summary', P, False, SummaryEn);
+  Result := EnLaBase('summary', P, adLee, SummaryEn);
 end;
 
 { Los values de insert y update (objetos con field y value): las columnas citadas y
@@ -1138,11 +1170,310 @@ begin
   if (ACmd <> 'insert') and (P.Filters.Trim = '') then
     Exit(MsgFmt(SR_DB_FALTA_FMT, [ACmd, 'filters']));
   Cmd := ACmd;
-  Result := EnLaBase(ACmd, P, True,
+  Result := EnLaBase(ACmd, P, adEscribe,
     function(const S: TSesionDb; const Q: TDelphiDbParams): string
     begin
       Result := EscribeEn(Cmd, S, Q);
     end);
+end;
+
+type
+  { Una columna de create-table como la pide el agente (C5 de la 1.29); -1 =
+    no se pide (queda lo que ponga el generador, y la respuesta lo dice). }
+  TColumnaNueva = record
+    Nombre: string;
+    Tipo: TFDDataType;
+    Tamano, Precision, Escala: Integer;
+    Requerida, Clave, AutoInc: Boolean;
+  end;
+
+const
+  { LOS campos de una entrada de columns: los que se leen y los que dice DB-014 }
+  CAMPOS_DE_UNA_COLUMNA: array [0 .. 7] of string = ('name', 'type', 'size', 'precision', 'scale',
+    'required', 'key', 'autoinc');
+  NUMEROS_DE_UNA_COLUMNA: array [0 .. 2] of string = ('size', 'precision', 'scale');
+  SI_NO_DE_UNA_COLUMNA: array [0 .. 2] of string = ('required', 'key', 'autoinc');
+
+{ Un nombre NUEVO (tabla, vista, columna; AQue lo dice): EL identificador de
+  la casa (Lsp.Pascal.EsIdentificador: letras, digitos y _, sin empezar por un
+  digito), porque el servidor lo escribe en el SQL. '' o DB-025. }
+function NombreNuevoDenegado(const ANombre, AQue: string): string;
+begin
+  if EsIdentificador(ANombre) then
+    Result := ''
+  else
+    Result := MsgFmt(SR_DB_NOMBRE_NUEVO_FMT, [ANombre, AQue]);
+end;
+
+{ La lista columns de create-table en sus columnas, sin abrir la base: '' o la
+  negativa (DB-015 la forma, DB-014 una entrada, DB-025 un nombre). El tipo,
+  por su nombre en FireDAC (TFDDataType: dtInt32, dtWideString...) por RTTI:
+  si el motor lo tiene lo dice su generador, no una lista nuestra. }
+function ColumnasNuevas(const ATexto: string; out AColumnas: TArray<TColumnaNueva>): string;
+var
+  Lista: TJSONArray;
+  Nombres: TArray<string>;
+
+  function Entrada(I: Integer; const APor: string): string;
+  begin
+    Result := MsgFmt(SR_DB_ENTRADA_FMT, ['columns', I + 1, APor]);
+  end;
+
+begin
+  Result := '';
+  AColumnas := [];
+  Nombres := [];
+  Lista := ListaJson(ATexto);
+  if Lista = nil then
+    Exit(MsgFmt(SR_DB_LISTA_FMT, ['columns', MsgText(SF_DB_COLUMNA_FORMA)]));
+  try
+    if Lista.Count = 0 then
+      Exit(MsgFmt(SR_DB_LISTA_FMT, ['columns', MsgText(SF_DB_COLUMNA_FORMA)]));
+    SetLength(AColumnas, Lista.Count);
+    for var I := 0 to Lista.Count - 1 do
+    begin
+      if not (Lista.Items[I] is TJSONObject) then
+        Exit(Entrada(I, MsgText(SF_DB_COLUMNA_FORMA)));
+      var Obj := TJSONObject(Lista.Items[I]);
+      var Ajena := ClaveQueNoVa(Obj, CAMPOS_DE_UNA_COLUMNA);
+      if Ajena <> '' then
+        Exit(Entrada(I, MsgFmt(SF_DB_COLUMNA_CAMPO_FMT, [Ajena, string.Join(', ', CAMPOS_DE_UNA_COLUMNA)])));
+      var C: TColumnaNueva;
+      C := Default(TColumnaNueva);
+      C.Tamano := -1;
+      C.Precision := -1;
+      C.Escala := -1;
+      // el nombre y el tipo: textos, y los dos hacen falta
+      var Nombre := Obj.GetValue('name');
+      var Tipo := Obj.GetValue('type');
+      if (Nombre = nil) or (Tipo = nil) then
+        Exit(Entrada(I, MsgText(SF_DB_COLUMNA_FORMA)));
+      if not (Nombre is TJSONString) then
+        Exit(Entrada(I, MsgFmt(SF_DB_COLUMNA_TEXTO_FMT, ['name'])));
+      if not (Tipo is TJSONString) then
+        Exit(Entrada(I, MsgFmt(SF_DB_COLUMNA_TEXTO_FMT, ['type'])));
+      C.Nombre := TJSONString(Nombre).Value.Trim;
+      Result := NombreNuevoDenegado(C.Nombre, 'column');
+      if Result <> '' then
+        Exit;
+      // dos con el mismo nombre: los motores no distinguen mayusculas en el
+      // nombre de una columna sin comillas
+      if MatchText(C.Nombre, Nombres) then
+        Exit(Entrada(I, MsgFmt(SF_DB_COLUMNA_REPETIDA_FMT, [C.Nombre])));
+      Nombres := Nombres + [C.Nombre];
+      var Ord := GetEnumValue(TypeInfo(TFDDataType), TJSONString(Tipo).Value.Trim);
+      if Ord < 0 then
+        Exit(Entrada(I, MsgFmt(SF_DB_COLUMNA_TIPO_FMT, [TJSONString(Tipo).Value])));
+      C.Tipo := TFDDataType(Ord);
+      // los numeros (enteros, 0 o mas) y los si/no, cada uno de su tipo
+      for var Par in Obj do
+      begin
+        var K := Par.JsonString.Value;
+        var N: Integer;
+        case IndexStr(K, NUMEROS_DE_UNA_COLUMNA) of
+          0, 1, 2:
+            begin
+              if not (Par.JsonValue is TJSONNumber) or not TryStrToInt(Par.JsonValue.Value, N) or (N < 0) then
+                Exit(Entrada(I, MsgFmt(SF_DB_COLUMNA_NUMERO_FMT, [K])));
+              case IndexStr(K, NUMEROS_DE_UNA_COLUMNA) of
+                0: C.Tamano := N;
+                1: C.Precision := N;
+              else
+                C.Escala := N;
+              end;
+            end;
+        end;
+        if MatchStr(K, SI_NO_DE_UNA_COLUMNA) then
+        begin
+          if not (Par.JsonValue is TJSONBool) then
+            Exit(Entrada(I, MsgFmt(SF_DB_COLUMNA_SI_NO_FMT, [K])));
+          var B := TJSONBool(Par.JsonValue).AsBoolean;
+          case IndexStr(K, SI_NO_DE_UNA_COLUMNA) of
+            0: C.Requerida := B;
+            1: C.Clave := B;
+          else
+            C.AutoInc := B;
+          end;
+        end;
+      end;
+      AColumnas[I] := C;
+    end;
+  finally
+    Lista.Free;
+  end;
+end;
+
+{ create-table (C5 de la 1.29): la tabla NUEVA P.Table con P.Columns. Su SQL
+  lo compone EL generador de FireDAC para ese motor
+  (IFDPhysCommandGenerator.GenerateCreateTable) SIN goSkipUnsupTypes: con el
+  -lo pone TFDTable.CreateTable- una columna de un tipo que el motor no tiene
+  se saltaba en silencio; sin el, FireDAC la niega (FD-353, medido el 7-nov-2026
+  en MSSQL y PG). Una columna solo cuenta con su nombre de origen y caBase
+  (ColumnStorable: sin ellos el generador daba una lista VACIA sin error,
+  medido); NOT NULL es quitarle caAllowNull. Sin DROP: un nombre que ya es una
+  tabla o una vista se niega antes. Todo en una transaccion (los dos motores la
+  tienen para esto, medido), y la respuesta lleva el SQL que se ejecuto. }
+function CreaTablaEn(const S: TSesionDb; const P: TDelphiDbParams): string;
+var
+  Columnas: TArray<TColumnaNueva>;
+  T: TFDDatSTable;
+  Gen: IFDPhysCommandGenerator;
+  Sqls: TStrings;
+  Hechas: TArray<string>;
+  Tabla, Neg: string;
+  R: TJSONObject;
+begin
+  Result := ColumnasNuevas(P.Columns, Columnas);
+  if Result <> '' then
+    Exit;
+  S.Conn.StartTransaction;
+  try
+    if TablaDe(S, P.Table, Tabla, Neg) then
+      Exit(MsgFmt(SR_DB_YA_EXISTE_FMT, [Tabla, NombreDeConexion(S.Conexion)]));
+    T := TFDDatSTable.Create(P.Table.Trim);
+    try
+      T.SourceName := P.Table.Trim;
+      for var C in Columnas do
+      begin
+        var Col := T.Columns.Add(C.Nombre, C.Tipo);
+        Col.SourceName := C.Nombre;
+        Col.Attributes := Col.Attributes + [caBase];
+        if C.Tamano >= 0 then
+          Col.Size := C.Tamano;
+        if C.Precision >= 0 then
+          Col.Precision := C.Precision;
+        if C.Escala >= 0 then
+          Col.Scale := C.Escala;
+        if C.Requerida then
+          Col.Attributes := Col.Attributes - [caAllowNull];
+        if C.Clave then
+          Col.Options := Col.Options + [coInKey];
+        if C.AutoInc then
+          Col.Attributes := Col.Attributes + [caAutoInc];
+      end;
+      S.Conn.ConnectionIntf.CreateCommandGenerator(Gen, nil);
+      try
+        Gen.Options := S.Conn.OptionsIntf;
+        Gen.Table := T;
+        Gen.GenOptions := [goBeautify];
+        Sqls := Gen.GenerateCreateTable([tpTable .. tpIndexes]);
+        try
+          Hechas := Sqls.ToStringArray;
+        finally
+          Sqls.Free;
+        end;
+      finally
+        // antes que la tabla que mira
+        Gen := nil;
+      end;
+    finally
+      T.Free;
+    end;
+    for var Sql in Hechas do
+      S.Conn.ExecSQL(Sql);
+    // como la nombra el catalogo (en PG, sin comillas, en minusculas)
+    if not TablaDe(S, P.Table, Tabla, Neg) then
+      Tabla := P.Table.Trim;
+    // solo si quien la pidio sigue esperando (DB-022)
+    S.Confirma;
+    R := TJSONObject.Create;
+    try
+      R.AddPair('db', NombreDeConexion(S.Conexion));
+      R.AddPair('table', Tabla);
+      R.AddPair('sql', ArrayDeTextos(Hechas));
+      R.AddPair('note', MsgText(SN_DB_CREADO));
+      Result := R.ToJSON;
+    finally
+      R.Free;
+    end;
+  finally
+    if S.Conn.InTransaction then
+      S.Conn.Rollback;
+  end;
+end;
+
+function CreaTabla(const P: TDelphiDbParams): string;
+var
+  Columnas: TArray<TColumnaNueva>;
+begin
+  if P.Table.Trim = '' then
+    Exit(MsgFmt(SR_DB_FALTA_FMT, ['create-table', 'table']));
+  if P.Columns.Trim = '' then
+    Exit(MsgFmt(SR_DB_FALTA_FMT, ['create-table', 'columns']));
+  // lo que se juzga sin la base, antes de abrirla
+  Result := NombreNuevoDenegado(P.Table.Trim, 'table');
+  if Result = '' then
+    Result := ColumnasNuevas(P.Columns, Columnas);
+  if Result = '' then
+    Result := EnLaBase('create-table', P, adCrea, CreaTablaEn);
+end;
+
+{ create-view (C5 de la 1.29): la vista NUEVA P.View con los campos de
+  P.Table (fields; sin ellos, todos): CREATE VIEW <vista> AS SELECT <campos>
+  FROM <tabla>, la forma que tienen los dos motores. La tabla y sus campos,
+  como los da el catalogo y citados por FireDAC (CitaNombre); la vista, como
+  el generador nombra una tabla nueva (NombreNuevoCitado). Sin filters: un
+  WHERE pediria sus valores como LITERALES y ningun juez los compone sin
+  riesgo (medido el 7-nov-2026: las macros de texto de FireDAC dejan el SQL sin
+  cerrar con una comilla en el valor, en MSSQL y en PG). }
+function CreaVistaEn(const S: TSesionDb; const P: TDelphiDbParams): string;
+var
+  Elegidos: TArray<TCampoDb>;
+  Nombres: TArray<string>;
+  Tabla, Vista, Neg, Cols, Sql: string;
+  R: TJSONObject;
+begin
+  S.Conn.StartTransaction;
+  try
+    if not TablaDe(S, P.Table, Tabla, Neg) then
+      Exit(Neg);
+    if TablaDe(S, P.View, Vista, Neg) then
+      Exit(MsgFmt(SR_DB_YA_EXISTE_FMT, [Vista, NombreDeConexion(S.Conexion)]));
+    Result := CamposElegidos(CamposDeTabla(S.Conn, Tabla), P.Fields, Tabla, True, Elegidos);
+    if Result <> '' then
+      Exit;
+    Cols := '';
+    Nombres := [];
+    for var C in Elegidos do
+    begin
+      Cols := Cols + IfThen(Cols <> '', ', ') + CitaNombre(S.Conn, C.Nombre);
+      Nombres := Nombres + [C.Nombre];
+    end;
+    Sql := 'CREATE VIEW ' + NombreNuevoCitado(S.Conn, P.View.Trim) + ' AS SELECT ' + Cols + ' FROM ' +
+      CitaNombre(S.Conn, Tabla);
+    S.Conn.ExecSQL(Sql);
+    if not TablaDe(S, P.View, Vista, Neg) then
+      Vista := P.View.Trim;
+    // solo si quien la pidio sigue esperando (DB-022)
+    S.Confirma;
+    R := TJSONObject.Create;
+    try
+      R.AddPair('db', NombreDeConexion(S.Conexion));
+      R.AddPair('view', Vista);
+      R.AddPair('table', Tabla);
+      R.AddPair('fields', ArrayDeTextos(Nombres));
+      // una lista, como la de create-table (su generador puede dar varias)
+      R.AddPair('sql', ArrayDeTextos([Sql]));
+      R.AddPair('note', MsgText(SN_DB_CREADO));
+      Result := R.ToJSON;
+    finally
+      R.Free;
+    end;
+  finally
+    if S.Conn.InTransaction then
+      S.Conn.Rollback;
+  end;
+end;
+
+function CreaVista(const P: TDelphiDbParams): string;
+begin
+  if P.Table.Trim = '' then
+    Exit(MsgFmt(SR_DB_FALTA_FMT, ['create-view', 'table']));
+  if P.View.Trim = '' then
+    Exit(MsgFmt(SR_DB_FALTA_FMT, ['create-view', 'view']));
+  Result := NombreNuevoDenegado(P.View.Trim, 'view');
+  if Result = '' then
+    Result := EnLaBase('create-view', P, adCrea, CreaVistaEn);
 end;
 
 function Connections: string;
@@ -1171,6 +1502,8 @@ begin
         B.AddPair('db', NombreDeConexion(C));
         B.AddPair('engine', C.Motor);
         B.AddPair('readonly', TJSONBool.Create(C.SoloLectura));
+        // lo que vale: con readonly:true no se crea aunque lo diga
+        B.AddPair('allowCreate', TJSONBool.Create(C.CreaObjetos and not C.SoloLectura));
       end
       else
       begin
@@ -1216,21 +1549,27 @@ begin
       'summary', 'db table filters group values order limit offset',
       'insert', 'db table values',
       'update', 'db table values filters',
-      'delete', 'db table filters'],
+      'delete', 'db table filters',
+      'create-table', 'db table columns',
+      'create-view', 'db table view fields'],
     ['db', Params.Db, '', 'table', Params.Table, '', 'fields', Params.Fields, '',
      'filters', Params.Filters, '', 'order', Params.Order, '',
      'limit', IfThen(Params.Limit <> 0, IntToStr(Params.Limit)), '',
      'offset', IfThen(Params.Offset <> 0, IntToStr(Params.Offset)), '',
-     'group', Params.Group, '', 'values', Params.Values, ''], Suyos, VaCon);
+     'group', Params.Group, '', 'values', Params.Values, '', 'columns', Params.Columns, '',
+     'view', Params.View, ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_DB_NO_VA_CON_COMANDO_FMT, [Sobra, Cmd, Cmd, Suyos]) + VaCon);
-  case IndexText(Cmd, ['connections', 'tables', 'fields', 'rows', 'summary', 'insert', 'update', 'delete']) of
+  case IndexText(Cmd, ['connections', 'tables', 'fields', 'rows', 'summary', 'insert', 'update', 'delete',
+    'create-table', 'create-view']) of
     0: Result := Connections;
-    1: Result := EnLaBase('tables', Params, False, TablesEn);
+    1: Result := EnLaBase('tables', Params, adLee, TablesEn);
     2: Result := Fields(Params);
     3: Result := Rows(Params);
     4: Result := Summary(Params);
     5, 6, 7: Result := Escribe(Cmd, Params);
+    8: Result := CreaTabla(Params);
+    9: Result := CreaVista(Params);
   else
     Result := MsgText(SR_DB_COMANDO);
   end;

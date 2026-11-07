@@ -2103,16 +2103,14 @@ const
     '| get-sdk (pull the sysroot from the PAServer of "profile" into ' +
     'a folder of its own named after the target distro, registered for ' +
     'delphi_build AND the IDE SDK Manager; minutes. Never over an SDK it ' +
-    'did not bring. What it replaces is copied first (previousSdkCopy, ' +
-    'previousSdkRecordCopy, previousIdeSeatCopy; 10 kept per file); what ' +
+    'did not bring. What it replaces is copied first (10 kept per file); what ' +
     'says the same is not rewritten) | reseat-sdk (rewrite ' +
     'the IDE seat of an SDK get-sdk brought, no network; "sdk" names one, ' +
-    'none = all) | remove-sdk (its .sdk file and IDE seat, copied first: removedCopy, ' +
-    'removedSeatCopy; the sysroot ' +
+    'none = all) | remove-sdk (its .sdk file and IDE seat, copied first; the sysroot ' +
     'stays on disk and the answer says where) | remote-run (run what THAT ' +
     'project deployed on the target of "profile" - nothing else - and ' +
-    'return exit code and output (a long one as its last lines, with ' +
-    'outputTruncated); nothing to install, PAServer runs it. On ' +
+    'return exit code and output (a long one as its last lines); nothing ' +
+    'to install, PAServer runs it. On ' +
     'timeout it is NOT killed: a program with a window stays up, you get ' +
     'its partial output and stillRunning=true) | kill (stop a job a ' +
     'remote-run left running: profile, project and its job id; only a job of ' +
@@ -2717,9 +2715,8 @@ const
     'The desktop of the machine behind a PAServer profile (a Linux or ' +
     'Windows target, or this server itself when a PAServer runs in its ' +
     'user session), like adb for Android: SEE it and ACT on it. A small ' +
-    'Delphi node does the work there; this server deploys and updates it ' +
-    'by itself (leave "project" empty) - nothing else is installed or ' +
-    'compiled on the target. THE FLOW: command=screenshot brings the whole ' +
+    'node this server deploys and updates by itself does the work there ' +
+    '(leave "project" empty). THE FLOW: command=screenshot brings the whole ' +
     'desktop; measure the pixel you want on it and tap (or type, which ' +
     'presses there first) at that x,y - the node handles the screen scale. ' +
     'Every capture lists "windows" (title and rectangle in capture pixels; ' +
@@ -2728,11 +2725,8 @@ const
     'graphicalEnv. The target needs a graphical session open for the user ' +
     'PAServer runs as: a headless box, a locked session (Linux or Windows) ' +
     'or a Windows service (session 0) has nothing to show (command=status ' +
-    'says what to ask the operator for). It is a ' +
-    'permission of its own: ' +
-    'AllowRemoteRun=1, the profile''s host in RemoteHosts and in ' +
-    'DesktopAllowedHosts (DesktopViewHosts: only screenshot and status) - only ' +
-    'the operator sets them, and a refusal names the missing one.';
+    'says what to ask the operator for). It is a permission of its own, ' +
+    'set by the operator: a refusal names what is missing.';
   SP_ADBLINUX_COMMAND =
     'screenshot (default: the whole desktop as a PNG) | tap (press at x,y ' +
     'measured on that screenshot) | drag (press at x,y, move to tox,toy and ' +
@@ -4631,17 +4625,20 @@ const
   // %s = el provider que declara
   SF_DB_DEF_PROVEEDOR_FMT = 'its provider is "%s", and this server connects through FIREDAC only';
   SF_DB_DEF_SOLO_LECTURA = 'its "readonly" is not true or false';
+  SF_DB_DEF_CREAR = 'its "allowCreate" is not true or false';
   // %s = el motor declarado, %s = los que tiene el servidor
   SF_DB_DEF_MOTOR_FMT = 'its engine "%s" is not one this server has (%s)';
 
   SN_DB_CONNECTIONS =
     '[DB-005] Your databases: "db" is the name every other command of ' +
     'delphi_db takes. The server, the credentials and the real database ' +
-    'stay with the operator. readonly=true only reads.';
+    'stay with the operator. readonly=true only reads; allowCreate=true may ' +
+    'also create tables and views.';
 
   SR_DB_COMANDO =
     '[DB-006 INVALID_PARAM] Command must be connections | tables | fields | ' +
-    'rows | summary | insert | update | delete. Nothing was done.';
+    'rows | summary | insert | update | delete | create-table | create-view. ' +
+    'Nothing was done.';
 
   // %s = el nombre de la base, %d = los segundos
   SR_DB_NO_RESPONDE_FMT =
@@ -4743,6 +4740,43 @@ const
     'database repeats: the next page may repeat or skip rows. Give order= ' +
     'with fields whose values are unique.';
 
+  // ---- create-table y create-view (C5 de la 1.29) ----
+  // %s = la base, %s = el comando
+  SR_DB_SIN_CREAR_FMT =
+    '[DB-023 DENIED] The database "%s" does not allow creating tables or ' +
+    'views (the operator did not declare allowCreate:true for it), and ' +
+    'command=%s creates. Nothing was done.';
+  // %s = el nombre, %s = la base
+  SR_DB_YA_EXISTE_FMT =
+    '[DB-024 DENIED] "%s" already exists in "%s" as a table or view: ' +
+    'create-table and create-view only make NEW ones, and never replace or ' +
+    'alter one. Nothing was done.';
+  // %s = lo dado, %s = que nombra (table, view, column)
+  SR_DB_NOMBRE_NUEVO_FMT =
+    '[DB-025 INVALID_PARAM] "%s" cannot name a new %s: letters, digits and ' +
+    '_, not starting with a digit (the server writes it into the SQL). ' +
+    'Nothing was done.';
+  // Una entrada de columns (DB-014): por que
+  SF_DB_COLUMNA_FORMA =
+    'each entry is {"name", "type"} plus, as needed, size, precision, scale, ' +
+    'required, key, autoinc';
+  // %s = el campo dado, %s = los que lleva
+  SF_DB_COLUMNA_CAMPO_FMT = 'it has the field "%s"; an entry takes %s';
+  // %s = lo dado
+  SF_DB_COLUMNA_TIPO_FMT =
+    '"%s" is not a FireDAC data type: type takes one as FireDAC names it ' +
+    '(dtInt32, dtInt64, dtWideString, dtWideMemo, dtFmtBCD, dtDouble, ' +
+    'dtBoolean, dtDate, dtDateTime, dtBlob...)';
+  // %s = el campo de la entrada
+  SF_DB_COLUMNA_NUMERO_FMT = '%s takes a whole number, 0 or more';
+  SF_DB_COLUMNA_SI_NO_FMT = '%s takes true or false';
+  SF_DB_COLUMNA_TEXTO_FMT = '%s takes text';
+  // %s = el nombre
+  SF_DB_COLUMNA_REPETIDA_FMT = 'column "%s" is already in the list';
+  SN_DB_CREADO =
+    '[DB-026] Created with the SQL FireDAC writes for this engine (sql), in ' +
+    'one transaction. command=fields shows it as the database names it.';
+
   SD_DB =
     'The databases the operator gave this workspace, by NAME and through ' +
     'operations: you never write SQL - the server composes it from these ' +
@@ -4753,14 +4787,25 @@ const
     '(filters, fields, order, limit/offset, and always the total); summary ' +
     'groups and adds up; insert, update and delete write, only where ' +
     'readonly=false (update and delete only the rows their filters select, ' +
-    'and they need filters), and say how many rows they touched. The ' +
-    'server, the credentials and the real database stay with the operator.';
+    'and they need filters), and say how many rows they touched; ' +
+    'create-table and create-view make new ones where allowCreate is set ' +
+    '(FireDAC writes each engine''s SQL; nothing is dropped or altered).';
   SP_DB_COMMAND =
     'connections (the default) | tables | fields | rows | summary | insert | ' +
-    'update | delete.';
+    'update | delete | create-table | create-view.';
   SP_DB_DB = 'The database, as connections lists it (project/alias).';
-  SP_DB_TABLE = 'All but connections and tables: a table or view as tables lists it.';
-  SP_DB_FIELDS = 'rows: the fields to return (default: all but binary ones).';
+  SP_DB_TABLE =
+    'All but connections and tables: a table or view as tables lists it; ' +
+    'create-table: the NEW table''s name.';
+  SP_DB_FIELDS =
+    'rows: the fields to return (default: all but binary ones); ' +
+    'create-view: its columns (default: all).';
+  SP_DB_COLUMNS =
+    'create-table: a list of {"name", "type"; optional "size", "precision", ' +
+    '"scale", "required", "key" (in the primary key), "autoinc"}; type as ' +
+    'FireDAC names it (dtInt32, dtWideString, dtFmtBCD, dtDateTime...).';
+  SP_DB_VIEW =
+    'create-view: the NEW view''s name; it selects fields of table, no filters.';
   SP_DB_FILTERS =
     'rows, summary, update, delete: a list of {"field", "op", "value"}; all ' +
     'must hold. op: ' +
@@ -6036,17 +6081,14 @@ const
   SP_DESIGNER_COMPONENT =
     'get: the component Name as it appears in the form (object <Name>: ' +
     '<Class>). preview: crop the image to that component (one inside an ' +
-    'inline frame goes as Frame1.Name); componentRect ' +
-    'says where it is in the form. set/delete: the component to change or ' +
+    'inline frame goes as Frame1.Name). set/delete: the component to change or ' +
     'delete. insert optional: the Name of the new control (an identifier ' +
     'free in the form and its class), its text too when the class shows ' +
     'one; without it, the IDE''s own (Button1, Button2...)';
 
   SP_DESIGNER_FRAMEWORK =
-    'info/prop: vcl | fmx (default vcl). preview: the file decides (.fmx = ' +
-    'fmx; .dfm = vcl, but a data module whose unit says CLASSGROUP ' +
-    '''FMX.Controls.TControl'', as the IDE writes it in an FMX project, is ' +
-    'fmx); if given, it must agree';
+    'info/prop: vcl | fmx (default vcl). preview: the file decides (a .dfm ' +
+    'data module of an FMX project is fmx); if given, it must agree';
 
   SP_DESIGNER_FILTER =
     'info optional: only properties whose name contains this text - also ' +
@@ -6099,8 +6141,7 @@ const
   SP_DESIGNER_NONVISUAL =
     'preview optional: true = draw the non-visual components (TTimer, ' +
     'TActionList, datasets...) where the designer puts them, with their ' +
-    'icon and name. Default false: the image shows the form as it will ' +
-    'look, and nonVisual lists them anyway.';
+    'icon and name. Default false (nonVisual lists them anyway).';
 
   SP_DESIGNER_OUT =
     'preview: where the PNG lands' + SP_CAPTURE_OUT_RULE;
@@ -11292,13 +11333,11 @@ const
     'project builds a remote platform with, by name; "none" = back to the ' +
     'SDK Manager default) | set-profile (the PAServer profile it deploys ' +
     'and runs that platform with; "none" = the platform''s active profile) ' +
-    '| set-active (config and/or platform: what it builds by default) ' +
-    '| set-property | remove-property | get-property (one property by name; ' +
-    'see name) ' +
+    '| set-active | set-property | remove-property | get-property ' +
     '| add-searchpath | remove-searchpath | add-deployfile | ' +
     'remove-deployfile | add-unit | remove-unit | add-requires (packages: ' +
     'names for the .dpk requires clause, from requiresSuggested after a ' +
-    'W1033) | save-as (a copy under another name) | fix-references | ' +
+    'W1033) | save-as | fix-references | ' +
     'add-project | remove-project. The description says what each does.';
 
   SP_CFG_PLATFORM =

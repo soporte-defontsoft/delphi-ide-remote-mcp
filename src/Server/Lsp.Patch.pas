@@ -1189,13 +1189,12 @@ begin
           var O2 := TJSONObject(Arr.Items[N]);
           // Un campo que no existe se leia y se tiraba. Se compara SIN ignorar
           // mayusculas a proposito: "Old" tampoco lo lee nadie mas abajo, asi
-          // que tampoco puede pasar por bueno.
+          // que tampoco puede pasar por bueno (Lsp.Json.ClaveQueNoVa).
+          var Ajena := ClaveQueNoVa(O2, CAMPOS_DE_UNA_EDICION);
+          if Ajena <> '' then
+            Exit(MsgFmt(SR_PATCH_EDIT_KEY_FMT, [N + 1, Ajena, string.Join(', ', CAMPOS_DE_UNA_EDICION)]));
           for var Par in O2 do
           begin
-            // sin ignorar mayusculas: MatchStr, no MatchText
-            if not MatchStr(Par.JsonString.Value, CAMPOS_DE_UNA_EDICION) then
-              Exit(MsgFmt(SR_PATCH_EDIT_KEY_FMT,
-                [N + 1, Par.JsonString.Value, string.Join(', ', CAMPOS_DE_UNA_EDICION)]));
             // un "new" que llega como objeto se leia como '' y la linea
             // quedaba en blanco contestando OK (tercera revision, medido)
             if MatchStr(Par.JsonString.Value, ['old', 'new', 'fragment']) and

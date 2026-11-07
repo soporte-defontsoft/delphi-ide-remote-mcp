@@ -112,6 +112,12 @@ function IndicesDeTabla(AConn: TFDConnection; const ATabla: string): TArray<TInd
   de FireDAC, nunca uno nuestro. }
 function CitaNombre(AConn: TFDConnection; const ANombre: string): string;
 
+{ Un nombre NUEVO (el de una vista) como el generador de FireDAC nombra una
+  tabla nueva (EncodeObjName con eoQuote y eoNormalize): en PG en minusculas,
+  como un nombre sin comillas, y tal cual en MSSQL (medido el 7-nov-2026,
+  C5 de la 1.29). CitaNombre cita tal cual uno que ya es del catalogo. }
+function NombreNuevoCitado(AConn: TFDConnection; const ANombre: string): string;
+
 { DB-010 con lo que dijo la base, enmascarado. }
 function NegativaDeLaBase(E: Exception; const AConexion: TConexionDb): string;
 
@@ -567,6 +573,14 @@ end;
 function CitaNombre(AConn: TFDConnection; const ANombre: string): string;
 begin
   Result := AConn.ConnectionMetaDataIntf.QuoteObjName(ANombre, npObject);
+end;
+
+function NombreNuevoCitado(AConn: TFDConnection; const ANombre: string): string;
+var
+  R: TFDPhysParsedName;
+begin
+  AConn.ConnectionMetaDataIntf.DecodeObjName(ANombre, R, nil, []);
+  Result := AConn.ConnectionMetaDataIntf.EncodeObjName(R, nil, [eoQuote, eoNormalize]);
 end;
 
 function NegativaDeLaBase(E: Exception; const AConexion: TConexionDb): string;
