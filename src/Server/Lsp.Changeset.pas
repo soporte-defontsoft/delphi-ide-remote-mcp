@@ -1102,6 +1102,26 @@ begin
         SetLength(Lineas, C.Ops.Count);
         for I := 0 to C.Ops.Count - 1 do
           Lineas[I] := C.Ops[I].AtLine;
+        // La identidad de cada fichero a lo largo del lote: un move la lleva de
+        // su ruta a la nueva, y lo que se apilo despues sobre la nueva es el
+        // MISMO fichero, al que movieron las lineas los pasos de antes del move
+        // (EH1 del revisor del paisaje de la 1.29: el atline no seguia al move)
+        var Identidad: TArray<string>;
+        SetLength(Identidad, C.Ops.Count);
+        var Alias := TDictionary<string, string>.Create;
+        try
+          for I := 0 to C.Ops.Count - 1 do
+          begin
+            var Suya: string;
+            if not Alias.TryGetValue(ClaveDeRuta(C.Ops[I].Path), Suya) then
+              Suya := ClaveDeRuta(C.Ops[I].Path);
+            Identidad[I] := Suya;
+            if C.Ops[I].Kind = opMove then
+              Alias.AddOrSetValue(ClaveDeRuta(C.Ops[I].Dest), Suya);
+          end;
+        finally
+          Alias.Free;
+        end;
         // los avisos del motor de cada paso, con su fichero (M-6)
         var AvisosTodos := '';
         // lo que el lote movio y lo que borro de verdad, para su nota (V19)
@@ -1163,17 +1183,27 @@ begin
                 end;
                 var DespuesL := LineasDeFichero(Op.Path);
                 After := Length(DespuesL);
+                // solo mueve las lineas de los siguientes lo que CAMBIA lineas de
+                // un fichero que ya estaba (editar, quitar una): el atline de un
+                // fichero que el lote crea cuenta las de lo que se crea, y el
+                // create se tomaba por tres lineas metidas delante (medido:
+                // delete-line atline=2 iba a la 5, "x.txt has 3"); un delete o
+                // un move no cambian las lineas de nadie
                 if After <> Before then
                 begin
+                  // (el informe cuenta las de todos, el create tambien)
                   var Acc := 0;
                   Deltas2.TryGetValue(ClaveDeRuta(Op.Path), Acc);
                   Deltas2.AddOrSetValue(ClaveDeRuta(Op.Path), Acc + (After - Before));
+                end;
+                if (Op.Kind in [opEdit, opDeleteLine]) and (After <> Before) then
+                begin
                   // las siguientes de ESTE fichero: solo lo que queda por
                   // debajo de lo que cambio este paso se mueve
                   var Desde, Delta: Integer;
                   ZonaDelCambio(AntesL, DespuesL, Desde, Delta);
                   for var J := I + 1 to C.Ops.Count - 1 do
-                    if SameFileName(C.Ops[J].Path, Op.Path) then
+                    if Identidad[J] = Identidad[I] then
                       Lineas[J] := LineaTrasCambio(Lineas[J], Desde, Delta);
                 end;
               end;

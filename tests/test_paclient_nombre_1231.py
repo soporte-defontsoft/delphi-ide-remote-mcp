@@ -48,7 +48,7 @@ os.makedirs(os.path.join(SRVDIR, 'node'))
 EXE = mc.copia_exe(SRVDIR, src=exe_src)
 # remote-run sube el lanzador que el servidor lleva en node\ junto a su exe (como test_remoterun):
 # sin el, RemoteRun para en RUN-011 antes de llamar a paclient y no se mide nada
-for f in ('McpRunJob', 'McpRunJob.exe'):
+for f in ('McpRunJob', 'McpRunJob.exe', 'McpDesktopNode', 'McpDesktopNode.exe'):
     shutil.copy(os.path.join(REPO, 'node', f), os.path.join(SRVDIR, 'node', f))
 RUNJOB_EXE = os.path.join(SRVDIR, 'node', 'McpRunJob.exe')
 JAIL = os.path.join(BASE, 'jail')
@@ -79,6 +79,7 @@ env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'
 env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = 'all'   # el comodin: la lista no decide este punto
 env['APPDATA'] = _ad
 env['DELPHI_MCP_REMOTE_HOSTS'] = _host
+env['DELPHI_MCP_DESKTOP_HOSTS'] = _host  # R1j: el escritorio de ese perfil
 
 srv = mc.Stdio(EXE, env, nombre='v217', cwd=CASA, t=120)
 call = srv.call
@@ -257,6 +258,12 @@ try:
     r = call('delphi_build', {'project': dep_proj, 'platform': 'Win64', 'target': 'Deploy', 'profile': PROF}, t=300)
     check('R1i control: el grupo de OSX64 (P.app\\..\\) no se juzga en un build Win64 (llega a msbuild)',
           not mc.fallo(r) or 'CodeGear.Deployment' in r, r[:240])
+    # R1j: el nombre reservado es para lo que nombra el AGENTE: el nodo del propio servidor (delphi_desktop sin
+    # project) se despliega y corre. La 1.29 en desarrollo lo nego con PAS-074 en todo perfil remoto y dejo sin
+    # escritorio a un agente (informe del 7-nov-2026): ninguna bateria pasaba delphi_desktop por un perfil
+    r = call('delphi_desktop', {'command': 'status', 'profile': PROF}, t=90)
+    check('R1j el nodo del servidor (delphi_desktop status sin project) se despliega y corre: sin PAS-074',
+          not mc.es(r, 'SR_PACLIENT_NOMBRE_RESERVADO_FMT') and mc.como_json(r).get('ran') is True, r[:240])
 finally:
     srv.mata()
 

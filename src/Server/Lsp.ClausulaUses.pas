@@ -880,6 +880,55 @@ begin
   Result := Copy(Dpr, 1, Ini - 1) + Nuevo + Copy(Dpr, U.EndPos, MaxInt);
 end;
 
+{ Anadir al FINAL de una clausula con COMENTARIOS (y sin directivas), sin
+  tocar lo demas: la ultima entrada cambia su ';' por ',' - con su comentario
+  detras, que es suyo (11.3 de la 1.18.0) - y las nuevas van en lineas nuevas
+  con la sangria de la clausula, la ultima con el ';'. UsesCompacta no edita
+  una clausula con comentarios, y ReplaceUses la rehacia una unit por linea:
+  cinco units de una linea pasaban a cinco lineas por una que se anadia, un
+  diff en el codigo del usuario (AU1 de la 1.29, medido en Lsp.Conexiones).
+  '' si no es eso (quitar, reordenar, una clausula sin comentarios, una
+  directiva, algo entre la ultima entrada y su ';', o un comentario de varias
+  lineas detras): entonces el camino de siempre. }
+function UsesAnadidasAlFinal(const Dpr: string; const U: TUsesClause;
+  const AEntries: TArray<string>): string;
+var
+  Ini, PC, LC: Integer;
+  Cuerpo, NL, Indent, Nuevas: string;
+begin
+  Result := '';
+  if (Length(U.Entries) = 0) or (Length(AEntries) <= Length(U.Entries)) then
+    Exit;
+  for var I := 0 to High(U.Entries) do
+    if AEntries[I] <> U.Entries[I] then
+      Exit;
+  for var I := Length(U.Entries) to High(AEntries) do
+    if not EsIdentificador(AEntries[I], True) then
+      Exit;
+  Ini := U.StartPos + Length(U.Keyword);
+  Cuerpo := Copy(Dpr, Ini, U.EndPos - Ini);
+  if (CodigoPascal(Cuerpo) = Cuerpo) or Cuerpo.Contains('{$') or Cuerpo.Contains('(*$') then
+    Exit;
+  // el ';' cierra la ultima entrada, pegado a su nombre
+  if (U.EndPos > Length(Dpr)) or (Dpr[U.EndPos] <> ';') or (U.EndPos - 1 < Ini) or
+     not EsCaracterDeIdent(Dpr[U.EndPos - 1]) then
+    Exit;
+  // un comentario de varias lineas detras del ';': de quien es no se sabe aqui
+  if ComentarioTrasElCierre(Dpr, U.EndPos, False, PC, LC) and
+     not ComentarioTrasElCierre(Dpr, U.EndPos, True, PC, LC) then
+    Exit;
+  NL := SaltoDominante(Dpr);
+  Indent := SangriaDeClausula(Copy(Dpr, U.StartPos, U.EndPos - U.StartPos + 1));
+  Nuevas := '';
+  for var I := Length(U.Entries) to High(AEntries) do
+    Nuevas := Nuevas + IfThen(Nuevas <> '', ',') + NL + Indent + AEntries[I];
+  if ComentarioTrasElCierre(Dpr, U.EndPos, True, PC, LC) then
+    Result := Copy(Dpr, 1, U.EndPos - 1) + ',' + Copy(Dpr, U.EndPos + 1, PC + LC - U.EndPos - 1) +
+      Nuevas + ';' + Copy(Dpr, PC + LC, MaxInt)
+  else
+    Result := Copy(Dpr, 1, U.EndPos - 1) + ',' + Nuevas + ';' + Copy(Dpr, U.EndPos + 1, MaxInt);
+end;
+
 function ReplaceUses(const Dpr: string; const U: TUsesClause; const AEntries: TArray<string>): string;
 var
   Body, NL, Indent, Clause, E: string;
@@ -1010,8 +1059,12 @@ begin
       Inc(Fin);
     Exit(Copy(Dpr, 1, U.StartPos - 1) + Copy(Dpr, Fin, MaxInt));
   end;
-  // una clausula compacta se edita en su sitio (UsesCompacta)
+  // una clausula compacta se edita en su sitio (UsesCompacta), y una con
+  // comentarios a la que solo se anade al final, tambien (UsesAnadidasAlFinal)
   Result := UsesCompacta(Dpr, U, AEntries);
+  if Result <> '' then
+    Exit;
+  Result := UsesAnadidasAlFinal(Dpr, U, AEntries);
   if Result <> '' then
     Exit;
   NL := SaltoDominante(Dpr);

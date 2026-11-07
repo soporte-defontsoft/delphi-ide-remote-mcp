@@ -492,6 +492,8 @@ begin
     primer gesto de la sesion por perfil comprueba el sello node.ver y, si
     falta o difiere, despliega/actualiza el nodo sin compilar nada. }
   Nota := '';
+  // sin project, el nodo lo pone y lo corre el SERVIDOR: su carpeta es suya
+  var DelServidor := Proj = '';
   if Proj = '' then
   begin
     Result := EnsureNodeCurrent(Params.Profile.Trim, Nota);
@@ -525,7 +527,7 @@ begin
     habra sustituido antes de llegar aqui. }
   // la salida ENTERA: de ella se lee el protocolo del nodo (CAPTURE=, sus
   // ventanas, WINERR=); la cola es de lo que se da al agente (V99)
-  Res := RemoteRun(Params.Profile.Trim, Proj, '', Args, 60000, False, False);
+  Res := RemoteRun(Params.Profile.Trim, Proj, '', Args, 60000, False, False, DelServidor);
   try
     Salida := '';
     if Res.GetValue('output') <> nil then

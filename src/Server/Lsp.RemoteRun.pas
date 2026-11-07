@@ -140,10 +140,14 @@ function PaclientConecta(const APaclient, AProfile: string; out AOutput: string)
   al AGENTE) recorta la salida con la cola de la casa (PonSalida); False (el
   nodo de delphi_desktop, que lee de ella SU protocolo) la deja entera: con un
   escritorio de muchas ventanas la linea CAPTURE= se caia de la cola (V99 de
-  la 1.23.1). }
+  la 1.23.1). ADelServidor: lo corre el servidor para si (el nodo de
+  delphi_desktop sin project): la carpeta del nodo es suya (PAS-074 es para
+  lo que nombra el agente; con el, la 1.29 en desarrollo dejo sin escritorio
+  remoto a un agente, informe del 7-nov). }
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
   const AArgv: TArray<string>; ATimeoutMs: Integer;
-  AGuardaSiSigue: Boolean = False; ACola: Boolean = True): TJSONObject;
+  AGuardaSiSigue: Boolean = False; ACola: Boolean = True;
+  ADelServidor: Boolean = False): TJSONObject;
 
 { Mata el programa que un remote-run anterior dejo corriendo en el target:
   el trabajo AJobId, de ESE proyecto, en ESE perfil. Viaja como un trabajo
@@ -754,7 +758,7 @@ end;
 
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
   const AArgv: TArray<string>; ATimeoutMs: Integer;
-  AGuardaSiSigue, ACola: Boolean): TJSONObject;
+  AGuardaSiSigue, ACola, ADelServidor: Boolean): TJSONObject;
 
   // la salida: recortada para el agente, entera para quien la lee dentro
   procedure Pon(AObj: TJSONObject; const ATexto: string; ATamano: Int64);
@@ -799,7 +803,7 @@ begin
   // V217: el nombre no puede romper un campo de paclient (--put / --get /
   // --Remove de abajo). La puerta de Mcp.Tools.PAServer ya lo juzga; este es
   // el cerrojo de dentro, para cualquier llamador
-  var NombreMalo := NombreDeProyectoParaPaclientDenegado(ADprojPath);
+  var NombreMalo := NombreDeProyectoParaPaclientDenegado(ADprojPath, ADelServidor);
   if NombreMalo <> '' then
   begin
     Result.AddPair('success', TJSONBool.Create(False));

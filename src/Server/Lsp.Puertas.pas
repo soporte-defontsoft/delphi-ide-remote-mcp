@@ -903,6 +903,13 @@ function ReescrituraDenegada(const APath: string; const B: TArray<Byte>;
   out K: TEncKind): string;
 begin
   K := DetectEnc(B, EsRutaDeDesigner(APath));
+  // "esto no es texto" (LooksBinaryBytes, la regla de delphi_read y de
+  // delphi_edit) tambien aqui, donde reescriben TODOS: adduses edito un .pas
+  // con bytes NUL que old/new negaba con TEXT-008 (EH4 del revisor del paisaje
+  // de la 1.29, medido en vivo el 7-nov-2026). Un form binario es otra cosa,
+  // con su camino propio (to-text)
+  if LooksBinaryBytes(B) and not (EsRutaDeDesigner(APath) and IsBinaryDesignerBytes(B)) then
+    Exit(MsgFmt(SR_TEXT_PARECE_BINARIO_FMT, [TPath.GetFileName(APath)]));
   if BytesVuelvenIgual(B, K) then
     Result := ''
   else
