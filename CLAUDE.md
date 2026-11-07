@@ -16,7 +16,7 @@ it in the first call.
 
 ## Survey the landscape first (David, 2026-09-20)
 
-One act, four questions - and a fifth and a sixth before any of it turns into
+One act, four questions - and a fifth, a sixth and a seventh before any of it turns into
 code. You
 look at the landscape once - the one there is today AND the one this code
 will have tomorrow - and while you are there you ask the four:
@@ -100,6 +100,20 @@ stand in for a measurement that can be made. Measured twice in two days:
 
 So, before writing a rule of our own: name the judge that would make it
 unnecessary, or say there is none.
+
+**7. What already worked is measured too** (David, 2026-11-07) - a fix
+comes with its red (the failure) and its green (the fix), and neither says
+anything about what worked before it. When a rule is added to or tightened
+in a shared helper, list EVERY caller and tell apart what the agent names
+from what the server does on its own; every path that already existed
+needs a battery that walks it; and nothing reaches production on the
+batteries of the point alone - the whole regression goes first. Measured
+that morning: the reserved name of the desktop node (PAS-074) went into
+the judge every door to paclient asks, and the server's own node was one
+of those doors. Deployed after three batteries, it took the remote desktop
+away from another agent within minutes; no battery ran `delphi_desktop`
+through a profile. Point 5's sibling: that one measures the cause of a
+failure, this one measures what the change did to everything else.
 
 In David's words: *"knowing how to write code is one thing, and knowing
 how to program is another"* - writing code solves today's line; programming leaves
