@@ -96,13 +96,28 @@ check('A4 ...y la bateria recoge lo que dejo su control (mc.atomos_rtl_recoge)',
 # ---- B. un servidor de bateria se PARA, no se mata
 antes = mc.atomos_rtl_nombres()
 PORT = mc.puerto_libre()
-proc = mc.lanza_http(EXE, PORT, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}))
-pid = proc.pid
-t0 = time.time()
-proc.kill()
+# su salida de error a un fichero: B1 salio rc=1 en 0,0 s UNA vez en un run_all (7-nov-2026) y no se reprodujo
+# en 330 paradas sueltas; 1 es lo que deja la RTL tras una excepcion sin manejar. La proxima vez dira cual
+ERR_B = os.path.join(BASE, 'b1.stderr.txt')
+with open(ERR_B, 'wb') as fe:
+    proc = mc.lanza_http(EXE, PORT, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), stderr=fe)
+    pid = proc.pid
+    t0 = time.time()
+    proc.kill()
+dt_b1 = time.time() - t0
+
+
+def rastro_b1():
+    # el final de su log y su salida de error, para el detalle del fallo
+    log = os.path.join(os.path.dirname(EXE), 'logs', 'actual.log')
+    cola = open(log, encoding='utf-8', errors='replace').read()[-1500:] if os.path.isfile(log) else '(sin log)'
+    err = open(ERR_B, encoding='utf-8', errors='replace').read()[-800:] if os.path.isfile(ERR_B) else ''
+    return ' | stderr: %s | log: %s' % (err.strip() or '(vacia)', cola)
+
+
 check('B1 proc.kill() de un servidor HTTP de bateria lo PARA: sale limpio (codigo 0), antes del plazo',
-      proc.returncode == 0 and time.time() - t0 < mc.ServidorHttp.PLAZO_PARADA,
-      'rc=%s %.1f s' % (proc.returncode, time.time() - t0))
+      proc.returncode == 0 and dt_b1 < mc.ServidorHttp.PLAZO_PARADA,
+      ('rc=%s %.1f s' % (proc.returncode, dt_b1)) + (rastro_b1() if proc.returncode != 0 else ''))
 
 
 def suyos(pid, antes):
