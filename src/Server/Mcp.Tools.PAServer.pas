@@ -267,13 +267,6 @@ begin
   end;
 end;
 
-{ Profiles + SDKs live in %APPDATA%\Embarcadero\BDS\<ver> - the shared
-  definition is Lsp.Discovery.IdeProfilesDir (the build runner reads it too). }
-function ProfilesDir(const AVersion: string): string;
-begin
-  Result := IdeProfilesDir(AVersion);
-end;
-
 const
   { La ficha que cada sysroot lleva dentro: de que maquina salio y con que
     glibc/gcc. Nombre feo a proposito - no debe parecerse a nada del target. }
@@ -581,7 +574,7 @@ begin
     Info := DiscoverRadStudio;
     Dir := '';
     if Info.Found then
-      Dir := ProfilesDir(Info.Version);
+      Dir := IdeProfilesDir(Info.Version); // EL lector (era un alias suyo: E12 de la 1.28)
     if (Dir <> '') and TDirectory.Exists(Dir) then
     begin
       for var Nombre in PerfilesDelIde(Info.Version) do // EL lector de la lista

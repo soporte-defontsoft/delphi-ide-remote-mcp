@@ -16,6 +16,11 @@ function BackupFile(const APath: string): string;
   <nombre>, sin sello): el nombrador, para quien tenga que quitarla porque la
   escritura que la dejo se deshizo (el move de una unit que no acaba). }
 function CopiaDiariaDe(const APath: string): string;
+{ Su lector: la copia diaria MAS RECIENTE de APath, la de la ultima carpeta de
+  dia que la tenga, por el mismo nombre; '' si no hay ninguna. La busca
+  restore, que componia el nombre a mano (B6 del revisor del paisaje de la
+  1.28). }
+function UltimaCopiaDiariaDe(const APath: string): string;
 { El nombre ORIGINAL de una copia de la papelera, o '' si ese nombre no lleva
   sello. Solo tiene sentido DENTRO de __delphi-patch.
 
@@ -104,6 +109,7 @@ uses
   System.SysUtils,
   System.IOUtils,
   System.RegularExpressions,
+  System.Generics.Collections,
   Lsp.Puertas,      // EscribeTexto, LeeTexto: la marca de dueno por las puertas
   Lsp.Codificacion, // ekUtf8
   Lsp.Guard,        // las puertas de escribir, CrearCarpeta, EnPapelera, PurgeOldBackups
@@ -113,12 +119,38 @@ uses
   Lsp.NetDrives,    // SinBarraFinal
   Lsp.Texts;
 
+{ La copia diaria de APath en la carpeta de un dia: EL nombre, el que escribe
+  CopiaDiariaDe (hoy) y lee UltimaCopiaDiariaDe (el dia mas reciente). }
+function CopiaDiariaEn(const ACarpetaDelDia, APath: string): string;
+begin
+  Result := TPath.Combine(ACarpetaDelDia, TPath.GetFileName(APath));
+end;
+
 function CopiaDiariaDe(const APath: string): string;
 begin
   // Esta copia NO lleva sello a proposito: es una por fichero y dia, la
   // version previa al primer cambio del dia. Pero la CARPETA la pone el
   // nombrador, como todas.
-  Result := TPath.Combine(TrashDayDir(APath, ''), TPath.GetFileName(APath));
+  Result := CopiaDiariaEn(TrashDayDir(APath, ''), APath);
+end;
+
+function UltimaCopiaDiariaDe(const APath: string): string;
+var
+  Dir: string;
+  Dias: TArray<string>;
+begin
+  Result := '';
+  Dir := CarpetaDePapelera(APath);
+  if not TDirectory.Exists(Dir) then
+    Exit;
+  // los nombres de dia (yyyymmdd) ordenan como las fechas; por EL lister de la
+  // puerta, que dice una papelera que Windows no deja listar en vez de darla
+  // por vacia (GetDirectories, B2 del cierre de la 1.19.0)
+  Dias := EntradasDeCarpeta(Dir);
+  TArray.Sort<string>(Dias);
+  for var I := High(Dias) downto 0 do
+    if EsCarpetaDeDia(TPath.GetFileName(Dias[I])) and TFile.Exists(CopiaDiariaEn(Dias[I], APath)) then
+      Exit(CopiaDiariaEn(Dias[I], APath));
 end;
 
 { Makes the pre-edit copy (once per file per day). Returns a note. }

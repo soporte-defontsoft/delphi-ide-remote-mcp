@@ -119,22 +119,27 @@ begin
   Result := True;
 end;
 
-{ El "Style" del desplegable del designer -> recurso RCDATA y su BPL. UNA tabla. }
-function RecursoDePlataforma(const ANombre: string; out ABpl, ARecurso: string): Boolean;
 const
-  TABLA: array[0..10, 0..2] of string = (
+  { El "Style" del desplegable del designer -> recurso RCDATA y su BPL. UNA
+    tabla: de ella salen tambien los nombres que se aceptan
+    (NombresDePlataforma, que era una tercera lista a mano: C2-8 de la 1.28) }
+  ESTILOS_DE_PLATAFORMA: array[0..10, 0..2] of string = (
     ('win7', 'fmx', 'WIN7STYLE'), ('win8', 'fmx', 'WIN8STYLE'),
     ('win10', 'fmx', 'WIN10STYLE'), ('win11', 'fmx', 'WIN11STYLE'),
     ('mobile', 'fmx', 'MOBILEPREVIEWSTYLE'),
     ('android', 'fmxdesigner', 'ANDROIDSTYLE'), ('ios', 'fmxdesigner', 'IOSSTYLE'),
     ('ios-dark', 'fmxdesigner', 'IOS15DARKSTYLE'), ('osx', 'fmxdesigner', 'OSXSTYLE'),
     ('linux', 'fmxdesigner', 'UBUNTUSTYLE'), ('gnome', 'fmxdesigner', 'GNOMESTYLE'));
+  { el estilo por defecto de Windows: sin StyleBook (el que no esta en la tabla) }
+  ESTILO_WINDOWS = 'windows';
+
+function RecursoDePlataforma(const ANombre: string; out ABpl, ARecurso: string): Boolean;
 begin
-  for var I := Low(TABLA) to High(TABLA) do
-    if SameText(TABLA[I, 0], ANombre) then
+  for var I := Low(ESTILOS_DE_PLATAFORMA) to High(ESTILOS_DE_PLATAFORMA) do
+    if SameText(ESTILOS_DE_PLATAFORMA[I, 0], ANombre) then
     begin
-      ABpl := TABLA[I, 1] + GPeticion.Bds.Replace('.', '') + '.bpl';
-      ARecurso := TABLA[I, 2];
+      ABpl := ESTILOS_DE_PLATAFORMA[I, 1] + GPeticion.Bds.Replace('.', '') + '.bpl';
+      ARecurso := ESTILOS_DE_PLATAFORMA[I, 2];
       Exit(True);
     end;
   Result := False;
@@ -142,7 +147,9 @@ end;
 
 function NombresDePlataforma: string;
 begin
-  Result := 'windows|win7|win8|win10|win11|mobile|android|ios|ios-dark|osx|linux|gnome';
+  Result := ESTILO_WINDOWS;
+  for var I := Low(ESTILOS_DE_PLATAFORMA) to High(ESTILOS_DE_PLATAFORMA) do
+    Result := Result + '|' + ESTILOS_DE_PLATAFORMA[I, 0];
 end;
 
 { Cuantos items del StyleBook llevan un estilo: uno vacio (Styles = < item
@@ -187,7 +194,7 @@ begin
     Exit(MsgFmt(SF_RENDER_ESTILO_PROPIO_FMT, [AForm.StyleBook.Name, AForm.StyleBook.Styles.Count]));
   end;
   Lleva := LoQueLlevaLaForm(AForm);
-  if SameText(GPeticion.Estilo, 'none') or SameText(GPeticion.Estilo, 'windows') then
+  if SameText(GPeticion.Estilo, 'none') or SameText(GPeticion.Estilo, ESTILO_WINDOWS) then
   begin
     AForm.StyleBook := nil;
     Exit(MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, [MsgText(SF_RENDER_ESTILO_WINDOWS), Lleva]));
@@ -197,7 +204,8 @@ begin
     SB := TStyleBook.Create(AForm);
     SB.LoadFromFile(GPeticion.Estilo);
     AForm.StyleBook := SB;
-    Exit(MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, ['file ' + ExtractFileName(GPeticion.Estilo), Lleva]));
+    Exit(MsgFmt(SF_RENDER_ESTILO_SOLO_ESTA_IMAGEN_FMT, [MsgFmt(SF_RENDER_ESTILO_DE_FICHERO_FMT,
+      [ExtractFileName(GPeticion.Estilo)]), Lleva]));
   end;
   if not RecursoDePlataforma(GPeticion.Estilo, Bpl, Recurso) then
     raise ERender.Create(MsgFmt(SR_RENDER_ESTILO_DESCONOCIDO_FMT, [GPeticion.Estilo, NombresDePlataforma]));

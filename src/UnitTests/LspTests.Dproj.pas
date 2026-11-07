@@ -958,13 +958,15 @@ const
 var
   Mal: string;
   E: TArray<TElementoXml>;
-  Otro: TArray<Boolean>;
+  // los veredictos del juez (VeredictosDeElementos): de otro build = vNo. Era
+  // ElementosDeOtroBuild, un envoltorio que solo usaban estas pruebas (D12d de la 1.28)
+  Otro: TArray<TVeredicto>;
 
   function DeOtro(const ANombre: string): Boolean;
   begin
     for var I := 0 to High(E) do
       if SameText(E[I].Escrito, ANombre) then
-        Exit(Otro[I]);
+        Exit(Otro[I] = vNo);
     raise Exception.Create('no esta ' + ANombre);
   end;
 
@@ -1003,40 +1005,40 @@ begin
   Assert.IsTrue(EvaluaCondicion('''$(LbA)''==''a''', 'Win64', 'Release', Tabla(['LbA=%61'])) = vSi, 'desescapado tras expandir');
   // los grupos de un .dproj, en orden de documento
   E := ElementosDe(XML, Mal);
-  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Release', E, [], []);
+  Otro := VeredictosDeElementos(XML, 'Win64', 'Release', E, [], []);
   Assert.IsTrue(DeOtro('PF_KeyStoreDebug'), 'Release/Win64: el grupo de Debug de Android64 es de otro');
   Assert.IsFalse(DeOtro('DCC_UnitSearchPath'), 'los valores de Win64 son de este');
   Assert.IsTrue(DeOtro('DCC_Define'), 'los valores de Debug son de otro en Release');
   Assert.IsFalse(DeOtro('Icon_MainIcon'), 'lo que no se sabe (Exists) se juzga');
   Assert.IsTrue(DeOtro('Manifest_File'), 'la Condition del elemento, de Win32, es de otro');
-  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Debug', E, [], []);
+  Otro := VeredictosDeElementos(XML, 'Win64', 'Debug', E, [], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'en Debug, los valores de Debug son de este');
-  Otro := ElementosDeOtroBuild(XML, 'Win64', 'Debug2', E, [], []);
+  Otro := VeredictosDeElementos(XML, 'Win64', 'Debug2', E, [], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'una config hija de Debug lee los valores de Debug');
   Assert.IsTrue(DeOtro('PF_KeyStoreDebug'), '...y no los de Android64');
   // una bandera plantada en un grupo sin condicion: msbuild lee el grupo
   E := ElementosDe(PLANTADA, Mal);
-  Otro := ElementosDeOtroBuild(PLANTADA, 'Win64', 'Release', E, [], []);
+  Otro := VeredictosDeElementos(PLANTADA, 'Win64', 'Release', E, [], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'la bandera plantada: el grupo se lee en cualquier config');
   // un nombre que msbuild toma de fuera (la tabla del build) no se da por vacio
   E := ElementosDe(EXTERNA, Mal);
-  Otro := ElementosDeOtroBuild(EXTERNA, 'Win64', 'Release', E, ['BDS'], []);
+  Otro := VeredictosDeElementos(EXTERNA, 'Win64', 'Release', E, ['BDS'], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'un grupo sobre $(BDS), que viene de rsvars: no se sabe, se juzga');
   // un valor se fija expandido: Tarde vale 'a' aunque Antes cambie despues
   E := ElementosDe(PEREZOSA, Mal);
-  Otro := ElementosDeOtroBuild(PEREZOSA, 'Win64', 'Release', E, [], []);
+  Otro := VeredictosDeElementos(PEREZOSA, 'Win64', 'Release', E, [], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'Tarde vale a: el grupo se lee');
   // lo de ProjectExtensions y de un Target no cuenta en la pasada, ni para
   // las banderas ni para el lector
   E := ElementosDe(ANIDADA, Mal);
-  Otro := ElementosDeOtroBuild(ANIDADA, 'Win64', 'Release', E, [], []);
+  Otro := VeredictosDeElementos(ANIDADA, 'Win64', 'Release', E, [], []);
   Assert.IsFalse(DeOtro('DCC_Define'), 'Puerta sigue a 1: el grupo se lee');
   Assert.AreEqual('r', EffectiveProperty(ANIDADA, 'DCC_ExeOutput', 'Win64', 'Release'), 'el lector no lee el grupo del Target');
   // una global del build: aunque el documento la ponga, no se sabe y se juzga
   E := ElementosDe(GLOBAL, Mal);
-  Otro := ElementosDeOtroBuild(GLOBAL, 'Win64', 'Release', E, [], ['Profile']);
+  Otro := VeredictosDeElementos(GLOBAL, 'Win64', 'Release', E, [], ['Profile']);
   Assert.IsFalse(DeOtro('DCC_Define'), 'Profile es global: no se sabe, se juzga');
-  Otro := ElementosDeOtroBuild(GLOBAL, 'Win64', 'Release', E, [], []);
+  Otro := VeredictosDeElementos(GLOBAL, 'Win64', 'Release', E, [], []);
   Assert.IsTrue(DeOtro('DCC_Define'), 'sin globales, el documento manda: p no es vacio');
   Assert.IsTrue(Length(PropiedadesDefinidas(E)) = 2, 'Profile y DCC_Define: ' + IntToStr(Length(PropiedadesDefinidas(E))));
   // los trozos de una lista

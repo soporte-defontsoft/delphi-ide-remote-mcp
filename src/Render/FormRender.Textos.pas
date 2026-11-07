@@ -163,6 +163,14 @@ const
   SF_RENDER_ESTILO_WINDOWS =
     'none (Windows default, as the designer)';
 
+  { lo que nombra un fichero de estilo dentro de otro mensaje: estaban en linea
+    en los dos renderizadores (C2-9 del revisor del paisaje de la 1.28) }
+  SF_RENDER_FICHERO_DE_ESTILO_FMT =
+    'style %s';
+
+  SF_RENDER_ESTILO_DE_FICHERO_FMT =
+    'file %s';
+
   SF_RENDER_ESTILO_VCL_FMT =
     '%s (%s; the form is not in design mode: VCL styles do not apply to designed controls)';
 

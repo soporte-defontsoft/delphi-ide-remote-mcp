@@ -529,9 +529,9 @@ begin
       Chg := Changes.Items[I] as TJSONObject;
       P := TPath.GetFullPath(Chg.GetValue('path').Value);
       L0 := Chg.GetValue('line0').GetValue<Integer>;
-      if Hechas.IndexOf(ClaveDeRuta(P) + '|' + IntToStr(L0)) >= 0 then
+      if Hechas.IndexOf(ClaveDeLinea(P, L0)) >= 0 then
         Continue;
-      Hechas.Add(ClaveDeRuta(P) + '|' + IntToStr(L0));
+      Hechas.Add(ClaveDeLinea(P, L0));
       if not Textos.TryGetValue(ClaveDeRuta(P), Lineas) then
       begin
         var Fuente := PatchLoadText(P, EncName);

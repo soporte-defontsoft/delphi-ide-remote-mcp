@@ -318,6 +318,11 @@ begin
   V := ArgStr(AArguments, 'deviceid').Trim;
   if (V <> '') and BadDeviceName(V) then
     Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
+  // ...y uno de los dispositivos que el workspace permite, la lista de
+  // delphi_adb: el agente elige entre lo que el servidor sabe, no escribe un
+  // valor libre en la linea de msbuild (D6 del revisor del paisaje de la 1.28)
+  if (V <> '') and not AdbTargetAllowed(V) then
+    Exit(MsgFmt(SR_ADB_ALLOWLIST_FMT, [V]));
   // "sdk" reaches msbuild's line (/p:PlatformSDK=): a file NAME, never a
   // path and never a metacharacter (audit 2026-09-25). The build also
   // checks it against the SDKs of the platform, like set-sdk does.

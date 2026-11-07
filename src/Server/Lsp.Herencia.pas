@@ -251,7 +251,7 @@ begin
   Result := False;
   AFile2 := '';
   ALinea2 := -1;
-  Clave := ClaveDeRuta(AFile) + '|' + ALinea.ToString;
+  Clave := ClaveDeLinea(AFile, ALinea);
   if FSaltos.TryGetValue(Clave, Guardado) then
   begin
     if Guardado = SIN_ANCESTRO then

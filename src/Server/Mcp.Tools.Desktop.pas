@@ -130,6 +130,7 @@ uses
   Lsp.Casa,
   Lsp.TextoDelNodo,
   Lsp.Lineas,
+  Lsp.PuertaDeLaLlamada, // ComandoQueLee: que comandos solo miran, la tabla de la puerta
   Lsp.Capturas;
 
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
@@ -148,9 +149,9 @@ function VentanasDeLaSalida(const ASalida, AWindow: string;
   out X, Y, W, H: Integer; out AHay: Boolean): TJSONArray;
 var
   L: string;
-  T: TArray<string>;
   O: TJSONObject;
   Titulo, V: string;
+  VX, VY, VW, VH: Integer;
   Lineas: TArray<string>;
   Desde, I: Integer;
 begin
@@ -166,33 +167,26 @@ begin
   for I := Desde to High(Lineas) do
   begin
     L := Lineas[I];
-    if not LineaDelNodo(L, NODO_VENTANA, V) then
+    // "WINDOW x y w h <titulo con espacios>", por EL lector de esa linea, la
+    // inversa de su compositor (Lsp.TextoDelNodo; aqui se troceaba a mano: E7
+    // del revisor de la 1.28)
+    if not LineaDelNodo(L, NODO_VENTANA, V) or not LeeLineaDeVentana(V, VX, VY, VW, VH, Titulo) then
       Continue;
-    // "VENTANA x y w h <titulo con espacios>": Split con tope TIRA el resto
-    // (medido: "Experiencia de entrada" quedaba en "Experiencia"), asi que
-    // el titulo se corta a mano tras el quinto espacio
-    T := L.Trim.Split([' ']);
-    if Length(T) < 6 then
-      Continue;
-    Titulo := L.Trim;
-    for var K := 1 to 5 do
-      Titulo := Titulo.Substring(Titulo.IndexOf(' ') + 1);
-    Titulo := Titulo.Trim([#13, ' ']);
     O := TJSONObject.Create;
     Result.AddElement(O);
     O.AddPair('title', Titulo);
-    O.AddPair('x', TJSONNumber.Create(StrToIntDef(T[1], 0)));
-    O.AddPair('y', TJSONNumber.Create(StrToIntDef(T[2], 0)));
-    O.AddPair('w', TJSONNumber.Create(StrToIntDef(T[3], 0)));
-    O.AddPair('h', TJSONNumber.Create(StrToIntDef(T[4], 0)));
+    O.AddPair('x', TJSONNumber.Create(VX));
+    O.AddPair('y', TJSONNumber.Create(VY));
+    O.AddPair('w', TJSONNumber.Create(VW));
+    O.AddPair('h', TJSONNumber.Create(VH));
     if (not AHay) and (AWindow <> '') and
        SinMayusculas(Titulo).Contains(SinMayusculas(AWindow)) then
     begin
       AHay := True;
-      X := StrToIntDef(T[1], 0);
-      Y := StrToIntDef(T[2], 0);
-      W := StrToIntDef(T[3], 0);
-      H := StrToIntDef(T[4], 0);
+      X := VX;
+      Y := VY;
+      W := VW;
+      H := VH;
     end;
   end;
 end;
@@ -387,14 +381,17 @@ begin
   begin
     if Params.Text.Trim = '' then
       Exit(MsgText(SR_ADBLINUX_NEEDTEXT));
-    // UNA linea, por EL juez de lo que cabe en el fichero de trabajo
-    // (ArgumentoCabeEnElTrabajo): un salto salia como RUN-026 nombrando un
-    // "Argument 3" que el agente nunca mando. Y lo pedido se escribe tal cual:
-    // el Trim quitaba sin decirlo los blancos de delante y de detras (revisor
-    // del paisaje de la 1.28, J10)
-    var Texto := TextoParaElNodo(Params.Text);
+    // Un salto de linea, como venga (CRLF, LF o CR suelto), es UNA pulsacion
+    // de Intro: se deja en LF (ConSalto, EL normalizador) y viaja codificado
+    // con el resto (TextoParaElNodo); el nodo lo teclea. Lo que no viaja es
+    // un NUL, y eso lo dice EL juez de lo que cabe en el fichero de trabajo
+    // (ArgumentoCabeEnElTrabajo): salia como RUN-026 nombrando un "Argument 3"
+    // que el agente nunca mando. Lo pedido se escribe tal cual: el Trim
+    // quitaba sin decirlo los blancos de delante y de detras (revisor del
+    // paisaje de la 1.28, J10; el salto, en el nodo desde la 1.29)
+    var Texto := TextoParaElNodo(ConSalto(Params.Text, #10));
     if not ArgumentoCabeEnElTrabajo(Texto) then
-      Exit(MsgText(SR_DESKTOP_TYPE_UNA_LINEA));
+      Exit(MsgText(SR_DESKTOP_TYPE_NUL));
     { Con coordenadas es UN solo viaje: pulsa para dar el foco y escribe. }
     if (Params.X.Trim <> '') and (Params.Y.Trim <> '') then
     begin
@@ -417,13 +414,16 @@ begin
     (ProfileDesktopDenied, V90): screenshot y status miran, lo demas actua, y
     project= ejecuta ese proyecto en el destino, asi que tampoco es mirar (la misma
     cuenta que la tabla de accesos de Lsp.Guard). Va AQUI, tras validar los argumentos
-    propios y ANTES de leer el perfil, marcar o escribir. }
+    propios y ANTES de leer el perfil, marcar o escribir. Que comandos solo
+    MIRAN lo dice la tabla de accesos de la puerta (ComandoQueLee), la que
+    juzga la credencial de solo lectura: estaba escrito aqui otra vez (E4 del
+    revisor del paisaje de la 1.28). }
   Proj := DprojDe(Params.Project.Trim);
   Result := EjecucionRemotaDenegada(Params.Profile.Trim, Proj,
     MsgText(SR_ADBLINUX_NEEDPROFILE));
   if Result <> '' then
     Exit;
-  Result := ProfileDesktopDenied(Params.Profile.Trim, (Proj <> '') or not MatchStr(Cmd, ['screenshot', 'status']));
+  Result := ProfileDesktopDenied(Params.Profile.Trim, (Proj <> '') or not ComandoQueLee('delphi_desktop', Cmd));
   if Result <> '' then
     Exit;
   { El destino dice que nodo y que teclas espera: lo lee el .profile, nunca el
@@ -450,12 +450,14 @@ begin
       if Mo = 'win' then Mo := 'super';
       if not MatchText(Mo, ['ctrl', 'shift', 'alt', 'super']) then
         Exit(MsgFmt(SR_ADBLINUX_MODIFIERS_BAD_FMT, [M.Trim]));
+      // en Linux, sus codigos evdev: los del protocolo, que son los que
+      // pulsa el nodo por su cuenta (NodeProtocolo.inc; estaban en los dos)
       if EsWin then
         Mods := Mods + [Mo]
-      else if Mo = 'ctrl' then Mods := Mods + ['29']
-      else if Mo = 'shift' then Mods := Mods + ['42']
-      else if Mo = 'alt' then Mods := Mods + ['56']
-      else Mods := Mods + ['125'];
+      else if Mo = 'ctrl' then Mods := Mods + [IntToStr(EVDEV_CTRL)]
+      else if Mo = 'shift' then Mods := Mods + [IntToStr(EVDEV_MAYUS)]
+      else if Mo = 'alt' then Mods := Mods + [IntToStr(EVDEV_ALT)]
+      else Mods := Mods + [IntToStr(EVDEV_SUPER)];
     end;
     if EsWin then
     begin

@@ -106,7 +106,8 @@ uses
   Lsp.Listas,
   Lsp.Lineas,
   Lsp.Capturas,
-  Lsp.JuecesDeArgumentos;
+  Lsp.JuecesDeArgumentos,
+  Lsp.Rutas;
 
 { El valor de una linea "<clave>: <valor>" de la salida de `wm size` / `wm
   density` ("Physical size: 1080x1920", "Override density: 320"); '' si no
@@ -426,8 +427,8 @@ begin
       Denied := ColocacionDenegada(Params.Out.Trim);
       if Denied <> '' then
         Exit(Denied);
-      if not (SinMayusculas(Params.Out.Trim).EndsWith('.txt') or
-              SinMayusculas(Params.Out.Trim).EndsWith('.log')) then
+      // la extension como la compara el disco (TieneExtension; E12 de la 1.28)
+      if not TieneExtension(Params.Out.Trim, ['.txt', '.log']) then
         Exit(MsgText(SR_ADB_OUT_LOG));
     end;
     // logcat on a missing device WAITS instead of erroring (measured:

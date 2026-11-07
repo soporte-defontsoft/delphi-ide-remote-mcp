@@ -114,7 +114,9 @@ end;
 
 function EsManifiesto(const APath: string): Boolean;
 begin
-  Result := APath.Trim.EndsWith(EXT_MANIFIESTO, True);
+  // la extension como la compara el disco (TieneExtension): EndsWith con
+  // IgnoreCase compara con el locale (A6 del revisor del paisaje de la 1.28)
+  Result := TieneExtension(APath.Trim, [EXT_MANIFIESTO]);
 end;
 
 function ManifiestoDe(const ADproj: string): string;

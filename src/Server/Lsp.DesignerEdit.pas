@@ -1887,7 +1887,9 @@ function ConLasPropiedadesDelIde(var F: TFormEnEdicion; const ALineas: TArray<st
         Continue;
       var Hay: Boolean;
       var Valor := ADoc.ValorDe(AObj, Rg.Prop, Hay).Trim;
-      if not Hay or (Valor = '') or CharInSet(Valor[1], ['''', '#', '(', '<', '{']) then
+      // un bloque o una cadena no es un valor suelto: por sus jueces (EsValorDeBloque,
+      // EsLiteralDeForm), no por el primer caracter (C1-3 del revisor de la 1.28)
+      if not Hay or (Valor = '') or EsValorDeBloque(Valor) or EsLiteralDeForm(Valor) then
         Continue;
       var Puesta := ANomObj + '.' + Rg.Prop + '=' + Valor;
       if not ValorDeLaCasaLlega(Puesta) then
@@ -2310,15 +2312,23 @@ begin
     // el bloque, con lo minimo que escribe el IDE, ultimo hijo de su padre (su
     // sitio entre los hermanos lo dice el juez del orden, abajo)
     Ind := SangriaDeNivel(Padre.Depth + 1);
+    // sus propiedades, un nivel por debajo: por EL nombrador de la sangria (era
+    // Ind + '  ' a mano siete veces; C1-6 del revisor de la 1.28)
+    var IndProp := SangriaDeNivel(Padre.Depth + 2);
     // cada linea por sus compositores (Lsp.DesignerBin): la de objeto, la de
     // una propiedad, el literal, el flotante
     Bloque := [Ind + ComponeLineaDeObjeto((if EsFrame then 'inline' else 'object'), Nombre, Clase)];
-    if F.EsFmx then
-      Bloque := Bloque + LineasDePropiedad(Ind + '  ', 'Position.X', [FlotanteFmx(INSERT_X)]) +
-        LineasDePropiedad(Ind + '  ', 'Position.Y', [FlotanteFmx(INSERT_Y)])
+    // su sitio por LA regla de set y el lint (SitioFmxDeLeftTop): Position.X/Y
+    // en un control FMX, Left/Top en la VCL (lo decidia aqui un if propio;
+    // C1-7 del revisor de la 1.28). insert solo pone controles (DSGN-079)
+    var SitioX := SitioFmxDeLeftTop(F.Tabla, F.EsFmx, ClsId, 'Left');
+    var SitioY := SitioFmxDeLeftTop(F.Tabla, F.EsFmx, ClsId, 'Top');
+    if SitioX <> '' then
+      Bloque := Bloque + LineasDePropiedad(IndProp, SitioX, [FlotanteFmx(INSERT_X)]) +
+        LineasDePropiedad(IndProp, SitioY, [FlotanteFmx(INSERT_Y)])
     else
-      Bloque := Bloque + LineasDePropiedad(Ind + '  ', 'Left', [IntToStr(INSERT_X)]) +
-        LineasDePropiedad(Ind + '  ', 'Top', [IntToStr(INSERT_Y)]);
+      Bloque := Bloque + LineasDePropiedad(IndProp, 'Left', [IntToStr(INSERT_X)]) +
+        LineasDePropiedad(IndProp, 'Top', [IntToStr(INSERT_Y)]);
     // su texto, con su nombre, si su SetName lo hace: EL juez
     // (PropiedadesDeTexto, el mismo del renombrado)
     Texto := '';
@@ -2326,15 +2336,15 @@ begin
     if Length(Textos) = 1 then
       Texto := Textos[0];
     if not F.EsFmx and (Texto <> '') then
-      Bloque := Bloque + LineasDePropiedad(Ind + '  ', Texto, TrozosDeLiteral(Nombre));
+      Bloque := Bloque + LineasDePropiedad(IndProp, Texto, TrozosDeLiteral(Nombre));
     // el TabOrder: el ultimo del tabulador de su padre, el que diga el juez
     // (abajo, DondeLoDejaElIde, que le pregunta SIN esta linea); el propio,
     // el que lleva el bloque, si no contesta o si su escritor no lo escribe
     var ConTab := Publica(F.Tabla, ClsId, 'TabOrder');
     if ConTab then
-      Bloque := Bloque + LineasDePropiedad(Ind + '  ', 'TabOrder', [IntToStr(SiguienteTabOrder(F.Doc, Padre))]);
+      Bloque := Bloque + LineasDePropiedad(IndProp, 'TabOrder', [IntToStr(SiguienteTabOrder(F.Doc, Padre))]);
     if F.EsFmx and (Texto <> '') then
-      Bloque := Bloque + LineasDePropiedad(Ind + '  ', Texto, TrozosDeLiteral(Nombre));
+      Bloque := Bloque + LineasDePropiedad(IndProp, Texto, TrozosDeLiteral(Nombre));
     Bloque := Bloque + [Ind + 'end'];
     DfmLineas := Copy(F.Doc.Lines);
     Ini := Padre.EndLine - 1;
@@ -2407,7 +2417,7 @@ begin
       begin
         Ini := Puesto.StartLine - 1;
         FinBloque := Puesto.EndLine - 1;
-        DocI.ValorDe(Puesto, IfThen(F.EsFmx, 'Position.X', 'Left'), ConSitio);
+        DocI.ValorDe(Puesto, IfThen(SitioX <> '', SitioX, 'Left'), ConSitio);
         var HayAlign: Boolean;
         var ValorAlign := DocI.ValorDe(Puesto, 'Align', HayAlign);
         if HayAlign then
@@ -2911,13 +2921,12 @@ begin
   if (Base = 'single') or (Base = 'float') then
   begin
     var Num: Extended;
-    var N64: Int64;
-    var EsNum := TryStrToFloat(V, Num, TFormatSettings.Invariant);
-    if not EsNum and TryStrToInt64(V, N64) then
-    begin
-      Num := N64;
-      EsNum := True;
-    end;
+    // leido por EL lector de un flotante de form (LeeFlotanteDeForm: el parser
+    // del IDE y el $hex), el que usa el ayudante de render: aqui era un
+    // TryStrToFloat propio con un entero de reserva (C1-8 del revisor del
+    // paisaje de la 1.28). Un sufijo d/s/c no llega: lo niega antes
+    // TipoQueNoCasa (DSGN-093, ReadFloat no los toma; medido el 7-nov-2026)
+    var EsNum := LeeFlotanteDeForm(V, Num);
     // la gramatica ya paso (TipoQueNoCasa): uno que no se lee es que no cabe
     // (1E400 en un Double se escribia tal cual: segunda revision de la 1.17.0)
     var Tope: Extended := MaxDouble;
@@ -3359,7 +3368,7 @@ begin
     Fin := Obj.EndLine - 1;
     Largo := Fin - Ini + 1;
     // el bloque entero, con sus hijos, a la sangria de su nuevo nivel
-    Delta := ((Padre.Depth + 1) - Obj.Depth) * 2;
+    Delta := Length(SangriaDeNivel(Padre.Depth + 1)) - Length(SangriaDeNivel(Obj.Depth));
     Bloque := Copy(F.Doc.Lines, Ini, Largo);
     for I := 0 to High(Bloque) do
       Bloque[I] := Resangra(Bloque[I], Delta);

@@ -102,6 +102,11 @@ function ManosDeWindows: TManosDeUnidades;
   misma lectura que Lsp.Host hace de las notas de arranque). El TDiceNota de
   un servidor. }
 procedure NotaAlLog(const ANota: string);
+{ ANota como AVISO de arranque: con la marca (SL_MARCA_AVISO) delante si no la
+  lleva; '' sigue siendo ''. Su inversa la lee NotaAlLog. EL compositor de la
+  marca: Lsp.Host ponia la suya ('AVISO: ', fuera del catalogo) y la leia aparte
+  (A7 del revisor del paisaje de la 1.28). }
+function ComoAviso(const ANota: string): string;
 
 { La regla. Por cada letra de ASitios (los que se escribieron con unidad; lo
   demas no es de aqui), en el orden en que aparecen:
@@ -269,6 +274,14 @@ begin
     TLogger.Warning(ANota)
   else
     TLogger.Info(ANota);
+end;
+
+function ComoAviso(const ANota: string): string;
+begin
+  if (ANota = '') or ANota.StartsWith(SL_MARCA_AVISO) then
+    Result := ANota
+  else
+    Result := SL_MARCA_AVISO + ': ' + ANota;
 end;
 
 function ManosDeWindows: TManosDeUnidades;

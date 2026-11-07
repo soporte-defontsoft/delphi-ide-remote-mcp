@@ -107,6 +107,9 @@ const
   EV_ASIENTO = 3;
   EV_DISPOSITIVO = 5;
   EV_REANUDADO = 8;
+  { El protocolo con el servidor: de el, los codigos evdev de las teclas que
+    las manos pulsan por su cuenta (EVDEV_MAYUS, EVDEV_ALTGR, EVDEV_INTRO) }
+  {$I NodeProtocolo.inc}
 
 type
   TEiNuevo = function(ACtx: Pointer): Pointer; cdecl;
@@ -545,13 +548,28 @@ begin
 end;
 
 function TManos.Escribir(const ATexto: string): Boolean;
-const
-  MAYUSCULA = 42;   { KEY_LEFTSHIFT }
-  ALTGR = 100;      { KEY_RIGHTALT: el tercer nivel del teclado (@, #, ~...) }
 var
   I, Codigo: Integer;
   C: Char;
   Mayus: Boolean;
+
+  { Pulsa y suelta ACodigo en su nivel (Mayusculas si es impar, AltGr de 2 en
+    adelante), como una persona: el gesto de cada caracter, lo diga el mapa o
+    la tabla fija, y el de un salto de linea. Estaba escrito dos veces. }
+  function Pulsa(ACodigo: Cardinal; ANivel: Integer): Boolean;
+  begin
+    Result := False;
+    if Odd(ANivel) and not Tecla(EVDEV_MAYUS, True) then Exit;
+    if (ANivel >= 2) and not Tecla(EVDEV_ALTGR, True) then Exit;
+    if not Tecla(ACodigo, True) then Exit;
+    Sleep(35);
+    if not Tecla(ACodigo, False) then Exit;
+    if (ANivel >= 2) and not Tecla(EVDEV_ALTGR, False) then Exit;
+    if Odd(ANivel) and not Tecla(EVDEV_MAYUS, False) then Exit;
+    Sleep(35);
+    Result := True;
+  end;
+
 begin
   Result := False;
   if not FListo then
@@ -563,8 +581,17 @@ begin
   for I := 1 to Length(ATexto) do
   begin
     C := ATexto[I];
+    // Un salto de linea es la tecla Intro, en toda distribucion: la que pulsa
+    // una persona (el servidor deja todo salto en LF; J10 de la 1.28). El
+    // mapa no la da: Intro no compone un caracter imprimible
+    if C = #10 then
+    begin
+      if not Pulsa(EVDEV_INTRO, 0) then
+        Exit;
+      Continue;
+    end;
     // Con el mapa del escritorio en la mano, manda EL: la tecla y el nivel
-    // (Mayusculas 42, AltGr 100) que el escritorio dice que dan ese caracter.
+    // (Mayusculas, AltGr) que el escritorio dice que dan ese caracter.
     if (FMapa <> nil) and (FMapa.Cuantas > 0) then
     begin
       // Una pulsacion si la tecla existe, DOS si el caracter sale por tecla
@@ -578,16 +605,8 @@ begin
         Exit;
       end;
       for var P in Secuencia do
-      begin
-        if Odd(P.Nivel) and not Tecla(MAYUSCULA, True) then Exit;
-        if (P.Nivel >= 2) and not Tecla(ALTGR, True) then Exit;
-        if not Tecla(P.Codigo, True) then Exit;
-        Sleep(35);
-        if not Tecla(P.Codigo, False) then Exit;
-        if (P.Nivel >= 2) and not Tecla(ALTGR, False) then Exit;
-        if Odd(P.Nivel) and not Tecla(MAYUSCULA, False) then Exit;
-        Sleep(35);
-      end;
+        if not Pulsa(P.Codigo, P.Nivel) then
+          Exit;
       Continue;
     end;
     // Sin mapa: la tabla fija de siempre, que es un teclado AMERICANO. En
@@ -616,16 +635,8 @@ begin
         Exit;
       end;
     end;
-    if Mayus and not Tecla(MAYUSCULA, True) then
+    if not Pulsa(Codigo, Ord(Mayus)) then
       Exit;
-    if not Tecla(Codigo, True) then
-      Exit;
-    Sleep(35);
-    if not Tecla(Codigo, False) then
-      Exit;
-    if Mayus and not Tecla(MAYUSCULA, False) then
-      Exit;
-    Sleep(35);
   end;
   Result := True;
 end;

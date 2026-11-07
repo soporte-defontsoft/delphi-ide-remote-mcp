@@ -366,7 +366,6 @@ function ExportDe(AModulo: HMODULE; const ARutina: string): Pointer;
 
 { Registro de clases como lo haria RegisterComponents }
 procedure Apunta(const AClases: array of TComponentClass);
-function ClaseRegistrada(const AClase: string): Boolean;
 
 { El componente de ARaiz que nombra ARuta como lee la RTL una referencia
   (FindNestedComponent: Marco1.LblAviso, dentro de un frame en linea), y
@@ -1205,11 +1204,6 @@ begin
         Traza(Format('%s: RegisterClass(%s): %s', [GPaqueteActual, C.ClassName, E.Message]));
     end;
   end;
-end;
-
-function ClaseRegistrada(const AClase: string): Boolean;
-begin
-  Result := GetClass(AClase) <> nil;
 end;
 
 procedure ApuntaComponentes(const Page: string; const ComponentClasses: array of TComponentClass);

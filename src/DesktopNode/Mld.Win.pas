@@ -599,19 +599,34 @@ begin
   if ATexto = '' then
     Exit(True);
   { Una pulsacion Unicode por unidad UTF-16: asi entran acentos y emojis sin
-    depender de la distribucion de teclado que tenga el operador. }
+    depender de la distribucion de teclado que tenga el operador. Un salto de
+    linea es la tecla Intro (VK_RETURN), la que pulsa una persona: un caracter
+    13 Unicode llega como VK_PACKET, y lo que espera la tecla (el boton por
+    defecto de un dialogo, un OnKeyDown) no lo ve. El servidor deja todo salto
+    en LF (J10 de la 1.28). }
   SetLength(E, Length(ATexto) * 2);
   N := 0;
   for I := 1 to Length(ATexto) do
   begin
     E[N].Itype := INPUT_KEYBOARD;
-    E[N].ki.wVk := 0;
-    E[N].ki.wScan := Word(ATexto[I]);
-    E[N].ki.dwFlags := KEYEVENTF_UNICODE;
     E[N].ki.time := 0;
     E[N].ki.dwExtraInfo := 0;
-    E[N + 1] := E[N];
-    E[N + 1].ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
+    if ATexto[I] = #10 then
+    begin
+      E[N].ki.wVk := VK_RETURN;
+      E[N].ki.wScan := 0;
+      E[N].ki.dwFlags := 0;
+      E[N + 1] := E[N];
+      E[N + 1].ki.dwFlags := KEYEVENTF_KEYUP;
+    end
+    else
+    begin
+      E[N].ki.wVk := 0;
+      E[N].ki.wScan := Word(ATexto[I]);
+      E[N].ki.dwFlags := KEYEVENTF_UNICODE;
+      E[N + 1] := E[N];
+      E[N + 1].ki.dwFlags := KEYEVENTF_UNICODE or KEYEVENTF_KEYUP;
+    end;
     Inc(N, 2);
   end;
   Result := EnviarEntradas(E);

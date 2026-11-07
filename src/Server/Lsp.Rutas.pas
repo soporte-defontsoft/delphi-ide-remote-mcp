@@ -158,6 +158,11 @@ function RutaTrasladada(const ARuta, ADesde, AHasta: string): string;
   ASCII) separa lo que NTFS junta (la ene y su mayuscula). Las mayusculas
   invariantes coinciden con el disco en los 35. }
 function ClaveDeRuta(const ARuta: string): string;
+{ La clave de "la linea ALinea de ESE fichero": la linea y la clave de su ruta
+  ("17@D:\X\U.PAS"). La forma "a|b" es la de las marcas de parametros
+  (ClaveDeParam). Estaba en el changeset, y a mano con '|' en la herencia y
+  en el renombrado (B9 del revisor del paisaje de la 1.28). }
+function ClaveDeLinea(const ARuta: string; ALinea: Integer): string;
 
 { AReal (una ruta REAL, RealPath) esta en alguno de ALugares, cada uno por
   SU ruta real: la comparacion de los lugares de las puertas (Lsp.Patch) y de
@@ -752,6 +757,11 @@ function ClaveDeRuta(const ARuta: string): string;
 begin
   // LCMapString con LOCALE_INVARIANT y sin casing de ningun idioma
   Result := ARuta.ToUpperInvariant;
+end;
+
+function ClaveDeLinea(const ARuta: string; ALinea: Integer): string;
+begin
+  Result := IntToStr(ALinea) + '@' + ClaveDeRuta(ARuta);
 end;
 
 function EnAlgunLugar(const AReal: string; const ALugares: TArray<string>): Boolean;

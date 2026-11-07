@@ -376,16 +376,35 @@ begin
     '</Project>' + CRLF;
 end;
 
-function VclFormPas(const AUnitName, AFormName: string): string;
+{ Lo que cambia un esqueleto heredado de uno de su marco: la clase de la que
+  hereda (la del marco, o la del ancestro del proyecto) y, al final de su uses,
+  la unidad de ese ancestro. Por parametro de cada plantilla: se injertaba con
+  un IndexOf y un StringReplace sobre el texto ya compuesto, que en silencio no
+  hacian nada si la plantilla cambiaba de forma (D10 del revisor de la 1.28). }
+function Herencia(const AAncestro, ADelMarco: string): string;
+begin
+  // la del marco va entera en la plantilla (' = class(TForm)'): su clase no
+  // se nombra suelta (la regla de la raiz de un designer, test_paisaje)
+  Result := IfThen(AAncestro <> '', ' = class(' + AAncestro + ')', ADelMarco);
+end;
+
+function UsesDelAncestro(const AUnidad: string): string;
+begin
+  Result := IfThen(AUnidad <> '', ', ' + AUnidad, '');
+end;
+
+function VclFormPas(const AUnitName, AFormName: string; const AAncestro: string = '';
+  const AUnidadDelAncestro: string = ''): string;
 begin
   Result :=
     'unit ' + AUnitName + ';' + CRLF + CRLF +
     'interface' + CRLF + CRLF +
     'uses' + CRLF +
     '  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,' + CRLF +
-    '  System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs;' + CRLF + CRLF +
+    '  System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs' +
+    UsesDelAncestro(AUnidadDelAncestro) + ';' + CRLF + CRLF +
     'type' + CRLF +
-    '  T' + AFormName + ' = class(TForm)' + CRLF +
+    '  T' + AFormName + Herencia(AAncestro, ' = class(TForm)') + CRLF +
     '  private' + CRLF +
     '  public' + CRLF +
     '  end;' + CRLF + CRLF +
@@ -415,16 +434,18 @@ begin
     'end' + CRLF;
 end;
 
-function FmxFormPas(const AUnitName, AFormName: string): string;
+function FmxFormPas(const AUnitName, AFormName: string; const AAncestro: string = '';
+  const AUnidadDelAncestro: string = ''): string;
 begin
   Result :=
     'unit ' + AUnitName + ';' + CRLF + CRLF +
     'interface' + CRLF + CRLF +
     'uses' + CRLF +
     '  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,' + CRLF +
-    '  FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs;' + CRLF + CRLF +
+    '  FMX.Types, FMX.Controls, FMX.Forms, FMX.Graphics, FMX.Dialogs' +
+    UsesDelAncestro(AUnidadDelAncestro) + ';' + CRLF + CRLF +
     'type' + CRLF +
-    '  T' + AFormName + ' = class(TForm)' + CRLF +
+    '  T' + AFormName + Herencia(AAncestro, ' = class(TForm)') + CRLF +
     '  private' + CRLF +
     '  public' + CRLF +
     '  end;' + CRLF + CRLF +
@@ -451,16 +472,18 @@ begin
     'end' + CRLF;
 end;
 
-function VclFramePas(const AUnitName, AFrameName: string): string;
+function VclFramePas(const AUnitName, AFrameName: string; const AAncestro: string = '';
+  const AUnidadDelAncestro: string = ''): string;
 begin
   Result :=
     'unit ' + AUnitName + ';' + CRLF + CRLF +
     'interface' + CRLF + CRLF +
     'uses' + CRLF +
     '  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants,' + CRLF +
-    '  System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs;' + CRLF + CRLF +
+    '  System.Classes, Vcl.Graphics, Vcl.Controls, Vcl.Forms, Vcl.Dialogs' +
+    UsesDelAncestro(AUnidadDelAncestro) + ';' + CRLF + CRLF +
     'type' + CRLF +
-    '  T' + AFrameName + ' = class(TFrame)' + CRLF +
+    '  T' + AFrameName + Herencia(AAncestro, ' = class(TFrame)') + CRLF +
     '  private' + CRLF +
     '  public' + CRLF +
     '  end;' + CRLF + CRLF +
@@ -481,16 +504,18 @@ begin
     'end' + CRLF;
 end;
 
-function FmxFramePas(const AUnitName, AFrameName: string): string;
+function FmxFramePas(const AUnitName, AFrameName: string; const AAncestro: string = '';
+  const AUnidadDelAncestro: string = ''): string;
 begin
   Result :=
     'unit ' + AUnitName + ';' + CRLF + CRLF +
     'interface' + CRLF + CRLF +
     'uses' + CRLF +
     '  System.SysUtils, System.Types, System.UITypes, System.Classes, System.Variants,' + CRLF +
-    '  FMX.Types, FMX.Graphics, FMX.Controls, FMX.Forms, FMX.Dialogs, FMX.StdCtrls;' + CRLF + CRLF +
+    '  FMX.Types, FMX.Graphics, FMX.Controls, FMX.Forms, FMX.Dialogs, FMX.StdCtrls' +
+    UsesDelAncestro(AUnidadDelAncestro) + ';' + CRLF + CRLF +
     'type' + CRLF +
-    '  T' + AFrameName + ' = class(TFrame)' + CRLF +
+    '  T' + AFrameName + Herencia(AAncestro, ' = class(TFrame)') + CRLF +
     '  private' + CRLF +
     '  public' + CRLF +
     '  end;' + CRLF + CRLF +
@@ -977,17 +1002,9 @@ begin
   Result := WriteTargetDenied(ADir); // jaula + carpetas muertas, UNA puerta
 end;
 
-{ Un heredado, sobre el esqueleto de su marco: su clase hereda del ancestro y su uses
-  lleva la unidad de este, donde la lista el proyecto; su form, lo que el IDE escribe
-  en uno nuevo: inherited, y en una form su Caption. }
-function PasHeredado(const APas, AFormName: string; const AAncestro: TFormDelProyecto): string;
-begin
-  var Cabeza := 'T' + AFormName + ' = class(';
-  var Ini := APas.IndexOf(Cabeza) + Length(Cabeza);
-  Result := APas.Substring(0, Ini) + AAncestro.Clase + APas.Substring(APas.IndexOf(')', Ini));
-  Result := StringReplace(Result, ';' + CRLF + CRLF + 'type', ', ' + AAncestro.Unidad + ';' + CRLF + CRLF + 'type', []);
-end;
-
+{ El form de un heredado, lo que el IDE escribe en uno nuevo: inherited, y en
+  una form su Caption (su .pas es el esqueleto de su marco con la clase y la
+  unidad del ancestro, por parametro). }
 function FormHeredado(const AFormName: string; AEsFrame: Boolean): string;
 begin
   Result := ComponeLineaDeObjeto('inherited', AFormName, 'T' + AFormName) + CRLF;
@@ -1117,7 +1134,7 @@ begin
   begin
     if Heredado then
     begin
-      WriteNewFile(PasPath, PasHeredado(VclFormPas(AUnitName, FormName), FormName, Ancestro));
+      WriteNewFile(PasPath, VclFormPas(AUnitName, FormName, Ancestro.Clase, Ancestro.Unidad));
       WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), FormHeredado(FormName, False));
     end
     else
@@ -1131,7 +1148,7 @@ begin
     DesignerExt := '.fmx';
     if Heredado then
     begin
-      WriteNewFile(PasPath, PasHeredado(FmxFormPas(AUnitName, FormName), FormName, Ancestro));
+      WriteNewFile(PasPath, FmxFormPas(AUnitName, FormName, Ancestro.Clase, Ancestro.Unidad));
       WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FormHeredado(FormName, False));
     end
     else
@@ -1144,7 +1161,7 @@ begin
   begin
     if Heredado then
     begin
-      WriteNewFile(PasPath, PasHeredado(VclFramePas(AUnitName, FormName), FormName, Ancestro));
+      WriteNewFile(PasPath, VclFramePas(AUnitName, FormName, Ancestro.Clase, Ancestro.Unidad));
       WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), FormHeredado(FormName, True));
     end
     else
@@ -1158,7 +1175,7 @@ begin
     DesignerExt := '.fmx';
     if Heredado then
     begin
-      WriteNewFile(PasPath, PasHeredado(FmxFramePas(AUnitName, FormName), FormName, Ancestro));
+      WriteNewFile(PasPath, FmxFramePas(AUnitName, FormName, Ancestro.Clase, Ancestro.Unidad));
       WriteNewFile(TPath.Combine(Dir, AUnitName + '.fmx'), FormHeredado(FormName, True));
     end
     else

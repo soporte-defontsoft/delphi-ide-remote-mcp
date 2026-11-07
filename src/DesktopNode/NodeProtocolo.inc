@@ -33,6 +33,19 @@
   NODO_ORDEN_TECLA = 'tecla';          // tecla [modificadores] <tecla>
   NODO_ORDEN_ALTAB = 'altab';          // Alt+Tab (desde la consola del nodo)
   NODO_ORDEN_ARRASTRA = 'arrastra';    // arrastra x1 y1 x2 y2: pulsa, se mueve y suelta
+  { Las teclas por su codigo evdev (linux/input-event-codes.h: una POSICION del
+    teclado, la misma en toda distribucion) que nombran los dos lados en Linux:
+    los modificadores que manda la tool en "tecla" y las que el nodo pulsa por
+    su cuenta (el nivel de un caracter, el salto de type, Alt+Tab, la vista de
+    ventanas). Estaban escritas en el servidor y en el nodo (J19 del revisor
+    del paisaje de la 1.28). }
+  EVDEV_TAB = 15;                      // KEY_TAB
+  EVDEV_INTRO = 28;                    // KEY_ENTER: un salto de linea de type
+  EVDEV_CTRL = 29;                     // KEY_LEFTCTRL
+  EVDEV_MAYUS = 42;                    // KEY_LEFTSHIFT: el nivel 1 de un caracter
+  EVDEV_ALT = 56;                      // KEY_LEFTALT
+  EVDEV_ALTGR = 100;                   // KEY_RIGHTALT: el nivel 2 (@, #, ~...)
+  EVDEV_SUPER = 125;                   // KEY_LEFTMETA
   { Y la salida de un TRABAJO del lanzador (src\RunJob): la escribe
     McpRunJob y la lee Lsp.RemoteRun. Estaban a mano en diecinueve sitios
     del lanzador y dos del servidor (28-sep-2026). }

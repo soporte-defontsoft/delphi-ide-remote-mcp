@@ -327,7 +327,9 @@ begin
   // SParseError es '%s on line %d': su forma, escapada, con los huecos
   var Patron := '^' + TRegEx.Escape(SParseError).Replace('%s', '(.*)').Replace('%d', '(\d+)') + '$';
   var M := TRegEx.Match(AMensaje.Trim, Patron);
-  if M.Success and (M.Groups.Count > 2) then
+  // los dos grupos son obligatorios: si casa, estan (sin contar Groups a mano,
+  // B5 de la 1.28; GrupoDe no llega a los renderizadores, que comparten esta unit)
+  if M.Success then
     Result := StrToIntDef(M.Groups[2].Value, 0);
 end;
 

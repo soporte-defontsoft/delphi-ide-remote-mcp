@@ -1718,13 +1718,32 @@ end;
   comilla (ParamStr): codificado, sin comillas, y de vuelta igual (C de la 1.26) }
 procedure TFinalDeUnTrabajoTests.ElTextoDelNodoVaYVuelveSinComillas;
 begin
+  // ...y los saltos de linea (J10 de la 1.28: el nodo los teclea como Intro desde la 1.29), tambien
+  // junto a lo que parece su marca escrita a mano (%0A, %250A)
   for var T in TArray<string>.Create('di "hola"', '100% seguro', '%22 escrito', '%"', '%25', '', 'sin nada',
-    'a' + #$00F1 + 'o "' + #$00E9 + '"') do
+    'a' + #$00F1 + 'o "' + #$00E9 + '"', 'uno' + #10 + 'dos', 'uno' + #13#10 + 'dos' + #13, '%0A escrito',
+    '%250A%0D', '%' + #10 + '%', #10#10) do
   begin
     var Ida := TextoParaElNodo(T);
     Assert.IsFalse(Ida.Contains('"'), 'sin comillas: ' + Ida);
+    Assert.IsFalse(Ida.Contains(#10) or Ida.Contains(#13), 'sin saltos (un argumento por linea): ' + Ida);
     Assert.AreEqual(T, TextoDelServidor(Ida), 'de vuelta igual: ' + Ida);
   end;
+  // lo que el nodo repite en su salida, en UNA linea: el servidor la lee por lineas
+  Assert.AreEqual('uno\ndos\ntres\n', TextoEnUnaLinea('uno' + #13#10 + 'dos' + #10 + 'tres' + #13));
+  // la linea de una ventana: su compositor (el del nodo) y su lector (el del servidor), un titulo con
+  // espacios entero (Split con tope lo cortaba) y uno con un salto en UNA linea (E7 de la 1.28)
+  var X, Y, W, H: Integer;
+  var Titulo: string;
+  var L := LineaDeVentana(10, -20, 300, 400, 'Experiencia de entrada');
+  Assert.IsFalse(L.Contains(#10), L);
+  Assert.IsTrue(LeeLineaDeVentana(L.Trim.Substring(L.Trim.IndexOf(' ') + 1), X, Y, W, H, Titulo), L);
+  Assert.AreEqual('10 -20 300 400 Experiencia de entrada', Format('%d %d %d %d %s', [X, Y, W, H, Titulo]));
+  L := LineaDeVentana(1, 2, 3, 4, 'uno' + #10 + 'CAPTURE=/etc/x');
+  Assert.IsFalse(L.Contains(#10), 'un titulo con salto no parte la linea: ' + L);
+  Assert.IsFalse(LeeLineaDeVentana('1 2 3 4', X, Y, W, H, Titulo), 'sin titulo no es una');
+  Assert.IsFalse(LeeLineaDeVentana('1 dos 3 4 t', X, Y, W, H, Titulo), 'un numero que no lo es');
+  Assert.AreEqual('  3 visible windows:', CabeceraDeVentanas(3));
 end;
 
 procedure TClaveDeCarpetaTests.UnaListaDeRutasSeparaLoQueNtfsSepara;

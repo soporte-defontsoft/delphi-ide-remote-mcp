@@ -492,17 +492,6 @@ function EsNombreDeMacro(const ANombre: string): Boolean;
   msbuild desescapa un valor tras expandirlo, y la puerta de lecturas juzga lo
   desescapado (H3, 22-oct-2026). }
 function DesescapaDeMsbuild(const S: string): string;
-{ Para cada elemento de AElementos (los de ElementosDe), si es de OTRO build
-  que APlatform/AConfig: esta en un PropertyGroup cuya Condition, o la suya,
-  es falsa (vNo) evaluada como msbuild en orden de documento, con las
-  propiedades que los grupos y elementos anteriores que se aplican dejan
-  puestas (el ultimo gana), dudosas las de los que no se sabe, y desconocidas
-  las que msbuild toma de fuera del documento: AExternas (la tabla con que el
-  build expande: la del IDE, rsvars.bat, las de msbuild) y el entorno del
-  servidor; una definida en el documento y aun no puesta vale ''. Lo que no
-  esta en un PropertyGroup no es de otro build. }
-function ElementosDeOtroBuild(const AXml, APlatform, AConfig: string;
-  const AElementos: TArray<TElementoXml>; const AExternas, AGlobales: TArray<string>): TArray<Boolean>;
 { Los trozos de un valor de lista del proyecto (a;b;c): partidos por ';', sin
   blancos alrededor y sin vacios. EL troceador de lo que lee la puerta del
   build - lo escrito y lo que expande un macro - que eran tres Split a pelo. }
@@ -3172,18 +3161,6 @@ begin
   end;
 end;
 
-function ElementosDeOtroBuild(const AXml, APlatform, AConfig: string;
-  const AElementos: TArray<TElementoXml>; const AExternas, AGlobales: TArray<string>): TArray<Boolean>;
-var
-  V: TArray<TVeredicto>;
-begin
-  // de otro build = su Condition o la de su grupo es FALSA; lo que no se
-  // sabe se juzga (una de mas es prudencia)
-  V := VeredictosDeElementos(AXml, APlatform, AConfig, AElementos, AExternas, AGlobales);
-  SetLength(Result, Length(V));
-  for var I := 0 to High(V) do
-    Result[I] := V[I] = vNo;
-end;
 
 function TrozosDeLista(const AValor: string): TArray<string>;
 begin
@@ -3381,8 +3358,10 @@ begin
   for var T in TramosDeEtiqueta(AXml, 'ProjectRoot', True) do
     if SameText(AtributoDeTramo(AXml, T, 'ProjectRoot', 'Platform').Trim, APlataforma) then
     begin
-      Result := StringReplace(AtributoDeTramo(AXml, T, 'ProjectRoot', 'Name').Trim, '$(PROJECTNAME)',
-        AProyecto, [rfIgnoreCase]);
+      // por EL expansor (una pasada, todas las veces que salga): era un
+      // StringReplace de la primera sola, que la regla no veia (D8 de la 1.28)
+      Result := ExpandeMacros(AtributoDeTramo(AXml, T, 'ProjectRoot', 'Name').Trim,
+        ['PROJECTNAME=' + AProyecto]);
       Break;
     end;
   // la carpeta de la entrada o, sin ella, la de su clase en esa plataforma

@@ -1055,9 +1055,8 @@ begin
       var Ends := EndsConPunto(CodigoPascal(Text));
       if Length(Ends) = 0 then
         Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
-      var NL := SaltoDominante(Text);
-      Text := Copy(Text, 1, Ends[0].Ini - 1) + 'contains' + NL + '  ' +
-        BuildEntry(Info, Include) + ';' + NL + NL + Copy(Text, Ends[0].Ini, MaxInt);
+      // por EL escritor de una clausula nueva (D9 del revisor de la 1.28)
+      EstrenaClausulaDelante(Text, Ends[0].Ini, 'contains', BuildEntry(Info, Include));
       PatchSaveText(Dpr, Text, Enc);
       Text := PatchLoadText(Dpr, Enc);
       U := FindUses(Text);
@@ -1529,7 +1528,7 @@ end;
 
 function AddPackageRequires(const AProject, ANames: string): string;
 var
-  Dpr, Dproj, Enc, Text, NL, Clausula, N, E: string;
+  Dpr, Dproj, Enc, Text, NL, N, E: string;
   Nombres, Nuevos: TStringList;
   Entradas, Existentes: TArray<string>;
   Ya: Boolean;
@@ -1588,7 +1587,7 @@ begin
         Text := ReplaceUses(Text, U, Entradas)
       else
       begin
-        Clausula := 'requires' + NL + '  ' + string.Join(',' + NL + '  ', Existentes) + ';';
+        // por EL escritor de una clausula nueva (D9 del revisor de la 1.28)
         // delante de contains (EL lector de la clausula: FindUses) o del end.
         // final (EL suyo: Lsp.Pascal). contains se buscaba al principio de una
         // linea, y en un .dpk de una linea el requires caia DETRAS de el
@@ -1602,7 +1601,7 @@ begin
           Donde := Ends[0].Ini;
         if Donde = 0 then
           Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
-        Text := Copy(Text, 1, Donde - 1) + Clausula + NL + NL + Copy(Text, Donde, MaxInt);
+        EstrenaClausulaDelante(Text, Donde, 'requires', string.Join(',' + NL + '  ', Existentes));
       end;
       PatchSaveText(Dpr, Text, Enc);
     finally

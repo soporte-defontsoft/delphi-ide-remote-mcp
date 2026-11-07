@@ -1963,22 +1963,9 @@ begin
       // ---------- RESTORE (2 steps) ----------
       if A.Restore then
       begin
-        var DirBk := CarpetaDePapelera(A.Path);
-        var Src := '';
-        if TDirectory.Exists(DirBk) then
-        begin
-          var Days := TDirectory.GetDirectories(DirBk);
-          TArray.Sort<string>(Days);
-          for I := High(Days) downto 0 do
-          begin
-            var Cand := TPath.Combine(Days[I], TPath.GetFileName(A.Path));
-            if EsCarpetaDeDia(TPath.GetFileName(Days[I])) and TFile.Exists(Cand) then
-            begin
-              Src := Cand;
-              Break;
-            end;
-          end;
-        end;
+        // la copia diaria mas reciente, por EL nombrador de la papelera y su
+        // lector (componia aqui el nombre a mano: B6 del revisor de la 1.28)
+        var Src := UltimaCopiaDiariaDe(A.Path);
         if Src = '' then
           Exit(MsgFmt(SR_EDIT_HAY_COPIA_SOLO_PUEDO_FMT,
             [TPath.GetFileName(A.Path), TrashFolderName]));
@@ -2486,7 +2473,11 @@ begin
             var FalloCausa := '';
             try
               FotoVis.Vigila(A.Path);
-              var Crudas := SplitToLines(DecodeBytes(TFile.ReadAllBytes(A.Path), K));
+              // releido por EL lector, que mide la codificacion OTRA VEZ: la
+              // primera escritura pudo fijarla (EDIT-080, un fichero que era
+              // ASCII puro) y K es la de antes (B7 del revisor de la 1.28)
+              var EncVis: string;
+              var Crudas := SplitToLines(PatchLoadText(A.Path, EncVis));
               // LA regla de la seccion (FinDeSeccion, la de adduses): la primera vez
               // que la palabra sale entera en el codigo, este donde este en su linea.
               // Se buscaba una linea que solo dijera eso: con 'implementation uses X;'

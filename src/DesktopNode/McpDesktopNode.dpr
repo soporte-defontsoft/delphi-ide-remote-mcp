@@ -110,10 +110,10 @@ var
         dice; la captura ya esta escrita y no se pierde por esto. }
       try
         Lista := Escritorio.Ventanas;
-        Writeln(Format('  %d ' + NODO_VENTANAS, [Length(Lista)]));
+        // por EL compositor de la lista (Lsp.TextoDelNodo; E7 de la 1.28)
+        Writeln(CabeceraDeVentanas(Length(Lista)));
         for V in Lista do
-          Writeln(Format('  ' + NODO_VENTANA + '%d %d %d %d %s',
-            [V.X, V.Y, V.Ancho, V.Alto, V.Titulo]));
+          Writeln(LineaDeVentana(V.X, V.Y, V.Ancho, V.Alto, V.Titulo));
       except
         on E: Exception do
           Writeln(MsgFmt(SN_NODE_VENTANAS_FALLO_LISTA_FMT, [E.Message]));
@@ -165,7 +165,7 @@ begin
         Sleep(250);
         Hizo := Escritorio.Escribir(Frase);
         if Hizo then
-          Writeln(MsgFmt(SK_NODE_ESCRITO_EN_PIXEL_FMT, [Frase, ObjX, ObjY]))
+          Writeln(MsgFmt(SK_NODE_ESCRITO_EN_PIXEL_FMT, [TextoEnUnaLinea(Frase), ObjX, ObjY]))
         else
           Writeln(MsgFmt(SR_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Escritorio.Error]));
       end;
@@ -175,7 +175,7 @@ begin
       Frase := TextoDesde(2);
       Hizo := Escritorio.Escribir(Frase);
       if Hizo then
-        Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_FMT, [Frase]))
+        Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_FMT, [TextoEnUnaLinea(Frase)]))
       else
         Writeln(MsgFmt(SR_NODE_NO_PUDE_ESCRIBIR_FMT, [Escritorio.Error]));
     end
@@ -388,11 +388,11 @@ var
       end
       else
         Writeln(MsgText(SN_NODE_VENTANAS_SIN_CONVERTIR));
-      Writeln(Format('  %d ' + NODO_VENTANAS, [Length(Lista)]));
+      Writeln(CabeceraDeVentanas(Length(Lista)));
       Writeln(MsgText(SN_NODE_NATIVAS_WAYLAND_NO_SALEN));
       for V in Lista do
-        Writeln(Format('  ' + NODO_VENTANA + '%d %d %d %d %s',
-          [Round(V.X * FX), Round(V.Y * FY), Round(V.Ancho * FX), Round(V.Alto * FY), V.Titulo]));
+        Writeln(LineaDeVentana(Round(V.X * FX), Round(V.Y * FY), Round(V.Ancho * FX),
+          Round(V.Alto * FY), V.Titulo));
     except
       on E: Exception do
         Writeln(MsgFmt(SN_NODE_VENTANAS_FALLO_LISTA_CLASE_FMT, [E.ClassName, E.Message]));
@@ -557,7 +557,7 @@ begin
             end
             else
             begin
-              Hizo := Manos.Combinacion([125]);
+              Hizo := Manos.Combinacion([EVDEV_SUPER]);
               if Hizo then
                 Writeln(MsgText(SK_NODE_SUPER_ENVIADO))
               else
@@ -580,7 +580,7 @@ begin
               Hizo := Manos.Escribir(Frase);
               if Hizo then
                 Writeln(MsgFmt(SK_NODE_ESCRITO_PIXEL_MAPA_FMT,
-                  [Frase, ObjX, ObjY, Manos.MapaNota]))
+                  [TextoEnUnaLinea(Frase), ObjX, ObjY, Manos.MapaNota]))
               else
                 Writeln(MsgFmt(SR_NODE_PULSE_BIEN_NO_ESCRIBIR_FMT, [Manos.Error]));
             end;
@@ -591,7 +591,7 @@ begin
             Frase := TextoDesde(2);
             Hizo := Manos.Escribir(Frase);
             if Hizo then
-              Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_MAPA_FMT, [Frase, Manos.MapaNota]))
+              Writeln(MsgFmt(SK_NODE_ESCRITO_TECLEADO_MAPA_FMT, [TextoEnUnaLinea(Frase), Manos.MapaNota]))
             else
               Writeln(MsgFmt(SR_NODE_NO_PUDE_ESCRIBIR_FMT, [Manos.Error]));
           end
@@ -629,7 +629,7 @@ begin
           else if Orden = NODO_ORDEN_ALTAB then
           begin
             { Alt+Tab: la via de teclado para cambiar de ventana. }
-            Hizo := Manos.Combinacion([56, 15]);
+            Hizo := Manos.Combinacion([EVDEV_ALT, EVDEV_TAB]);
             if Hizo then
               Writeln(MsgText(SK_NODE_ALT_TAB_ENVIADO))
             else

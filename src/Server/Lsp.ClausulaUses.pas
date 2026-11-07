@@ -96,6 +96,11 @@ function EntryInclude(const Entry: string): string;
 function EntryUnitName(const Entry: string): string;
 procedure EstrenaClausula(var AText: string; APos: Integer; const AEntradas: string;
   AEnLinea: Boolean = False);
+{ Estrena la clausula APalabra (contains, requires de un paquete) de AEntradas
+  DELANTE de APos (donde empieza lo que la sigue: el end. final, un contains),
+  con una linea en blanco detras, la forma del IDE. La componian a mano los dos
+  escritores de un .dpk (D9 del revisor del paisaje de la 1.28). }
+procedure EstrenaClausulaDelante(var AText: string; APos: Integer; const APalabra, AEntradas: string);
 function EstrenaUsesTrasCabecera(var AText: string; const AEntradas: string): Boolean;
 function InicioDeLaLinea(const ATexto: string; APos: Integer): Integer;
 function LeeEntradaDeUses(const AEntrada: string): TEntradaDeUses;
@@ -113,7 +118,8 @@ uses
   System.Character,
   Lsp.Texts,
   Lsp.Pascal,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Regex;
 
 { Splits the clause body on top-level commas (outside quotes, comments and
   directives; those stay glued to the entry they precede or follow). }
@@ -587,8 +593,9 @@ begin
         if M.Success then
         begin
           Result.Form := M.Groups[1].Value;
-          if (M.Groups.Count > 2) and M.Groups[2].Success then
-            Result.DesignClass := M.Groups[2].Value;
+          // un grupo opcional que no caso, por EL lector (GrupoDe; B5 de la 1.28)
+          if GrupoDe(M, 2) <> '' then
+            Result.DesignClass := GrupoDe(M, 2);
           Inc(I, M.Length);
         end;
       end;
@@ -1220,6 +1227,22 @@ end;
   UNA linea ('unit X; interface implementation end.'), pegada a la palabra en
   APos y en su misma linea, que se quedo a mano junto a su llamada (C3 del
   cierre de la 1.26). }
+{ EL cuerpo de una clausula nueva, la forma del IDE: la palabra, salto, dos
+  espacios, las entradas y el ';' (las de varias lineas ya traen sus saltos). }
+function CuerpoDeClausula(const APalabra, AEntradas, ANL: string): string;
+begin
+  Result := APalabra + ANL + '  ' + AEntradas + ';';
+end;
+
+procedure EstrenaClausulaDelante(var AText: string; APos: Integer; const APalabra, AEntradas: string);
+var
+  NL: string;
+begin
+  NL := SaltoDominante(AText);
+  AText := Copy(AText, 1, APos - 1) + CuerpoDeClausula(APalabra, AEntradas, NL) + NL + NL +
+    Copy(AText, APos, MaxInt);
+end;
+
 procedure EstrenaClausula(var AText: string; APos: Integer; const AEntradas: string;
   AEnLinea: Boolean = False);
 var
@@ -1232,7 +1255,7 @@ begin
     Exit;
   end;
   NL := SaltoDominante(AText);
-  Cuerpo := 'uses' + NL + '  ' + AEntradas + ';';
+  Cuerpo := CuerpoDeClausula('uses', AEntradas, NL);
   Fin := APos;
   while (Fin <= Length(AText)) and CharInSet(AText[Fin], [#10, #13]) do
     Inc(Fin);

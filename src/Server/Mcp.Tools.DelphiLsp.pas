@@ -155,7 +155,8 @@ uses
   Lsp.Rutas,
   Lsp.ClausulaUses,
   Lsp.Lineas,
-  Lsp.Puertas;
+  Lsp.Puertas,
+  Lsp.Regex;
 
 const
   MAX_COMPLETION_ITEMS = 50;
@@ -1164,7 +1165,7 @@ begin
     if MSec.Success then
     begin
       Seccion := LowerCase(MSec.Groups[1].Value);
-      if (MSec.Groups.Count < 3) or (MSec.Groups[2].Value.Trim = '') then
+      if GrupoDe(MSec, 2).Trim = '' then
       begin
         Inc(I);
         Continue;
@@ -1600,9 +1601,10 @@ begin
   begin
     Result := Result + Copy(AMarkdown, Desde, M.Index - Desde);
     var Ruta := TLspClient.UriToPath(M.Groups[2].Value);
-    // un grupo opcional que no casa no esta en Groups (Index out of bounds)
-    if (M.Groups.Count > 3) and (M.Groups[3].Value <> '') then
-      Result := Result + MsgFmt(SF_LSP_ENLACE_CON_LINEA_FMT, [M.Groups[1].Value, Ruta, M.Groups[3].Value])
+    // un grupo opcional que no casa no esta en Groups (Index out of bounds):
+    // EL lector que lo sabe, GrupoDe (B5 del revisor de la 1.28)
+    if GrupoDe(M, 3) <> '' then
+      Result := Result + MsgFmt(SF_LSP_ENLACE_CON_LINEA_FMT, [M.Groups[1].Value, Ruta, GrupoDe(M, 3)])
     else
       Result := Result + MsgFmt(SF_LSP_ENLACE_FMT, [M.Groups[1].Value, Ruta]);
     Desde := M.Index + M.Length;

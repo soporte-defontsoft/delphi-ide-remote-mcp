@@ -891,8 +891,9 @@ begin
     Result[0] := Result[0] + ATrozos[0];
   if Length(ATrozos) <= 1 then
     Exit;
+  // los trozos, un nivel mas adentro: EL nombrador de la sangria (C1-6 de la 1.28)
   for var T in ATrozos do
-    Result := Result + [ASangria + '  ' + T];
+    Result := Result + [ASangria + SangriaDeNivel(1) + T];
 end;
 
 function LeeLiteralDeForm(const AValor: string; out ATexto: string): Boolean;

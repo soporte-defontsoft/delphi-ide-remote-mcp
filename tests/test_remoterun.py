@@ -139,6 +139,26 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project'
 j = json.loads(r) if r.startswith('{') else {}
 check('exitCode del programa (7)', j.get('exitCode') == 7, r[:300])
 check('output capturado', 'hola desde el target' in (j.get('output') or ''), r[:300])
+# 3b) J18 del revisor del paisaje de la 1.28: sin exe=, el binario por EL nombrador (NombreDelBinario, con el
+# OutputExt del proyecto); era el nombre del proyecto a secas y en Windows el lanzador adivinaba el .exe. El
+# .exe se aparta mientras tanto: con el build de antes, "Saluda" -> Saluda.exe no esta y no corre nada
+APARTE = APP + '.aparte'
+BIN = os.path.join(DEPLOY, PROJNAME + '.bin')
+open(DPROJ, 'w', encoding='utf-8').write('<Project><PropertyGroup><OutputExt>bin</OutputExt></PropertyGroup></Project>')
+shutil.copy(APP, BIN)
+os.rename(APP, APARTE)
+try:
+    # (con nombres propios: los checks de mas abajo leen la r y la j del camino feliz; con la r de aqui el
+    # del modo sin cuadro pasaba por casualidad con el build nuevo y caia con el viejo, medido el 7-nov-2026)
+    r18 = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                                   'args': '"%s" uno dos' % SCRIPT.replace(chr(92), '/'), 'timeoutms': 30000}, t=180)
+finally:
+    os.rename(APARTE, APP)
+    os.remove(BIN)
+    open(DPROJ, 'w', encoding='utf-8').write('<Project/>')
+j18 = json.loads(r18) if r18.startswith('{') else {}
+check('J18 sin exe=: corre <proyecto>.<OutputExt> (Saluda.bin), no el nombre a secas',
+      j18.get('exitCode') == 7 and 'hola desde el target' in (j18.get('output') or ''), r18[:300])
 # Control POSITIVO: con RemoteHosts a OTRO host, remote-run al MISMO perfil se
 # deniega NOMBRANDO 127.0.0.1 - el host del perfil FALSO. Prueba que la puerta
 # leyo ESTE perfil (del APPDATA de prueba), no el real (donde 'perfil' no
@@ -465,11 +485,26 @@ finally:
 j = json.loads(r) if r.startswith('{') else {}
 check('desktop status contra un PAServer que no contesta: reachable=false con el motivo, sin error',
       j.get('reachable') is False and 'error' not in j and 'E0003' in (j.get('hint') or ''), r[:300])
-# desktop type con un salto de linea: UNA linea, dicho antes de nada (DESK-027, con la tecla de Enter);
-# salia RUN-026 nombrando un "Argument 3" que el agente nunca mando (revisor del paisaje de la 1.28, J10)
-r = call('delphi_desktop', {'command': 'type', 'profile': PROFILE, 'text': 'uno\ndos'}, t=180)
-check('desktop type con un salto de linea: DESK-027, una linea y como se pulsa Enter (era RUN-026)',
-      mc.es(r, 'SR_DESKTOP_TYPE_UNA_LINEA') and 'Argument' not in r, r[:300])
+# desktop type con un salto de linea: salia RUN-026 nombrando un "Argument 3" que el agente nunca mando
+# (revisor del paisaje de la 1.28, J10); en la 1.28 DESK-027 "una linea", y desde la 1.29 el salto viaja
+# codificado y el nodo lo teclea como Intro: pasa la entrada y sigue hasta el nodo (aqui no hay nodo
+# empaquetado: DESK-021, sin teclear nada en ESTA maquina). Lo que no viaja es un NUL: DESK-027, antes de nada
+for texto in ('uno\ndos', 'uno\r\ndos\r'):
+    r = call('delphi_desktop', {'command': 'type', 'profile': PROFILE, 'text': texto}, t=180)
+    check('desktop type con salto %r: no se niega por el salto, llega a buscar el nodo (DESK-021)' % texto,
+          mc.es(r, 'SR_ADBLINUX_NONODE') and not mc.es(r, 'SR_DESKTOP_TYPE_NUL') and 'Argument' not in r, r[:300])
+r = call('delphi_desktop', {'command': 'type', 'profile': PROFILE, 'text': 'uno' + chr(0) + 'dos'}, t=180)
+check('desktop type con un NUL: DESK-027 antes de nada, sin "Argument"',
+      mc.es(r, 'SR_DESKTOP_TYPE_NUL') and 'Argument' not in r, r[:300])
+# J19 del revisor del paisaje de la 1.28: en un destino Windows una cifra SOLA es su tecla (el nodo la pulsa,
+# VK_0..VK_9) y el servidor la negaba; un numero de dos cifras sigue siendo un codigo de otro sistema. Sin nodo
+# empaquetado aqui: la cifra llega a buscarlo (DESK-021), sin pulsar nada en ESTA maquina
+r = call('delphi_desktop', {'command': 'key', 'profile': PROFILE, 'code': '5'}, t=180)
+check('J19 key code=5 en Windows: pasa la validacion y llega a buscar el nodo (era DESK needcode)',
+      mc.es(r, 'SR_ADBLINUX_NONODE') and not mc.es(r, 'SR_DESKTOP_NEEDCODE'), r[:300])
+r = call('delphi_desktop', {'command': 'key', 'profile': PROFILE, 'code': '28'}, t=180)
+check('J19 control: key code=28 en Windows sigue negado (un codigo evdev no es una tecla de Windows)',
+      mc.es(r, 'SR_DESKTOP_NEEDCODE'), r[:300])
 
 # ---- 2ab de la 1.18.2 (revisor, R1): una credencial de SOLO LECTURA no
 # ejecuta. delphi_desktop screenshot/status con project= corre ESE proyecto en

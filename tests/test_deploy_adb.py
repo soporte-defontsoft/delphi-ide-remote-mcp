@@ -229,6 +229,14 @@ out = srv.call('delphi_build', {"project": "x.dproj", "platform": "Win64",
                                 "deviceid": "x;y"})
 check('gate build: deviceid sucio rechazado (misma regla que adb)',
       mc.rechazado(out) and mc.es(out, 'SR_ADB_TARGET_FMT'), out[:250])
+# D6 del revisor del paisaje de la 1.28: deviceid llega a msbuild (/p:DeviceId=) y era texto libre con solo los
+# caracteres juzgados; ahora uno de los dispositivos que el workspace permite, como el device de delphi_adb
+out = srv.call('delphi_build', {"project": "x.dproj", "platform": "Win64", "deviceid": "SERIAL-AJENO"})
+check('gate build: deviceid limpio pero fuera de AdbAllowedDevices, negado (ADB-005, la lista de adb)',
+      mc.rechazado(out) and mc.es(out, 'SR_ADB_ALLOWLIST_FMT'), out[:250])
+out = srv.call('delphi_build', {"project": "x.dproj", "platform": "Win64", "deviceid": "ZZZ-NO-EXISTE"})
+check('gate build: control - un deviceid de la lista pasa la puerta (lo que diga despues es del build)',
+      not mc.es(out, 'SR_ADB_ALLOWLIST_FMT') and not mc.es(out, 'SR_ADB_TARGET_FMT'), out[:250])
 
 out = srv.call('delphi_build', {"project": "x.dproj", "platform": "Win64",
                                 "target": "Deploy;Evil"})

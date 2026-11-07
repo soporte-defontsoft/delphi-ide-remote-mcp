@@ -59,13 +59,11 @@ const
 { Lo que escribe el nodo (CAPTURE=, Could not capture:), en UN sitio. }
 {$I ..\DesktopNode\NodeProtocolo.inc}
 
-{ El nodo de escritorio EMPAQUETADO con el servidor: node\McpDesktopNode
-  junto al exe. '' si la distribucion no lo trae. }
-function BundledNodePath: string; overload;
-
-{ El mismo, eligiendo binario por la plataforma del target ('Win64',
-  'Linux64'...): a cada sistema el suyo. }
-function BundledNodePath(const APlataforma: string): string; overload;
+{ El nodo de escritorio EMPAQUETADO con el servidor (node\McpDesktopNode junto
+  al exe), eligiendo binario por la plataforma del target ('Win64',
+  'Linux64'...): a cada sistema el suyo. '' si la distribucion no lo trae. (La
+  forma sin plataforma no la llamaba nadie: E12 de la 1.28.) }
+function BundledNodePath(const APlataforma: string): string;
 
 { Deja el nodo del target AL DIA sin compilar nada (peticion David
   2026-09-19): compara el sello node.ver del target (SHA-256 del binario)
@@ -663,6 +661,20 @@ begin
   end;
 end;
 
+{ La negativa de un id de trabajo que kill y output no aceptan: '' si tiene la
+  forma de uno (EsIdDeTrabajo) y lo arranco ESTE proceso para ese perfil y ese
+  proyecto (TrabajoNuestro); si no, cual de las dos. EL juez de los dos: cada
+  uno lo escribia con sus dos errores (E9 del revisor del paisaje de la 1.28). }
+function TrabajoDenegado(const AJobId, AProfile, ADprojPath: string): string;
+begin
+  if not EsIdDeTrabajo(AJobId) then
+    Result := MsgText(SR_REMOTERUN_BADJOB)
+  else if not TrabajoNuestro(AJobId, AProfile, ADprojPath) then
+    Result := MsgFmt(SR_REMOTERUN_JOB_AJENO_FMT, [AJobId])
+  else
+    Result := '';
+end;
+
 { Trae <ADeployRel>/<job>.out del target y lo parte: el entorno grafico,
   lo que escribio el programa y, si TERMINO, su codigo. EL lector de ese
   fichero: remote-run mientras espera y output despues. False si no se
@@ -993,14 +1005,12 @@ function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
 var
   Rc: Integer;
 begin
-  if not EsIdDeTrabajo(AJobId) or not TrabajoNuestro(AJobId, AProfile, ADprojPath) then
+  var Veto := TrabajoDenegado(AJobId, AProfile, ADprojPath);
+  if Veto <> '' then
   begin
     Result := TJSONObject.Create;
     Result.AddPair('success', TJSONBool.Create(False));
-    if EsIdDeTrabajo(AJobId) then
-      Result.AddPair('error', MsgFmt(SR_REMOTERUN_JOB_AJENO_FMT, [AJobId]))
-    else
-      Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
+    Result.AddPair('error', Veto);
     Exit;
   end;
   Result := RemoteRun(AProfile, ADprojPath, VERBO_MATAR, [AJobId], 20000); // Lsp.NombresDeTrabajo (V196)
@@ -1024,16 +1034,11 @@ var
 begin
   Result := TJSONObject.Create;
   try
-  if not EsIdDeTrabajo(AJobId) then
+  var Veto := TrabajoDenegado(AJobId, AProfile, ADprojPath);
+  if Veto <> '' then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', MsgText(SR_REMOTERUN_BADJOB));
-    Exit;
-  end;
-  if not TrabajoNuestro(AJobId, AProfile, ADprojPath) then
-  begin
-    Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', MsgFmt(SR_REMOTERUN_JOB_AJENO_FMT, [AJobId]));
+    Result.AddPair('error', Veto);
     Exit;
   end;
   Pc := PaClientPath;
@@ -1123,12 +1128,6 @@ begin
     de donde viene este camino. }
   Result := EmpaquetadoConElServidor(NODE_PROJECT, APlataforma);
 end;
-
-function BundledNodePath: string;
-begin
-  Result := BundledNodePath('');
-end;
-
 
 { paclient no llego al PAServer: lo dice el, con esta frase (medido contra
   destinos apagados y contra una IP que no contesta). Su codigo de salida no lo

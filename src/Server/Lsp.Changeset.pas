@@ -241,15 +241,6 @@ end;
   pista o las lineas (era 'NOT FOUND' o 'AMBIGUOUS': forma 1 de la 1.26). El
   preview preguntaba con OTRA regla (exacta en una funcion, recortada en la
   otra) y decia limpio lo que el commit deshacia (octava revision). }
-{ La clave de "la linea L de ESE fichero" para el registro del preview de lo que
-  cada operacion escribe (Escritas): la linea de antes del lote y la ruta sin
-  mirar mayusculas ("17@d:\x\u.pas"; la forma "a|b" es la de las marcas de
-  parametros, ClaveDeParam, y test_paisaje la vigila). }
-function ClaveDeLineaEscrita(const APath: string; ALinea: Integer): string;
-begin
-  Result := IntToStr(ALinea) + '@' + ClaveDeRuta(APath);
-end;
-
 function ResuelveAncla(const AText, ALine: string; AAtLine: Integer;
   const AFichero: string; out ALinea: Integer): string;
 var
@@ -386,24 +377,25 @@ begin
         // 2026-08-24).
         if EsDelMotorPascal(Op.Path) then
         begin
-          FillChar(A, SizeOf(A), 0);
+          // old y new con el significado de las tools (SignificadoDeOldNew), no
+          // puestos a mano (B4 del revisor del paisaje de la 1.28); y el record
+          // a cero por Default, que no pisa strings (B11)
+          A := Default(TPatchArgs);
           A.Path := Op.Path;
           A.OldLine := Op.OldLine;
           A.NewText := Op.NewText;
-          A.HasOld := True;
-          A.HasNew := True;
+          SignificadoDeOldNew(Op.OldLine, Op.NewText, A.HasOld, A.HasNew);
           A.AtLine := Op.AtLine;
           A.Ensayo := AEnsayo;
           R := ExecutePatch(A);
         end
         else
         begin
-          FillChar(T, SizeOf(T), 0);
+          T := Default(TTextEditArgs);
           T.Path := Op.Path;
           T.OldLine := Op.OldLine;
           T.NewText := Op.NewText;
-          T.HasOld := True;
-          T.HasNew := True;
+          SignificadoDeOldNew(Op.OldLine, Op.NewText, T.HasOld, T.HasNew);
           T.AtLine := Op.AtLine;
           T.Ensayo := AEnsayo;
           R := ExecuteTextEdit(T);
@@ -544,7 +536,7 @@ end;
   and returns the first contradiction ('' when the plan still holds). }
 function PlanConflict(C: TChangeset): string;
 var
-  I, J: Integer;
+  I: Integer;
   Op: TStagedOp;
   Sub: TChangeset;
 
@@ -596,8 +588,6 @@ begin
       end;
       Sub.Ops.Add(Op);
     end;
-    J := 0; // keeps the compiler quiet about an unused counter
-    Inc(J);
   finally
     Sub.Free;
   end;
@@ -726,7 +716,6 @@ begin
     if Cmd = 'stage' then
     begin
       C.Previewed := False; // a new op invalidates any previous preview
-      FillChar(Op, SizeOf(Op), 0);
       Op := Default(TStagedOp);
       if AKind = 'edit' then Op.Kind := opEdit
       else if AKind = 'create' then Op.Kind := opCreate
@@ -816,9 +805,9 @@ begin
             // entero se rechaza: todo o nada, como siempre.
             if AFragment <> '' then
             begin
-              var Otros := '';
-              if AOldLine <> '' then
-                Otros := 'old';
+              // los otros modos que lleva, por LA regla de las tools
+              // (OtroModoConFragmento; B4 del revisor de la 1.28)
+              var Otros := OtroModoConFragmento(AOldLine <> '', AOldLine, False, 0, '');
               var LineaVieja, LineaNueva: string;
               Denied := FragmentoALinea(Op.Path, AFragment, ANewText, AAtLine,
                 Otros, LineaVieja, LineaNueva);
@@ -991,16 +980,16 @@ begin
               Obj.AddPair('anchor', Negado);
               Inc(N);
             end
-            else if Escritas.ContainsKey(ClaveDeLineaEscrita(Op.Path, Op.AtLine)) then
+            else if Escritas.ContainsKey(ClaveDeLinea(Op.Path, Op.AtLine)) then
             begin
               Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_YA_ESCRITA_FMT,
-                [Op.AtLine, Escritas[ClaveDeLineaEscrita(Op.Path, Op.AtLine)]]));
+                [Op.AtLine, Escritas[ClaveDeLinea(Op.Path, Op.AtLine)]]));
               Inc(N);
             end
             else
             begin
               Obj.AddPair('anchor', 'ok');
-              Escritas.AddOrSetValue(ClaveDeLineaEscrita(Op.Path, Op.AtLine), I + 1);
+              Escritas.AddOrSetValue(ClaveDeLinea(Op.Path, Op.AtLine), I + 1);
             end;
           end;
           if Op.Kind = opEdit then
@@ -1025,16 +1014,16 @@ begin
             // (codificacion, binario, la puerta, el +R) sin escribir; el
             // preview copiaba tres reglas del commit y le faltaban las
             // demas (decima revision)
-            else if Escritas.ContainsKey(ClaveDeLineaEscrita(Op.Path, LineaAncla)) then
+            else if Escritas.ContainsKey(ClaveDeLinea(Op.Path, LineaAncla)) then
             begin
               Obj.AddPair('anchor', MsgFmt(SF_CHSET_LINEA_YA_ESCRITA_FMT,
-                [LineaAncla, Escritas[ClaveDeLineaEscrita(Op.Path, LineaAncla)]]));
+                [LineaAncla, Escritas[ClaveDeLinea(Op.Path, LineaAncla)]]));
               Inc(N);
             end
             else if ApplyOne(Op, Err, True) then
             begin
               Obj.AddPair('anchor', 'ok');
-              Escritas.AddOrSetValue(ClaveDeLineaEscrita(Op.Path, LineaAncla), I + 1);
+              Escritas.AddOrSetValue(ClaveDeLinea(Op.Path, LineaAncla), I + 1);
             end
             else
             begin

@@ -67,9 +67,9 @@ type
 
     { The operational facts a host should tell its operator at startup, in
       order: the write jail, the vault, the credential situation, and where
-      the log goes. Each
-      entry is prefixed 'AVISO: ' when it is a warning, so a host can colour
-      or log it accordingly without re-deciding what is important. }
+      the log goes. A warning carries THE mark (SL_MARCA_AVISO, by ComoAviso,
+      the same as the notes of other units), so a host can colour or log it
+      accordingly without re-deciding what is important. }
     function StartupNotes: TArray<string>;
 
     { Logs StartupNotes, warnings as warnings. The same for every host: it
@@ -81,9 +81,6 @@ type
     property Registry: TMCPManagerRegistry read FRegistry;
     property Core: TMCPCoreManager read FCore;
   end;
-
-const
-  NOTE_WARNING_PREFIX = 'AVISO: ';
 
 implementation
 
@@ -110,7 +107,8 @@ uses
   Lsp.Settings,
   Lsp.Mascara,
   Lsp.PuertaDeLaLlamada,
-  Lsp.PurgaDelArranque;
+  Lsp.PurgaDelArranque,
+  Lsp.NetDrives;
 
 constructor TMcpHost.Create;
 begin
@@ -298,22 +296,15 @@ var
       Notes := Notes + [S];
   end;
 
-  // las notas de otra unidad: las que empiezan por SL_MARCA_AVISO son avisos
-  procedure AddNota(const S: string);
-  begin
-    if S.StartsWith(SL_MARCA_AVISO) then
-      Add(NOTE_WARNING_PREFIX + S)
-    else
-      Add(S);
-  end;
-
 var
   JailWarn: Boolean;
   Jail: string;
 begin
   Jail := WorkspaceJailSummary(JailWarn);
+  // un aviso lleva LA marca, la de las notas de las otras unidades, por su
+  // compositor (ComoAviso; era 'AVISO: ' a mano: A7 del revisor de la 1.28)
   if JailWarn then
-    Add(NOTE_WARNING_PREFIX + Jail)
+    Add(ComoAviso(Jail))
   else
     Add(Jail);
   Add(VaultSeedNote);
@@ -326,37 +317,37 @@ begin
   // Un settings.ini que esta y no se pudo leer: nada de el en vigor, y dicho
   // (David, 9-oct-2026: cerrado y nunca callado)
   if IniSinLeer <> '' then
-    Add(NOTE_WARNING_PREFIX + IniSinLeer);
+    Add(ComoAviso(IniSinLeer));
   if WorkspaceTokensConfigured then
     Add(MsgText(SL_SYS_BEARER_AUTH_ENABLED))
   else
   begin
-    Add(NOTE_WARNING_PREFIX + MsgFmt(SL_SYS_NO_CREDENTIALS_FMT, [MsgText(SF_TOKEN_NEEDED)]));
+    Add(ComoAviso(MsgFmt(SL_SYS_NO_CREDENTIALS_FMT, [MsgText(SF_TOKEN_NEEDED)])));
     // CreateHttpServer's fail-safe, said here with ITS condition: the .dpr
     // used to say it, only in terminal mode, whenever the interface was
     // 127.0.0.1 - credentials or not - and pointing at [Security], a
     // section retired in v0.98 (found by test_round24 on 2026-09-26).
     if Lsp.Settings.BindIP = '' then
-      Add(NOTE_WARNING_PREFIX + MsgText(SL_SYS_NO_BINDIP_LOCALHOST_ONLY));
+      Add(ComoAviso(MsgText(SL_SYS_NO_BINDIP_LOCALHOST_ONLY)));
   end;
   // One auth mechanism: workspaces. A legacy env pair shows up
   // here as the "default" workspace; misconfigured sections stop vanishing
   // silently (operator decision 2026-09-11).
   for var WsNote in WorkspaceStartupNotes do
-    AddNota(WsNote);
+    Add(WsNote);
   // las raices y referencias declaradas a las que no se llega AL ARRANCAR,
   // con su motivo (EL juez, sin salir a la red). Solo se dice: la jaula
   // queda como esta declarada (David, 10-oct-2026: una raiz de produccion
   // no existia y el arranque no lo dijo)
   for var NoEsta in RaicesNoDisponibles(SitiosDeclarados(False)) do
-    Add(NOTE_WARNING_PREFIX + MsgFmt(SL_SYS_RAIZ_NO_DISPONIBLE_ARRANQUE_FMT,
-      [NoEsta.Raiz, NoEsta.Motivo]));
+    Add(ComoAviso(MsgFmt(SL_SYS_RAIZ_NO_DISPONIBLE_ARRANQUE_FMT,
+      [NoEsta.Raiz, NoEsta.Motivo])));
   // Las instalaciones de Delphi de la maquina, cada una con la clave que el
   // operador copiaria a su settings.ini, y cual usa este servidor (David,
   // 5-oct-2026: un servidor es un Delphi).
   for var DelphiNote in NotasDeArranqueDelphi do
-    AddNota(DelphiNote);
-  AddNota(FNotaDelphiIni);
+    Add(DelphiNote);
+  Add(FNotaDelphiIni);
   Add(LogSinkNote);
   Result := Notes;
 end;
@@ -365,11 +356,9 @@ procedure TMcpHost.LogStartupNotes;
 var
   S: string;
 begin
+  // por EL lector de la marca (NotaAlLog), el de las notas de las otras unidades
   for S in StartupNotes do
-    if S.StartsWith(NOTE_WARNING_PREFIX) then
-      TLogger.Warning(S.Substring(Length(NOTE_WARNING_PREFIX)))
-    else
-      TLogger.Info(S);
+    NotaAlLog(S);
 end;
 
 function TMcpHost.CreateHttpServer(APort: Integer): TMCPIdHTTPServer;

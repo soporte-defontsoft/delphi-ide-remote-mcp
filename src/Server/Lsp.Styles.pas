@@ -1558,7 +1558,10 @@ var
 begin
   AHuella := '';
   N := ExtractFileName(ANombre);
-  Result := N.StartsWith(PREFIJO_CACHE_ESTILO, True) and N.EndsWith(EXT_CACHE_ESTILO, True) and
+  // sin el locale: el prefijo, ASCII como lo escribe su nombrador, y la
+  // extension como la compara el disco (A6 del revisor del paisaje de la 1.28)
+  Result := SameText(Copy(N, 1, Length(PREFIJO_CACHE_ESTILO)), PREFIJO_CACHE_ESTILO) and
+    TieneExtension(N, [EXT_CACHE_ESTILO]) and
     (Length(N) > Length(PREFIJO_CACHE_ESTILO) + Length(EXT_CACHE_ESTILO));
   if Result then
     AHuella := Copy(N, Length(PREFIJO_CACHE_ESTILO) + 1,

@@ -190,7 +190,7 @@ REGLAS = [
      [(u, '*') for u in ('Lsp.BuildRunner.pas', 'Lsp.Casa.pas', 'Lsp.DesignerMetaGen.pas',
                          'Lsp.Discovery.pas', 'Lsp.Guard.pas', 'Lsp.LogSink.pas', 'Lsp.Mudanzas.pas',
                          'Lsp.PackageMap.pas',
-                         'Lsp.Patch.pas', 'Lsp.ProjectUnits.pas', 'Lsp.Session.pas', 'Lsp.Styles.pas',
+                         'Lsp.ProjectUnits.pas', 'Lsp.Session.pas', 'Lsp.Styles.pas',
                          'Mcp.Tools.Messages.pas', 'Mcp.Tools.PAServer.pas',
                          'Mcp.Tools.Report.pas', 'Mcp.Tools.Styles.pas', 'Mcp.Tools.Vault.pas',
                          'Mcp.Tools.Workspace.pas', 'Mcp.Vault.Seed.pas', 'Mld.Sesion.pas',
@@ -366,14 +366,19 @@ REGLAS = [
     # de EstrenaClausula, que la inserta (forma 3 de la 1.26). Las plantillas de Lsp.Scaffold son esqueletos enteros
     # ...y su forma en linea (' uses A, B;' pegada a la palabra de una unit de una linea), que se quedo a mano al
     # lado de su llamada y la regex no veia: blancos dentro del literal (C3 del revisor del cierre de la 1.26)
-    ('una clausula uses nueva compuesta a mano', r"'uses'\s*\+\s*\w+\s*\+\s*'  '|'\s+uses\s+'\s*\+",
+    # (y las de un paquete, contains y requires, que tambien componian a mano sus dos escritores: D9 del revisor
+    # del paisaje de la 1.28)
+    ('una clausula uses nueva compuesta a mano',
+     r"'(?:uses|contains|requires)'\s*\+\s*\w+\s*\+\s*'  '|'\s+uses\s+'\s*\+",
      [('Lsp.ClausulaUses.pas', 'EstrenaClausula')],
      'EstrenaClausula (Lsp.ClausulaUses): el escritor de una clausula uses nueva y su forma, la del IDE'),
     ('una extension juzgada con el locale',
      # (y las otras dos formas de juzgar el final de un nombre con el locale: EndsWith con IgnoreCase y
      # EndsText, CompareString del usuario; las vio el revisor del cierre de la 1.26, C5)
      r"\b(?:(?:Ansi)?(?:MatchText|IndexText)|AnsiSameText|AnsiCompareText)\s*\(\s*(?:TPath\.GetExtension|ExtractFileExt)\b|"
-     r"\.EndsWith\(\s*'\.\w+'\s*,\s*True\s*\)|\bEndsText\(\s*(?:'\.|\w*_EXT\b)",
+     # (y una constante EXT_ de la casa: EsManifiesto y el lector de la cache de estilos se le escapaban,
+     # A6 del revisor del paisaje de la 1.28)
+     r"\.EndsWith\(\s*(?:'\.\w+'|EXT_\w+|\w*_EXT\b)\s*,\s*True\s*\)|\bEndsText\(\s*(?:'\.|\w*_EXT\b|EXT_\w+)",
      # los nombres de DENTRO de un .chm (ITSS): no son del disco, y su juez es el del archivo
      [('Lsp.Docs.pas', '*')],
      'TieneExtension (Lsp.Rutas, forma 25 de la 1.26): la extension como la compara NTFS (RutaEnLista)'),
@@ -986,7 +991,8 @@ REGLAS = [
      r"'\s+[A-Za-z_][\w.]*\s+=\s+'\s*\+|\b\w*Prop\w*\s*\+\s*' = '\s*\+", [],
      'LineasDePropiedad (Lsp.DesignerBin): Prop = valor, y sus trozos en las lineas de debajo como el IDE '
      '(revision de la 1.17.0; la plantilla del frame FMX, 2.3 de la 1.18.0)'),
-    ('un valor de bloque preguntado a mano', r"CharInSet\(\s*\w+\[1\]\s*,\s*\['[(<{]'",
+    # (con el juego en cualquier orden: uno que empezaba por la comilla se le escapaba, C1-3 de la 1.28)
+    ('un valor de bloque preguntado a mano', r"CharInSet\(\s*\w+\[1\]\s*,\s*\[[^\]]*'[(<{]'",
      [('Lsp.DesignerBin.pas', 'EsValorDeBloque')],
      'EsValorDeBloque: una lista, un bloque binario o una coleccion (2.3 de la 1.18.0: tres a mano)'),
     ('la regex de una linea de propiedad', r"PATRON_IDENT_PUNTOS\s*\+\s*'\)\\s\*=",
@@ -1092,7 +1098,9 @@ REGLAS = [
     # una macro $(X) sustituida a mano. Los expansores eran DOS, deuda declarada (ExpandIdeMacros, cuatro pasadas, y
     # ExpandeReservadas, una), mas el $(ATag) de EffectiveProperty, y sustituian par a par volviendo a mirar lo
     # insertado; msbuild no lo mira (medido el 3-nov-2026). Ahora es UNO, sin Replace: la deuda, en cero (C17)
-    ('una macro sustituida a mano', r"\.Replace\(\s*'\$\(|StringReplace\([^,]+,\s*'\$\(",
+    # (el primer argumento puede llevar comas, una llamada: con [^,]+ se escapaba el de DestinoDeDespliegue,
+    # D8 del revisor del paisaje de la 1.28)
+    ('una macro sustituida a mano', r"\.Replace\(\s*'\$\(|StringReplace\([^;]*?,\s*'\$\(",
      [],
      'ExpandeMacros (Lsp.Dproj): EL expansor de $(X), una pasada, lo insertado no se vuelve a mirar'),
     # un $(X) recorrido a mano: eran seis recorridos y dos recortaban el nombre, que msbuild no recorta, aunque la
@@ -1875,6 +1883,18 @@ REGLAS = [
      'ayudante del render en la del form), y EsRutaAMedias para quien niega lo que no resuelve. El juez '
      'de los literales del render y la puerta del build miraban en la unidad del proceso lo que el '
      'ayudante y msbuild leen en la del form o la del proyecto (medido, test_rutas_a_medias_1230)'),
+    # un grupo de una regex que puede no estar (opcional, o mas alla de los que hay) juzgado a mano con
+    # Groups.Count: cuatro sitios cada uno a su manera (> 2, < 3, > 3 con Success) teniendo GrupoDe, el que
+    # lo sabe (B5 del revisor del paisaje de la 1.28)
+    ('un grupo de una regex juzgado a mano', r'\.Groups\.Count\b',
+     [('Lsp.Regex.pas', 'GrupoDe')],
+     'GrupoDe (Lsp.Regex, B5 de la 1.28): el valor del grupo, o vacio si no esta'),
+    # la clave de "la linea L de ese fichero" compuesta a mano: estaba con '@' en el changeset y con '|' en la
+    # herencia y el renombrado (B9 del revisor del paisaje de la 1.28)
+    ('la clave de una linea de un fichero a mano',
+     r"'@'\s*\+\s*ClaveDeRuta\b|ClaveDeRuta\([^;]*\)\s*\+\s*'[|@]'\s*\+\s*(?:IntToStr\(|\w+\.ToString\b)",
+     [('Lsp.Rutas.pas', 'ClaveDeLinea')],
+     'ClaveDeLinea (Lsp.Rutas, B9 de la 1.28)'),
 ]
 
 
@@ -2157,7 +2177,8 @@ PLANTADO = {
     'un literal de form leido a mano': "  N := V.Trim(['''']);",
     'la gramatica de un numero de un form': r"  if TRegEx.IsMatch(V, '^-?\d+(?:\.\d+)?$') then",
     'una linea de propiedad de un form compuesta a mano': "  T := '  Size.Width = ' + FlotanteFmx(320);",
-    'un valor de bloque preguntado a mano': "  if CharInSet(V[1], ['(', '<', '{']) then",
+    # la de Lsp.DesignerEdit.AlObjetoCargado hasta el 7-nov-2026, que la regla no veia (C1-3 de la 1.28)
+    'un valor de bloque preguntado a mano': "  if CharInSet(V[1], ['''', '#', '(', '<', '{']) then",
     'la regex de una linea de propiedad': r"  M := TRegEx.Match(L, '^(' + PATRON_IDENT_PUNTOS + ')\s*=\s*(.*)$');",
     'binario por el primer byte': "  if (B[0] = $FF) or EsFirmaFmx(B) then",
     'la distancia de edicion': "  D[J] := Min(Min(D[J] + 1, D[J - 1] + 1), P + C);",
@@ -2178,7 +2199,9 @@ PLANTADO = {
     'lo que recibe ParamStr juzgado a mano': "  if AArg.Contains('\"') then",
     'una linea citada sin su corte': "    Warns.Add(MsgFmt(SF_DSGN_LINEA_AVISO_FMT, [I + 1, ALines[I].Trim, AMsg]));",
     'un $(X) recorrido a mano': "  P := Pos('$(', AValor);",
-    'una macro sustituida a mano': "  T := T.Replace('$(BDS)', Raiz, [rfReplaceAll]);",
+    # la de Lsp.Dproj.DestinoDeDespliegue hasta el 7-nov-2026, que la regla no veia (D8 de la 1.28)
+    'una macro sustituida a mano':
+        "  R := StringReplace(AtributoDeTramo(AXml, T, 'ProjectRoot', 'Name').Trim, '$(PROJECTNAME)', P, []);",
     'la autorizacion de X de Wayland a mano': "  M := Home + '/.mutter-Xwaylandauth.*';",
     'la cuenta leida del entorno': "  U := GetEnvironmentVariable('USERNAME');",
     'el texto del nodo codificado a mano': "  T := T.Replace('\"', '%22');",
@@ -2264,6 +2287,10 @@ PLANTADO = {
         "  if not (SameText(Prop, 'StyleLookup') and LeeLiteralDeForm(Valor, Lookup)) then Continue;",
     # una segunda copia de la regla del pintado de FMX (B11 de la 1.28)
     'quien recorta lo que pinta FMX': '  if P.ClipChildren or TControlCrack(P).SmallSizeControl then',
+    # las de Lsp.DesignerForma y Lsp.ClausulaUses hasta el 7-nov-2026 (B5 de la 1.28)
+    'un grupo de una regex juzgado a mano': '  if M.Success and (M.Groups.Count > 2) then X := 1;',
+    # la de Lsp.Rename hasta el 7-nov-2026 (B9 de la 1.28)
+    'la clave de una linea de un fichero a mano': "  Hechas.Add(ClaveDeRuta(P) + '|' + IntToStr(L0));",
 }
 for regla in REGLAS:
     nombre = regla[0]
@@ -2281,6 +2308,24 @@ for forma in ("  Sb.AppendLine('    ' + XmlElemento('Profile_host', H));",
     cazados = fuera_de_casa(REGLA_LINEA, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
                                           'LineaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
     check('mutante "%s": tambien %s' % (REGLA_LINEA[0], forma.strip()), len(cazados) == 1, cazados)
+
+# las formas de la extension con el locale con una constante de la casa (A6 del revisor de la 1.28): las de
+# Lsp.Extensiones.EsManifiesto y Lsp.Styles.LeeNombreDeCacheDelEstilo hasta el 7-nov-2026
+REGLA_EXT = next(r for r in REGLAS if r[0] == 'una extension juzgada con el locale')
+for forma in ("  Result := APath.Trim.EndsWith(EXT_MANIFIESTO, True);",
+              "  Result := N.EndsWith(EXT_CACHE_ESTILO, True);"):
+    cazados = fuera_de_casa(REGLA_EXT, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                        'ExtAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_EXT[0], forma.strip()), len(cazados) == 1, cazados)
+
+# las clausulas nuevas de un paquete compuestas a mano (D9 del revisor de la 1.28): las de Lsp.ProjectUnits
+# hasta el 7-nov-2026
+REGLA_CLAUSULA = next(r for r in REGLAS if r[0] == 'una clausula uses nueva compuesta a mano')
+for forma in ("  T := 'contains' + NL + '  ' + Entrada + ';';",
+              "  C := 'requires' + NL + '  ' + string.Join(',' + NL + '  ', E) + ';';"):
+    cazados = fuera_de_casa(REGLA_CLAUSULA, [('Plantado.pas', 'unit Plantado;\nimplementation\nprocedure '
+                                             'ClausulaAMano;\nbegin\n' + forma + '\nend;\nend.\n')])
+    check('mutante "%s": tambien %s' % (REGLA_CLAUSULA[0], forma.strip()), len(cazados) == 1, cazados)
 
 # ...y la forma con SinMayusculas de cinco reglas (V108 de la 1.23.1): el pliegue de lo que no es
 # una ruta cambio de forma, y las reglas que buscaban .ToLower dejaron de ver su copia (la casa de

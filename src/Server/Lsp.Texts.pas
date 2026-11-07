@@ -50,9 +50,9 @@ const
   // ---------------------------------------------------------------------
   SERVER_NAME = 'delphi-lsp-mcp-service';
   { La marca de las notas de arranque que son un AVISO: la llevan las SL_ que
-    las anuncian (las de Lsp.Settings, Lsp.NetDrives, Lsp.DesignerMetaGen y
-    Lsp.Host) y la leen Lsp.Host y Lsp.NetDrives (NotaAlLog) para ponerles el
-    prefijo de aviso. Una
+    las anuncian (las de Lsp.Settings, Lsp.NetDrives y Lsp.DesignerMetaGen), la
+    pone a las demas ComoAviso y la lee NotaAlLog (Lsp.NetDrives los dos; Lsp.Host
+    tenia otra, 'AVISO: ', hasta la 1.29). Una
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
@@ -2798,16 +2798,16 @@ const
     'type: the text to write. Windows: typed as Unicode. Linux: key by key ' +
     'with the target''s own keyboard layout (Shift, AltGr, dead keys); a ' +
     'character it cannot compose (an emoji) is refused by name, and the ' +
-    'answer says which keyboard was used. Typed as ' +
+    'answer says which keyboard was used. A line break (LF, CRLF or CR) presses ' +
+    'Enter, once. Typed as ' +
     'TEXT, never run. With x,y it presses there first to focus the field.';
   SR_ADBLINUX_NEEDTEXT =
     '[DESK-002 INVALID_PARAM] type needs "text". If you also pass x and y, it ' +
     'presses there before writing: that is the real gesture, "write this ' +
     'here", and it starts up only once.';
-  SR_DESKTOP_TYPE_UNA_LINEA =
-    '[DESK-027 INVALID_PARAM] type writes ONE line, and this text has a line break ' +
-    '(or a NUL). Send each line in its own type and press Enter between them with ' +
-    'key (code=28 on Linux, code=enter on Windows). Nothing was typed.';
+  SR_DESKTOP_TYPE_NUL =
+    '[DESK-027 INVALID_PARAM] This text has a NUL character (U+0000), and that does ' +
+    'not travel to the target. Send the text without it. Nothing was typed.';
   SR_ADBLINUX_NONODE =
     '[DESK-021 INVALID_PARAM] delphi_desktop: neither "project" nor a ' +
     'bundled node for that system. Either the operator leaves the node ' +
@@ -11288,7 +11288,7 @@ const
   SP_BUILD_DEVICEID =
     'target=Deploy: device id - msbuild installs only on iOS devices with ' +
     'it; for Android, Deploy builds the .apk and delphi_adb install puts ' +
-    'it on a device.';
+    'it on a device. One of the devices this workspace allows (AdbAllowedDevices).';
 
   SD_BUILD_DIAGNOSTICS =
     'Compiler-grade errors/warnings/hints for one Delphi source file ' +

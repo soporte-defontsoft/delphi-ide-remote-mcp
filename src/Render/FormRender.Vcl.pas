@@ -514,7 +514,8 @@ begin
       if (GPeticion.Estilo <> '') and not SameText(GPeticion.Estilo, 'none') then
       begin
         if not TFile.Exists(GPeticion.Estilo) then
-          raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, ['style ' + GPeticion.Estilo]));
+          raise ERender.Create(MsgFmt(SR_RENDER_NO_EXISTE_FMT, [MsgFmt(SF_RENDER_FICHERO_DE_ESTILO_FMT,
+            [GPeticion.Estilo])]));
         TStyleManager.SetStyle(TStyleManager.LoadFromFile(GPeticion.Estilo));
         Designing := False;
         Responde(FR_STYLE, MsgFmt(SF_RENDER_ESTILO_VCL_FMT, [TStyleManager.ActiveStyle.Name, ExtractFileName(GPeticion.Estilo)]));
