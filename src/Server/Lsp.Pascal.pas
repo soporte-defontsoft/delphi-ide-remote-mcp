@@ -344,6 +344,11 @@ type
     Ini, NombreIni, NombreLen, Fin: Integer;
   end;
 function CabeceraDeFuente(const ACodigo: string; out ACab: TCabeceraFuente): Boolean;
+{ ...y su escritor: ATexto con ANuevo en lugar del nombre de su cabecera, en
+  su sitio (lo que lee CabeceraDeFuente, fuera de comentarios), el resto tal
+  cual. False sin cabecera con nombre. El "Save Project As" del IDE deja el
+  .dpr con program Nuevo (medido el 7-nov-2026; delphi_config save-as). }
+function TextoConNombreDeCabecera(const ATexto, ANuevo: string; out AResultado: string): Boolean;
 { El fuente ATexto es un PAQUETE: su cabecera dice package. Lo decide la
   cabecera, no la extension: dcc compila un .dpr que empieza por package en un
   .bpl y un .dpk que empieza por program en un .exe (medido el 24-oct-2026).
@@ -963,6 +968,18 @@ begin
     ACab.Nombre := TRegEx.Replace(MN.Groups[1].Value, '\s+', '');
   end;
   Result := True;
+end;
+
+function TextoConNombreDeCabecera(const ATexto, ANuevo: string; out AResultado: string): Boolean;
+var
+  Cab: TCabeceraFuente;
+begin
+  AResultado := ATexto;
+  // la vista del codigo guarda las posiciones del texto: lo que lee el
+  // lector se reescribe ahi mismo
+  Result := CabeceraDeFuente(CodigoPascal(ATexto), Cab) and (Cab.NombreLen > 0);
+  if Result then
+    AResultado := Copy(ATexto, 1, Cab.NombreIni - 1) + ANuevo + Copy(ATexto, Cab.NombreIni + Cab.NombreLen, MaxInt);
 end;
 
 function EndsConPunto(const ACodigo: string): TArray<TEndPunto>;

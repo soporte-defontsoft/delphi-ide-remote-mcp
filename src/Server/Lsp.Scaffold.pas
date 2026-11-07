@@ -46,6 +46,11 @@ function BadUnitName(const AName: string): string;
   quien crea el nombre. }
 function NotaDeNombreTapado(const AName, AFuente: string): string;
 
+{ LA regla del nombre de un proyecto NUEVO: un identificador que BadUnitName
+  deja pasar. '' si vale. La usan delphi_create kind=project-* y
+  delphi_config save-as. }
+function NombreDeProyectoNuevoDenegado(const AName: string): string;
+
 implementation
 
 uses
@@ -654,6 +659,13 @@ begin
       Exit(#10 + MsgFmt(SN_CREATE_NOMBRE_TAPADO_FMT, [AName, S + '.' + AName, Por, AName, S + '.' + AName]));
 end;
 
+function NombreDeProyectoNuevoDenegado(const AName: string): string;
+begin
+  if not EsIdentificador(AName) then
+    Exit(MsgFmt(SR_CREATE_IDENTIFICADOR_NOMBRE_PROYECTO_FMT, [AName]));
+  Result := BadUnitName(AName);
+end;
+
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
 var
   Kind, Dir, Dpr, Dproj, MainUnit, MainForm, Clash: string;
@@ -666,10 +678,7 @@ begin
     // them to write kind=console, which is refused too. Name the values that
     // work (field round 10).
     Exit(MsgText(SR_CREATE_PROJECT_KIND));
-  if not EsIdentificador(AName) then
-    Exit(MsgFmt(SR_CREATE_IDENTIFICADOR_NOMBRE_PROYECTO_FMT, [AName]));
-
-  Result := BadUnitName(AName);
+  Result := NombreDeProyectoNuevoDenegado(AName);
   if Result <> '' then
     Exit;
   if ADir.Trim = '' then

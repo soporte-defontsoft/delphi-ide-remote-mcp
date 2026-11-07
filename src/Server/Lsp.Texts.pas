@@ -3479,7 +3479,8 @@ const
     'option: the selectors Config and Platform (set-active changes them), ' +
     'the keys Base and Cfg_N with their flags (the IDE writes them when it ' +
     'declares a configuration or a platform: add-platform), ProjectGuid, ' +
-    'ProjectVersion and MainSource, the properties the IDE''s own ' +
+    'ProjectVersion and MainSource (a new name for the project: command=' +
+    'save-as), the properties the IDE''s own ' +
     'imports resolve their files through (BDS, APPDATA, ProductVersion...), ' +
     'which a project never defines, and the names msbuild reserves ' +
     '(MSBuild...). Nothing was written.';
@@ -9737,8 +9738,31 @@ const
     '| set-active | set-property | remove-property | get-property ' +
     '| add-searchpath | remove-searchpath | add-deployfile | ' +
     'remove-deployfile | add-unit | remove-unit | add-requires | ' +
-    'fix-references | add-project | remove-project (these last two, on a ' +
-    '.groupproj)';
+    'save-as | fix-references | add-project | remove-project (these last ' +
+    'two, on a .groupproj)';
+
+  // delphi_config save-as (C1 de la 1.29): el "Save Project As" del IDE,
+  // medido el 7-nov-2026. %s = el fuente nuevo, %s = el .dproj nuevo, %s = el
+  // fuente viejo, %s = el .dproj viejo
+  SN_CFG_SAVE_AS_FMT =
+    '[CFG-149] SAVED AS: %s and %s, as the IDE''s Save Project As writes ' +
+    'them - the main source with its new header, the project with its main ' +
+    'source, its names and the binary of each platform. %s and %s stay as ' +
+    'they were: Save As copies, and deleting the old ones is up to you ' +
+    '(delphi_delete). The .res comes with the first build; the .deployproj ' +
+    'is not copied (its remote folder has the old name), the first deploy ' +
+    'writes it again.';
+  SR_CFG_SAVE_AS_SIN_NOMBRE =
+    '[CFG-150 INVALID_PARAM] save-as needs "name": the new project name. ' +
+    'Nothing was written.';
+  // %s = el .dproj, %s = lo que nombra su MainSource
+  SR_CFG_SAVE_AS_SIN_FUENTE_FMT =
+    '[CFG-151 NOT_FOUND] %s names a main source that is not next to it ' +
+    '(%s): there is nothing to save as. Nothing was written.';
+  // %s = el fuente principal
+  SR_CFG_SAVE_AS_SIN_CABECERA_FMT =
+    '[CFG-152 INVALID_PARAM] %s has no program, library or package header ' +
+    'with a name, so the new one has nowhere to go. Nothing was written.';
 
   // Mensajes que estaban en linea en Mcp.Tools.DelphiLsp.pas (paso 3c, 27-sep-2026)
   SR_LSP_MODE_DEBE_SER_SUMMARY =
@@ -11177,8 +11201,8 @@ const
     '| add-searchpath | remove-searchpath | add-deployfile | ' +
     'remove-deployfile | add-unit | remove-unit | add-requires (packages: ' +
     'names for the .dpk requires clause, from requiresSuggested after a ' +
-    'W1033) | fix-references | add-project | remove-project. The ' +
-    'description says what each does.';
+    'W1033) | save-as (a copy under another name) | fix-references | ' +
+    'add-project | remove-project. The description says what each does.';
 
   SP_CFG_PLATFORM =
     'add/remove-platform: the platform name (Win32, Win64, Linux64, ' +
@@ -11216,7 +11240,7 @@ const
     'set-property / remove-property / get-property: the property, as the ' +
     '.dproj writes it (PF_KeyStoreDebug, DCC_Define...). To write, not the ' +
     'structure (Config, Platform, Base, Cfg_N...), a build event or a free ' +
-    'compiler option.';
+    'compiler option. save-as: the new project name.';
 
   SP_CFG_VALUE =
     'set-property: the text the property takes, one line, as the IDE would ' +
@@ -11251,7 +11275,8 @@ const
     'is gone or lies outside what you can read -, and the file stays on ' +
     'disk. fix-references, on a project or a group: re-points what was ' +
     'moved by hand, finding it by name in the workspace - one match only, ' +
-    'never a guess. On a .groupproj: view lists its projects, and ' +
+    'never a guess. save-as name=X: the IDE''s Save Project As. On a ' +
+    '.groupproj: view lists its projects, and ' +
     'add-project / remove-project write what the IDE''s Add existing ' +
     'project writes. set-property / remove-property / get-property: one ' +
     'property of the .dproj by name, in the group of the build platform= and ' +

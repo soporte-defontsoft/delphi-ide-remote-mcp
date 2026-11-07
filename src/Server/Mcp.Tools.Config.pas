@@ -155,7 +155,8 @@ uses
   Lsp.Mudanzas,
   Lsp.JuecesDeArgumentos,
   Lsp.PuertaDeLaLlamada,
-  Lsp.Settings;
+  Lsp.Settings,
+  Lsp.Scaffold;
 
 constructor TDelphiConfigTool.Create;
 begin
@@ -2335,6 +2336,63 @@ begin
   Result := MsgFmt(SN_CFG_PROPERTY_GET_FMT, [Nombre, Plat, Cfg, Donde, Valor, EnOtrosGrupos(Xml, Nombre)]);
 end;
 
+{ save-as (C1 de la 1.29): el "Save Project As" del IDE, medido el 7-nov-2026
+  con tres copias - COPIA, no renombra: el fuente principal nuevo con su
+  cabecera (TextoConNombreDeCabecera) y el .dproj nuevo como lo deja el IDE
+  (DprojConOtroNombre), en la carpeta del proyecto, los dos o ninguno y sin
+  pisar nada. El viejo se queda; el .res lo hace el primer build y el
+  .deployproj no se copia (su carpeta remota lleva el nombre viejo). Un
+  agente se quedaba sin camino: MainSource es estructura (CFG-132) y
+  delphi_textedit no escribe un .dproj (informe del 7-nov). }
+function GuardaComo(const ADproj, ANombre: string): string;
+var
+  Dir, Viejo, Nuevo, Main, MainNuevo, DprojNuevo, Texto, TextoNuevo, EncMain, Xml, EncXml: string;
+begin
+  Nuevo := ANombre.Trim;
+  if Nuevo = '' then
+    Exit(MsgText(SR_CFG_SAVE_AS_SIN_NOMBRE));
+  Result := NombreDeProyectoNuevoDenegado(Nuevo);
+  if Result <> '' then
+    Exit;
+  Dir := TPath.GetDirectoryName(TPath.GetFullPath(ADproj));
+  Viejo := TPath.GetFileNameWithoutExtension(ADproj);
+  Xml := PatchLoadText(ADproj, EncXml);
+  var MainEscrito := '';
+  for var V in AllTagValues(Xml, 'MainSource') do
+    if (MainEscrito = '') and SameText(TPath.GetFileNameWithoutExtension(V.Trim), Viejo) then
+      MainEscrito := V.Trim;
+  Main := RutaDesde(Dir, MainEscrito);
+  if (MainEscrito = '') or not TFile.Exists(Main) then
+    Exit(MsgFmt(SR_CFG_SAVE_AS_SIN_FUENTE_FMT, [TPath.GetFileName(ADproj), MainEscrito]));
+  MainNuevo := TPath.Combine(Dir, Nuevo + TPath.GetExtension(Main));
+  DprojNuevo := DprojDe(MainNuevo);
+  // nunca se pisa: ni el fuente ni el proyecto de ese nombre, de ninguna clase
+  if TFile.Exists(MainNuevo) or TFile.Exists(DprojNuevo) or TFile.Exists(TPath.Combine(Dir, Nuevo + '.dpr')) or
+     TFile.Exists(TPath.Combine(Dir, Nuevo + '.dpk')) then
+    Exit(MsgFmt(SR_CREATE_YA_EXISTE_PROYECTO_FMT, [Nuevo, Dir]));
+  Result := WriteTargetDenied(MainNuevo);
+  if Result = '' then
+    Result := WriteTargetDenied(DprojNuevo);
+  if Result <> '' then
+    Exit;
+  Texto := PatchLoadText(Main, EncMain);
+  if not TextoConNombreDeCabecera(Texto, Nuevo, TextoNuevo) then
+    Exit(MsgFmt(SR_CFG_SAVE_AS_SIN_CABECERA_FMT, [TPath.GetFileName(Main)]));
+  var XmlNuevo := DprojConOtroNombre(Xml, Dir, Viejo, Nuevo);
+  Result := FicherosTodoONada([MainNuevo, DprojNuevo],
+    function: string
+    begin
+      // como sus origenes: su codificacion y sus saltos de linea
+      PatchSaveText(MainNuevo, TextoNuevo, EncMain, False, True);
+      PatchSaveText(DprojNuevo, XmlNuevo, EncXml, False, True);
+      Result := '';
+    end);
+  if Result <> '' then
+    Exit;
+  Result := MsgFmt(SN_CFG_SAVE_AS_FMT, [TPath.GetFileName(MainNuevo), TPath.GetFileName(DprojNuevo),
+    TPath.GetFileName(Main), TPath.GetFileName(ADproj)]);
+end;
+
 { Los parametros de CADA comando, ademas de project y command. Uno que no es
   del comando se dice: set-output con path=".\bin" contestaba "puesto en
   Compiled" (su valor por defecto) ignorando lo que se pidio (sexta revision).
@@ -2344,7 +2402,7 @@ end;
 function ParametroQueSobra(const ACmd: string; const P: TDelphiConfigParams;
   out ASuyos, AVaCon: string): string;
 const
-  COMANDOS: array [0 .. 41] of string = (
+  COMANDOS: array [0 .. 43] of string = (
     'view', 'section',
     'add-platform', 'platform sdk profile',
     'remove-platform', 'platform',
@@ -2364,6 +2422,7 @@ const
     'add-unit', 'path autocreate',
     'remove-unit', 'path',
     'fix-references', '',
+    'save-as', 'name',
     'add-project', 'path',
     'remove-project', 'path');
 begin
@@ -2516,6 +2575,17 @@ begin
   end;
   if Cmd = 'fix-references' then
     Exit(ArreglaReferencias(Params.Project));
+  // ficheros NUEVOS a su lado: el proyecto no se toca (bajo el cerrojo de las
+  // ediciones, como ellas)
+  if Cmd = 'save-as' then
+  begin
+    EnterFileEdit;
+    try
+      Exit(GuardaComo(Proj, Params.Name));
+    finally
+      LeaveFileEdit;
+    end;
+  end;
 
   // Todo lo demas ESCRIBE el .dproj leyendolo, cambiandolo y guardandolo, asi
   // que va bajo el mismo cerrojo que las demas ediciones: dos agentes tocando

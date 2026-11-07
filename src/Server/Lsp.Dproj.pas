@@ -1168,6 +1168,16 @@ function NombreDelBinario(const AXml, ADir, ABase, APlatform, AConfig: string): 
   (DLL_Sharing de FireDAC) dice GenDll=true. Lo dice delphi_build. }
 function LibreriaSinGenDll(const AXml, ADir, APlatform, AConfig: string): Boolean;
 
+{ El .dproj AXml (en ADir, el del proyecto AViejo) como lo deja el "Save
+  Project As" del IDE con el nombre ANuevo (medido el 7-nov-2026 con tres
+  copias): MainSource, ProjectName, SanitizedProjectName y el <Source
+  Name="MainSource"> del nombre viejo pasan al nuevo, y de las entradas
+  ProjectOutput que llevan su <Platform>, el binario (su LocalName y su
+  RemoteName) por EL nombrador (NombreDelBinario). Las vacias y lo demas,
+  tal cual: lo demas va por $(MSBuildProjectName). Lo escribe delphi_config
+  save-as. }
+function DprojConOtroNombre(const AXml, ADir, AViejo, ANuevo: string): string;
+
 { TODAS las carpetas donde un build de ADprojPath (APlatform/AConfig) deja
   ficheros, tal como las declaran el .dproj y lo que importa del proyecto
   (un .optset): cada valor de cada DCC_*Output, en CUALQUIER grupo - las
@@ -4601,6 +4611,91 @@ begin
   Result := (FuenteDelBuild(AXml, ADir, APlatform, AConfig).Palabra = 'library') and
     not EsVerdadDeMsbuild(EffectiveProperty(AXml, 'GenDll', APlatform, AConfig)) and
     not EsVerdadDeMsbuild(EffectiveProperty(AXml, 'GenPackage', APlatform, AConfig));
+end;
+
+function DprojConOtroNombre(const AXml, ADir, AViejo, ANuevo: string): string;
+type
+  TCambio = record
+    Ini, Fin: Integer; // AXml[Ini .. Fin - 1] pasa a ser Texto
+    Texto: string;
+  end;
+var
+  Cambios: TArray<TCambio>;
+  MainViejo, MainNuevo: string;
+
+  procedure Cambia(AIni, AFin: Integer; const ATexto: string);
+  var
+    C: TCambio;
+  begin
+    C.Ini := AIni;
+    C.Fin := AFin;
+    C.Texto := ATexto;
+    Cambios := Cambios + [C];
+  end;
+
+  // cada <ATag> que vale AValor pasa a valer ANuevoValor
+  procedure CambiaLasQueValen(const ATag, AValor, ANuevoValor: string);
+  begin
+    for var T in TramosDeEtiqueta(AXml, ATag) do
+      if SameText(ValorDeTramo(AXml, T).Trim, AValor) then
+        Cambia(T.Ini, T.Fin, XmlEscape(ANuevoValor));
+  end;
+
+begin
+  Cambios := [];
+  // el fuente principal como lo nombra el proyecto (la <MainSource> de la
+  // compilacion vale 'MainSource' y se queda)
+  MainViejo := '';
+  for var V in AllTagValues(AXml, 'MainSource') do
+    if (MainViejo = '') and SameText(TPath.GetFileNameWithoutExtension(V.Trim), AViejo) then
+      MainViejo := V.Trim;
+  MainNuevo := ANuevo + TPath.GetExtension(MainViejo);
+  if MainViejo <> '' then
+    CambiaLasQueValen('MainSource', MainViejo, MainNuevo);
+  CambiaLasQueValen('ProjectName', AViejo, ANuevo);
+  CambiaLasQueValen('SanitizedProjectName', AViejo, ANuevo);
+  if MainViejo <> '' then
+    for var T in TramosDeEtiqueta(AXml, 'Source') do
+      if SameText(AtributoDeTramo(AXml, T, 'Source', 'Name'), 'MainSource') and
+         SameText(ValorDeTramo(AXml, T).Trim, MainViejo) then
+        Cambia(T.Ini, T.Fin, XmlEscape(MainNuevo));
+  // el binario de cada ProjectOutput con su <Platform Name="...">, por su
+  // build (como el IDE: LocalName y RemoteName; una <DeployFile .../> vacia
+  // se queda con el nombre viejo, medido)
+  for var T in TramosDeEtiqueta(AXml, 'DeployFile') do
+  begin
+    if not SameText(AtributoDeTramo(AXml, T, 'DeployFile', 'Class'), 'ProjectOutput') then
+      Continue;
+    var Plats := TramosDentro(AXml, 'Platform', T);
+    if Length(Plats) = 0 then
+      Continue;
+    var Plat := AtributoDeTramo(AXml, Plats[0], 'Platform', 'Name');
+    if Plat = '' then
+      Continue;
+    var Cfg := AtributoDeTramo(AXml, T, 'DeployFile', 'Configuration');
+    var BinViejo := NombreDelBinario(AXml, ADir, AViejo, Plat, Cfg);
+    var BinNuevo := NombreDelBinario(AXml, ADir, ANuevo, Plat, Cfg);
+    for var A in AtributosDeTramo(AXml, T) do
+      if SameText(A.Nombre, 'LocalName') then
+      begin
+        var Incl := ValorDeAtributo(AXml, A);
+        var Fich := TPath.GetFileName(Incl);
+        if SameText(Fich, BinViejo) then
+          Cambia(A.Ini, A.Fin, XmlEscapeEn(Incl.Substring(0, Incl.Length - Fich.Length) + BinNuevo, AXml[A.Fin]));
+      end;
+    for var R in TramosDentro(AXml, 'RemoteName', T) do
+      if SameText(ValorDeTramo(AXml, R).Trim, BinViejo) then
+        Cambia(R.Ini, R.Fin, XmlEscape(BinNuevo));
+  end;
+  // de atras adelante: las posiciones de delante no se mueven
+  TArray.Sort<TCambio>(Cambios, TComparer<TCambio>.Construct(
+    function(const A, B: TCambio): Integer
+    begin
+      Result := B.Ini - A.Ini;
+    end));
+  Result := AXml;
+  for var C in Cambios do
+    Result := Copy(Result, 1, C.Ini - 1) + C.Texto + Copy(Result, C.Fin, MaxInt);
 end;
 
 function NombreDelBinario(const AXml, ADir, ABase, APlatform, AConfig: string): string;
