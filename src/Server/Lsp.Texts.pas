@@ -9255,6 +9255,14 @@ const
     'command=install apk=<path> device=<serial>, open it with ' +
     'command=run app=<package>, and watch it with command=logcat.';
 
+  // un fuente library sin GenDll ni GenPackage: dcc lo deja como ejecutable (A17
+  // de la 1.29, medido el 7-nov-2026). %s = el binario que dejo
+  SN_BUILD_LIBRERIA_SIN_GENDLL_FMT =
+    '[BUILD-072] The main source is a library, but this build does not ask ' +
+    'dcc for one: it wrote %s as an executable. A library project says ' +
+    'GenDll=true (delphi_config set-property name=GenDll value=true), and ' +
+    'the next build writes the library.';
+
   { el Deploy de tienda de Android (BT_BuildType=AppStore en Android64): un
     .aab, que no se instala en un dispositivo (V117 de la 1.23.1) }
   SN_BUILD_AAB_NOTE =

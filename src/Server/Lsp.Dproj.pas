@@ -1161,6 +1161,13 @@ function ExpandOutputMacros(const AValue, ADir, ABase, APlatform,
   tabla de CodeGear.Common.Targets de la instalacion. }
 function NombreDelBinario(const AXml, ADir, ABase, APlatform, AConfig: string): string;
 
+{ El fuente principal de ESE build dice library y el .dproj no le pide a dcc
+  una biblioteca (ni GenDll ni GenPackage): dcc la deja como un ejecutable
+  (medido el 7-nov-2026: MideLib.exe). Un proyecto que paso a library por las
+  tools se quedaba asi (A17 de la 1.29); la libreria de los Samples del IDE
+  (DLL_Sharing de FireDAC) dice GenDll=true. Lo dice delphi_build. }
+function LibreriaSinGenDll(const AXml, ADir, APlatform, AConfig: string): Boolean;
+
 { TODAS las carpetas donde un build de ADprojPath (APlatform/AConfig) deja
   ficheros, tal como las declaran el .dproj y lo que importa del proyecto
   (un .optset): cada valor de cada DCC_*Output, en CUALQUIER grupo - las
@@ -4582,14 +4589,27 @@ begin
   end;
 end;
 
+{ Lo que dice del binario el fuente principal de ESE build: el que el .dproj
+  le da a msbuild (MainSource). }
+function FuenteDelBuild(const AXml, ADir, APlatform, AConfig: string): TNombreDelFuente;
+begin
+  Result := NombreDelFuente(RutaDesde(ADir, EffectiveProperty(AXml, 'MainSource', APlatform, AConfig).Trim));
+end;
+
+function LibreriaSinGenDll(const AXml, ADir, APlatform, AConfig: string): Boolean;
+begin
+  Result := (FuenteDelBuild(AXml, ADir, APlatform, AConfig).Palabra = 'library') and
+    not EsVerdadDeMsbuild(EffectiveProperty(AXml, 'GenDll', APlatform, AConfig)) and
+    not EsVerdadDeMsbuild(EffectiveProperty(AXml, 'GenPackage', APlatform, AConfig));
+end;
+
 function NombreDelBinario(const AXml, ADir, ABase, APlatform, AConfig: string): string;
 var
   Fuente: TNombreDelFuente;
   Ext, Prefijo, Version: string;
   Hay: Boolean;
 begin
-  // el fuente principal, el que el .dproj le da a msbuild (MainSource)
-  Fuente := NombreDelFuente(RutaDesde(ADir, EffectiveProperty(AXml, 'MainSource', APlatform, AConfig).Trim));
+  Fuente := FuenteDelBuild(AXml, ADir, APlatform, AConfig);
   // la extension de ESE build: la que declara el .dproj (OutputExt, con o sin
   // punto); si no, la de su clase por la tabla de la plataforma, la que msbuild
   // le pasa a dcc (-TX): GenPackage, GenDll o un ejecutable. Medido el 7-nov-2026:

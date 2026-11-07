@@ -3245,6 +3245,19 @@ begin
             Note := MsgText(SN_BUILD_APK_NOTE);
         end;
       end;
+      // un fuente library que el .dproj no compila como biblioteca (A17 de la
+      // 1.29): dcc deja un ejecutable con su nombre, medido. Android no: alli
+      // todo programa sale como .so, y no esta medido
+      if (Artifact <> '') and (Note = '') and (SistemaDePlataforma(Plat) <> spAndroid) then
+      begin
+        var DprojDeLaLib := TPath.GetFullPath(ADprojPath);
+        try
+          if LibreriaSinGenDll(LeeTexto(DprojDeLaLib, [ltJaula]), TPath.GetDirectoryName(DprojDeLaLib), Plat, Cfg) then
+            Note := MsgFmt(SN_BUILD_LIBRERIA_SIN_GENDLL_FMT, [TPath.GetFileName(Artifact)]);
+        except
+          // sin leerlo, sin nota: el binario de arriba es la respuesta
+        end;
+      end;
       if Artifact <> '' then
       begin
         Result.AddPair('output', Artifact);
