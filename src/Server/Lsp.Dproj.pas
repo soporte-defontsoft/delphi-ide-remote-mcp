@@ -1153,8 +1153,13 @@ function ExpandOutputMacros(const AValue, ADir, ABase, APlatform,
   21-oct-2026: el build Win32 de un proyecto real contesto "output" con un
   <proyecto>.exe de diciembre, el ultimo .exe que habia en la carpeta, mientras
   acababa de escribir el <proyecto>.<OutputExt> al lado; en Win64 no
-  contesto ninguno. }
-function NombreDelBinario(const AXml, ABase, APlatform, AConfig: string): string;
+  contesto ninguno. Y el de una LIBRERIA o un PAQUETE, como lo deja dcc (B1
+  de la 1.29, medido el 7-nov-2026: libMideLib.so, MidePaquete370.bpl y
+  bplMidePaquete370.so salian sin output): la clase la dice la cabecera del
+  fuente principal (en ADir, el de ABase), el prefijo, el sufijo y la version
+  sus directivas de nombre, y las extensiones y prefijos de cada plataforma la
+  tabla de CodeGear.Common.Targets de la instalacion. }
+function NombreDelBinario(const AXml, ADir, ABase, APlatform, AConfig: string): string;
 
 { TODAS las carpetas donde un build de ADprojPath (APlatform/AConfig) deja
   ficheros, tal como las declaran el .dproj y lo que importa del proyecto
@@ -1258,7 +1263,9 @@ uses
   Lsp.NetDrives,
   Lsp.Sandbox,
   Lsp.Pascal,
-  Lsp.Lineas;
+  Lsp.Lineas,
+  Lsp.Discovery,
+  Lsp.DesignerBin;
 
 { El '>' que cierra la etiqueta abierta antes de AFrom, saltando lo que va
   entre comillas: un Condition="'$(A)'>'1'" no la cierra. 0 si no hay. }
@@ -4495,30 +4502,141 @@ begin
         Exit(Prop);
 end;
 
-function NombreDelBinario(const AXml, ABase, APlatform, AConfig: string): string;
-var
-  Ext: string;
+type
+  // lo que dice el FUENTE del nombre de su binario, como lo lee dcc
+  TNombreDelFuente = record
+    Palabra: string;                // la de CabeceraDeFuente: library, package... ('' sin cabecera)
+    Prefijo, Sufijo, Version: string;
+    HayPrefijo: Boolean;            // {$LIBPREFIX ''} quita el de la plataforma
+  end;
+
+(* El argumento de las directivas LIBPREFIX, LIBSUFFIX o LIBVERSION: un literal
+   como el de un form ('abc', con su comilla doble), o AUTO en el sufijo: el de
+   los paquetes de ESTA instalacion, el de su compilador (TRadStudioInfo.
+   SufijoCompilador, '370' de bin\dcc32370.dll; medido el 7-nov-2026: LIBSUFFIX
+   AUTO deja MidePaquete370.bpl). Comentario entre parentesis: con llaves, la
+   llave de una directiva citada lo cerraria (EDIT-091). *)
+function ArgumentoDeLib(const AArg: string): string;
 begin
-  // la extension efectiva de ESE build (EffectiveProperty: el grupo de la
-  // plataforma y la config, como msbuild); los targets la ponen tras el punto
-  // (-TX.$(OutputExt)), con o sin punto delante en el .dproj
-  Ext := EffectiveProperty(AXml, 'OutputExt', APlatform, AConfig).Trim;
+  Result := AArg.Trim;
+  if SameText(Result, 'AUTO') then
+  begin
+    try
+      Result := DiscoverRadStudio.SufijoCompilador;
+    except
+      Result := '';
+    end;
+    Exit;
+  end;
+  var Texto: string;
+  if LeeLiteralDeForm(Result, Texto) then
+    Result := Texto;
+end;
+
+{ La clase del fuente principal y sus directivas de nombre, la ULTIMA de cada
+  una. msbuild no le pasa a dcc el DllSuffix del .dproj (CodeGear.Delphi.
+  Targets): el sufijo lo pone el fuente. Las ramas de un IFDEF no se evaluan:
+  limite declarado. }
+function NombreDelFuente(const AFuente: string): TNombreDelFuente;
+var
+  Texto: string;
+  Cab: TCabeceraFuente;
+begin
+  Result := Default(TNombreDelFuente);
+  if (AFuente = '') or not TFile.Exists(AFuente) then
+    Exit;
+  try
+    Texto := LeeTexto(AFuente, [ltJaula]);
+  except
+    Exit;
+  end;
+  if CabeceraDeFuente(CodigoPascal(Texto), Cab) then
+    Result.Palabra := Cab.Palabra;
+  for var D in DirectivasPascal(Texto) do
+    if D.Nombre = 'LIBPREFIX' then
+    begin
+      Result.Prefijo := ArgumentoDeLib(D.Argumento);
+      Result.HayPrefijo := True;
+    end
+    else if D.Nombre = 'LIBSUFFIX' then
+      Result.Sufijo := ArgumentoDeLib(D.Argumento)
+    else if D.Nombre = 'LIBVERSION' then
+      Result.Version := ArgumentoDeLib(D.Argumento);
+end;
+
+{ Una propiedad de la tabla de APlatform en CodeGear.Common.Targets de la
+  instalacion (ExeExt, DllExt, BplExt, DllPlatformPrefix, BplPlatformPrefix),
+  por EL evaluador, como UnitAliases (Lsp.ConfigFabricator): el juez de las
+  extensiones y prefijos de cada plataforma, que aqui estaban a mano.
+  AHay: False si no se pudo leer. }
+function DeLaTablaDePlataforma(const AProp, APlatform, AConfig: string; out AHay: Boolean): string;
+begin
+  AHay := False;
+  Result := '';
+  try
+    var Tabla := LeeTexto(TPath.Combine(BinDelIde(DiscoverRadStudio.RootDir),
+      'CodeGear.Common.Targets'), [ltIde]);
+    Result := EffectiveProperty(Tabla, AProp, APlatform, AConfig).Trim;
+    AHay := True;
+  except
+  end;
+end;
+
+function NombreDelBinario(const AXml, ADir, ABase, APlatform, AConfig: string): string;
+var
+  Fuente: TNombreDelFuente;
+  Ext, Prefijo, Version: string;
+  Hay: Boolean;
+begin
+  // el fuente principal, el que el .dproj le da a msbuild (MainSource)
+  Fuente := NombreDelFuente(RutaDesde(ADir, EffectiveProperty(AXml, 'MainSource', APlatform, AConfig).Trim));
+  // la extension de ESE build: la que declara el .dproj (OutputExt, con o sin
+  // punto); si no, la de su clase por la tabla de la plataforma, la que msbuild
+  // le pasa a dcc (-TX): GenPackage, GenDll o un ejecutable. Medido el 7-nov-2026:
+  // un fuente library sin GenDll deja MideLib.EXE
+  Ext := EffectiveProperty(AXml, 'OutputExt', APlatform, AConfig).Trim.TrimLeft(['.']);
+  if Ext = '' then
+  begin
+    if EsVerdadDeMsbuild(EffectiveProperty(AXml, 'GenPackage', APlatform, AConfig)) then
+      Ext := DeLaTablaDePlataforma('BplExt', APlatform, AConfig, Hay)
+    else if EsVerdadDeMsbuild(EffectiveProperty(AXml, 'GenDll', APlatform, AConfig)) then
+      Ext := DeLaTablaDePlataforma('DllExt', APlatform, AConfig, Hay)
+    else
+      Ext := DeLaTablaDePlataforma('ExeExt', APlatform, AConfig, Hay);
+    if not Hay then
+      Ext := ExtensionDeEjecutable(APlatform).TrimLeft(['.']);
+  end;
   if Ext <> '' then
-    Result := ABase + '.' + Ext.TrimLeft(['.'])
+    Ext := '.' + Ext;
+  // el prefijo lo pone dcc por la CLASE del fuente (medido: un library con
+  // AppType=Console deja libMideLib.so en Linux64): el de la tabla, salvo un
+  // {$LIBPREFIX}; y en Android tambien a un programa (libAndExt.so, medido el
+  // 23-oct-2026; R11 del censo de Fable)
+  if Fuente.HayPrefijo then
+    Prefijo := Fuente.Prefijo
+  else if Fuente.Palabra = 'library' then
+    Prefijo := DeLaTablaDePlataforma('DllPlatformPrefix', APlatform, AConfig, Hay)
+  else if Fuente.Palabra = 'package' then
+    Prefijo := DeLaTablaDePlataforma('BplPlatformPrefix', APlatform, AConfig, Hay)
+  else if SistemaDePlataforma(APlatform) = spAndroid then
+    Prefijo := 'lib'
   else
-    Result := ABase + ExtensionDeEjecutable(APlatform);
-  // en Android el compilador le antepone lib (medido el 23-oct-2026:
-  // libAndExt.so, y con OutputExt=mx libAndExt.mx). Se componia a mano en el
-  // manifiesto de Android y en ResolveBuildOutput, que solo probaba lib
-  // delante de un .so y con OutputExt no daba output (R11 del censo de Fable)
-  if SistemaDePlataforma(APlatform) = spAndroid then
-    Result := 'lib' + Result;
+    Prefijo := '';
+  Version := '';
+  if Fuente.Version <> '' then
+    Version := '.' + Fuente.Version;
+  // el orden de CodeGear.Delphi.Targets (OutputFilename): en Linux32 y Android
+  // la version va detras de la extension (libX.so.1), en el resto delante
+  if MatchText(APlatform, ['Linux32', 'Android', 'Android64']) then
+    Result := Prefijo + ABase + Fuente.Sufijo + Ext + Version
+  else
+    Result := Prefijo + ABase + Fuente.Sufijo + Version + Ext;
 end;
 
 function ResolveBuildOutput(const ADprojPath, APlatform, AConfig: string): string;
 var
-  Xml, Dir, Base, D, Cand, Ext, Artifact, Nombre: string;
-  ArtifactExts, Nombres, Dirs: TArray<string>;
+  Xml, Dir, Base, D, Cand, Artifact, Nombre: string;
+  Nombres, Dirs: TArray<string>;
   Best: string;
   BestTime, T: TDateTime;
 
@@ -4538,30 +4656,15 @@ begin
     Exit;
   end;
   Base := TPath.GetFileNameWithoutExtension(ADprojPath);
-  // What a build leaves per platform family: Windows .exe/.dll/.bpl, Linux
-  // an ELF WITHOUT extension (plus .so), macOS the same (plus .dylib), iOS
-  // its executable without extension (ExeExt vacia en CodeGear.Common.Targets;
-  // decia .so, que es el de Android). Measured 2026-08-23: a Linux64 build
-  // declared no output at all and the agent had to hunt the ELF with
-  // delphi_list.
-  case SistemaDePlataforma(APlatform) of
-    spWindows: ArtifactExts := ['.exe', '.dll', '.bpl'];
-    spLinux: ArtifactExts := ['', '.so'];
-    spMacOS: ArtifactExts := ['', '.dylib'];
-  else
-    ArtifactExts := [''];
-  end;
-  // los NOMBRES candidatos: con OutputExt declarada, o en Android (su
-  // lib<proyecto>.so), el que compone el nombrador y ninguno mas (un
-  // <proyecto>.exe viejo al lado no es el de este build); si no, el proyecto
-  // con cada extension de la plataforma
-  Nombres := [];
-  if (SistemaDePlataforma(APlatform) = spAndroid) or
-     (EffectiveProperty(Xml, 'OutputExt', APlatform, AConfig).Trim <> '') then
-    Nombres := [NombreDelBinario(Xml, Base, APlatform, AConfig)]
-  else
-    for Ext in ArtifactExts do
-      Nombres := Nombres + [Base + Ext];
+  // (Measured 2026-08-23: a Linux64 build declared no output at all and the
+  // agent had to hunt the ELF with delphi_list. Lo que deja cada plataforma lo
+  // dice ahora la tabla de los targets, en el nombrador)
+  // el NOMBRE es el que compone el nombrador y ninguno mas (un <proyecto>.exe
+  // viejo al lado no es el de este build). Antes solo con OutputExt o en
+  // Android; sin ellos se probaba el proyecto con cada extension de la
+  // plataforma, y una libreria de Linux64 (libX.so) o un paquete con sufijo
+  // (X370.bpl) salian sin output (B1 de la 1.29, medido)
+  Nombres := [NombreDelBinario(Xml, Dir, Base, APlatform, AConfig)];
   Best := '';
   BestTime := 0;
   // Las carpetas de ESTE build, por EL compositor y EL evaluador: se miraban

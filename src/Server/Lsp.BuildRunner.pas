@@ -913,7 +913,7 @@ begin
       Salida := CarpetaDelDespliegue(ADprojXml, ADir, AName, APlat, Cfg);
       Add(Salida + '\AndroidManifest.xml', '', 'AndroidManifest.xml',
         'ProjectAndroidManifest', True);
-      Add(Salida + '\' + NombreDelBinario(ADprojXml, AName, APlat, Cfg), Libs, Bin,
+      Add(Salida + '\' + NombreDelBinario(ADprojXml, ADir, AName, APlat, Cfg), Libs, Bin,
         'ProjectOutput', True);
       for E in APK_RES do
         Add(Salida + '\' + E.Src, E.Dir, E.Name, E.Cls, False);
@@ -960,7 +960,7 @@ begin
   OutDir := CarpetaDelDespliegue(ADprojXml, ADir, AName, APlat, ACfg);
   // el nombre del binario por EL nombrador (OutputExt de esa plataforma y
   // config, como lo escribe el IDE en el DeployFile: App.x64.exe)
-  Ext := NombreDelBinario(ADprojXml, AName, APlat, ACfg);
+  Ext := NombreDelBinario(ADprojXml, ADir, AName, APlat, ACfg);
   Include := IncludeTrailingPathDelimiter(OutDir) + Ext;
   Result := XmlDeployFile(Include, ACfg, AName + '\', Ext, 'ProjectOutput', 1, True);
 end;

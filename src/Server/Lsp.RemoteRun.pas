@@ -821,7 +821,8 @@ begin
     ExeLeaf := ProjName;
     try
       var Xml := LeeTexto(ADprojPath, [ltJaula]);
-      ExeLeaf := NombreDelBinario(Xml, ProjName, Plataforma, InfoDeDproj(Xml).ConfigPorDefecto);
+      ExeLeaf := NombreDelBinario(Xml, ExtractFileDir(ADprojPath), ProjName, Plataforma,
+        InfoDeDproj(Xml).ConfigPorDefecto);
     except
       // un .dproj que no se lee aqui: el nombre del proyecto, como antes
       on E: Exception do
