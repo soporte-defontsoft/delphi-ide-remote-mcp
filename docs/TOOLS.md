@@ -601,7 +601,7 @@ The launcher also takes care of the **graphical environment** of the target. On 
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Android devices for remote development: phones/tablets hang off THIS server (USB or wifi adb) while you program from anywhere. Each subcommand is in "command"; discover gives the ip:port of what announces wireless debugging, and connect attaches it (Android 11+: pair it once first). The adb used is the one of the IDE's own Android SDK. Building the .apk is delphi_build target=Deploy (the deployment manifest is generated if missing). screenshot (the screen, in this answer), tap and key are your eyes and hands on the device, and logcat shows what the app did. Typical flow: discover -> connect -> devices -> delphi_build target=Deploy -> install -> run -> screenshot -> tap -> logcat.
+Android devices for remote development: phones/tablets hang off THIS server (USB or wifi adb) while you program from anywhere. Each subcommand is in "command"; discover gives the ip:port of what announces wireless debugging, and connect attaches it (Android 11+: pair it once first). The adb used is the one of the IDE's own Android SDK. Building the .apk is delphi_build target=Deploy (the deployment manifest is generated or completed). screenshot (the screen, in this answer), tap and key are your eyes and hands on the device, and logcat shows what the app did. Typical flow: discover -> connect -> devices -> delphi_build target=Deploy -> install -> run -> screenshot -> tap -> logcat.
 
 *Access: mixed (`command` discover / devices / logcat / screenshot read-only; logcat only without out=; screenshot only without out=; every other command read-write, refused to a read-only credential).*
 

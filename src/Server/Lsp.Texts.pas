@@ -3051,7 +3051,7 @@ const
     'connect attaches it (Android 11+: pair it once first). The ' +
     'adb used is the one of the IDE''s own Android SDK. Building the .apk ' +
     'is delphi_build target=Deploy (the deployment manifest is generated ' +
-    'if missing). screenshot (the screen, in this answer), tap and key are ' +
+    'or completed). screenshot (the screen, in this answer), tap and key are ' +
     'your eyes and hands on the device, and logcat shows what the app did. ' +
     'Typical flow: discover -> connect -> devices -> delphi_build ' +
     'target=Deploy -> install -> run -> screenshot -> tap -> logcat.';
@@ -9276,6 +9276,19 @@ const
     'present and not listed. No install command exists by design - report ' +
     'a missing library with ' +
     'delphi_report.';
+
+  { un Deploy de Android con un .deployproj que no lo desplegaba (lo escribio el
+    deploy de otra plataforma, o el IDE con el grupo vacio): se completo con el
+    mapa de Android (Lsp.BuildRunner.EnsureAndroidEntries; A19 de la 1.29). %s la
+    plataforma }
+  SN_BUILD_ANDROID_FILLED_FMT =
+    '[BUILD-073] The project''s .deployproj did not deploy %s in every ' +
+    'configuration it builds (one written by a deploy to another platform has ' +
+    'no Android entries, and msbuild then stops with E8712: AndroidManifest.xml ' +
+    'does not exist). The standard Android entries were added for the ' +
+    'configurations that had none - the generated AndroidManifest, ' +
+    'styles/strings/colors, default icons and splash artwork, the compiled ' +
+    'library -; the other platforms'' entries were not touched.';
 
   SN_BUILD_ANDROID_NEW =
     '[BUILD-039] No .deployproj existed, so the standard Android ' +
