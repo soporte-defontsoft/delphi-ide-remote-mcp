@@ -1889,6 +1889,11 @@ REGLAS = [
     ('un grupo de una regex juzgado a mano', r'\.Groups\.Count\b',
      [('Lsp.Regex.pas', 'GrupoDe')],
      'GrupoDe (Lsp.Regex, B5 de la 1.28): el valor del grupo, o vacio si no esta'),
+    # el final de una edicion del disenador (cerrojo, el form es el que se juzgo, escribir) copiado en cada
+    # comando: siete copias, y el delete tuvo el juez DENTRO del cerrojo (J9; C1-2 del revisor de la 1.28)
+    ('el cerrojo y la comprobacion de lo juzgado a mano', r'(?<!function )\bCambioDesdeQueSeJuzgo\s*\(',
+     [('Lsp.DesignerEdit.pas', 'EscribeLoJuzgado')],
+     'EscribeLoJuzgado (Lsp.DesignerEdit, C1-2 de la 1.28): con el cerrojo, solo comprobar y escribir'),
     # la clave de "la linea L de ese fichero" compuesta a mano: estaba con '@' en el changeset y con '|' en la
     # herencia y el renombrado (B9 del revisor del paisaje de la 1.28)
     ('la clave de una linea de un fichero a mano',
@@ -2289,6 +2294,8 @@ PLANTADO = {
     'quien recorta lo que pinta FMX': '  if P.ClipChildren or TControlCrack(P).SmallSizeControl then',
     # las de Lsp.DesignerForma y Lsp.ClausulaUses hasta el 7-nov-2026 (B5 de la 1.28)
     'un grupo de una regex juzgado a mano': '  if M.Success and (M.Groups.Count > 2) then X := 1;',
+    # las siete de Lsp.DesignerEdit hasta el 7-nov-2026 (C1-2 de la 1.28)
+    'el cerrojo y la comprobacion de lo juzgado a mano': '      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);',
     # la de Lsp.Rename hasta el 7-nov-2026 (B9 de la 1.28)
     'la clave de una linea de un fichero a mano': "  Hechas.Add(ClaveDeRuta(P) + '|' + IntToStr(L0));",
 }

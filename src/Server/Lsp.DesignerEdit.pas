@@ -1227,6 +1227,8 @@ function AbreFormParaJuzgar(const APath: string; ANecesitaPas, ANecesitaTabla: B
   out F: TFormEnEdicion; out AAntes, AAntesPas: TArray<Byte>): string; forward;
 function JuezQueTardo(const F: TFormEnEdicion): string; forward;
 function CambioDesdeQueSeJuzgo(const F: TFormEnEdicion; const AAntes, AAntesPas: TArray<Byte>): string; forward;
+function EscribeLoJuzgado(const F: TFormEnEdicion; const AAntes, AAntesPas: TArray<Byte>;
+  const AEscribe: TFunc<string>): string; forward;
 function DondeLoDejaElIde(var F: TFormEnEdicion; const ALineas: TArray<string>;
   const ANomObj, ANomPadre: string; var AIni: Integer; ALargo: Integer; ASinTabOrder: Boolean;
   out ANota: string; out ATabOrder: Integer; const AUnidad: string = ''): TArray<string>; forward;
@@ -2427,14 +2429,11 @@ begin
       DocI.Free;
     end;
     // con el cerrojo: el form y la unidad son los que se juzgaron
-    EnterFileEdit;
-    try
-      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
-      if Result = '' then
+    Result := EscribeLoJuzgado(F, Antes, AntesPas,
+      function: string
+      begin
         Result := EscribeFormYUnidad(F, F.Doc.TextoDe(DfmLineas), PasNuevo, True);
-    finally
-      LeaveFileEdit;
-    end;
+      end);
     if Result <> '' then
       Exit;
     // la linea del campo, en la unidad como ha quedado
@@ -3119,14 +3118,11 @@ begin
     F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, [Info.Prop], NotaIde, NoGuarda, Otras));
     MarcaLoQueGuarda(Info, NoGuarda, Otras);
     // con el cerrojo: el form es el que se juzgo
-    EnterFileEdit;
-    try
-      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
-      if Result = '' then
+    Result := EscribeLoJuzgado(F, Antes, AntesPas,
+      function: string
+      begin
         Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
-    finally
-      LeaveFileEdit;
-    end;
+      end);
     if Result <> '' then
       Exit;
     // el arbol se releyo al guardar: su linea, la de ahora
@@ -3263,14 +3259,11 @@ begin
     for var I := 0 to High(Infos) do
       MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
     // con el cerrojo: el form es el que se juzgo
-    EnterFileEdit;
-    try
-      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
-      if Result = '' then
+    Result := EscribeLoJuzgado(F, Antes, AntesPas,
+      function: string
+      begin
         Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)
-    finally
-      LeaveFileEdit;
-    end;
+      end);
     if Result <> '' then
       Exit;
     Ret := TJSONObject.Create;
@@ -3413,17 +3406,12 @@ begin
       PonSuTabOrder(F, Lineas, NomObj, Tab);
     end;
     // con el cerrojo: el form es el que se juzgo
-    EnterFileEdit;
-    try
-      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
-      if Result = '' then
+    Result := EscribeLoJuzgado(F, Antes, AntesPas,
+      function: string
       begin
         F.Doc.SetLines(Lineas);
         Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
-      end;
-    finally
-      LeaveFileEdit;
-    end;
+      end);
     if Result <> '' then
       Exit;
     Ret := TJSONObject.Create;
@@ -3497,14 +3485,11 @@ begin
       Exit;
     Linea := Obj.StartLine;
     // con el cerrojo: el form y la unidad son los que se juzgaron
-    EnterFileEdit;
-    try
-      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
-      if Result = '' then
+    Result := EscribeLoJuzgado(F, Antes, AntesPas,
+      function: string
+      begin
         Result := EscribeFormYUnidad(F, Dfm, Pas, Pas <> F.PasTexto);
-    finally
-      LeaveFileEdit;
-    end;
+      end);
     if Result <> '' then
       Exit;
     LineaCampo := 0;
@@ -3993,6 +3978,26 @@ begin
   Result := '';
 end;
 
+{ EL final de toda edicion del disenador que escribe: con el cerrojo de
+  escritura, solo comprobar que el form (y la unidad, y lo que leyo el juez)
+  son los que se juzgaron (CambioDesdeQueSeJuzgo) y escribir (AEscribe); '' si
+  escribio. El juicio, el lento, va ANTES y fuera del cerrojo
+  (AbreFormParaJuzgar). Estaba copiado en los siete comandos que escriben, y el
+  delete lo tuvo con el juez dentro del cerrojo (J9 de la 1.28; C1-2 del revisor
+  del paisaje de la 1.28). }
+function EscribeLoJuzgado(const F: TFormEnEdicion; const AAntes, AAntesPas: TArray<Byte>;
+  const AEscribe: TFunc<string>): string;
+begin
+  EnterFileEdit;
+  try
+    Result := CambioDesdeQueSeJuzgo(F, AAntes, AAntesPas);
+    if Result = '' then
+      Result := AEscribe();
+  finally
+    LeaveFileEdit;
+  end;
+end;
+
 { set before= / after= / index=: el bloque del componente, entero, a su sitio
   nuevo entre sus hermanos, SOLO si el IDE lo guarda ahi - se le pregunta
   (ComoLoEscribeElIde: la propuesta cargada como la carga el designer y
@@ -4144,16 +4149,12 @@ begin
     end;
     // con el cerrojo, solo releer y escribir: el fichero tiene que ser el que
     // se juzgo (revisor 5 de la noche, A3)
-    EnterFileEdit;
-    try
-      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
-      if Result <> '' then
-        Exit;
-      F.Doc.SetLines(Lineas);
-      Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
-    finally
-      LeaveFileEdit;
-    end;
+    Result := EscribeLoJuzgado(F, Antes, AntesPas,
+      function: string
+      begin
+        F.Doc.SetLines(Lineas);
+        Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+      end);
     if Result <> '' then
       Exit;
     // su sitio y sus lineas, del arbol releido al guardar: sin el bloque que
@@ -4259,14 +4260,11 @@ begin
     if Result <> '' then
       Exit;
     // con el cerrojo: el form y la unidad son los que se juzgaron
-    EnterFileEdit;
-    try
-      Result := CambioDesdeQueSeJuzgo(F, Antes, AntesPas);
-      if Result = '' then
+    Result := EscribeLoJuzgado(F, Antes, AntesPas,
+      function: string
+      begin
         Result := EscribeFormYUnidad(F, Dfm, Pas, Pas <> F.PasTexto);
-    finally
-      LeaveFileEdit;
-    end;
+      end);
     // los usos que quedan, con las lineas de la unidad que QUEDA: el campo
     // y los manejadores que se fueron estaban por encima (3.8, Hermes)
     if (Result = '') and (Imp.Nota = '') and (F.PasTexto <> '') then
