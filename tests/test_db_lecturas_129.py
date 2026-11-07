@@ -102,16 +102,29 @@ def filas_sql(fmt_fecha, bool_lit, n_prefijo):
     return ', '.join(v)
 
 
-MS_DDL = ("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; CREATE TABLE dbo.%s (id int PRIMARY KEY, nombre "
+# la hija (1.29, DB-P4/P5): una clave ajena a la tabla, un indice y una nota de 30.000 caracteres
+HIJA = 't_db129h'
+LARGO = 30000
+MS_HIJA = ("CREATE TABLE dbo.%s (id int PRIMARY KEY, padre int NULL REFERENCES dbo.%s(id), nota nvarchar(max) "
+           "NULL); CREATE INDEX ix_%s_padre ON dbo.%s(padre); INSERT INTO dbo.%s (id, padre, nota) VALUES (1, 2, "
+           "REPLICATE(CAST(N'x' AS nvarchar(max)), %d));" % (HIJA, TABLA, HIJA, HIJA, HIJA, LARGO))
+PG_HIJA = ("CREATE TABLE %s (id int PRIMARY KEY, padre int REFERENCES %s(id), nota text); CREATE INDEX "
+           "ix_%s_padre ON %s(padre); INSERT INTO %s (id, padre, nota) VALUES (1, 2, repeat('x', %d));"
+           % (HIJA, TABLA, HIJA, HIJA, HIJA, LARGO))
+MS_DDL = ("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; " % (HIJA, HIJA) +
+          "IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; CREATE TABLE dbo.%s (id int PRIMARY KEY, nombre "
           "nvarchar(60) NULL, alta datetime2 NULL, importe decimal(10,2) NULL, activo bit NULL, foto varbinary(100) "
           "NULL); INSERT INTO dbo.%s (id, nombre, alta, importe, activo) VALUES %s; UPDATE dbo.%s SET foto = "
           "0x010203 WHERE id = 1;" % (TABLA, TABLA, TABLA, TABLA,
-                                     filas_sql("'%d-%02d-01'", lambda b: '1' if b else '0', 'N'), TABLA))
-PG_DDL = ("DROP TABLE IF EXISTS %s; CREATE TABLE %s (id int PRIMARY KEY, nombre varchar(60), alta timestamp, importe "
+                                     filas_sql("'%d-%02d-01'", lambda b: '1' if b else '0', 'N'), TABLA)
+          + ' ' + MS_HIJA)
+PG_DDL = ("DROP TABLE IF EXISTS %s; " % HIJA +
+          "DROP TABLE IF EXISTS %s; CREATE TABLE %s (id int PRIMARY KEY, nombre varchar(60), alta timestamp, importe "
           "numeric(10,2), activo boolean, foto bytea); INSERT INTO %s (id, nombre, alta, importe, activo) VALUES %s; "
           "UPDATE %s SET foto = '\\x010203' WHERE id = 1;" % (TABLA, TABLA, TABLA,
                                                              filas_sql("'%d-%02d-01'", lambda b: 'true' if b else
-                                                                       'false', ''), TABLA))
+                                                                       'false', ''), TABLA)
+          + ' ' + PG_HIJA)
 
 srv = None
 respuestas = []
@@ -212,6 +225,34 @@ try:
         check('L7 %s summary por anyo: suma y n' % motor,
               g == [{'alta:year': 2024, 'sum_importe': 13.5, 'n': 3}, {'alta:year': 2025, 'sum_importe': 18.0, 'n': 3}],
               r[:400])
+        # DB-P1 (1.29): sin order, las filas van por la clave primaria, y con un order que repite valores, la
+        # clave desempata: la pagina siguiente no repite ni salta filas. ROJO en PG contra 958be0fe: el UPDATE
+        # de la fila 1 la llevo al final del heap y sin ORDER BY salia 2,3,4,5,6,1
+        r = db({'command': 'rows', 'db': D, 'table': TABLA, 'fields': ['id'], 'limit': 2, 'offset': 2})
+        got = [f.get('id') for f in mc.como_json(r).get('rows', [])]
+        check('L16 %s sin order, limit 2, offset 2: [3, 4] (por la clave primaria)' % motor, got == [3, 4], r[:300])
+        got, rr = ids([], order='activo', limit=2, offset=1)
+        check('L16 %s order activo (valores repetidos), limit 2, offset 1: [3, 5] (desempata la clave)' % motor,
+              got == [3, 5], rr[:300])
+        # DB-P3: summary pagina con offset, y sus grupos desempatan por sus campos (n empata 3 y 3)
+        r = db({'command': 'summary', 'db': D, 'table': TABLA, 'group': ['activo'], 'limit': 1, 'offset': 1})
+        j = mc.como_json(r)
+        check('L17 %s summary con offset 1 y limit 1: el segundo grupo (activo verdadero) y su offset' % motor,
+              j.get('groups') == [{'activo': True, 'n': 3}] and j.get('offset') == 1, r[:300])
+        # DB-P5: fields dice las claves ajenas y los indices (del catalogo de la base)
+        j = mc.como_json(db({'command': 'fields', 'db': D, 'table': HIJA}))
+        fks = j.get('foreignKeys') or [{}]
+        ixs = {tuple(i.get('fields', [])): i for i in j.get('indexes', [])}
+        check('L18 %s fields: la clave ajena padre -> %s(id) y los indices (el primario y el de padre)' % (motor, TABLA),
+              len(fks) == 1 and fks[0].get('fields') == ['padre'] and fks[0].get('references', '').lower() == TABLA
+              and fks[0].get('referencedFields') == ['id'] and ixs.get(('id',), {}).get('primary') is True
+              and ('padre',) in ixs, j)
+        # DB-P4: un texto largo va cortado y lo dice (la primera fila va siempre: entraba entero)
+        r = db({'command': 'rows', 'db': D, 'table': HIJA, 'fields': ['nota']})
+        nota = (mc.como_json(r).get('rows') or [{}])[0].get('nota')
+        check('L19 %s una nota de %d caracteres: {text, length, truncated}, cortada a 20.000' % (motor, LARGO),
+              isinstance(nota, dict) and nota.get('truncated') is True and nota.get('length') == LARGO
+              and len(nota.get('text', '')) == 20000, str(nota)[:200] if not isinstance(nota, str) else len(nota))
         r = db({'command': 'summary', 'db': D, 'table': TABLA, 'values': [{'field': 'importe', 'op': 'max'}],
                 'filters': [{'field': 'activo', 'op': 'equals', 'value': True}]})
         check('L8 %s summary sin grupo: una fila con los totales' % motor,
@@ -279,8 +320,9 @@ finally:
     if srv:
         srv.cierra()
     try:
-        sql_mssql("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s;" % (TABLA, TABLA))
-        sql_pg('DROP TABLE IF EXISTS %s;' % TABLA)
+        sql_mssql("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE "
+                  "dbo.%s;" % (HIJA, HIJA, TABLA, TABLA))
+        sql_pg('DROP TABLE IF EXISTS %s; DROP TABLE IF EXISTS %s;' % (HIJA, TABLA))
     finally:
         mc.borra(BASE)
 mc.fin('delphi_db 1.29 (lecturas, MSSQL y PG)')

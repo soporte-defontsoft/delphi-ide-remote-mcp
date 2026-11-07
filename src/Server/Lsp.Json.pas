@@ -73,6 +73,11 @@ function TextoEnJson(const ATexto: string): string;
   hacia la tercera. }
 function TextoDeValor(const AValor: TJSONValue): string;
 
+{ AValores como un array JSON de cadenas, en su orden (lo libera quien lo
+  recibe, o el objeto al que se anade). Estaba local en delphi_designer y
+  delphi_db hacia la segunda. }
+function ArrayDeTextos(const AValores: TArray<string>): TJSONArray;
+
 implementation
 
 uses
@@ -242,6 +247,13 @@ begin
   finally
     V.Free;
   end;
+end;
+
+function ArrayDeTextos(const AValores: TArray<string>): TJSONArray;
+begin
+  Result := TJSONArray.Create;
+  for var V in AValores do
+    Result.Add(V);
 end;
 
 end.

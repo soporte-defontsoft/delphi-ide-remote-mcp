@@ -151,7 +151,7 @@ uses
   Lsp.Imagen,        // RecortaPngBytes: el recorte al componente, en el servidor
   Lsp.InlineImages,  // DeliverCapture: como se entrega una captura
   Lsp.DesignerEdit,  // insert / set / delete: el form y su unidad, como el IDE
-  Lsp.Json,          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre
+  Lsp.Json,          // ObjetoJson: la respuesta de layout, para el aviso de fuera del padre; ArrayDeTextos
   Lsp.Rutas,
   Lsp.Mascara,
   Lsp.Lineas,
@@ -1801,13 +1801,6 @@ var
       ConsumeAgentCapture(Temporal);
   end;
 
-  function Textos(const AValores: TArray<string>): TJSONArray;
-  begin
-    Result := TJSONArray.Create;
-    for var V in AValores do
-      Result.Add(V);
-  end;
-
 begin
   if Params.Path.Trim = '' then
     Exit(MsgText(SR_DESIGNER_NEED_PATH));
@@ -2006,7 +1999,7 @@ begin
     Return.AddPair('components', TJSONNumber.Create(R.Componentes));
     if Length(R.Sustituidas) > 0 then
     begin
-      Return.AddPair('substituted', Textos(R.Sustituidas));
+      Return.AddPair('substituted', ArrayDeTextos(R.Sustituidas));
       Return.AddPair('substitutedNote', MsgText(SN_DESIGNER_SUSTITUIDAS));
     end;
     if Length(R.Ignoradas) > 0 then
@@ -2087,7 +2080,7 @@ begin
         Return.AddPair('ignoredUserNote', MsgFmt(SN_DESIGNER_PREVIEW_DEL_USUARIO_FMT, [Suyas]));
     end;
     if Length(R.Avisos) > 0 then
-      Return.AddPair('warnings', Textos(R.Avisos));
+      Return.AddPair('warnings', ArrayDeTextos(R.Avisos));
     // los no visuales SIEMPRE, se dibujen o no (David, 7-oct-2026: lo que
     // el modelo necesita es saber que existen)
     NoVis := TJSONArray.Create;

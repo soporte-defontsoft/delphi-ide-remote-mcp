@@ -115,6 +115,19 @@ try:
         fs = filas(fields=['activo', 'alta']).get('rows')
         check('E5 %s update de varias filas: affected 2' % motor,
               afectadas(r) == 2 and fs == [{'activo': False, 'alta': '2026-11-06T00:00:00'}] * 2, (r[:300], fs))
+        # CH7 (1.29): lo que la base dice sale por la mascara de unidades (C:\ -> srvc:\) y el agente lo devuelve
+        # tal cual: el update escribia srvc:\ en la base. De vuelta, por EL inverso de la mascara (una unidad
+        # servida: la de la jaula). ROJO contra 958be0fe: en la base quedaba srvc:\ y el equals con la real no
+        # la encontraba
+        letra = JAIL[0].lower()
+        r = db({'command': 'update', 'db': D, 'table': TABLA, 'filters': UNO,
+                'values': [{'field': 'nombre', 'value': 'srv%s:\\ch7\\f.txt' % letra}]})
+        n = filas(fields=['id'], filters=[{'field': 'nombre', 'op': 'equals',
+                                           'value': '%s:\\ch7\\f.txt' % letra.upper()}]).get('total')
+        check('E15 %s update con una ruta de su unidad virtual: en la base queda la real' % motor,
+              afectadas(r) == 1 and n == 1, (r[:200], n))
+        # (la fila 1 vuelve a su nombre: E11 la mira despues)
+        db({'command': 'update', 'db': D, 'table': TABLA, 'filters': UNO, 'values': [{'field': 'nombre', 'value': NOMBRE}]})
         # sin filters lo niega la tool antes de conectar; con filters = [] llega la lista vacia (su texto JSON) y
         # lo niega la segunda barrera, la del WHERE vacio: sin ella, la fila 2 se iria
         for cmd, extra in (('update', {'values': [{'field': 'importe', 'value': 0}]}), ('delete', {})):

@@ -955,7 +955,7 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-The databases the operator gave this workspace, by NAME and through operations: you never write SQL - the server composes it from these fields and FireDAC turns it into each engine's dialect. connections lists them ("db" = project/alias, engine, readonly; the ones declared wrong under "unusable"); tables and fields, what one holds; rows reads (filters, fields, order, limit/offset, and always the total); summary groups and adds up; insert, update and delete write, only where readonly=false (update and delete only the rows their filters select, and they need filters), and say how many rows they touched. The server, the credentials and the real database stay with the operator.
+The databases the operator gave this workspace, by NAME and through operations: you never write SQL - the server composes it from these fields and FireDAC turns it into each engine's dialect. connections lists them ("db" = project/alias, engine, readonly; the ones declared wrong under "unusable"); tables and fields, what one holds (fields also its foreign keys and indexes); rows reads (filters, fields, order, limit/offset, and always the total); summary groups and adds up; insert, update and delete write, only where readonly=false (update and delete only the rows their filters select, and they need filters), and say how many rows they touched. The server, the credentials and the real database stay with the operator.
 
 *Access: mixed (`command` connections / tables / fields / rows / summary read-only; every other command read-write, refused to a read-only credential).*
 
@@ -966,9 +966,9 @@ The databases the operator gave this workspace, by NAME and through operations: 
 | `table` | string | optional | All but connections and tables: a table or view as tables lists it. |
 | `fields` | array | optional | rows: the fields to return (default: all but binary ones). |
 | `filters` | array | optional | rows, summary, update, delete: a list of {"field", "op", "value"}; all must hold. op: equals, not_equals, greater, less, greater_or_equal, less_or_equal, contains, starts_with, words (every word, any order), empty (value true/false). A date as yyyy-mm-dd or yyyy-mm-ddThh:mm:ss. |
-| `order` | string | optional | "field" or "field desc", comma separated; summary: also n, or a value as op_field (sum_total). |
+| `order` | string | optional | "field" or "field desc", comma separated; summary: also n, or a value as op_field (sum_total). rows are then ordered by the primary key, and summary's groups by their fields. |
 | `limit` | integer | optional | rows (default 100) and summary (default 50); at most 500. |
-| `offset` | integer | optional | rows: how many to skip, for the next page. |
+| `offset` | integer | optional | rows and summary: how many to skip, for the next page. |
 | `group` | array | optional | summary: the fields to group by; a date field also as field:year, field:month, field:day or field:hour. |
 | `values` | array | optional | summary: a list of {"field", "op"} - sum \| avg \| min \| max \| count; each group also carries n, its rows. insert, update: a list of {"field", "value"} to write (null writes NULL). |
 <!-- /contract -->

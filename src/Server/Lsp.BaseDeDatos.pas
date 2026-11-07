@@ -38,6 +38,22 @@ type
     Longitud, Precision, Escala: Integer;
   end;
 
+  { Una clave ajena de una tabla y un indice, como los dice el catalogo de la
+    base (los metadatos de FireDAC: mkForeignKeys/mkForeignKeyFields y
+    mkIndexes/mkIndexFields; DB-P5 de la 1.29): con ellos el agente sabe como
+    se relacionan las tablas sin adivinarlo por los nombres. }
+  TClaveAjenaDb = record
+    Nombre: string;
+    Campos: TArray<string>;
+    Tabla: string;                // la tabla a la que apunta
+    CamposDeAlla: TArray<string>; // sus campos, en el orden de Campos
+  end;
+  TIndiceDb = record
+    Nombre: string;
+    Unico, Primario: Boolean;
+    Campos: TArray<string>;
+  end;
+
 const
   // segundos que espera el servidor a que una base abra: SQL Server con un
   // host que no responde tardaba 42 s con LoginTimeout=5 (medido el 6-nov)
@@ -71,6 +87,11 @@ function TablasDeBase(AConn: TFDConnection; AVistas: Boolean): TArray<string>;
 
 { Los campos de ATabla, en su orden. }
 function CamposDeTabla(AConn: TFDConnection; const ATabla: string): TArray<TCampoDb>;
+
+{ Las claves ajenas de ATabla y sus indices, cada uno con sus campos en su
+  orden. }
+function ClavesAjenasDeTabla(AConn: TFDConnection; const ATabla: string): TArray<TClaveAjenaDb>;
+function IndicesDeTabla(AConn: TFDConnection; const ATabla: string): TArray<TIndiceDb>;
 
 { ANombre entrecomillado como lo pide el motor ([x] en MSSQL, "x" en PG): el
   de FireDAC, nunca uno nuestro. }
@@ -286,6 +307,28 @@ begin
   end;
 end;
 
+{ Una consulta de metadatos de AQue sobre el objeto AObjeto (una tabla, con
+  ABase vacio) o sobre el objeto AObjeto de la tabla ABase (los campos de un
+  indice o de una clave ajena), en el esquema de la conexion, ya abierta: LA
+  forma de pedirle a FireDAC el catalogo (los campos, las claves ajenas, los
+  indices). }
+function Metadatos(AConn: TFDConnection; AQue: TFDPhysMetaInfoKind;
+  const ABase, AObjeto: string): TFDMetaInfoQuery;
+begin
+  Result := TFDMetaInfoQuery.Create(nil);
+  try
+    Result.Connection := AConn;
+    Result.MetaInfoKind := AQue;
+    Result.SchemaName := AConn.CurrentSchema;
+    Result.BaseObjectName := ABase;
+    Result.ObjectName := AObjeto;
+    Result.Open;
+  except
+    Result.Free;
+    raise;
+  end;
+end;
+
 function CamposDeTabla(AConn: TFDConnection; const ATabla: string): TArray<TCampoDb>;
 var
   M: TFDMetaInfoQuery;
@@ -296,15 +339,11 @@ var
   Tam: LongWord;
 begin
   Result := [];
+  M := nil;
   Claves := TStringList.Create;
-  M := TFDMetaInfoQuery.Create(nil);
   try
     AConn.GetKeyFieldNames('', AConn.CurrentSchema, ATabla, '', Claves);
-    M.Connection := AConn;
-    M.MetaInfoKind := mkTableFields;
-    M.SchemaName := AConn.CurrentSchema;
-    M.ObjectName := ATabla;
-    M.Open;
+    M := Metadatos(AConn, mkTableFields, '', ATabla);
     while not M.Eof do
     begin
       C := Default(TCampoDb);
@@ -329,6 +368,77 @@ begin
   finally
     M.Free;
     Claves.Free;
+  end;
+end;
+
+{ Los campos de AObjeto (un indice o una clave ajena de ATabla) por su
+  COLUMN_POSITION, y los de la otra tabla (ACampoDeAlla, si se pide). }
+procedure CamposDeObjeto(AConn: TFDConnection; AQue: TFDPhysMetaInfoKind;
+  const ATabla, AObjeto, ACampoDeAlla: string; out ACampos, ADeAlla: TArray<string>);
+var
+  M: TFDMetaInfoQuery;
+begin
+  ACampos := [];
+  ADeAlla := [];
+  M := Metadatos(AConn, AQue, ATabla, AObjeto);
+  try
+    M.IndexFieldNames := 'COLUMN_POSITION';
+    M.First;
+    while not M.Eof do
+    begin
+      ACampos := ACampos + [M.FieldByName('COLUMN_NAME').AsString];
+      if ACampoDeAlla <> '' then
+        ADeAlla := ADeAlla + [M.FieldByName(ACampoDeAlla).AsString];
+      M.Next;
+    end;
+  finally
+    M.Free;
+  end;
+end;
+
+function ClavesAjenasDeTabla(AConn: TFDConnection; const ATabla: string): TArray<TClaveAjenaDb>;
+var
+  M: TFDMetaInfoQuery;
+  K: TClaveAjenaDb;
+begin
+  Result := [];
+  M := Metadatos(AConn, mkForeignKeys, '', ATabla);
+  try
+    while not M.Eof do
+    begin
+      K := Default(TClaveAjenaDb);
+      K.Nombre := M.FieldByName('FKEY_NAME').AsString;
+      K.Tabla := M.FieldByName('PKEY_TABLE_NAME').AsString;
+      CamposDeObjeto(AConn, mkForeignKeyFields, ATabla, K.Nombre, 'PKEY_COLUMN_NAME', K.Campos, K.CamposDeAlla);
+      Result := Result + [K];
+      M.Next;
+    end;
+  finally
+    M.Free;
+  end;
+end;
+
+function IndicesDeTabla(AConn: TFDConnection; const ATabla: string): TArray<TIndiceDb>;
+var
+  M: TFDMetaInfoQuery;
+  I: TIndiceDb;
+  Nada: TArray<string>;
+begin
+  Result := [];
+  M := Metadatos(AConn, mkIndexes, '', ATabla);
+  try
+    while not M.Eof do
+    begin
+      I := Default(TIndiceDb);
+      I.Nombre := M.FieldByName('INDEX_NAME').AsString;
+      I.Primario := TFDPhysIndexKind(M.FieldByName('INDEX_TYPE').AsInteger) = ikPrimaryKey;
+      I.Unico := TFDPhysIndexKind(M.FieldByName('INDEX_TYPE').AsInteger) in [ikUnique, ikPrimaryKey];
+      CamposDeObjeto(AConn, mkIndexFields, ATabla, I.Nombre, '', I.Campos, Nada);
+      Result := Result + [I];
+      M.Next;
+    end;
+  finally
+    M.Free;
   end;
 end;
 

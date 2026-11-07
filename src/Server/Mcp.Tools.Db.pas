@@ -74,6 +74,8 @@ uses
   Lsp.Guard, // ParametroQueNoVa: lo que no es del comando se dice
   Lsp.Settings, // LeeSiNo: LA gramatica del si/no
   Lsp.Conexiones,
+  Lsp.Listas, // PrincipioDeTexto: cortar sin partir un par UTF-16
+  Lsp.Mascara, // ExpandDriveValue: EL inverso de la mascara de unidades
   Lsp.BaseDeDatos;
 
 const
@@ -84,6 +86,10 @@ const
   // al menos una fila, y lo que no cabe se dice (truncated) - la leccion de
   // las tools de tablas de la casa: un "cuantos hay" no se trae las filas
   PRESUPUESTO_FILAS_DB = 60000;
+  // ...y lo que cabe de UN texto de una celda: la primera fila de una pagina va
+  // siempre, y un memo de 1 MB entraba entero en la respuesta (DB-P4 de la
+  // 1.29). Un tercio: caben tres asi en una fila sin pasar del presupuesto
+  LIMITE_TEXTO_CELDA_DB = PRESUPUESTO_FILAS_DB div 3;
   // las operaciones del agente: listas NUESTRAS (no hay juez; son el
   // contrato de la tool), cada una con lo que compone el servidor
   OPS_DE_FILTRO: array [0 .. 9] of string = ('equals', 'not_equals', 'greater',
@@ -186,7 +192,12 @@ begin
   else
     if not EsTexto(ACampo.TipoDeCampo) and (ACampo.TipoDeCampo <> ftGuid) then
       Exit;
-    AVar := S;
+    // Lo que la base dice sale por la mascara de unidades (D:\ -> srvd:\), y
+    // el agente lo devuelve tal cual: un update escribia srvd:\ en la base y
+    // un equals no lo encontraba (CH7 del revisor del paisaje de la 1.29). De
+    // vuelta, por EL inverso de la mascara, el de los argumentos de toda
+    // llamada: un valor entero que empieza por una unidad servida.
+    AVar := ExpandDriveValue(S);
   end;
   Result := True;
 end;
@@ -217,7 +228,17 @@ begin
     if EsBinario(F.DataType) then
       Result := TJSONString.Create(MsgFmt(SF_DB_BINARIO_FMT, [Length(F.AsBytes)]))
     else
-      Result := TJSONString.Create(F.AsWideString);
+    begin
+      var Texto := F.AsWideString;
+      if Length(Texto) <= LIMITE_TEXTO_CELDA_DB then
+        Exit(TJSONString.Create(Texto));
+      // cortado, y dicho: el principio (sin partir un par UTF-16) y lo que mide
+      var Cortado := TJSONObject.Create;
+      Cortado.AddPair('text', PrincipioDeTexto(Texto, LIMITE_TEXTO_CELDA_DB));
+      Cortado.AddPair('length', TJSONNumber.Create(Length(Texto)));
+      Cortado.AddPair('truncated', TJSONBool.Create(True));
+      Result := Cortado;
+    end;
   end;
 end;
 
@@ -374,7 +395,8 @@ begin
       begin
         if not EsTexto(C.TipoDeCampo) then
           Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['filters', I + 1, MsgFmt(SF_DB_FILTRO_TEXTO_FMT, [Op, C.Nombre, C.Tipo])]));
-        T := TextoDeValor(Obj.GetValue('value'));
+        // (una ruta que salio con su unidad virtual se busca con la real: CH7)
+        T := ExpandDriveValue(TextoDeValor(Obj.GetValue('value')));
         // sin nada que buscar casaria con TODAS las filas: LIKE '%%', y un
         // update o un delete con ese filtro las tocaba todas pasando la guarda
         // del WHERE (CH6 del revisor del paisaje de la 1.29)
@@ -408,9 +430,13 @@ end;
 
 { El ORDER BY de AOrden ("campo" o "campo desc", separados por comas): con
   AEtiquetas vacia, campos de ACampos; con ellas (summary), las columnas por
-  su posicion, que es lo que todos los motores entienden igual. }
+  su posicion, que es lo que todos los motores entienden igual. AUsados: lo que
+  ordena, cada uno una vez (el nombre del campo, o su posicion en summary),
+  para quien desempata detras sin repetirlo (SQL Server niega una columna dos
+  veces en un ORDER BY). }
 function ClausulaDeOrden(const S: TSesionDb; const AOrden, ATabla: string;
-  const ACampos: TArray<TCampoDb>; const AEtiquetas: TArray<string>; out AOrderBy: string): string;
+  const ACampos: TArray<TCampoDb>; const AEtiquetas: TArray<string>; out AOrderBy: string;
+  out AUsados: TArray<string>): string;
 var
   Partes: TArray<string>;
   C: TCampoDb;
@@ -419,6 +445,7 @@ var
 begin
   Result := '';
   AOrderBy := '';
+  AUsados := [];
   for var Trozo in AOrden.Split([',']) do
   begin
     Partes := Trozo.Trim.Split([' '], TStringSplitOptions.ExcludeEmpty);
@@ -432,12 +459,14 @@ begin
       if Pos < 0 then
         Exit(MsgFmt(SR_DB_ORDEN_FMT, [AOrden]));
       Item := IntToStr(Pos + 1);
+      AUsados := AUsados + [Item];
     end
     else
     begin
       if not CampoDe(ACampos, Partes[0], ATabla, C, Neg) then
         Exit(Neg);
       Item := CitaNombre(S.Conn, C.Nombre);
+      AUsados := AUsados + [C.Nombre];
     end;
     if (Length(Partes) = 2) and SameText(Partes[1], 'desc') then
       Item := Item + ' DESC';
@@ -584,6 +613,32 @@ begin
           if C.Clave then
             O.AddPair('key', TJSONBool.Create(True));
         end;
+        // como se relaciona con las demas y por que se busca rapido, del
+        // catalogo de la base (DB-P5 de la 1.29)
+        L := TJSONArray.Create;
+        R.AddPair('foreignKeys', L);
+        for var K in ClavesAjenasDeTabla(S.Conn, Tabla) do
+        begin
+          O := TJSONObject.Create;
+          L.AddElement(O);
+          O.AddPair('name', K.Nombre);
+          O.AddPair('fields', ArrayDeTextos(K.Campos));
+          O.AddPair('references', K.Tabla);
+          O.AddPair('referencedFields', ArrayDeTextos(K.CamposDeAlla));
+        end;
+        L := TJSONArray.Create;
+        R.AddPair('indexes', L);
+        for var Ix in IndicesDeTabla(S.Conn, Tabla) do
+        begin
+          O := TJSONObject.Create;
+          L.AddElement(O);
+          O.AddPair('name', Ix.Nombre);
+          O.AddPair('fields', ArrayDeTextos(Ix.Campos));
+          if Ix.Primario then
+            O.AddPair('primary', TJSONBool.Create(True))
+          else if Ix.Unico then
+            O.AddPair('unique', TJSONBool.Create(True));
+        end;
         Result := R.ToJSON;
       finally
         R.Free;
@@ -604,6 +659,7 @@ var
   Pars: TArray<TParametroDb>;
   Nombres: TArray<string>;
   Tabla, Neg, Where, OrderBy, Cols, Desde: string;
+  Ordenados: TArray<string>;
   C: TCampoDb;
   Q: TFDQuery;
   R: TJSONObject;
@@ -648,9 +704,30 @@ begin
         Result := ClausulaDeFiltros(S, Tabla, Campos, P.Filters, Pars, Where);
         if Result <> '' then
           Exit;
-        Result := ClausulaDeOrden(S, P.Order, Tabla, Campos, [], OrderBy);
+        Result := ClausulaDeOrden(S, P.Order, Tabla, Campos, [], OrderBy, Ordenados);
         if Result <> '' then
           Exit;
+        // Un orden TOTAL, para que una pagina y la siguiente no repitan ni salten
+        // filas: lo pedido y, detras, la clave primaria (sin orden, la clave sola).
+        // Sin ORDER BY ningun motor garantiza el mismo orden dos veces, y SQL
+        // Server solo pagina en el motor con el (OFFSET...FETCH; sin el, FireDAC
+        // pide TOP offset+limit y tira aqui lo de delante: leido en su generador,
+        // FireDAC.Phys.MSSQLMeta, GetLimitSelect). DB-P1 de la 1.29. Una tabla
+        // sin clave no tiene ese orden: la nota lo dice.
+        var Desempate := '';
+        var SinClave := True;
+        for var K in Campos do
+          if K.Clave then
+          begin
+            SinClave := False;
+            if not MatchText(K.Nombre, Ordenados) then
+              Desempate := Desempate + ', ' + CitaNombre(S.Conn, K.Nombre);
+          end;
+        if Desempate <> '' then
+          if OrderBy = '' then
+            OrderBy := ' ORDER BY ' + Desempate.Substring(2)
+          else
+            OrderBy := OrderBy + Desempate;
         Desde := ' FROM ' + CitaNombre(S.Conn, Tabla) + Where;
         Q := NuevaConsulta(S, 'SELECT COUNT(*)' + Desde, Pars);
         try
@@ -679,6 +756,8 @@ begin
               R.AddPair('truncated', TJSONBool.Create(True));
             R.AddPair('rows', Filas);
             R.AddPair('note', MsgText(SN_DB_ROWS));
+            if SinClave and (Total > Filas.Count) then
+              R.AddPair('pagingNote', MsgText(SN_DB_SIN_CLAVE));
             Result := R.ToJSON;
           finally
             R.Free;
@@ -706,6 +785,7 @@ var
   Pars: TArray<TParametroDb>;
   Grupos, Etiquetas: TArray<string>;
   Tabla, Neg, Where, OrderBy, Sel, GroupBy, Expr, Op: string;
+  Ordenados: TArray<string>;
   C: TCampoDb;
   Valores: TJSONArray;
   Obj: TJSONObject;
@@ -783,21 +863,36 @@ begin
         Result := ClausulaDeFiltros(S, Tabla, Campos, P.Filters, Pars, Where);
         if Result <> '' then
           Exit;
-        Result := ClausulaDeOrden(S, P.Order, Tabla, Campos, Etiquetas, OrderBy);
+        Result := ClausulaDeOrden(S, P.Order, Tabla, Campos, Etiquetas, OrderBy, Ordenados);
         if Result <> '' then
           Exit;
         // por defecto, el primer valor (o n) de mayor a menor: "el que mas"
         if (OrderBy = '') and (GroupBy <> '') then
-          OrderBy := ' ORDER BY ' + IntToStr(Min(Length(Grupos) + 1, Length(Etiquetas))) + ' DESC';
+        begin
+          var Primero := IntToStr(Min(Length(Grupos) + 1, Length(Etiquetas)));
+          OrderBy := ' ORDER BY ' + Primero + ' DESC';
+          Ordenados := [Primero];
+        end;
+        // ...y detras, los grupos: un orden TOTAL, para que una pagina y la
+        // siguiente no repitan ni salten grupos (cada grupo es unico; DB-P3 de la
+        // 1.29, como el de rows)
+        if GroupBy <> '' then
+          for I := 1 to Length(Grupos) do
+            if not MatchText(IntToStr(I), Ordenados) then
+              OrderBy := OrderBy + IfThen(OrderBy = '', ' ORDER BY ', ', ') + IntToStr(I);
         Q := NuevaConsulta(S, 'SELECT ' + Sel + ' FROM ' + CitaNombre(S.Conn, Tabla) + Where +
           IfThen(GroupBy <> '', ' GROUP BY ' + GroupBy) + OrderBy, Pars);
         try
+          if P.Offset > 0 then
+            Q.FetchOptions.RecsSkip := P.Offset;
           Q.FetchOptions.RecsMax := Limite(P.Limit, LIMITE_GRUPOS_DB);
           Q.Open;
           R := TJSONObject.Create;
           try
             R.AddPair('db', NombreDeConexion(S.Conexion));
             R.AddPair('table', Tabla);
+            R.AddPair('offset', TJSONNumber.Create(Max(P.Offset, 0)));
+            R.AddPair('limit', TJSONNumber.Create(Limite(P.Limit, LIMITE_GRUPOS_DB)));
             Filas := FilasEnJson(Q, Etiquetas, Truncado);
             R.AddPair('returned', TJSONNumber.Create(Filas.Count));
             if Truncado then
@@ -1026,7 +1121,7 @@ begin
       'tables', 'db',
       'fields', 'db table',
       'rows', 'db table fields filters order limit offset',
-      'summary', 'db table filters group values order limit',
+      'summary', 'db table filters group values order limit offset',
       'insert', 'db table values',
       'update', 'db table values filters',
       'delete', 'db table filters'],

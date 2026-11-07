@@ -4739,15 +4739,23 @@ const
     '[DB-019] total counts every row the filters select; rows holds ' +
     'those from offset, up to limit and to the size of one answer ' +
     '(truncated says it was cut: ask for the next page with offset, or for ' +
-    'fewer fields). Text compares as the database does (its collation: ' +
-    'case and accents).';
+    'fewer fields). A very long text comes as {"text" (its beginning), ' +
+    '"length", "truncated"}. Pages follow your order and then the primary ' +
+    'key, so the next page neither repeats nor skips a row. Text compares as ' +
+    'the database does (its collation: case and accents).';
+  // una tabla sin clave primaria: sus paginas no tienen un orden que se repita
+  SN_DB_SIN_CLAVE =
+    '[DB-021] This table has no primary key, so its rows have no order the ' +
+    'database repeats: the next page may repeat or skip rows. Give order= ' +
+    'with fields whose values are unique.';
 
   SD_DB =
     'The databases the operator gave this workspace, by NAME and through ' +
     'operations: you never write SQL - the server composes it from these ' +
     'fields and FireDAC turns it into each engine''s dialect. connections ' +
     'lists them ("db" = project/alias, engine, readonly; the ones declared ' +
-    'wrong under "unusable"); tables and fields, what one holds; rows reads ' +
+    'wrong under "unusable"); tables and fields, what one holds (fields also ' +
+    'its foreign keys and indexes); rows reads ' +
     '(filters, fields, order, limit/offset, and always the total); summary ' +
     'groups and adds up; insert, update and delete write, only where ' +
     'readonly=false (update and delete only the rows their filters select, ' +
@@ -4767,9 +4775,10 @@ const
     'true/false). A date as yyyy-mm-dd or yyyy-mm-ddThh:mm:ss.';
   SP_DB_ORDER =
     '"field" or "field desc", comma separated; summary: also n, or a value ' +
-    'as op_field (sum_total).';
+    'as op_field (sum_total). rows are then ordered by the primary key, and ' +
+    'summary''s groups by their fields.';
   SP_DB_LIMIT = 'rows (default 100) and summary (default 50); at most 500.';
-  SP_DB_OFFSET = 'rows: how many to skip, for the next page.';
+  SP_DB_OFFSET = 'rows and summary: how many to skip, for the next page.';
   SP_DB_GROUP =
     'summary: the fields to group by; a date field also as field:year, ' +
     'field:month, field:day or field:hour.';
