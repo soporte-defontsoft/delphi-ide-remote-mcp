@@ -185,7 +185,8 @@ begin
   // y sin la salida C++: la puerta del build las pide declaradas), Win32 y
   // Win64 activas, y sin DCC_UsePackage (es la lista de los paquetes de ESA
   // maquina) ni los grupos de las plataformas que no se activan (los escribe
-  // add-platform).
+  // add-platform). La DLL, medida igual el 8-nov-2026 contra la que David
+  // creo en el IDE (File > New > Other > Dynamic-link Library, A17 de la 1.29).
   EsVcl := SameText(AFramework, FRAMEWORK_TYPE_VCL);
   EsFmx := SameText(AFramework, FRAMEWORK_TYPE_FMX);
   EsVisual := EsVcl or EsFmx;
@@ -232,6 +233,11 @@ begin
     PkgProps := Prop('DCC_BplOutput', IDE_OUTPUT_DEFAULT) + Prop('DCC_DcpOutput', IDE_OUTPUT_DEFAULT) +
       Prop('GenDll', 'true') + Prop('GenPackage', 'true') + Prop('AppFileExt', 'bpl');
   end;
+  // Una biblioteca (DLL): AppType Library y GenDll en la base, como la escribe el
+  // IDE; su Borland.ProjectType sigue siendo Application. Sin GenDll dcc la deja
+  // con nombre de ejecutable (A17 de la 1.29, BUILD-072)
+  if SameText(AAppType, 'Library') then
+    PkgProps := Prop('GenDll', 'true');
   // la base: los interruptores E N S F K (todos los tipos), los permisos de
   // Android de un FMX (el IDE los pone en la base aunque no active Android),
   // los iconos y, en un DUnitX, el RTL de Delphi y la carpeta de DUnitX
@@ -696,7 +702,7 @@ var
 begin
   Kind := SinMayusculas(AKind.Trim);
   if (Kind <> 'console') and (Kind <> 'vcl') and (Kind <> 'fmx') and (Kind <> 'package') and
-     (Kind <> 'test') then
+     (Kind <> 'test') and (Kind <> 'library') then
     // The caller wrote "project-web": answering "console | vcl | fmx" sends
     // them to write kind=console, which is refused too. Name the values that
     // work (field round 10).
@@ -731,7 +737,7 @@ begin
   MainForm := 'FormMain';
   if Kind = 'test' then
     MainUnit := 'U' + AName; // el primer fixture, con el nombre del proyecto
-  if (Kind <> 'console') and (Kind <> 'package') then
+  if (Kind <> 'console') and (Kind <> 'package') and (Kind <> 'library') then
   begin
     Clash := '';
     if TFile.Exists(TPath.Combine(Dir, MainUnit + '.pas')) then
@@ -787,6 +793,27 @@ begin
         'end.' + CRLF);
       WriteNewFile(Dproj,
         DprojTemplate(AName, NewGuidStr, 'Console', FRAMEWORK_TYPE_NINGUNO, '', '', ''));
+      Files.Add(AName + '.dpr');
+      Files.Add(TPath.GetFileName(Dproj));
+    end
+    else if Kind = 'library' then
+    begin
+      // Una DLL como la crea el IDE de la 37.0 (medido el 8-nov-2026): library,
+      // la nota de ShareMem (en corto), System.SysUtils y System.Classes, su
+      // recurso y un bloque vacio; lo que exporta va en una clausula exports
+      WriteNewFile(Dpr,
+        'library ' + AName + ';' + CRLF + CRLF +
+        '{ Exported routines that pass strings need ShareMem as the first unit of' + CRLF +
+        '  this library and of the program that loads it, or PChar/ShortString' + CRLF +
+        '  parameters instead. }' + CRLF + CRLF +
+        'uses' + CRLF +
+        '  System.SysUtils,' + CRLF +
+        '  System.Classes;' + CRLF + CRLF +
+        '{$R *.res}' + CRLF + CRLF +
+        'begin' + CRLF +
+        'end.' + CRLF);
+      WriteNewFile(Dproj,
+        DprojTemplate(AName, NewGuidStr, 'Library', FRAMEWORK_TYPE_NINGUNO, '', '', ''));
       Files.Add(AName + '.dpr');
       Files.Add(TPath.GetFileName(Dproj));
     end

@@ -50,8 +50,11 @@ def call(args):
     return srv.call('delphi_designer', args)
 
 
-def layout(name, body, texto=False):
-    p = os.path.join(BASE_T if texto else BASE, name + '.dfm')
+def layout(name, body, texto=False, sub=''):
+    # sub: una carpeta propia, sin los forms rotos de L9 al lado (el renderizador juzga los hermanos)
+    carpeta = os.path.join(BASE_T if texto else BASE, sub)
+    os.makedirs(carpeta, exist_ok=True)
+    p = os.path.join(carpeta, name + '.dfm')
     open(p, 'w', encoding='utf-8', newline='').write(body)
     r = (srv_t.call('delphi_designer', {'command': 'layout', 'path': p}) if texto
          else call({'command': 'layout', 'path': p}))
@@ -331,6 +334,15 @@ open(p, 'wb').write(b'\xff\x0a\x00FORMBIN\x00TPF0\x08TFormBin\x00')
 r = call({'command': 'layout', 'path': p})
 check('L9 designer binario: RECHAZADO',
       mc.abre(r, 'SR_DSGN_BINARIO_DANADO_FMT'), r[:160])
+# ...y AL LADO deja sin renderizador a los forms de su carpeta: el ayudante puede cargar cualquiera como
+# frame o ancestro, y lo que no se puede juzgar no se le da (falla cerrado). DSGN-116 lo nombra: decia "the
+# form" y mandaba a mirar con tree o lint el pedido, que estaba bien (C1-11 de la 1.29). ROJO contra 4ebf7a51
+o = layout('JuntoAlRoto', 'object F: TF\n  ClientWidth = 100\n  ClientHeight = 100\nend\n')
+nota = o.get('boxesNote', '')
+check('L9b un .dfm danado al lado: sin renderizador, y DSGN-116 nombra ESE fichero, no el pedido. '
+      'ROJO contra 4ebf7a51',
+      o.get('boxesFrom') == 'text' and mc.es(nota, 'SR_DESIGNER_LITERAL_NO_VERIFICABLE_FMT') and
+      'Bin.dfm' in nota and 'JuntoAlRoto' not in nota, o)
 p = os.path.join(BASE, 'algo.pas')
 open(p, 'w').write('unit algo;\ninterface\nimplementation\nend.\n')
 r = call({'command': 'layout', 'path': p})
@@ -357,48 +369,90 @@ DFMS['Boxes'] = 'object F: TF\n  ClientWidth = 500\n  ClientHeight = 300\n  obje
 DFMS['Overflow'] = 'object F: TF\n  ClientWidth = 400\n  ClientHeight = 300\n  object pnlL: TPanel\n    Align = alLeft\n    Width = 250\n    Height = 300\n  end\n  object pnlR: TPanel\n    Align = alRight\n    Width = 250\n    Height = 300\n    object hijo: TButton\n      Left = 10\n      Top = 10\n      Width = 50\n      Height = 25\n    end\n  end\nend\n'
 DFMS['Trunc'] = 'object F: TF\n  ClientWidth = 100\n  ClientHeight = 100\n  object P: TPanel\n    Width = 100\n    Height = 100\n'
 DFMS['OldForm'] = 'object F: TF\n  Width = 544\n  Height = 375\n  object btnAbajo: TButton\n    Left = 16\n    Top = 345\n    Width = 75\n    Height = 25\n  end\nend\n'
+DFMS['HiddenNest'] = ('object F: TF\n  ClientWidth = 300\n  ClientHeight = 200\n  object pnlOculto: TPanel\n'
+                      '    Left = 20\n    Top = 30\n    Width = 200\n    Height = 100\n    Visible = False\n'
+                      '    object btnDentro: TButton\n      Left = 8\n      Top = 8\n      Width = 0\n      Height = 25\n'
+                      '    end\n  end\nend\n')
 
-o = layout('Scroll', DFMS['Scroll'])
-check('S1 un TScrollBox con contenido mayor NO es error', o.get('clean') is True, o)
+# Cada caso en los DOS modos, y cada check mira de cual salio (C1-11 de la 1.29): corrian en BASE junto al
+# Bin.dfm danado de L9, que deja sin renderizador a toda la carpeta (L9b), y salian TODOS del texto sin que
+# ningun check mirase boxesFrom: el juez de las cajas medidas (JuzgaCajas) no los veia. Ahora en su carpeta
+for TEXTO in (True, False):
+    M = ' [%s]' % ('texto' if TEXTO else 'renderizador')
+    DE = 'text' if TEXTO else 'renderer'
 
-o = layout('Hidden', DFMS['Hidden'])
-check('S2 un panel Visible=False no cuenta (ni como segundo alClient)', o.get('clean') is True, o)
-o = layout('Swap', DFMS['Swap'])
-check('S2 dos controles en el mismo hueco, uno oculto: sin solape', o.get('clean') is True, o)
+    def L8(nombre):
+        return layout(nombre, DFMS[nombre], texto=TEXTO, sub='ronda8')
 
-o = layout('Deco', DFMS['Deco'])
-check('S4 un TBevel de marco no "tapa" a los controles de dentro', o.get('clean') is True, o)
+    o = L8('Scroll')
+    check('S1 un TScrollBox con contenido mayor NO es error' + M, o.get('boxesFrom') == DE and o.get('clean') is True, o)
 
-o = layout('Defaults', DFMS['Defaults'])
-check('S6 StatusBar/ToolBar por defecto van a su banda, no se solapan', o.get('clean') is True, o)
+    o = L8('Hidden')
+    check('S2 un panel Visible=False no cuenta (ni como segundo alClient)' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is True, o)
+    # C1-11 (David, 8-nov-2026): la VCL lista tambien los ocultos, con visible false, como FMX; cada caja lleva
+    # visible, y los jueces no cambian (S2 sigue limpio). ROJO contra 4ebf7a51: no salian, ni el campo
+    bx = {b['name']: b for b in o.get('boxes', [])}
+    check('C1-11a el oculto en boxes con visible false, el otro con true. ROJO contra 4ebf7a51' + M,
+          bx.get('pnl2', {}).get('visible') is False and bx.get('pnl1', {}).get('visible') is True and
+          all('visible' in b for b in o.get('boxes', [])) and
+          (not TEXTO or (bx.get('pnl2', {}).get('w') == 200 and bx.get('pnl2', {}).get('h') == 100)), o)
+    o = L8('Swap')
+    check('S2 dos controles en el mismo hueco, uno oculto: sin solape' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is True, o)
+    o = L8('HiddenNest')
+    bx = {b['name']: b for b in o.get('boxes', [])}
+    check('C1-11c lo de dentro de un oculto tambien sale, con su Visible, en coords del form, sin juzgar (ancho 0)' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is True and not o.get('zeroSize') and
+          bx.get('pnlOculto', {}).get('visible') is False and bx.get('btnDentro', {}).get('visible') is True and
+          bx.get('btnDentro', {}).get('parent') == 'pnlOculto' and bx.get('btnDentro', {}).get('x') == 28 and
+          bx.get('btnDentro', {}).get('y') == 38, o)
 
-o = layout('Grid', DFMS['Grid'])
-check('S3 los hijos alClient de un TGridPanel no se marcan como solape', o.get('clean') is True, o)
+    o = L8('Deco')
+    check('S4 un TBevel de marco no "tapa" a los controles de dentro' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is True, o)
 
-o = layout('Cover', DFMS['Cover'])
-check('FN2 un alClient que tapa a un alNone SI se detecta',
-      o.get('clean') is False and len(o.get('overlapping', [])) == 1, o)
+    o = L8('Defaults')
+    check('S6 StatusBar/ToolBar por defecto van a su banda, no se solapan' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is True, o)
 
-o = layout('TwoClient', DFMS['TwoClient'])
-check('Bug3 dos alClient visibles se tapan al 100%',
-      o.get('clean') is False and len(o.get('overlapping', [])) == 1 and '100%' in json.dumps(o), o)
+    o = L8('Grid')
+    check('S3 los hijos alClient de un TGridPanel no se marcan como solape' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is True, o)
 
-o = layout('ClientFirst', DFMS['ClientFirst'])
-check('alClient declarado ANTES de un alBottom no se solapa con el', o.get('clean') is True, o)
+    o = L8('Cover')
+    check('FN2 un alClient que tapa a un alNone SI se detecta' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is False and len(o.get('overlapping', [])) == 1, o)
 
-o = layout('Tab', DFMS['Tab'])
-check('FN1 el contenido de un TTabSheet SI se revisa',
-      o.get('clean') is False and len(o.get('zeroSize', [])) == 1 and len(o.get('overlapping', [])) == 1, o)
+    o = L8('TwoClient')
+    check('Bug3 dos alClient visibles se tapan al 100%' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is False and len(o.get('overlapping', [])) == 1 and
+          '100%' in json.dumps(o), o)
 
-o = layout('Boxes', DFMS['Boxes'])
-bx = {b['name']: b for b in o.get('boxes', [])}
-check('MURO boxes: el rectangulo resuelto de cada control, en coords del form',
-      o.get('clean') is True and len(bx) == 3 and bx['Grid']['y'] == 40 and bx['Grid']['h'] == 260
-      and bx['Btn']['x'] == 8 and bx['Btn']['y'] == 8 and bx['Btn']['parent'] == 'Barra', o)
+    o = L8('ClientFirst')
+    check('alClient declarado ANTES de un alBottom no se solapa con el' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is True, o)
 
-o = layout('Overflow', DFMS['Overflow'])
-check('Bug1 un desbordamiento no cascadea tamanos negativos',
-      len(o.get('clipped', [])) == 1 and '-' not in json.dumps(o.get('clipped')), o)
+    o = L8('Tab')
+    check('FN1 el contenido de un TTabSheet SI se revisa' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is False and len(o.get('zeroSize', [])) == 1 and
+          len(o.get('overlapping', [])) == 1, o)
+
+    o = L8('Boxes')
+    bx = {b['name']: b for b in o.get('boxes', [])}
+    check('MURO boxes: el rectangulo resuelto de cada control, en coords del form' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is True and len(bx) == 3 and
+          bx.get('Grid', {}).get('y') == 40 and bx.get('Grid', {}).get('h') == 260 and
+          bx.get('Btn', {}).get('x') == 8 and bx.get('Btn', {}).get('y') == 8 and
+          bx.get('Btn', {}).get('parent') == 'Barra', o)
+
+    o = L8('Overflow')
+    # lo que no cabe: el texto lo dice banda sin sitio; la VCL coloca la banda derecha entera y tapa a la
+    # izquierda (medido el 8-nov-2026: comparten de 150 a 250). Uno y otro avisan una vez, sin tamanos negativos
+    avisos = o.get('clipped', []) if TEXTO else o.get('overlapping', [])
+    check('Bug1 un desbordamiento no cascadea tamanos negativos' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is False and len(avisos) == 1 and
+          '-' not in json.dumps(o.get('clipped', []) + o.get('overlapping', [])), o)
 
 o = layout('Trunc', DFMS['Trunc'])
 check('Bug4 un .dfm truncado se avisa', 'truncatedNote' in o, o)

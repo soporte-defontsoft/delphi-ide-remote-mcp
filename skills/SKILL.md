@@ -378,7 +378,7 @@ in frame. Do the gesture you came for and nothing else.
 
 ## Projects and builds
 
-- `delphi_create` scaffolds console/VCL/FMX projects, runtime packages
+- `delphi_create` scaffolds console/VCL/FMX projects, DLLs, runtime packages
   and DUnitX test projects (`project-test`: runner + first fixture, green
   at birth; `delphi_test` runs it), and inside a
   project: `form-vcl`/`form-fmx`, `frame-vcl`/`frame-fmx`, `datamodule`

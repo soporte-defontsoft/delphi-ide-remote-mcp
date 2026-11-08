@@ -800,9 +800,11 @@ end;
 
 { UNA caja de "boxes", con la misma forma para sus tres fuentes (el texto de un form
   VCL, el renderizador en FMX y lo que el renderizador anade al texto VCL): align
-  solo cuando se sabe (el texto), visible solo cuando lo dijo el renderizador. }
+  solo cuando se sabe (el texto), visible siempre - el Visible del control, el que
+  mide el renderizador o el que escribe el texto: la VCL listaba solo los visibles y
+  sin el campo, FMX todos con el (C1-11, David 8-nov-2026: los dos como FMX). }
 function CajaJson(const ANombre, AClase, AAlign: string; AConAlign: Boolean; const APadre: string;
-  AX, AY, AW, AH, ALinea, AVisible: Integer; const AFichero: string = ''): TJSONObject;
+  AX, AY, AW, AH, ALinea: Integer; AVisible: Boolean; const AFichero: string = ''): TJSONObject;
 begin
   Result := TJSONObject.Create;
   Result.AddPair('name', ANombre);
@@ -814,8 +816,7 @@ begin
   Result.AddPair('y', TJSONNumber.Create(AY));
   Result.AddPair('w', TJSONNumber.Create(AW));
   Result.AddPair('h', TJSONNumber.Create(AH));
-  if AVisible >= 0 then
-    Result.AddPair('visible', TJSONBool.Create(AVisible = 1));
+  Result.AddPair('visible', TJSONBool.Create(AVisible));
   // la linea es de ese fichero, si no es el form (LineaDeCaja)
   if AFichero <> '' then
     Result.AddPair('file', AFichero);
@@ -1068,7 +1069,7 @@ begin
           var PX, PY, PW, PH: Integer;
           PadreMedido(CajaDe, R, Doc.Root.ObjName, C, Padre, PX, PY, PW, PH);
           Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False, Padre.Ruta, C.X, C.Y, C.W, C.H, LineaCaja,
-            Ord(C.Visible), FicheroCaja));
+            C.Visible, FicheroCaja));
         end;
         // y lo que se juzga, por EL juez de las cajas medidas, el mismo de la VCL (A2 de la 1.27)
         JuzgaCajas(R, CajaDe, TablaFmx, True, Doc.Root.ObjName, Ficheros, nil, Zero, Outside, Overlap, nil, AFuera);
@@ -1103,8 +1104,9 @@ end;
   the one subtlety a probe agent measured on 2026-08-25: alClient does NOT
   shrink the remaining rectangle, so several alClient siblings all get the WHOLE
   space and lie on top of each other (the IDE writes them with identical
-  coordinates). Invisible controls are skipped, because the VCL neither lays out
-  nor draws them. Grid children fill cells and are left alone. A TBevel/TShape/
+  coordinates). Invisible controls take no band and are not judged, because the
+  VCL neither lays out nor draws them; boxes lists them with visible false, at the
+  rectangle the .dfm writes (C1-11). Grid children fill cells and are left alone. A TBevel/TShape/
   TImage is decoration and does not "cover" anyone. And the resolved rectangle
   of every control is returned in `boxes`, in form coordinates - that is the
   "where things end up" the name promises, and what lets an agent place the next
@@ -1171,6 +1173,30 @@ var
       not SameText(DefaultAlign(TablaVcl, AObj.ClassName_), 'alNone') or EsControl(AObj);
   end;
 
+  // Un control oculto tambien sale en boxes, con visible false, como en FMX y como
+  // lo da el renderizador (C1-11, David 8-nov-2026). La VCL no lo coloca: su
+  // rectangulo es el que escribe el .dfm, no se come banda y no se juzga. Lo de
+  // dentro, igual, cada uno con su propio Visible (el que da el renderizador)
+  procedure ListaOculto(AObj: TStyleObj; AAbsX, AAbsY: Integer; const APadre: string);
+  var
+    Nm, Al: string;
+    X, Y, W, H: Integer;
+    F: Boolean;
+  begin
+    Nm := AObj.Ruta; if AObj.ObjName = '' then Nm := AObj.ClassName_;
+    Al := PropRaw(Doc, AObj, 'Align', F);
+    if not F then Al := DefaultAlign(TablaVcl, AObj.ClassName_);
+    X := PropInt(Doc, AObj, 'Left', 0, F);
+    Y := PropInt(Doc, AObj, 'Top', 0, F);
+    W := Max(0, PropInt(Doc, AObj, 'Width', 0, F));
+    H := Max(0, PropInt(Doc, AObj, 'Height', 0, F));
+    Boxes.AddElement(CajaJson(Nm, AObj.ClassName_, Al, True, APadre, AAbsX + X, AAbsY + Y, W, H,
+      AObj.StartLine, Vis(AObj)));
+    for var K := 0 to AObj.Children.Count - 1 do
+      if IsVisual(AObj.Children[K]) then
+        ListaOculto(AObj.Children[K], AAbsX + X, AAbsY + Y, Nm);
+  end;
+
   procedure Walk(AParent: TStyleObj; AClientW, AClientH, AAbsX, AAbsY: Integer;
     const AWhere: string; AKnown, AScroll: Boolean);
   var
@@ -1196,7 +1222,12 @@ var
     begin
       Kid := AParent.Children[K];
       if not IsVisual(Kid) then Continue;
-      if not Vis(Kid) then Continue;      // the VCL does not lay out the hidden
+      // the VCL does not lay out the hidden: listed apart, not judged (C1-11)
+      if not Vis(Kid) then
+      begin
+        ListaOculto(Kid, AAbsX, AAbsY, AWhere);
+        Continue;
+      end;
       // por SU ruta (Frame1.Edit1 dentro de un frame en linea), la que da el
       // renderizador y con la que se cruzan las cajas: por el nombre a secas,
       // lo sobrescrito en un frame tomaba el rectangulo de un homonimo del
@@ -1342,7 +1373,7 @@ var
     for K := 0 to Cnt - 1 do
     begin
       Boxes.AddElement(CajaJson(Kids[K].Nm, Kids[K].Cls, Kids[K].Align, True, AWhere, AAbsX + Kids[K].X1,
-        AAbsY + Kids[K].Y1, Kids[K].X2 - Kids[K].X1, Kids[K].Y2 - Kids[K].Y1, Kids[K].Line, -1));
+        AAbsY + Kids[K].Y1, Kids[K].X2 - Kids[K].X1, Kids[K].Y2 - Kids[K].Y1, Kids[K].Line, True));
     end;
 
     // overlap: any two whose rectangles share area, decoration/alCustom/
@@ -1500,16 +1531,20 @@ begin
               Bx.AddPair('y', TJSONNumber.Create(C.Y));
               Bx.AddPair('w', TJSONNumber.Create(C.W));
               Bx.AddPair('h', TJSONNumber.Create(C.H));
+              // y su Visible, el medido: el de un heredado lo escribe su ancestro
+              Bx.RemovePair('visible').Free;
+              Bx.AddPair('visible', TJSONBool.Create(C.Visible));
             end
-            else if C.Visible then
+            else
             begin
+              // tambien un oculto, con visible false (C1-11): se listaban solo los visibles
               var FicheroCaja: string;
               var LineaCaja := LineaDeCaja(Ficheros, C, FicheroCaja);
               var Padre: TCajaDeRender;
               var PX, PY, PW, PH: Integer;
               PadreMedido(CajaDe, Medido, Doc.Root.ObjName, C, Padre, PX, PY, PW, PH);
               Boxes.AddElement(CajaJson(C.Ruta, C.Clase, '', False, Padre.Ruta, C.X, C.Y, C.W, C.H,
-                LineaCaja, -1, FicheroCaja));
+                LineaCaja, C.Visible, FicheroCaja));
             end;
           end;
           // y lo que se juzga, sobre lo medido (R8), por EL juez de los dos marcos (A2); el

@@ -98,9 +98,9 @@ const
   // lo que lee cada kind, ademas de kind y name: los kinds de verdad, que la
   // negativa nombra con los que SI lo llevan (decia "goes with: form", un
   // kind que no existe: Opus en Hermes, 1.22.2)
-  KINDS: array [0 .. 23] of string = (
+  KINDS: array [0 .. 25] of string = (
     'project-console', 'dir', 'project-vcl', 'dir', 'project-fmx', 'dir',
-    'project-package', 'dir', 'project-test', 'dir',
+    'project-package', 'dir', 'project-test', 'dir', 'project-library', 'dir',
     'form-vcl', 'project formname dir ancestor autocreate',
     'form-fmx', 'project formname dir ancestor autocreate',
     'frame-vcl', 'project formname dir ancestor', 'frame-fmx', 'project formname dir ancestor',

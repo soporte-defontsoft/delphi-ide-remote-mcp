@@ -1,6 +1,7 @@
 # -*- coding: utf-8 -*-
 """1.29 (A17, medido al medir A1): un proyecto que pasa a library por las tools -un project-console con la cabecera
-cambiada: delphi_create no tiene libreria- se queda sin GenDll, y dcc deja la DLL con nombre de ejecutable
+cambiada; hasta la 1.29 delphi_create no tenia libreria, hoy kind=project-library: test_project_library_129- se
+queda sin GenDll, y dcc deja la DLL con nombre de ejecutable
 (MideLib.exe; medido el 7-nov-2026). delphi_build lo dice junto al binario (BUILD-072) y como se arregla.
 
   L1 cabecera library sin GenDll: el build deja MideLib.exe y lo dice. ROJO contra 4891b190

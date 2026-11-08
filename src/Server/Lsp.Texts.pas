@@ -6445,9 +6445,18 @@ const
     'form''s folder or below it (they travel with the form); the property value ' +
     'is never shown.';
 
-  SR_DESIGNER_LITERAL_NO_VERIFICABLE =
-    '[DSGN-116 DENIED] The form strings could not be checked before rendering. ' +
-    'Nothing was rendered. Use tree or lint to inspect the form first.';
+  { el fichero que no se pudo leer, por su nombre: decia "the form" y mandaba a mirar
+    con tree o lint el form pedido, que estaba bien - el roto era un hermano (medido en
+    test_layout al hacer C1-11 de la 1.29: un .dfm binario danado en la carpeta dejaba
+    sin renderizador a todos los forms de al lado) }
+  SR_DESIGNER_LITERAL_NO_VERIFICABLE_FMT =
+    '[DSGN-116 DENIED] Nothing was rendered: the strings of %s could not be checked ' +
+    'before rendering%s';
+  SF_DESIGNER_NO_VERIFICABLE_FORM =
+    '. The renderer may load any form of its folder as a frame or an ancestor, so ' +
+    'the forms next to this one are checked too: lint on that file says why it cannot ' +
+    'be read - fix it, or move it out of the folder.';
+  SF_DESIGNER_NO_VERIFICABLE_STATE = 'the state values';
 
   SR_DESIGNER_LITERAL_TOPE_FMT =
     '[DSGN-117 DENIED] Form data to check exceeds the %d MiB rendering budget. ' +
@@ -7945,7 +7954,8 @@ const
     'in a warning are relative to the container it names. The Align that ' +
     'names a warning (two alClient, a band with no room) is the one the .dfm ' +
     'writes, or the class''s default when it writes none (TStatusBar=alBottom, ' +
-    'TToolBar=alTop...). I skip what is invisible (Visible = False), I do not ' +
+    'TToolBar=alTop...). A hidden control (Visible = False) is in "boxes" with ' +
+    'visible false and is not judged, I do not ' +
     'judge the children of a container that places them itself (a TGridPanel, ' +
     'a TFlowPanel), I do not treat a TBevel/TShape/TImage or an alCustom control ' +
     'as covering anything, and a TScrollBox may have larger content on purpose. ' +
@@ -8347,8 +8357,9 @@ const
   SF_CREATE_AMBITOS_DE_UN_VCL_NUEVO = 'the unit scope names of a VCL project the IDE creates';
 
   SR_CREATE_PROJECT_KIND =
-    '[CREATE-011 INVALID_PARAM] I can only make five kinds of project: ' +
+    '[CREATE-011 INVALID_PARAM] I can only make six kinds of project: ' +
     'kind=project-console, kind=project-vcl, kind=project-fmx, ' +
+    'kind=project-library (a DLL, .dpr + .dproj), ' +
     'kind=project-package (a runtime package, .dpk + .dproj) and ' +
     'kind=project-test (a DUnitX runner with its first fixture, for ' +
     'delphi_test). (Then there are form-vcl, form-fmx, frame-vcl, ' +
@@ -11280,7 +11291,7 @@ const
   // Mensajes que estaban en linea en Mcp.Tools.Scaffold.pas (paso 3c a mano, 27-sep-2026)
   SR_CREATE_KIND_DEBE_SER_ALL =
     '[CREATE-034 INVALID_PARAM] kind must be project-console | project-vcl | ' +
-    'project-fmx | project-package | project-test | form-vcl | form-fmx ' +
+    'project-fmx | project-library | project-package | project-test | form-vcl | form-fmx ' +
     '| frame-vcl | frame-fmx | datamodule | unit | include.';
 
   // Mensajes que estaban en linea en Mcp.Tools.FileOps.pas (paso 3c a mano, 27-sep-2026)
@@ -11989,12 +12000,11 @@ const
 
   // Descripciones que estaban en linea en Mcp.Tools.Scaffold.pas (paso 3d, 27-sep-2026)
   SP_CREATE_KIND =
-    'project-console | project-vcl | project-fmx | project-package ' +
+    'project-console | project-vcl | project-fmx | project-library (a DLL) | project-package ' +
     '(requires rtl; its units go into contains with kind=unit or add-unit) ' +
     '| project-test (green at birth; DUnitX ships with RAD Studio) | ' +
     'form-vcl | form-fmx | frame-vcl | frame-fmx | datamodule | unit | ' +
-    'include (never registered; used with {$I}). The description says what ' +
-    'each one creates.';
+    'include (never registered; used with {$I}).';
 
   SP_CREATE_DIR =
     'Projects: ABSOLUTE target folder (created if missing). Units, forms, ' +
@@ -12047,7 +12057,7 @@ const
 
   SD_CREATE_CREATE =
     'Create a NEW Delphi project - console/VCL/FMX (.dpr + buildable ' +
-    '.dproj + main form), a runtime PACKAGE (.dpk + .dproj, built to ' +
+    '.dproj + main form), a DLL, a runtime PACKAGE (.dpk + .dproj, built to ' +
     'BPL+DCP in its folder, never installed) or a TEST project (a DUnitX ' +
     'console runner with its first fixture, what delphi_test runs) - or a ' +
     'NEW form, frame, data module or unit (.pas, plus its .dfm/.fmx for ' +

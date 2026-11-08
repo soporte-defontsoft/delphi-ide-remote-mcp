@@ -1486,7 +1486,7 @@ var
   Hermanos: string;
   BytesLeidos, BytesJunto: Int64;
   Doc: TStyleDoc;
-  Texto, Valor, Prop: string;
+  Texto, Valor, Prop, Cual: string;
 
   function Comprueba(const AProp, AValor: string): string;
   var
@@ -1570,6 +1570,9 @@ begin
     // lo que se le da a leer al ayudante, TAMBIEN la propuesta del juez
     // (Carpeta): el form de verdad se leyo en otro momento y un escritor que
     // esperaba el cerrojo pudo cambiarlo (revisor 6 del 3.11, M1)
+    // el que se esta leyendo, para decirlo si no se puede (el form del agente, nunca
+    // la propuesta del temporal)
+    Cual := FormDeVerdad(APeticion);
     Result := CompruebaForm(APeticion.Path, APeticion.Carpeta <> '');
     if Result <> '' then
       Exit;
@@ -1582,16 +1585,19 @@ begin
       if not EsEnlace(Hermano) and not SameFileName(Hermano, APeticion.Path) and
          not SameFileName(Hermano, ElDeVerdad) then
       begin
+        Cual := Hermano;
         Result := CompruebaForm(Hermano);
         if Result <> '' then
           Exit;
       end;
     for var Lejano in APeticion.Lejanos do
     begin
+      Cual := Lejano;
       Result := CompruebaForm(Lejano);
       if Result <> '' then
         Exit;
     end;
+    Cual := '';
     for var Estado in APeticion.Estados do
     begin
       var P := Pos('=', Estado);
@@ -1607,7 +1613,10 @@ begin
         Exit;
     end;
   except
-    Result := MsgText(SR_DESIGNER_LITERAL_NO_VERIFICABLE);
+    if Cual <> '' then
+      Result := MsgFmt(SR_DESIGNER_LITERAL_NO_VERIFICABLE_FMT, [Cual, MsgText(SF_DESIGNER_NO_VERIFICABLE_FORM)])
+    else
+      Result := MsgFmt(SR_DESIGNER_LITERAL_NO_VERIFICABLE_FMT, [MsgText(SF_DESIGNER_NO_VERIFICABLE_STATE), '.']);
   end;
 end;
 
