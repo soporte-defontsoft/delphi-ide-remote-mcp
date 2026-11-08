@@ -7644,10 +7644,18 @@ const
 
   SR_PASERVER_SDK_NOGROUP_FMT =
     '[PAS-030 DENIED] The target sysroot of "%s" does not match any ' +
-    'distribution I know. I tried the gcc trees (%s) and the library ' +
-    'folders (%s) and no variant delivered files. File a delphi_report ' +
-    '(command=report) ' +
-    'with your distro''s triplet (ls /usr/lib/gcc/) and we will add it.';
+    'distribution this RAD Studio knows. I tried the gcc trees (%s) and the library ' +
+    'folders (%s) that its Linux64.defaultsdkpaths lists, and no variant delivered ' +
+    'files. File a delphi_report (command=report) ' +
+    'with your distro''s triplet (ls /usr/lib/gcc/).';
+  { get-sdk trae lo que dice el <plataforma>.defaultsdkpaths de la instalacion
+    (E1 de la 1.29: iba escrito en el servidor); sin el no sabe que traer. }
+  SR_PASERVER_SDK_SIN_DEFAULTS_FMT =
+    '[PAS-075 NOT_FOUND] This RAD Studio has no bin\%s.defaultsdkpaths: it is ' +
+    'the IDE''s list of what an SDK brings from the target (its libraries and ' +
+    'the startup objects of the linker), and without it get-sdk does not know ' +
+    'what to pull. Nothing was pulled or written; install the platform''s ' +
+    'support in the IDE.';
 
   SN_BUILD_QUEUED =
     '[BUILD-037] This build waited its turn: the server builds ONE AT A ' +

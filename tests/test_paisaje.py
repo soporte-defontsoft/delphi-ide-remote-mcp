@@ -80,9 +80,9 @@ REGLAS = [
       ('FormRender.Fmx.pas', 'AplicaEstilo'), ('Lsp.Dproj.pas', 'PaqueteDeAndroid')],
      'BinDelIde (Lsp.Rutas, P25)'),
     ('donde vive la libc de un sysroot a mano', r"lib\\x86_64-linux-gnu|'libc\.so\.6'",
-     [('Lsp.Discovery.pas', '*'), ('Mcp.Tools.PAServer.pas', 'VersionDeGlibc'),
-      # otra pregunta: las carpetas de biblioteca del .sdk, en el orden en que las mira el linker
-      ('Mcp.Tools.PAServer.pas', 'GetSdk')],
+     # (las carpetas de biblioteca del .sdk iban escritas en GetSdk: desde E1 de la 1.29 las
+     # dice el Linux64.defaultsdkpaths del IDE, BibliotecasDelSdk)
+     [('Lsp.Discovery.pas', '*'), ('Mcp.Tools.PAServer.pas', 'VersionDeGlibc')],
      'CarpetasDeLibc y SysrootMezclado (Lsp.Discovery, P8)'),
     ('LocalSystem por el nombre de la cuenta', r"'\\?SYSTEM'|(?i:systemprofile)",
      [], 'SidDeEstaCuenta = SID_DE_LOCALSYSTEM (Lsp.Sandbox, P11): el juez es el SID'),

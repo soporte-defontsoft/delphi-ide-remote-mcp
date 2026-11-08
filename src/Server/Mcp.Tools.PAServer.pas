@@ -720,6 +720,118 @@ begin
   Result := BorraClaveDelIde(AVersion, 'RemoteProfiles\' + AName);
 end;
 
+{ One pull of get-sdk: a remote directory mirrored under the local sysroot.
+  Optional entries cover layout differences between distros (Ubuntu vs
+  RedHat vs /lib symlinked) - a missing one is normal, not a failure. }
+type
+  TSdkPull = record
+    RemoteBase: string;   // POSIX dir on the target
+    Recursive: Boolean;   // whole subtree (**) vs direct files (*)
+    Group: string;        // GRUPO_GCC/GRUPO_LIBC: ONE of the group must land; '' = extra
+  end;
+
+  { Un objeto de arranque o de fin del enlazador: su etiqueta en el
+    .defaultsdkpaths y en el .sdk (Perfil) y su valor en el asiento del SDK
+    Manager (Asiento). }
+  TObjetoDelSdk = record
+    Perfil, Asiento: string;
+  end;
+
+const
+  // las dos macros de una ruta del .defaultsdkpaths: la raiz del sysroot y la
+  // version de gcc, que la dice lo que llega del destino
+  MACRO_SDKROOT = '$(SDKROOT)';
+  MACRO_GCCVERSION = '$(GCCVERSION)';
+  GRUPO_GCC = 'gcc';
+  GRUPO_LIBC = 'libc';
+  // UNA tabla para el .sdk de get-sdk y el asiento de RegistrarSdkEnIde (el .sdk
+  // los llevaba escritos a mano, E1 de la 1.29)
+  OBJETOS_DEL_SDK: array[0..3] of TObjetoDelSdk = (
+    (Perfil: 'Profile_startupobj'; Asiento: 'SDKStartupObj'),
+    (Perfil: 'Profile_endcodeobj'; Asiento: 'SDKEndCodeObj'),
+    (Perfil: 'Profile_startupobjS'; Asiento: 'SDKStartupObjS'),
+    (Perfil: 'Profile_endcodeobjS'; Asiento: 'SDKEndCodeObjS'));
+
+{ EL lector del <PLATAFORMA_DE_GETSDK>.defaultsdkpaths de la instalacion (bin\):
+  lo que el asistente de SDK del IDE trae de un destino y escribe en su .sdk y en
+  su asiento (David, 2026-09-19: cada Delphi tiene su lista). False sin el
+  fichero. Lo leia RegistrarSdkEnIde, y get-sdk llevaba a mano sus rutas y sus
+  objetos de arranque (E1 de la 1.29: lo medible no se hardcodea). }
+function DefaultSdkPathsDelIde(const ARootDir: string; out AXml: string): Boolean;
+var
+  Fichero: string;
+begin
+  AXml := '';
+  Fichero := TPath.Combine(BinDelIde(ARootDir), PLATAFORMA_DE_GETSDK + '.defaultsdkpaths');
+  if not TFile.Exists(Fichero) then
+    Exit(False);
+  AXml := LeeTexto(Fichero, [ltIde]);
+  Result := True;
+end;
+
+{ Sus bibliotecas (ProfileLibrary), en su orden, como rutas del DESTINO sin la
+  raiz del sysroot: '/usr/lib64', '/usr/lib/gcc/x86_64-linux-gnu/$(GCCVERSION)'. }
+function BibliotecasDelSdk(const AXml: string): TArray<string>;
+begin
+  Result := [];
+  for var T in TramosDeEtiqueta(AXml, 'ProfileLibrary') do
+  begin
+    var Ruta := AtributoDeTramo(AXml, T, '', 'Include');
+    if StartsText(MACRO_SDKROOT, Ruta) then
+      Ruta := Ruta.Substring(Length(MACRO_SDKROOT));
+    if Ruta <> '' then
+      Result := Result + [Ruta];
+  end;
+end;
+
+{ What the LINKER needs: the ProfileLibrary entries of the .defaultsdkpaths, the
+  one with the gcc version as its whole parent tree (crt*/libgcc live there, and
+  the version is what arrives). The ProfileInclude entries (C++ headers, tens of
+  thousands of small files) are deliberately NOT pulled: this server links
+  Delphi.
+
+  GROUP semantics, not per-entry requiredness: the GCC triplet path is the
+  distro's choice - Debian/Ubuntu use x86_64-linux-gnu, Fedora/RHEL use
+  x86_64-redhat-linux + /usr/lib64 - so every variant is TRIED and what is
+  required is that at least one 'gcc' tree and one 'libc' dir actually
+  landed. Marking the Debian path required aborted the whole pull on
+  Fedora 44 even though the RedHat tree was there (openclaw, live Fedora
+  target, 2026-09-11). Which entries make each group is GRAMATICA NUESTRA,
+  declared: the file does not say it. The gcc ones are the gcc trees, the ones
+  under /usr/ the libc, the rest extras; with the Linux64.defaultsdkpaths of
+  37.0 that is the six pulls that were written here by hand, in their order. }
+function TraidasDelSdk(const ABibliotecas: TArray<string>): TArray<TSdkPull>;
+begin
+  Result := [];
+  for var B in ABibliotecas do
+  begin
+    var P: TSdkPull;
+    var I := B.IndexOf('/' + MACRO_GCCVERSION);
+    if I >= 0 then
+    begin
+      P.RemoteBase := B.Substring(0, I);
+      P.Recursive := True;
+      P.Group := GRUPO_GCC;
+    end
+    else
+    begin
+      P.RemoteBase := B;
+      P.Recursive := False;
+      P.Group := IfThen(B.StartsWith('/usr/'), GRUPO_LIBC, '');
+    end;
+    Result := Result + [P];
+  end;
+end;
+
+{ Las bases de lo que se trae de un grupo, para decirlas: 'a | b' }
+function BasesDelGrupo(const ATraidas: TArray<TSdkPull>; const AGrupo: string): string;
+begin
+  Result := '';
+  for var P in ATraidas do
+    if P.Group = AGrupo then
+      Result := Result + IfThen(Result <> '', ' | ', '') + P.RemoteBase;
+end;
+
 { El gemelo del SDK en el SDK Manager del IDE: PlatformSDKs\Linux64.sdk
   apuntando al sysroot que get-sdk acaba de aprovisionar. La tabla de rutas
   y los objetos crt NO van clavados aqui: se leen del
@@ -733,17 +845,15 @@ end;
 function RegistrarSdkEnIde(const AVersion, ARootDir, ASysRoot,
   ASdkName: string; AFijarDefault: Boolean; out ACopiaAsiento, ACopiaDefault: string): Boolean;
 var
-  Fichero, Xml: string;
+  Xml: string;
   I: Integer;
   Valores: TArray<TValorDelIde>;
 begin
   Result := False;
   ACopiaAsiento := '';
   ACopiaDefault := '';
-  Fichero := TPath.Combine(BinDelIde(ARootDir), PLATAFORMA_DE_GETSDK + '.defaultsdkpaths');
-  if not TFile.Exists(Fichero) then
+  if not DefaultSdkPathsDelIde(ARootDir, Xml) then
     Exit;
-  Xml := LeeTexto(Fichero, [ltIde]);
   // OJO con la clave: sin la barra salia "BDS37.0\PlatformSDKs", que no la
   // lee nadie (visto 2026-09-20): el SDK quedaba perfecto para msbuild - que
   // solo mira el fichero .sdk - y jamas aparecia en el SDK Manager del IDE.
@@ -752,11 +862,9 @@ begin
     ValorDeTexto('SDKDisplayName', PLATAFORMA_DE_GETSDK + ' ' + ASdkName + ' (MCP get-sdk)'),
     ValorDeTexto('PlatformName', PLATAFORMA_DE_GETSDK),
     ValorDeTexto('Version', ''),
-    ValorDeTexto('SystemRoot', PrefijoSinBarra(ASysRoot)),
-    ValorDeTexto('SDKStartupObj', TagValue(Xml, 'Profile_startupobj')),
-    ValorDeTexto('SDKEndCodeObj', TagValue(Xml, 'Profile_endcodeobj')),
-    ValorDeTexto('SDKStartupObjS', TagValue(Xml, 'Profile_startupobjS')),
-    ValorDeTexto('SDKEndCodeObjS', TagValue(Xml, 'Profile_endcodeobjS'))];
+    ValorDeTexto('SystemRoot', PrefijoSinBarra(ASysRoot))];
+  for var O in OBJETOS_DEL_SDK do
+    Valores := Valores + [ValorDeTexto(O.Asiento, TagValue(Xml, O.Perfil))];
   I := 0;
   // las rutas de cabeceras y bibliotecas, en orden de documento, por EL
   // analisis (era una regex cuyo .*? se llevaba la FileMask de la entrada
@@ -1155,36 +1263,6 @@ begin
   end;
 end;
 
-{ One pull of get-sdk: a remote directory mirrored under the local sysroot.
-  Optional entries cover layout differences between distros (Ubuntu vs
-  RedHat vs /lib symlinked) - a missing one is normal, not a failure. }
-type
-  TSdkPull = record
-    RemoteBase: string;   // POSIX dir on the target
-    Recursive: Boolean;   // whole subtree (**) vs direct files (*)
-    Group: string;        // 'gcc'/'libc': ONE of the group must land; '' = extra
-  end;
-
-const
-  { What the LINKER needs, from $(BDS)\bin\Linux64.defaultsdkpaths - the
-    ProfileLibrary entries plus the gcc tree (crt*/libgcc live there). The
-    ProfileInclude entries (C++ headers, tens of thousands of small files)
-    are deliberately NOT pulled: this server links Delphi.
-
-    GROUP semantics, not per-entry requiredness: the GCC triplet path is the
-    distro's choice - Debian/Ubuntu use x86_64-linux-gnu, Fedora/RHEL use
-    x86_64-redhat-linux + /usr/lib64 - so every variant is TRIED and what is
-    required is that at least one 'gcc' tree and one 'libc' dir actually
-    landed. Marking the Debian path required aborted the whole pull on
-    Fedora 44 even though the RedHat tree was there (openclaw, live Fedora
-    target, 2026-09-11). }
-  LINUX64_PULLS: array[0..5] of TSdkPull = (
-    (RemoteBase: '/usr/lib/gcc/x86_64-linux-gnu'; Recursive: True; Group: 'gcc'),
-    (RemoteBase: '/usr/lib/x86_64-linux-gnu'; Recursive: False; Group: 'libc'),
-    (RemoteBase: '/lib/x86_64-linux-gnu'; Recursive: False; Group: ''),
-    (RemoteBase: '/usr/lib/gcc/x86_64-redhat-linux'; Recursive: True; Group: 'gcc'),
-    (RemoteBase: '/usr/lib64'; Recursive: False; Group: 'libc'),
-    (RemoteBase: '/lib64'; Recursive: False; Group: ''));
 
 { "Total file(s) copied: 196 file(s)  62.099.159 bytes" -> 196 and 62099159.
   The byte count carries locale thousands separators - digits only. }
@@ -1476,6 +1554,13 @@ begin
   Plat := Campos.Plataforma;
   if not SameText(Plat, PLATAFORMA_DE_GETSDK) then
     Exit(MsgFmt(SR_PASERVER_SDK_PLATFORM_FMT, [PLATAFORMA_DE_GETSDK, ProfName, Plat]));
+  // lo que se trae y lo que lleva el .sdk, de la lista de ESTA instalacion (E1 de
+  // la 1.29: iba escrito aqui), y antes de tocar nada
+  var SdkXml: string;
+  if not DefaultSdkPathsDelIde(Info.RootDir, SdkXml) then
+    Exit(MsgFmt(SR_PASERVER_SDK_SIN_DEFAULTS_FMT, [PLATAFORMA_DE_GETSDK]));
+  var Bibliotecas := BibliotecasDelSdk(SdkXml);
+  var Traidas := TraidasDelSdk(Bibliotecas);
 
   // El destino contesta? ANTES de nada: con el PAServer apagado cada
   // descarga salia "skipped (not on this target)" y el final culpaba a la
@@ -1521,7 +1606,7 @@ begin
   GotGcc := False;
   GotLibc := False;
   try
-    for Pull in LINUX64_PULLS do
+    for Pull in Traidas do
     begin
       if Pull.Recursive then
         Pattern := Pull.RemoteBase + '/**/*'
@@ -1556,9 +1641,9 @@ begin
           PullObj.AddPair('status', MsgText(SF_PAS_PULL_ALREADY_UP_TO_DATE))
         else
           PullObj.AddPair('status', 'ok');
-        if Pull.Group = 'gcc' then
+        if Pull.Group = GRUPO_GCC then
           GotGcc := True
-        else if Pull.Group = 'libc' then
+        else if Pull.Group = GRUPO_LIBC then
           GotLibc := True;
       end
       else
@@ -1572,9 +1657,7 @@ begin
     if not (GotGcc and GotLibc) then
     begin
       Return.AddPair('error', MsgFmt(SR_PASERVER_SDK_NOGROUP_FMT,
-        [ProfName,
-         '/usr/lib/gcc/x86_64-linux-gnu | /usr/lib/gcc/x86_64-redhat-linux',
-         '/usr/lib/x86_64-linux-gnu | /usr/lib64']));
+        [ProfName, BasesDelGrupo(Traidas, GRUPO_GCC), BasesDelGrupo(Traidas, GRUPO_LIBC)]));
       // lo bajado hasta aqui se queda (gigas) y sin .sdk nadie lo lista: se
       // dice donde, como hace remove-sdk (B de la 1.18.4)
       Return.AddPair('sysrootLeftBehind', SysRoot);
@@ -1586,16 +1669,17 @@ begin
       Exit(Return.ToJSON);
     end;
 
-    // GCC version = the version folder that arrived in the gcc tree.
+    // GCC version = the version folder that arrived in a gcc tree.
     GccVer := '';
-    for D in TArray<string>.Create('x86_64-linux-gnu', 'x86_64-redhat-linux') do
-    begin
-      DestDir := TPath.Combine(SysRoot, 'usr\lib\gcc\' + D);
-      if TDirectory.Exists(DestDir) then
-        for var Sub in TDirectory.GetDirectories(DestDir) do
-          if GccVer = '' then
-            GccVer := TPath.GetFileName(Sub);
-    end;
+    for Pull in Traidas do
+      if Pull.Group = GRUPO_GCC then
+      begin
+        DestDir := TPath.Combine(SysRoot, ConBarrasDeWindows(Pull.RemoteBase.TrimLeft(['/'])));
+        if TDirectory.Exists(DestDir) then
+          for var Sub in TDirectory.GetDirectories(DestDir) do
+            if GccVer = '' then
+              GccVer := TPath.GetFileName(Sub);
+      end;
 
     // Library search dirs for the .sdk: every pulled dir that exists locally,
     // plus the versioned gcc dir. Fully resolved paths - the IDE-written
@@ -1603,15 +1687,14 @@ begin
     LibDirs := TStringList.Create;
     Sb := TStringBuilder.Create;
     try
-      for D in TArray<string>.Create(
-        'usr\lib\gcc\x86_64-linux-gnu\' + GccVer,
-        'usr\lib\x86_64-linux-gnu',
-        'lib\x86_64-linux-gnu',
-        'usr\lib\gcc\x86_64-redhat-linux\' + GccVer,
-        'usr\lib64', 'lib64') do
-        if (GccVer <> '') or not D.Contains('\gcc\') then
+      // las bibliotecas del .defaultsdkpaths, con la version de gcc que llego
+      for var B in Bibliotecas do
+        if (GccVer <> '') or not B.Contains(MACRO_GCCVERSION) then
+        begin
+          D := ConBarrasDeWindows(StringReplace(B, MACRO_GCCVERSION, GccVer, []).TrimLeft(['/']));
           if TDirectory.Exists(TPath.Combine(SysRoot, D)) then
             LibDirs.Add(TPath.Combine(SysRoot, D));
+        end;
 
       Sb.AppendLine('<?xml version="1.0" encoding="utf-8"?>');
       Sb.AppendLine('<Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="">');
@@ -1625,10 +1708,9 @@ begin
       Sb.Append(LineaXml('    ', 'Profile_displayname', PLATAFORMA_DE_GETSDK + ' ' + SdkName +
         ' (delphi_paserver get-sdk, profile ' + ProfName + ')'));
       Sb.Append(LineaXml('    ', 'Profile_sysroot', SysRoot));
-      Sb.AppendLine('    <Profile_startupobj>crt1.o;crti.o;crtbegin.o</Profile_startupobj>');
-      Sb.AppendLine('    <Profile_endcodeobj>crtend.o;crtn.o</Profile_endcodeobj>');
-      Sb.AppendLine('    <Profile_startupobjS>crti.o;crtbeginS.o</Profile_startupobjS>');
-      Sb.AppendLine('    <Profile_endcodeobjS>crtendS.o;crtn.o</Profile_endcodeobjS>');
+      // los objetos de arranque y de fin, los del .defaultsdkpaths (iban escritos aqui)
+      for var O in OBJETOS_DEL_SDK do
+        Sb.Append(LineaXml('    ', O.Perfil, TagValue(SdkXml, O.Perfil)));
       // The Delphi Linux64 block reads $(Profile_LibraryPath) - a PROPERTY,
       // resolved at project-load time - to build DCC_LibraryPath for the
       // linker. The ProfileLibrary ITEMS below only feed _CollapsePaths (a

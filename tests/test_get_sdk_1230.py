@@ -23,6 +23,8 @@ RemoteProfiles\\mcpvdiez* (como test_paserver con su perfil), recogidos al
 empezar y al salir. Nunca active=yes: el Default_Linux64 es del operador.
 
   G1  control: un get-sdk nuevo deja carpeta con la ficha de su distro, .sdk y asiento
+  G1b lo que pide al destino y lo que lleva su .sdk es lo del Linux64.defaultsdkpaths del IDE
+      (E1 de la 1.29: iba escrito en el servidor; guarda: el de antes hacia lo mismo)
   G2  un asiento que dice otra cosa se exporta ANTES (previousIdeSeatCopy: el .reg de reg.exe)
   G3  control: repetido sin cambios, el asiento ni se copia
   G4  una carpeta sin ficha con algo dentro: NEGADO (PAS-064), nada bajado ni escrito
@@ -42,6 +44,7 @@ y G13 rojos.
 Uso:  python tests/test_get_sdk_1230.py [exe]
 """
 import atexit, json, os, re, shutil, winreg
+import xml.etree.ElementTree as ET
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -230,6 +233,30 @@ try:
           and bool(f1) and f1.get('distro') == DISTRO
           and os.path.isfile(os.path.join(PROFILES_DIR, DISTRO + '.sdk'))
           and seat(DISTRO) is not None and pidio_bajar(m0), out[:500])
+
+    # --- G1b lo que trae y lo que escribe es lo que dice el IDE (E1 de la 1.29) -
+    # el juez es el Linux64.defaultsdkpaths de ESTA instalacion, por un parser XML: sus
+    # ProfileLibrary (la del gcc, su carpeta de encima entera) son lo que se pide al destino,
+    # en su orden; en el .sdk, las que estan (con la version de gcc que llego, 13 en el
+    # destino de mentira) y sus cuatro objetos de arranque y de fin. Iban escritos en el
+    # servidor (LINUX64_PULLS, que leia test_round26: retirada con ellos, su regla de grupos
+    # la mide NOGROUP aqui abajo)
+    _ns = {'m': 'http://schemas.microsoft.com/developer/msbuild/2003'}
+    _ide = ET.parse(os.path.join(mc.raiz_ide(srv.call), 'bin', 'Linux64.defaultsdkpaths')).getroot()
+    _libs = [e.get('Include').replace('$(SDKROOT)', '', 1) for e in _ide.iterfind('.//m:ProfileLibrary', _ns)]
+    _bases = [l.split('/$(GCCVERSION)')[0] for l in _libs]
+    _pedidos = [p.get('dir') for p in j.get('pulls', [])]
+    _sdk = ET.parse(os.path.join(PROFILES_DIR, DISTRO + '.sdk')).getroot()
+    _raiz = os.path.join(SDKS, DISTRO + '.sdk')
+    _estan = [os.path.join(_raiz, *l.replace('$(GCCVERSION)', '13').strip('/').split('/')) for l in _libs]
+    _estan = [os.path.normcase(d) for d in _estan if os.path.isdir(d)]
+    _en_sdk = [os.path.normcase(mc.real(e.get('Include'))) for e in _sdk.iterfind('.//m:ProfileLibrary', _ns)]
+    _objetos = {t: (_ide.findtext('.//m:' + t, '', _ns), _sdk.findtext('.//m:' + t, '', _ns))
+                for t in ('Profile_startupobj', 'Profile_endcodeobj', 'Profile_startupobjS', 'Profile_endcodeobjS')}
+    check('G1b lo que pide al destino y lo que lleva su .sdk es lo del Linux64.defaultsdkpaths del IDE',
+          len(_libs) > 0 and _pedidos == _bases and _en_sdk == _estan
+          and all(i and i == s for i, s in _objetos.values()),
+          (_pedidos, _bases, _en_sdk, _estan, _objetos))
 
     # --- G2 el asiento que dice otra cosa se exporta antes --------------------
     pon_asiento(r'PlatformSDKs\%s.sdk' % DISTRO, {'SDKDisplayName': 'tocado a mano por G2'})
