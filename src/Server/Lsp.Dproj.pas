@@ -1376,38 +1376,56 @@ type
     Vacia: Boolean; // <Tag/>
   end;
 
+const
+  // lo que puede seguir al nombre en una apertura: <Platforms> no es <Platform>
+  TRAS_EL_NOMBRE_DE_ETIQUETA = ['>', '/', ' ', #9, #13, #10];
+
+{ La siguiente apertura de AOpen ('<tag', en minusculas) en ALow desde ADesde:
+  la que sigue un separador, hasta su '>' (FinDeEtiqueta). False si no hay mas
+  o si la siguiente no se cierra. EL reconocedor de una apertura, el de
+  AperturasDe y el de CierreDe (B9 de la 1.29: estaba escrito en las dos, con
+  su conjunto de separadores). }
+function SiguienteApertura(const ALow, AOpen: string; ADesde: Integer;
+  out AAbierta: TAperturaXml): Boolean;
+var
+  P, After, TagEnd: Integer;
+begin
+  P := ADesde;
+  while True do
+  begin
+    P := Pos(AOpen, ALow, P);
+    if P = 0 then
+      Exit(False);
+    After := P + Length(AOpen);
+    if (After <= Length(ALow)) and CharInSet(ALow[After], TRAS_EL_NOMBRE_DE_ETIQUETA) then
+      Break;
+    P := After;
+  end;
+  TagEnd := FinDeEtiqueta(ALow, After);
+  if TagEnd = 0 then
+    Exit(False);
+  AAbierta.Abre := P;
+  AAbierta.Cierra := TagEnd + 1;
+  AAbierta.Vacia := ALow[TagEnd - 1] = '/';
+  Result := True;
+end;
+
 { Cada etiqueta de apertura de ATag en ALow (TextoDeBusqueda), en orden: EL
   buscador de aperturas, el de los elementos y el de los atributos (eran dos
   bucles gemelos, uno en TramosDeEtiqueta y otro en AllTagAttr). }
 function AperturasDe(const ALow, ATag: string): TArray<TAperturaXml>;
 var
   Open: string;
-  P, After, TagEnd: Integer;
+  P: Integer;
   A: TAperturaXml;
 begin
   Result := [];
   Open := '<' + LowerCase(ATag);
   P := 1;
-  while True do
+  while SiguienteApertura(ALow, Open, P, A) do
   begin
-    P := Pos(Open, ALow, P);
-    if P = 0 then
-      Break;
-    After := P + Length(Open);
-    if (After > Length(ALow)) or
-       not CharInSet(ALow[After], ['>', '/', ' ', #9, #13, #10]) then
-    begin
-      P := After; // <Platforms> no es <Platform>
-      Continue;
-    end;
-    TagEnd := FinDeEtiqueta(ALow, After);
-    if TagEnd = 0 then
-      Break;
-    A.Abre := P;
-    A.Cierra := TagEnd + 1;
-    A.Vacia := ALow[TagEnd - 1] = '/';
     Result := Result + [A];
-    P := TagEnd + 1;
+    P := A.Cierra;
   end;
 end;
 
@@ -1420,7 +1438,8 @@ function CierreDe(const ALow, ATag: string; const AAbierta: TAperturaXml;
   out AFin, ACierra: Integer): Boolean;
 var
   Open, CloseOpen: string;
-  P, C, Q, O, After, TagEnd, Nivel: Integer;
+  P, C, Q, O, Nivel: Integer;
+  A: TAperturaXml;
 begin
   Result := False;
   Open := '<' + LowerCase(ATag);
@@ -1445,23 +1464,11 @@ begin
     end;
     // las del mismo nombre que se abren antes de el (y no son <Tag/>) suben
     O := P;
-    while True do
+    while SiguienteApertura(ALow, Open, O, A) and (A.Abre < C) do
     begin
-      O := Pos(Open, ALow, O);
-      if (O = 0) or (O >= C) then
-        Break;
-      After := O + Length(Open);
-      if (After <= Length(ALow)) and CharInSet(ALow[After], ['>', '/', ' ', #9, #13, #10]) then
-      begin
-        TagEnd := FinDeEtiqueta(ALow, After);
-        if TagEnd = 0 then
-          Break;
-        if ALow[TagEnd - 1] <> '/' then
-          Inc(Nivel);
-        O := TagEnd + 1;
-      end
-      else
-        O := After;
+      if not A.Vacia then
+        Inc(Nivel);
+      O := A.Cierra;
     end;
     Dec(Nivel);
     if Nivel = 0 then

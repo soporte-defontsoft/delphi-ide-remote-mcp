@@ -438,37 +438,28 @@ begin
     (TJSONObject(V).GetValue('path').Value.Trim <> '');
 end;
 
-procedure AgrupaPorFichero(AObj: TJSONObject; const ACampo: string);
+{ El andamiaje de AgrupaPorFichero y AgrupaPorCarpeta: el campo, que sea una
+  lista, que cada entrada traiga su 'path' (si no, el campo se queda como esta)
+  y, al final, el par con la lista agrupada. Lo propio de cada una es que hace
+  con cada entrada, APon (B9 de la 1.29: el resto eran dos copias). }
+procedure AgrupaPor(AObj: TJSONObject; const ACampo: string;
+  const APon: TProc<TListaDeFicheros, TJSONObject>);
 var
   Par: TJSONPair;
   Lista: TListaDeFicheros;
-  E: TJSONObject;
-  Hits: TJSONArray;
 begin
   Par := AObj.Get(ACampo);
   if (Par = nil) or not (Par.JsonValue is TJSONArray) then
     Exit;
-  // una entrada sin 'path' deja el campo como esta, como AgrupaPorCarpeta:
-  // se saltaba y se perdia en silencio (revisor de baterias de la 1.15.0)
+  // una entrada sin 'path' deja el campo como esta: se saltaba y se perdia
+  // en silencio (revisor de baterias de la 1.15.0)
   for var V in TJSONArray(Par.JsonValue) do
     if not TienePath(V) then
       Exit;
   Lista := TListaDeFicheros.Create;
   try
     for var V in TJSONArray(Par.JsonValue) do
-    begin
-      E := Lista.Fichero(TJSONObject(V).GetValue('path').Value);
-      if E.GetValue('hits') is TJSONArray then
-        Hits := TJSONArray(E.GetValue('hits'))
-      else
-      begin
-        Hits := TJSONArray.Create;
-        E.AddPair('hits', Hits);
-      end;
-      var Uso := V.Clone as TJSONObject;
-      Uso.RemovePair('path').Free;
-      Hits.AddElement(Uso);
-    end;
+      APon(Lista, TJSONObject(V));
     // el par se queda la lista agrupada y libera la plana (SetJsonValue)
     Par.JsonValue := Lista.FCarpetas;
     Lista.FColgada := True;
@@ -477,32 +468,38 @@ begin
   end;
 end;
 
-procedure AgrupaPorCarpeta(AObj: TJSONObject; const ACampo: string);
-var
-  Par: TJSONPair;
-  Lista: TListaDeFicheros;
+procedure AgrupaPorFichero(AObj: TJSONObject; const ACampo: string);
 begin
-  Par := AObj.Get(ACampo);
-  if (Par = nil) or not (Par.JsonValue is TJSONArray) then
-    Exit;
-  for var V in TJSONArray(Par.JsonValue) do
-    if not TienePath(V) then
-      Exit;
-  Lista := TListaDeFicheros.Create;
-  try
-    for var V in TJSONArray(Par.JsonValue) do
+  AgrupaPor(AObj, ACampo,
+    procedure(ALista: TListaDeFicheros; AEntrada: TJSONObject)
+    var
+      E: TJSONObject;
+      Hits: TJSONArray;
     begin
-      var E := Lista.Add(TJSONObject(V).GetValue('path').Value);
-      for var P in TJSONObject(V) do
+      E := ALista.Fichero(AEntrada.GetValue('path').Value);
+      if E.GetValue('hits') is TJSONArray then
+        Hits := TJSONArray(E.GetValue('hits'))
+      else
+      begin
+        Hits := TJSONArray.Create;
+        E.AddPair('hits', Hits);
+      end;
+      var Uso := AEntrada.Clone as TJSONObject;
+      Uso.RemovePair('path').Free;
+      Hits.AddElement(Uso);
+    end);
+end;
+
+procedure AgrupaPorCarpeta(AObj: TJSONObject; const ACampo: string);
+begin
+  AgrupaPor(AObj, ACampo,
+    procedure(ALista: TListaDeFicheros; AEntrada: TJSONObject)
+    begin
+      var E := ALista.Add(AEntrada.GetValue('path').Value);
+      for var P in AEntrada do
         if P.JsonString.Value <> 'path' then
           E.AddPair(P.JsonString.Value, P.JsonValue.Clone as TJSONValue);
-    end;
-    // el par se queda la lista agrupada y libera la plana (SetJsonValue)
-    Par.JsonValue := Lista.FCarpetas;
-    Lista.FColgada := True;
-  finally
-    Lista.Free;
-  end;
+    end);
 end;
 
 procedure TListaDeFicheros.AddNombre(const ARuta: string);

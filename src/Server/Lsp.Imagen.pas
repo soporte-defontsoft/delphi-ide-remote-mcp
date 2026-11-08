@@ -62,22 +62,60 @@ uses
   Vcl.Imaging.jpeg, // CabeEnLineaBytes: la misma imagen en JPEG
   Lsp.Texts;
 
+{ Un PNG desde sus bytes (quien llama lo libera; lanza si no lo es): EL lector de
+  las tres que transforman una captura - eran tres TBytesStream + TPngImage +
+  LoadFromStream a mano (B9 de la 1.29). }
+function PngDeBytes(const ABytes: TArray<Byte>): TPngImage;
+var
+  Ent: TBytesStream;
+begin
+  Ent := TBytesStream.Create(ABytes);
+  try
+    Result := TPngImage.Create;
+    try
+      Result.LoadFromStream(Ent);
+    except
+      Result.Free;
+      raise;
+    end;
+  finally
+    Ent.Free;
+  end;
+end;
+
+{ ...y su escritor: los bytes PNG de un mapa de bits, con la compresion de la
+  casa (6: un recorte pesaba mas que la captura entera). Eran dos copias. }
+function BytesDePng(AMapa: TBitmap): TArray<Byte>;
+var
+  Png: TPngImage;
+  Sal: TBytesStream;
+begin
+  Png := TPngImage.Create;
+  Sal := TBytesStream.Create;
+  try
+    Png.Assign(AMapa);
+    Png.CompressionLevel := 6;
+    Png.SaveToStream(Sal);
+    Result := Copy(Sal.Bytes, 0, Sal.Size);
+  finally
+    Sal.Free;
+    Png.Free;
+  end;
+end;
+
 function RecortaPngBytes(const AEntrada: TArray<Byte>; var X, Y, W, H: Integer;
   out AAnchoOrig, AAltoOrig: Integer; out ASalida: TArray<Byte>): string;
 var
-  Png, Nuevo: TPngImage;
+  Png: TPngImage;
   Entera, Trozo: TBitmap;
-  Ent, Sal: TBytesStream;
 begin
   Result := '';
   AAnchoOrig := 0;
   AAltoOrig := 0;
   ASalida := nil;
   try
-    Ent := TBytesStream.Create(AEntrada);
-    Png := TPngImage.Create;
+    Png := PngDeBytes(AEntrada);
     try
-      Png.LoadFromStream(Ent);
       AAnchoOrig := Png.Width;
       AAltoOrig := Png.Height;
       // al lienzo: lo que se sale por un lado se pierde, no se inventa
@@ -100,27 +138,19 @@ begin
           [Png.Width, Png.Height]));
       Entera := TBitmap.Create;
       Trozo := TBitmap.Create;
-      Nuevo := TPngImage.Create;
-      Sal := TBytesStream.Create;
       try
         Entera.Assign(Png);
         Trozo.PixelFormat := pf24bit;
         Trozo.SetSize(W, H);
         Trozo.Canvas.CopyRect(Rect(0, 0, W, H), Entera.Canvas,
           Rect(X, Y, X + W, Y + H));
-        Nuevo.Assign(Trozo);
-        Nuevo.CompressionLevel := 6; // el recorte pesaba mas que la captura entera
-        Nuevo.SaveToStream(Sal);
-        ASalida := Copy(Sal.Bytes, 0, Sal.Size);
+        ASalida := BytesDePng(Trozo);
       finally
-        Sal.Free;
-        Nuevo.Free;
         Trozo.Free;
         Entera.Free;
       end;
     finally
       Png.Free;
-      Ent.Free;
     end;
   except
     on E: Exception do
@@ -134,9 +164,8 @@ end;
 function EscalaPngBytes(const AEntrada: TArray<Byte>; AMaxAncho: Integer;
   out ASalida: TArray<Byte>; out AEscala: Double; out AW, AH: Integer): string;
 var
-  Png, Nuevo: TPngImage;
+  Png: TPngImage;
   Entera, Chica: TBitmap;
-  Ent, Sal: TBytesStream;
 begin
   Result := '';
   ASalida := AEntrada;
@@ -144,10 +173,8 @@ begin
   AW := 0;
   AH := 0;
   try
-    Ent := TBytesStream.Create(AEntrada);
-    Png := TPngImage.Create;
+    Png := PngDeBytes(AEntrada);
     try
-      Png.LoadFromStream(Ent);
       AW := Png.Width;
       AH := Png.Height;
       if (AMaxAncho <= 0) or (Png.Width <= AMaxAncho) then
@@ -159,27 +186,19 @@ begin
         AH := 1;
       Entera := TBitmap.Create;
       Chica := TBitmap.Create;
-      Nuevo := TPngImage.Create;
-      Sal := TBytesStream.Create;
       try
         Entera.Assign(Png);
         Chica.PixelFormat := pf24bit;
         Chica.SetSize(AW, AH);
         SetStretchBltMode(Chica.Canvas.Handle, HALFTONE);
         Chica.Canvas.StretchDraw(Rect(0, 0, AW, AH), Entera);
-        Nuevo.Assign(Chica);
-        Nuevo.CompressionLevel := 6;
-        Nuevo.SaveToStream(Sal);
-        ASalida := Copy(Sal.Bytes, 0, Sal.Size);
+        ASalida := BytesDePng(Chica);
       finally
-        Sal.Free;
-        Nuevo.Free;
         Chica.Free;
         Entera.Free;
       end;
     finally
       Png.Free;
-      Ent.Free;
     end;
   except
     on E: Exception do
@@ -198,7 +217,7 @@ var
   Png: TPngImage;
   Bmp: TBitmap;
   Jpg: TJPEGImage;
-  Ent, Sal: TBytesStream;
+  Sal: TBytesStream;
 begin
   Result := '';
   ASalida := APng;
@@ -206,11 +225,9 @@ begin
   if Length(APng) <= AMaxBytes then
     Exit; // cabe: sale tal cual, sin perder nada
   try
-    Ent := TBytesStream.Create(APng);
-    Png := TPngImage.Create;
+    Png := PngDeBytes(APng);
     Bmp := TBitmap.Create;
     try
-      Png.LoadFromStream(Ent);
       Bmp.Assign(Png);
       Bmp.PixelFormat := pf24bit; // un JPEG no lleva alfa; una captura no la usa
       for var Calidad in CALIDADES do
@@ -236,7 +253,6 @@ begin
     finally
       Bmp.Free;
       Png.Free;
-      Ent.Free;
     end;
     ASalida := nil;
     Result := MsgFmt(SN_CAPT_NO_CABE_EN_LINEA_FMT, [Length(APng), AMaxBytes]);

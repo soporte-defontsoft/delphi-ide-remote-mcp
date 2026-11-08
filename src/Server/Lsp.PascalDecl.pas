@@ -340,6 +340,7 @@ type
     function LeeCuerpoDeClase(ATipo: TTipoPas): Boolean;
     procedure LeeCuerpoDeRegistro(ATipo: TTipoPas);
     function LeeMiembrosDeEnumerado: TArray<string>;
+    function AbreBloque(const T, Ant: string): Boolean;
   public
     constructor Create(const ATexto: string; AUnidad: TUnidadPas);
     destructor Destroy; override;
@@ -1057,10 +1058,7 @@ begin
   while not Fin do
   begin
     T := Mira;
-    if AbreRecord or ((T = 'object') and (Ant <> 'of')) or
-       (T = 'dispinterface') or
-       ((T = 'interface') and (Mira(1) <> ';')) or
-       ((T = 'class') and EsAperturaDeClase(FI)) then
+    if AbreBloque(T, Ant) then
       Inc(Prof)
     else if T = 'end' then
     begin
@@ -2156,8 +2154,7 @@ begin
       Ant := '';
       Continue;
     end;
-    if AbreRecord or ((T = 'object') and (Ant <> 'of')) or
-       ((T = 'class') and EsAperturaDeClase(FI)) then
+    if AbreBloque(T, Ant) then
       Inc(Prof)
     else if T = 'end' then
     begin
@@ -2453,6 +2450,18 @@ begin
     end;
     Cur := Anc;
   end;
+end;
+
+function TLectorPas.AbreBloque(const T, Ant: string): Boolean;
+begin
+  // lo que abre un bloque que acaba en su 'end': un record, un object (no el
+  // 'of object' de un tipo de metodo), una interfaz (no su declaracion
+  // adelantada) o una clase. EL predicado de SaltaHastaEnd y de
+  // LeeCuerpoDeRegistro: eran dos conjuntos, y solo uno contaba las
+  // interfaces (W13; B9 de la 1.29, con UnInterfaceDentroDeUnRecord de guarda)
+  Result := AbreRecord or ((T = 'object') and (Ant <> 'of')) or
+    (T = 'dispinterface') or ((T = 'interface') and (Mira(1) <> ';')) or
+    ((T = 'class') and EsAperturaDeClase(FI));
 end;
 
 end.

@@ -36,6 +36,8 @@ type
     [Test] procedure ElImplementationYSusRutinas;
     [Test] procedure LasConstantesDelInterface;
     [Test] procedure LoQueCortabaLaUnidad;
+    [Test]
+    procedure UnInterfaceDentroDeUnRecord;
   end;
 
   [TestFixture]
@@ -1715,6 +1717,35 @@ begin
   Assert.IsTrue(Hechos(V, 'P Vcl.Cajas:TCajaInc Ancho o Integer'), 'la clase esta: ' + string.Join(' | ', V));
   Assert.IsTrue(Hechos(V, 'D Vcl.Cajas:TCajaInc Oculta'), 'y lo que guarda por codigo en su include: ' +
     string.Join(' | ', V));
+end;
+
+procedure TPascalDeclTests.UnInterfaceDentroDeUnRecord;
+var
+  U: TUnidadPas;
+begin
+  // SaltaHastaEnd cuenta interface y dispinterface y LeeCuerpoDeRegistro no
+  // (W13 de la auditoria de duplicados; WATCH de B-I18 de la 1.29): un
+  // interface en la clase de un record, y otro suelto en el record
+  U := LeeUnidadPascal(
+    'unit Cinco; interface type'#13#10 +
+    'TRec = record'#13#10 +
+    'public type'#13#10 +
+    '  TDentro = class'#13#10 +
+    '  public type IUno = interface procedure P; end;'#13#10 +
+    '    IDos = dispinterface [''{00000000-0000-0000-0000-000000000001}''] end;'#13#10 +
+    '  end;'#13#10 +
+    '  ITres = interface end;'#13#10 +
+    'var X: Integer;'#13#10 +
+    'end;'#13#10 +
+    'TDespues = (dsA, dsB);'#13#10 +
+    'implementation end.');
+  try
+    Assert.IsNotNull(Tipo(U, 'TRec.TDentro'), 'la clase del record');
+    Assert.IsNotNull(Tipo(U, 'TDespues'), 'y lo de detras del record se sigue leyendo');
+    Assert.AreEqual('dsA,dsB', string.Join(',', Tipo(U, 'TDespues').Miembros));
+  finally
+    U.Free;
+  end;
 end;
 
 initialization
