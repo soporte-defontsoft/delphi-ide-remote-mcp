@@ -107,7 +107,8 @@ uses
   Lsp.Lineas,
   Lsp.Capturas,
   Lsp.JuecesDeArgumentos,
-  Lsp.Rutas;
+  Lsp.Rutas,
+  System.Math;
 
 { El valor de una linea "<clave>: <valor>" de la salida de `wm size` / `wm
   density` ("Physical size: 1080x1920", "Override density: 320"); '' si no
@@ -442,8 +443,17 @@ begin
       if DeviceGone(Output) or (ExitCode <> 0) then
         Exit(FalloDeAdb(Output, ExitCode));
     end;
-    Output := RunAdb(Adb, DevArg + 'logcat -d -v time -t ' + IntToStr(N),
-      45000, ExitCode);
+    // con filter, en el log ENTERO del dispositivo, y de lo que case las N mas
+    // recientes: -t N recortaba ANTES de filtrar y la linea de la app quedaba
+    // fuera (A20 de la 1.29, medido en la tablet: 302.624 lineas, las de la
+    // app 27.000 atras; el volcado entero, 32,8 MB en 4,8 s). El -e de logcat
+    // filtraria en el dispositivo, pero solo el MENSAJE: la etiqueta que el
+    // contrato de filter nombra dejaria de casar. Sin filter, las N ultimas
+    if Params.Filter.Trim <> '' then
+      Output := RunAdb(Adb, DevArg + 'logcat -d -v time', 45000, ExitCode)
+    else
+      Output := RunAdb(Adb, DevArg + 'logcat -d -v time -t ' + IntToStr(N),
+        45000, ExitCode);
     // a lost device must say so, not hide as "(logcat vacio)" - but only
     // when adb ITSELF failed. The dump's content is the device's own system
     // log, which naturally carries "failed to connect"/"offline" noise:
@@ -451,19 +461,37 @@ begin
     // the marker scan and Exit'ed the RAW dump inline - 611KB past the
     // filter, the out= file and the 400-line cap in one move. The get-state
     // precheck above already answers for a device gone BEFORE the call.
-    if (ExitCode <> 0) and DeviceGone(Output) then
-      Exit(ResultadoAdb(Output, ExitCode));
+    // Un exit distinto de 0 SIN nada recibido es el fallo de adb; CON algo,
+    // un volcado que adb no acabo: lo que llego va como siempre (filtro, out=,
+    // cola) y la nota lo dice con su exit. Antes, sin las palabras de un
+    // dispositivo perdido, salia como el log entero, y con ellas (el log del
+    // propio dispositivo las trae) el volcado crudo dentro del fallo (A10 de
+    // la 1.29, medido con la tablet: exit 255 y 3.788 de unas 5.300 lineas)
+    var Incompleto := '';
+    if ExitCode <> 0 then
+    begin
+      if Output.Trim = '' then
+        Exit(FalloDeAdb(Output, ExitCode));
+      Incompleto := MsgFmt(SN_ADB_LOGCAT_INCOMPLETO_FMT, [ExitCode]);
+    end;
     var Txt: string;
     if Params.Filter.Trim <> '' then
     begin
+      // en una lista (un log entero son cientos de miles de lineas: sumar a un
+      // array lo copiaba entero a cada coincidencia), y de ella las N mas
+      // recientes de las que casan (lines, como sin filtro)
+      var Casan := TStringList.Create;
       var Filtered := TStringBuilder.Create;
       try
         for L in LineasDelTexto(Output) do
           if L.Contains(Params.Filter.Trim) then
-            Filtered.AppendLine(L.TrimRight);
+            Casan.Add(L.TrimRight);
+        for var K := Max(0, Casan.Count - N) to Casan.Count - 1 do
+          Filtered.AppendLine(Casan[K]);
         Txt := Filtered.ToString.TrimRight;
       finally
         Filtered.Free;
+        Casan.Free;
       end;
     end
     else
@@ -498,6 +526,8 @@ begin
           TJSONNumber.Create(Length(LineasDelTexto(Txt))));
         Return.AddPair('size', TJSONNumber.Create(TFile.GetSize(Params.Out.Trim)));
         Return.AddPair('note', MsgText(SN_ADB_LOGFILE));
+        if Incompleto <> '' then
+          Return.AddPair('incompleteNote', Incompleto);
         Result := Return.ToJSON;
       finally
         Return.Free;
@@ -513,6 +543,8 @@ begin
       Result := Cola.Texto;
       if Cola.Cortada then
         Result := MsgFmt(SN_ADB_TAIL_FMT, [Cola.Total, Cola.Mostradas]) + #10 + Result;
+      if Incompleto <> '' then
+        Result := Incompleto + #10 + Result;
     end;
   end
   else if (Cmd = 'connect') or (Cmd = 'disconnect') then

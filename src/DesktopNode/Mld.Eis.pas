@@ -590,9 +590,25 @@ begin
   // destino y la respuesta decia que no se pudo (R3 de la 1.29, medido en el
   // Fedora: "ab<TAB>cd" dejo "ab" escrito)
   Gestos := [];
-  for I := 1 to Length(ATexto) do
+  I := 0;
+  var Posicion := 0; // en caracteres, no en unidades UTF-16
+  while I < Length(ATexto) do
   begin
+    Inc(I);
+    Inc(Posicion);
     C := ATexto[I];
+    // un caracter fuera del plano basico (un emoji) son DOS unidades UTF-16:
+    // se juzga por su punto de codigo y se nombra ENTERO (su mitad salia '?'
+    // en la negativa; visto en el Fedora el 8-nov-2026)
+    var Punto: Cardinal := Ord(C);
+    var Nombre: string := C;
+    if (Ord(C) >= $D800) and (Ord(C) <= $DBFF) and (I < Length(ATexto)) and
+       (Ord(ATexto[I + 1]) >= $DC00) and (Ord(ATexto[I + 1]) <= $DFFF) then
+    begin
+      Punto := $10000 + ((Cardinal(Ord(C)) - $D800) shl 10) + (Cardinal(Ord(ATexto[I + 1])) - $DC00);
+      Nombre := Copy(ATexto, I, 2);
+      Inc(I);
+    end;
     // Un salto de linea es la tecla Intro y un tabulador la tecla Tab, en toda
     // distribucion: las que pulsa una persona (el servidor deja todo salto en
     // LF; J10 de la 1.28). El mapa no las da: no componen un caracter
@@ -611,7 +627,7 @@ begin
     // tal cual en la salida del nodo
     if C < ' ' then
     begin
-      FError := MsgFmt(SF_NODE_NO_SE_TECLEAR_FMT, [Format('#%d', [Ord(C)]), I]);
+      FError := MsgFmt(SF_NODE_NO_SE_TECLEAR_FMT, [Format('#%d', [Ord(C)]), Posicion]);
       Exit;
     end;
     // Con el mapa del escritorio en la mano, manda EL: la tecla y el nivel
@@ -621,10 +637,10 @@ begin
       // Una pulsacion si la tecla existe, DOS si el caracter sale por tecla
       // muerta ("´" y luego "i" = "í"): el mapa lo decide.
       var Secuencia: TArray<TPulsacion>;
-      if not FMapa.Secuencia(Ord(C), Secuencia) then
+      if not FMapa.Secuencia(Punto, Secuencia) then
       begin
         FError := MsgFmt(SF_NODE_TECLADO_SIN_TECLA_FMT,
-          [FMapa.Distribucion, string(C), I, FMapa.CuantasMuertas]);
+          [FMapa.Distribucion, Nombre, Posicion, FMapa.CuantasMuertas]);
         Exit;
       end;
       Gestos := Gestos + Secuencia;
@@ -652,7 +668,7 @@ begin
       '.': Codigo := 52;  ',': Codigo := 51;  '/': Codigo := 53;
     else
       begin
-        FError := MsgFmt(SF_NODE_NO_SE_TECLEAR_FMT, [string(C), I]);
+        FError := MsgFmt(SF_NODE_NO_SE_TECLEAR_FMT, [Nombre, Posicion]);
         Exit;
       end;
     end;

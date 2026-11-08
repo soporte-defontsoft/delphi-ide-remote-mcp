@@ -3246,6 +3246,14 @@ const
     'For the full dump repeat with out=<file.txt> and read it by ranges ' +
     'with delphi_read, or narrow it with filter.)';
 
+  { Un volcado que adb no acabo (A10 de la 1.29, medido con la tablet: un
+    disconnect a mitad dio exit 255 y 3.788 de unas 5.300 lineas, sin una
+    palabra de adb): lo que llego no es el log entero }
+  SN_ADB_LOGCAT_INCOMPLETO_FMT =
+    '[ADB-036] adb ended with exit code %d before finishing the dump: what ' +
+    'is here is only what arrived, not the whole log. command=devices says ' +
+    'whether the device is still there; then repeat.';
+
   SN_ADB_SCREENSHOT =
     '[ADB-011] The device screen comes in this answer (with ' +
     'inline=false, as a download link; over stdio, pass out=). Coordinates ' +
