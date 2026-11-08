@@ -228,7 +228,7 @@ begin
   S := '';
   for var I := 1 to 200 do
     S := S + StringOfChar('x', 999) + IntToStr(I mod 10) + #10;
-  var C := ColaDeSalida(S, LINEAS_DE_SALIDA);
+  var C := ColaDeSalida(S, LineasDeSalida);
   Assert.IsTrue(Length(C.Texto) <= CARACTERES_DE_COLA, IntToStr(Length(C.Texto)));
   Assert.IsTrue((C.Mostradas > 0) and (C.Mostradas < 200) and C.Cortada, IntToStr(C.Mostradas));
   Assert.IsTrue(C.Texto.EndsWith('x0'), 'la mas nueva al final');
@@ -237,13 +237,13 @@ end;
 
 procedure TColaDeSalidaTests.UnaLineaEnormeVaSuFinalYSeDice;
 begin
-  var C := ColaDeSalida('vieja'#10 + StringOfChar('A', 200000) + 'FIN', LINEAS_DE_SALIDA);
+  var C := ColaDeSalida('vieja'#10 + StringOfChar('A', 200000) + 'FIN', LineasDeSalida);
   Assert.IsTrue(Length(C.Texto) <= CARACTERES_DE_COLA, IntToStr(Length(C.Texto)));
   Assert.IsTrue(C.Texto.StartsWith('...') and C.Texto.EndsWith('FIN'), Copy(C.Texto, 1, 10));
   Assert.AreEqual(1, C.Mostradas, 'la mas nueva, a medias');
   Assert.IsTrue(C.Cortada, 'y se dice');
   // sola: la cuenta cuadra (1 de 1) y aun asi falta su principio
-  C := ColaDeSalida(StringOfChar('A', 200000), LINEAS_DE_SALIDA);
+  C := ColaDeSalida(StringOfChar('A', 200000), LineasDeSalida);
   Assert.IsTrue((C.Total = 1) and (C.Mostradas = 1) and C.Cortada, 'una sola linea cortada');
 end;
 

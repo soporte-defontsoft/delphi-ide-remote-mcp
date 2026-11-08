@@ -67,14 +67,14 @@ type
     [SchemaDescription(SP_BUILD_CONFIG)]
     property Config: string read FConfig write FConfig;
     [SchemaDescription(SP_BUILD_TARGET)]
-    [SchemaDefault('Build')]
+    [SchemaDefault(BUILD_TARGET_POR_DEFECTO)]
     property Target: string read FTarget write FTarget;
     [SchemaDescription(SP_BUILD_PROFILE)]
     property Profile: string read FProfile write FProfile;
     [SchemaDescription(SP_BUILD_SDK)]
     property Sdk: string read FSdk write FSdk;
     [SchemaDescription(SP_BUILD_VERBOSITY)]
-    [SchemaDefault('quiet')]
+    [SchemaDefault(BUILD_VERBOSIDAD_POR_DEFECTO)]
     property Verbosity: string read FVerbosity write FVerbosity;
     [SchemaDescription(SP_BUILD_DEVICEID)]
     property DeviceId: string read FDeviceId write FDeviceId;
@@ -282,8 +282,8 @@ begin
     // un agente son "?sigue compilando?" y pagar los warnings enteros en cada
     // uno se lo come el contexto.
     R := RunMsBuild(Params.Project, Params.Platform, Params.Config, Params.Target,
-      Params.Profile, Params.DeviceId, 600000, Params.Sdk,
-      IfThen(Params.Verbosity.Trim = '', 'quiet', SinMayusculas(Params.Verbosity.Trim)));
+      Params.Profile, Params.DeviceId, PLAZO_DEL_BUILD_MS, Params.Sdk,
+      IfThen(Params.Verbosity.Trim = '', BUILD_VERBOSIDAD_POR_DEFECTO, SinMayusculas(Params.Verbosity.Trim)));
   except
     on E: Exception do
       // "error:" tambien, no solo "RECHAZADO": desde v1.0.4-beta el motor

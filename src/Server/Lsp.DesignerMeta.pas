@@ -585,6 +585,36 @@ begin
   Result := Copy(AClave, 1, P - 1);
 end;
 
+const
+  { una clase AMBIGUA en la tabla en memoria (Ambiguas): su nombre y las
+    unidades que la declaran, juntos por este separador al cargarla y leidos
+    por AmbiguaEnPartes. Se partian a mano en dos sitios (WHEN SEEN de F1 de
+    la 1.29) }
+  SEP_AMBIGUA = '|';
+
+function AmbiguaEnPartes(const A: string; out ANombre, AUnidades: string): Boolean;
+begin
+  var P := A.IndexOf(SEP_AMBIGUA);
+  Result := P >= 0;
+  if Result then
+  begin
+    ANombre := A.Substring(0, P);
+    AUnidades := A.Substring(P + 1);
+  end
+  else
+  begin
+    ANombre := A;
+    AUnidades := '';
+  end;
+end;
+
+function UnidadesDeAmbigua(const A: string): string;
+var
+  Nombre: string;
+begin
+  AmbiguaEnPartes(A, Nombre, Result);
+end;
+
 constructor TMetaTable.Create(const AFacts: array of string);
 var
   F, Names, Formas: string;
@@ -680,13 +710,10 @@ begin
       // '*' cualquiera; '*a,b' abierta (esos nombres y algo mas); 'a,b' esos;
       // detras de ';', las formas de la abierta
       Names := P[2];
-      Formas := '';
-      if Names.Contains(';') then
-      begin
-        Formas := Copy(Names, Pos(';', Names), MaxInt);
-        Names := Copy(Names, 1, Pos(';', Names) - 1);
+      // por EL que las separa (Lsp.DesignerMetaGen.SeparaFormas)
+      SeparaFormas(Names, Formas);
+      if Formas <> '' then
         FormasAbiertas.AddOrSetValue(ClaveDeIdentificador(P[1]), Formas);
-      end;
       if Names.StartsWith('*') then
         Delete(Names, 1, 1);
       if Names = '' then
@@ -701,7 +728,7 @@ begin
     else if (P[0] = 'F') and (Length(P) >= 3) then
       Firmas.AddOrSetValue(ClaveDeIdentificador(P[1]), P[2])
     else if (P[0] = 'X') and (Length(P) >= 3) then
-      Ambiguas.AddOrSetValue(ClaveDeIdentificador(P[1]), P[1] + '|' + P[2])
+      Ambiguas.AddOrSetValue(ClaveDeIdentificador(P[1]), P[1] + SEP_AMBIGUA + P[2])
     else if (P[0] = 'D') and (Length(P) >= 3) then
       Definidas.AddOrSetValue(ClaveProp(P[1], P[2]), P[2])
     else if (P[0] = 'H') and (Length(P) >= 3) then
@@ -970,9 +997,9 @@ function ClaseQueNoEsta(M: TMetaTable; const AClass, AFramework: string): string
 var
   A: string;
 begin
-  if M.Ambiguas.TryGetValue(ClaveDeIdentificador(AClass.Trim), A) then
-    Result := MsgFmt(SR_DESIGNER_CLASE_AMBIGUA_FMT, [A.Substring(0, A.IndexOf('|')),
-      UpperCase(AFramework), A.Substring(A.IndexOf('|') + 1)])
+  var Nombre, Unidades: string;
+  if M.Ambiguas.TryGetValue(ClaveDeIdentificador(AClass.Trim), A) and AmbiguaEnPartes(A, Nombre, Unidades) then
+    Result := MsgFmt(SR_DESIGNER_CLASE_AMBIGUA_FMT, [Nombre, UpperCase(AFramework), Unidades])
   else
     Result := MsgFmt(SR_DESIGNER_CLASS_FMT, [AClass, UpperCase(AFramework)]);
 end;
@@ -1261,26 +1288,21 @@ end;
 { Si AValor carga por una de las formas de una lista abierta (AFormas, las
   de FormasAbiertas) con sus nombres ALista (',a,b,' en minusculas). }
 function CargaPorSusFormas(const AFormas, AValor, ALista: string): Boolean;
-var
-  N: Integer;
 begin
   Result := False;
-  for var F in AFormas.Split([';'], TStringSplitOptions.ExcludeEmpty) do
-    if F.StartsWith('hex=') and (Length(F) = 5) then
+  // por EL lector de las formas (FormasDeLaLista; WHEN SEEN de F1 de la 1.29)
+  for var F in FormasDeLaLista(AFormas) do
+    if F.Hex then
     begin
       // la letra como la compara su cuerpo (Chars[0] = 'x', con su caja) y un
       // hexadecimal que quepa en 64 bits (StrToInt64 de '$' y el resto)
-      if (Length(AValor) >= 2) and (Length(AValor) <= 17) and (AValor[1] = F[5]) and
+      if (Length(AValor) >= 2) and (Length(AValor) <= 17) and (AValor[1] = F.Letra) and
          TRegEx.IsMatch(Copy(AValor, 2, MaxInt), '\A[0-9A-Fa-f]+\z') then
         Exit(True);
     end
-    else if F.StartsWith('ins=') and (Length(F) >= 6) then
-    begin
-      N := StrToIntDef(Copy(F, 5, Length(F) - 5), -1);
-      if (N >= 0) and (Length(AValor) > N) and ALista.Contains(',' +
-           ClaveDeIdentificador(Copy(AValor, 1, N) + F[Length(F)] + Copy(AValor, N + 1, MaxInt)) + ',') then
-        Exit(True);
-    end;
+    else if (Length(AValor) > F.Sitio) and ALista.Contains(',' +
+         ClaveDeIdentificador(Copy(AValor, 1, F.Sitio) + F.Letra + Copy(AValor, F.Sitio + 1, MaxInt)) + ',') then
+      Exit(True);
 end;
 
 { Como se ensenan esas formas: la letra y un hexadecimal; los nombres sin la
@@ -1288,26 +1310,23 @@ end;
   claAliceblue). }
 function FormasQueSeEnsenan(const AFormas: string; const ANombres: TArray<string>): string;
 var
-  N: Integer;
-  C: Char;
   Ejemplo: string;
 begin
   Result := '';
-  for var F in AFormas.Split([';'], TStringSplitOptions.ExcludeEmpty) do
-    if F.StartsWith('hex=') and (Length(F) = 5) then
-      Result := Result + IfThen(Result <> '', '; ') + MsgFmt(SF_DESIGNER_FORMA_HEX_FMT, [F[5]])
-    else if F.StartsWith('ins=') and (Length(F) >= 6) then
+  for var F in FormasDeLaLista(AFormas) do
+    if F.Hex then
+      Result := Result + IfThen(Result <> '', '; ') + MsgFmt(SF_DESIGNER_FORMA_HEX_FMT, [F.Letra])
+    else
     begin
-      N := StrToIntDef(Copy(F, 5, Length(F) - 5), -1);
-      C := F[Length(F)];
       Ejemplo := '';
       for var Nm in ANombres do
-        if (N >= 0) and (Length(Nm) > N) and (Nm[N + 1] = C) then
+        if (Length(Nm) > F.Sitio) and (Nm[F.Sitio + 1] = F.Letra) then
         begin
-          Ejemplo := MsgFmt(SF_DESIGNER_FORMA_INSERTA_EJEMPLO_FMT, [Copy(Nm, 1, N) + Copy(Nm, N + 2, MaxInt), Nm]);
+          Ejemplo := MsgFmt(SF_DESIGNER_FORMA_INSERTA_EJEMPLO_FMT,
+            [Copy(Nm, 1, F.Sitio) + Copy(Nm, F.Sitio + 2, MaxInt), Nm]);
           Break;
         end;
-      Result := Result + IfThen(Result <> '', '; ') + MsgFmt(SF_DESIGNER_FORMA_INSERTA_FMT, [C, Ejemplo]);
+      Result := Result + IfThen(Result <> '', '; ') + MsgFmt(SF_DESIGNER_FORMA_INSERTA_FMT, [F.Letra, Ejemplo]);
     end;
 end;
 
@@ -1315,7 +1334,7 @@ function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: strin
   out AAviso: string;
   out AParecida: string): string;
 var
-  Base, K, Lista, Show, Formas: string;
+  Base, K, Lista, Formas: string;
   Nombres: TArray<string>;
   Tope: Integer;
   N: Int64;
@@ -1351,9 +1370,9 @@ begin
       begin
         var Hex := '';
         if M.FormasAbiertas.TryGetValue(K, Formas) then
-          for var F in Formas.Split([';'], TStringSplitOptions.ExcludeEmpty) do
-            if F.StartsWith('hex=') and (Length(F) = 5) then
-              Hex := F[5] + IntToHex(N, 8);
+          for var F in FormasDeLaLista(Formas) do
+            if F.Hex then
+              Hex := F.Letra + IntToHex(N, 8);
         if Hex <> '' then
           Result := Result + MsgFmt(SF_DESIGNER_MISMOS_32_BITS_HEX_FMT, [Hex, N - $100000000])
         else
@@ -1374,8 +1393,9 @@ begin
       if EsIdentificador(AValor, False) and Lista.Contains(',' + ClaveDeIdentificador(AValor) + ',') then
         Exit;
       Abierta := Lista.StartsWith('*');
-      Show := M.ConstantesShow[K];
-      Nombres := Show.Split([', ']);
+      // los nombres por EL lector de una lista de la tabla (MiembrosDeLaTabla):
+      // se partia aqui por ', ' a mano (WHEN SEEN de F1 de la 1.29)
+      Nombres := MiembrosDeLaTabla(M.ConstantesShow, AHoja.TypeId);
       if EsIdentificador(AValor, False) then
       begin
         Tope := Length(AValor) div 3;
@@ -1460,7 +1480,7 @@ begin
   if Lista = '*' then
     Exit(MsgText(SF_DESIGNER_TOMA_CONSTANTE));
   Show := M.ConstantesShow[K];
-  Nombres := Show.Split([', ']);
+  Nombres := MiembrosDeLaTabla(M.ConstantesShow, AHoja.TypeId); // EL lector, como en BaseQueNoCasa
   if Length(Nombres) > MAX_MUESTRA then
     Show := string.Join(', ', Copy(Nombres, 0, MAX_MUESTRA)) + ', ...';
   if Lista.StartsWith('*') and M.FormasAbiertas.TryGetValue(K, Formas) then
@@ -1929,7 +1949,7 @@ begin
                 Unknown := Unknown + Cur + ',';
                 if M.Ambiguas.TryGetValue(Cur, Have) then
                   Nota(MsgFmt(SN_LINT_CLASE_AMBIGUA_FMT, [OClase,
-                    UpperCase(MarcoDe(AIsFmx)), Have.Substring(Have.IndexOf('|') + 1)]))
+                    UpperCase(MarcoDe(AIsFmx)), UnidadesDeAmbigua(Have)]))
                 else
                   Nota(MsgFmt(SN_LINT_UNKNOWN_CLASS_FMT,
                     [OClase, UpperCase(MarcoDe(AIsFmx))]));

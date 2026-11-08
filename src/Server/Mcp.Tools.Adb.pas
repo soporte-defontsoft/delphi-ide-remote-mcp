@@ -190,10 +190,14 @@ begin
   Result := RunCaptured(ComillasSinEscape(AAdb) + ' ' + AArgs, ATimeoutMs, AExitCode);
 end;
 
-{ Field report (EDA51): Android switches wireless debugging OFF on its own
-  after a while, and the port changes on re-enable. Nothing to auto-reconnect
-  server-side - it takes a hand on the device - so the honest move is to
-  RECOGNIZE adb's device-loss messages and append the recovery path. }
+{ LISTA QUE IMITA A UN JUEZ, declarada (WHEN SEEN de F1 de la 1.29): las
+  frases con las que adb dice que perdio el dispositivo. adb solo lo dice en
+  prosa (el codigo de salida no separa "no esta" de otro fallo), asi que es una
+  gramatica nuestra, UNA, aqui; solo puede encoger. Field report (EDA51):
+  Android switches wireless debugging OFF on its own after a while, and the
+  port changes on re-enable. Nothing to auto-reconnect server-side - it takes
+  a hand on the device - so the honest move is to RECOGNIZE adb's device-loss
+  messages and append the recovery path. }
 function DeviceGone(const AOutput: string): Boolean;
 var
   L: string;
@@ -262,9 +266,8 @@ const
   // la actividad de toda app FMX de Delphi: la plantilla del AndroidManifest la nombra
   ACTIVIDAD_FMX = 'com.embarcadero.firemonkey.FMXNativeActivity';
   // command=key: the whole vocabulary - fixed navigation keys, no free
-  // keycodes, no text injection.
-  KEY_NAMES: array[0..9] of string = ('back', 'home', 'enter', 'appswitch',
-    'wakeup', 'up', 'down', 'left', 'right', 'tab');
+  // keycodes, no text injection. Sus NOMBRES, en el orden de estos codigos:
+  // TECLAS_DE_ADB (Lsp.Texts), la misma lista que dicen sus textos
   KEY_CODES: array[0..9] of string = ('KEYCODE_BACK', 'KEYCODE_HOME',
     'KEYCODE_ENTER', 'KEYCODE_APP_SWITCH', 'KEYCODE_WAKEUP',
     'KEYCODE_DPAD_UP', 'KEYCODE_DPAD_DOWN', 'KEYCODE_DPAD_LEFT',
@@ -406,15 +409,15 @@ begin
     // tail. -t N is the last N lines; filter is applied here, not as an adb
     // tag spec, so it matches anywhere in the line.
     if (Params.Lines.Trim <> '') and not TryStrToInt(Params.Lines.Trim, N) then
-      Exit(MsgFmt(SR_ADB_LINES_FMT, [Params.Lines.Trim])); // 'abc' pasaba como 300
-    N := StrToIntDef(Params.Lines.Trim, 300);
+      Exit(MsgFmt(SR_ADB_LINES_FMT, [Params.Lines.Trim])); // 'abc' pasaba como el defecto
+    N := StrToIntDef(Params.Lines.Trim, StrToInt(LINEAS_LOGCAT));
     // clients that type every parameter send lines=0 for "unset" (measured
     // in the field: hermes' client fills all fields with zero defaults) -
     // 0 means the default, same as an absent param
     if N = 0 then
-      N := 300;
+      N := StrToInt(LINEAS_LOGCAT);
     if Params.Lines.Trim <> '' then
-      if (N < 1) or (N > 5000) then
+      if (N < 1) or (N > StrToInt(TOPE_LOGCAT)) then
         Exit(MsgFmt(SR_ADB_LINES_FMT, [Params.Lines.Trim]));
     // out= vetted BEFORE touching adb (fail fast)
     if Params.Out.Trim <> '' then
@@ -539,7 +542,7 @@ begin
       // context is the server's job too. Por EL recorte de la casa
       // (ColaDeSalida, V80 de la 1.23.1: el tope estaba escrito a mano aqui,
       // en el build y en delphi_test), que acota tambien los caracteres
-      var Cola := ColaDeSalida(Txt, LINEAS_DE_SALIDA);
+      var Cola := ColaDeSalida(Txt, LineasDeSalida);
       Result := Cola.Texto;
       if Cola.Cortada then
         Result := MsgFmt(SN_ADB_TAIL_FMT, [Cola.Total, Cola.Mostradas]) + #10 + Result;
@@ -779,12 +782,14 @@ begin
   end
   else if Cmd = 'key' then
   begin
-    N := IndexText(Params.Key.Trim, KEY_NAMES);
-    if N < 0 then
+    var Nombres := TECLAS_DE_ADB.Split([SEPARADOR_DE_TECLAS_DE_ADB]);
+    N := IndexText(Params.Key.Trim, Nombres);
+    // (un nombre del texto sin su KEYCODE no se pulsa: se niega como uno que no esta)
+    if (N < 0) or (N > High(KEY_CODES)) then
       Exit(MsgFmt(SR_ADB_KEY_FMT, [Params.Key.Trim]));
     Output := RunAdb(Adb, DevArg + 'shell input keyevent ' + KEY_CODES[N],
       15000, ExitCode);
-    Result := ResultadoAdb(Output, ExitCode, MsgFmt(SK_ADB_KEY_ENVIADA_FMT, [KEY_NAMES[N], Output.Trim]).Trim);
+    Result := ResultadoAdb(Output, ExitCode, MsgFmt(SK_ADB_KEY_ENVIADA_FMT, [Nombres[N], Output.Trim]).Trim);
   end
   else
     Result := MsgText(SR_ADB_CMD);

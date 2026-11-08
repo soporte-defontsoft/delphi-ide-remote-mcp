@@ -188,7 +188,7 @@ begin
   // otra lectura del registro y otra expansion con su propia tabla de macros
   // (regla del paisaje, 18-oct-2026; medido que daban lo mismo en las 13
   // plataformas de esta maquina, sin entradas relativas ni con $(Config))
-  Result := IdePlatformLibraryPaths(AInfo, APlat, 'Search Path', ACfg);
+  Result := IdePlatformLibraryPaths(AInfo, APlat, VALOR_SEARCH_PATH, ACfg);
 end;
 
 function MotorPuedeEnsenar(const APath: string): Boolean;
@@ -619,7 +619,7 @@ begin
   // va FUERA, o todas las sesiones esperarian detras de esa (lectura del diff
   // propio, 18-oct-2026). Dos que la juzguen a la vez dicen lo mismo.
   Ensenables := nil;
-  for P in IdePlatformLibraryPaths(AInfo, Plat, 'Browsing Path') do
+  for P in IdePlatformLibraryPaths(AInfo, Plat, VALOR_BROWSING_PATH) do
   begin
     var Ensena, Sabido: Boolean;
     System.TMonitor.Enter(GNavegable);

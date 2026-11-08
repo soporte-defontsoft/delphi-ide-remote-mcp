@@ -819,10 +819,8 @@ begin
   end;
   Result.AddPair('platform', Plat);
   Result.AddPair('config', Cfg);
-  if ATimeoutMs <= 0 then
-    ATimeoutMs := 120000;
-  if ATimeoutMs > 600000 then
-    ATimeoutMs := 600000;
+  // su defecto y su tope, los de su texto (Lsp.Texts)
+  ATimeoutMs := ValorAcotado(ATimeoutMs, PLAZO_TEST, TOPE_TEST);
   // Sin paquetes en tiempo de ejecucion: la jaula no deja leer los .bpl de
   // fuera y el exe ni arrancaria (David, 2-oct-2026: "lo compilas entero o
   // no molestes"). Se dice ANTES de compilar.
@@ -836,7 +834,7 @@ begin
   // 1. build, unless told not to: running a stale binary is a lie
   if not ANoBuild then
   begin
-    Build := RunMsBuild(Dproj, Plat, Cfg, 'Build', '', '', 600000);
+    Build := RunMsBuild(Dproj, Plat, Cfg, BUILD_TARGET_POR_DEFECTO, '', '', PLAZO_DEL_BUILD_MS);
     try
       if not Build.GetValue('success').GetValue<Boolean> then
       begin

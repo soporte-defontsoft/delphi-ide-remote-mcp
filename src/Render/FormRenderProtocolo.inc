@@ -7,12 +7,14 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 13; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+  FR_PROTOCOLO_VERSION = 14; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
                             // la 9: los VALORES de abajo como constantes (C2-3 de la 1.28; en el cable, los mismos);
                             // la 10: --scale y SCALE= (C2 de la 1.29); la 11: el estilo none y windows
                             // y la fidelidad canvas como constantes (DH4 de la 1.29; en el cable, los mismos);
                             // la 12: los separadores de NONVISUALS= como constantes (B-I18 de la 1.29; en el
-                            // cable, los mismos); la 13: --bplsuffix (F1-2 de la 1.29)
+                            // cable, los mismos); la 13: --bplsuffix (F1-2 de la 1.29); la 14: los separadores
+                            // de los demas valores como constantes (WHEN SEEN de F1 de la 1.29; en el cable, los
+                            // mismos)
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
@@ -161,6 +163,16 @@
   // compone FormRender.Comun.ListaDeNoVisuales y los lee Lsp.FormRender (se escribian a mano en los dos lados)
   FR_NOVISUALES_SEP = ',';
   FR_NOVISUAL_CLASE_SEP = ':';
+  // ...y los de los demas valores, que se escribian a mano en los dos lados (WHEN SEEN de F1 de la 1.29): los
+  // escribe FormRender.Comun (Responde*) y los lee Lsp.FormRender.LeeRespuestaDeRender
+  FR_CAMPOS_SEP = '|';           // entre los campos de BOX= y de READ=
+  FR_BOX_CAMPOS = 9;             // los de BOX=, en ese orden (el lector exige los de su version)
+  FR_LISTA_SEP = ',';            // entre los numeros de un rectangulo y de MS=, las clases de SUBSTITUTED= y
+                                 // las propiedades de ORDER=, UNSTORED= y BYCODE=
+  FR_NOMBRE_SEP = '=';           // entre el componente y lo suyo: RECT=, ORDER=, UNSTORED=, BYCODE=
+  FR_RAIZ_SEP = ':';             // entre el nombre, la clase y form|frame de ROOT=
+  FR_TAMANO_SEP = 'x';           // entre el ancho y el alto de SIZE=
+  FR_RAZON_SEP = '/';            // entre los dos numeros de SCALE= y de PACKAGES=
   FR_RC_OK = 0;
   FR_RC_ERROR = 1;
   FR_RC_USAGE = 2;

@@ -533,7 +533,7 @@ function XmlGrupoDeDespliegue(const ACondicion, AEntradas: string): string;
   APlataforma, '$(Platform)'=='X', como lo deja el IDE: el vacio que escribe
   (<ItemGroup .../>) se llena, en uno con otros ficheros van al principio, y
   sin ninguno se crea al final; '' si no tiene </Project>. Lo hacian a mano
-  el completado del manifiesto (EnsurePlatformOutputEntries) y
+  el completado del manifiesto (Lsp.BuildRunner.CompletaManifiesto) y
   add-deployfile, que creaba un grupo nuevo en cada llamada. }
 function ConEntradasEnSuGrupo(const AXml, APlataforma, AEntradas: string): string;
 { La plataforma y la config que nombra una Condition de esas formas - la
@@ -924,6 +924,12 @@ const
     BuildOutputDefault), para quien la restaura (delphi_config set-output
     default) y para quien la escribe (Lsp.Scaffold). }
   IDE_OUTPUT_DEFAULT = '.\$(Platform)\$(Config)';
+  { ...y la de las .dcu que escribe la CASA (delphi_create y set-output
+    default): una carpeta dcu debajo de la del binario, que delphi_package no
+    empaqueta. NO es la del IDE: sus plantillas (ObjRepos de la 37.0, siete
+    .dproj) dejan las .dcu en la misma carpeta que el binario (medido el
+    8-nov-2026). Estaba escrita en los dos (WHEN SEEN de F1 de la 1.29) }
+  SALIDA_DCU_POR_DEFECTO = IDE_OUTPUT_DEFAULT + '\dcu';
 
   { Las salidas que el build SUPLE cuando el proyecto no las declara para esa
     plataforma/config (David, 21-oct-2026: un proyecto real de veinte anos
@@ -3827,7 +3833,9 @@ end;
 
 { Un valor de salida YA expandido (ACand, de ExpandOutputMacros), resuelto a
   carpeta real contra la del proyecto; '' si no se puede comprobar: una macro
-  sin resolver, un escape de MSBuild (%3A), una entidad numerica (&#58;) o un
+  sin resolver, un escape de MSBuild (%3A), una entidad numerica que el lector
+  no supo leer (AValue llega leido: una &#58; que sigue ahi es una que no
+  descodifico; la que si, la lee como msbuild) o un
   CDATA (AEscrito, el tramo tal cual) los leeria msbuild distinto que
   nosotros, y lo que no se puede comprobar no se aprueba (el lector lee ya el
   CDATA como XML, 17-oct-2026, y aqui se sigue sin aprobar lo que no esta
@@ -4457,6 +4465,16 @@ begin
     Result := Result + ['DCC_HppOutput'];
 end;
 
+{ La salida del binario de ESTE build tal como la declara el .dproj (sin
+  expandir); sin ella, la que el IDE escribe en un proyecto nuevo. La leian a
+  mano BuildOutputDefault y SalidaDelBinario (WHEN SEEN de F1 de la 1.29). }
+function ValorDeSalidaDelBinario(const ADprojXml, APlatform, AConfig: string): string;
+begin
+  Result := EffectiveProperty(ADprojXml, 'DCC_ExeOutput', APlatform, AConfig).Trim;
+  if Result = '' then
+    Result := IDE_OUTPUT_DEFAULT;
+end;
+
 function BuildOutputDefault(const ADprojPath, APlatform, AConfig: string): TBuildOutputDir;
 var
   Chain: TArray<string>;
@@ -4468,11 +4486,7 @@ begin
   Chain := ProjectXmlChain(ADprojPath);
   if Chain = nil then
     Exit;
-  // la del binario de ESTE build, tal como la declara el .dproj; sin ella,
-  // la que el IDE escribe en un proyecto nuevo
-  Result.Value := EffectiveProperty(Chain[0], 'DCC_ExeOutput', APlatform, AConfig).Trim;
-  if Result.Value = '' then
-    Result.Value := IDE_OUTPUT_DEFAULT;
+  Result.Value := ValorDeSalidaDelBinario(Chain[0], APlatform, AConfig);
   Dir := ExtractFileDir(TPath.GetFullPath(ADprojPath));
   Base := TPath.GetFileNameWithoutExtension(ADprojPath);
   Cand := SalidaDelBinario(Chain[0], Dir, Base, APlatform, AConfig); // EL compositor (A19)
@@ -4482,10 +4496,8 @@ end;
 
 function SalidaDelBinario(const ADprojXml, ADir, ABase, APlatform, AConfig: string): string;
 begin
-  Result := EffectiveProperty(ADprojXml, 'DCC_ExeOutput', APlatform, AConfig).Trim;
-  if Result = '' then
-    Result := IDE_OUTPUT_DEFAULT;
-  Result := ExpandOutputMacros(Result, ADir, ABase, APlatform, AConfig).Trim;
+  Result := ExpandOutputMacros(ValorDeSalidaDelBinario(ADprojXml, APlatform, AConfig), ADir, ABase,
+    APlatform, AConfig).Trim;
 end;
 
 function UsaPaquetesEnEjecucion(const ADprojPath, APlatform, AConfig: string): Boolean;

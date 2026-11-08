@@ -98,7 +98,7 @@ procedure FlushLogSink;
 { <carpeta del exe>\logs: el unico sitio que compone esa ruta. }
 function LogDir: string;
 
-{ [Log] LinesPerFile (por defecto 2000, minimo 100): las lineas de un bloque,
+{ [Log] LinesPerFile (por defecto Lsp.Settings.LOG_LINEAS_POR_DEFECTO, minimo 100): las lineas de un bloque,
   y las que guarda como mucho la ventana de la bandeja. }
 function LogLinesPerFile: Integer;
 
@@ -143,8 +143,8 @@ var
   GStop: TEvent;
   GDrain: TLogDrain;
   GAjustesLeidos: Boolean;
-  GLinesPerFile: Integer = 2000;
-  GMaxFiles: Integer = 10;
+  GLinesPerFile: Integer = LOG_LINEAS_POR_DEFECTO;
+  GMaxFiles: Integer = LOG_BLOQUES_POR_DEFECTO;
   GLinesInLive: Integer;        // las de actual.log que ha visto ESTE proceso
 
 constructor TBuzonDeLineas.Create;

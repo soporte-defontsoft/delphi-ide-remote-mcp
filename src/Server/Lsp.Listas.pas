@@ -130,6 +130,12 @@ procedure PonPosicion(AObj: TJSONObject; ALine0: Integer; ACol: Integer = -1);
   (PAGINA_* / TOPE_* de Lsp.Texts, B1 de la 1.29). }
 function PaginaDe(AOffset, AMax: Integer; const APorDefecto, ATope: string): TPagina;
 
+{ ...y la misma regla para cualquier valor de quien llama (un plazo): uno que
+  no es positivo es APorDefecto y uno mayor que ATope es ATope, los dos como
+  el texto que los escribe UNA vez (Lsp.Texts). Los plazos de remote-run y de
+  delphi_test la tenian a mano (WHEN SEEN de F1 de la 1.29). }
+function ValorAcotado(AValor: Integer; const APorDefecto, ATope: string): Integer;
+
 { La pagina de un TEXTO que se lee por trozos (delphi_docs read): los
   caracteres de ADesde a AHasta de ATotal. Su Report es el de las listas
   (total, shown, offset, hasMore, nextOffset): docs escribia length, offset y
@@ -143,10 +149,13 @@ function PaginaDeTexto(ADesde, AHasta, ATotal: Integer): TPagina;
   contexto estaba escrito a mano tres veces, cada una a su manera (el build
   25 o 120 lineas crudas y luego filtradas, delphi_test 40, el logcat de adb
   400 ya filtradas), y remote-run devolvia la salida entera. }
+{ las lineas de una salida que ES la respuesta: el logcat de adb y lo que
+  escribio un programa en remote-run. El numero, LINEAS_DE_SALIDA de
+  Lsp.Texts, que lo dice tambien en el texto de lines de delphi_adb (estaba en
+  los dos: WHEN SEEN de F1 de la 1.29) }
+function LineasDeSalida: Integer;
+
 const
-  { las lineas de una salida que ES la respuesta: el logcat de adb y lo que
-    escribio un programa en remote-run }
-  LINEAS_DE_SALIDA = 400;
   { los caracteres de CUALQUIER cola: una linea sola puede ser de megas }
   CARACTERES_DE_COLA = 64 * 1024;
   { lo que basta leer del FINAL de un fichero para llenar una cola: un
@@ -214,6 +223,11 @@ uses
   Lsp.Rutas,
   Lsp.Lineas;    // LineasDelTexto, EL troceador
 
+function LineasDeSalida: Integer;
+begin
+  Result := StrToInt(LINEAS_DE_SALIDA);
+end;
+
 { TPagina }
 
 procedure PonPosicion(AObj: TJSONObject; ALine0, ACol: Integer);
@@ -225,22 +239,24 @@ begin
     AObj.AddPair('character0', TJSONNumber.Create(ACol));
 end;
 
+function ValorAcotado(AValor: Integer; const APorDefecto, ATope: string): Integer;
+begin
+  Result := AValor;
+  if Result <= 0 then
+    Result := StrToInt(APorDefecto);
+  if Result > StrToInt(ATope) then
+    Result := StrToInt(ATope);
+end;
+
 function PaginaDe(AOffset, AMax: Integer; const APorDefecto, ATope: string): TPagina;
-var
-  Tope: Integer;
 begin
   Result := Default(TPagina);
   if AOffset > 0 then
     Result.Desde := AOffset;
-  if AMax <= 0 then
-    AMax := StrToInt(APorDefecto);
-  Tope := StrToInt(ATope);
-  if AMax > Tope then
-  begin
+  Result.Max := ValorAcotado(AMax, APorDefecto, ATope);
+  // lo que se pidio por pagina, si pasaba del tope: su nota lo dice
+  if AMax > Result.Max then
     Result.Pedido := AMax;
-    AMax := Tope;
-  end;
-  Result.Max := AMax;
 end;
 
 function PaginaDeTexto(ADesde, AHasta, ATotal: Integer): TPagina;

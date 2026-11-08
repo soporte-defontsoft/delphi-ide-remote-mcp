@@ -751,7 +751,7 @@ end;
   va). La ponen remote-run y output, que la devolvian entera. }
 procedure PonSalida(AObj: TJSONObject; const ASalida: string; ATamano: Int64);
 begin
-  var Cola := ColaDeSalida(ASalida, LINEAS_DE_SALIDA);
+  var Cola := ColaDeSalida(ASalida, LineasDeSalida);
   AObj.AddPair('output', Cola.Texto);
   if Cola.Cortada or (ATamano > BYTES_DE_COLA) then
   begin
@@ -791,10 +791,8 @@ begin
     Result.AddPair('error', PaclientQueFalta(MsgText(SR_REMOTERUN_NO_PACLIENT)));
     Exit;
   end;
-  if ATimeoutMs <= 0 then
-    ATimeoutMs := 30000;
-  if ATimeoutMs > 300000 then
-    ATimeoutMs := 300000;
+  // su defecto y su tope, los de su texto (Lsp.Texts)
+  ATimeoutMs := ValorAcotado(ATimeoutMs, PLAZO_REMOTE_RUN, TOPE_REMOTE_RUN);
 
   // The ONE thing that may run: what THIS project deployed, in its own folder
   // of the scratch dir. The caller never names a path (David's rule

@@ -23,10 +23,8 @@ uses
   Lsp.Texts,
   Lsp.Attributes;  // [RutaDelServidor]: que parametro es una ruta NUESTRA
 
-const
-  { El section que publica el esquema por defecto: el mismo valor en el
-    atributo y en la regla de "lo que no va" (que no lo cuenta como enviado). }
-  CFG_SECTION_POR_DEFECTO = 'summary';
+// (el command y el section por defecto, CFG_COMANDO_POR_DEFECTO y
+// CFG_SECTION_POR_DEFECTO: en Lsp.Texts, que compone tambien su texto)
 
 type
   TDelphiConfigParams = class
@@ -54,7 +52,7 @@ type
     [RutaDelServidor]
     property Project: string read FProject write FProject;
     [SchemaDescription(SP_CFG_COMMAND)]
-    [SchemaDefault('view')]
+    [SchemaDefault(CFG_COMANDO_POR_DEFECTO)]
     property Command: string read FCommand write FCommand;
     [SchemaDescription(SP_CFG_PLATFORM)]
     property Platform: string read FPlatform write FPlatform;
@@ -382,7 +380,7 @@ begin
   RadVisto := False;
   Sec := SinMayusculas(ASection.Trim);
   if Sec = '' then
-    Sec := 'summary';
+    Sec := CFG_SECTION_POR_DEFECTO;
   if not MatchText(Sec, ['summary', 'platforms', 'searchpaths', 'deploy',
     'units', 'all']) then
     Exit(MsgText(SR_CFG_SECTION_DEBE_SER_SUMMARY));
@@ -721,7 +719,7 @@ begin
   begin
     Clean := MsgText(SF_CFG_RAD_STUDIO_DEFAULT);
     ExeInner := IDE_OUTPUT_DEFAULT; // lo que escribe el IDE en un proyecto nuevo (un literal, Lsp.Dproj)
-    DcuInner := IDE_OUTPUT_DEFAULT + '\dcu';
+    DcuInner := SALIDA_DCU_POR_DEFECTO; // la de la casa, la de delphi_create (no la del IDE: Lsp.Dproj)
   end
   else
   begin
@@ -2437,7 +2435,7 @@ const
     'add-project', 'path',
     'remove-project', 'path');
 begin
-  Result := ParametroQueNoVa(IfThen(ACmd = '', 'view', ACmd), COMANDOS,
+  Result := ParametroQueNoVa(IfThen(ACmd = '', CFG_COMANDO_POR_DEFECTO, ACmd), COMANDOS,
     ['platform', P.Platform, '', 'sdk', P.Sdk, '', 'profile', P.Profile, '',
      'path', P.Path, '', 'paths', P.Paths, '', 'section', P.Section, CFG_SECTION_POR_DEFECTO,
      'remotedir', P.RemoteDir, '', 'version', P.Version, '',
@@ -2459,8 +2457,8 @@ begin
   var Suyos, VaCon: string;
   var Sobra := ParametroQueSobra(Cmd, Params, Suyos, VaCon);
   if Sobra <> '' then
-    Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [Sobra, IfThen(Cmd = '', 'view', Cmd),
-      IfThen(Cmd = '', 'view', Cmd), ONinguno(Suyos)]) + VaCon);
+    Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [Sobra, IfThen(Cmd = '', CFG_COMANDO_POR_DEFECTO, Cmd),
+      IfThen(Cmd = '', CFG_COMANDO_POR_DEFECTO, Cmd), ONinguno(Suyos)]) + VaCon);
   // view y get-property solo LEEN el .dproj (y valen en un proyecto de
   // REFERENCIA); todo lo demas lo escribe y pasa por la puerta de escritura.
   // Que comando lee lo dice LA tabla de accesos, la de la credencial de solo
@@ -2488,12 +2486,12 @@ begin
   // orden de escritura lo habria tocado como un .dproj (26-sep-2026).
   if SameText(TPath.GetExtension(Proj), '.groupproj') then
   begin
-    if (Cmd = '') or (Cmd = 'view') then
+    if (Cmd = '') or (Cmd = CFG_COMANDO_POR_DEFECTO) then
     begin
       // view de un GRUPO no tiene secciones: section se ignoraba (septima
       // revision). La misma regla, con la fila del grupo
       var SuyosG, VaConG: string;
-      var SobraG := ParametroQueNoVa('view', ['view', ''],
+      var SobraG := ParametroQueNoVa(CFG_COMANDO_POR_DEFECTO, [CFG_COMANDO_POR_DEFECTO, ''],
         ['section', Params.Section, CFG_SECTION_POR_DEFECTO], SuyosG, VaConG);
       if SobraG <> '' then
         Exit(MsgFmt(SR_CONFIG_NO_ES_DEL_COMANDO_FMT, [SobraG, 'view (.groupproj)',
@@ -2535,14 +2533,14 @@ begin
     Sibling := DprojDe(Proj);
     if TFile.Exists(Sibling) then
       Proj := Sibling
-    else if not MatchText(Cmd, ['', 'view', 'add-unit', 'remove-unit', 'add-requires']) then
+    else if not MatchText(Cmd, ['', CFG_COMANDO_POR_DEFECTO, 'add-unit', 'remove-unit', 'add-requires']) then
       Exit(MsgFmt(SR_CONFIG_NO_DPROJ_FMT,
         [TPath.GetFileName(Proj), TPath.GetFileName(Sibling)]));
   end;
   // Y lo que no es un proyecto no se lee ni se escribe como si lo fuera.
   if not EsProyectoOSuFuente(Proj) then
     Exit(MsgFmt(SR_CONFIG_NOT_PROJECT_FMT, [TPath.GetFileName(Proj)]));
-  if (Cmd = '') or (Cmd = 'view') then
+  if (Cmd = '') or (Cmd = CFG_COMANDO_POR_DEFECTO) then
     Exit(ViewConfig(Proj, Params.Section));
   if Cmd = 'get-property' then
     Exit(GetProperty(Proj, Params.Name, Params.Platform, Params.Config));

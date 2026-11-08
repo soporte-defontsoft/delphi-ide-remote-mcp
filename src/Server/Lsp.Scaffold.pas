@@ -345,7 +345,7 @@ begin
     GrupoDeValores('', 'Base',
       Prop('SanitizedProjectName', AName) +
       Prop('DCC_ExeOutput', IDE_OUTPUT_DEFAULT) +
-      Prop('DCC_DcuOutput', IDE_OUTPUT_DEFAULT + '\dcu') +
+      Prop('DCC_DcuOutput', SALIDA_DCU_POR_DEFECTO) +
       PkgProps +
       Prop('VerInfo_Locale', '1033') +
       Prop('DCC_Namespace', Ambitos + '$(DCC_Namespace)') +

@@ -278,6 +278,25 @@ function TablaDeInstalacion(const AInfo: TRadStudioInfo; AMarco: TMarcoDisenador
   Lo que tarda se apunta en el log. No espera. }
 procedure CalientaTablasDelDisenador;
 
+type
+  { UNA forma de una IdentTo ABIERTA, como la apunta la tabla (FormasDeAbierta):
+    Hex, la letra delante de un hexadecimal (';hex=x'); si no, la letra que
+    inserta en Sitio antes de buscar otra vez en el mapa (';ins=2a') }
+  TFormaDeAbierta = record
+    Hex: Boolean;
+    Letra: Char;
+    Sitio: Integer;
+  end;
+
+{ ...y su lector, la inversa de FormasDeAbierta: las de AFormas en su orden;
+  lo que no tiene su forma se salta. Se leian a mano en tres sitios de
+  Lsp.DesignerMeta (WHEN SEEN de F1 de la 1.29). }
+function FormasDeLaLista(const AFormas: string): TArray<TFormaDeAbierta>;
+{ ...y donde empiezan en una lista de constantes: ALista se queda con los
+  nombres y AFormas con las formas (con su primer separador), '' si no hay.
+  Lo partian a mano el cargador de la tabla y la union de dos registros }
+procedure SeparaFormas(var ALista: string; out AFormas: string);
+
 implementation
 
 uses
@@ -900,6 +919,13 @@ end;
   apunta, y entonces set no sabe que mas lee y avisa (DSGN-110). Generacion
   12, segunda revision de la 1.17.0: 'Rojo' en un TAlphaColor se escribia y
   el form no abria. }
+const
+  // la forma de cada una en la tabla: FormasDeAbierta la escribe y
+  // FormasDeLaLista la lee
+  FORMA_SEP = ';';
+  FORMA_HEX = 'hex=';
+  FORMA_INSERTA = 'ins=';
+
 function FormasDeAbierta(const ACuerpo: string): string;
 var
   M: TMatch;
@@ -907,10 +933,46 @@ begin
   Result := '';
   M := TRegEx.Match(ACuerpo, '(?i)\.Chars\s*\[\s*0\s*\]\s*=\s*''([A-Za-z])''');
   if M.Success and TRegEx.IsMatch(ACuerpo, '(?i)\b(?:StringTo\w+|StrToInt(?:64)?|HexToInt)\s*\(') then
-    Result := Result + ';hex=' + M.Groups[1].Value;
+    Result := Result + FORMA_SEP + FORMA_HEX + M.Groups[1].Value;
   M := TRegEx.Match(ACuerpo, '(?i)\.Insert\s*\(\s*(\d+)\s*,\s*''([A-Za-z])''\s*\)');
   if M.Success then
-    Result := Result + ';ins=' + M.Groups[1].Value + M.Groups[2].Value;
+    Result := Result + FORMA_SEP + FORMA_INSERTA + M.Groups[1].Value + M.Groups[2].Value;
+end;
+
+procedure SeparaFormas(var ALista: string; out AFormas: string);
+begin
+  AFormas := '';
+  var P := Pos(FORMA_SEP, ALista);
+  if P > 0 then
+  begin
+    AFormas := Copy(ALista, P, MaxInt);
+    ALista := Copy(ALista, 1, P - 1);
+  end;
+end;
+
+function FormasDeLaLista(const AFormas: string): TArray<TFormaDeAbierta>;
+begin
+  Result := [];
+  for var F in AFormas.Split([FORMA_SEP], TStringSplitOptions.ExcludeEmpty) do
+  begin
+    var Forma := Default(TFormaDeAbierta);
+    if F.StartsWith(FORMA_HEX) and (Length(F) = Length(FORMA_HEX) + 1) then
+    begin
+      Forma.Hex := True;
+      Forma.Letra := F[Length(F)];
+    end
+    else if F.StartsWith(FORMA_INSERTA) and (Length(F) >= Length(FORMA_INSERTA) + 2) then
+    begin
+      // el sitio, las cifras entre el '=' y la letra del final
+      Forma.Sitio := StrToIntDef(Copy(F, Length(FORMA_INSERTA) + 1, Length(F) - Length(FORMA_INSERTA) - 1), -1);
+      Forma.Letra := F[Length(F)];
+      if Forma.Sitio < 0 then
+        Continue;
+    end
+    else
+      Continue;
+    Result := Result + [Forma];
+  end;
 end;
 
 { Lo de ConstantesDeTexto sobre un texto CON sus cadenas (los nombres de un
@@ -2060,25 +2122,15 @@ function UneConstantes(const A, B: string): string;
 var
   LA, LB, FA, FB: string;
 
-  // las formas de una abierta van detras de ';' (FormasDeAbierta)
-  procedure Parte(var ALista: string; out AFormas: string);
-  begin
-    AFormas := '';
-    if Pos(';', ALista) > 0 then
-    begin
-      AFormas := Copy(ALista, Pos(';', ALista), MaxInt);
-      ALista := Copy(ALista, 1, Pos(';', ALista) - 1);
-    end;
-  end;
-
 begin
   if (A = '*') or (B = '*') then
     Exit('*');
   // una abierta (*a,b) deja abierta la union
   LA := A;
   LB := B;
-  Parte(LA, FA);
-  Parte(LB, FB);
+  // las formas de una abierta van detras de su separador (SeparaFormas)
+  SeparaFormas(LA, FA);
+  SeparaFormas(LB, FB);
   if LA.StartsWith('*') then
     Delete(LA, 1, 1);
   if LB.StartsWith('*') then
@@ -2770,7 +2822,7 @@ begin
   Lista := TList<string>.Create;
   try
     // el Search Path primero: lo que el compilador encontraria
-    for var Valor in ['Search Path', 'Browsing Path'] do
+    for var Valor in [VALOR_SEARCH_PATH, VALOR_BROWSING_PATH] do
       for var Plat in ['Win32', 'Win64'] do
         for var C in IdePlatformLibraryPaths(AInfo, Plat, Valor) do
           if not Vistas.ContainsKey(ClaveDeRuta(C)) and TDirectory.Exists(C) then

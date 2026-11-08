@@ -157,6 +157,14 @@ var
   Style: TFmxObject;
   FS: TFileStream;
 begin
+  // win10style aunque FMX pinte win11style en un Windows 11 (su eleccion es
+  // privada: TStyleManager.StyleResourceForContext). Medido el 8-nov-2026 con
+  // dcc32 de la 37.0: los mismos 181 nombres de primer nivel (ActiveStyle(nil)
+  // da los de win11style) salvo dos de imagen, y de los anidados -que el
+  // TStyleIndexer de FMX tambien busca dentro de un SearchInto- solo
+  // checkbackground, que win11style no trae: en un Windows 11 el lint daria por
+  // bueno ese lookup. VIGILADO, no arreglado: preguntar a ActiveStyle(nil) pide
+  // medirlo en la sesion 0 del servicio (WHEN SEEN de F1 de la 1.29)
   Style := TStyleStreaming.LoadFromResource(HInstance, 'win10style', RT_RCDATA);
   try
     FS := TFileStream.Create(AOut, fmCreate);

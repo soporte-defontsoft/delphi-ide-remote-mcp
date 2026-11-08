@@ -226,8 +226,13 @@ const
   // warnings a msbuild, asi que no hay recuento que dar. BUILD-001 lo decia
   // en CADA build quiet; desde el 4-oct-2026 lo dice esta descripcion y la
   // respuesta no lleva la clave (nunca un 0 que seria mentira).
+  { lo que hace delphi_build sin target ni verbosity, UNA vez: lo componen el
+    esquema (SchemaDefault), el texto de su parametro y el codigo. Estaban en
+    las tres formas a mano (WHEN SEEN de F1 de la 1.29, como B1) }
+  BUILD_TARGET_POR_DEFECTO = 'Build';
+  BUILD_VERBOSIDAD_POR_DEFECTO = 'quiet';
   SP_BUILD_VERBOSITY =
-    'quiet (DEFAULT: errors + the summary - cheapest for "does it still ' +
+    BUILD_VERBOSIDAD_POR_DEFECTO + ' (DEFAULT: errors + the summary - cheapest for "does it still ' +
     'compile"; warnings are not even asked for) | normal (warnings, hints and ' +
     'msbuild milestones) | verbose (everything, the whole linker command ' +
     'line included - when a quiet error is not clear enough). It sets ' +
@@ -661,8 +666,14 @@ const
     'With mode="full" you get it whole; with filter="name" only what you ' +
     'are looking for.';
 
+  { lo que hace delphi_config sin command y view sin section, UNA vez: el
+    esquema, su texto, la regla de "lo que no va" y el codigo. command estaba
+    en tres formas y seis sitios de Mcp.Tools.Config; section, otra vez a
+    mano en ViewConfig (WHEN SEEN de F1 de la 1.29) }
+  CFG_COMANDO_POR_DEFECTO = 'view';
+  CFG_SECTION_POR_DEFECTO = 'summary';
   SP_CONFIG_SECTION =
-    'view only: summary (default) | platforms (state and reasons) | ' +
+    'view only: ' + CFG_SECTION_POR_DEFECTO + ' (default) | platforms (state and reasons) | ' +
     'searchpaths (by group) | deploy (files by platform) | units (all the ' +
     'project units) | all (everything, large).';
 
@@ -2132,9 +2143,16 @@ const
     'break (RUN-026), and on a Windows target - where the program reads them ' +
     'as Delphi''s ParamStr does - a double quote or an empty one cannot arrive ' +
     '(RUN-025)';
+  { el plazo de remote-run y el de delphi_test run, por defecto y su tope, UNA
+    vez: su texto y el codigo (Lsp.Listas.ValorAcotado). Estaban en los dos
+    (WHEN SEEN de F1 de la 1.29) }
+  PLAZO_REMOTE_RUN = '30000';
+  TOPE_REMOTE_RUN = '300000';
+  PLAZO_TEST = '120000';
+  TOPE_TEST = '600000';
   SP_PASERVER_TIMEOUT =
-    'remote-run: max milliseconds to wait for the program (default 30000, ' +
-    'max 300000)';
+    'remote-run: max milliseconds to wait for the program (default ' + PLAZO_REMOTE_RUN + ', ' +
+    'max ' + TOPE_REMOTE_RUN + ')';
   SP_PASERVER_NAME =
     'The PAServer connection profile, by name (letters, digits, "_", "-") - ' +
     'the same "profile" delphi_build and delphi_desktop take: add-profile ' +
@@ -2774,14 +2792,17 @@ const
     'frame) as x';
   SP_DESKTOP_TOY =
     'drag: vertical pixel where it releases, as tox';
+  { los modificadores de delphi_desktop key, UNA vez: su texto, su negativa y
+    el codigo, que los parte por ', ' (WHEN SEEN de F1 de la 1.29) }
+  MODIFICADORES = 'ctrl, shift, alt, super';
   SP_ADBLINUX_MODIFIERS =
-    'key OPTIONAL: keys held while it is pressed, comma separated - ctrl, ' +
-    'shift, alt, super (Ctrl+K on Linux: code=37 modifiers=ctrl; Alt+F4 on ' +
+    'key OPTIONAL: keys held while it is pressed, comma separated - ' + MODIFICADORES +
+    ' (Ctrl+K on Linux: code=37 modifiers=ctrl; Alt+F4 on ' +
     'Windows: code=f4 modifiers=alt). Pressed in that order and released ' +
     'in reverse.';
   SR_ADBLINUX_MODIFIERS_BAD_FMT =
     '[DESK-001 INVALID_PARAM] modifiers does not know "%s": the valid ones are ' +
-    'ctrl, shift, alt and super (comma-separated).';
+    MODIFICADORES + ' (comma-separated).';
   { Las teclas de un Windows por su NOMBRE, las que pulsa el nodo
     (Mld.Win.TeclaPorNombre), UNA vez: estaban a mano en el parametro y en
     DESK-010, y ninguno decia las cifras, que el nodo pulsa (F1-10 de la 1.29) }
@@ -3105,16 +3126,26 @@ const
     'tap: Y measured on a screenshot; pass its frame and the server ' +
     'converts to display pixels. Without frame, Y is display pixels ' +
     '(multiply by tapScale.y when the answer carried it).';
+  { las teclas de delphi_adb key por su nombre, UNA vez: sus dos textos y el
+    codigo (Mcp.Tools.Adb las parte por SEPARADOR_DE_TECLAS_DE_ADB, en el
+    orden de sus KEYCODE). Las lineas de un logcat, por defecto y su tope (se
+    niega por encima, ADB-021). Y las lineas de una salida que ES la respuesta
+    (el logcat, remote-run; Lsp.Listas.LineasDeSalida). Estaban en el texto y
+    en el codigo (WHEN SEEN de F1 de la 1.29) }
+  TECLAS_DE_ADB = 'back | home | enter | appswitch | wakeup | up | down | left | right | tab';
+  SEPARADOR_DE_TECLAS_DE_ADB = ' | ';
+  LINEAS_LOGCAT = '300';
+  TOPE_LOGCAT = '5000';
+  LINEAS_DE_SALIDA = '400';
   SP_ADB_KEY =
-    'key: back | home | enter | appswitch | wakeup | up | down | left | ' +
-    'right | tab';
+    'key: ' + TECLAS_DE_ADB;
   SP_ADB_FILTER =
     'logcat: only lines containing this text (e.g. your app tag or package). ' +
     'Optional';
   SP_ADB_LINES =
-    'logcat: how many recent lines (default 300, max 5000; 0 = the ' +
+    'logcat: how many recent lines (default ' + LINEAS_LOGCAT + ', max ' + TOPE_LOGCAT + '; 0 = the ' +
     'default). An inline ' +
-    'answer carries at most the newest 400 - for more, pass out=<file.txt> ' +
+    'answer carries at most the newest ' + LINEAS_DE_SALIDA + ' - for more, pass out=<file.txt> ' +
     'and read it in ranges.';
 
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa; decima). }
@@ -3181,8 +3212,7 @@ const
     'only).';
 
   SR_ADB_KEY_FMT =
-    '[ADB-004 INVALID_PARAM] "%s" is not an allowed key. Use back | home | ' +
-    'enter | appswitch | wakeup | up | down | left | right | tab.';
+    '[ADB-004 INVALID_PARAM] "%s" is not an allowed key. Use ' + TECLAS_DE_ADB + '.';
 
   { la puerta juzga TODO device y address que llega, use o no la orden el
     suyo: con devices o discover, que no usan ninguno, la salida es quitarlo
@@ -3347,7 +3377,7 @@ const
 
   SR_ADB_LINES_FMT =
     '[ADB-021 INVALID_PARAM] "%s" is not a valid number of lines for logcat ' +
-    '(1-5000; 0 or nothing = the default, 300).';
+    '(1-' + TOPE_LOGCAT + '; 0 or nothing = the default, ' + LINEAS_LOGCAT + ').';
 
   // ---- /files download route + delphi_fetch ----
 
@@ -5729,8 +5759,8 @@ const
     'runner that does not read its command line ignores it.';
 
   SP_TEST_TIMEOUT =
-    'run optional: maximum run time in milliseconds (120000 by default, ' +
-    'maximum 600000); a test that hangs is cut off and the answer says so.';
+    'run optional: maximum run time in milliseconds (' + PLAZO_TEST + ' by default, ' +
+    'maximum ' + TOPE_TEST + '); a test that hangs is cut off and the answer says so.';
 
   SP_TEST_NOBUILD =
     'run optional: true = run the binary that already exists, without ' +
@@ -8114,7 +8144,7 @@ const
     '[CFG-062 INVALID_PARAM] That is not valid as an output folder. It must be ' +
     'a simple RELATIVE name, like Compiled or bin\out: no drive or ' +
     'absolute path, no ".." and no special characters (spaces are ' +
-    'allowed). output=default restores the standard RAD Studio layout.';
+    'allowed). output=default restores the layout delphi_create writes.';
 
   SN_CONFIG_DPR_ONLY =
     '[CFG-063] This is the main source (.dpr or .dpk) and there is no ' +
@@ -9482,7 +9512,7 @@ const
 
   { un Deploy de Android con un .deployproj que no lo desplegaba (lo escribio el
     deploy de otra plataforma, o el IDE con el grupo vacio): se completo con el
-    mapa de Android (Lsp.BuildRunner.EnsureAndroidEntries; A19 de la 1.29). %s la
+    mapa de Android (Lsp.BuildRunner.CompletaManifiesto; A19 de la 1.29). %s la
     plataforma }
   SN_BUILD_ANDROID_FILLED_FMT =
     '[BUILD-073] The project''s .deployproj did not deploy %s in every ' +
@@ -11463,7 +11493,7 @@ const
     no cuenta: los dos textos explicaban lo mismo (revisor de tokens,
     4-oct-2026). }
   SP_CFG_COMMAND =
-    'view (default; section= for the detail) | add-platform | ' +
+    CFG_COMANDO_POR_DEFECTO + ' (default; section= for the detail) | add-platform | ' +
     'remove-platform | set-output | set-version | set-sdk (the SDK this ' +
     'project builds a remote platform with, by name; "none" = back to the ' +
     'SDK Manager default) | set-profile (the PAServer profile it deploys ' +
@@ -11490,7 +11520,7 @@ const
     'to <folder>\$(Platform)\$(Config), .dcu to ' +
     '<folder>\Dcu\$(Platform)\$(Config) - in every configuration and ' +
     'platform, even one with its own folder (the answer says what each ' +
-    'had). "default" restores the RAD Studio layout. No absolute paths, no ' +
+    'had). "default" restores delphi_create''s layout. No absolute paths, no ' +
     '"..".';
 
   SP_CFG_REQUIRES =
@@ -11593,7 +11623,7 @@ const
     'view; set-active changes it).';
 
   SP_BUILD_TARGET =
-    'Build (full, default) | Make (incremental) | Clean | Deploy (builds ' +
+    BUILD_TARGET_POR_DEFECTO + ' (full, default) | Make (incremental) | Clean | Deploy (builds ' +
     'first, then deploys: to the PAServer of "profile" for Linux/macOS (a ' +
     'project in RemoteRunProjects), or packages the app for Android). After ' +
     'switching platforms use Build.';
@@ -12986,7 +13016,7 @@ const
     'block in the .dproj.';
 
   SF_CFG_RAD_STUDIO_DEFAULT =
-    '(RAD Studio default)';
+    '(the default of delphi_create)';
 
   SF_CFG_SIN_DEFINIR =
     '(not set)';

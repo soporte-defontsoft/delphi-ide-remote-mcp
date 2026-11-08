@@ -37,9 +37,15 @@ type
     los dos (completo de Opus de la 1.22.1). }
   TPaginaDelHijo = (phConsola, phAnsi, phPorLinea);
 
+const
+  { lo que puede tardar un build, UNA vez: el de delphi_build y el que
+    delphi_test hace antes de correr (estaba en tres sitios; WHEN SEEN de F1
+    de la 1.29) }
+  PLAZO_DEL_BUILD_MS = 600000;
+
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile: string = ''; const ADeviceId: string = '';
-  ATimeoutMs: Integer = 600000; const ASdk: string = '';
+  ATimeoutMs: Integer = PLAZO_DEL_BUILD_MS; const ASdk: string = '';
   const AVerbosity: string = ''): TJSONObject;
 
 { Runs a command line with stdout+stderr captured (no shell). }
@@ -946,8 +952,8 @@ begin
 end;
 
 { Las entradas de Android de la configuracion ACfg (el mapa del apk medido): las
-  del manifiesto que se genera (AndroidDeployXml, en un grupo de plataforma y
-  config) y las que completan uno que ya existe (EnsureAndroidEntries, con la
+  del manifiesto que se genera (ManifiestoNuevo, en un grupo de plataforma y
+  config) y las que completan uno que ya existe (CompletaManifiesto, con la
   config en cada entrada, AConCondicion, como el IDE en el grupo de la
   plataforma). A19 de la 1.29: el mapa estaba solo en el generador }
 function EntradasDeAndroid(const ADprojXml, ADir, AName, APlat, ABdsRoot, ACfg: string;
@@ -993,25 +999,6 @@ begin
   Result := Entradas;
 end;
 
-function AndroidDeployXml(const ADprojXml, ADir, AName, APlat, ABdsRoot: string;
-  const AConfigs: TArray<string>): string;
-var
-  SB: TStringBuilder;
-begin
-  SB := TStringBuilder.Create;
-  try
-    SB.Append(CabeceraDeManifiesto);
-    for var Cfg in AConfigs do
-      // EL escritor del grupo de una plataforma y config del .deployproj (Lsp.Dproj)
-      SB.AppendLine('    ' + XmlGrupoDeDespliegue(DeployGroupCondition(APlat, Cfg),
-        EntradasDeAndroid(ADprojXml, ADir, AName, APlat, ABdsRoot, Cfg, False)));
-    SB.AppendLine('</Project>');
-    Result := SB.ToString;
-  finally
-    SB.Free;
-  end;
-end;
-
 { Target=Deploy needs the project's deployment manifest (<name>.deployproj):
   the .dproj imports it when present, and IT is who imports
   CodeGear.Deployment.targets - without one, msbuild fails with MSB4057
@@ -1041,13 +1028,40 @@ begin
   Result := XmlDeployFile(Include, ACfg, AName + '\', Ext, 'ProjectOutput', 1, True);
 end;
 
+{ Lo que despliega UNA configuracion ACfg en APlat: el mapa del apk en Android
+  (EntradasDeAndroid) y la salida del proyecto en las demas (OutputDeployEntry).
+  AConCondicion: van al grupo de la plataforma de un manifiesto que ya existe,
+  con su configuracion en cada entrada. La eleccion estaba en las dos que
+  completan un manifiesto y en los dos que lo generan (WHEN SEEN de F1 de la
+  1.29) }
+function EntradasDeLaConfig(const ADprojXml, ADir, AName, APlat, ABdsRoot, ACfg: string;
+  AConCondicion: Boolean): string;
+begin
+  if SistemaDePlataforma(APlat) = spAndroid then
+    Result := EntradasDeAndroid(ADprojXml, ADir, AName, APlat, ABdsRoot, ACfg, AConCondicion)
+  else
+    Result := OutputDeployEntry(ADprojXml, ADir, APlat, ACfg, AName);
+end;
+
+{ ...y el manifiesto NUEVO de APlat con las de AConfigs, cada una en su grupo de
+  plataforma y config (EL escritor del grupo, Lsp.Dproj). }
+function ManifiestoNuevo(const ADprojXml, ADir, AName, APlat, ABdsRoot: string;
+  const AConfigs: TArray<string>): string;
+begin
+  Result := CabeceraDeManifiesto;
+  for var Cfg in AConfigs do
+    Result := Result + '    ' + XmlGrupoDeDespliegue(DeployGroupCondition(APlat, Cfg),
+      EntradasDeLaConfig(ADprojXml, ADir, AName, APlat, ABdsRoot, Cfg, False)) + #13#10;
+  Result := Result + '</Project>'#13#10;
+end;
+
 { Las configuraciones de AConfigs que el manifiesto AXml no despliega en APlat:
   las que no llevan su ProjectOutput, por EL lector (la de la entrada o la de su
   grupo); ninguna si uno lo lleva para todas. Se miraba si habia CUALQUIER
   ProjectOutput de la plataforma: el Deploy de una configuracion sin el suyo no
   enviaba nada y msbuild decia exito (revisor del paisaje de la 1.27, medido).
   La regla de las dos maneras de completar un manifiesto: la salida sola
-  (EnsurePlatformOutputEntries) y el mapa de Android (EnsureAndroidEntries; A19
+  y el mapa de Android, las dos por CompletaManifiesto (A19
   de la 1.29) }
 function ConfigsSinSalida(const AXml, APlat: string; const AConfigs: TArray<string>): TArray<string>;
 var
@@ -1068,39 +1082,17 @@ begin
       Result := Result + [Cfg];
 end;
 
-{ Adds the ProjectOutput entries for APlat to an existing manifest, for each
-  configuration of the manifest that has none (an empty or missing platform
-  group, a configuration the project does not declare, one declared after the
-  manifest was written). True when it changed. }
-function EnsurePlatformOutputEntries(const ADeployProj, ADprojPath, APlat,
-  AName, AConfig: string): Boolean;
-var
-  Enc, Xml, DprojXml, Entries: string;
-begin
-  Result := False;
-  Xml := PatchLoadText(ADeployProj, Enc);
-  DprojXml := LeeTexto(ADprojPath, [ltJaula]);
-  Entries := '';
-  for var Cfg in ConfigsSinSalida(Xml, APlat, ConfigsDelManifiesto(DprojXml, AConfig)) do
-    Entries := Entries + OutputDeployEntry(DprojXml, ExtractFileDir(ADprojPath), APlat, Cfg, AName);
-  if Entries = '' then
-    Exit;
-  // en el grupo de la plataforma, como lo deja el IDE (Lsp.Dproj)
-  Xml := ConEntradasEnSuGrupo(Xml, APlat, Entries);
-  if Xml = '' then
-    Exit;
-  PatchSaveConSuSalto(ADeployProj, Xml, Enc);
-  Result := True;
-end;
-
-{ ...y el de Android: el mapa entero de cada configuracion que el manifiesto no
-  despliega en APlat (EntradasDeAndroid, el del que se genera), en el grupo de la
-  plataforma como lo deja el IDE; lo de las otras plataformas no se toca. Uno
-  escrito por el deploy de otra plataforma no llevaba nada de Android y msbuild
-  paraba con E8712 (AndroidManifest.xml does not exist): solo se generaba si no
-  habia manifiesto (informes del 31-oct y del 7-nov, medido por el agente: con
-  el manifiesto borrado salio el apk; A19 de la 1.29) }
-function EnsureAndroidEntries(const ADeployProj, ADprojPath, APlat, AName, ABdsRoot,
+{ Completa un manifiesto que ya existe con lo que despliega en APlat cada
+  configuracion suya que no lo despliega (un grupo de plataforma vacio o que
+  falta, una configuracion que el proyecto no declara o declaro despues): la
+  salida del proyecto, o en Android el mapa entero del apk (EntradasDeLaConfig),
+  en el grupo de la plataforma como lo deja el IDE; lo de las otras plataformas
+  no se toca. Uno escrito por el deploy de otra plataforma no llevaba nada de
+  Android y msbuild paraba con E8712 (AndroidManifest.xml does not exist):
+  solo se generaba si no habia manifiesto (informes del 31-oct y del 7-nov,
+  medido por el agente: con el manifiesto borrado salio el apk; A19 de la
+  1.29). True si lo cambio. Eran dos, la salida y Android (WHEN SEEN de F1). }
+function CompletaManifiesto(const ADeployProj, ADprojPath, APlat, AName, ABdsRoot,
   AConfig: string): Boolean;
 var
   Enc, Xml, DprojXml, Entries: string;
@@ -1110,7 +1102,7 @@ begin
   DprojXml := LeeTexto(ADprojPath, [ltJaula]);
   Entries := '';
   for var Cfg in ConfigsSinSalida(Xml, APlat, ConfigsDelManifiesto(DprojXml, AConfig)) do
-    Entries := Entries + EntradasDeAndroid(DprojXml, ExtractFileDir(ADprojPath), AName, APlat, ABdsRoot,
+    Entries := Entries + EntradasDeLaConfig(DprojXml, ExtractFileDir(ADprojPath), AName, APlat, ABdsRoot,
       Cfg, True);
   if Entries = '' then
     Exit;
@@ -1134,8 +1126,7 @@ const
   // el Import que hace de ancla, por su Project
   ANCHOR_PROJECT = '$(BDS)\Bin\CodeGear.Delphi.Targets';
 var
-  F, N, Xml: string;
-  Cfg: string;
+  F, N: string;
   Ancla: TTramoXml;
 begin
   AGenerated := False;
@@ -1227,32 +1218,17 @@ begin
   begin
     // ...y uno sin Android (lo escribio el deploy de otra plataforma) se completa
     // con su mapa: no tenia nada que lo generara y paraba en E8712 (A19 de la 1.29)
-    if SistemaDePlataforma(APlat) = spAndroid then
-      AGenerated := EnsureAndroidEntries(F, ADprojPath, APlat, N, ABdsRoot, AConfig)
-    else
-      AGenerated := EnsurePlatformOutputEntries(F, ADprojPath, APlat, N, AConfig);
+    AGenerated := CompletaManifiesto(F, ADprojPath, APlat, N, ABdsRoot, AConfig);
     Exit;
   end;
-  if SistemaDePlataforma(APlat) = spAndroid then
-  begin
-    // como lo escribe el IDE (el juez: UTF-8 con BOM, medido en sus
-    // .deployproj): en ASCII un nombre de proyecto no ASCII salia con '?' en
-    // el Include (P3-L1 de la 1.18.0)
-    EscribeTexto(F, AndroidDeployXml(Dproj, ExtractFileDir(ADprojPath), N, APlat, ABdsRoot,
-      ConfigsDelManifiesto(Dproj, AConfig)), ltJaula, ekUtf8Bom);
-    AGenerated := True;
-    Exit;
-  end;
-  Xml := CabeceraDeManifiesto;
-  for Cfg in ConfigsDelManifiesto(Dproj, AConfig) do
-    // EL escritor del grupo de una plataforma y config (Lsp.Dproj) con LA
-    // entrada del binario (OutputDeployEntry: su carpeta de salida y su nombre
-    // por sus compositores); se escribia aqui a mano en $(Platform)\$(Config)
-    // y sin su Configuration (A19 de la 1.23)
-    Xml := Xml + '    ' + XmlGrupoDeDespliegue(DeployGroupCondition(APlat, Cfg),
-      OutputDeployEntry(Dproj, ExtractFileDir(ADprojPath), APlat, Cfg, N)) + #13#10;
-  Xml := Xml + '</Project>'#13#10;
-  EscribeTexto(F, Xml, ltJaula, ekUtf8Bom); // como el de Android, arriba
+  // como lo escribe el IDE (el juez: UTF-8 con BOM, medido en sus
+  // .deployproj): en ASCII un nombre de proyecto no ASCII salia con '?' en
+  // el Include (P3-L1 de la 1.18.0). Cada configuracion por EL escritor del
+  // grupo de una plataforma y config (Lsp.Dproj) con lo suyo (la salida se
+  // escribia aqui a mano en $(Platform)\$(Config) y sin su Configuration, A19
+  // de la 1.23)
+  EscribeTexto(F, ManifiestoNuevo(Dproj, ExtractFileDir(ADprojPath), N, APlat, ABdsRoot,
+    ConfigsDelManifiesto(Dproj, AConfig)), ltJaula, ekUtf8Bom);
   AGenerated := True;
 end;
 
@@ -2637,7 +2613,7 @@ begin
     raise Exception.Create(NoPuede);
   Target := ATarget.Trim;
   if Target = '' then
-    Target := 'Build';
+    Target := BUILD_TARGET_POR_DEFECTO;
   // el target con SU nombre, uno del cuarteto que admite la puerta (lo que
   // teclea el agente solo elige; a /t: iba tal cual, con sus mayusculas)
   var IdxTarget := IndexText(Target, TARGETS_DE_BUILD);

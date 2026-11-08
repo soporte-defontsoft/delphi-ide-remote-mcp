@@ -231,6 +231,21 @@ const
     en 16 sitios de tres unidades (B5 de la 1.29). }
   CLAVE_DE_LOS_SDKS = 'PlatformSDKs';
   CLAVE_DE_LOS_PERFILES = 'RemoteProfiles';
+  { ...y las que leen otros lectores y sus VIGILANTES (los que invalidan su
+    cache cuando el IDE las cambia): cada pareja nombraba la misma clave con
+    su propio literal, y una errata en uno dejaba la cache sin invalidar sin
+    que nada lo dijera (WHEN SEEN de F1 de la 1.29). SUFIJO_X64, el de las
+    listas de paquetes de 64 bits }
+  CLAVE_DE_LA_BIBLIOTECA = 'Library';
+  CLAVE_DEL_ENTORNO = 'Environment Variables';
+  CLAVE_DEL_EDITOR = 'Editor';
+  CLAVE_DE_LOS_PAQUETES = 'Known Packages';
+  CLAVE_DE_LOS_DESACTIVADOS = 'Disabled Packages';
+  SUFIJO_X64 = ' x64';
+  { los dos valores de la biblioteca de una plataforma: el Search Path, lo que
+    encuentra el compilador, y el Browsing Path, el fuente que el IDE ensena }
+  VALOR_SEARCH_PATH = 'Search Path';
+  VALOR_BROWSING_PATH = 'Browsing Path';
 
 { La clave de UN SDK asentado y la de UN perfil remoto, con el nombre tal como
   esta en el registro: el de un SDK que da el agente pasa antes por NombreDeSdk;
@@ -578,7 +593,7 @@ procedure MacrosDelProyecto(const AInfo: TRadStudioInfo; const ADprojDir, ANombr
   paquetes de COMPONENTES de terceros registran sus carpetas, que un
   proyecto no suele repetir en su .dproj. }
 function IdePlatformLibraryPaths(const AInfo: TRadStudioInfo; const APlatform: string;
-  const AValor: string = 'Search Path'; const AConfig: string = ''): TArray<string>;
+  const AValor: string = VALOR_SEARCH_PATH; const AConfig: string = ''): TArray<string>;
 
 { Las carpetas de una lista (a;b;c) como las ve quien la usa: los macros
   expandidos con AVars (la tabla del IDE, IdeMacroVars) ANTES de partir - uno que
@@ -1069,7 +1084,7 @@ begin
   // la del usuario, como el IDE: aqui habia otra copia del mismo bucle
   // (revision de la 1.10.0). Un valor que no es texto llega vacio, y vaciar
   // un Values lo quita: no es una macro
-  for var V in IdeValoresDeClave(AVersion, 'Environment Variables', False) do
+  for var V in IdeValoresDeClave(AVersion, CLAVE_DEL_ENTORNO, False) do
     ADest.Values[V.Nombre] := V.Dato;
 end;
 
@@ -1084,7 +1099,7 @@ end;
 
 function IdeLibraryPlatforms(const AVersion: string): TArray<string>;
 begin
-  Result := IdeSubclaves(AVersion, 'Library');
+  Result := IdeSubclaves(AVersion, CLAVE_DE_LA_BIBLIOTECA);
 end;
 
 function IdeSubclaves(const AVersion, ASubKey: string): TArray<string>;
@@ -1169,11 +1184,11 @@ begin
   Off := TDictionary<string, Boolean>.Create;
   List := TList<TIdePackage>.Create;
   try
-    for var SubKey in TArray<string>.Create('Known Packages',
-      'Known Packages x64') do
+    for var SubKey in TArray<string>.Create(CLAVE_DE_LOS_PAQUETES,
+      CLAVE_DE_LOS_PAQUETES + SUFIJO_X64) do
       Collect(SubKey, True, False);
-    for var SubKey in TArray<string>.Create('Disabled Packages',
-      'Disabled Packages x64') do
+    for var SubKey in TArray<string>.Create(CLAVE_DE_LOS_DESACTIVADOS,
+      CLAVE_DE_LOS_DESACTIVADOS + SUFIJO_X64) do
       Collect(SubKey, False, True);
     for Key in Map.Keys do
     begin
@@ -1199,7 +1214,7 @@ end;
 function IdeBplsDesactivados32(const AVersion: string): TArray<string>;
 begin
   Result := nil;
-  for var V in IdeValoresDeClave(AVersion, 'Disabled Packages', False) do
+  for var V in IdeValoresDeClave(AVersion, CLAVE_DE_LOS_DESACTIVADOS, False) do
     Result := Result + [ClaveDeRuta(NombreDeBpl(V.Nombre))];
 end;
 
@@ -1411,13 +1426,13 @@ end;
 
 function VigiasDeLaBiblioteca(const AVersion: string): TArray<TVigiaDeClave>;
 begin
-  Result := [VigilaClaveDelIde(AVersion, 'Library'),
-    VigilaClaveDelIde(AVersion, 'Environment Variables')];
+  Result := [VigilaClaveDelIde(AVersion, CLAVE_DE_LA_BIBLIOTECA),
+    VigilaClaveDelIde(AVersion, CLAVE_DEL_ENTORNO)];
 end;
 
 function VigiasDeLaCarpetaDeSdks(const AVersion: string): TArray<TVigiaDeClave>;
 begin
-  Result := [VigilaClaveDelIde(AVersion, 'Environment Variables'),
+  Result := [VigilaClaveDelIde(AVersion, CLAVE_DEL_ENTORNO),
     VigilaClaveDelIde(AVersion, CLAVE_DE_LOS_SDKS)];
 end;
 
@@ -1469,7 +1484,7 @@ end;
 
 function VigiasDelEditor(const AVersion: string): TArray<TVigiaDeClave>;
 begin
-  Result := [VigilaClaveDelIde(AVersion, 'Editor')];
+  Result := [VigilaClaveDelIde(AVersion, CLAVE_DEL_EDITOR)];
 end;
 
 procedure SueltaVigia(var AVigia: TVigiaDeClave);
@@ -1482,7 +1497,7 @@ end;
 
 function IdeDefaultUtf8(const AVersion: string): Boolean;
 begin
-  Result := SinMayusculas(IdeConfigValue(AVersion, 'Editor', 'DefaultFileFilter'))
+  Result := SinMayusculas(IdeConfigValue(AVersion, CLAVE_DEL_EDITOR, 'DefaultFileFilter'))
     .Contains('utf8toutf8');
 end;
 
@@ -2058,7 +2073,7 @@ begin
     // solo las completas: un valor del registro no tiene carpeta, y "\x" o
     // "X:y" se resolvian contra el PROCESO del servidor (EL resolutor)
     for var Carpeta in CarpetasDeUnaLista(IdeConfigValue(AInfo.Version,
-      'Library\' + ClaveLibraryDePlataforma(AInfo.Version, Plat), AValor), '', Vars) do
+      CLAVE_DE_LA_BIBLIOTECA + '\' + ClaveLibraryDePlataforma(AInfo.Version, Plat), AValor), '', Vars) do
       Result := Result + [PrefijoSinBarra(Carpeta)];
   finally
     Vars.Free;

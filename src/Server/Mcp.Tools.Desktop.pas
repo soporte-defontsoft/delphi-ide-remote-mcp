@@ -455,7 +455,8 @@ begin
       var Mo := M.Trim;
       if Mo = 'control' then Mo := 'ctrl';
       if Mo = 'win' then Mo := 'super';
-      if not MatchText(Mo, ['ctrl', 'shift', 'alt', 'super']) then
+      // la lista de sus textos (MODIFICADORES, Lsp.Texts): estaba aqui a mano
+      if not MatchText(Mo, MODIFICADORES.Split([', '])) then
         Exit(MsgFmt(SR_ADBLINUX_MODIFIERS_BAD_FMT, [M.Trim]));
       // en Linux, sus codigos evdev: los del protocolo, que son los que
       // pulsa el nodo por su cuenta (NodeProtocolo.inc; estaban en los dos)

@@ -106,9 +106,9 @@ REGLAS = [
      'RespondeRaiz, RespondePaquetes, RespondeRect, RespondeTamano, RespondeMs, RespondeLoCargado, '
      'RespondeElPintado y RespondeCaja (FormRender.Comun, P7), y las fases en CargaPaquetesDelIde'),
     ('una medida del ayudante a mano', r"%d,%d,%d,%d",
-     [('FormRender.Comun.pas', 'MedidasEnTexto'),
-      # lo que se le contesta al agente, no el protocolo del ayudante
-      ('Mcp.Tools.Designer.pas', 'PreviewDeForm'), ('Mcp.Tools.Desktop.pas', 'GestoEnElTarget')],
+     # (MedidasEnTexto ya no la escribe a mano: las une por FR_LISTA_SEP, el separador del protocolo; WHEN
+     # SEEN de F1 de la 1.29) lo que se le contesta al agente, no el protocolo del ayudante
+     [('Mcp.Tools.Designer.pas', 'PreviewDeForm'), ('Mcp.Tools.Desktop.pas', 'GestoEnElTarget')],
      'MedidasEnTexto (FormRender.Comun), y su inversa LeeCuatroEnteros (Lsp.FormRender)'),
     # V60 de la 1.25: la identidad y la version de una peticion moderna las lee UNO, el de
     # los dos transportes; un segundo lector es una segunda puerta a quien eres
@@ -1773,7 +1773,7 @@ REGLAS = [
      'el .dproj entero con los nombradores (Lsp.Scaffold)'),
     # un <ItemGroup Condition="..."> del .deployproj compuesto a mano: lo componian cinco sitios
     # (el manifiesto de Android y el de las demas plataformas, el hueco y el grupo nuevo de
-    # EnsurePlatformOutputEntries, add-deployfile; revisor del 21-oct-2026)
+    # CompletaManifiesto, add-deployfile; revisor del 21-oct-2026)
     ('un ItemGroup de despliegue compuesto a mano',
      r"'\s*<ItemGroup\s",
      [('Lsp.Dproj.pas', 'XmlGrupoDeDespliegue')],
@@ -2673,14 +2673,22 @@ def negra_declarada(texto,funcion):
         if inicio>=0 and antes.endswith('}') and 'LISTA NEGRA' in antes[inicio:]:
             return True
     return False
-# Una lista que imita a un juez que solo contesta en prosa (P21): se declara, y solo puede encoger
-TEXTO_DPROJ = next(t for f, t in TEXTOS if os.path.basename(f) == 'Lsp.Dproj.pas')
-check('deuda declarada Lsp.Dproj PACLIENT_PLATFORMS',
-      re.search(r"\{ LISTA QUE IMITA A UN JUEZ[^}]*\}\s*PACLIENT_PLATFORMS", TEXTO_DPROJ) is not None)
-# ...y la de las palabras reservadas, que imita a dcc (WHEN SEEN de F1 de la 1.29)
-TEXTO_PASCAL = next(t for f, t in TEXTOS if os.path.basename(f) == 'Lsp.Pascal.pas')
-check('deuda declarada Lsp.Pascal RESERVADAS',
-      re.search(r"\{ LISTA QUE IMITA A UN JUEZ[^}]*\}\s*RESERVADAS", TEXTO_PASCAL) is not None)
+# Una lista que imita a un juez que solo contesta en prosa (P21): se declara, y solo puede encoger. Las platforms de
+# paclient, las palabras reservadas de dcc, las frases de adb sin dispositivo y los expertos del IDE (las tres
+# ultimas, WHEN SEEN de F1 de la 1.29); cada una con su mutante
+LISTAS_QUE_IMITAN = [('Lsp.Dproj.pas', 'PACLIENT_PLATFORMS'), ('Lsp.Pascal.pas', 'RESERVADAS'),
+                     ('Mcp.Tools.Adb.pas', 'function DeviceGone'), ('FormRender.Comun.pas', 'EXPERTOS')]
+
+
+def imita_declarada(texto, nombre):
+    return re.search(r"\{ LISTA QUE IMITA A UN JUEZ[^}]*\}\s*" + re.escape(nombre), texto) is not None
+
+
+for fichero, nombre in LISTAS_QUE_IMITAN:
+    texto = next((t for f, t in TEXTOS if os.path.basename(f) == fichero), '')
+    check('deuda declarada %s %s' % (fichero, nombre), imita_declarada(texto, nombre), fichero)
+    check('mutante lista sin declarar %s' % nombre,
+          not imita_declarada(texto.replace('LISTA QUE IMITA A UN JUEZ', 'sin declarar'), nombre))
 for fichero,funcion in LISTAS_NEGRAS:
     texto=next(t for f,t in TEXTOS if os.path.basename(f)==fichero)
     check('deuda declarada '+fichero+' '+funcion,negra_declarada(texto,funcion))
@@ -3053,10 +3061,11 @@ check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
 # 1.27-, y uno que ParseaArgumentos leyera a mano). Si cambia uno sin
 # subirlo, un ayudante viejo y un servidor nuevo se creen iguales. Cambia: sube FR_PROTOCOLO_VERSION y
 # pon aqui el numero y la firma que dice el fallo
-FIRMA_DEL_PROTOCOLO = (13, '194a30f31d40e7cf')  # la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+FIRMA_DEL_PROTOCOLO = (14, '8a8bb5b98e9a3d25')  # la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
 # la 9: los valores de los argumentos y las claves como constantes del .inc (C2-3 de la 1.28); la 10: --scale y SCALE= (C2
 # de la 1.29); la 11: el estilo none/windows y la fidelidad canvas como constantes (DH4 de la 1.29); la 12: los
-# separadores de NONVISUALS= como constantes (B-I18 de la 1.29); la 13: --bplsuffix, el sufijo medido (F1-2 de la 1.29)
+# separadores de NONVISUALS= como constantes (B-I18 de la 1.29); la 13: --bplsuffix, el sufijo medido (F1-2 de la 1.29);
+# la 14: los separadores de los demas valores como constantes (WHEN SEEN de F1 de la 1.29)
 # (un campo nuevo en el VALOR de una clave no cambia la firma, que mira claves y argumentos: ese
 # numero se sube a mano, y el lector exige los campos de su version: BOX= de ocho no se lee)
 

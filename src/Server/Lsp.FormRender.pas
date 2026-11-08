@@ -818,7 +818,7 @@ function LeeCuatroEnteros(const ATexto: string; out AX, AY, AAncho, AAlto: Integ
 var
   Trozos: TArray<string>;
 begin
-  Trozos := ATexto.Split([',']);
+  Trozos := ATexto.Split([FR_LISTA_SEP]);
   Result := Length(Trozos) = 4;
   if Result then
   begin
@@ -852,9 +852,9 @@ var
   function ListaDelComponente: TArray<string>;
   begin
     Result := [];
-    P := V.IndexOf('=');
+    P := V.IndexOf(FR_NOMBRE_SEP);
     if P > 0 then
-      Result := V.Substring(P + 1).Split([','], TStringSplitOptions.ExcludeEmpty);
+      Result := V.Substring(P + 1).Split([FR_LISTA_SEP], TStringSplitOptions.ExcludeEmpty);
   end;
 
 begin
@@ -873,7 +873,7 @@ begin
       Result.Captura := V
     else if Es(FR_SIZE) then
     begin
-      Trozos := V.Split(['x']);
+      Trozos := V.Split([FR_TAMANO_SEP]);
       if Length(Trozos) = 2 then
       begin
         Result.Ancho := StrToIntDef(Trozos[0], 0);
@@ -886,7 +886,7 @@ begin
       Result.Sesion := StrToIntDef(V, -1)
     else if Es(FR_ROOT) then
     begin
-      Trozos := V.Split([':']);
+      Trozos := V.Split([FR_RAIZ_SEP]);
       if Length(Trozos) = 3 then
       begin
         Result.RaizNombre := Trozos[0];
@@ -903,7 +903,7 @@ begin
     else if Es(FR_COMPONENTS) then
       Result.Componentes := StrToIntDef(V, 0)
     else if Es(FR_SUBSTITUTED) then
-      Result.Sustituidas := V.Split([','], TStringSplitOptions.ExcludeEmpty)
+      Result.Sustituidas := V.Split([FR_LISTA_SEP], TStringSplitOptions.ExcludeEmpty)
     else if Es(FR_IGNORED) then
     begin
       // <de quien>|<mensaje en partes> (FR_ORIGEN_LECTOR = del lector)
@@ -932,7 +932,7 @@ begin
     else if Es(FR_RECT) then
     begin
       // <Nombre>=<izq>,<arriba>,<ancho>,<alto>: el nombre no lleva '='
-      P := V.LastIndexOf('=');
+      P := V.LastIndexOf(FR_NOMBRE_SEP);
       Result.HayRect := (P > 0) and LeeCuatroEnteros(V.Substring(P + 1), Result.RectX, Result.RectY,
         Result.RectW, Result.RectH);
     end
@@ -942,7 +942,7 @@ begin
     begin
       // <pixeles>/<unidades>, la inversa de FormRender.Comun.RespondeEscala; lo que no
       // sean dos enteros positivos se queda en 1/1
-      Trozos := V.Split(['/']);
+      Trozos := V.Split([FR_RAZON_SEP]);
       if (Length(Trozos) = 2) and (StrToIntDef(Trozos[0], 0) > 0) and (StrToIntDef(Trozos[1], 0) > 0) then
       begin
         Result.EscalaPixeles := StrToInt(Trozos[0]);
@@ -953,7 +953,7 @@ begin
       Result.Avisos := Result.Avisos + [V]
     else if Es(FR_MS) then
     begin
-      Trozos := V.Split([',']);
+      Trozos := V.Split([FR_LISTA_SEP]);
       if Length(Trozos) = 2 then
       begin
         Result.MsCarga := StrToIntDef(Trozos[0], 0);
@@ -968,8 +968,8 @@ begin
     begin
       // <ruta>|<clase>|<padre>|<x>,<y>,<ancho>,<alto>|<visible>|<contenido>|<fichero>|<ruta en
       // el fichero>|<pintada>: ni un nombre ni una ruta llevan '|'
-      Trozos := V.Split(['|']);
-      if Length(Trozos) = 9 then
+      Trozos := V.Split([FR_CAMPOS_SEP]);
+      if Length(Trozos) = FR_BOX_CAMPOS then
       begin
         // a cero: lo que un campo vacio no dice (el contenido, lo pintado en la VCL) no queda al azar
         var Caja := Default(TCajaDeRender);
@@ -1000,7 +1000,7 @@ begin
     else if Es(FR_READ) then
     begin
       // <sha256>|<ruta>: la huella es hexadecimal, y una ruta no lleva '|'
-      P := V.IndexOf('|');
+      P := V.IndexOf(FR_CAMPOS_SEP);
       if P > 0 then
       begin
         var Leido: TLeidoPorElJuez;
@@ -1637,7 +1637,7 @@ begin
   var Vars := TStringList.Create;
   try
     IdeMacroVars(AInfo, Vars);
-    for var V in IdeValoresDeClave(AInfo.Version, 'Known Packages', False) do
+    for var V in IdeValoresDeClave(AInfo.Version, CLAVE_DE_LOS_PAQUETES, False) do
       if not EsBplDesactivado(V.Nombre, Off) then
         Result := Result + [RutaDePaqueteDelIde(V.Nombre, Vars)];
   finally

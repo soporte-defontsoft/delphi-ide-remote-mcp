@@ -681,43 +681,43 @@ end;
 procedure RespondeCaja(const ARuta, AClase, APadre: string; AX, AY, AAncho, AAlto: Integer; AVisible: Boolean;
   const AContenido, AFichero, AEnFichero, APintada: string);
 begin
-  Responde(FR_BOX, Format('%s|%s|%s|%s|%d|%s|%s|%s|%s', [ARuta, AClase, APadre, MedidasEnTexto(AX, AY, AAncho, AAlto),
-    Ord(AVisible), AContenido, AFichero, AEnFichero, APintada]));
+  Responde(FR_BOX, string.Join(FR_CAMPOS_SEP, [ARuta, AClase, APadre, MedidasEnTexto(AX, AY, AAncho, AAlto),
+    IntToStr(Ord(AVisible)), AContenido, AFichero, AEnFichero, APintada]));
 end;
 
 procedure RespondeRaiz(const ANombre, AClase: string; AEsFrame: Boolean);
 begin
-  Responde(FR_ROOT, Format('%s:%s:%s', [ANombre, AClase, (if AEsFrame then FR_RAIZ_FRAME else FR_RAIZ_FORM)]));
+  Responde(FR_ROOT, string.Join(FR_RAIZ_SEP, [ANombre, AClase, (if AEsFrame then FR_RAIZ_FRAME else FR_RAIZ_FORM)]));
 end;
 
 procedure RespondePaquetes(ACargados, AConocidos: Integer);
 begin
-  Responde(FR_PACKAGES, Format('%d/%d', [ACargados, AConocidos]));
+  Responde(FR_PACKAGES, IntToStr(ACargados) + FR_RAZON_SEP + IntToStr(AConocidos));
 end;
 
 procedure RespondeRect(const ANombre: string; AX, AY, AAncho, AAlto: Integer);
 begin
-  Responde(FR_RECT, ANombre + '=' + MedidasEnTexto(AX, AY, AAncho, AAlto));
+  Responde(FR_RECT, ANombre + FR_NOMBRE_SEP + MedidasEnTexto(AX, AY, AAncho, AAlto));
 end;
 
 procedure RespondeTamano(AAncho, AAlto: Integer);
 begin
-  Responde(FR_SIZE, Format('%dx%d', [AAncho, AAlto]));
+  Responde(FR_SIZE, IntToStr(AAncho) + FR_TAMANO_SEP + IntToStr(AAlto));
 end;
 
 procedure RespondeEscala(APixeles, AUnidades: Integer);
 begin
-  Responde(FR_SCALE, Format('%d/%d', [APixeles, AUnidades]));
+  Responde(FR_SCALE, IntToStr(APixeles) + FR_RAZON_SEP + IntToStr(AUnidades));
 end;
 
 procedure RespondeMs(ACarga, APintado: Int64);
 begin
-  Responde(FR_MS, Format('%d,%d', [ACarga, APintado]));
+  Responde(FR_MS, IntToStr(ACarga) + FR_LISTA_SEP + IntToStr(APintado));
 end;
 
 function MedidasEnTexto(AX, AY, AAncho, AAlto: Integer): string;
 begin
-  Result := Format('%d,%d,%d,%d', [AX, AY, AAncho, AAlto]);
+  Result := string.Join(FR_LISTA_SEP, [IntToStr(AX), IntToStr(AY), IntToStr(AAncho), IntToStr(AAlto)]);
 end;
 
 procedure RespondeLoCargado(ACargador: TCargador; ARaiz: TComponent; AEsFrame: Boolean;
@@ -1055,7 +1055,7 @@ end;
 procedure AnotaLeido(ALeidos: TStrings; const AFichero: string; const ABytes: TBytes);
 begin
   if (ALeidos <> nil) and not SameFileName(AFichero, GPeticion.Path) then
-    ALeidos.Add(Sha256DeBytes(ABytes) + '|' + AFichero);
+    ALeidos.Add(Sha256DeBytes(ABytes) + FR_CAMPOS_SEP + AFichero);
 end;
 
 { El texto de un .pas que decide lo que se carga, anotado en ALeidos: la huella
@@ -1354,16 +1354,17 @@ end;
 
 procedure CargaPaquetesDelIde(out ACargados, AConocidos: Integer);
 const
-  // expertos del IDE: no registran componentes y tocan BorlandIDEServices.
-  // Una lista de la casa por el nombre del bpl: no hay juez sin cargarlo
-  // (el registro no los distingue, Known IDE Packages no tiene ninguno de
-  // estos; medido el 25-oct-2026). Las integraciones de control de
-  // versiones (gitide, hgide, svnide) por 'ide' y su version, sin clavarla:
-  // 'ide370' dejaba de casar con el IDE siguiente. Sin 'wizard': solo casaba
-  // JvWizardsDesign370, el paquete de diseno de TJvWizard (sus forms salian
-  // sustituidos), y MobileWizardExpert370, que ya casa 'expert' (V17 de la
-  // 1.23). El juez seria cargar solo los paquetes que registran las clases
-  // que faltan (apuntado para la 1.24)
+  { LISTA QUE IMITA A UN JUEZ, declarada (WHEN SEEN de F1 de la 1.29): los
+    expertos del IDE, que no registran componentes y tocan BorlandIDEServices.
+    Una lista de la casa por el nombre del bpl: no hay juez sin cargarlo (el
+    registro no los distingue, Known IDE Packages no tiene ninguno de estos;
+    medido el 25-oct-2026). Las integraciones de control de versiones (gitide,
+    hgide, svnide) por 'ide' y su version, sin clavarla: 'ide370' dejaba de
+    casar con el IDE siguiente. Sin 'wizard': solo casaba JvWizardsDesign370,
+    el paquete de diseno de TJvWizard (sus forms salian sustituidos), y
+    MobileWizardExpert370, que ya casa 'expert' (V17 de la 1.23). El juez
+    seria cargar solo los paquetes que registran las clases que faltan; hasta
+    entonces solo puede encoger }
   EXPERTOS = '(?i)(ide\d+\.bpl$|expert|explorer|visualizer|applet|quickedit|emacsedit|smpedit|mlwiz|netwiz|styledesigner|^svn)';
 var
   H: HMODULE;
@@ -2026,7 +2027,7 @@ end;
 procedure RespondeLoLeido(ACargador: TCargador);
 begin
   if ACargador.Sustituidas.Count > 0 then
-    Responde(FR_SUBSTITUTED, string.Join(',', ACargador.Sustituidas.ToStringArray));
+    Responde(FR_SUBSTITUTED, string.Join(FR_LISTA_SEP, ACargador.Sustituidas.ToStringArray));
   // <de quien>|<fichero>|<mensaje en partes>: ReaderError guarda 'origen|fichero|mensaje',
   // y ni el origen ni una ruta llevan el separador
   for var S in ACargador.Ignoradas do
@@ -2077,7 +2078,7 @@ begin
     begin
       if Lista^[I] = nil then
         Break;
-      Result := Result + (if Result <> '' then ',' else '') + GetPropName(Lista^[I]);
+      Result := Result + (if Result <> '' then FR_LISTA_SEP else '') + GetPropName(Lista^[I]);
     end;
   finally
     FreeMem(Lista);
@@ -2107,7 +2108,7 @@ var
     N: Integer;
   begin
     for var Nombre in TEspiaDeDefinidas.SinEscritor(AO) do
-      PorCodigo := PorCodigo + (if PorCodigo <> '' then ',' else '') + APrefijo + Nombre;
+      PorCodigo := PorCodigo + (if PorCodigo <> '' then FR_LISTA_SEP else '') + APrefijo + Nombre;
     N := GetTypeData(AO.ClassInfo)^.PropCount;
     if N = 0 then
       Exit;
@@ -2121,7 +2122,7 @@ var
         var Nombre := APrefijo + GetPropName(Lista^[I]);
         var Guarda := UIntPtr(Lista^[I]^.StoredProc);
         if ((Guarda and not NativeUInt($FF)) = 0) and ((Guarda and $FF) = 0) then
-          Juntas := Juntas + (if Juntas <> '' then ',' else '') + Nombre
+          Juntas := Juntas + (if Juntas <> '' then FR_LISTA_SEP else '') + Nombre
         // tres niveles bastan (TextSettings.Font.Style) y cortan un ciclo
         else if (ANivel < 3) and (Lista^[I]^.PropType^.Kind = tkClass) then
         try
@@ -2149,7 +2150,7 @@ end;
   separada por comas). La inversa: Lsp.FormRender.LeeRespuestaDeRender }
 function ListaDelComponente(const ANombre, ALista: string): string;
 begin
-  Result := ANombre + '=' + ALista;
+  Result := ANombre + FR_NOMBRE_SEP + ALista;
 end;
 
 procedure EscribeComoElIde(ARaiz: TComponent);

@@ -73,8 +73,15 @@ function CurrentWorkspaceName: string;
   mira delphi_workspace para avisar de que el fichero cambio despues. }
 function SettingsIniPath: string;
 
-{ [Log] LinesPerFile / MaxFiles tal cual los trae el settings.ini (2000 y
-  10 si no estan), leidos por el lector central, LoadSecurity. Los usa
+const
+  { lo que vale [Log] sin LinesPerFile ni MaxFiles, UNA vez: el lector del
+    settings.ini y el registro antes de leerlo (estaban en los dos; WHEN SEEN
+    de F1 de la 1.29) }
+  LOG_LINEAS_POR_DEFECTO = 2000;
+  LOG_BLOQUES_POR_DEFECTO = 10;
+
+{ [Log] LinesPerFile / MaxFiles tal cual los trae el settings.ini (los de
+  arriba si no estan), leidos por el lector central, LoadSecurity. Los usa
   Lsp.LogSink; hasta el 26-sep los leia la bandeja con su propio TIniFile. }
 procedure LogIniSettings(out ALinesPerFile, AMaxFiles: Integer);
 
@@ -478,8 +485,8 @@ var
   GEngineIdleMin: Double = -1;     // -1 = sin leer todavia
   GIniMaxEngines: string;          // [Server] MaxEngines, sin parsear
   GMaxEngines: Integer = -1;       // -1 = sin leer todavia
-  GIniLogLines: Integer = 2000;    // [Log] LinesPerFile
-  GIniLogMaxFiles: Integer = 10;   // [Log] MaxFiles
+  GIniLogLines: Integer = LOG_LINEAS_POR_DEFECTO;    // [Log] LinesPerFile
+  GIniLogMaxFiles: Integer = LOG_BLOQUES_POR_DEFECTO;   // [Log] MaxFiles
 
   GReadOnlyToken: string;
   GAllowRemoteRun: Boolean = False; // remote-run is OFF unless opted in
@@ -1467,8 +1474,8 @@ begin
           [MsgFmt(SL_GUARD_DELPHIUPDATE_MAL_FMT, [GDelphiUpdate])];
         GDelphiUpdate := '';
       end;
-      GIniLogLines := Ini.ReadInteger('Log', 'LinesPerFile', 2000);
-      GIniLogMaxFiles := Ini.ReadInteger('Log', 'MaxFiles', 10);
+      GIniLogLines := Ini.ReadInteger('Log', 'LinesPerFile', LOG_LINEAS_POR_DEFECTO);
+      GIniLogMaxFiles := Ini.ReadInteger('Log', 'MaxFiles', LOG_BLOQUES_POR_DEFECTO);
       // [Workspace.<name>] sections: token-scoped sandboxes. Parsed once,
       // here, so AuthorizeBearer never touches the disk per request.
       var Secs := TStringList.Create;
