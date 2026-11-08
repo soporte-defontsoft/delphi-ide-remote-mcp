@@ -50,10 +50,36 @@ function BorraAtomosPropios: Integer;
   tabla. Para llamar cuando el hijo ha terminado. Cuantos borro. }
 function BorraAtomosSiLosDejo(APid, ATidPrincipal: DWORD): Integer;
 
+type
+  { Un proceso tomado VIVO antes de que lo mate otro: su pid, los ids de todos
+    sus hilos y un handle a cada uno. Con los handles abiertos ningun id se
+    reutiliza, asi que un atomo que lleve uno de ellos es suyo }
+  TProcesoTomado = record
+    Pid: DWORD;
+    Proceso: THandle;
+    Tids: TArray<DWORD>;
+    Hilos: TArray<THandle>;
+  end;
+
+{ Los procesos APids que sigan en el Job AJob, tomados vivos con todos sus
+  hilos, ANTES de que el Job los mate al cerrarse: los nietos de RunCore, de
+  los que no sabemos ni el pid ni el hilo principal (Windows no dice cual es:
+  se borrara lo que lleve cualquiera de sus hilos). Medido el 8-nov-2026: el
+  hijo que lanza un componente dentro del renderizador dejaba sus tres atomos
+  en cada render cortado por plazo. Un pid que ya no esta en el Job se salta. }
+function TomaProcesosDelJob(AJob: THandle; const APids: TArray<DWORD>): TArray<TProcesoTomado>;
+
+{ Tras matarlos: espera a cada uno y a sus hilos (APlazoMs para todos), borra
+  los atomos del RTL que dejaron - solo los de un proceso que termino del todo,
+  y sin recorrer la tabla por el que finalizo - y cierra los handles. Cuantos
+  borro. }
+function BorraAtomosDeLosTomados(var ATomados: TArray<TProcesoTomado>; APlazoMs: Cardinal): Integer;
+
 implementation
 
 uses
-  System.SysUtils;
+  System.SysUtils,
+  Winapi.TlHelp32;
 
 // Lo que Winapi.Windows de este Delphi no declara (como las APIs de Job en
 // Lsp.BuildRunner): con su nombre real en kernel32
@@ -132,45 +158,154 @@ begin
   end;
 end;
 
-function Borra(APid, ATidPrincipal: DWORD): Integer;
+{ Los del proceso APid con uno de los hilos ATids: el principal cuando se sabe,
+  todos los suyos cuando no (los tomados). Una sola pasada por la tabla }
+function Borra(APid: DWORD; const ATids: array of DWORD): Integer;
 var
   Nombre: array [0 .. 255] of Char;
+  Sufijos: TArray<string>;
 begin
-  Result := BorraTodasLas(Format(ATOMO_VENTANA_VCL, [APid])) +
-    BorraTodasLas(Format(ATOMO_VENTANA_FMX, [APid, ATidPrincipal]));
+  Result := BorraTodasLas(Format(ATOMO_VENTANA_VCL, [APid]));
+  SetLength(Sufijos, Length(ATids));
+  for var I := 0 to High(ATids) do
+  begin
+    Inc(Result, BorraTodasLas(Format(ATOMO_VENTANA_FMX, [APid, ATids[I]])));
+    Sufijos[I] := Format('%.8X', [ATids[I]]);
+  end;
   // ControlOfs/WndProcPtr llevan delante el HInstance, que no se sabe (el
   // exe y cada bpl cargado tienen el suyo): se buscan por el tid del final
-  var Sufijo := Format('%.8X', [ATidPrincipal]);
   for var A: Integer := PRIMER_ATOMO to ULTIMO_ATOMO do
     if GlobalGetAtomName(ATOM(A), Nombre, Length(Nombre)) > 0 then
     begin
       var S := string(Nombre);
-      if (S.StartsWith(ATOMO_CONTROL) or S.StartsWith(ATOMO_WNDPROC)) and
-         (Length(S) > Length(ATOMO_CONTROL) + Length(Sufijo)) and S.EndsWith(Sufijo) then
-        Inc(Result, BorraTodasLas(S));
+      if S.StartsWith(ATOMO_CONTROL) or S.StartsWith(ATOMO_WNDPROC) then
+        for var Sufijo in Sufijos do
+          if (Length(S) > Length(ATOMO_CONTROL) + Length(Sufijo)) and S.EndsWith(Sufijo) then
+          begin
+            Inc(Result, BorraTodasLas(S));
+            Break;
+          end;
     end;
+end;
+
+{ Un proceso VCL o FMX que finalizo ya quito su atomo de proceso: sin el, nada
+  que mirar (ni se recorre la tabla) }
+function DejoSuAtomo(APid: DWORD; const ATids: array of DWORD): Boolean;
+begin
+  Result := GlobalFindAtom(PChar(Format(ATOMO_VENTANA_VCL, [APid]))) <> 0;
+  for var T in ATids do
+    if not Result then
+      Result := GlobalFindAtom(PChar(Format(ATOMO_VENTANA_FMX, [APid, T]))) <> 0;
 end;
 
 function BorraAtomosDeProceso(APid, ATidPrincipal: DWORD): Integer;
 begin
   if ProcesoVivo(APid) or HiloVivo(ATidPrincipal) then
     Exit(0);
-  Result := Borra(APid, ATidPrincipal);
+  Result := Borra(APid, [ATidPrincipal]);
 end;
 
 function BorraAtomosPropios: Integer;
 begin
-  Result := Borra(GetCurrentProcessId, MainThreadID);
+  Result := Borra(GetCurrentProcessId, [MainThreadID]);
 end;
 
 function BorraAtomosSiLosDejo(APid, ATidPrincipal: DWORD): Integer;
 begin
   Result := 0;
-  // un proceso VCL o FMX que finalizo ya quito el suyo: sin el, nada que mirar
-  if (GlobalFindAtom(PChar(Format(ATOMO_VENTANA_VCL, [APid]))) = 0) and
-     (GlobalFindAtom(PChar(Format(ATOMO_VENTANA_FMX, [APid, ATidPrincipal]))) = 0) then
+  if not DejoSuAtomo(APid, [ATidPrincipal]) then
     Exit;
   Result := BorraAtomosDeProceso(APid, ATidPrincipal);
+end;
+
+function TomaProcesosDelJob(AJob: THandle; const APids: TArray<DWORD>): TArray<TProcesoTomado>;
+var
+  Foto: THandle;
+  E: TThreadEntry32;
+  EnElJob: ByteBool;
+begin
+  Result := [];
+  for var Pid in APids do
+  begin
+    var H := OpenProcess(SYNCHRONIZE or PROCESS_QUERY_LIMITED_INFORMATION, False, Pid);
+    if H = 0 then
+      Continue;
+    // el pid de la lista del Job, si entretanto murio y es de otro, fuera
+    if IsProcessInJob(H, AJob, EnElJob) and EnElJob then
+    begin
+      var P := Default(TProcesoTomado);
+      P.Pid := Pid;
+      P.Proceso := H;
+      Result := Result + [P];
+    end
+    else
+      CloseHandle(H);
+  end;
+  if Length(Result) = 0 then
+    Exit;
+  // sus hilos: los que viven ahora, con el principal entre ellos (es el primero
+  // que nace y no muere antes que el proceso)
+  Foto := CreateToolhelp32Snapshot(TH32CS_SNAPTHREAD, 0);
+  if Foto = INVALID_HANDLE_VALUE then
+    Exit;
+  try
+    E.dwSize := SizeOf(E);
+    if Thread32First(Foto, E) then
+      repeat
+        for var I := 0 to High(Result) do
+          if E.th32OwnerProcessID = Result[I].Pid then
+          begin
+            var Hilo := OpenThread(SYNCHRONIZE or THREAD_QUERY_LIMITED_INFORMATION, False, E.th32ThreadID);
+            if Hilo <> 0 then
+            begin
+              Result[I].Tids := Result[I].Tids + [E.th32ThreadID];
+              Result[I].Hilos := Result[I].Hilos + [Hilo];
+            end;
+            Break;
+          end;
+        E.dwSize := SizeOf(E);
+      until not Thread32Next(Foto, E);
+  finally
+    CloseHandle(Foto);
+  end;
+end;
+
+{ Espera a AHandle hasta AFin (GetTickCount64); True si termino }
+function TerminoAntesDe(AHandle: THandle; AFin: UInt64): Boolean;
+var
+  Resta: UInt64;
+begin
+  Resta := 0;
+  var Ahora := GetTickCount64;
+  if Ahora < AFin then
+    Resta := AFin - Ahora;
+  Result := WaitForSingleObject(AHandle, DWORD(Resta)) = WAIT_OBJECT_0;
+end;
+
+function BorraAtomosDeLosTomados(var ATomados: TArray<TProcesoTomado>; APlazoMs: Cardinal): Integer;
+var
+  Codigo: DWORD;
+begin
+  Result := 0;
+  var Fin := GetTickCount64 + APlazoMs;
+  for var P in ATomados do
+  begin
+    // muerto del todo: el proceso Y sus hilos (el proceso se senala antes de
+    // que su hilo principal deje de contestar STILL_ACTIVE, medido el
+    // 19-oct-2026). Uno que sigue vivo no se toca
+    var Muerto := TerminoAntesDe(P.Proceso, Fin) and GetExitCodeProcess(P.Proceso, Codigo) and
+      (Codigo <> STILL_ACTIVE);
+    for var H in P.Hilos do
+      Muerto := Muerto and TerminoAntesDe(H, Fin) and GetExitCodeThread(H, Codigo) and
+        (Codigo <> STILL_ACTIVE);
+    // con los handles aun abiertos: ninguno de sus ids es de otro todavia
+    if Muerto and DejoSuAtomo(P.Pid, P.Tids) then
+      Inc(Result, Borra(P.Pid, P.Tids));
+    for var H in P.Hilos do
+      CloseHandle(H);
+    CloseHandle(P.Proceso);
+  end;
+  ATomados := nil;
 end;
 
 end.

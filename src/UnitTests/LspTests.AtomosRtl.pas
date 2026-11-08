@@ -22,6 +22,7 @@ type
     [Test] procedure UnMuertoSeLimpiaAunConNuestroHandleAbierto;
     [Test] procedure UnMuertoDentroDeUnJobAbiertoSeLimpia;
     [Test] procedure LoQueDejoUnHijoAcabadoPorSuCuentaSeLimpia;
+    [Test] procedure LoQueMataElJobAlCerrarseSeLimpia;
   end;
 
 implementation
@@ -210,6 +211,73 @@ begin
   Assert.IsTrue(BorraAtomosSiLosDejo(PI.dwProcessId, PI.dwThreadId) >= 2, 'lo que dejo: los dos');
   Assert.IsTrue((GlobalFindAtom(PChar(N1)) = 0) and (GlobalFindAtom(PChar(N2)) = 0), 'borrados');
   Assert.AreEqual(0, BorraAtomosSiLosDejo(PI.dwProcessId, PI.dwThreadId), 'segunda pasada: nada');
+end;
+
+{ El camino de los nietos de RunCore (8-nov-2026): un proceso que el Job mata
+  al cerrarse, del que no sabemos ni el pid ni el hilo principal. Se toma vivo
+  con sus hilos y, muerto, se limpia lo suyo y nada mas; uno que no esta en el
+  Job no se toma; y un tomado que sigue vivo no se toca }
+procedure TAtomosRtlTests.LoQueMataElJobAlCerrarseSeLimpia;
+var
+  PI, Fuera: TProcessInformation;
+  Job: THandle;
+  Lim: TJobObjectExtendedLimitInformation;
+  Nombres: TArray<string>;
+  Vecino: string;
+  AVecino: ATOM;
+  Tomados: TArray<TProcesoTomado>;
+begin
+  Job := CreateJobObject(nil, nil);
+  Assert.IsTrue(Job <> 0, 'job');
+  FillChar(Lim, SizeOf(Lim), 0);
+  Lim.BasicLimitInformation.LimitFlags := JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+  Assert.IsTrue(SetInformationJobObject(Job, JobObjectExtendedLimitInformation, @Lim, SizeOf(Lim)), 'kill-on-close');
+  Assert.IsTrue(ArrancaParado(PI), 'arranca parado');
+  Assert.IsTrue(AssignProcessToJobObject(Job, PI.hProcess), 'en el job');
+  Assert.IsTrue(ArrancaParado(Fuera), 'otro, fuera del job');
+  // los del RTL del nieto, con su hilo; y un vecino de un hilo que no es suyo
+  Nombres := [Format('Delphi%.8X', [PI.dwProcessId]),
+    Format('ControlOfs%.8X%.8X', [$70120000, PI.dwThreadId]),
+    Format('WndProcPtr%.8X%.8X', [$70120000, PI.dwThreadId])];
+  for var N in Nombres do
+    Planta(N);
+  Vecino := Format('ControlOfs%.8X%.8X', [$70120000, TID_MUERTO]);
+  AVecino := Planta(Vecino);
+  try
+    // ni el pid de fuera ni uno que no existe: solo el que esta en el job
+    Tomados := TomaProcesosDelJob(Job, [Fuera.dwProcessId, PID_MUERTO, PI.dwProcessId]);
+    Assert.IsTrue(Length(Tomados) = 1, 'solo el del job');
+    Assert.AreEqual(PI.dwProcessId, Tomados[0].Pid, 'su pid');
+    Assert.IsTrue(Length(Tomados[0].Tids) >= 1, 'con sus hilos');
+    // vivo: nada se toca, y sus handles se cierran igual
+    Assert.AreEqual(0, BorraAtomosDeLosTomados(Tomados, 50), 'vivo: nada');
+    Assert.IsTrue(Length(Tomados) = 0, 'cerrados');
+    for var N in Nombres do
+      Assert.IsTrue(GlobalFindAtom(PChar(N)) <> 0, 'sigue: ' + N);
+    // el camino de RunCore: tomarlo, cerrar el job (lo mata) y limpiar
+    Tomados := TomaProcesosDelJob(Job, [PI.dwProcessId]);
+    CloseHandle(Job);
+    Job := 0;
+    // al menos los tres plantados (con restos de muertos de antes con el mismo
+    // id de hilo, se lleva esos tambien)
+    Assert.IsTrue(BorraAtomosDeLosTomados(Tomados, 5000) >= 3, 'muerto por el job: los tres');
+    for var N in Nombres do
+      Assert.IsTrue(GlobalFindAtom(PChar(N)) = 0, 'borrado: ' + N);
+    Assert.IsTrue(GlobalFindAtom(PChar(Vecino)) <> 0, 'el de otro hilo se queda');
+  finally
+    GlobalDeleteAtom(AVecino);
+    for var N in Nombres do
+      if GlobalFindAtom(PChar(N)) <> 0 then
+        GlobalDeleteAtom(GlobalFindAtom(PChar(N)));
+    if Job <> 0 then
+      CloseHandle(Job);
+    TerminateProcess(Fuera.hProcess, 1);
+    WaitForSingleObject(Fuera.hProcess, 5000);
+    CloseHandle(Fuera.hThread);
+    CloseHandle(Fuera.hProcess);
+    CloseHandle(PI.hThread);
+    CloseHandle(PI.hProcess);
+  end;
 end;
 
 initialization

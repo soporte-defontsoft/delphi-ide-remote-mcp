@@ -6011,6 +6011,12 @@ const
     '%s ended with code 0x%.8X without finalizing (an unhandled exception ' +
     'kills it inside its Job, or it crashed): %d RTL atom(s) it left were ' +
     'cleaned';
+  // ...y los procesos que un hijo de RunCore dejo vivos dentro de su Job, que
+  // el Job mata al cerrarse (8-nov-2026): %s el programa del hijo, %d cuantos
+  // quedaban, %d los atomos que dejaron y se limpiaron
+  SL_NIETOS_SIN_FINALIZAR_FMT =
+    '%s left %d process(es) running inside its Job, killed when the Job ' +
+    'closed: %d RTL atom(s) they left were cleaned';
 
   // El contenedor no arranca si su estacion/escritorio no concede acceso a
   // los AppContainers (ALL APPLICATION PACKAGES): user32 falla al iniciar

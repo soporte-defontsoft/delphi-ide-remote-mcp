@@ -27,8 +27,11 @@ BASE = mc.carpeta('designer-corpus')
 # con los renderizadores: desde la 1.20 el lint pregunta al LECTOR del IDE lo
 # que las tablas no juzgan (DSGN-061), y sin ellos cada form que lo necesita
 # contestaba DSGN-154 "no se le pudo preguntar" (revisor de baterias,
-# 18-oct-2026: el corpus no media al lector desde la 1.20)
-EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True)
+# 18-oct-2026: el corpus no media al lector desde la 1.20). Y con el conversor:
+# es el juez de los StyleLookup de un .fmx (el estilo por defecto de la
+# plataforma); sin el, el lint de cada form con uno daba CLEAN sin mirarlo, y
+# desde A21 de la 1.29 dice DSGN-199 (8-nov-2026: el corpus no los juzgaba)
+EXE = mc.copia_exe(os.path.join(BASE, 'srv'), con_render=True, con_conversor=True)
 APPDATA = os.path.join(BASE, 'appdata')
 os.makedirs(APPDATA, exist_ok=True)
 # por HTTP, para lintar EN PARALELO (mc.en_paralelo): en serie por stdio el
@@ -141,7 +144,7 @@ VERDADEROS = {os.path.join('Object Pascal', 'Database', 'FireDAC', 'Samples', 'D
                            'Admin', 'AdminUtility.fmx'): 'FMX.Grid.Style'}
 vistos_verdaderos = set()
 falsos, familia, notas, ejemplos, sin_lint = 0, 0, 0, [], []
-sin_lector, sin_render, contesto = {}, [], {}
+sin_lector, sin_render, contesto, sin_conversor, lookups_sin_estilo = {}, [], {}, [], []
 # el motivo de DSGN-154 va detras de su cabecera: o el lector CONTESTO y lo que salto no se
 # puede cargar a este fichero (un fragmento SF_DSGN_LECTOR_*, sin id: el ancestro que falta,
 # la raiz que no ve, una excepcion del codigo de un componente, una clase del proyecto), o no
@@ -166,8 +169,19 @@ for dst, r in zip(copiados, respuestas):
     rel = os.path.relpath(dst, FORMS)
     if not any(mc.abre(r, c) for c in ('SN_DESIGNER_LINT_OK_FMT', 'SN_DESIGNER_LINT_BAD_FMT',
                                         'SN_DESIGNER_LINT_NOTAS_FMT', 'SN_DESIGNER_LINT_SIN_LECTOR_FMT',
-                                        'SN_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT')):
+                                        'SN_DESIGNER_LITERAL_QUE_PREVIEW_NIEGA_FMT',
+                                        'SN_DESIGNER_LOOKUPS_SIN_DEFECTO_FMT',
+                                        'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT',
+                                        'SN_DESIGNER_LOOKUPS_FUERA_DE_STYLES_FMT')):
         sin_lint.append('%s: %s' % (rel, r[:100]))
+    # contesta, pero sin su juez: el arnes pone el conversor, asi que es un fallo
+    if mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_DEFECTO_FMT'):
+        sin_conversor.append('%s: %s' % (rel, r[:300]))
+    # con su juez, la nota de los que ningun estilo que el form ve define
+    # (DSGN-175: no es un error, FMX los pinta con el estilo de su clase; los
+    # Samples de iOS en Windows: tabitemmostviewed, medido el 8-nov-2026)
+    if mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_ESTILO_FMT') or mc.es(r, 'SN_DESIGNER_LOOKUPS_FUERA_DE_STYLES_FMT'):
+        lookups_sin_estilo.append(rel)
     if mc.es(r, 'SN_DESIGNER_LINT_SIN_LECTOR_FMT'):
         if mc.es(r, 'SR_DESIGNER_SIN_RENDER_FMT'):
             sin_render.append(rel)
@@ -210,6 +224,9 @@ check('corpus: el lint CONTESTA de cada form (limpio, avisos, notas o sin confir
       not sin_lint, ' || '.join(sin_lint[:5]))
 check('corpus: al lector se le pregunta (el arnes pone los renderizadores)',
       not sin_render, ' || '.join(sin_render[:5]))
+check('corpus: los StyleLookup se juzgan (el arnes pone el conversor, su juez)',
+      not sin_conversor, ' || '.join(sin_conversor[:3]))
+print('NOTA: corpus: %d forms con StyleLookup que ningun estilo que ven define (DSGN-175, una nota)' % len(lookups_sin_estilo))
 # (18-oct-2026) TODOS, uno por linea: el detalle de check se recorta y con
 # los 8 primeros no se podia medir cuantos ni cuales eran
 for motivo, forms in sorted(contesto.items()):

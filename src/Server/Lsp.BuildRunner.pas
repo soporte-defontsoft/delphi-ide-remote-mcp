@@ -230,6 +230,11 @@ const
   JobObjectBasicUIRestrictions = 4;
 {$ENDIF}
 
+const
+  // el tope de procesos de un job (contra una bomba de procesos), y el tamano
+  // de la lista de los suyos que se le pide (ProcesosDelJob)
+  TOPE_PROCESOS_DEL_JOB = 128;
+
 function CreateConfinedJob: THandle;
 type
   TIoCounters = record
@@ -266,7 +271,7 @@ begin
     JOB_OBJECT_LIMIT_DIE_ON_UNHANDLED_EXCEPTION or
     JOB_OBJECT_LIMIT_ACTIVE_PROCESS or
     JOB_OBJECT_LIMIT_PROCESS_MEMORY;
-  Ext.BasicLimitInformation.ActiveProcessLimit := 128;
+  Ext.BasicLimitInformation.ActiveProcessLimit := TOPE_PROCESOS_DEL_JOB;
   // 3 GB/process as a plain hex constant: the arithmetic form
   // NativeUInt(3)*1024*1024*1024 overflowed dcc32's SIGNED 32-bit constant
   // evaluation (E2099) even though $C0000000 fits NativeUInt fine - the
@@ -340,6 +345,29 @@ begin
       Exit;
     Sleep(10);
   until GetTickCount64 >= Fin;
+end;
+
+const
+  JobObjectBasicProcessIdList_ = 3;
+
+{ Los pids que siguen vivos dentro del job: lo que matara al cerrarse }
+function ProcesosDelJob(AJob: THandle): TArray<DWORD>;
+type
+  TListaDePids = record
+    NumberOfAssignedProcesses: DWORD;
+    NumberOfProcessIdsInList: DWORD;
+    ProcessIdList: array [0 .. TOPE_PROCESOS_DEL_JOB - 1] of ULONG_PTR;
+  end;
+var
+  L: TListaDePids;
+  RetLen: DWORD;
+begin
+  Result := [];
+  FillChar(L, SizeOf(L), 0);
+  if not QueryInformationJobObject_(AJob, JobObjectBasicProcessIdList_, @L, SizeOf(L), @RetLen) then
+    Exit;
+  for var I := 0 to Integer(L.NumberOfProcessIdsInList) - 1 do
+    Result := Result + [DWORD(L.ProcessIdList[I])];
 end;
 
 { El programa de una linea de mando, solo su nombre, para el log: la linea
@@ -705,6 +733,13 @@ begin
     // orphaned by a timeout): kill-on-close leaves nothing running behind us.
     if Job <> 0 then
     begin
+      // ...y lo que el job mata tambien lo limpiamos: de un nieto no sabemos ni
+      // el pid ni el hilo, asi que se toman vivos, antes de matarlos (medido el
+      // 8-nov-2026: el hijo que lanza un componente dentro del renderizador
+      // dejaba sus tres atomos en cada render cortado por plazo). Si la foto
+      // falla, el job se cierra igual: un arbol vivo es peor que una fuga
+      var Nietos: TArray<TProcesoTomado> := nil;
+      try Nietos := TomaProcesosDelJob(Job, ProcesosDelJob(Job)); except Nietos := nil; end;
       // Con contenedor no se vuelve hasta que el arbol del test este muerto:
       // la foto y el borrado de la copia no deben correr con un hijo vivo.
       if AContenedor <> nil then
@@ -715,6 +750,16 @@ begin
         BorraAtomosDeProceso(PI.dwProcessId, PI.dwThreadId);
       end;
       CloseHandle(Job);
+      // (y lo que falle al limpiar no le quita al llamador lo que el hijo dijo)
+      if Length(Nietos) > 0 then
+      try
+        var Cuantos := Length(Nietos);
+        var DeNietos := BorraAtomosDeLosTomados(Nietos, ESPERA_CIERRE_MS);
+        if DeNietos > 0 then
+          TLogger.Warning(MsgFmt(SL_NIETOS_SIN_FINALIZAR_FMT,
+            [ProgramaDe(ACmdLine), Cuantos, DeNietos]));
+      except
+      end;
     end;
   end;
   // lo que escribio, como texto (DecodificaHijo)
