@@ -46,7 +46,7 @@ type
     [Required]
     property Query: string read FQuery write FQuery;
     [SchemaDescription(SP_WS_MAXRESULTS)]
-    [SchemaDefault('100')]
+    [SchemaDefault(PAGINA_SEARCH)]
     property MaxResults: Integer read FMaxResults write FMaxResults;
     [SchemaDescription(SP_WS_OFFSET)]
     [SchemaDefault('0')]
@@ -83,7 +83,7 @@ type
     [SchemaDescription(SP_WS_INCLUDETRASH)]
     property IncludeTrash: Boolean read FIncludeTrash write FIncludeTrash;
     [SchemaDescription(SP_WS_LIST_MAXRESULTS)]
-    [SchemaDefault('500')]
+    [SchemaDefault(PAGINA_LIST)]
     property MaxResults: Integer read FMaxResults write FMaxResults;
     [SchemaDescription(SP_WS_LIST_OFFSET)]
     [SchemaDefault('0')]
@@ -103,7 +103,7 @@ type
     [SchemaDescription(SP_WS_NAME)]
     property Name: string read FName write FName;
     [SchemaDescription(SP_WS_MAXRESULTS_2)]
-    [SchemaDefault('50')]
+    [SchemaDefault(PAGINA_PROJECTS)]
     property MaxResults: Integer read FMaxResults write FMaxResults;
     [SchemaDescription(SP_WS_OFFSET_2)]
     [SchemaDefault('0')]
@@ -274,11 +274,6 @@ uses
   Lsp.Puertas,
   Lsp.PuertaDeLaLlamada;
 
-const
-  // Entradas de un delphi_list: el recorte y la nota que lo cuenta, el mismo
-  // numero (la nota lo llevaba copiado a mano)
-  LIST_CAP = 500;
-
 // WalkFiles vive en Lsp.Guard: la misma lectura para todas las tools.
 
 { Lo que buscan delphi_search y delphi_list sin mascara: LAS listas del motor
@@ -378,8 +373,8 @@ begin
   // linea a linea: una consulta con un salto no casaria con nada
   if Params.Query.Contains(#10) or Params.Query.Contains(#13) then
     Exit(MsgText(SR_SEARCH_VARIAS_LINEAS));
-  // la pagina: 100 por defecto, 500 como mucho (TPagina, la de las listas)
-  var Pag := PaginaDe(Params.Offset, Params.MaxResults, 100, 500);
+  // la pagina, con su defecto y su tope escritos una vez (TPagina, la de las listas)
+  var Pag := PaginaDe(Params.Offset, Params.MaxResults, PAGINA_SEARCH, TOPE_SEARCH);
   Q := SinMayusculas(Params.Query);
   // regex=true: la consulta es una expresion (PCRE, sin distinguir
   // mayusculas, como la literal), que se aplica linea a linea; una que no
@@ -710,7 +705,7 @@ begin
     var ListaDirs := TListaDeFicheros.Create('dirs');
     // por paginas, como su hermana delphi_search: cortaba en 500 y las de
     // detras no se alcanzaban
-    var PagDirs := PaginaDe(Params.Offset, Params.MaxResults, LIST_CAP, LIST_CAP);
+    var PagDirs := PaginaDe(Params.Offset, Params.MaxResults, PAGINA_LIST, PAGINA_LIST);
     Ocultos := Default(THiddenCount);
     try
       // A root already inside artifact territory was asked for by name:
@@ -779,7 +774,7 @@ begin
   // por paginas, y lo que no cabe dice DONDE esta (byFolder): las 500
   // primeras de la raiz de referencia de un ERP eran copias de backups\ y lo
   // vivo no se alcanzaba (Hermes, 5-oct-2026)
-  var Pag := PaginaDe(Params.Offset, Params.MaxResults, LIST_CAP, LIST_CAP);
+  var Pag := PaginaDe(Params.Offset, Params.MaxResults, PAGINA_LIST, PAGINA_LIST);
   var PorCarpeta := Default(TPorCarpeta);
   Ocultos := Default(THiddenCount);
   ShownTrash := 0;
@@ -1392,7 +1387,7 @@ begin
   // Paginado como delphi_search: una maquina de trabajo tiene miles de .dproj
   // y la lista entera no cabe en una respuesta (medido: 7025 proyectos = 82 KB
   // = limite del cliente reventado, o sea la tool inservible sin "root").
-  var Pag := PaginaDe(Params.Offset, Params.MaxResults, 50, 300);
+  var Pag := PaginaDe(Params.Offset, Params.MaxResults, PAGINA_PROJECTS, TOPE_PROJECTS);
   Return := TJSONObject.Create;
   // la carpeta una vez y debajo sus proyectos (el organizador): 'project' y
   // 'dir' repetian la carpeta, el 30% de la respuesta (6-oct-2026)

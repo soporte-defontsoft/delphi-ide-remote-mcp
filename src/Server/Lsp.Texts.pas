@@ -5251,8 +5251,22 @@ const
     'The previous answer''s nextOffset. read: where to go on in the page; ' +
     'search: the next results.';
 
+  { Las paginas de las tools que paginan, por defecto y su tope, UNA vez: las
+    componen el esquema (SchemaDefault), el texto de su parametro y el codigo
+    (Lsp.Listas.PaginaDe las lee como numero). Cada una estaba escrita en esas
+    tres formas a mano (B1 de la 1.29); texto, para que un atributo las componga. }
+  PAGINA_DOCS = '10';
+  TOPE_DOCS = '25';
+  PAGINA_VAULT = '50';
+  TOPE_VAULT = '500';
+  PAGINA_SEARCH = '100';
+  TOPE_SEARCH = '500';
+  PAGINA_LIST = '500'; // y su tope: el mismo
+  PAGINA_PROJECTS = '50';
+  TOPE_PROJECTS = '300';
+
   SP_DOCS_LIMIT =
-    'search optional: how many results (default 10, at most 25)';
+    'search optional: how many results (default ' + PAGINA_DOCS + ', at most ' + TOPE_DOCS + ')';
 
   SR_DOCS_SIN_AYUDA_FMT =
     '[DOCS-001 NOT_FOUND] The Delphi in use (%s) has no help installed: ' +
@@ -12088,7 +12102,7 @@ const
     'conventions...)';
 
   SP_VAULT_MAXRESULTS =
-    'Results PER PAGE (default 50, cap 500).';
+    'Results PER PAGE (default ' + PAGINA_VAULT + ', cap ' + TOPE_VAULT + ').';
 
   SP_VAULT_SEARCH_OFFSET =
     'Skip the first N results of the FULL list: pass the offset the ' +
@@ -12147,7 +12161,7 @@ const
     'see ASCII letters.';
 
   SP_WS_MAXRESULTS =
-    'Hits PER PAGE (default 100, cap 500) - not a global limit: offset ' +
+    'Hits PER PAGE (default ' + PAGINA_SEARCH + ', cap ' + TOPE_SEARCH + ') - not a global limit: offset ' +
     'walks the whole list.';
 
   SP_WS_OFFSET =
@@ -12184,7 +12198,7 @@ const
     'false.';
 
   SP_WS_LIST_MAXRESULTS =
-    'Entries PER PAGE (default and cap 500).';
+    'Entries PER PAGE (default and cap ' + PAGINA_LIST + ').';
 
   SP_WS_LIST_OFFSET =
     'Skip the first N entries of the FULL list: pass the previous ' +
@@ -12198,7 +12212,7 @@ const
     'Optional name filter (substring, case-insensitive), e.g. "messenger"';
 
   SP_WS_MAXRESULTS_2 =
-    'Projects PER PAGE (default 50, cap 300).';
+    'Projects PER PAGE (default ' + PAGINA_PROJECTS + ', cap ' + TOPE_PROJECTS + ').';
 
   SP_WS_OFFSET_2 =
     'Skip the first N projects of the FULL list: pass the previous ' +

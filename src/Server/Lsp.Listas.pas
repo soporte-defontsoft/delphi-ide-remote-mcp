@@ -125,8 +125,10 @@ procedure AgrupaPorCarpeta(AObj: TJSONObject; const ACampo: string);
 procedure PonPosicion(AObj: TJSONObject; ALine0: Integer; ACol: Integer = -1);
 
 { La pagina que pide quien llama: un offset negativo es 0, un maximo que no
-  es positivo es APorDefecto y uno mayor que ATope es ATope. }
-function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
+  es positivo es APorDefecto y uno mayor que ATope es ATope. Los dos, como el
+  texto que los escribe UNA vez para el esquema y la descripcion de la tool
+  (PAGINA_* / TOPE_* de Lsp.Texts, B1 de la 1.29). }
+function PaginaDe(AOffset, AMax: Integer; const APorDefecto, ATope: string): TPagina;
 
 { La pagina de un TEXTO que se lee por trozos (delphi_docs read): los
   caracteres de ADesde a AHasta de ATotal. Su Report es el de las listas
@@ -223,17 +225,20 @@ begin
     AObj.AddPair('character0', TJSONNumber.Create(ACol));
 end;
 
-function PaginaDe(AOffset, AMax, APorDefecto, ATope: Integer): TPagina;
+function PaginaDe(AOffset, AMax: Integer; const APorDefecto, ATope: string): TPagina;
+var
+  Tope: Integer;
 begin
   Result := Default(TPagina);
   if AOffset > 0 then
     Result.Desde := AOffset;
   if AMax <= 0 then
-    AMax := APorDefecto;
-  if AMax > ATope then
+    AMax := StrToInt(APorDefecto);
+  Tope := StrToInt(ATope);
+  if AMax > Tope then
   begin
     Result.Pedido := AMax;
-    AMax := ATope;
+    AMax := Tope;
   end;
   Result.Max := AMax;
 end;

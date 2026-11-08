@@ -45,7 +45,7 @@ type
     [SchemaDefault('0')]
     property Offset: Integer read FOffset write FOffset;
     [SchemaDescription(SP_DOCS_LIMIT)]
-    [SchemaDefault('10')]
+    [SchemaDefault(PAGINA_DOCS)]
     property Limit: Integer read FLimit write FLimit;
   end;
 
@@ -105,7 +105,7 @@ begin
     Exit(MsgText(SR_DOCS_SIN_CONSULTA));
   // la pagina: limit por defecto 10 y como mucho 25 (TPagina, la de las listas);
   // la consulta trae hasta donde acaba, porque el orden es de toda la lista
-  var Pag := PaginaDe(Params.Offset, Params.Limit, 10, 25);
+  var Pag := PaginaDe(Params.Offset, Params.Limit, PAGINA_DOCS, TOPE_DOCS);
   Res := BuscaEnLaAyuda(AAyudas, Params.Query, AFramework, Pag.Desde + Pag.Max, Total, Abiertas);
   if Length(Res) = 0 then
     if Abiertas = 0 then

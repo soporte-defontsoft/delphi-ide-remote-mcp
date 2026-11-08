@@ -51,7 +51,7 @@ type
     [SchemaDescription(SP_VAULT_SUBFOLDER)]
     property Subfolder: string read FSubfolder write FSubfolder;
     [SchemaDescription(SP_VAULT_MAXRESULTS)]
-    [SchemaDefault('50')]
+    [SchemaDefault(PAGINA_VAULT)]
     property MaxResults: Integer read FMaxResults write FMaxResults;
     [SchemaDescription(SP_VAULT_SEARCH_OFFSET)]
     [SchemaDefault('0')]
@@ -610,7 +610,7 @@ begin
   ByContent := SameText(Params.Target.Trim, 'content');
   // por paginas, como delphi_search: cortaba en el maximo con un "(limit
   // reached)" y lo de detras no se alcanzaba (6-oct-2026)
-  Pag := PaginaDe(Params.Offset, Params.MaxResults, 50, 500);
+  Pag := PaginaDe(Params.Offset, Params.MaxResults, PAGINA_VAULT, TOPE_VAULT);
 
   Root := VaultPath;
   if Params.Subfolder.Trim <> '' then
