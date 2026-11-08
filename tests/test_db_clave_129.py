@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""delphi_db (1.29), lo que la pasada en vivo como agente encontro (8-nov-2026, contra las bases de Galatea), en
+"""delphi_db (1.29), lo que la pasada en vivo como agente encontro (8-nov-2026, contra bases reales de desarrollo), en
 los DOS motores enlazados (MSSQL y PostgreSQL). Las bases y su arnes, en db_arnes; el juez de cada cosa es la
 tabla que el arnes crea con su SQL.
 

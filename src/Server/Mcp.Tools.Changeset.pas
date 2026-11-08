@@ -23,6 +23,7 @@ type
     FOld: string;
     FNew: string;
     FContent: string;
+    FEol: string;
     FAtLine: Integer;
     FFragment: string;
     FOps: string;
@@ -49,6 +50,8 @@ type
     [SchemaDescription(SP_CHANGESET_CONTENT)]
     [Contenido]
     property Content: string read FContent write FContent;
+    [SchemaDescription(SP_CHANGESET_EOL)]
+    property Eol: string read FEol write FEol;
     [SchemaDescription(SP_CHANGESET_ATLINE)]
     property AtLine: Integer read FAtLine write FAtLine;
     [SchemaDescription(SP_PATCH_FRAGMENT)]
@@ -186,13 +189,13 @@ begin
   var Sobra := ParametroQueNoVa(Modo, [
       'begin', '',
       'status', '', // status lista TODOS: su tabla decia id y SP_CHANGESET_ID no (novena)
-      'stage', 'id kind path dest old new content atline fragment',
+      'stage', 'id kind path dest old new content eol atline fragment',
       'stage ops', 'id ops',
       'unstage', 'id n', 'undo', 'id n',
       'preview', 'id', 'commit', 'id', 'rollback', 'id'],
     ['id', Params.Id, '', 'kind', Params.Kind, '', 'path', Params.Path, '',
      'dest', Params.Dest, '', 'old', Params.Old, '', 'new', Params.New, '',
-     'content', Params.Content, '', 'fragment', Params.Fragment, '',
+     'content', Params.Content, '', 'eol', Params.Eol, '', 'fragment', Params.Fragment, '',
      'ops', Params.Ops, '',
      'atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
      'n', IfThen(Params.N <> 0, IntToStr(Params.N)), ''], Suyos, VaCon);
@@ -203,7 +206,7 @@ begin
   var Forms: TArray<TFormEscrito>;
   Result := ChangesetExecuteYForms(Params.Command, Params.Id, SinMayusculas(Params.Kind.Trim),
     Params.Path, Params.Dest, Params.Old, Params.New, Params.Content,
-    Params.AtLine, Forms, Params.N, Params.Fragment);
+    Params.AtLine, Forms, Params.N, Params.Fragment, Params.Eol);
   // los forms que el commit escribio, al LECTOR del IDE ya fuera de los
   // cerrojos, con su ruta delante como los avisos del lote (DSGN-061 de la 1.20);
   // con su texto de antes, lo que el lote les trae (V154 de la 1.23.1)

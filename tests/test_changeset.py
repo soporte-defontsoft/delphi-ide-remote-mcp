@@ -283,6 +283,31 @@ check('M-3 el create de un .fmx que el parser del IDE no lee: el lote vuelve (CH
       mc.abre(r, 'SR_CHANGESET_ROLLED_BACK_FMT') and mc.es(r, 'SR_DSGN_PARSER_NO_ESCRIBE_FMT') and
       not os.path.exists(_m3), r[-600:])
 
+# E1 (Hermes, completo de la 1.29): create con el eol que se pide, como delphi_textedit create y delphi_create;
+# escribia CRLF siempre, sin decirlo y sin eol. ROJO contra 0b408580 (eol no existia: CHSET no-va / SYS-015)
+_lf, _crlf = os.path.join(BASE, 'eol-lf.txt'), os.path.join(BASE, 'eol-crlf.txt')
+_plf = os.path.join(BASE, 'UEolLf.pas')
+cid = begin()
+r1 = cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': _lf, 'content': 'uno\ndos\n', 'eol': 'lf'})
+r2 = cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': _crlf, 'content': 'uno\ndos\n'})
+r3 = cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': _plf, 'eol': 'lf',
+         'content': 'unit UEolLf;\n\ninterface\n\nimplementation\n\nend.'})
+cs({'command': 'preview', 'id': cid})
+r = cs({'command': 'commit', 'id': cid})
+check('E1 create con eol=lf escribe LF, sin eol CRLF (un .txt y un .pas)',
+      mc.abre(r1, 'SN_CHANGESET_STAGED_FMT') and mc.abre(r3, 'SN_CHANGESET_STAGED_FMT')
+      and open(_lf, 'rb').read() == b'uno\ndos\n' and open(_crlf, 'rb').read() == b'uno\r\ndos\r\n'
+      and os.path.exists(_plf) and b'\r' not in open(_plf, 'rb').read(), (r1[:150], r3[:150], r[:300]))
+# ...un eol que no es crlf ni lf se niega, y no va con otro kind
+cid = begin()
+r4 = cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': os.path.join(BASE, 'eol-mac.txt'),
+         'content': 'x', 'eol': 'mac'})
+r5 = cs({'command': 'stage', 'id': cid, 'kind': 'delete', 'path': _lf, 'eol': 'lf'})
+cs({'command': 'rollback', 'id': cid})
+check('E1 eol=mac se niega (la regla de los que crean) y eol con kind=delete no va (CHSET no-es-de-kind)',
+      mc.es(r4, 'SR_TEXT_EOL_FMT') and mc.abre(r5, 'SR_CHANGESET_NO_ES_DE_KIND_FMT') and os.path.exists(_lf),
+      (r4[:200], r5[:200]))
+
 srv.mata()
 mc.borra(BASE)  # no se quedaba en la maquina (revisor de baterias de la 1.27)
 mc.fin('changeset battery')

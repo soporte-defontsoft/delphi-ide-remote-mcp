@@ -54,7 +54,7 @@ type
 function ChangesetExecuteYForms(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer;
   out AFormsEscritos: TArray<TFormEscrito>; AN: Integer = 0;
-  const AFragment: string = ''): string;
+  const AFragment: string = ''; const AEol: string = ''): string;
 
 { Abre un changeset y devuelve su id ('' = ya hay demasiados abiertos). Es lo
   que hace command=begin, expuesto para que otro motor del servidor (el
@@ -658,7 +658,7 @@ end;
 function ChangesetExecuteYForms(const ACommand, AId, AKind, APath, ADest,
   AOldLine, ANewText, AContent: string; AAtLine: Integer;
   out AFormsEscritos: TArray<TFormEscrito>; AN: Integer;
-  const AFragment: string): string;
+  const AFragment: string; const AEol: string): string;
 var
   Cmd, Id, Denied, EncName, Text, Err: string;
   C: TChangeset;
@@ -741,11 +741,11 @@ begin
       var SuyosK, VaConK: string;
       var SobraK := ParametroQueNoVa(KindName(Op.Kind), [
           NOMBRES_DE_KIND[opEdit], 'old new fragment atline',
-          NOMBRES_DE_KIND[opCreate], 'content',
+          NOMBRES_DE_KIND[opCreate], 'content eol',
           NOMBRES_DE_KIND[opDelete], '',
           NOMBRES_DE_KIND[opDeleteLine], 'atline old',
           NOMBRES_DE_KIND[opMove], 'dest'],
-        ['content', AContent, '', 'old', AOldLine, '', 'new', ANewText, '',
+        ['content', AContent, '', 'eol', AEol, '', 'old', AOldLine, '', 'new', ANewText, '',
          'fragment', AFragment, '', 'dest', ADest, '',
          'atline', IfThen(AAtLine > 0, IntToStr(AAtLine)), ''], SuyosK, VaConK);
       if SobraK <> '' then
@@ -837,10 +837,16 @@ begin
             // (CRLF y su salto final); lo demas, como delphi_textedit create: en
             // CRLF y sin anadirle el final (revisor del paisaje de la 1.26, D:
             // un .json o un .txt salian con un salto que nadie escribio)
+            // con el eol que se pida, por la regla de los que crean (EolDesconocido,
+            // SaltoPedido: la de delphi_textedit create y delphi_create): aqui salia
+            // siempre CRLF, sin decirlo y sin eol (Hermes, completo de la 1.29)
+            var MalEol := EolDesconocido(AEol);
+            if MalEol <> '' then
+              Exit(MalEol);
             if EsDelMotorPascal(Op.Path) then
-              Op.Content := TextoQueNace(AContent, #13#10)
+              Op.Content := TextoQueNace(AContent, SaltoPedido(AEol))
             else
-              Op.Content := ConSalto(AContent, #13#10);
+              Op.Content := ConSalto(AContent, SaltoPedido(AEol));
             if WillExist(C, Op.Path) then
               Exit(MsgFmt(SR_CHANGESET_VIRT_EXISTS_FMT, [Op.Path]));
           end;

@@ -9256,8 +9256,7 @@ const
     'resolves against the file as it is BEFORE the changeset: an edit ' +
     'cannot anchor on a line an earlier edit of it writes (several edits ' +
     'of one file: delphi_edit edits=). It expires after 30 minutes unused. ' +
-    'For renames, refactors and any change where a half-applied batch ' +
-    'would break the project; for one file, delphi_edit is simpler.';
+    'For one file, delphi_edit is simpler.';
 
   SP_CHANGESET_COMMAND =
     'begin (new changeset -> id) | stage (add ONE operation, or several by ops) | unstage ' +
@@ -9303,6 +9302,10 @@ const
 
   SP_CHANGESET_CONTENT =
     'stage kind=create: the whole content of the new file';
+
+  { el salto de lo que crea, como delphi_textedit create y delphi_create (Hermes,
+    completo de la 1.29: salia CRLF sin decirlo) }
+  SP_CHANGESET_EOL = 'stage kind=create: line endings, "crlf" (default) or "lf"';
 
   SP_CHANGESET_ATLINE =
     'stage kind=edit optional: the 1-based line that pins the anchor when ' +

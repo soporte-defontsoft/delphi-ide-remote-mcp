@@ -260,7 +260,7 @@ begin
   // nombre por EL que lo lee (RutaDeInforme); uno: ese; varios: se dicen como list
   // los ensena, no se elige
   if not TFile.Exists(Ruta) and
-     SameFileName(TPath.GetDirectoryName(Ruta), ExcludeTrailingPathDelimiter(BuzonDeInformes)) then
+     SameFileName(TPath.GetDirectoryName(Ruta), SinBarraFinal(BuzonDeInformes)) then
   begin
     var Suyos: TArray<string> := [];
     for var R in InformesDelBuzon do
