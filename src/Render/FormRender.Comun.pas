@@ -33,6 +33,7 @@ type
     Componente: string;  // --component <Nombre>: RECT= de ese componente
     Bds: string;         // --bds 37.0
     RaizBds: string;     // --bdsroot: la carpeta del IDE; la dice el servidor, el contenedor no lee el registro
+    SufijoBpl: string;   // --bplsuffix 370: el de sus paquetes, medido por el servidor (F1-2 de la 1.29)
     FicheroPaquetes: string; // --knownfile: los paquetes que puede cargar, una ruta por linea; sin el, ninguno
     Paquetes: string;    // --packages auto | none | all
     Fidelidad: string;   // --fidelity auto | window | print (VCL)
@@ -605,6 +606,7 @@ begin
       else if P = FR_ARG_COMPONENT then GPeticion.Componente := Valor
       else if P = FR_ARG_BDS then GPeticion.Bds := Valor
       else if P = FR_ARG_BDSROOT then GPeticion.RaizBds := Valor
+      else if P = FR_ARG_BPLSUFFIX then GPeticion.SufijoBpl := Valor
       else if P = FR_ARG_KNOWNFILE then GPeticion.FicheroPaquetes := Valor
       else if P = FR_ARG_PACKAGES then GPeticion.Paquetes := Entre(Valor, [FR_AUTO, FR_PAQUETES_NINGUNO, FR_PAQUETES_TODOS])
       else if P = FR_ARG_FIDELITY then GPeticion.Fidelidad := Entre(Valor, [FR_AUTO, FR_FIDELIDAD_WINDOW, FR_FIDELIDAD_PRINT])

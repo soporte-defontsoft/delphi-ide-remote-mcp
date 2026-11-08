@@ -84,6 +84,7 @@ uses
   Lsp.Codificacion, // ekUtf8Bom
   Lsp.Listas,     // TListaDeFicheros: el organizador de las listas de ficheros
   Lsp.Casa,
+  Lsp.Identidad, // AgenteDeLaLlamada: el agent= o el del saludo, como delphi_messages
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.NetDrives;
 
@@ -324,9 +325,10 @@ begin
   Title := Params.Title.Trim;
   // One subfolder per emitter. Slug() - the same normalizer as the title -
   // is what keeps this a server-generated path: nothing of the raw client
-  // value reaches the filesystem. Empty (or slugged-to-empty) = the root
-  // reports folder, exactly as before the parameter existed.
-  Agent := SlugDeAgente(Params.Agent);
+  // value reaches the filesystem. Empty (or slugged-to-empty) = the agent of
+  // the handshake, as delphi_messages reads it; with neither, the root reports
+  // folder (F1-9 de la 1.29: sin agent= iba siempre a la raiz).
+  Agent := AgenteDeLaLlamada(Params.Agent);
 
   // el buzon del workspace de la sesion, y dentro el del agente
   Dir := BuzonDeInformes(Agent);

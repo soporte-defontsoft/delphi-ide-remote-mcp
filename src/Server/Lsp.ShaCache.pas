@@ -88,7 +88,8 @@ uses
   System.IOUtils,
   System.Hash,
   System.SyncObjs,
-  System.Generics.Collections;
+  System.Generics.Collections,
+  Lsp.Reparse;
 
 var
   GLock: TCriticalSection;
@@ -180,8 +181,13 @@ var
 begin
   if not GetFileAttributesEx(PChar(APath), GetFileExInfoStandard, @Data) then
     Exit(SelloSinAtributos);
-  if ((Data.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY) = 0) or
-     ((Data.dwFileAttributes and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) then
+  if (Data.dwFileAttributes and FILE_ATTRIBUTE_DIRECTORY) = 0 then
+    Exit(STAMP_UNKNOWN);
+  // una carpeta ENLACE no tiene sello suyo (su fecha es la del enlace, no la de
+  // lo de detras): por EL juez (EsEnlace, Lsp.Reparse) y no por el atributo,
+  // que tambien lleva una carpeta de OneDrive sin ser enlace, y se quedaba sin
+  // sello: su cache de proyecto no se guardaba nunca (F1-4 de la 1.29)
+  if ((Data.dwFileAttributes and FILE_ATTRIBUTE_REPARSE_POINT) <> 0) and EsEnlace(APath) then
     Exit(STAMP_UNKNOWN);
   Result := UIntToStr((UInt64(Data.ftLastWriteTime.dwHighDateTime) shl 32) or Data.ftLastWriteTime.dwLowDateTime);
 end;

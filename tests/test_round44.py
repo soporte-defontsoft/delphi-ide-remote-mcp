@@ -57,6 +57,11 @@ os.makedirs(TEMP_SERVIDOR, exist_ok=True)
 MIGAJA = os.path.join(TEMP_SERVIDOR, 'sobra-de-la-vez-anterior.txt')
 open(MIGAJA, 'w').write('basura de una ejecucion anterior\n')
 os.makedirs(os.path.join(TEMP_SERVIDOR, 'carpeta-vieja'), exist_ok=True)
+# F1-6 (1.29): ...y una de SOLO LECTURA en la raiz de la casa: la purga la borraba con TFile.Delete y sobrevivia,
+# mientras la misma, una carpeta mas abajo, se iba (BorraNombre)
+MIGAJA_RO = os.path.join(TEMP_SERVIDOR, 'solo-lectura-de-la-vez-anterior.txt')
+open(MIGAJA_RO, 'w').write('basura de solo lectura\n')
+os.chmod(MIGAJA_RO, 0o444)
 
 TOK = 'r44'
 PORT = mc.puerto_libre()
@@ -85,6 +90,8 @@ try:
           not os.path.exists(MIGAJA) and
           not os.path.isdir(os.path.join(TEMP_SERVIDOR, 'carpeta-vieja')),
           'sigue ahi %s' % MIGAJA)
+    check('T1 F1-6 ...tambien un fichero de solo lectura en la raiz de la casa',
+          not os.path.exists(MIGAJA_RO), 'sigue ahi %s' % MIGAJA_RO)
 
     # ------------------------------------------------------------------ T2
     # El fichero del mensaje de git vivia en el %TEMP% de la maquina. Se crea

@@ -283,6 +283,13 @@ check('fixture: el paquete nombra DUnitX.AyudasPaq (en su contains, y la unidad 
 r = B.call('delphi_test', {'command': 'run', 'project': os.path.join(BASE, 'PaqT', 'PaqT.dpk')}, t=900)
 check('un paquete que nombra DUnitX. tampoco es un test: TEST-018 sin compilar ni lanzar nada (ROJO contra r1222v)',
       mc.es(r, 'SR_TEST_NOTATEST_FMT') and not os.path.isdir(os.path.join(BASE, 'PaqT', 'Win64')), r[:300])
+# F1-3 (1.29): programa o paquete por la CABECERA de su fuente, como lo compila dcc, no por la extension: el mismo
+# paquete en un .dpr pasaba la guarda (iba por la extension) y seguia a compilar y lanzar
+open(os.path.join(PAQ, 'PaqDpr.dpr'), 'wb').write(open(os.path.join(PAQ, 'PaqT.dpk'), 'rb').read())
+r = B.call('delphi_test', {'command': 'run', 'project': os.path.join(PAQ, 'PaqDpr.dpr')}, t=900)
+check('F1-3 un .dpr que empieza por package no es un test: TEST-018 por su cabecera, sin compilar nada',
+      mc.es(r, 'SR_TEST_NOTATEST_FMT') and 'PaqDpr.dpr' in r and not os.path.isdir(os.path.join(PAQ, 'Win64')),
+      r[:300])
 r = B.call('delphi_test', {'command': 'run'})
 check('run sin project rechazado con pista', mc.rechazado(r) and mc.es(r, 'SR_TEST_NEED_PROJECT'), r[:200])
 r = B.call('delphi_test', {'command': 'volar', 'path': BASE})

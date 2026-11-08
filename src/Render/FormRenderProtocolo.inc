@@ -7,12 +7,12 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 12; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+  FR_PROTOCOLO_VERSION = 13; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
                             // la 9: los VALORES de abajo como constantes (C2-3 de la 1.28; en el cable, los mismos);
                             // la 10: --scale y SCALE= (C2 de la 1.29); la 11: el estilo none y windows
                             // y la fidelidad canvas como constantes (DH4 de la 1.29; en el cable, los mismos);
                             // la 12: los separadores de NONVISUALS= como constantes (B-I18 de la 1.29; en el
-                            // cable, los mismos)
+                            // cable, los mismos); la 13: --bplsuffix (F1-2 de la 1.29)
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
@@ -23,6 +23,10 @@
   FR_ARG_COMPONENT = '--component';
   FR_ARG_BDS = '--bds';
   FR_ARG_BDSROOT = '--bdsroot';
+  // --bplsuffix 370: el sufijo de los paquetes de ESA instalacion, el que mide el servidor del
+  // dcc32<sufijo>.dll de su bin (Lsp.Discovery.SufijoDelCompilador). El ayudante lo deducia del
+  // numero de --bds, y solo coincide desde Delphi 13: el 12 es BDS 23.0 y sus paquetes, 290 (F1-2)
+  FR_ARG_BPLSUFFIX = '--bplsuffix';
   FR_ARG_KNOWNFILE = '--knownfile';
   FR_ARG_PACKAGES = '--packages';
   FR_ARG_FIDELITY = '--fidelity';

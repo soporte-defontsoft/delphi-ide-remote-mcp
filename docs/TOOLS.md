@@ -651,7 +651,7 @@ The desktop of the machine behind a PAServer profile (a Linux or Windows target,
 | `y` | string | optional | tap/type/drag: vertical pixel, measured as x |
 | `tox` | string | optional | drag: horizontal pixel where it releases, on the same screenshot (and frame) as x |
 | `toy` | string | optional | drag: vertical pixel where it releases, as tox |
-| `code` | string | optional | key. Linux target: the evdev key code (NOT an X11 keycode): Escape 1, Tab 15, Enter 28, Backspace 14, Delete 111, left Alt 56, Super 125. Windows target: the key NAME - escape, enter, tab, space, backspace, delete, home, end, up, down, left, right, super, alt, ctrl, shift, f1..f12, or a letter a..z. The other kind is refused. |
+| `code` | string | optional | key. Linux target: the evdev key code (NOT an X11 keycode): Escape 1, Tab 15, Enter 28, Backspace 14, Delete 111, left Alt 56, Super 125. Windows target: the key NAME - escape, enter, tab, space, backspace, delete, home, end, up, down, left, right, super, alt, ctrl, shift, f1..f12, a..z or 0..9. The other kind is refused. |
 | `modifiers` | string | optional | key OPTIONAL: keys held while it is pressed, comma separated - ctrl, shift, alt, super (Ctrl+K on Linux: code=37 modifiers=ctrl; Alt+F4 on Windows: code=f4 modifiers=alt). Pressed in that order and released in reverse. |
 | `text` | string | optional | type: the text to write. Windows: typed as Unicode. Linux: key by key with the target's own keyboard layout (Shift, AltGr, dead keys); a character it cannot compose (an emoji) is refused by name, and the answer says which keyboard was used. A line break (LF, CRLF or CR) presses Enter, once. Typed as TEXT, never run. With x,y it presses there first to focus the field. |
 | `out` | string | optional | screenshot: where the capture lands: a FOLDER (existing, or ending in \ - the server names the file) or a FILE with the capture's real extension, on THIS server and jailed. Empty = it travels as "inline" says. |
@@ -1027,7 +1027,7 @@ Report a problem, limitation or suggestion about THIS MCP server to its maintain
 | `title` | string | optional | Optional one-line summary (becomes part of the file name) |
 | `kind` | string | optional | Optional: bug \| limitation \| suggestion \| question (default: bug) |
 | `from` | string | optional | Optional: who reports (agent/model, project) |
-| `agent` | string | optional | Optional short STABLE id (e.g. "hermes"): your reports get a folder of that name. Letters, digits, dashes; the rest is normalized away. |
+| `agent` | string | optional | Optional STABLE id (e.g. "hermes"): the folder of your reports (omitted: your handshake id). Letters, digits, dashes; the rest is normalized away. |
 | `command` | string | optional | report (default) \| list (newest first, per folder) \| read (one, by name) |
 | `name` | string | optional | command=read: \<dir>\\<name> as list shows it |
 <!-- /contract -->

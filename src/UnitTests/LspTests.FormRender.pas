@@ -380,6 +380,7 @@ begin
   P.NoVisuales := True;
   P.Bds := '37.0';
   P.RaizBds := 'C:\Program Files\Ide';
+  P.SufijoBpl := '290';
   P.FicheroPaquetes := 'C:\e tapa\paquetes.lst';
   Assert.AreEqual('', ComponeOrdenDeRender('C:\s\DelphiFormRenderVcl.exe', P, O));
   Assert.IsTrue(O.StartsWith('"C:\s\DelphiFormRenderVcl.exe" '), O);
@@ -392,6 +393,8 @@ begin
   Assert.IsTrue(O.Contains(' --nonvisual on'), O);
   Assert.IsTrue(O.Contains(' --bds "37.0"'), O);
   Assert.IsTrue(O.Contains(' --bdsroot "C:\Program Files\Ide"'), 'un valor con espacios va entero: ' + O);
+  // el sufijo de los paquetes, el MEDIDO, que no sale del numero de --bds (F1-2 de la 1.29)
+  Assert.IsTrue(O.Contains(' --bplsuffix "290"'), O);
   Assert.IsTrue(O.Contains(' --knownfile "C:\e tapa\paquetes.lst"'), 'un valor con espacios va entero: ' + O);
   Assert.IsTrue(O.Contains(' --timeout '), 'el vigia del ayudante va siempre: ' + O);
   Assert.IsTrue(O.Contains(' --packagestimeout ' + IntToStr(ESPERA_DEL_CLIENTE_MS)),
@@ -415,6 +418,7 @@ begin
   Assert.IsFalse(O.Contains('--state'), O);
   Assert.IsFalse(O.Contains('--bds'), O);
   Assert.IsFalse(O.Contains('--bdsroot'), O);
+  Assert.IsFalse(O.Contains('--bplsuffix'), O);
   Assert.IsFalse(O.Contains('--knownfile'), O);
   Assert.IsFalse(O.Contains('""'), 'ningun valor vacio: ' + O);
   Assert.IsTrue(O.Contains(' --nonvisual off'), 'apagado por defecto: ' + O);

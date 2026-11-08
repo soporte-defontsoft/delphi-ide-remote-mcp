@@ -951,6 +951,16 @@ begin
     Result := StrToInt(Params.Port.Trim);
 end;
 
+{ El puerto de un perfil: el que dice su Profile_port, o el de un PAServer
+  al que nadie da otro (PuertoDePAServer) si no lo dice. Lo piden reseat,
+  test-connection y el aviso de duplicado de add-profile, que comparaba el
+  texto crudo: un perfil sin Profile_port (el 64211) no se veia igual que uno
+  nuevo en el 64211 (F1-11 de la 1.29). }
+function PuertoDelPerfil(const ACampos: TCamposDePerfil): Integer;
+begin
+  Result := StrToIntDef(ACampos.Puerto.Trim, PuertoDePAServer);
+end;
+
 function AddProfile(const Params: TDelphiPAServerParams): string;
 var
   Info: TRadStudioInfo;
@@ -996,7 +1006,7 @@ begin
     // EL lector de un perfil listado (B12 de la 1.28: se leia a mano); uno
     // ilegible no impide crear el nuevo
     if (LeeCamposDePerfil(Info.Version, Otro, Campos, Fallo) = lpLeido) and
-       SameText(Campos.Host, Host) and (Campos.Puerto = IntToStr(Puerto)) then
+       SameText(Campos.Host, Host) and (PuertoDelPerfil(Campos) = Puerto) then
       AvisoDup := MsgFmt(SN_PASERVER_DUP_HOST_FMT, [Otro]);
   // cualificada: la variable local PaClient tapa a la funcion (sin mayusculas)
   ExitCode := Cardinal(Lsp.RemoteRun.Paclient(PaClient,
@@ -1095,31 +1105,42 @@ begin
   AMs := SW.ElapsedMilliseconds;
 end;
 
-function TcpProbe(const AHost: string; APuerto: Integer): string;
+{ ...y lo que dice de ella una respuesta, UNA vez: host, port, tcpReachable,
+  elapsedMs y, si conecto, ANotaSiConecta; si no, reason (el texto de Indy) y
+  la nota de que mirar. Lo componian a mano test-connection sin perfil y el
+  perfil que no conecto, y el segundo perdia elapsedMs (F1-13 de la 1.29). }
+procedure PonSondaTcp(AObj: TJSONObject; const AHost: string; APuerto: Integer;
+  const ANotaSiConecta: string);
 var
-  Return: TJSONObject;
   Ok: Boolean;
   Err: string;
   Ms: Int64;
 begin
   Ok := SondaTcp(AHost, APuerto, Err, Ms);
+  AObj.AddPair('host', AHost);
+  AObj.AddPair('port', IntToStr(APuerto));
+  AObj.AddPair('tcpReachable', TJSONBool.Create(Ok));
+  AObj.AddPair('elapsedMs', TJSONNumber.Create(Ms));
+  if Ok then
+    AObj.AddPair('note', ANotaSiConecta)
+  else
+  begin
+    // un INFORME, como su gemela con perfil (connected:false): el
+    // texto de Indy iba en "error" sin etiqueta y la llamada salia
+    // INVALID_PARAM ("corrige la llamada") con la llamada bien hecha
+    // (sexta revision)
+    AObj.AddPair('reason', Err);
+    AObj.AddPair('note', MsgText(SN_PASERVER_TCP_FAIL));
+  end;
+end;
+
+function TcpProbe(const AHost: string; APuerto: Integer): string;
+var
+  Return: TJSONObject;
+begin
   Return := TJSONObject.Create;
   try
-    Return.AddPair('host', AHost);
-    Return.AddPair('port', IntToStr(APuerto));
-    Return.AddPair('tcpReachable', TJSONBool.Create(Ok));
-    Return.AddPair('elapsedMs', TJSONNumber.Create(Ms));
-    if Ok then
-      Return.AddPair('note', MsgText(SN_PASERVER_TCP_OK))
-    else
-    begin
-      // un INFORME, como su gemela con perfil (connected:false): el
-      // texto de Indy iba en "error" sin etiqueta y la llamada salia
-      // INVALID_PARAM ("corrige la llamada") con la llamada bien hecha
-      // (sexta revision)
-      Return.AddPair('reason', Err);
-      Return.AddPair('note', MsgText(SN_PASERVER_TCP_FAIL));
-    end;
+    PonSondaTcp(Return, AHost, APuerto, MsgText(SN_PASERVER_TCP_OK));
     Result := Return.ToJSON;
   finally
     Return.Free;
@@ -1186,14 +1207,6 @@ begin
     Result := Result + MsgText(SN_PAS_TAMBIEN_CARPETA_VACIA_SDKS);
 end;
 
-{ El puerto de un perfil: el que dice su Profile_port, o el de un PAServer
-  al que nadie da otro (PuertoDePAServer) si no lo dice. Lo piden reseat y
-  test-connection. }
-function PuertoDelPerfil(const ACampos: TCamposDePerfil): Integer;
-begin
-  Result := StrToIntDef(ACampos.Puerto.Trim, PuertoDePAServer);
-end;
-
 { Por que no conecto un perfil: la ruta TCP a SU host y puerto, medida con
   la sonda de test-connection sin perfil. Sin ruta, PAS-028 (que mirar, en
   orden); con ruta, PAS-072: lo que nego es el PAServer o el perfil, y
@@ -1203,23 +1216,13 @@ end;
 procedure PorQueNoConecto(const AVersion, AProfName: string; AReturn: TJSONObject);
 var
   Campos: TCamposDePerfil;
-  Motivo, Err: string;
-  Ms: Int64;
+  Motivo: string;
 begin
   if not CamposDePerfilListado(AVersion, AProfName, Campos, Motivo) or (Campos.Host.Trim = '') then
     Exit;
   var Puerto := PuertoDelPerfil(Campos);
-  var Ok := SondaTcp(Campos.Host.Trim, Puerto, Err, Ms);
-  AReturn.AddPair('host', Campos.Host.Trim);
-  AReturn.AddPair('port', IntToStr(Puerto));
-  AReturn.AddPair('tcpReachable', TJSONBool.Create(Ok));
-  if Ok then
-    AReturn.AddPair('note', MsgFmt(SN_PASERVER_PERFIL_RUTA_OK_FMT, [Campos.Host.Trim, Puerto]))
-  else
-  begin
-    AReturn.AddPair('reason', Err);
-    AReturn.AddPair('note', MsgText(SN_PASERVER_TCP_FAIL));
-  end;
+  PonSondaTcp(AReturn, Campos.Host.Trim, Puerto,
+    MsgFmt(SN_PASERVER_PERFIL_RUTA_OK_FMT, [Campos.Host.Trim, Puerto]));
 end;
 
 function TestConnection(const Params: TDelphiPAServerParams): string;
@@ -1537,6 +1540,12 @@ begin
   var Activo := False;
   if (Params.Active.Trim <> '') and not LeeSiNo(Params.Active, Activo) then
     Exit(MsgFmt(SR_PASERVER_ACTIVE_NO_ES_SINO_FMT, [Params.Active.Trim]));
+  // ...y el nombre de la carpeta, tambien antes de nada: lo que el formador
+  // quitaria ('.', '_', '-', un espacio) se dice; quitado en silencio, el
+  // agente pedia luego el build con el nombre que escribio (F1-12 de la 1.29)
+  SdkName := SoloAlfanumerico(Params.Sdk);
+  if SdkName <> SinMayusculas(Params.Sdk.Trim) then
+    Exit(MsgFmt(SR_PASERVER_SDK_NOMBRE_FMT, [Params.Sdk.Trim, SdkName]));
   var DelIde: string;
   Result := PerfilParaOperar(ProfName, Info, PaClient, DelIde);
   if Result <> '' then
@@ -1578,7 +1587,6 @@ begin
   Etiqueta := EtiquetaDelTarget(PaClient, ProfName);
   if Etiqueta = '' then
     Exit(MsgFmt(SR_PASERVER_SDK_SIN_DISTRO_FMT, [ProfName]));
-  SdkName := SoloAlfanumerico(Params.Sdk);
   if SdkName = '' then
     SdkName := Etiqueta;
   SysRoot := CarpetaDeSdk(Info.Version, SdkName);

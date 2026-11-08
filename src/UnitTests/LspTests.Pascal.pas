@@ -429,6 +429,11 @@ begin
   Assert.IsFalse(EsFuenteDePaquete('program P;'#13#10'begin'#13#10'end.'));
   Assert.IsFalse(EsFuenteDePaquete('// package Viejo;'#13#10'program P;'#13#10'begin'#13#10'end.'), 'un package comentado no cuenta');
   Assert.IsFalse(EsFuenteDePaquete('unit U;'#13#10'interface'#13#10'implementation'#13#10'end.'));
+  // ...y un programa por la suya (F1-3 de la 1.29: delphi_test lo decidia por la extension)
+  Assert.IsTrue(EsFuenteDePrograma('{ un test }'#13#10'Program T;'#13#10'begin'#13#10'end.'));
+  Assert.IsFalse(EsFuenteDePrograma('package P;'#13#10'requires rtl;'#13#10'end.'), 'un .dpr que empieza por package no es un programa');
+  Assert.IsFalse(EsFuenteDePrograma('library L;'#13#10'begin'#13#10'end.'), 'ni una biblioteca');
+  Assert.IsFalse(EsFuenteDePrograma('// program Viejo;'#13#10'package P;'#13#10'end.'), 'un program comentado no cuenta');
 end;
 
 procedure TDirectivasTests.ElGrupoDeClasesDelIde;

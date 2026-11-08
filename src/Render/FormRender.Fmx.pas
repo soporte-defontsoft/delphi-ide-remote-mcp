@@ -138,7 +138,11 @@ begin
   for var I := Low(ESTILOS_DE_PLATAFORMA) to High(ESTILOS_DE_PLATAFORMA) do
     if SameText(ESTILOS_DE_PLATAFORMA[I, 0], ANombre) then
     begin
-      ABpl := ESTILOS_DE_PLATAFORMA[I, 1] + GPeticion.Bds.Replace('.', '') + '.bpl';
+      // el sufijo de SUS paquetes, el que mide el servidor: del numero de --bds
+      // solo salia bien desde Delphi 13 (F1-2 de la 1.29)
+      if GPeticion.SufijoBpl = '' then
+        raise ERender.Create(MsgFmt(SR_RENDER_SIN_SUFIJO_FMT, [ANombre]));
+      ABpl := ESTILOS_DE_PLATAFORMA[I, 1] + GPeticion.SufijoBpl + '.bpl';
       ARecurso := ESTILOS_DE_PLATAFORMA[I, 2];
       Exit(True);
     end;

@@ -304,9 +304,13 @@ const
   // lo ensenaba entero con pattern=* y solo el modo dirs lo escondia
   // (en vivo, 6-oct-2026)
   // (las copias muertas del IDE por sus nombres, los de Lsp.Guard)
-  CARPETAS_ARTEFACTO: array [0 .. 7] of string = (
+  // (las de cada PLATAFORMA, la salida del IDE por defecto ($(Platform)\$(Config)),
+  // salen de su lista en SkipReason: aqui solo estaban Win32 y Win64, y
+  // Linux64\Prod se recorria como fuente; F1-5 de la 1.29. Medido: ni en D: ni
+  // en los Samples del IDE hay una carpeta de fuentes con nombre de plataforma)
+  CARPETAS_ARTEFACTO: array [0 .. 5] of string = (
     '\' + CARPETA_HISTORIA_DEL_IDE + '\', '\' + CARPETA_RECUPERACION_DEL_IDE + '\',
-    '\win32\', '\win64\', '\debug\', '\release\', '\dcu\', '\__pycache__\');
+    '\debug\', '\release\', '\dcu\', '\__pycache__\');
 
 { Saltar y el motivo de saltar son UNA decision: la toma SkipReason. }
 function SkipIdeArtifacts(const APath: string; AAllowTrash: Boolean): Boolean;
@@ -367,6 +371,9 @@ begin
     Exit(SKIP_TEMP);
   for B in CARPETAS_ARTEFACTO do
     if Low.Contains(ClaveDeRuta(B)) then
+      Exit(SKIP_ARTIFACTS);
+  for B in PlataformasConocidas do
+    if Low.Contains(ClaveDeRuta('\' + B + '\')) then
       Exit(SKIP_ARTIFACTS);
   if not AAllowTrash and Low.Contains(ClaveDeRuta('\' + TrashFolderName + '\')) then
     Exit(SKIP_TRASH);

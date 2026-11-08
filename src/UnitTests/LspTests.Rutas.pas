@@ -307,6 +307,7 @@ type
   TEnlazadorTests = class
   public
     [Test] procedure LeeLasDosFormasDelEnlazador;
+    [Test] procedure LaCitaVaTrasElCodigoDeLaLinea;
   end;
 
 implementation
@@ -1957,6 +1958,25 @@ begin
 end;
 
 { TEnlazadorTests }
+
+procedure TEnlazadorTests.LaCitaVaTrasElCodigoDeLaLinea;
+begin
+  // F1-1 de la 1.29: la unidad de un F2613, por EL juez del codigo de la linea
+  Assert.AreEqual('Vcl.Grids', CitaTrasElCodigo(
+    'C:\p\U.pas(3): error F2613: Unit ''Vcl.Grids'' not found.', 'F2613'));
+  // un F2613 de una CARPETA de la ruta no es el codigo de la linea: la cita es de un E2003
+  Assert.AreEqual('', CitaTrasElCodigo(
+    'C:\p\F2613Demo\U.pas(3): error E2003: Undeclared identifier: ''Foo''', 'F2613'),
+    'una carpeta F2613Demo no es un F2613');
+  Assert.AreEqual('Foo', CitaTrasElCodigo(
+    'C:\p\F2613Demo\U.pas(3): error E2003: Undeclared identifier: ''Foo''', 'E2003'));
+  // el fichero de un F1026 y la unit de un W1033, en su forma de siempre
+  Assert.AreEqual('UFalta.dcu', CitaTrasElCodigo(
+    'C:\p\P.dpr(1): error F1026: File not found: ''UFalta.dcu''', 'F1026'));
+  Assert.AreEqual('Vcl.Forms', CitaTrasElCodigo(
+    'C:\p\P.dpk(1): warning W1033: The unit ''Vcl.Forms'' has been implicitly imported into package ''P''', 'W1033'));
+  Assert.AreEqual('', CitaTrasElCodigo('C:\p\U.pas(3): error F2613: sin cita', 'F2613'), 'sin cita, nada');
+end;
 
 procedure TEnlazadorTests.LeeLasDosFormasDelEnlazador;
 var

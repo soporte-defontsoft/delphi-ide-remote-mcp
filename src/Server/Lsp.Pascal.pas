@@ -359,6 +359,10 @@ function TextoConNombreDeCabecera(const ATexto, ANuevo: string; out AResultado: 
   .bpl y un .dpk que empieza por program en un .exe (medido el 24-oct-2026).
   Tres sitios lo preguntaban por la extension .dpk (A30 de la 1.23). }
 function EsFuenteDePaquete(const ATexto: string): Boolean;
+{ ...y un PROGRAMA: su cabecera dice program (lo que se lanza; un test lo es).
+  delphi_test lo decidia por la extension .dpr, y un .dpr que empieza por
+  package se compilaba en un .bpl y se lanzaba: error 193 (F1-3 de la 1.29) }
+function EsFuenteDePrograma(const ATexto: string): Boolean;
 
 { LOS 'end.' de un fuente, leidos en ACodigo (la vista del codigo, como la
   cabecera), en orden: donde empieza su 'end' (Ini) y donde acaba, detras de
@@ -944,11 +948,23 @@ begin
       Inc(Result);
 end;
 
-function EsFuenteDePaquete(const ATexto: string): Boolean;
+{ La palabra de la cabecera del fuente es APalabra: EL juez de EsFuenteDePaquete
+  y EsFuenteDePrograma }
+function FuenteEmpiezaPor(const ATexto, APalabra: string): Boolean;
 var
   Cab: TCabeceraFuente;
 begin
-  Result := CabeceraDeFuente(CodigoPascal(ATexto), Cab) and (Cab.Palabra = 'package');
+  Result := CabeceraDeFuente(CodigoPascal(ATexto), Cab) and (Cab.Palabra = APalabra);
+end;
+
+function EsFuenteDePaquete(const ATexto: string): Boolean;
+begin
+  Result := FuenteEmpiezaPor(ATexto, 'package');
+end;
+
+function EsFuenteDePrograma(const ATexto: string): Boolean;
+begin
+  Result := FuenteEmpiezaPor(ATexto, 'program');
 end;
 
 function CabeceraDeFuente(const ACodigo: string; out ACab: TCabeceraFuente): Boolean;

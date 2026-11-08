@@ -37,6 +37,7 @@ empezar y al salir. Nunca active=yes: el Default_Linux64 es del operador.
   G11 reseat-sdk de un SDK sin ficha: no se asienta (PAS-066); el suyo si
   G12 remove-sdk: el asiento se exporta antes (removedSeatCopy)
   G13 remove-profile: el asiento del perfil se exporta antes (PAS-067)
+  G14 sdk= con lo que el formador quitaria: PAS-076, sin crear nada (F1-12 de la 1.29)
 
 Mutante: produccion (el build sin el arreglo): G2, G4-G7, G9, G10a, G11a, G12
 y G13 rojos.
@@ -271,6 +272,19 @@ try:
     out = get_sdk()
     check('G3 control: repetido sin cambios, el asiento ni se reescribe ni se copia',
           mc.como_json(out).get('sdk') == DISTRO + '.sdk' and 'previousIdeSeatCopy' not in out, out[:400])
+
+    # --- G14 (F1-12 de la 1.29): un nombre que el formador cambia se dice -----
+    # "Ubuntu_24.04" salia "ubuntu2404" en silencio, y el agente pedia luego el build con el suyo
+    m0 = marca()
+    malo = PREFIJO.capitalize() + '_X.1'
+    out = get_sdk(sdk=malo)
+    check('G14 sdk= con lo que no es letra ni cifra: PAS-076 con el nombre que seria, nada bajado ni creado',
+          mc.rechazado(out) and mc.es(out, 'SR_PASERVER_SDK_NOMBRE_FMT') and (PREFIJO + 'x1') in out
+          and not pidio_bajar(m0) and not os.path.exists(os.path.join(SDKS, PREFIJO + 'x1.sdk'))
+          and seat(PREFIJO + 'x1') is None, out[:400])
+    out = get_sdk(sdk=(PREFIJO + 'e').upper())
+    check('G14 control: las mayusculas no cuentan (el IDE no las distingue): se crea en minusculas',
+          mc.como_json(out).get('sdk') == PREFIJO + 'e.sdk', out[:400])
 
     # --- G4 carpeta sin ficha con algo dentro ---------------------------------
     b = PREFIJO + 'b'

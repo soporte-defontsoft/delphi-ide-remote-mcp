@@ -471,6 +471,19 @@ try:
           'no es un dia aunque vaya antes del limite (2020-01-01)',
           not os.path.exists(VIEJA) and os.path.isdir(HOY9) and os.path.isdir(OTRA9),
           sorted(os.listdir(PAP9)) if os.path.isdir(PAP9) else 'sin papelera')
+
+    # ---------------------------------------------------------------- R10
+    # F1-5 (1.29): la salida del IDE por defecto es $(Platform)\$(Config), y una carpeta de PLATAFORMA es artefacto
+    # para todas, no solo Win32 y Win64: Linux64\Prod (una config propia) se recorria como fuente
+    R10 = os.path.join(JAIL, 'r10')
+    for sub in ('src', os.path.join('Linux64', 'Prod'), os.path.join('Android64', 'Prod'), os.path.join('Win64', 'Prod')):
+        os.makedirs(os.path.join(R10, sub))
+        open(os.path.join(R10, sub, 'U.pas'), 'w').write('unit U;\n// TOKENR10\ninterface\nimplementation\nend.\n')
+    r = json.loads(call('delphi_search', {'root': R10, 'query': 'TOKENR10'}))
+    # (por el final de la ruta: R10 puede venir en 8.3 y la respuesta, larga)
+    rutas = sorted(mc.real(h['path']) for h in mc.aciertos(r))
+    check('R10 una carpeta con nombre de plataforma es artefacto (Linux64, Android64 como Win64): solo src',
+          len(rutas) == 1 and rutas[0].lower().endswith('\\r10\\src\\u.pas'), (rutas, str(r)[:300]))
 finally:
     try:
         proc.kill()

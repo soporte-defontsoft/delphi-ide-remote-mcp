@@ -171,7 +171,8 @@ try:
         filas = j.get('rows', [])
         f1 = filas[0] if filas else {}
         check('L3 %s rows: total 6, sus tipos JSON, el binario fuera por defecto' % motor,
-              j.get('total') == 6 and j.get('returned') == 6 and f1.get('id') == 1 and f1.get('nombre') == 'Ana 50%'
+              j.get('total') == 6 and j.get('shown') == 6 and j.get('hasMore') is False and f1.get('id') == 1
+              and f1.get('nombre') == 'Ana 50%'
               and f1.get('importe') == 1.5 and f1.get('activo') is False and f1.get('alta') == '2024-01-01T00:00:00'
               and 'foto' not in f1 and mc.es(j.get('note', ''), 'SN_DB_ROWS'), r[:600])
         r = db({'command': 'rows', 'db': D, 'table': TABLA, 'fields': ['id', 'foto'], 'filters': [
@@ -212,8 +213,11 @@ try:
         check('L4 %s contains "ana" sin mayusculas, con los acentos de su collation' % motor,
               got == ([1, 2, 4] if motor == 'mssql' else [1, 2]), (got, rr[:300]))
         got, rr = ids([], limit=2, offset=2)
-        check('L5 %s order id, limit 2, offset 2: [3, 4] y total 6' % motor,
-              got == [3, 4] and mc.como_json(rr).get('total') == 6, rr[:300])
+        # F1-8 (1.29): la pagina por EL paginador de las listas, como delphi_search o delphi_list
+        jr = mc.como_json(rr)
+        check('L5 %s order id, limit 2, offset 2: [3, 4], total 6, shown 2, hasMore y nextOffset 4' % motor,
+              got == [3, 4] and jr.get('total') == 6 and jr.get('shown') == 2 and jr.get('offset') == 2
+              and jr.get('hasMore') is True and jr.get('nextOffset') == 4, rr[:300])
         got, rr = ids([], order='importe desc', limit=1)
         check('L5 %s order importe desc, limit 1: el 6' % motor, got == [6], rr[:200])
         r = db({'command': 'rows', 'db': D, 'table': TABLA, 'fields': ['nombre', 'id'], 'limit': 1, 'order': 'id'})
@@ -222,9 +226,9 @@ try:
         r = db({'command': 'summary', 'db': D, 'table': TABLA, 'group': ['alta:year'],
                 'values': [{'field': 'importe', 'op': 'sum'}], 'order': 'alta:year'})
         g = mc.como_json(r).get('groups', [])
-        check('L7 %s summary por anyo: suma y n' % motor,
-              g == [{'alta:year': 2024, 'sum_importe': 13.5, 'n': 3}, {'alta:year': 2025, 'sum_importe': 18.0, 'n': 3}],
-              r[:400])
+        check('L7 %s summary por anyo: suma y n, y total 2 (los grupos, contados por la base)' % motor,
+              g == [{'alta:year': 2024, 'sum_importe': 13.5, 'n': 3}, {'alta:year': 2025, 'sum_importe': 18.0, 'n': 3}]
+              and mc.como_json(r).get('total') == 2 and mc.como_json(r).get('hasMore') is False, r[:400])
         # DB-P1 (1.29): sin order, las filas van por la clave primaria, y con un order que repite valores, la
         # clave desempata: la pagina siguiente no repite ni salta filas. ROJO en PG contra 958be0fe: el UPDATE
         # de la fila 1 la llevo al final del heap y sin ORDER BY salia 2,3,4,5,6,1
@@ -237,8 +241,12 @@ try:
         # DB-P3: summary pagina con offset, y sus grupos desempatan por sus campos (n empata 3 y 3)
         r = db({'command': 'summary', 'db': D, 'table': TABLA, 'group': ['activo'], 'limit': 1, 'offset': 1})
         j = mc.como_json(r)
-        check('L17 %s summary con offset 1 y limit 1: el segundo grupo (activo verdadero) y su offset' % motor,
-              j.get('groups') == [{'activo': True, 'n': 3}] and j.get('offset') == 1, r[:300])
+        check('L17 %s summary con offset 1 y limit 1: el segundo grupo (activo verdadero), su offset y total 2' % motor,
+              j.get('groups') == [{'activo': True, 'n': 3}] and j.get('offset') == 1 and j.get('total') == 2
+              and j.get('hasMore') is False, r[:300])
+        j = mc.como_json(db({'command': 'summary', 'db': D, 'table': TABLA, 'group': ['activo'], 'limit': 1}))
+        check('L17 %s ...y la primera pagina: hasMore y nextOffset 1' % motor,
+              j.get('shown') == 1 and j.get('hasMore') is True and j.get('nextOffset') == 1, j)
         # DB-P5: fields dice las claves ajenas y los indices (del catalogo de la base)
         j = mc.como_json(db({'command': 'fields', 'db': D, 'table': HIJA}))
         fks = j.get('foreignKeys') or [{}]
@@ -255,8 +263,9 @@ try:
               and len(nota.get('text', '')) == 20000, str(nota)[:200] if not isinstance(nota, str) else len(nota))
         r = db({'command': 'summary', 'db': D, 'table': TABLA, 'values': [{'field': 'importe', 'op': 'max'}],
                 'filters': [{'field': 'activo', 'op': 'equals', 'value': True}]})
-        check('L8 %s summary sin grupo: una fila con los totales' % motor,
-              mc.como_json(r).get('groups') == [{'max_importe': 9.0, 'n': 3}], r[:300])
+        check('L8 %s summary sin grupo: una fila con los totales (total 1)' % motor,
+              mc.como_json(r).get('groups') == [{'max_importe': 9.0, 'n': 3}] and mc.como_json(r).get('total') == 1,
+              r[:300])
         negativas = [
             ({'command': 'rows', 'db': D, 'table': 'no_existe_129'}, 'SR_DB_TABLA_FMT'),
             ({'command': 'rows', 'db': D, 'table': TABLA, 'fields': ['no_existe']}, 'SR_DB_CAMPO_FMT'),

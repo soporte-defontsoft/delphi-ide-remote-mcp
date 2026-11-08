@@ -16,7 +16,7 @@ become REAL profiles, and paclient writes to the real profile folder whatever
 APPDATA says (measured 9-oct-2026: Location: ...\\Roaming\\...). Point 7.2 of
 the 1.18.0 list, the rule of the destructive mutant.
 """
-import atexit, json, time, os, socket, glob, threading
+import atexit, json, time, os, re, socket, glob, threading
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -30,6 +30,9 @@ PROF_PASSWORD = 'dummySecretE2E123'
 # I1 de la cierre (1.28): un SEGUNDO perfil al mismo host:puerto, para el aviso de duplicado de add-profile (lee
 # los perfiles listados por EL lector, LeeCamposDePerfil); real como el primero, y cleanup_profile lo recoge
 PROF_DUP = 'mcp-e2e-paserver-dup'
+# F1-11 (1.29): un TERCERO, sin puerto, al 64211: el aviso compara el NUMERO (el .profile sin Profile_port es el
+# 64211 por defecto, PuertoDelPerfil), no el texto crudo; cleanup_profile tambien lo recoge
+PROF_SIN_PUERTO = 'mcp-e2e-paserver-sinpuerto'
 # el .profile SIN plataforma del reseat (A4 de la depuracion de la 1.23): vive en un APPDATA de prueba, pero el
 # asiento que un build escribiera iria al registro del IDE, y cleanup_profile lo borra
 SIN_PLAT = 'mcp-e2e-sinplataforma'
@@ -83,12 +86,12 @@ def profile_seats(nombre=PROF_NAME):
 
 def cleanup_profile():
     import winreg
-    for f in profile_files() + profile_files(PROF_DUP):
+    for f in profile_files() + profile_files(PROF_DUP) + profile_files(PROF_SIN_PUERTO):
         try:
             os.remove(f)
         except OSError:
             pass
-    for sub in profile_seats() + profile_seats(SIN_PLAT) + profile_seats(PROF_DUP):
+    for sub in profile_seats() + profile_seats(SIN_PLAT) + profile_seats(PROF_DUP) + profile_seats(PROF_SIN_PUERTO):
         try:
             winreg.DeleteKey(winreg.HKEY_CURRENT_USER, sub)
         except OSError:
@@ -292,6 +295,22 @@ if not ide_open:
     check('I1 add-profile al mismo host:puerto: se crea y avisa del perfil que ya apunta ahi',
           d_dup.get('profile') == PROF_DUP and mc.es(d_dup.get('warning', ''), 'SN_PASERVER_DUP_HOST_FMT')
           and PROF_NAME in d_dup.get('warning', ''), out[:400])
+    # F1-11: el .profile de PROF_DUP sin su Profile_port (el IDE lo lee como el 64211) y uno nuevo al 64211. En
+    # localhost: en 127.0.0.1:64211 el IDE de esta maquina ya tiene uno de verdad (windows-local, medido el 8-nov), y
+    # el aviso lo citaba a el; en localhost no hay ninguno, y el aviso solo puede salir del de la prueba
+    _dup = profile_files(PROF_DUP)
+    if _dup:
+        # por bytes: el resto del fichero (su BOM, sus saltos) se queda como lo escribio paclient
+        _b = open(_dup[0], 'rb').read()
+        _b = re.sub(rb'[ \t]*<Profile_port>[^<]*</Profile_port>\r?\n?', b'', _b)
+        open(_dup[0], 'wb').write(re.sub(rb'<Profile_host>[^<]*</Profile_host>', b'<Profile_host>localhost</Profile_host>', _b))
+    out = srv.call('delphi_paserver', {"command": "add-profile", "name": PROF_SIN_PUERTO,
+                                       "host": "localhost", "password": "x", "platform": "Linux64"}, t=60)
+    d_sp = mc.como_json(out)
+    check('F1-11 un perfil sin Profile_port es el 64211: uno nuevo al 64211 avisa de el (comparaba el texto)',
+          bool(_dup) and d_sp.get('profile') == PROF_SIN_PUERTO
+          and mc.es(d_sp.get('warning', ''), 'SN_PASERVER_DUP_HOST_FMT') and PROF_DUP in d_sp.get('warning', ''),
+          (out[:400], _dup))
 
     # --- test-connection with profile: dead port -> connected false, E0003 ---
     out = srv.call('delphi_paserver', {"command": "test-connection", "name": PROF_NAME}, t=90)
@@ -309,7 +328,9 @@ if not ide_open:
         # connected:false sin codigo ni consejo (Hermes, 5-nov-2026, con el Zorin apagado)
         check('B12c perfil sin ruta: PAS-028 con la ruta medida (tcpReachable false, su host, su puerto y el motivo)',
               mc.es(d.get('note', ''), 'SN_PASERVER_TCP_FAIL') and d.get('tcpReachable') is False
-              and d.get('host') == '127.0.0.1' and d.get('port') == DEAD_PORT and d.get('reason'), out[:400])
+              and d.get('host') == '127.0.0.1' and d.get('port') == DEAD_PORT and d.get('reason')
+              # F1-13 (1.29): el bloque de la sonda por SU compositor, el de test-connection sin perfil
+              and isinstance(d.get('elapsedMs'), int), out[:400])
         # ...y con la ruta abierta y sin PAServer detras (un oyente que acepta y cierra): lo que nego no
         # es la red, PAS-072
         oyente = socket.socket()

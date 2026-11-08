@@ -10,6 +10,8 @@ El registro del IDE no se toca: lo desactivado aqui es de la maquina, asi que
   D1-D2 el renderizador DE VERDAD con --knownfile, y un paquete estandar del IDE
         (dclsmp370.bpl, TGauge) en vez del de esta maquina
   D3    ...y sin --bdsroot no busca el IDE en el registro: RENDER-008
+  D4-D6 el sufijo de los paquetes de un estilo de plataforma, el que mide el servidor (--bplsuffix):
+        sin el RENDER-032, con el medido se aplica, con otro abre ESE (F1-2 de la 1.29)
   E1    el servidor entero: PACKAGES= cuenta lo que dice el registro, leido aqui
         solo para comparar (ROJO en produccion si la maquina tiene desactivados)
 
@@ -83,11 +85,30 @@ check('D2 sin el en la lista, TGauge sale sustituido y hay un conocido menos',
 # el estilo de una plataforma es lo unico que le pide la carpeta del IDE: un recurso de sus bpl
 FMX = escribe('UEstilo.fmx', 'object FormE: TFormE\n  Left = 0\n  Top = 0\n  Caption = \'E\'\n'
               '  ClientHeight = 100\n  ClientWidth = 100\nend\n')
-p = subprocess.run([os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe'), '--path', FMX, '--out',
-                    os.path.join(BASE, 'e.png'), '--timeout', '120000', '--bds', BDS, '--style', 'android'],
-                   capture_output=True, timeout=240, cwd=JAIL)
-salida = p.stdout.decode('utf-8', 'replace')
+SUFIJO = mc.sufijo_del_ide(mc.raiz_del_ide(BDS))
+
+
+def estilo(*extra):
+    """El ayudante FMX con --style android, como lo lanza el servidor: su salida."""
+    pp = subprocess.run([os.path.join(os.path.dirname(EXE), 'DelphiFormRenderFmx.exe'), '--path', FMX, '--out',
+                         os.path.join(BASE, 'e.png'), '--timeout', '120000', '--bds', BDS, '--style', 'android']
+                        + list(extra), capture_output=True, timeout=240, cwd=JAIL)
+    return pp.returncode, pp.stdout.decode('utf-8', 'replace')
+
+
+c3, salida = estilo('--bplsuffix', SUFIJO)
 check('D3 sin --bdsroot no busca el IDE en el registro: RENDER-008', mc.es(salida, 'SR_RENDER_SIN_IDE_FMT'), salida[:300])
+# F1-2 (1.29): el sufijo de sus paquetes lo MIDE el servidor (el dcc32<sufijo>.dll de su bin) y viaja en
+# --bplsuffix; el ayudante lo deducia del numero de --bds, y solo coincide desde Delphi 13 (el 12 es 23.0 y 290)
+c4, s4 = estilo('--bdsroot', mc.raiz_del_ide(BDS))
+check('D4 un estilo de plataforma sin --bplsuffix: RENDER-032 (no lo saca de --bds)',
+      c4 != 0 and mc.es(s4, 'SR_RENDER_SIN_SUFIJO_FMT'), s4[:300])
+c5, s5 = estilo('--bdsroot', mc.raiz_del_ide(BDS), '--bplsuffix', SUFIJO)
+check('D5 control: con el sufijo medido (%s) se abre fmxdesigner%s.bpl y se aplica' % (SUFIJO, SUFIJO),
+      c5 == 0 and ('fmxdesigner%s.bpl' % SUFIJO) in s5, s5[:400])
+c6, s6 = estilo('--bdsroot', mc.raiz_del_ide(BDS), '--bplsuffix', '999')
+check('D6 el paquete sale del sufijo dado, no del --bds: fmxdesigner999.bpl no abre (RENDER del BPL)',
+      c6 != 0 and mc.es(s6, 'SR_RENDER_ESTILO_NO_ABRE_FMT') and 'fmxdesigner999.bpl' in s6, s6[:300])
 
 
 def lista(subclave):

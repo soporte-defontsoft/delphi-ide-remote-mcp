@@ -55,6 +55,11 @@ const
     '[RENDER-008 NOT_FOUND] Nobody said where RAD Studio %s is (--bdsroot): ' +
     'inside its container the renderer does not read the registry.';
 
+  // %s = el estilo pedido (F1-2 de la 1.29: el sufijo lo mide el servidor)
+  SR_RENDER_SIN_SUFIJO_FMT =
+    '[RENDER-032 NOT_FOUND] The style %s lives in a package of RAD Studio, and ' +
+    'nobody said the suffix of its packages (--bplsuffix): the server measures it.';
+
   SN_RENDER_HEREDA_SIN_PAS_FMT =
     '[RENDER-009] %s is inherited and no .pas next to it says from which ' +
     'class: read on its own.';
@@ -216,7 +221,7 @@ const
     '%s --path <dfm|fmx> --out <png> [--state Component.Property=Value]* ' +
     '[--component Name] [--style <file|platform|none>] [--nonvisual on|off (off)] ' +
     '[--packages auto|none|all] [--root auto|form|frame] ' +
-    '[--fidelity auto|window|print] [--bds 37.0] [--bdsroot <dir>] [--knownfile <file>] ' +
+    '[--fidelity auto|window|print] [--bds 37.0] [--bdsroot <dir>] [--bplsuffix 370] [--knownfile <file>] ' +
     '[--timeout ms] [--packagestimeout ms] [--scale <percent>] [--verbose] | ' +
     '%s --path <dfm|fmx> --writeback on ' +
     '[--component Name] [--dropped Name] ' +

@@ -752,8 +752,17 @@ begin
   end;
   // un test es un PROGRAMA: un paquete que nombra DUnitX. (uno de ayudas de
   // test) pasaba KindOf, se compilaba y se lanzaba su .bpl (error 193)
-  // desde 15c8cab (octava pasada de Fable)
-  if not SameText(TPath.GetExtension(Dpr), '.dpr') then
+  // desde 15c8cab (octava pasada de Fable). Por la cabecera de su fuente, como
+  // lo compila dcc (EsFuenteDePrograma): por la extension .dpr pasaba un .dpr
+  // que empieza por package, y se negaba un .dpk que empieza por program (F1-3)
+  var TextoDpr := '';
+  try
+    var EncDpr: string;
+    TextoDpr := PatchLoadText(Dpr, EncDpr);
+  except
+    // sin su fuente no es un test: lo dice la negativa de abajo
+  end;
+  if not EsFuenteDePrograma(TextoDpr) then
   begin
     Result.AddPair('error', MsgFmt(SR_TEST_NOTATEST_FMT, [TPath.GetFileName(Dpr)]));
     Exit;

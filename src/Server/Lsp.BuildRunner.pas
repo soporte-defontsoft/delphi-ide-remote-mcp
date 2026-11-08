@@ -77,6 +77,13 @@ function ProyectoDeclaraSdk(const ADproj, APlat, AConfig: string; out ASdk: stri
   sysroot sin libz.so no se completaba nunca. La salida del enlazador no tiene
   otro juez: esta es su gramatica, una. }
 function LibreriasQueNoEncuentra(const AOutput: string): TArray<string>;
+{ La primera cita ('...') que sigue al codigo de dcc ACodigo en ALinea (la unidad
+  de un F2613, el fichero de un F1026, la unit de un W1033), o '' si el codigo de
+  la linea -por EL juez, CodigoDelCompilador- no es ese. missingUnits y el lector
+  de W1033 lo buscaban cada uno con su regex, sin limite de palabra, con los dos
+  puntos opcionales y sin mayusculas: una carpeta F2613Demo en la ruta de un
+  error daba una unidad que no faltaba (F1-1 de la 1.29). }
+function CitaTrasElCodigo(const ALinea, ACodigo: string): string;
 function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
 { ...y el perfil que el IDE tiene para esa plataforma: UNO para todos sus
   proyectos (el IDE no guarda un perfil por proyecto) }
@@ -164,7 +171,8 @@ uses
   Lsp.Listas,
   Lsp.Lineas,
   Lsp.Extensiones,
-  Lsp.JuecesDeArgumentos;
+  Lsp.JuecesDeArgumentos,
+  Lsp.Pascal;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -1270,7 +1278,6 @@ end;
 function MissingUnitsOf(const AErrors: TJSONArray): TArray<string>;
 var
   I: Integer;
-  M: TMatch;
   L: TList<string>;
   Name: string;
 begin
@@ -1278,15 +1285,17 @@ begin
   try
     for I := 0 to AErrors.Count - 1 do
     begin
-      M := TRegEx.Match(AErrors.Items[I].Value,
-        'F2613:?[^'']*''([^'']+)''|F1026:?[^'']*''([^'']+)\.dcu''',
-        [roIgnoreCase]);
-      if not M.Success then
-        Continue;
-      // una rama de la alternativa: su grupo, por GrupoDe (Lsp.Regex)
-      Name := GrupoDe(M, 1);
+      // por EL juez del codigo de la linea y su primera cita (CitaTrasElCodigo)
+      Name := CitaTrasElCodigo(AErrors.Items[I].Value, 'F2613');
       if Name = '' then
-        Name := GrupoDe(M, 2);
+      begin
+        Name := CitaTrasElCodigo(AErrors.Items[I].Value, 'F1026');
+        // la extension como la compara NTFS (TieneExtension), no con el locale
+        if TieneExtension(Name, ['.dcu']) then
+          Name := Copy(Name, 1, Length(Name) - Length('.dcu'))
+        else
+          Name := '';
+      end;
       if (Name <> '') and not L.Contains(Name) then
         L.Add(Name);
       if L.Count >= 10 then
@@ -2481,6 +2490,24 @@ begin
   Result := (if M.Success then M.Groups[1].Value else '');
 end;
 
+function CitaTrasElCodigo(const ALinea, ACodigo: string): string;
+var
+  P, Q: Integer;
+begin
+  Result := '';
+  if CodigoDelCompilador(ALinea) <> ACodigo then
+    Exit;
+  // tras el codigo y sus dos puntos (una ruta no lleva dos puntos tras el nombre
+  // de una carpeta), la primera cita
+  P := Pos('''', ALinea, Pos(ACodigo + ':', ALinea));
+  if P = 0 then
+    Exit;
+  Q := Pos('''', ALinea, P + 1);
+  if Q = 0 then
+    Exit;
+  Result := Copy(ALinea, P + 1, Q - P - 1);
+end;
+
 { Para msbuild, un hint de dcc es un aviso ("Hint warning H2077:") }
 function EsHintDelCompilador(const ALinea: string): Boolean;
 begin
@@ -2925,7 +2952,15 @@ begin
   // dice tambien en quiet, aparte de warnings[]: salia en verde con la VCL entera
   // dentro (medido 2026-09-23: 25 W1033, BPL de 4,6 MB en vez de 13 KB). Lo lee el
   // log de avisos, que no depende de esto
-  EsPaquete := SameText(ReadDproj(TPath.GetFullPath(ADprojPath)).AppType, 'Package');
+  // un paquete por la cabecera de su fuente, como lo compila dcc (EsFuenteDePaquete),
+  // no por el AppType que escribe el IDE (F1-3 de la 1.29)
+  EsPaquete := False;
+  try
+    var EncDpk: string;
+    EsPaquete := EsFuenteDePaquete(PatchLoadText(DprDe(TPath.GetFullPath(ADprojPath)), EncDpk));
+  except
+    // sin su fuente no se juzga: la nota de W1033 no sale
+  end;
   if SameText(AVerbosity, 'quiet') then
     Verb := '/v:quiet /clp:ErrorsOnly;Summary;NoItemAndPropertyList /nologo'
   else if SameText(AVerbosity, 'verbose') then
@@ -3182,10 +3217,15 @@ begin
         // Fable sobre la 1.22.2, B3)
         DeBpl.Sorted := True; DeBpl.Duplicates := dupIgnore;
         // por el CODIGO y el primer '...' (un dcc traducido no dice "implicitly imported")
-        for var MI in TRegEx.Matches(string.Join(#10, AvisosDelLog), 'W1033:?[^'']*''([^'']+)''', [roIgnoreCase]) do
+        // linea a linea, por EL juez del codigo (CitaTrasElCodigo): sobre las
+        // lineas unidas, la cita podia saltar a la siguiente (F1-1 de la 1.29)
+        for var LineaW in AvisosDelLog do
         begin
-          Implicitas.Add(MI.Groups[1].Value);
-          var Pk := PaqueteDeUnit(Info, MI.Groups[1].Value);
+          var Implicita := CitaTrasElCodigo(LineaW, 'W1033');
+          if Implicita = '' then
+            Continue;
+          Implicitas.Add(Implicita);
+          var Pk := PaqueteDeUnit(Info, Implicita);
           if Pk <> '' then
           begin
             Sugeridos.Add(Pk);
@@ -3198,14 +3238,14 @@ begin
             // instalacion. Se sugiere ese paquete y se dice que hay que
             // compilarlo antes; nada mas. Si dos .dpk la contienen, van los dos.
             var Dpks := WorkspacePackagesWithUnit(
-              DprDe(TPath.GetFullPath(ADprojPath)), MI.Groups[1].Value); // el propio .dpk no cuenta
+              DprDe(TPath.GetFullPath(ADprojPath)), Implicita); // el propio .dpk no cuenta
             if Length(Dpks) = 0 then
-              SinPaquete.Add(MI.Groups[1].Value)
+              SinPaquete.Add(Implicita)
             else
               for var Dk in Dpks do
               begin
                 Sugeridos.Add(TPath.GetFileNameWithoutExtension(Dk));
-                DelWorkspace.Add(MI.Groups[1].Value + ' -> ' + Dk);
+                DelWorkspace.Add(Implicita + ' -> ' + Dk);
               end;
           end;
         end;

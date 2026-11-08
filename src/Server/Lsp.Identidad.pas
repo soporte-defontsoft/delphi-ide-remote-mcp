@@ -53,6 +53,14 @@ procedure SetThreadIdentityByRequest(const AName: string); // HTTP sin sesion: e
 procedure SetThreadIdentity(const AName: string); // stdio: one process, one name
 procedure ClearThreadIdentity;
 function CurrentAgent: string;               // '' = unknown
+{ EL agente de una llamada como nombre de su carpeta (SlugDeAgente): el agent=
+  que da (quien no puede fijar su clientInfo.name lo pasa en cada llamada,
+  regla 12 de delphi_help) o, sin el, el que declaro en su saludo; '' si
+  ninguno (la identidad propia de quien no dio nombre no es uno).
+  delphi_messages caia al del saludo y delphi_report no: sin agent=, el correo
+  iba a la carpeta del agente y el informe a la raiz del buzon, aunque la
+  descripcion de messages promete el mismo valor (F1-9 de la 1.29). }
+function AgenteDeLaLlamada(const AExplicito: string): string;
 { EL "es mio": ANombre (el dueno de una copia de la papelera, la carpeta bajo
   una raiz) es el agente de esta llamada, como NTFS compara dos nombres: el
   del agente es ASCII (NombreDeAgente) y SameText, que solo pliega ASCII, dice
@@ -131,6 +139,14 @@ const
 function IdentidadPropia: string;
 begin
   Result := SESION_SIN_NOMBRE + FragmentoUnico;
+end;
+
+{ ...y su lector: AAgente es la identidad propia de quien no dio nombre, no
+  uno que declaro. Quien declare "session-algo" sale como sin nombre: lo de
+  antes de saber su nombre, nunca el de otro. }
+function EsIdentidadPropia(const AAgente: string): Boolean;
+begin
+  Result := AAgente.StartsWith(SESION_SIN_NOMBRE, True);
 end;
 
 { Bajo GIdentLock. -1 = no esta. }
@@ -333,6 +349,16 @@ end;
 function CurrentAgent: string;
 begin
   Result := TCurrentAgent;
+end;
+
+function AgenteDeLaLlamada(const AExplicito: string): string;
+begin
+  Result := SlugDeAgente(AExplicito);
+  // ...o el que DECLARO su cliente: la identidad propia de una sesion sin
+  // nombre (o de cada peticion sin nombre del protocolo sin saludo) no es un
+  // nombre suyo, y daria una carpeta de informes por sesion
+  if (Result = '') and not EsIdentidadPropia(TCurrentAgent) then
+    Result := SlugDeAgente(TCurrentAgent);
 end;
 
 function LlamadaDelHilo: TLlamadaDelHilo;

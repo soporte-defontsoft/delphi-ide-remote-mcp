@@ -94,9 +94,8 @@ uses
   FireDAC.Stan.Intf, FireDAC.Phys.Intf, FireDAC.DatS; // create-table: EL generador de FireDAC
 
 const
-  LIMITE_FILAS_DB = 100;
-  LIMITE_GRUPOS_DB = 50;
-  LIMITE_MAXIMO_DB = 500;
+  // (las paginas de rows y summary, y su tope: PAGINA_DB_* y TOPE_DB de
+  // Lsp.Texts, que componen tambien su texto; F1-8 de la 1.29)
   // lo que cabe en una respuesta de rows o summary (caracteres de su JSON):
   // al menos una fila, y lo que no cabe se dice (truncated) - la leccion de
   // las tools de tablas de la casa: un "cuantos hay" no se trae las filas
@@ -688,14 +687,6 @@ begin
   end;
 end;
 
-function Limite(ADado, APorDefecto: Integer): Integer;
-begin
-  Result := ADado;
-  if Result <= 0 then
-    Result := APorDefecto;
-  Result := Min(Result, LIMITE_MAXIMO_DB);
-end;
-
 function TablesEn(const S: TSesionDb; const P: TDelphiDbParams): string;
 var
   R: TJSONObject;
@@ -827,7 +818,7 @@ var
   R: TJSONObject;
   Filas: TJSONArray;
   Total: Int64;
-  Lim: Integer;
+  Pag: TPagina;
   Truncado: Boolean;
 begin
   // leer, siempre en una transaccion que se deshace: la segunda barrera
@@ -878,22 +869,26 @@ begin
     finally
       Q.Free;
     end;
-    Lim := Limite(P.Limit, LIMITE_FILAS_DB);
+    Pag := PaginaDe(P.Offset, P.Limit, PAGINA_DB_ROWS, TOPE_DB);
     Q := NuevaConsulta(S, 'SELECT ' + Cols + Desde + OrderBy, Pars);
     try
-      if P.Offset > 0 then
-        Q.FetchOptions.RecsSkip := P.Offset;
-      Q.FetchOptions.RecsMax := Lim;
+      if Pag.Desde > 0 then
+        Q.FetchOptions.RecsSkip := Pag.Desde;
+      Q.FetchOptions.RecsMax := Pag.Max;
       Q.Open;
       R := TJSONObject.Create;
       try
         R.AddPair('db', NombreDeConexion(S.Conexion));
         R.AddPair('table', Tabla);
-        R.AddPair('total', TJSONNumber.Create(Total));
-        R.AddPair('offset', TJSONNumber.Create(Max(P.Offset, 0)));
-        R.AddPair('limit', TJSONNumber.Create(Lim));
         Filas := FilasEnJson(Q, [], Truncado);
-        R.AddPair('returned', TJSONNumber.Create(Filas.Count));
+        // la pagina por EL paginador de las listas (total, shown, offset,
+        // hasMore, nextOffset y la nota del tope): escribia offset, limit y
+        // returned a su manera, sin decir si habia mas, y bajaba al tope en
+        // silencio (F1-8 de la 1.29). Mas de High(Integer) filas no las cuenta
+        // ni el COUNT(*) de SQL Server
+        Pag.Total := Min(Total, High(Integer));
+        Pag.Mostrados := Filas.Count;
+        Pag.Report(R);
         if Truncado then
           R.AddPair('truncated', TJSONBool.Create(True));
         R.AddPair('rows', Filas);
@@ -935,6 +930,8 @@ var
   Filas: TJSONArray;
   Truncado: Boolean;
   I, Parte: Integer;
+  Pag: TPagina;
+  TotalDeGrupos: Int64;
 begin
   S.Conn.StartTransaction;
   try
@@ -1021,21 +1018,39 @@ begin
       for I := 1 to Length(Grupos) do
         if not MatchText(IntToStr(I), Ordenados) then
           OrderBy := OrderBy + IfThen(OrderBy = '', ' ORDER BY ', ', ') + IntToStr(I);
+    // cuantos grupos hay, para su pagina (si hay mas y desde donde): los
+    // cuenta la base, con los mismos filtros; sin grupos el resumen es UNA
+    // fila. Cada columna de una tabla derivada lleva nombre: SQL Server no
+    // acepta una sin el (F1-8 de la 1.29)
+    TotalDeGrupos := 1;
+    if GroupBy <> '' then
+    begin
+      Q := NuevaConsulta(S, 'SELECT COUNT(*) FROM (SELECT 1 AS k FROM ' + CitaNombre(S.Conn, Tabla) + Where +
+        ' GROUP BY ' + GroupBy + ') g', Pars);
+      try
+        Q.Open;
+        TotalDeGrupos := Q.Fields[0].AsLargeInt;
+      finally
+        Q.Free;
+      end;
+    end;
+    Pag := PaginaDe(P.Offset, P.Limit, PAGINA_DB_SUMMARY, TOPE_DB);
     Q := NuevaConsulta(S, 'SELECT ' + Sel + ' FROM ' + CitaNombre(S.Conn, Tabla) + Where +
       IfThen(GroupBy <> '', ' GROUP BY ' + GroupBy) + OrderBy, Pars);
     try
-      if P.Offset > 0 then
-        Q.FetchOptions.RecsSkip := P.Offset;
-      Q.FetchOptions.RecsMax := Limite(P.Limit, LIMITE_GRUPOS_DB);
+      if Pag.Desde > 0 then
+        Q.FetchOptions.RecsSkip := Pag.Desde;
+      Q.FetchOptions.RecsMax := Pag.Max;
       Q.Open;
       R := TJSONObject.Create;
       try
         R.AddPair('db', NombreDeConexion(S.Conexion));
         R.AddPair('table', Tabla);
-        R.AddPair('offset', TJSONNumber.Create(Max(P.Offset, 0)));
-        R.AddPair('limit', TJSONNumber.Create(Limite(P.Limit, LIMITE_GRUPOS_DB)));
         Filas := FilasEnJson(Q, Etiquetas, Truncado);
-        R.AddPair('returned', TJSONNumber.Create(Filas.Count));
+        // EL paginador, como rows
+        Pag.Total := Min(TotalDeGrupos, High(Integer));
+        Pag.Mostrados := Filas.Count;
+        Pag.Report(R);
         if Truncado then
           R.AddPair('truncated', TJSONBool.Create(True));
         R.AddPair('groups', Filas);

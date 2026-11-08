@@ -2957,9 +2957,12 @@ begin
   try
     if not TDirectory.Exists(ADir) then
       Exit;
+    // por EL borrador de un fichero (BorraNombre, el de BorraArbolDentro): con
+    // TFile.Delete uno de solo lectura sobrevivia a toda purga en la carpeta y
+    // el mismo, una carpeta mas abajo, se iba (F1-6 de la 1.29)
     for E in TDirectory.GetFiles(ADir) do
       try
-        TFile.Delete(E);
+        BorraNombre(E);
       except
       end;
     for E in TDirectory.GetDirectories(ADir) do

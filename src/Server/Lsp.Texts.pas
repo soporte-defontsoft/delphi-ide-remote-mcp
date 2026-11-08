@@ -2558,6 +2558,15 @@ const
     'get-sdk. I do NOT pull on top of it nor overwrite its .sdk or its SDK ' +
     'Manager seat. Give me another name in "sdk".';
 
+  { el nombre de un SDK NUEVO, solo letras y cifras: el formador quitaba en
+    silencio lo demas ("Ubuntu_24.04" salia "ubuntu2404") y el build lo buscaba
+    como lo escribio el agente (F1-12 de la 1.29). %s = el dado, %s = el que
+    seria }
+  SR_PASERVER_SDK_NOMBRE_FMT =
+    '[PAS-076 INVALID_PARAM] sdk="%s": the name of a NEW SDK takes only ' +
+    'letters and digits, as its folder and its .sdk are named. Nothing was ' +
+    'created. Pass it as "%s", or another name of letters and digits.';
+
   { sin la distro del destino no hay carpeta propia: con el os-release sin
     leer se caia al nombre del perfil, se bajaba encima de lo que hubiera y
     la ficha quedaba con la distro vacia (V10). %s = perfil }
@@ -2773,12 +2782,16 @@ const
   SR_ADBLINUX_MODIFIERS_BAD_FMT =
     '[DESK-001 INVALID_PARAM] modifiers does not know "%s": the valid ones are ' +
     'ctrl, shift, alt and super (comma-separated).';
+  { Las teclas de un Windows por su NOMBRE, las que pulsa el nodo
+    (Mld.Win.TeclaPorNombre), UNA vez: estaban a mano en el parametro y en
+    DESK-010, y ninguno decia las cifras, que el nodo pulsa (F1-10 de la 1.29) }
+  TECLAS_DE_WINDOWS =
+    'escape, enter, tab, space, backspace, delete, home, end, up, down, ' +
+    'left, right, super, alt, ctrl, shift, f1..f12, a..z or 0..9';
   SP_ADBLINUX_CODE =
     'key. Linux target: the evdev key code (NOT an X11 keycode): Escape 1, ' +
     'Tab 15, Enter 28, Backspace 14, Delete 111, left Alt 56, Super 125. ' +
-    'Windows target: the key ' +
-    'NAME - escape, enter, tab, space, backspace, delete, home, end, up, ' +
-    'down, left, right, super, alt, ctrl, shift, f1..f12, or a letter a..z. ' +
+    'Windows target: the key NAME - ' + TECLAS_DE_WINDOWS + '. ' +
     'The other kind is refused.';
   SP_ADBLINUX_TEXT =
     'type: the text to write. Windows: typed as Unicode. Linux: key by key ' +
@@ -2992,9 +3005,7 @@ const
     'session.';
   SR_DESKTOP_NEEDCODE =
     '[DESK-010 INVALID_PARAM] The target is Windows and key needs "code" with ' +
-    'the key NAME: escape, enter, tab, space, backspace, delete, home, ' +
-    'end, up, down, left, right, super, alt, ctrl, shift, f1..f12 or a letter ' +
-    'a..z.';
+    'the key NAME: ' + TECLAS_DE_WINDOWS + '.';
 
   SR_ADBLINUX_CMD =
     '[DESK-011 INVALID_PARAM] command must be screenshot, tap, drag, type, ' +
@@ -4777,7 +4788,7 @@ const
   // (va en CADA pagina: corta, como las notas fijas del informe 3 de la 1.29)
   SN_DB_ROWS =
     '[DB-019] total = all rows the filters select; rows = from offset, up to ' +
-    'limit and one answer''s size (truncated: next page with offset). Pages ' +
+    'limit and one answer''s size (truncated: the rest from nextOffset). Pages ' +
     'follow your order, then the primary key. A long text comes as {"text", ' +
     '"length", "truncated"}. Text compares as the database''s collation does.';
   // una tabla sin clave primaria: sus paginas no tienen un orden que se repita
@@ -4862,7 +4873,14 @@ const
     '"field" or "field desc", comma separated; summary: also n, or a value ' +
     'as op_field (sum_total). rows are then ordered by the primary key, and ' +
     'summary''s groups by their fields.';
-  SP_DB_LIMIT = 'rows (default 100) and summary (default 50); at most 500.';
+  { las paginas de rows y summary, por defecto y su tope, UNA vez, como las
+    PAGINA_* de mas abajo (B1): aqui, antes de su texto. Estaban en el texto
+    y en tres constantes del codigo (F1-8 de la 1.29) }
+  PAGINA_DB_ROWS = '100';
+  PAGINA_DB_SUMMARY = '50';
+  TOPE_DB = '500';
+  SP_DB_LIMIT = 'rows (default ' + PAGINA_DB_ROWS + ') and summary (default ' + PAGINA_DB_SUMMARY +
+    '); at most ' + TOPE_DB + '.';
   SP_DB_OFFSET = 'rows and summary: how many to skip, for the next page.';
   SP_DB_GROUP =
     'summary: the fields to group by; a date field also as field:year, ' +
@@ -9546,8 +9564,9 @@ const
   // letters/digits/dashes before it becomes a folder name, same normalizer
   // as the title. Also the seed of a wider client identity (future use).
   SP_REPORT_AGENT =
-    'Optional short STABLE id (e.g. "hermes"): your reports get a folder ' +
-    'of that name. Letters, digits, dashes; the rest is normalized away.';
+    'Optional STABLE id (e.g. "hermes"): the folder of your reports ' +
+    '(omitted: your handshake id). Letters, digits, dashes; the rest is ' +
+    'normalized away.';
   SP_REPORT_COMMAND =
     'report (default) | list (newest first, per folder) | read (one, by name)';
   SP_REPORT_NAME =

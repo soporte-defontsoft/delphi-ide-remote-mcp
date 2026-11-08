@@ -68,6 +68,7 @@ type
     NoVisuales: Boolean;       // dibujar los no visuales
     Bds: string;               // la version del Delphi del servidor (37.0)
     RaizBds: string;           // su carpeta: el contenedor no lee el registro
+    SufijoBpl: string;         // el de sus paquetes ('370'), del dcc32<sufijo>.dll de su bin (F1-2 de la 1.29)
     FicheroPaquetes: string;   // los .bpl que puede cargar, una ruta por linea (lo pone CorreRender)
     Raiz: string;              // form | frame, por el lector de clases del servidor; '' = que mire el ayudante
     // el JUEZ de lo que guarda el IDE (3.11 de la 1.18.0): sin png, el form
@@ -717,7 +718,7 @@ begin
   // tomaria el interruptor siguiente como valor. Cada valor que viaja, por EL
   // juez de los nuestros (ValorDeLaCasaLlega); --dropped no estaba (A4 de la 1.27)
   for var V in TArray<string>.Create(APeticion.Path, APeticion.Salida,
-    APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.RaizBds,
+    APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.RaizBds, APeticion.SufijoBpl,
     APeticion.FicheroPaquetes, APeticion.Soltado) + APeticion.Estados + APeticion.Puestas do
     if not ValorDeLaCasaLlega(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V, CaracterQueNoLlega(V)])); // y CUAL, como TEST-037 (B7)
@@ -744,6 +745,8 @@ begin
     AOrden := AOrden + Arg(FR_ARG_BDS, APeticion.Bds);
   if APeticion.RaizBds <> '' then
     AOrden := AOrden + Arg(FR_ARG_BDSROOT, APeticion.RaizBds);
+  if APeticion.SufijoBpl <> '' then
+    AOrden := AOrden + Arg(FR_ARG_BPLSUFFIX, APeticion.SufijoBpl);
   if APeticion.FicheroPaquetes <> '' then
     AOrden := AOrden + Arg(FR_ARG_KNOWNFILE, APeticion.FicheroPaquetes);
   for var E in APeticion.Estados do
@@ -2453,7 +2456,11 @@ begin
   if Result.Framework = '' then
     Result.Framework := MarcoDe(EsDesignerFmx(APath));
   Result.Path := APath;
-  Result.Bds := DiscoverRadStudio.Version;
+  var Rad := DiscoverRadStudio;
+  Result.Bds := Rad.Version;
+  // ...y el sufijo de sus paquetes, medido (Lsp.Discovery.SufijoDelCompilador):
+  // el ayudante lo deducia del numero de Bds (F1-2 de la 1.29)
+  Result.SufijoBpl := Rad.SufijoCompilador;
   // form o frame lo dice EL lector de clases (RaizParaElRender): el ayudante
   // lo adivinaba con su regex. Sin .pas legible, o sin saberlo, que mire el
   var Pas := UnidadDeDesigner(APath);

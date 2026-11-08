@@ -107,7 +107,9 @@ try:
           and 'informe de vm2' in open(de_vm2[0], encoding='utf-8').read(), (os.listdir(REPORTS), md(B2), md(B3)))
 
     # W3
-    informe(c1, 'sin agente', 'raiz', kind='question')
+    # sin agent= y SIN nombre en el saludo, la raiz: con un nombre, su carpeta (F1-9 de la 1.29, como
+    # delphi_messages); la identidad propia de la sesion sin nombre no es una carpeta
+    informe(cliente(T1, ''), 'sin agente', 'raiz', kind='question')
     informe(c1, 'de codex', 'otro', 'codex', 'suggestion')
     time.sleep(1.1)  # otro segundo: el nombre empieza por la hora
     informe(c1, 'el mas nuevo', 'nuevo', 'hermes')
@@ -203,6 +205,13 @@ try:
     check('W11 la carpeta vieja reports\\uno\\ (de todos los tokens) no es el buzon del workspace Uno',
           'viejo' not in r and mc.es(rr, 'SR_REPORT_NO_ESTA_FMT') and 'VIEJO-DE-OTRO' not in rr,
           (r[:300], rr[:200]))
+
+    # W12 (F1-9 de la 1.29): sin agent=, el nombre del saludo, como delphi_messages; en la raiz caia
+    antes = len(md(B2))
+    r = informe(c2, 'por el saludo', 'saludo')
+    check('W12 sin agent= y con nombre en el saludo: en reports\\<workspace>\\<ese nombre>, no en la raiz',
+          mc.abre(r, 'SN_REPORT_OK_FMT') and 'hermes/' in r and len(md(B2)) == antes + 1
+          and not md(os.path.dirname(B2)), (r[:200], md(B2)))
 finally:
     mc.borra(union)  # la union como union: lo de detras no se toca
     proc.kill()

@@ -240,13 +240,16 @@ check('C1-bis: declaracion DESPUES del campo y antes de private (no E2169)',
 # ---- delphi_report: works at every level, one .md per report ---------------
 import glob as _glob
 RDIR = mc.buzon(os.path.join(os.path.dirname(EXE), mc.INFORMES))  # el del proceso local: sin workspace
-before = set(_glob.glob(os.path.join(RDIR, '*.md')))
+# F1-9 (1.29): sin agent=, la carpeta del nombre que dio el cliente al saludar (el de start), como
+# delphi_messages; la raiz, solo para quien no dio ninguno (abajo, con su propio servidor)
+SDIR = os.path.join(RDIR, 'v012-battery')
+before = set(_glob.glob(os.path.join(SDIR, '*.md')))
 out = call('delphi_report', {"message": "Al usar delphi_x paso Y, esperaba Z.",
                              "title": "Prueba de la bateria",
                              "kind": "bug", "from": "test_v012"})
 check('report: aceptado y guardado',
       mc.abre(out, 'SN_REPORT_OK_FMT') and '.md' in out, out[:150])
-after = set(_glob.glob(os.path.join(RDIR, '*.md')))
+after = set(_glob.glob(os.path.join(SDIR, '*.md')))
 new_files = after - before
 check('report: creo exactamente 1 fichero .md', len(new_files) == 1, new_files)
 if new_files:
@@ -277,14 +280,15 @@ try:
     os.rmdir(ADIR)
 except OSError:
     pass
-out = call('delphi_report', {"message": "sin agente sigue en la raiz",
-                             "title": "raiz", "kind": "question"})
+out = call('delphi_report', {"message": "sin agente, el del saludo",
+                             "title": "saludo", "kind": "question"})
 # el nombre del .md por SU forma, no por la frase que lo rodea; None si no
 # lo trae (antes '?', y el check de abajo pasaba sin mirar nada)
 _m = re.search(r'\S+\.md\b', out)
 saved_name = _m.group(0) if _m else None
-check('report sin agent: sigue en la raiz de reports',
-      mc.abre(out, 'SN_REPORT_OK_FMT') and saved_name is not None and '/' not in saved_name and '\\' not in saved_name, out[:150])
+check('report sin agent: en la carpeta del nombre del saludo (v012-battery/), como delphi_messages',
+      mc.abre(out, 'SN_REPORT_OK_FMT') and saved_name is not None and saved_name.startswith('v012-battery/'),
+      out[:150])
 
 # ---- git dangerous options refused at the GATE (both access levels) --------
 # 1.19.0: sin args; una opcion de git ni se puede escribir (args, GIT-068: lo
@@ -769,6 +773,19 @@ if GHOST:
 
 # ---- shutdown main server --------------------------------------------------
 srv.cierra(15)
+
+# ---- delphi_report de un cliente SIN nombre: la raiz de reports (F1-9) -----
+_anon = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': INSIDE}), nombre='', t=90)
+try:
+    out = _anon.call('delphi_report', {"message": "sin agente ni nombre: la raiz", "title": "raiz",
+                                       "kind": "question"})
+finally:
+    _anon.cierra(15)
+_m = re.search(r'\S+\.md\b', out)
+saved_name = _m.group(0) if _m else None
+check('report sin agent y sin nombre en el saludo: sigue en la raiz de reports',
+      mc.abre(out, 'SN_REPORT_OK_FMT') and saved_name is not None and '/' not in saved_name
+      and '\\' not in saved_name and os.path.isfile(os.path.join(RDIR, saved_name)), out[:150])
 
 # ---- Roots con comillas / roots invalidos (servidores propios) -------------
 def one_shot(envroots, tool, args, extra_env=None):
