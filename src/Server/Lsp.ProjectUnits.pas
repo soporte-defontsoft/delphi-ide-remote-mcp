@@ -1168,7 +1168,7 @@ begin
     PatchSaveConSuSalto(Dproj, Text, Enc);
   end
   else
-    Note := Note + IfThen(Note <> '', ' ', '') + MsgText(SN_UNIT_NO_DPROJ);
+    Note := Note + IfThen(Note <> '', ' ', '') + MsgFmt(SN_UNIT_NO_DPROJ_FMT, [TPath.GetFileName(Dpr)]);
   if NotaDeRaiz(Info) <> '' then
     Note := Note + IfThen(Note <> '', ' ', '') + NotaDeRaiz(Info);
 
@@ -1641,10 +1641,15 @@ begin
       PatchSaveConSuSalto(ADproj, Text, Enc);
   end
   else
-    Note := MsgText(SN_UNIT_NO_DPROJ);
+    Note := MsgFmt(SN_UNIT_NO_DPROJ_FMT, [TPath.GetFileName(ADpr)]);
   if Length(Nuevos) > 0 then
+  begin
     Result := MsgFmt(SN_REQUIRES_ADDED_FMT, [TPath.GetFileName(ADpr),
-      string.Join(', ', Nuevos), string.Join(', ', Existentes)])
+      string.Join(', ', Nuevos), string.Join(', ', Existentes)]);
+    // y lo que recibio el .dproj, como lo dice add-unit
+    if Length(EnDproj) > 0 then
+      Result := Result + #10 + MsgFmt(SN_REQUIRES_DPROJ_TAMBIEN_FMT, [string.Join(', ', EnDproj)]);
+  end
   else if Length(EnDproj) > 0 then
     Result := MsgFmt(SN_REQUIRES_EN_DPROJ_FMT, [TPath.GetFileName(ADpr), string.Join(', ', EnDproj)])
   else

@@ -10,7 +10,8 @@ nacer el .dproj sin la de rtl, que su .dpk si pide.
   Q1 project-package: el .dproj nace con la de rtl.dcp, tras </DelphiCompile>
      (ROJO hasta la 1.29)
   Q2 add-requires vcl;dbrtl en un paquete con una unit: las dos en el .dproj, tras
-     rtl.dcp y DELANTE de la unit, en la forma del IDE (ROJO hasta la 1.29)
+     rtl.dcp y DELANTE de la unit, en la forma del IDE, y la respuesta dice lo que
+     recibio el .dproj (CFG-154, visto en vivo el 8-nov) (ROJO hasta la 1.29)
   Q3 un paquete que ya pide vcl en su .dpk y no lo tiene en el .dproj: add-requires
      vcl se lo pone y lo dice (CFG-153; ROJO hasta la 1.29: CFG-052 y nada)
   Q4 (guarda) otra vez lo mismo: CFG-052 y el .dpk y el .dproj byte a byte
@@ -18,6 +19,10 @@ nacer el .dproj sin la de rtl, que su .dpk si pide.
   Q6 TODO O NADA: con el .dproj de solo lectura el .dpk tampoco cambia (ROJO
      hasta la 1.29: el .dpk se escribia y el .dproj no se miraba)
   Q7 (guarda) el paquete con sus requires en el .dproj COMPILA
+  Q8 un paquete sin .dproj: CFG-053 y la nota CFG-048 nombra el .dpk, que es lo que
+     se escribio (ROJO hasta la 1.29: decia ".dpr"), y no nace un .dproj
+  Q9 el otro llamador de CFG-048: add-unit en ese paquete sin .dproj tambien nombra
+     el .dpk (rigor 7: cada camino del texto cambiado)
 
 Uso:  python tests/test_requires_dproj_129.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -49,7 +54,7 @@ def tras_compile(dproj, include):
 
 srv = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL}), nombre='test-requires-dproj', t=300)
 try:
-    for n in ('PaqQ1', 'PaqQ3', 'PaqQ5', 'PaqQ6'):
+    for n in ('PaqQ1', 'PaqQ3', 'PaqQ5', 'PaqQ6', 'PaqQ8'):
         r = srv.call('delphi_create', {'kind': 'project-package', 'name': n, 'dir': os.path.join(JAIL, n)}, t=120)
         assert mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:300]
     d1 = os.path.join(JAIL, 'PaqQ1', 'PaqQ1.dproj')
@@ -62,6 +67,7 @@ try:
     t = lee(d1)
     check('Q2 add-requires vcl;dbrtl: en el .dproj tras rtl.dcp y delante de la unit, en la forma del IDE',
           mc.abre(r, 'SN_REQUIRES_ADDED_FMT') and refs(d1) == ['rtl.dcp', 'vcl.dcp', 'dbrtl.dcp', 'UQ1.pas']
+          and mc.es(r, 'SN_REQUIRES_DPROJ_TAMBIEN_FMT') and 'vcl.dcp, dbrtl.dcp' in r
           and '\r\n        <DCCReference Include="vcl.dcp"/>\r\n' in t, (r[:200], refs(d1)))
 
     # Q3: el .dpk ya pide vcl (escrito a mano, como lo deja otra herramienta) y el .dproj no
@@ -101,6 +107,25 @@ try:
 
     r = srv.call('delphi_build', {'project': d1, 'platform': 'Win64', 'config': 'Debug', 'target': 'Build'}, t=600)
     check('Q7 (guarda) el paquete con sus requires en el .dproj COMPILA', '"success":true' in r.replace(' ', ''), r[:300])
+
+    k8 = os.path.join(JAIL, 'PaqQ8', 'PaqQ8.dpk')
+    d8 = os.path.join(JAIL, 'PaqQ8', 'PaqQ8.dproj')
+    os.remove(d8)
+    r = srv.call('delphi_config', {'command': 'add-requires', 'project': k8, 'requires': 'vcl'})
+    nota = [l for l in r.splitlines() if mc.id_de('SN_UNIT_NO_DPROJ_FMT') in l]
+    check('Q8 sin .dproj: CFG-053, la nota CFG-048 nombra el .dpk y no nace un .dproj',
+          mc.abre(r, 'SN_REQUIRES_ADDED_FMT') and mc.es(r, 'SN_UNIT_NO_DPROJ_FMT') and len(nota) == 1
+          and 'PaqQ8.dpk' in nota[0] and '.dpr ' not in nota[0] and 'vcl' in lee(k8) and not os.path.exists(d8),
+          r[:300])
+
+    u9 = os.path.join(JAIL, 'PaqQ8', 'UQ9.pas')
+    with open(u9, 'wb') as f:
+        f.write(b'unit UQ9;\r\ninterface\r\nimplementation\r\nend.\r\n')
+    r = srv.call('delphi_config', {'command': 'add-unit', 'project': k8, 'path': u9})
+    nota = [l for l in r.replace('. [', '.\n[').splitlines() if mc.id_de('SN_UNIT_NO_DPROJ_FMT') in l]
+    check('Q9 add-unit en el paquete sin .dproj: la nota CFG-048 tambien nombra el .dpk',
+          not mc.rechazado(r) and len(nota) == 1 and 'PaqQ8.dpk' in nota[0] and 'UQ9' in lee(k8)
+          and not os.path.exists(d8), r[:400])
 finally:
     srv.cierra()
 

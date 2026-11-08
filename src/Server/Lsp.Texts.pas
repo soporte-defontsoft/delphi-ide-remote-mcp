@@ -3956,8 +3956,10 @@ const
     'the IDE will complete it when it opens the project (MSBuild ' +
     'compiles anyway through the uses).';
 
-  SN_UNIT_NO_DPROJ =
-    '[CFG-048] The project has no .dproj: only the .dpr was updated.';
+  { el fichero que si se escribio, .dpr o .dpk: decia ".dpr" tambien de un
+    paquete (visto en vivo el 8-nov-2026) }
+  SN_UNIT_NO_DPROJ_FMT =
+    '[CFG-048] The project has no .dproj: only %s was updated.';
 
   { add-requires: la clausula requires de un paquete, lo que el IDE ofrece tras
     un build con W1033. Un paquete por su cabecera, como lo compila dcc: un
@@ -3984,6 +3986,10 @@ const
   SN_REQUIRES_EN_DPROJ_FMT =
     '[CFG-153] Those packages were already in the requires of %s; its .dproj ' +
     'now references them too, as the IDE writes it: %s. Backup in __delphi-patch.';
+  { ...y con CFG-053, lo que recibio el .dproj: se escribia callado (visto en
+    vivo el 8-nov-2026; add-unit si lo dice) }
+  SN_REQUIRES_DPROJ_TAMBIEN_FMT =
+    '[CFG-154] Its .dproj references them too, as the IDE writes it: %s.';
 
   { adduses de delphi_edit (David, 2026-09-23): la unit entra en el uses de
     OTRA unit y la clausula la escribe el motor. }
@@ -11443,7 +11449,8 @@ const
   SP_CFG_REQUIRES =
     'add-requires: package names for the .dpk requires clause, separated ' +
     'by ; (vcl;dbrtl) - take them from requiresSuggested of delphi_build. ' +
-    'Names already there are kept.';
+    'Names already there are kept. The .dproj gets a DCCReference to the ' +
+    '.dcp of each one, as the IDE writes it.';
 
   SP_CFG_CONFIG =
     'set-active: the one the project builds by default (one it declares: ' +
