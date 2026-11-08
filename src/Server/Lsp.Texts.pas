@@ -11469,8 +11469,7 @@ const
   SP_CFG_REQUIRES =
     'add-requires: package names for the .dpk requires clause, separated ' +
     'by ; (vcl;dbrtl) - take them from requiresSuggested of delphi_build. ' +
-    'Names already there are kept. The .dproj gets a DCCReference to the ' +
-    '.dcp of each one, as the IDE writes it.';
+    'Names already there are kept. The .dproj gets them too.';
 
   SP_CFG_CONFIG =
     'set-active: the one the project builds by default (one it declares: ' +

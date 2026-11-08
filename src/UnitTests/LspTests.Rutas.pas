@@ -299,6 +299,16 @@ type
     [Test] procedure ElLectorDiceLoQueDejaCmd;
   end;
 
+  { EL lector de lo que el enlazador no encuentra (Lsp.BuildRunner.
+    LibreriasQueNoEncuentra), el del completado de un .so de desarrollo: la
+    forma de GNU ld (Delphi 13.1) y la de lld (13.2), con la linea exacta de la
+    VM (ARNES-002 de Hermes, 8-nov-2026: solo se leia la de GNU) }
+  [TestFixture]
+  TEnlazadorTests = class
+  public
+    [Test] procedure LeeLasDosFormasDelEnlazador;
+  end;
+
 implementation
 
 uses
@@ -328,7 +338,8 @@ uses
   LspTests.Comun,
   Lsp.Capturas,
   Lsp.Settings,
-  Lsp.ConPlazo;
+  Lsp.ConPlazo,
+  Lsp.BuildRunner;    // LibreriasQueNoEncuentra
 
 // dos raices en una letra de red (L: conectada a \\servidor\Recurso)
 function D: TArray<string>;
@@ -1945,6 +1956,24 @@ begin
   end;
 end;
 
+{ TEnlazadorTests }
+
+procedure TEnlazadorTests.LeeLasDosFormasDelEnlazador;
+var
+  L: TArray<string>;
+begin
+  // la linea de la VM tal como la devolvio delphi_build (lld, 13.2), la de GNU
+  // ld (13.1) y la misma biblioteca otra vez: cada nombre una vez, en orden
+  L := LibreriasQueNoEncuentra(
+    'C:\x\CodeGear.Delphi.Targets(434,5): error E2597: dcc-ld.lld: error: unable to find library -lz'#10 +
+    'ld-linux.exe: cannot find -lgcc_s'#10 +
+    'dcc-ld.lld: error: unable to find library -lz'#10 +
+    'error F2588: Linker error code: 1 ($00000001)');
+  Assert.AreEqual('z,gcc_s', string.Join(',', L), 'las dos formas, cada nombre una vez');
+  Assert.AreEqual<NativeInt>(0, Length(LibreriasQueNoEncuentra('error F2588: Linker error code: 1 ($00000001)')),
+    'sin un -l no hay nada que completar');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFinalDeUnTrabajoTests);
   TDUnitX.RegisterTestFixture(TLectoresDeJaulaTests);
@@ -1964,5 +1993,6 @@ initialization
   TDUnitX.RegisterTestFixture(TPerfilPorLaListaTests);
   TDUnitX.RegisterTestFixture(TMudanzaDeOperadorTests);
   TDUnitX.RegisterTestFixture(TRsVarsTests);
+  TDUnitX.RegisterTestFixture(TEnlazadorTests);
 
 end.

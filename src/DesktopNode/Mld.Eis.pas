@@ -552,6 +552,7 @@ var
   I, Codigo: Integer;
   C: Char;
   Mayus: Boolean;
+  Gestos: TArray<TPulsacion>;
 
   { Pulsa y suelta ACodigo en su nivel (Mayusculas si es impar, AltGr de 2 en
     adelante), como una persona: el gesto de cada caracter, lo diga el mapa o
@@ -570,6 +571,12 @@ var
     Result := True;
   end;
 
+  function Gesto(ACodigo: Cardinal; ANivel: Integer): TPulsacion;
+  begin
+    Result.Codigo := ACodigo;
+    Result.Nivel := ANivel;
+  end;
+
 begin
   Result := False;
   if not FListo then
@@ -578,25 +585,41 @@ begin
     Exit;
   end;
   MirarMapa;
+  // TODO el texto se traduce a pulsaciones ANTES de pulsar ninguna: con un
+  // caracter sin tecla a mitad, lo de antes quedaba escrito en la ventana del
+  // destino y la respuesta decia que no se pudo (R3 de la 1.29, medido en el
+  // Fedora: "ab<TAB>cd" dejo "ab" escrito)
+  Gestos := [];
   for I := 1 to Length(ATexto) do
   begin
     C := ATexto[I];
-    // Un salto de linea es la tecla Intro, en toda distribucion: la que pulsa
-    // una persona (el servidor deja todo salto en LF; J10 de la 1.28). El
-    // mapa no la da: Intro no compone un caracter imprimible
+    // Un salto de linea es la tecla Intro y un tabulador la tecla Tab, en toda
+    // distribucion: las que pulsa una persona (el servidor deja todo salto en
+    // LF; J10 de la 1.28). El mapa no las da: no componen un caracter
+    // imprimible (R4 de la 1.29: el tabulador cortaba el texto)
     if C = #10 then
     begin
-      if not Pulsa(EVDEV_INTRO, 0) then
-        Exit;
+      Gestos := Gestos + [Gesto(EVDEV_INTRO, 0)];
       Continue;
+    end;
+    if C = #9 then
+    begin
+      Gestos := Gestos + [Gesto(EVDEV_TAB, 0)];
+      Continue;
+    end;
+    // otro control no tiene tecla: se nombra por su codigo, que crudo iba
+    // tal cual en la salida del nodo
+    if C < ' ' then
+    begin
+      FError := MsgFmt(SF_NODE_NO_SE_TECLEAR_FMT, [Format('#%d', [Ord(C)]), I]);
+      Exit;
     end;
     // Con el mapa del escritorio en la mano, manda EL: la tecla y el nivel
     // (Mayusculas, AltGr) que el escritorio dice que dan ese caracter.
     if (FMapa <> nil) and (FMapa.Cuantas > 0) then
     begin
       // Una pulsacion si la tecla existe, DOS si el caracter sale por tecla
-      // muerta ("´" y luego "i" = "í"): el mapa lo decide, aqui solo se
-      // pulsa cada una con su nivel.
+      // muerta ("´" y luego "i" = "í"): el mapa lo decide.
       var Secuencia: TArray<TPulsacion>;
       if not FMapa.Secuencia(Ord(C), Secuencia) then
       begin
@@ -604,9 +627,7 @@ begin
           [FMapa.Distribucion, string(C), I, FMapa.CuantasMuertas]);
         Exit;
       end;
-      for var P in Secuencia do
-        if not Pulsa(P.Codigo, P.Nivel) then
-          Exit;
+      Gestos := Gestos + Secuencia;
       Continue;
     end;
     // Sin mapa: la tabla fija de siempre, que es un teclado AMERICANO. En
@@ -635,9 +656,12 @@ begin
         Exit;
       end;
     end;
-    if not Pulsa(Codigo, Ord(Mayus)) then
-      Exit;
+    Gestos := Gestos + [Gesto(Codigo, Ord(Mayus))];
   end;
+  // ...y solo con todo comprobado, se pulsa
+  for var G in Gestos do
+    if not Pulsa(G.Codigo, G.Nivel) then
+      Exit;
   Result := True;
 end;
 

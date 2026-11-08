@@ -69,6 +69,14 @@ function SdkDelIde(const AVersion, APlat, APedido: string): string;
   El build lee el primero; delphi_config view, el segundo (y el del proyecto
   con el lector del build, EffectiveProperty). }
 function ProyectoDeclaraSdk(const ADproj, APlat, AConfig: string; out ASdk: string): Boolean;
+{ Las bibliotecas que el enlazador dice que no encuentra (-lX), cada una una vez,
+  por SU texto: "cannot find -lX" (el ld de GNU, Delphi 13.1) y "unable to find
+  library -lX" (lld, Delphi 13.2: medido en la VM el 8-nov-2026, informe
+  ARNES-002 de Hermes). EL lector, el del disparo del completado y el de
+  CompletaEnlacesDev: leian cada uno solo la forma de GNU, y en la 13.2 un
+  sysroot sin libz.so no se completaba nunca. La salida del enlazador no tiene
+  otro juez: esta es su gramatica, una. }
+function LibreriasQueNoEncuentra(const AOutput: string): TArray<string>;
 function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
 { ...y el perfil que el IDE tiene para esa plataforma: UNO para todos sus
   proyectos (el IDE no guarda un perfil por proyecto) }
@@ -1711,12 +1719,28 @@ end;
   lo hecho, si de alguna no hay NINGUNA version que a esa maquina le falta la
   libreria misma (BUILD-035), y si la puerta nego escribirla, por que
   (BUILD-047). }
+function LibreriasQueNoEncuentra(const AOutput: string): TArray<string>;
+var
+  M: TMatch;
+  Ya: Boolean;
+begin
+  Result := [];
+  for M in TRegEx.Matches(AOutput, '(?:cannot find|unable to find library) -l([A-Za-z0-9_+.\-]+)') do
+  begin
+    Ya := False;
+    for var N in Result do
+      if N = M.Groups[1].Value then
+        Ya := True;
+    if not Ya then
+      Result := Result + [M.Groups[1].Value];
+  end;
+end;
+
 function CompletaEnlacesDev(const AVersion, ASdkFile, AOutput: string;
   out ANota: string): Integer;
 var
-  Xml, Rutas, Nombre, Dir, Dev, Mejor, Hechos, Faltan, Negadas, Motivo: string;
-  M: TMatch;
-  Vistos, Vars: TStringList;
+  Xml, Rutas, Dir, Dev, Mejor, Hechos, Faltan, Negadas, Motivo: string;
+  Vars: TStringList;
   Carpetas: TArray<string>;
   Hecho: Boolean;
 begin
@@ -1744,14 +1768,10 @@ begin
   Hechos := '';
   Faltan := '';
   Negadas := '';
-  Vistos := TStringList.Create;
-  try
-    for M in TRegEx.Matches(AOutput, 'cannot find -l([A-Za-z0-9_+.\-]+)') do
+  begin
+    // por EL lector de las dos formas del enlazador, cada nombre una vez
+    for var Nombre in LibreriasQueNoEncuentra(AOutput) do
     begin
-      Nombre := M.Groups[1].Value;
-      if Vistos.IndexOf(Nombre) >= 0 then
-        Continue;
-      Vistos.Add(Nombre);
       Dev := 'lib' + Nombre + '.so';
       Hecho := False;
       Motivo := '';
@@ -1806,8 +1826,6 @@ begin
         Faltan := Faltan + Dev;
       end;
     end;
-  finally
-    Vistos.Free;
   end;
   if Hechos <> '' then
     ANota := MsgFmt(SN_BUILD_DEVLINK_DONE_FMT, [Hechos]);
@@ -2970,12 +2988,13 @@ begin
     EsperaBloqueo := EsperaBloqueo * 2;
     Output := RunCapturedIn(Orden, Cwd, ATimeoutMs, ExitCode, EntornoMsBuild);
   end;
-  // "cannot find -lX" con un sysroot nuestro: el nombre -dev que falta se
+  // "cannot find -lX" (o el "unable to find library -lX" de lld: LibreriasQueNoEncuentra)
+  // con un sysroot nuestro: el nombre -dev que falta se
   // completa en el SDK (ver CompletaEnlacesDev) y el build se repite UNA vez.
   // Medido 2026-09-21: una app FMX real dejo de enlazar en zorin18 y fedora44 por
   // un libz.so que ninguno de los dos traia; con la copia enlaza en ambos.
   var ErroresDelLog := string.Join(#10, LineasDelLogDeMsBuild(LogDeErrores));
-  if (ExitCode <> 0) and (SdkUsado <> '') and ErroresDelLog.Contains('cannot find -l') then
+  if (ExitCode <> 0) and (SdkUsado <> '') and (Length(LibreriasQueNoEncuentra(ErroresDelLog)) > 0) then
   begin
     EnlacesDev := CompletaEnlacesDev(Info.Version, SdkUsado, ErroresDelLog, EnlacesNota);
     if EnlacesDev > 0 then
