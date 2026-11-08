@@ -371,7 +371,7 @@ except Exception:
     check('probe TCP abierto: parsea', False, out[:300])
 
 # B8 del revisor del paisaje de la 1.27: el puerto lo compone el servidor con el NUMERO que juzgo la puerta
-# (PuertoDeLaLlamada, y PASERVER_PUERTO con nombre si no hay); tecleado en hexadecimal la sonda marcaba bien y
+# (PuertoDeLaLlamada, y PuertoDePAServer con nombre si no hay); tecleado en hexadecimal la sonda marcaba bien y
 # contestaba el texto tecleado (ROJA contra c582da0)
 lst = socket.socket()
 lst.bind(('127.0.0.1', 0))

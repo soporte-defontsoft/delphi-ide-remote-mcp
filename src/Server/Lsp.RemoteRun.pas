@@ -47,17 +47,19 @@ const
     subio): lo baja la comprobacion y lo sube la subida (V106 de la 1.23.1:
     eran dos literales) }
   NODE_SELLO = 'node.ver';
-  { El puerto en que escucha un PAServer si nadie le da otro (paserver
-    -port=N): el de add-profile y test-connection sin port, y el de un
-    .profile que no lo dice. Era el literal 64211 en cinco sitios de
-    Mcp.Tools.PAServer (revisor del paisaje de la 1.27, B8). }
-  PASERVER_PUERTO = 64211;
 
 { La clave con la que el nodo reconoce que le llama ESTE servidor. Vive en
   un solo sitio para que los dos proyectos no se desincronicen. }
 {$I ..\DesktopNode\NodeKey.inc}
 { Lo que escribe el nodo (CAPTURE=, Could not capture:), en UN sitio. }
 {$I ..\DesktopNode\NodeProtocolo.inc}
+
+{ El puerto en que escucha un PAServer si nadie le da otro (paserver -port=N):
+  el de add-profile y test-connection sin port, y el de un .profile que no lo
+  dice. Era el literal 64211 en cinco sitios de Mcp.Tools.PAServer (revisor del
+  paisaje de la 1.27, B8) y en seis textos (B5 de la 1.29): ahora lo lee del
+  texto que lo escribe UNA vez, PUERTO_DE_PASERVER de Lsp.Texts. }
+function PuertoDePAServer: Integer;
 
 { El nodo de escritorio EMPAQUETADO con el servidor (node\McpDesktopNode junto
   al exe), eligiendo binario por la plataforma del target ('Win64',
@@ -1126,6 +1128,11 @@ begin
   Info := DiscoverRadStudio;
   if Info.Found then
     Result := PlataformaDePerfil(Info.Version, AProfile); // EL lector (Lsp.Discovery)
+end;
+
+function PuertoDePAServer: Integer;
+begin
+  Result := StrToInt(PUERTO_DE_PASERVER);
 end;
 
 function BundledNodePath(const APlataforma: string): string;

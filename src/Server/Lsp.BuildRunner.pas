@@ -1656,7 +1656,7 @@ function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
 begin
   // por EL lector de la configuracion del IDE y EL nombre del valor (Lsp.Discovery):
   // era el mismo lector reescrito, con el nombre compuesto a mano (P7)
-  Result := IdeConfigValue(AVersion, 'PlatformSDKs', ValorPorDefectoDePlataforma(APlat)).Trim;
+  Result := IdeConfigValue(AVersion, CLAVE_DE_LOS_SDKS, ValorPorDefectoDePlataforma(APlat)).Trim;
 end;
 
 { El perfil que el IDE tiene para la plataforma (Default_<Plataforma> de
@@ -1666,7 +1666,7 @@ end;
   ni el .dproj.local). El gemelo de SdkPorDefectoDelIde. }
 function PerfilPorDefectoDelIde(const AVersion, APlat: string): string;
 begin
-  Result := IdeConfigValue(AVersion, 'RemoteProfiles', ValorPorDefectoDePlataforma(APlat)).Trim;
+  Result := IdeConfigValue(AVersion, CLAVE_DE_LOS_PERFILES, ValorPorDefectoDePlataforma(APlat)).Trim;
 end;
 
 { Lo que EL PROYECTO declara para un build (PlatformSDK, Profile: las

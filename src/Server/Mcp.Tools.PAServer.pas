@@ -437,7 +437,7 @@ function AsientosDeSdk(const AVersion: string): TArray<string>;
 begin
   // por EL lector de las subclaves del IDE (Lsp.Discovery): aqui habia otra
   // copia del bucle (Fable, revision de la 1.22.2)
-  Result := IdeSubclaves(AVersion, 'PlatformSDKs');
+  Result := IdeSubclaves(AVersion, CLAVE_DE_LOS_SDKS);
 end;
 
 { Los Default_<Plataforma> de esa version: que SDK usa el IDE cuando el
@@ -448,7 +448,7 @@ end;
 function DefaultsDeSdk(const AVersion: string): TArray<string>;
 begin
   Result := nil;
-  for var V in IdeValoresDeClave(AVersion, 'PlatformSDKs', False) do
+  for var V in IdeValoresDeClave(AVersion, CLAVE_DE_LOS_SDKS, False) do
   begin
     var Plat: string;
     // por EL lector del nombre (Lsp.Discovery), la inversa de su compositor
@@ -499,7 +499,7 @@ function PlataformaDelAsiento(const AVersion, ANombre: string): string;
 begin
   // por EL lector de un valor del IDE (Lsp.Discovery), con su except de un
   // valor que no es texto: estaba reescrito aqui (V83 de la 1.23.1)
-  Result := IdeConfigValue(AVersion, 'PlatformSDKs\' + NombreDeSdk(ANombre), 'PlatformName');
+  Result := IdeConfigValue(AVersion, ClaveDeSdk(NombreDeSdk(ANombre)), 'PlatformName');
 end;
 
 { Un SDK registrado, con lo que se sabe de el: nombre, sysroot, y -si lo
@@ -602,7 +602,7 @@ begin
         SdkSeats.Add(F);
       for F in DefaultsDeSdk(Info.Version) do
         SdkDefs.Add(F);
-      for F in IdeSubclaves(Info.Version, 'RemoteProfiles') do
+      for F in IdeSubclaves(Info.Version, CLAVE_DE_LOS_PERFILES) do
         Asientos.Add(F);
     end;
     Return.AddPair('note', MsgText(SN_PAS_PROFILES_EN_DISCO));
@@ -709,7 +709,7 @@ end;
 function RegistrarPerfilEnIde(const AVersion, AName, APlat, AHost: string;
   APort: Integer; const APasswordCifrada: string): string;
 begin
-  Result := EscribeClaveDelIde(AVersion, 'RemoteProfiles\' + AName, [
+  Result := EscribeClaveDelIde(AVersion, ClaveDePerfil(AName), [
     ValorDeTexto('Platform', APlat), ValorDeTexto('HostName', AHost),
     ValorEntero('PortNumber', APort), ValorDeTexto('Password', APasswordCifrada),
     ValorDeTexto('LocalRoot', ''), ValorEntero('PathCount', 0)]);
@@ -717,7 +717,7 @@ end;
 
 function BorrarPerfilDelIde(const AVersion, AName: string): string;
 begin
-  Result := BorraClaveDelIde(AVersion, 'RemoteProfiles\' + AName);
+  Result := BorraClaveDelIde(AVersion, ClaveDePerfil(AName));
 end;
 
 { One pull of get-sdk: a remote directory mirrored under the local sysroot.
@@ -896,13 +896,13 @@ begin
     Inc(I);
   end;
   Valores := Valores + [ValorEntero('PathCount', I)];
-  ACopiaAsiento := EscribeClaveDelIde(AVersion, 'PlatformSDKs\' + NombreDeSdk(ASdkName), Valores);
+  ACopiaAsiento := EscribeClaveDelIde(AVersion, ClaveDeSdk(NombreDeSdk(ASdkName)), Valores);
   // El SDK "activo" de la plataforma: la negrita de la lista del SDK
   // Manager, y lo que usa un proyecto que no diga nada. SOLO se toca si
   // lo piden (David, 20-sep): traerse un sysroot no es decidir con que
   // compila esta maquina, y un proyecto Windows no necesita ningun SDK.
   if AFijarDefault then
-    ACopiaDefault := EscribeClaveDelIde(AVersion, 'PlatformSDKs',
+    ACopiaDefault := EscribeClaveDelIde(AVersion, CLAVE_DE_LOS_SDKS,
       [ValorDeTexto(ValorPorDefectoDePlataforma(PLATAFORMA_DE_GETSDK), NombreDeSdk(ASdkName))]);
   Result := I > 0;
 end;
@@ -939,14 +939,14 @@ end;
 
 { El puerto de la llamada: el NUMERO que juzgo la puerta (PAServerArgDenied:
   TryStrToInt, 1-65535), o el de un PAServer al que nadie da otro
-  (PASERVER_PUERTO). Lo compone el servidor: $1F o 0x1F pasaban la puerta y
+  (PuertoDePAServer). Lo compone el servidor: $1F o 0x1F pasaban la puerta y
   viajaban asi a paclient, mientras el registro del IDE guardaba el numero
   (revisor del paisaje de la 1.27: el agente elige, el servidor compone). Lo
   piden add-profile y test-connection, que lo leian cada uno con su literal. }
 function PuertoDeLaLlamada(const Params: TDelphiPAServerParams): Integer;
 begin
   if Params.Port.Trim = '' then
-    Result := PASERVER_PUERTO
+    Result := PuertoDePAServer
   else
     Result := StrToInt(Params.Port.Trim);
 end;
@@ -1187,11 +1187,11 @@ begin
 end;
 
 { El puerto de un perfil: el que dice su Profile_port, o el de un PAServer
-  al que nadie da otro (PASERVER_PUERTO) si no lo dice. Lo piden reseat y
+  al que nadie da otro (PuertoDePAServer) si no lo dice. Lo piden reseat y
   test-connection. }
 function PuertoDelPerfil(const ACampos: TCamposDePerfil): Integer;
 begin
-  Result := StrToIntDef(ACampos.Puerto.Trim, PASERVER_PUERTO);
+  Result := StrToIntDef(ACampos.Puerto.Trim, PuertoDePAServer);
 end;
 
 { Por que no conecto un perfil: la ruta TCP a SU host y puerto, medida con
@@ -1849,7 +1849,7 @@ begin
       // (V101 de la 1.23.1)
       for Nombre in PerfilesDelIde(Info.Version) do
       begin
-        YaEstaba := IdeExisteSubclave(Info.Version, 'RemoteProfiles\' + Nombre);
+        YaEstaba := IdeExisteSubclave(Info.Version, ClaveDePerfil(Nombre));
         if YaEstaba then
         begin
           Intactos.Add(Nombre);
@@ -2083,7 +2083,7 @@ begin
   // casa (se borraba sin copia, V10), y si no se puede, no se toca nada
   var CopiaAsiento := '';
   try
-    CopiaAsiento := BorraClaveDelIde(Info.Version, 'PlatformSDKs\' + NombreDeSdk(Nombre));
+    CopiaAsiento := BorraClaveDelIde(Info.Version, ClaveDeSdk(NombreDeSdk(Nombre)));
   except
     on E: Exception do
       Exit(MsgFmt(SR_PAS_NO_PUDE_BORRAR_FMT, [NombreDeSdk(Nombre), E.Message]));

@@ -225,6 +225,19 @@ function PerfilConSuNombre(const AVersion, APedido: string): string;
   (punto 4 de la 1.18.2). }
 function SdksDelIde(const AVersion: string): TArray<string>;
 
+const
+  { Las claves de la configuracion del IDE (HKCU\...\BDS\<ver>\) de los SDK
+    asentados en el SDK Manager y de los perfiles remotos. Se escribian a mano
+    en 16 sitios de tres unidades (B5 de la 1.29). }
+  CLAVE_DE_LOS_SDKS = 'PlatformSDKs';
+  CLAVE_DE_LOS_PERFILES = 'RemoteProfiles';
+
+{ La clave de UN SDK asentado y la de UN perfil remoto, con el nombre tal como
+  esta en el registro: el de un SDK que da el agente pasa antes por NombreDeSdk;
+  el que lista el propio registro (IdeSubclaves) va tal cual. }
+function ClaveDeSdk(const ANombreEnElRegistro: string): string;
+function ClaveDePerfil(const ANombre: string): string;
+
 { EL nombre de un SDK del IDE: '<nombre>.sdk'. Es UNO para todo: el fichero
   junto a los .profile, su clave en PlatformSDKs, los valores SDKName y
   Default_<Plataforma>, y la carpeta de su sysroot. Con o sin '.sdk' en
@@ -1405,7 +1418,7 @@ end;
 function VigiasDeLaCarpetaDeSdks(const AVersion: string): TArray<TVigiaDeClave>;
 begin
   Result := [VigilaClaveDelIde(AVersion, 'Environment Variables'),
-    VigilaClaveDelIde(AVersion, 'PlatformSDKs')];
+    VigilaClaveDelIde(AVersion, CLAVE_DE_LOS_SDKS)];
 end;
 
 function CambioLaClave(var AVigia: TVigiaDeClave): Boolean;
@@ -1539,6 +1552,16 @@ end;
 function SdksDelIde(const AVersion: string): TArray<string>;
 begin
   Result := FicherosDePerfilesDelIde(AVersion, '*.sdk');
+end;
+
+function ClaveDeSdk(const ANombreEnElRegistro: string): string;
+begin
+  Result := CLAVE_DE_LOS_SDKS + '\' + ANombreEnElRegistro;
+end;
+
+function ClaveDePerfil(const ANombre: string): string;
+begin
+  Result := CLAVE_DE_LOS_PERFILES + '\' + ANombre;
 end;
 
 function NombreDeSdk(const ANombre: string): string;
@@ -1752,9 +1775,9 @@ begin
   // otra copia del bucle, y con PlatformSDKs abierta la clave de cada SDK
   // salia relativa a ella y no se encontraba nunca (medido en la RTL el
   // 9-oct-2026)
-  for var K in IdeSubclaves(AVersion, 'PlatformSDKs') do
+  for var K in IdeSubclaves(AVersion, CLAVE_DE_LOS_SDKS) do
   begin
-    var Raiz := IdeConfigValue(AVersion, 'PlatformSDKs\' + K, 'SystemRoot');
+    var Raiz := IdeConfigValue(AVersion, ClaveDeSdk(K), 'SystemRoot');
     if Raiz <> '' then
       Result := Result + [Raiz];
   end;

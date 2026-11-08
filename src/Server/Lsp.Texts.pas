@@ -2142,9 +2142,14 @@ const
   SP_PASERVER_HOST =
     'Host or IP where the target PAServer listens (add-profile, or ' +
     'test-connection without profile for a raw TCP probe)';
+  { El puerto en que escucha PAServer si nadie le da otro (paserver -port=N),
+    escrito UNA vez: lo componen los textos y lo lee el codigo (PuertoDePAServer,
+    Lsp.RemoteRun). Eran seis textos con el numero a mano (B5 de la 1.29); una
+    constante de texto, para que un atributo del esquema la pueda componer. }
+  PUERTO_DE_PASERVER = '64211';
   SP_PASERVER_PORT =
     'Port of the target PAServer (add-profile / test-connection). ' +
-    'Default: 64211';
+    'Default: ' + PUERTO_DE_PASERVER;
   SP_PASERVER_PASSWORD =
     'The PAServer password (add-profile). Used once to create the profile, ' +
     'stored encrypted, never shown back';
@@ -2615,7 +2620,7 @@ const
 
   SR_PASERVER_PORT_FMT =
     '[PAS-017 INVALID_PARAM] "%s" is not a valid port (1-65535). PAServer ' +
-    'listens on 64211 by default.';
+    'listens on ' + PUERTO_DE_PASERVER + ' by default.';
 
   SR_PASERVER_PLATFORM_FMT =
     '[PAS-018 INVALID_PARAM] "%s" is not a paclient platform. Valid: %s.';
@@ -2634,7 +2639,7 @@ const
   SR_PASERVER_NEED_FMT =
     '[PAS-021 INVALID_PARAM] add-profile needs "%s". Parameters: profile (its ' +
     'name), host (IP or hostname of the PAServer), password (the ' +
-    'PAServer one); optional port (default 64211) and platform (default ' +
+    'PAServer one); optional port (default ' + PUERTO_DE_PASERVER + ') and platform (default ' +
     'Linux64).';
 
   SR_PASERVER_NO_PROFILE_FMT =
@@ -10011,7 +10016,7 @@ const
   SN_PAS_DOWNLOAD_PACKAGE_DELPHI_FETCH =
     '[PAS-035] Download a package with delphi_fetch (it returns a ' +
     'whole-file sha256 to verify), copy it to the target machine and run ' +
-    'it there. The Platform Assistant then listens on port 64211 for ' +
+    'it there. The Platform Assistant then listens on port ' + PUERTO_DE_PASERVER + ' for ' +
     'this server to connect.';
 
   SN_PAS_WINDOWS_PLATFORMS_BUILD_NATIVELY =
@@ -10599,7 +10604,8 @@ const
   SN_PAS_LINUX_FETCH_TAR_FMT =
     '[PAS-038] Linux: fetch, then `tar xzf %s && cd PAServer-*` and run ' +
     'it KEEPING STDIN OPEN if headless: `sh -c ''sleep infinity | ' +
-    './paserver -port=64211 -password=<pwd>''` (listens on 64211). ' +
+    './paserver -port=' + PUERTO_DE_PASERVER + ' -password=<pwd>''` (listens on ' +
+    PUERTO_DE_PASERVER + '). ' +
     'Warnings: `./paserver &` with stdin at EOF spins its prompt at ' +
     '100%% CPU (keep the sleep pipe); and -passfile with a plain-text ' +
     'password was rejected on login in the field - pass -password inline ' +
@@ -12637,7 +12643,7 @@ const
   // Textos que estaban en linea en Mcp.Tools.PAServer.pas (el resto, 27-sep-2026)
   SN_PAS_MACOS_FETCH_OPEN_PKG =
     '[PAS-046] macOS: fetch, then open the .pkg to install, and run ' +
-    'PAServer (port 64211).';
+    'PAServer (port ' + PUERTO_DE_PASERVER + ').';
 
   SN_PAS_WINARM_FETCH_RUN_SETUP =
     '[PAS-047] Windows on ARM: fetch and run the setup, then start ' +
