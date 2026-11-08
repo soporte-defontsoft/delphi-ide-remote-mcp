@@ -69,7 +69,8 @@ Menores medidos sobre la 1.22.1 (Opus en Hermes y dos agentes de medida, 23-oct-
   G1 delphi_git en una carpeta sin repo: GIT-082 NOT_FOUND (decia GIT-036 DENIED)
   R1 delphi_read con fromline pasado el final: READ-010 y "fromline=" (decia EDIT-100 y "from=")
   C1 delphi_create form-vcl sin project: CREATE-036 (decia GUARD-018, "no path given")
-  C2 delphi_create kind=project-library: CREATE-011 nombra include (lo omitia)
+  C2 delphi_create kind=project-web (un tipo que no hay): CREATE-011 nombra include (lo omitia). Era project-library,
+     que desde la 1.29 existe (A17-2)
   D1 un perfil que no existe: PAS-053 es NOT_FOUND (era DENIED)
   B1 BUILD-050 de un %2E%2E escrito: dice tambien como esta ESCRITO (citaba solo el ..)
   B2 un build que compila dice durationMs (no decia cuanto tardo)
@@ -588,9 +589,10 @@ try:
     check('C1 create form-vcl sin project: CREATE-036 (no un GUARD-018 generico)',
           mc.es(r, 'SR_CREATE_FORM_NEED_PROJECT') and not os.path.exists(os.path.join(plano, 'UFormSuelto.pas')),
           r[:300])
-    r = srv.call('delphi_create', {'kind': 'project-library', 'name': 'Lib', 'dir': os.path.join(JAIL, 'lib1')})
-    check('C2 create project-library: CREATE-011 nombra include, que tambien va suelto',
-          mc.es(r, 'SR_CREATE_PROJECT_KIND') and 'include' in r, r[:400])
+    r = srv.call('delphi_create', {'kind': 'project-web', 'name': 'Lib', 'dir': os.path.join(JAIL, 'lib1')})
+    check('C2 create project-web: CREATE-011 nombra include, que tambien va suelto',
+          mc.es(r, 'SR_CREATE_PROJECT_KIND') and 'include' in r and not os.path.exists(os.path.join(JAIL, 'lib1')),
+          r[:400])
     r = srv.call('delphi_build', {'project': pproj, 'target': 'Build', 'profile': 'noexiste'}, 300)
     check('D1 un perfil que no existe: PAS-053 NOT_FOUND', mc.es(r, 'SR_PROFILE_NO_EXISTE_FMT') and
           mc.resultado(r) == 'NOT_FOUND', r[:300])
