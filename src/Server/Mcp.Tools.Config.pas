@@ -854,6 +854,22 @@ begin
       Exit(True);
 end;
 
+const
+  // lo que cabe en el TEXTO de una ruta de delphi_config, tal como la escribe el
+  // agente (con sus macros sin expandir): una ruta del proyecto o un fichero
+  // desplegado, y la carpeta remota del destino
+  TEXTO_MAX_DE_RUTA = 400;
+  TEXTO_MAX_DE_CARPETA_REMOTA = 200;
+
+{ EL juez del texto de una ruta de delphi_config: su largo y sus caracteres
+  (CaracterVetado). Eran tres copias del par -search path, fichero desplegado
+  y su carpeta remota-, cada una con su tope escrito a mano (B21 de la 1.29). }
+function TextoDeRutaVetado(const ARaw: string; AMax: Integer; AAdmiteAmpersand: Boolean;
+  const AMas: TSysCharSet = []): Boolean;
+begin
+  Result := (Length(ARaw) > AMax) or CaracterVetado(ARaw, AAdmiteAmpersand, AMas);
+end;
+
 { Una ruta que el agente da en "path" RELATIVA a la carpeta del proyecto, o
   completa: su forma completa en AFull, o la negativa (AEco es lo que el
   agente escribio, para el texto). Estaba escrita a mano tres veces -search
@@ -922,9 +938,7 @@ begin
   AShow := '';
   if ARaw.Trim = '' then
     Exit(MsgText(SR_CONFIG_NEED_PATH));
-  if Length(ARaw) > 400 then
-    Exit(MsgText(SR_CONFIG_PATH_CHARS));
-  if CaracterVetado(ARaw, True) then
+  if TextoDeRutaVetado(ARaw, TEXTO_MAX_DE_RUTA, True) then
     Exit(MsgText(SR_CONFIG_PATH_CHARS));
   Plats := [''];
   Cfgs := [''];
@@ -1328,10 +1342,8 @@ begin
   AFull := '';
   if ARaw.Trim = '' then
     Exit(MsgText(SR_CONFIG_DEPLOY_NEED_PATH));
-  if Length(ARaw) > 400 then
+  if TextoDeRutaVetado(ARaw, TEXTO_MAX_DE_RUTA, False) then
     Exit(MsgText(SR_CONFIG_PATH_CHARS));
-  if CaracterVetado(ARaw, False) then
-      Exit(MsgText(SR_CONFIG_PATH_CHARS));
   Result := RutaEnLaCarpeta(TPath.GetDirectoryName(ADproj), ARaw, ARaw, P);
   if Result <> '' then
     Exit;
@@ -1348,9 +1360,7 @@ end;
 function RemoteDirDenied(const ARaw: string): string;
 begin
   Result := '';
-  if Length(ARaw) > 200 then
-    Exit(MsgText(SR_CONFIG_REMOTEDIR_CHARS));
-  if CaracterVetado(ARaw, False, [':']) then
+  if TextoDeRutaVetado(ARaw, TEXTO_MAX_DE_CARPETA_REMOTA, False, [':']) then
     Exit(MsgText(SR_CONFIG_REMOTEDIR_CHARS));
   if ARaw.Contains('..') or ARaw.StartsWith('\') or ARaw.StartsWith('/') then
     Exit(MsgText(SR_CONFIG_REMOTEDIR_CHARS));

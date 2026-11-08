@@ -2004,6 +2004,39 @@ const
   // de la lista (C15 de la 1.26)
   EXTS_CON_USES: array[0..1] of string = ('.pas', '.dpr');
 
+{ El preambulo de adduses y removeuses, que eran dos copias (B20 de la 1.29): la
+  extension, los nombres (recortados, al menos uno, cada uno un identificador) y
+  la seccion (implementation si no se dice). Un .dpr tiene UN uses y la seccion
+  no aplica: AEsPrograma, sin juzgarla. '' si vale, o la negativa; lo propio de
+  cada puerta son sus dos textos. }
+function PreambuloDeUses(const APasPath: string; const ANames: TArray<string>;
+  const ASection, ANoEsPasFmt, ASinNombres: string; out ANombres: TArray<string>;
+  out ASec: string; out AEsPrograma: Boolean): string;
+var
+  Nombre: string;
+begin
+  ANombres := [];
+  ASec := '';
+  AEsPrograma := False;
+  if not TieneExtension(APasPath, EXTS_CON_USES) then
+    Exit(MsgFmt(ANoEsPasFmt, [TPath.GetFileName(APasPath)]));
+  ANombres := Recortados(ANames);
+  if Length(ANombres) = 0 then
+    Exit(MsgText(ASinNombres));
+  for Nombre in ANombres do
+    if not EsIdentificador(Nombre, True) then
+      Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
+  Result := '';
+  AEsPrograma := SameText(TPath.GetExtension(APasPath), '.dpr');
+  if AEsPrograma then
+    Exit;
+  ASec := LowerCase(ASection.Trim);
+  if ASec = '' then
+    ASec := 'implementation';
+  if not MatchText(ASec, ['interface', 'implementation']) then
+    Exit(MsgFmt(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
+end;
+
 { adduses de delphi_edit (David, 2026-09-23): una unit entra en el uses de
   OTRA unit, en la seccion que se diga, y la clausula la escribe el motor:
   comas, terminador y, si no existia, la clausula entera bajo la palabra de
@@ -2013,26 +2046,17 @@ const
 function AddUsesToUnit(const APasPath: string; const ANames: TArray<string>;
   const ASection: string): string;
 var
-  Text, Enc, Sec, OtraSec, Nombre, Clausula: string;
+  Text, Enc, Sec, OtraSec, Clausula: string;
   Names, Faltan, YaEstan, EnOtra: TArray<string>;
-  Creada: Boolean;
+  Creada, EsPrograma: Boolean;
 begin
-  if not TieneExtension(APasPath, EXTS_CON_USES) then
-    Exit(MsgFmt(SR_ADDUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
-  Names := Recortados(ANames);
-  if Length(Names) = 0 then
-    Exit(MsgText(SR_ADDUSES_NEED_NAMES));
-  for Nombre in Names do
-    if not EsIdentificador(Nombre, True) then
-      Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
+  Result := PreambuloDeUses(APasPath, ANames, ASection, SR_ADDUSES_NOT_PAS_FMT, SR_ADDUSES_NEED_NAMES,
+    Names, Sec, EsPrograma);
+  if Result <> '' then
+    Exit;
   // un programa tiene UN uses: section no aplica
-  if SameText(TPath.GetExtension(APasPath), '.dpr') then
+  if EsPrograma then
     Exit(AddUsesToProgram(APasPath, Names));
-  Sec := LowerCase(ASection.Trim);
-  if Sec = '' then
-    Sec := 'implementation';
-  if not MatchText(Sec, ['interface', 'implementation']) then
-    Exit(MsgFmt(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
   OtraSec := IfThen(Sec = 'interface', 'implementation', 'interface');
   EnterFileEdit;
   try
@@ -2137,6 +2161,7 @@ var
   U: TUsesClause;
   Names, Entries, Quitadas, NoEstaban: TArray<string>;
   PosSec: Integer;
+  EsPrograma: Boolean;
   Resolutor: TResolutorDeUnidades; // EL juez de "es la misma unidad" (V79)
 
   // lo de ANombres que esta en la uses de la OTRA seccion, dicho con la
@@ -2161,22 +2186,13 @@ var
   end;
 
 begin
-  if not TieneExtension(APasPath, EXTS_CON_USES) then
-    Exit(MsgFmt(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]));
-  Names := Recortados(ANames);
-  if Length(Names) = 0 then
-    Exit(MsgText(SR_REMOVEUSES_NEED_NAMES));
-  for Nombre in Names do
-    if not EsIdentificador(Nombre, True) then
-      Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
+  Result := PreambuloDeUses(APasPath, ANames, ASection, SR_REMOVEUSES_NOT_PAS_FMT, SR_REMOVEUSES_NEED_NAMES,
+    Names, Sec, EsPrograma);
+  if Result <> '' then
+    Exit;
   // un programa tiene UN uses: section no aplica
-  if SameText(TPath.GetExtension(APasPath), '.dpr') then
+  if EsPrograma then
     Exit(RemoveUsesFromProgram(APasPath, Names));
-  Sec := LowerCase(ASection.Trim);
-  if Sec = '' then
-    Sec := 'implementation';
-  if not MatchText(Sec, ['interface', 'implementation']) then
-    Exit(MsgFmt(SR_ADDUSES_BAD_SECTION_FMT, [ASection]));
   Resolutor := ResolutorDeUnidades(APasPath);
   EnterFileEdit;
   try

@@ -699,7 +699,7 @@ begin
   var EnTabla := (M <> nil) and M.ClaseDeNombre(ACls, Id);
   for var C in AClases do
     if (EnTabla and M.Desciende(Id, C)) or
-       (not EnTabla and SameText(ACls, C.Substring(C.IndexOf(':') + 1))) then
+       (not EnTabla and MismoIdentificador(ACls, NombreDeIdDeTipo(C))) then
       Exit(True);
   Result := False;
 end;

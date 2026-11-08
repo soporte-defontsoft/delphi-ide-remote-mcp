@@ -1712,24 +1712,26 @@ begin
   // uno que la tabla conoce por su nombre (su identidad lleva la unidad): un
   // enumerado, un conjunto, un tipo con base o una clase; sus valores los
   // juzga EL juez de una hoja, como en un componente
+  // el nombre de cada identidad por LA inversa de su nombrador (NombreDeIdDeTipo;
+  // B28 de la 1.29: se cortaba a mano con EndsWith(':' + ...))
   Clave := ClaveDeIdentificador(Nombre);
   Hallados := [];
   for var K in M.Enums.Keys do
-    if K.EndsWith(':' + Clave) or (K = Clave) then
+    if NombreDeIdDeTipo(K) = Clave then
       Hallados := Hallados + ['e' + K];
   for var K in M.Sets.Keys do
-    if K.EndsWith(':' + Clave) or (K = Clave) then
+    if NombreDeIdDeTipo(K) = Clave then
       Hallados := Hallados + ['s' + K];
   for var K in M.Bases.Keys do
-    if K.EndsWith(':' + Clave) or (K = Clave) then
+    if NombreDeIdDeTipo(K) = Clave then
       Hallados := Hallados + ['o' + K];
   for var K in M.Classes.Keys do
-    if K.EndsWith(':' + Clave) then
+    if EsIdDeTipo(K) and (NombreDeIdDeTipo(K) = Clave) then
       Hallados := Hallados + ['c' + K];
   // ...o un tipo de evento: set lo enlaza por EL juez de un manejador (C7 de
   // la 1.29); se escribia sin juzgar
   for var K in M.Firmas.Keys do
-    if K.EndsWith(':' + Clave) then
+    if EsIdDeTipo(K) and (NombreDeIdDeTipo(K) = Clave) then
       Hallados := Hallados + ['m' + K];
   if Length(Hallados) = 1 then
   begin
