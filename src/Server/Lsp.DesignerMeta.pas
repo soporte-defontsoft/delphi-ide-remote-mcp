@@ -1336,7 +1336,6 @@ function BaseQueNoCasa(M: TMetaTable; const AHoja: TPropRec; const AValor: strin
 var
   Base, K, Lista, Formas: string;
   Nombres: TArray<string>;
-  Tope: Integer;
   N: Int64;
   Abierta: Boolean;
 begin
@@ -1398,10 +1397,7 @@ begin
       Nombres := MiembrosDeLaTabla(M.ConstantesShow, AHoja.TypeId);
       if EsIdentificador(AValor, False) then
       begin
-        Tope := Length(AValor) div 3;
-        if Tope < 2 then
-          Tope := 2;
-        var Cerca := ElMasParecido(AValor, Nombres, Tope);
+        var Cerca := NombreParecido(AValor, Nombres);
         if Cerca <> '' then
           AParecida := MsgFmt(SF_DESIGNER_QUIZAS_FMT, [Cerca]);
       end;

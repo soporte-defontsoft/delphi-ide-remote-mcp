@@ -1180,7 +1180,8 @@ begin
   else if Info.IsDesigner then
     Result := MsgFmt(SN_UNIT_ADDED_FORM_FMT, [Info.UnitName, Include, Info.FormName,
       Info.ClassName, TPath.GetFileName(Dpr), U.Keyword, TPath.GetFileName(Dpr),
-      IfThen(ConCreateForm, MsgText(SN_UNIT_CREATEFORM), '')])
+      IfThen(ConCreateForm, MsgText(SN_UNIT_CREATEFORM),
+        IfThen(Info.NeedsCreateForm and not EsPaquete and not AAutoCreate, MsgText(SN_UNIT_SIN_CREATEFORM), ''))])
   else
     Result := MsgFmt(SN_UNIT_ADDED_FMT, [Info.UnitName, Include, TPath.GetFileName(Dpr),
       U.Keyword, TPath.GetFileName(Dpr)]);

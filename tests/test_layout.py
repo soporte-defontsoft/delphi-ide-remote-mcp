@@ -374,6 +374,12 @@ DFMS['HiddenNest'] = ('object F: TF\n  ClientWidth = 300\n  ClientHeight = 200\n
                       '    object btnDentro: TButton\n      Left = 8\n      Top = 8\n      Width = 0\n      Height = 25\n'
                       '    end\n  end\nend\n')
 
+DFMS['HiddenDeep'] = ('object F: TF\n  ClientWidth = 300\n  ClientHeight = 200\n  object pnlOculto: TPanel\n'
+                      '    Left = 10\n    Top = 10\n    Width = 250\n    Height = 150\n    Visible = False\n'
+                      '    object pnlDentro: TPanel\n      Left = 10\n      Top = 10\n      Width = 200\n      Height = 100\n'
+                      '      object btnNieto: TButton\n        Left = 8\n        Top = 8\n        Width = 0\n        Height = 25\n'
+                      '      end\n    end\n  end\nend\n')
+
 # Cada caso en los DOS modos, y cada check mira de cual salio (C1-11 de la 1.29): corrian en BASE junto al
 # Bin.dfm danado de L9, que deja sin renderizador a toda la carpeta (L9b), y salian TODOS del texto sin que
 # ningun check mirase boxesFrom: el juez de las cajas medidas (JuzgaCajas) no los veia. Ahora en su carpeta
@@ -407,6 +413,13 @@ for TEXTO in (True, False):
           bx.get('pnlOculto', {}).get('visible') is False and bx.get('btnDentro', {}).get('visible') is True and
           bx.get('btnDentro', {}).get('parent') == 'pnlOculto' and bx.get('btnDentro', {}).get('x') == 28 and
           bx.get('btnDentro', {}).get('y') == 38, o)
+    # ...a cualquier profundidad: un NIETO del oculto con un lado a cero tampoco se juzga. Con el renderizador se
+    # miraba solo el padre, y el texto no juzgaba nada de dentro: los dos modos decian cosas distintas.
+    # ROJO contra 28ddda3f [renderizador]
+    o = L8('HiddenDeep')
+    bx = {b['name']: b for b in o.get('boxes', [])}
+    check('C1-11e lo de dentro de un oculto, a cualquier profundidad, no se juzga (un nieto de ancho 0)' + M,
+          o.get('boxesFrom') == DE and o.get('clean') is True and not o.get('zeroSize') and 'btnNieto' in bx, o)
 
     o = L8('Deco')
     check('S4 un TBevel de marco no "tapa" a los controles de dentro' + M,

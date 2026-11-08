@@ -848,6 +848,9 @@ begin
     // y para la nota, que decia siempre que faltaba; A21 de la 1.29)
     for D in PlatformDefaultStyleNames(MotivoDefecto) do
       Defaults.AddOrSetValue(D, '');
+    // los nombres que SI hay, para el casi bien escrito de cada uno que falta (didYouMean,
+    // el mismo de delphi_designer lint: Hermes, dirigido de la 1.29)
+    var Conocidos := Names.Keys.ToArray + Defaults.Keys.ToArray;
     Standard := 0;
     Used := 0;
     var FmxMirados := 0;
@@ -1001,6 +1004,9 @@ begin
           // organizador enmascara la carpeta)
           Issue.AddPair('path', F);
           Issue.AddPair('line', TJSONNumber.Create(L.Linea));
+          var Parecido := NombreParecido(L.Lookup, Conocidos);
+          if Parecido <> '' then
+            Issue.AddPair('didYouMean', Parecido);
           Missing.AddElement(Issue);
         end;
       end;

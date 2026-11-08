@@ -1863,7 +1863,14 @@ begin
   Defecto := Defecto + AEstilos;
   for var L in Nuevos do
     if IndexStr(ClaveDeEstilo(L.Lookup), Defecto) < 0 then
-      Result := Result + [MsgFmt(SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [L.Componente, L.Lookup, L.Linea])];
+    begin
+      // y el mas parecido de los que SI define un estilo que ve, por EL de los nombres casi
+      // bien escritos (Hermes, dirigido de la 1.29: tarjetaestilo, y el estilo dado tenia
+      // tarjetastyle); ninguno si hay empate o queda lejos
+      var Parecido := NombreParecido(L.Lookup, Defecto);
+      Result := Result + [MsgFmt(SF_DESIGNER_LOOKUP_SIN_ESTILO_FMT, [L.Componente, L.Lookup, L.Linea]) +
+        IfThen(Parecido <> '', MsgFmt(SF_DESIGNER_QUIZAS_FMT, ['''' + Parecido + '''']), '')];
+    end;
   if Length(Result) = 0 then
     Exit;
   if Length(AEstilos) > 0 then

@@ -323,6 +323,11 @@ function EditDistance(const A, B: string): Integer;
 // demasiado lejos, o A ya esta entre ellos)
 function ElMasParecido(const A: string; const ACandidatos: array of string;
   ATope: Integer): string;
+// El candidato casi bien escrito de un NOMBRE (una propiedad, una constante, un
+// StyleLookup): ElMasParecido con el tope de la casa, un tercio de su largo y al
+// menos 2. Estaba a mano en el set del disenador y en su juez de valores, y el
+// lint de StyleLookup era el tercero (Hermes, dirigido de la 1.29)
+function NombreParecido(const A: string; const ACandidatos: array of string): string;
 // La linea (1-based) de la posicion APos (1-based) de ATexto: un salto es
 // CRLF, LF o un CR suelto, como en el troceador (Lsp.Lineas.SplitToLines).
 // Estaba a mano en LlavesAnidadas; el analizador de impacto de
@@ -554,6 +559,11 @@ begin
   end;
   if (Mejor = 0) or (Mejor > ATope) or (Empates > 0) then
     Result := '';
+end;
+
+function NombreParecido(const A: string; const ACandidatos: array of string): string;
+begin
+  Result := ElMasParecido(A, ACandidatos, Max(2, Length(A) div 3));
 end;
 
 function MismoIdentificador(const A, B: string): Boolean;

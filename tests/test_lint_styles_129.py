@@ -44,7 +44,9 @@ def lint(path, **kw):
 
 
 def nombra(r, lookup):
-    return ("'%s'" % lookup) in r
+    # la LINEA de un lookup juzgado: el nombre entre comillas a secas tambien lo lleva la sugerencia
+    # ("Did you mean 'mibotonstyle'?", dirigido de Hermes de la 1.29)
+    return ("StyleLookup = '%s'" % lookup) in r
 
 
 try:
@@ -73,6 +75,12 @@ try:
     check('K2 ...ni el del .style ni el de la plataforma, y sin DSGN-178',
           not nombra(r, 'mibotonstyle') and not nombra(r, 'buttonstyle') and
           not mc.es(r, 'SN_DESIGNER_LOOKUPS_SIN_JUZGAR_FMT') and ' 1 StyleLookup' in r, r[:700])
+    # el nombre que SI define el estilo dado, junto al mal escrito: el agente no tiene que buscarlo (Hermes,
+    # dirigido de la 1.29: tarjetaestilo, con tarjetastyle en su .style)
+    check('K2b ...y la linea del mal escrito trae el mas parecido de los que SI hay (mibotonstyle). '
+          'ROJO contra 28ddda3f',
+          "Did you mean 'mibotonstyle'?" in next((l for l in r.splitlines() if nombra(l, 'mibotontsyle')), ''),
+          r[:700])
     r = lint(marco, styles=uno)
     check('K3 styles=<el .style>: lo mismo',
           mc.es(r, 'SN_DESIGNER_LOOKUPS_FUERA_DE_STYLES_FMT') and nombra(r, 'mibotontsyle') and

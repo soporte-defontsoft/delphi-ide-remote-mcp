@@ -39,9 +39,14 @@ try:
     check('C1 datamodule autocreate=no: registrado sin CreateForm',
           not mc.fallo(r) and 'UIconos' in t and 'CreateForm(TDMUIconos' not in t
           and 'UIconos.pas' in open(DPROJ, encoding='utf-8-sig').read(), (r[:200], t))
+    # ...y la respuesta lo DICE (CFG-155): solo faltaba el CFG-043, y habia que leer el .dpr (Hermes, dirigido 1.29)
+    check('C1b ...y la respuesta dice que va sin CreateForm (CFG-155). ROJO contra 28ddda3f',
+          mc.es(r, 'SN_UNIT_SIN_CREATEFORM') and not mc.es(r, 'SN_UNIT_CREATEFORM'), r[:400])
     r = srv.call('delphi_create', {'kind': 'datamodule', 'name': 'UDatos', 'project': DPROJ})
     check('C2 control: un datamodule sin decir nada lleva su CreateForm', 'CreateForm(TDMUDatos, DMUDatos)' in dpr(),
           (r[:200], dpr()))
+    check('C2b ...y su respuesta dice CFG-043, no CFG-155', mc.es(r, 'SN_UNIT_CREATEFORM') and
+          not mc.es(r, 'SN_UNIT_SIN_CREATEFORM'), r[:400])
     r = srv.call('delphi_create', {'kind': 'form-vcl', 'name': 'UOpciones', 'project': DPROJ, 'autocreate': 'false'})
     check('C3 form-vcl autocreate=false: sin CreateForm', not mc.fallo(r) and 'CreateForm(TFormUOpciones' not in dpr(),
           (r[:200], dpr()))

@@ -3974,6 +3974,10 @@ const
 
   SN_UNIT_CREATEFORM =
     ' [CFG-043] + Application.CreateForm';
+  { autocreate=no: que no lo crea se dice, no se deja a la ausencia de CFG-043 (Hermes,
+    dirigido de la 1.29: "se cumple pero la respuesta no lo dice; hay que leer el .dpr") }
+  SN_UNIT_SIN_CREATEFORM =
+    ' [CFG-155] without Application.CreateForm (autocreate=no): your code creates it';
 
   SN_UNIT_PRESENT_FMT =
     '[CFG-044] Unit %s was already in %s. Nothing to change (.dproj ' +
@@ -7955,7 +7959,9 @@ const
     'names a warning (two alClient, a band with no room) is the one the .dfm ' +
     'writes, or the class''s default when it writes none (TStatusBar=alBottom, ' +
     'TToolBar=alTop...). A hidden control (Visible = False) is in "boxes" with ' +
-    'visible false and is not judged, I do not ' +
+    'visible false, and neither it nor what is inside it is judged - preview ' +
+    'draws it, as the VCL designer shows hidden controls (the running ' +
+    'application does not); I do not ' +
     'judge the children of a container that places them itself (a TGridPanel, ' +
     'a TFlowPanel), I do not treat a TBevel/TShape/TImage or an alCustom control ' +
     'as covering anything, and a TScrollBox may have larger content on purpose. ' +
@@ -8015,7 +8021,8 @@ const
     '[DSGN-179] How I measure it: FMX laid the form out and the renderer said where ' +
     'each control ended up, in form coordinates ("boxes"), and I judge those ' +
     'rectangles by the rules of a VCL form: the coordinates in a warning are ' +
-    'relative to the container it names, a hidden control is not judged, nor are ' +
+    'relative to the container it names, a hidden control is not judged (nor ' +
+    'what is inside it, which FMX does not draw either), nor are ' +
     'the children of a container that places them itself (a TTabControl, a ' +
     'TGridPanelLayout, a TFlowLayout), and a scroll box may have larger content on ' +
     'purpose. "overlapping" does not take clean away: in FMX one control over another ' +
@@ -10055,9 +10062,10 @@ const
     'them - the main source with its new header, the project with its main ' +
     'source, its names and the binary of each platform. %s and %s stay as ' +
     'they were: Save As copies, and deleting the old ones is up to you ' +
-    '(delphi_delete). The .res comes with the first build; the .deployproj ' +
-    'is not copied (its remote folder has the old name), the first deploy ' +
-    'writes it again.';
+    '(delphi_delete). The units are not copied: both projects list the same ' +
+    '.pas files, as after the IDE''s Save As. The .res comes with the first ' +
+    'build; the .deployproj is not copied (its remote folder has the old ' +
+    'name), the first deploy writes it again.';
   SR_CFG_SAVE_AS_SIN_NOMBRE =
     '[CFG-150 INVALID_PARAM] save-as needs "name": the new project name. ' +
     'Nothing was written.';

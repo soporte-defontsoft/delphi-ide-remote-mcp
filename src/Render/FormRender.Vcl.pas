@@ -229,8 +229,12 @@ begin
     IntersectClipRect(DC, 0, 0, WR.Width, WR.Height);
     SendMessage(AControl.Handle, WM_PRINT, DC, PRF_CLIENT or PRF_NONCLIENT or PRF_ERASEBKGND);
     DibujaTextoCallado(AControl, DC);
+    // los que la VCL MUESTRA (Showing, de UpdateShowing): en diseno tambien los de
+    // Visible = False, como el disenador del IDE y como los pinta window. Por Visible
+    // print se saltaba un panel oculto que window pintaba (Hermes, dirigido de la 1.29;
+    // medido: rojo en window, blanco en print)
     for var I := 0 to AControl.ControlCount - 1 do
-      if (AControl.Controls[I] is TWinControl) and AControl.Controls[I].Visible then
+      if (AControl.Controls[I] is TWinControl) and TWinControl(AControl.Controls[I]).Showing then
         ImprimeArbol(AForm, TWinControl(AControl.Controls[I]), DC);
   finally
     RestoreDC(DC, Save);

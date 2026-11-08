@@ -269,6 +269,21 @@ try:
     faltas = json.dumps(mc.como_json(r).get('lookupsWithoutStyle'))
     check('L19 el .pas de un frame: su StyleLookup := no es una falta', 'pasdelmarco' not in faltas, faltas)
     check('L21 (control) una unidad sin designer: su StyleLookup := sigue siendo falta', 'pasplano' in faltas, faltas)
+    # L22 (dirigido de Hermes de la 1.29): una falta casi bien escrita trae el nombre que SI hay, como la linea de
+    # delphi_designer lint (el mismo helper); una lejos de todos, sin el
+    with open(os.path.join(carpeta, 'UCasi.fmx'), 'w', encoding='utf-8-sig', newline='') as f:
+        f.write("object F3: TForm\r\n  object B3: TButton\r\n    StyleLookup = 'mibotonstile'\r\n  end\r\nend\r\n")
+    r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos_app, 'project': carpeta}, 300)
+    faltas_j = mc.como_json(r).get('lookupsWithoutStyle') or []
+    # agrupadas por carpeta y fichero (dir -> files -> hits), como cualquier lista de rutas del servidor
+    hits = [h for g in faltas_j for f in g.get('files', []) for h in f.get('hits', [])]
+    casi = [x for x in hits if x.get('lookup') == 'mibotonstile']
+    lejos = [x for x in hits if x.get('lookup') == 'pasplano']
+    check('L22 delphi_styles lint: la falta casi bien escrita trae didYouMean mibotonstyle; una lejana, no. '
+          'ROJO contra 28ddda3f',
+          len(casi) == 1 and casi[0].get('didYouMean') == 'mibotonstyle' and len(lejos) == 1 and
+          'didYouMean' not in lejos[0], json.dumps(faltas_j)[:800])
+    os.remove(os.path.join(carpeta, 'UCasi.fmx'))
     if bt:
         con_codigo(os.path.join(bt, 'Unit1.pas'), 'pasdelsample')
         r = srv.call('delphi_styles', {'command': 'lint', 'path': estilos, 'project': bt}, 300)

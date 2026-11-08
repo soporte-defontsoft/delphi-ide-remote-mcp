@@ -2938,7 +2938,7 @@ begin
   for var Par in M.Props do
     if Par.Key.StartsWith(ClaveProp(AClsId, '')) and (Par.Value.Kind <> 'm') then
       Nombres := Nombres + [Par.Value.Name];
-  Cand := ElMasParecido(Segs[0], Nombres, Max(2, Length(Segs[0]) div 3));
+  Cand := NombreParecido(Segs[0], Nombres);
   if Cand = '' then
     Exit;
   Segs[0] := Cand;

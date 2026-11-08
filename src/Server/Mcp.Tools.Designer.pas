@@ -903,7 +903,7 @@ end;
   marcos: LayoutFmx y el de LayoutOf eran dos copias que ya divergian - la VCL
   daba las coordenadas de un aviso relativas al padre y FMX absolutas, con el
   mismo texto, y FMX no eximia de "fuera del padre" al que coloca a sus hijos (A2
-  del revisor del paisaje de la 1.27). Un control o un padre oculto no se juzga.
+  del revisor del paisaje de la 1.27). Un control oculto, o lo que haya dentro de uno, no se juzga.
   Se dice un lado a cero; lo que se sale de su padre, salvo si el padre coloca a
   sus hijos (ColocaASusHijos) o se desplaza (fcScroll); y dos hermanos que
   comparten area, salvo lo que coloca su padre, el adorno y alCustom. Las
@@ -940,17 +940,35 @@ procedure JuzgaCajas(const AMedido: TRespuestaRender; ACajaDe: TDictionary<strin
     Result := DondeDeCaja(Linea, Fichero);
   end;
 
+  // oculto el o alguno de los suyos hacia arriba: lo de dentro de un oculto no se juzga
+  // a ninguna profundidad, como desde el texto (ListaOculto). Se miraba solo el padre:
+  // un nieto de un panel oculto se juzgaba con el renderizador y no sin el (C1-11)
+  function EnUnOculto(const ACaja: TCajaDeRender): Boolean;
+  var
+    P: TCajaDeRender;
+    Clave: string;
+  begin
+    Result := not ACaja.Visible;
+    Clave := ACaja.Padre;
+    // tantos saltos como cajas: un padre que se nombrase a si mismo no da vueltas
+    for var Salto := 0 to High(AMedido.Cajas) do
+    begin
+      if Result or (Clave = '') or not ACajaDe.TryGetValue(ClaveDeIdentificador(Clave), P) then
+        Exit;
+      Result := not P.Visible;
+      Clave := P.Padre;
+    end;
+  end;
+
 begin
   for var I := 0 to High(AMedido.Cajas) do
   begin
     var C := AMedido.Cajas[I];
-    if not C.Visible then
+    if EnUnOculto(C) then
       Continue;
     var Padre: TCajaDeRender;
     var PX, PY, PW, PH: Integer;
     PadreMedido(ACajaDe, AMedido, ARaiz, C, Padre, PX, PY, PW, PH);
-    if not Padre.Visible then
-      Continue;
     var Al := AlignDe(C);
     if (C.W = 0) or (C.H = 0) then
       AZero.Add(MsgFmt(SF_DSGN_LADO_A_CERO_FMT, [C.Ruta, C.Clase, Donde(C), IntToStr(C.W), IntToStr(C.H)]));
