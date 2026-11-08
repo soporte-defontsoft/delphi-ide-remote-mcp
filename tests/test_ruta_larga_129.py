@@ -23,7 +23,7 @@ from mcp_cliente import check
 
 BASE = mc.carpeta('ruta_larga_129')
 # en su forma LARGA: la que mide el servidor (alarga lo que nombra el agente), y la del
-# %TEMP% en 8.3 tiene un caracter menos (DFONTA~1): la de "259" medía 260
+# %TEMP% en 8.3 tiene un caracter menos (la carpeta del usuario va en su nombre corto): la de "259" medía 260
 JAIL = os.path.join(BASE, 'j')
 os.makedirs(JAIL)
 JAIL = mc.larga(JAIL)
