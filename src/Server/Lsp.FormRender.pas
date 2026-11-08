@@ -2181,8 +2181,10 @@ begin
       Pet.Carpeta := '';
       Pet.RaizBds := PrefijoSinBarra(DiscoverRadStudio.RootDir);
       Pet.FicheroPaquetes := TPath.Combine(Etapa, 'paquetes.lst');
-      EscribeBytes(Pet.FicheroPaquetes, TEncoding.UTF8.GetPreamble +
-        TEncoding.UTF8.GetBytes(string.Join(#13#10, Paquetes)), ltTemporal);
+      // en UTF-8 CON su BOM (el TStringList del ayudante sin BOM lee ANSI), por
+      // EL escritor de un texto nuestro: el BOM se ponia a mano (WHEN SEEN de F1
+      // de la 1.29). No estricto, como el GetBytes que habia
+      EscribeTexto(Pet.FicheroPaquetes, string.Join(#13#10, Paquetes), ltTemporal, ekUtf8Bom, False);
       if APeticion.Salida <> '' then
         Pet.Salida := TPath.Combine(Etapa, TPath.GetFileName(APeticion.Salida));
       // un estilo por fichero, ya por su puerta: lo que no se ve tampoco se lee

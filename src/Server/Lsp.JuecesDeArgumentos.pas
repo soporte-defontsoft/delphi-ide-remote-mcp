@@ -71,6 +71,13 @@ function ValorRompeCampoDePaclient(const V: string): Boolean;
 function NombreDeProyectoParaPaclientDenegado(const ADprojPath: string;
   ADelServidor: Boolean = False): string;
 
+{ LA carpeta del proyecto ADprojPath en el destino, dentro de la del perfil
+  (<usuario>-<perfil>/): su nombre sin extension, como la deja PAServer al
+  desplegar. La derivaban a mano remote-run, su salida, la bajada de una
+  captura, el juez de su nombre, el de los RemoteDir y la nota del Deploy
+  (WHEN SEEN de F1 de la 1.29). }
+function CarpetaDelProyectoEnElDestino(const ADprojPath: string): string;
+
 { Un RemoteDir o un RemoteName (AElemento, su valor AValor) de un DeployFile que
   despliega el proyecto AProyecto para APlataforma: '' si el fichero queda en la
   carpeta del proyecto en el destino, o BUILD-070. PAServer deja un DeployFile
@@ -216,11 +223,16 @@ var
   Nombre: string;
 begin
   Result := '';
-  Nombre := TPath.GetFileNameWithoutExtension(ADprojPath);
+  Nombre := CarpetaDelProyectoEnElDestino(ADprojPath);
   if NombreRompeCampoDePaclient(Nombre) then
     Result := MsgFmt(SR_PACLIENT_NOMBRE_FMT, [Nombre])
   else if not ADelServidor and SameText(Nombre.Trim, NODE_PROJECT) then
     Result := MsgFmt(SR_PACLIENT_NOMBRE_RESERVADO_FMT, [Nombre]);
+end;
+
+function CarpetaDelProyectoEnElDestino(const ADprojPath: string): string;
+begin
+  Result := TPath.GetFileNameWithoutExtension(ADprojPath);
 end;
 
 function CampoRemotoFueraDelProyectoDenegado(const AElemento, AValor, AProyecto,
@@ -294,28 +306,34 @@ end;
 { delphi_adb's address/device land on the adb command line. Same lesson as
   git/build/paserver: one vetting place for both access levels. The apk path
   is a filesystem argument vetted by the tool through ReadPathDenied. }
+{ UN destino de adb que nombra el agente (address, device, deviceid): su forma
+  - una direccion ip:port (AEsDireccion) o el nombre que adb ensena - y que sea
+  de los que el workspace permite. '' si vale o no viene. Estaba escrito en
+  delphi_adb y en delphi_build (WHEN SEEN de F1 de la 1.29). }
+function DestinoAdbDenegado(const AValor: string; AEsDireccion: Boolean): string;
+begin
+  Result := '';
+  var V := AValor.Trim;
+  if V = '' then
+    Exit;
+  if (AEsDireccion and BadDeviceToken(V)) or (not AEsDireccion and BadDeviceName(V)) then
+    Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
+  if not AdbTargetAllowed(V) then
+    Exit(MsgFmt(SR_ADB_ALLOWLIST_FMT, [V]));
+end;
+
 function AdbArgDenied(const AArguments: TJSONObject): string;
 var
   V: string;
 begin
   Result := '';
   LoadSecurity;
-  V := ArgStr(AArguments, 'address').Trim;
-  if V <> '' then
-  begin
-    if BadDeviceToken(V) then
-      Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
-    if not AdbTargetAllowed(V) then
-      Exit(MsgFmt(SR_ADB_ALLOWLIST_FMT, [V]));
-  end;
-  V := ArgStr(AArguments, 'device').Trim;
-  if V <> '' then
-  begin
-    if BadDeviceName(V) then
-      Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
-    if not AdbTargetAllowed(V) then
-      Exit(MsgFmt(SR_ADB_ALLOWLIST_FMT, [V]));
-  end;
+  Result := DestinoAdbDenegado(ArgStr(AArguments, 'address'), True);
+  if Result <> '' then
+    Exit;
+  Result := DestinoAdbDenegado(ArgStr(AArguments, 'device'), False);
+  if Result <> '' then
+    Exit;
   // "app" is a package name reaching adb shell am start - same charset rule
   // (a package is letters/digits/dots/underscores), own message.
   V := ArgStr(AArguments, 'app').Trim;
@@ -388,14 +406,12 @@ begin
     Exit;
   // "deviceid" is an adb serial reaching msbuild (/p:DeviceId=) - the same
   // rule as delphi_adb's address/device.
-  V := ArgStr(AArguments, 'deviceid').Trim;
-  if (V <> '') and BadDeviceName(V) then
-    Exit(MsgFmt(SR_ADB_TARGET_FMT, [V]));
   // ...y uno de los dispositivos que el workspace permite, la lista de
   // delphi_adb: el agente elige entre lo que el servidor sabe, no escribe un
   // valor libre en la linea de msbuild (D6 del revisor del paisaje de la 1.28)
-  if (V <> '') and not AdbTargetAllowed(V) then
-    Exit(MsgFmt(SR_ADB_ALLOWLIST_FMT, [V]));
+  Result := DestinoAdbDenegado(ArgStr(AArguments, 'deviceid'), False);
+  if Result <> '' then
+    Exit;
   // "sdk" reaches msbuild's line (/p:PlatformSDK=): a file NAME, never a
   // path and never a metacharacter (audit 2026-09-25). The build also
   // checks it against the SDKs of the platform, like set-sdk does.

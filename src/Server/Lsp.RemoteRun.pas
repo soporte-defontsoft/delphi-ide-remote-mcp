@@ -375,7 +375,7 @@ begin
      ARelPath.StartsWith('/') or ARelPath.Contains('\') or
      ValorRompeCampoDePaclient(ARelPath) then
     Exit(MsgText(SR_FETCHTARGET_BADPATH));
-  ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
+  ProjName := CarpetaDelProyectoEnElDestino(ADprojPath);
   // V217: no a un campo de paclient. Lo llama el servidor (el nodo, sus capturas):
   // la carpeta del nodo es suya
   Result := NombreDeProyectoParaPaclientDenegado(ADprojPath, True);
@@ -581,7 +581,7 @@ begin
     ATexto := ATexto.Substring(P + 1);
   end;
   Linea := Linea.Substring(Length(JOB_ENV)).Trim([#13, ' ']);
-  P := Linea.IndexOf('|');
+  P := Linea.IndexOf(JOB_ENV_SEP);
   if P < 0 then
     Exit;
   Resto := Linea.Substring(P + 1).Trim;
@@ -589,13 +589,13 @@ begin
   // y no tiene escritorio (gemela del "sin DISPLAY")
   if Resto.StartsWith(JOB_ENV_WIN) then
   begin
-    if Linea.StartsWith('0') then
+    if Linea.StartsWith(JOB_ENV_SIN_GRAFICO) then
       Result := MsgText(SN_REMOTERUN_ENV_WIN0)
     else
       Result := MsgFmt(SN_REMOTERUN_ENV_WIN_FMT, [Resto.Substring(Length(JOB_ENV_WIN))]);
     Exit;
   end;
-  if Linea.StartsWith('0') then
+  if Linea.StartsWith(JOB_ENV_SIN_GRAFICO) then
     Result := MsgText(SN_REMOTERUN_ENV_NONE)
   else if Resto = '' then
     Result := MsgText(SN_REMOTERUN_ENV_INHERITED)
@@ -803,7 +803,7 @@ begin
   // out of reach even for a full-access token. The guion we drop lands in
   // THAT same folder and runs from there, so $D is the deploy dir.
   ProjName := TPath.GetFileNameWithoutExtension(ADprojPath);
-  DeployRel := ProjName;
+  DeployRel := CarpetaDelProyectoEnElDestino(ADprojPath);
   // V217: el nombre no puede romper un campo de paclient (--put / --get /
   // --Remove de abajo). La puerta de Mcp.Tools.PAServer ya lo juzga; este es
   // el cerrojo de dentro, para cualquier llamador
@@ -1060,7 +1060,7 @@ begin
     Exit;
   end;
   // la misma carpeta que deriva remote-run: la del proyecto, nunca otra
-  DeployRel := TPath.GetFileNameWithoutExtension(ADprojPath);
+  DeployRel := CarpetaDelProyectoEnElDestino(ADprojPath);
   // V217: segundo cerrojo del nombre a paclient (su --get y su --Remove)
   var NombreMalo := NombreDeProyectoParaPaclientDenegado(ADprojPath);
   if NombreMalo <> '' then

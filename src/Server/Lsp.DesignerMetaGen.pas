@@ -1737,10 +1737,13 @@ begin
 end;
 
 { Los tipos que pone el compilador (no estan declarados en System.pas) con
-  el nombre que les da su informacion de tipo en APlataforma: un alias
-  debil toma el de su destino (LongInt es Integer; NativeInt, Int64 en Win64
-  e Integer en Win32). }
-function Intrinseco(const L, APlataforma: string; out AInfo: TInfoTipo): Boolean;
+  el nombre que les da su informacion de tipo en la plataforma: un alias
+  debil toma el de su destino (LongInt es Integer; NativeInt, Int64 con un
+  puntero de 8 bytes e Integer con uno de 4). ATamanoNativo, el SizeOf de
+  NativeInt de la tabla de simbolos de esa plataforma (Lsp.Preproceso, que
+  decide que es Win64): se decidia aqui otra vez por el nombre (WHEN SEEN de
+  F1 de la 1.29); 0, sin plataforma. }
+function Intrinseco(const L: string; ATamanoNativo: Integer; out AInfo: TInfoTipo): Boolean;
 begin
   Result := True;
   if (L = 'string') or (L = 'unicodestring') then
@@ -1767,9 +1770,9 @@ begin
     AInfo := InfoBase('Byte', BASE_INTEGER)
   else if L = 'word' then
     AInfo := InfoBase('Word', BASE_INTEGER)
-  else if (L = 'nativeint') and not SameText(APlataforma, 'Win64') then
+  else if (L = 'nativeint') and (ATamanoNativo <> 8) then
     AInfo := InfoBase('Integer', BASE_INTEGER)
-  else if (L = 'nativeuint') and not SameText(APlataforma, 'Win64') then
+  else if (L = 'nativeuint') and (ATamanoNativo <> 8) then
     AInfo := InfoBase('Cardinal', BASE_INTEGER)
   else if (L = 'int64') or (L = 'nativeint') then
     AInfo := InfoBase('Int64', BASE_INT64)
@@ -1815,7 +1818,7 @@ begin
   ABase := '';
   AMiembros := nil;
   L := ClaveDeIdentificador(ANombre);
-  Result := (L <> 'nativeint') and (L <> 'nativeuint') and Intrinseco(L, '', I);
+  Result := (L <> 'nativeint') and (L <> 'nativeuint') and Intrinseco(L, 0, I);
   if not Result then
     Exit;
   AKind := I.Kind;
@@ -1965,12 +1968,12 @@ var
 begin
   if (ATexto = '') or (AProf > 16) then
     Exit(Info('?', '?'));
-  if not ATexto.Contains('.') and Intrinseco(ClaveDeIdentificador(ATexto), FPlataforma, Result) then
+  if not ATexto.Contains('.') and Intrinseco(ClaveDeIdentificador(ATexto), FBase.Tamano('NativeInt'), Result) then
     Exit;
   T := ResuelveTipo(ATexto, AUnidad, AContexto, AEnImpl, UT);
   if T = nil then
   begin
-    if Intrinseco(ClaveDeIdentificador(UltimoTrozo(ATexto)), FPlataforma, Result) then
+    if Intrinseco(ClaveDeIdentificador(UltimoTrozo(ATexto)), FBase.Tamano('NativeInt'), Result) then
       Exit;
     // un tipo que el fuente no deja leer (su unidad no esta en las rutas: el
     // TUniConnection de UniDAC) es '?', no 'o': con 'o' el lint decia que no

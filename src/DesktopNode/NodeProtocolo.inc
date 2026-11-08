@@ -52,6 +52,11 @@
     McpRunJob y la lee Lsp.RemoteRun. Estaban a mano en diecinueve sitios
     del lanzador y dos del servidor (28-sep-2026). }
   JOB_ENV = '___ENV=';                 // la primera: ___ENV=<1|0>|<lo anadido>
+  { ...con sus dos campos: si hay entorno grafico y el separador. Estaban a
+    mano en el escritor y en el lector (WHEN SEEN de F1 de la 1.29) }
+  JOB_ENV_GRAFICO = '1';
+  JOB_ENV_SIN_GRAFICO = '0';
+  JOB_ENV_SEP = '|';
   { ...y en Windows, lo anadido es la SESION en la que corre el lanzador:
     win:<n>, y la 0 es la de los servicios, sin escritorio. La leia
     Lsp.RemoteRun con un Substring(4) a mano (forma 17 de la 1.26). }

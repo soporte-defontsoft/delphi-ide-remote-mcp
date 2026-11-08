@@ -397,6 +397,20 @@ begin
   Result := CambiaLineasEnSuTexto(ATexto, Ini, Fin - Ini + 1, Nuevas, ASalto);
 end;
 
+{ Cuantas lineas iguales hay delante (APre) y, sin pisar esas, detras (ASuf)
+  entre AAntes y ADespues. Estaba escrito en LineasQueSeQuedan y en
+  ZonaDelCambio (WHEN SEEN de F1 de la 1.29). }
+procedure ExtremosIguales(const AAntes, ADespues: TArray<string>; out APre, ASuf: Integer);
+begin
+  APre := 0;
+  while (APre < Length(AAntes)) and (APre < Length(ADespues)) and (AAntes[APre] = ADespues[APre]) do
+    Inc(APre);
+  ASuf := 0;
+  while (ASuf < Length(AAntes) - APre) and (ASuf < Length(ADespues) - APre) and
+        (AAntes[High(AAntes) - ASuf] = ADespues[High(ADespues) - ASuf]) do
+    Inc(ASuf);
+end;
+
 function LineasQueSeQuedan(const AAntes, ADespues: TArray<string>): TArray<Integer>;
 const
   MAX_CAMBIOS = 1000; // mas que esto en medio es reescribir: el medio, nuevo
@@ -411,18 +425,11 @@ begin
   for var I := 0 to M - 1 do
     Result[I] := -1;
   // lo igual delante y detras, sin buscar
-  Pre := 0;
-  while (Pre < N) and (Pre < M) and (AAntes[Pre] = ADespues[Pre]) do
-  begin
-    Result[Pre] := Pre;
-    Inc(Pre);
-  end;
-  Suf := 0;
-  while (Suf < N - Pre) and (Suf < M - Pre) and (AAntes[N - 1 - Suf] = ADespues[M - 1 - Suf]) do
-  begin
-    Result[M - 1 - Suf] := N - 1 - Suf;
-    Inc(Suf);
-  end;
+  ExtremosIguales(AAntes, ADespues, Pre, Suf);
+  for var I := 0 to Pre - 1 do
+    Result[I] := I;
+  for var I := 0 to Suf - 1 do
+    Result[M - 1 - I] := N - 1 - I;
   // el medio: AAntes[Pre .. Pre+NA-1] contra ADespues[Pre .. Pre+NB-1]
   NA := N - Pre - Suf;
   NB := M - Pre - Suf;
@@ -563,13 +570,7 @@ var
   Pre, Suf: Integer;
 begin
   ADelta := Length(ADespues) - Length(AAntes);
-  Pre := 0;
-  while (Pre < Length(AAntes)) and (Pre < Length(ADespues)) and (AAntes[Pre] = ADespues[Pre]) do
-    Inc(Pre);
-  Suf := 0;
-  while (Suf < Length(AAntes) - Pre) and (Suf < Length(ADespues) - Pre) and
-        (AAntes[High(AAntes) - Suf] = ADespues[High(ADespues) - Suf]) do
-    Inc(Suf);
+  ExtremosIguales(AAntes, ADespues, Pre, Suf);
   ADesde := Length(AAntes) - Suf + 1;
 end;
 

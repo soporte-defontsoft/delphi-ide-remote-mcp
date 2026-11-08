@@ -169,17 +169,15 @@ begin
         // off-by-one, and worst exactly where an anchor repeats (a method's
         // declaration and its implementation). delphi_search already answers
         // like this; now so does rename.
-        // (references las trae ya asi desde la 1.15.0)
-        Chg.AddPair('line', Item.GetValue('line').Clone as TJSONValue);
-        Chg.AddPair('line0', Item.GetValue('line0').Clone as TJSONValue);
+        // (references las trae ya asi desde la 1.15.0). Two occurrences on ONE
+        // line came out as two identical entries with no column, and "one edit
+        // per line" then staged the same line twice (measured 2026-08-25): the
+        // column tells them apart, and the count says a single edit has to
+        // replace both. Por EL formato de una posicion (PonPosicion): se
+        // copiaban sus campos a mano (WHEN SEEN de F1 de la 1.29)
+        PonPosicion(Chg, Item.GetValue<Integer>('line0'), Item.GetValue<Integer>('character0', -1));
         // la linea tal cual, que es el ancla (iba dos veces: text y anchor)
         Chg.AddPair('text', Item.GetValue('text').Value);
-        // Two occurrences on ONE line came out as two identical entries with
-        // no column, and "one edit per line" then staged the same line twice
-        // (measured 2026-08-25). The column tells them apart, and the count
-        // says a single edit has to replace both.
-        if Item.GetValue('character0') <> nil then
-          Chg.AddPair('character0', Item.GetValue('character0').Clone as TJSONValue);
       end;
       // "occurrences" cuenta REFERENCIAS; "changes" puede llevar una fila mas,
       // la de la propia definicion, que no es una referencia pero si hay que
@@ -334,15 +332,10 @@ begin
           Chg := TJSONObject.Create;
           UnvArr.AddElement(Chg);
           Chg.AddPair('path', Item.GetValue('path').Value);
-          if Item.GetValue('line') <> nil then
-          begin
-            Chg.AddPair('line', Item.GetValue('line').Clone as TJSONValue);
-            Chg.AddPair('line0', Item.GetValue('line0').Clone as TJSONValue);
-          end;
           // la columna tambien, como en changes: sin ella no se puede
           // preguntar a delphi_definition por ese uso (revisor de la 1.15.0)
-          if Item.GetValue('character0') <> nil then
-            Chg.AddPair('character0', Item.GetValue('character0').Clone as TJSONValue);
+          if Item.GetValue('line0') <> nil then
+            PonPosicion(Chg, Item.GetValue<Integer>('line0'), Item.GetValue<Integer>('character0', -1));
           if Item.GetValue('text') <> nil then
             Chg.AddPair('text', Item.GetValue('text').Value);
           if Item.GetValue('why') <> nil then

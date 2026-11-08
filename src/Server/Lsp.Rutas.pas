@@ -98,6 +98,15 @@ function IndiceDeRuta(const ARuta: string; const ALista: TArray<string>): Intege
   daba un access violation en el commit de un move, Win64 Release, medido con
   el mapa; con TArray<string>, como estaba, no. }
 function TieneExtension(const ARuta: string; const AExts: array of string): Boolean;
+const
+  { el nombre de los metadatos de git en un arbol (su carpeta, o el fichero
+    .git de un worktree o de un submodulo) }
+  NOMBRE_DE_GIT = '.git';
+{ ANombre (UNA entrada, sin su carpeta) es el de los metadatos de git, como
+  compara NTFS (ClaveDeRuta). Se juzgaba de dos formas: SameText en la puerta
+  de los metadatos y SameFileName (el locale, que iguala de mas) en la copia y
+  en delphi_git (WHEN SEEN de F1 de la 1.29) }
+function EsNombreDeGit(const ANombre: string): Boolean;
 { LA lista de rutas (o de nombres de fichero) ordenada y sin repetir como las
   compara NTFS: AnsiCompareFileName, el juez de SameFileName. Un TStringList
   compara con el locale (AnsiCompareText, lingueistica): ordenado y con su
@@ -757,6 +766,11 @@ function ClaveDeRuta(const ARuta: string): string;
 begin
   // LCMapString con LOCALE_INVARIANT y sin casing de ningun idioma
   Result := ARuta.ToUpperInvariant;
+end;
+
+function EsNombreDeGit(const ANombre: string): Boolean;
+begin
+  Result := ClaveDeRuta(ANombre) = ClaveDeRuta(NOMBRE_DE_GIT);
 end;
 
 function ClaveDeLinea(const ARuta: string; ALinea: Integer): string;

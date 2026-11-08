@@ -2377,9 +2377,10 @@ begin
   MainNuevo := TPath.Combine(Dir, Nuevo + TPath.GetExtension(Main));
   DprojNuevo := DprojDe(MainNuevo);
   // nunca se pisa: ni el fuente ni el proyecto de ese nombre, de ninguna clase
-  if TFile.Exists(MainNuevo) or TFile.Exists(DprojNuevo) or TFile.Exists(TPath.Combine(Dir, Nuevo + '.dpr')) or
-     TFile.Exists(TPath.Combine(Dir, Nuevo + '.dpk')) then
-    Exit(MsgFmt(SR_CREATE_YA_EXISTE_PROYECTO_FMT, [Nuevo, Dir]));
+  // (por EL juez de delphi_create, Lsp.Scaffold.ProyectoQueYaExiste)
+  Result := ProyectoQueYaExiste(Dir, Nuevo, TPath.GetExtension(Main));
+  if Result <> '' then
+    Exit;
   Result := WriteTargetDenied(MainNuevo);
   if Result = '' then
     Result := WriteTargetDenied(DprojNuevo);

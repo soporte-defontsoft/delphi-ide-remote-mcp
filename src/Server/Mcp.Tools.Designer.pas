@@ -1936,16 +1936,10 @@ begin
   // donde cae: el out= de toda la familia de capturas (CaptureTarget). Se
   // dibuja en un temporal nuestro aunque haya out=
   var EnLaCasa: Boolean;
-  Fallo := CaptureTarget(Params.Out_, CAPTURE_SUB_DESIGNER, 'designer', CAPTURE_EXT, Propia, EnLaCasa);
+  Fallo := CaptureTargetYTrabajo(Params.Out_, CAPTURE_SUB_DESIGNER, 'designer', CAPTURE_EXT, CAPTURE_EXT,
+    Propia, Temporal, EnLaCasa);
   if Fallo <> '' then
     Exit(Fallo);
-  Temporal := Propia;
-  if not EnLaCasa then // un out=: lo dice EL que lo decide (CaptureTarget)
-  begin
-    Fallo := CaptureTarget('', CAPTURE_SUB_DESIGNER, 'designer', CAPTURE_EXT, Temporal);
-    if Fallo <> '' then
-      Exit(Fallo);
-  end;
   CrearCarpeta(TPath.GetDirectoryName(Temporal));
 
   // lo comun - framework, ruta, Delphi, form o frame por EL lector de clases -

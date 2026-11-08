@@ -1538,17 +1538,7 @@ begin
         B.AddPair('allowCreate', TJSONBool.Create(C.CreaObjetos and not C.SoloLectura));
       end
       else
-      begin
-        if Inutiles = nil then
-        begin
-          Inutiles := TJSONArray.Create;
-          R.AddPair('unusable', Inutiles);
-        end;
-        var U := TJSONObject.Create;
-        Inutiles.AddElement(U);
-        U.AddPair('db', NombreDeConexion(C));
-        U.AddPair('why', Por);
-      end;
+        ApuntaConexionInutil(R, Inutiles, 'db', NombreDeConexion(C), Por);
     end;
     Result := R.ToJSON;
   finally

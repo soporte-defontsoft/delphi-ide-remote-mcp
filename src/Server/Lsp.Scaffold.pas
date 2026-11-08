@@ -50,6 +50,11 @@ function NotaDeNombreTapado(const AName, AFuente: string): string;
   deja pasar. '' si vale. La usan delphi_create kind=project-* y
   delphi_config save-as. }
 function NombreDeProyectoNuevoDenegado(const AName: string): string;
+{ ...y que no haya ya uno de ese nombre en ADir: ni su fuente (ANombre +
+  AExtFuente), ni su .dproj, ni un programa o un paquete que se llame igual.
+  '' si no lo hay. Lo preguntaban a mano delphi_create y save-as (WHEN SEEN de
+  F1 de la 1.29). }
+function ProyectoQueYaExiste(const ADir, ANombre, AExtFuente: string): string;
 
 implementation
 
@@ -674,6 +679,16 @@ begin
   Result := BadUnitName(AName);
 end;
 
+function ProyectoQueYaExiste(const ADir, ANombre, AExtFuente: string): string;
+begin
+  Result := '';
+  var Fuente := TPath.Combine(ADir, ANombre + AExtFuente);
+  // el .dproj de su fuente: el nombrador de la casa
+  if TFile.Exists(Fuente) or TFile.Exists(DprojDe(Fuente)) or
+     TFile.Exists(TPath.Combine(ADir, ANombre + '.dpr')) or TFile.Exists(TPath.Combine(ADir, ANombre + '.dpk')) then
+    Result := MsgFmt(SR_CREATE_YA_EXISTE_PROYECTO_FMT, [ANombre, ADir]);
+end;
+
 function CreateDelphiProject(const ADir, AName, AKind: string): string;
 var
   Kind, Dir, Dpr, Dproj, MainUnit, MainForm, Clash: string;
@@ -703,9 +718,9 @@ begin
     Exit;
   Dpr := TPath.Combine(Dir, AName + IfThen(Kind = 'package', '.dpk', '.dpr'));
   Dproj := DprojDe(Dpr); // el .dproj de su .dpr/.dpk: el nombrador de la casa
-  if TFile.Exists(Dpr) or TFile.Exists(Dproj) or
-     TFile.Exists(TPath.Combine(Dir, AName + '.dpr')) or TFile.Exists(TPath.Combine(Dir, AName + '.dpk')) then
-    Exit(MsgFmt(SR_CREATE_YA_EXISTE_PROYECTO_FMT, [AName, Dir]));
+  Result := ProyectoQueYaExiste(Dir, AName, TPath.GetExtension(Dpr));
+  if Result <> '' then
+    Exit;
   // All or nothing. The files used to be written one by one, so a collision
   // on the THIRD of them (the UMain.pas of a project already living in that
   // folder) left an orphan .dpr behind - pointing at somebody else's unit,

@@ -29,6 +29,9 @@
 
 interface
 
+uses
+  System.JSON; // ApuntaConexionInutil: la lista de las que no se usan
+
 type
   TConexionDb = record
     Proyecto: string;     // la clave del proyecto en el json
@@ -81,6 +84,13 @@ const
 { <proyecto>/<alias>: EL nombre de una base o una API para el agente. }
 function NombreDeConexion(const AConexion: TConexionDb): string; overload;
 function NombreDeConexion(const AConexion: TConexionApi): string; overload;
+
+{ Una entrada que no se usa en la lista "unusable" de command=connections:
+  AClave (db | api) con su nombre y "why" con APorQue. La lista nace en
+  ARespuesta con la primera. La escribian a mano delphi_db y delphi_api (WHEN
+  SEEN de F1 de la 1.29). }
+procedure ApuntaConexionInutil(ARespuesta: TJSONObject; var AInutiles: TJSONArray;
+  const AClave, ANombre, APorQue: string);
 
 { Las bases de los proyectos que ESTA sesion puede usar, en el orden del
   json, con su Defecto si lo tienen. ANegativa (un SR_DB_*) si el workspace
@@ -143,12 +153,13 @@ function PinDeSpki(const ADer: TArray<Byte>): string;
 implementation
 
 uses
-  System.SysUtils, System.IOUtils, System.JSON, System.StrUtils, System.NetEncoding, System.Character,
+  System.SysUtils, System.IOUtils, System.StrUtils, System.NetEncoding, System.Character,
   Lsp.ShaCache, // Sha256CrudoDeBytes: el SHA-256, en su casa
   System.Net.URLClient, // TURI: el juez de una URL base
   Lsp.Texts, Lsp.Casa, Lsp.Settings, Lsp.Json,
   Lsp.Pascal, // SinMayusculas
   Lsp.Codificacion, // BomUtf8En: el BOM lo lee el de la casa
+  Lsp.Base64, // BytesToBase64 / Base64ToBytes: EL base64 de la casa
   Winapi.Winsock2; // inet_pton: el juez de que es una direccion IP
 
 const
@@ -199,6 +210,20 @@ end;
 function NombreDeConexion(const AConexion: TConexionApi): string;
 begin
   Result := NombreCompuesto(AConexion.Proyecto, AConexion.Alias);
+end;
+
+procedure ApuntaConexionInutil(ARespuesta: TJSONObject; var AInutiles: TJSONArray;
+  const AClave, ANombre, APorQue: string);
+begin
+  if AInutiles = nil then
+  begin
+    AInutiles := TJSONArray.Create;
+    ARespuesta.AddPair('unusable', AInutiles);
+  end;
+  var U := TJSONObject.Create;
+  AInutiles.AddElement(U);
+  U.AddPair(AClave, ANombre);
+  U.AddPair('why', APorQue);
 end;
 
 { La negativa de un fichero de conexiones que no se lee: el de APIs con AApi. }
@@ -420,8 +445,9 @@ begin
   Result := MatchText(U.Scheme, [TURI.SCHEME_HTTP, TURI.SCHEME_HTTPS]) and (U.Host <> '');
 end;
 
-{ APin como pin SPKI: sha256/ y el base64 de 32 bytes, de ida y vuelta (el
-  decodificador se salta lo que no es base64). }
+{ APin como pin SPKI: sha256/ y el base64 de 32 bytes, de ida y vuelta (la
+  vuelta niega un relleno que no es el canonico). Por EL base64 de la casa
+  (Lsp.Base64): usaba el de la RTL a su manera (WHEN SEEN de F1 de la 1.29) }
 function PinValido(const APin: string): Boolean;
 var
   B64: string;
@@ -431,8 +457,8 @@ begin
   if not APin.StartsWith(PREFIJO_PIN) then
     Exit;
   B64 := APin.Substring(Length(PREFIJO_PIN));
-  Bytes := TNetEncoding.Base64String.DecodeStringToBytes(B64);
-  Result := (Length(Bytes) = BYTES_DEL_PIN) and (TNetEncoding.Base64String.EncodeBytesToString(Bytes) = B64);
+  Result := (Base64ToBytes(B64, 'pin', Bytes) = '') and (Length(Bytes) = BYTES_DEL_PIN) and
+    (BytesToBase64(Bytes) = B64);
 end;
 
 { Una credencial del json: basic (user, password), bearer (token), header o
@@ -606,7 +632,7 @@ end;
 
 function CredencialBasica(const A: TAutenticacionApi): string;
 begin
-  Result := TNetEncoding.Base64String.EncodeBytesToString(TEncoding.UTF8.GetBytes(A.Usuario + ':' + A.Clave));
+  Result := BytesToBase64(TEncoding.UTF8.GetBytes(A.Usuario + ':' + A.Clave));
 end;
 
 function NombreValor(const ANombre, AValor: string): TNombreValor;
@@ -636,7 +662,7 @@ end;
 
 function PinDeSpki(const ADer: TArray<Byte>): string;
 begin
-  Result := PREFIJO_PIN + TNetEncoding.Base64String.EncodeBytesToString(Sha256CrudoDeBytes(ADer));
+  Result := PREFIJO_PIN + BytesToBase64(Sha256CrudoDeBytes(ADer));
 end;
 
 function MetodoDePeticion(const AMetodo: string): string;

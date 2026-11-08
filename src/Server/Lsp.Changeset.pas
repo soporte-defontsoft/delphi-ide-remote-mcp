@@ -206,10 +206,15 @@ function PublicId(const AId: string): string;
 var
   P: Integer;
 begin
-  Result := AId;
+  // la cola es lo que va tras el ULTIMO guion (la compone ChangesetBegin con
+  // FragmentoUnico, que no lleva guiones): se tapa siempre, mida lo que mida.
+  // Miraba que midiera 8, la longitud de hoy de FragmentoUnico, y si crecia
+  // status ensenaba el id entero, la capacidad (WHEN SEEN de F1 de la 1.29)
   P := AId.LastIndexOf('-');
-  if (P > 0) and (Length(AId) - P - 1 = 8) then
-    Result := Copy(AId, 1, P) + '...';
+  if P > 0 then
+    Result := Copy(AId, 1, P) + '...'
+  else
+    Result := '...';
 end;
 
 { Las lineas de un fichero como las cuenta delphi_read; ninguna si no esta. }
@@ -222,16 +227,26 @@ begin
   Result := LineasDelTexto(PatchLoadText(APath, Enc));
 end;
 
+const
+  { el nombre de cada kind, UNA vez: lo escribe KindName y lo lee KindDeNombre,
+    su inversa. El lector estaba a mano, con un alias 'deleteline' que ni la
+    descripcion ni el mensaje de la negativa decian (WHEN SEEN de F1, 1.29) }
+  NOMBRES_DE_KIND: array [TOpKind] of string = ('edit', 'create', 'delete', 'delete-line', 'move');
+
 function KindName(K: TOpKind): string;
 begin
-  case K of
-    opEdit: Result := 'edit';
-    opCreate: Result := 'create';
-    opDelete: Result := 'delete';
-    opDeleteLine: Result := 'delete-line';
-  else
-    Result := 'move';
-  end;
+  Result := NOMBRES_DE_KIND[K];
+end;
+
+function KindDeNombre(const ANombre: string; out AKind: TOpKind): Boolean;
+begin
+  for var K := Low(TOpKind) to High(TOpKind) do
+    if NOMBRES_DE_KIND[K] = ANombre then
+    begin
+      AKind := K;
+      Exit(True);
+    end;
+  Result := False;
 end;
 
 
@@ -717,12 +732,7 @@ begin
     begin
       C.Previewed := False; // a new op invalidates any previous preview
       Op := Default(TStagedOp);
-      if AKind = 'edit' then Op.Kind := opEdit
-      else if AKind = 'create' then Op.Kind := opCreate
-      else if AKind = 'delete' then Op.Kind := opDelete
-      else if (AKind = 'delete-line') or (AKind = 'deleteline') then Op.Kind := opDeleteLine
-      else if AKind = 'move' then Op.Kind := opMove
-      else
+      if not KindDeNombre(AKind, Op.Kind) then
         Exit(MsgText(SR_CHANGESET_KIND));
       // lo que no es de este kind se dice, no se ignora - por la regla de
       // todas las tools de varios modos (Lsp.Guard.ParametroQueNoVa): era
@@ -730,11 +740,11 @@ begin
       // delete-line toma old: lo compara con su linea
       var SuyosK, VaConK: string;
       var SobraK := ParametroQueNoVa(KindName(Op.Kind), [
-          'edit', 'old new fragment atline',
-          'create', 'content',
-          'delete', '',
-          'delete-line', 'atline old',
-          'move', 'dest'],
+          NOMBRES_DE_KIND[opEdit], 'old new fragment atline',
+          NOMBRES_DE_KIND[opCreate], 'content',
+          NOMBRES_DE_KIND[opDelete], '',
+          NOMBRES_DE_KIND[opDeleteLine], 'atline old',
+          NOMBRES_DE_KIND[opMove], 'dest'],
         ['content', AContent, '', 'old', AOldLine, '', 'new', ANewText, '',
          'fragment', AFragment, '', 'dest', ADest, '',
          'atline', IfThen(AAtLine > 0, IntToStr(AAtLine)), ''], SuyosK, VaConK);

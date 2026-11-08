@@ -365,7 +365,7 @@ begin
   // las carpetas por su nombre, con la clave del disco en los dos lados
   // (ClaveDeRuta): con .ToLower y el turco, \WIN32\ no era Win32 (V105)
   Low := ClaveDeRuta(APath);
-  if Low.Contains(ClaveDeRuta('\.git\')) then
+  if Low.Contains(ClaveDeRuta('\' + NOMBRE_DE_GIT + '\')) then
     Exit(SKIP_GIT);
   if Low.Contains(ClaveDeRuta('\' + TempFolderName + '\')) then
     Exit(SKIP_TEMP);

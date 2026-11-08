@@ -419,7 +419,7 @@ end;
   del repo ya los juzgo por su sitio real: DondeViveElRepo + PathDenied). }
 function EsCarpetaGit(const APath: string): Boolean;
 begin
-  Result := SameFileName(TPath.GetFileName(SinBarraFinal(APath)), '.git');
+  Result := EsNombreDeGit(TPath.GetFileName(SinBarraFinal(APath)));
 end;
 
 function ConfiguracionGitDenegada(const ARepo, ARaiz: string;
@@ -966,8 +966,27 @@ end;
 
 function TieneGit(const ADir: string): Boolean;
 begin
-  Result := TDirectory.Exists(TPath.Combine(ADir, '.git')) or
-    TFile.Exists(TPath.Combine(ADir, '.git'));
+  Result := TDirectory.Exists(TPath.Combine(ADir, NOMBRE_DE_GIT)) or
+    TFile.Exists(TPath.Combine(ADir, NOMBRE_DE_GIT));
+end;
+
+{ LO QUE FIJA git a lo que juzgo la puerta (DondeViveElRepo): su --git-dir y
+  su arbol (--work-tree), por el compositor de la casa (EnComillas). SIN arbol
+  de trabajo (un repo bare, o "repo" apuntando a la propia .git): --bare. Con
+  --git-dir solo, git toma el directorio actual por arbol de trabajo: status
+  ensenaba el contenido de .git como si fueran los fuentes y switch escribia
+  los ficheros de la rama DENTRO de .git (medido con git a pelo el
+  29-sep-2026, tercera revision). Con --bare contesta lo que contesta sin
+  fijar: log y branch van, y lo que necesita un arbol dice que no lo tiene.
+  Se componia en tres sitios, y la rama de delphi_projects sin el arbol
+  (WHEN SEEN de F1 de la 1.29). }
+function FijadoDelRepo(const AGitDir, ARaiz: string): string;
+begin
+  Result := ' --git-dir=' + EnComillas(AGitDir);
+  if ARaiz <> '' then
+    Result := Result + ' --work-tree=' + EnComillas(ARaiz)
+  else
+    Result := Result + ' --bare';
 end;
 
 function RamaDelRepo(const ARepo: string): string;
@@ -990,7 +1009,7 @@ begin
       if (Sitio <> '') and (ReadPathDenied(Sitio, True) <> '') then
         Exit;
     // fijado a lo que se juzgo, como la tool
-    Fijado := ' --git-dir=' + EnComillas(GitDir);
+    Fijado := FijadoDelRepo(GitDir, Raiz);
     // symbolic-ref sale con 1 y sin salida con HEAD suelto (medido, git 2.53)
     if GitContesta(ARepo, Fijado, 'symbolic-ref --short -q HEAD', Lineas) and (Length(Lineas) > 0) then
       Exit(Lineas[0]);
@@ -1738,19 +1757,7 @@ begin
         if Result <> '' then
           Exit(MsgFmt(SR_GIT_REPO_FUERA_FMT, [Params.Repo, Sitio]));
       end;
-    // por el compositor de la casa (EnComillas), como todo argumento
-    Fijado := ' --git-dir=' + EnComillas(GitDir);
-    if Raiz <> '' then
-      Fijado := Fijado + ' --work-tree=' + EnComillas(Raiz)
-    else
-      // SIN arbol de trabajo (un repo bare, o "repo" apuntando a la propia
-      // .git): --bare. Con --git-dir solo, git toma el directorio actual por
-      // arbol de trabajo: status ensenaba el contenido de .git como si
-      // fueran los fuentes y switch escribia los ficheros de la rama DENTRO
-      // de .git (medido con git a pelo el 29-sep-2026, tercera revision).
-      // Con --bare contesta lo que contesta sin fijar: log y branch van, y
-      // lo que necesita un arbol dice que no lo tiene.
-      Fijado := Fijado + ' --bare';
+    Fijado := FijadoDelRepo(GitDir, Raiz);
     // EL REMOTO antes que su endpoint LFS: un pull desde una carpeta de
     // fuera se niega por el remoto (GIT-044), no por el endpoint que de el
     // deriva. La puerta del remoto va delante de la de la configuracion.
@@ -2389,9 +2396,7 @@ begin
           // El repo ya existe, pero su arbol todavia no se ha materializado.
           if not DondeViveElRepo(Repo, GitDir, Comun, Raiz, Output, ExitCode) then
             Exit(GitFallo(ExitCode, Output));
-          Fijado := ' --git-dir=' + EnComillas(GitDir);
-          if Raiz <> '' then Fijado := Fijado + ' --work-tree=' + EnComillas(Raiz)
-          else Fijado := Fijado + ' --bare';
+          Fijado := FijadoDelRepo(GitDir, Raiz);
           Result := ConfiguracionGitDenegada(Repo, Raiz, GitMaterializaArbol(Cmd, Params.Action), Fijado);
           if Result <> '' then
           begin

@@ -2314,7 +2314,7 @@ begin
       for var C in CamposRemotosDeDespliegue(Xmls[I], APlat, ACfg) do
       begin
         Result := CampoRemotoFueraDelProyectoDenegado(C.Elemento, C.Escrito,
-          TPath.GetFileNameWithoutExtension(ADprojPath), APlat, Ficheros[I]);
+          CarpetaDelProyectoEnElDestino(ADprojPath), APlat, Ficheros[I]);
         if Result <> '' then
           Exit;
       end;
@@ -3437,7 +3437,7 @@ begin
           Shipped := Shipped + Length(MP.Groups[1].Value.Split([';']));
         Result.AddPair('deployNote', MsgFmt(SN_BUILD_DEPLOYED_FMT,
           [Perfil, NombreDeEstaCuenta, Perfil,
-           TPath.GetFileNameWithoutExtension(ADprojPath)]));
+           CarpetaDelProyectoEnElDestino(ADprojPath)]));
         // de donde salio: call | project | ide-default (los de delphi_config view)
         Result.AddPair('profileSource', FuenteDelPerfil);
         if Output.Contains('Local file "" not found') then

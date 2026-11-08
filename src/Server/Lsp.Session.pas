@@ -1811,7 +1811,7 @@ begin
     begin
       // Drop any queued diagnostics for this uri from earlier lints.
       repeat
-        Stale := Client.WaitForNotification('textDocument/publishDiagnostics', 1, Uri);
+        Stale := Client.EsperaDiagnosticos(1, Uri);
         Stale.Free;
       until Stale = nil;
 
@@ -1835,8 +1835,7 @@ begin
     Mine.FDocLock.Leave;
   end;
   // Wait outside the lock: lints can take a while on big units.
-  Result := Client.WaitForNotification('textDocument/publishDiagnostics',
-    ATimeoutMs, Uri);
+  Result := Client.EsperaDiagnosticos(ATimeoutMs, Uri);
   // Delivered: the next call on the same text is a NEW lint, not a retry
   // (measured: without this, an identical second call waited forever for a
   // notification already consumed).

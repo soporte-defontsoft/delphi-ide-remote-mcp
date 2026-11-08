@@ -2677,6 +2677,10 @@ def negra_declarada(texto,funcion):
 TEXTO_DPROJ = next(t for f, t in TEXTOS if os.path.basename(f) == 'Lsp.Dproj.pas')
 check('deuda declarada Lsp.Dproj PACLIENT_PLATFORMS',
       re.search(r"\{ LISTA QUE IMITA A UN JUEZ[^}]*\}\s*PACLIENT_PLATFORMS", TEXTO_DPROJ) is not None)
+# ...y la de las palabras reservadas, que imita a dcc (WHEN SEEN de F1 de la 1.29)
+TEXTO_PASCAL = next(t for f, t in TEXTOS if os.path.basename(f) == 'Lsp.Pascal.pas')
+check('deuda declarada Lsp.Pascal RESERVADAS',
+      re.search(r"\{ LISTA QUE IMITA A UN JUEZ[^}]*\}\s*RESERVADAS", TEXTO_PASCAL) is not None)
 for fichero,funcion in LISTAS_NEGRAS:
     texto=next(t for f,t in TEXTOS if os.path.basename(f)==fichero)
     check('deuda declarada '+fichero+' '+funcion,negra_declarada(texto,funcion))

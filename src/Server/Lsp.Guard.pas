@@ -1875,7 +1875,7 @@ begin
   Result := '';
   for var Ruta in TArray<string>.Create(LongCanonical(APath), LongCanonical(RealPath(APath))) do
     for var Segmento in Ruta.Split(['\', '/'], TStringSplitOptions.ExcludeEmpty) do
-      if SameText(Segmento, '.git') then
+      if EsNombreDeGit(Segmento) then
         Exit(MsgFmt(SR_GUARD_GIT_METADATA_FMT, [APath]));
 end;
 
@@ -2506,7 +2506,7 @@ begin
         Exit;
       // un .git (carpeta o fichero) es un repo: se apunta y no se baja; detras
       // de un enlace que la copia sigue, no esta dentro
-      if SameFileName(TPath.GetFileName(O), '.git') then
+      if EsNombreDeGit(TPath.GetFileName(O)) then
       begin
         if ADetras then
           Motivo := MsgFmt(SR_MOVE_COPIA_GIT_FUERA_FMT, [TPath.GetDirectoryName(O),
@@ -2529,7 +2529,7 @@ begin
   begin
     var GitDir, Comun, Raiz: string;
     if not Assigned(DameRepoDeCarpeta) or not DameRepoDeCarpeta(R, GitDir, Comun, Raiz) then
-      Exit(MsgFmt(SR_GUARD_GIT_METADATA_FMT, [TPath.Combine(R, '.git')]));
+      Exit(MsgFmt(SR_GUARD_GIT_METADATA_FMT, [TPath.Combine(R, NOMBRE_DE_GIT)]));
     if not Dentro(GitDir) then
       Exit(MsgFmt(SR_MOVE_COPIA_GIT_FUERA_FMT, [R, MsgText(SF_MOVE_GIT_METADATOS), GitDir]));
     if not Dentro(Comun) then

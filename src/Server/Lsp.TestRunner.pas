@@ -299,6 +299,11 @@ end;
   invented. }
 procedure ParseOutcome(const AOutput: string; AKind: TTestKind;
   AExitCode: Integer; ARet: TJSONObject);
+const
+  // la cabecera de un bloque de rojos (DUnitX.ResStrs): la que lo abre y la
+  // que, dentro de otro, no es un test. Estaba escrita dos veces (WHEN SEEN
+  // de F1 de la 1.29)
+  CABECERA_DE_ROJOS = '(?i)^(Failing\s+Tests|Tests\s+With\s+Errors)\s*$';
 var
   Fails: TJSONArray;
   L: string;
@@ -343,7 +348,7 @@ begin
         var T := Lineas[I].Trim;
         if not EnFallos then
         begin
-          EnFallos := TRegEx.IsMatch(T, '(?i)^(Failing\s+Tests|Tests\s+With\s+Errors)\s*$');
+          EnFallos := TRegEx.IsMatch(T, CABECERA_DE_ROJOS);
           Continue;
         end;
         // DUnitX deja una linea EN BLANCO justo despues de "Failing Tests"
@@ -355,7 +360,7 @@ begin
           EnFallos := False;
           Continue;
         end;
-        if TRegEx.IsMatch(T, '(?i)^(Failing\s+Tests|Tests\s+With\s+Errors)\s*$') then
+        if TRegEx.IsMatch(T, CABECERA_DE_ROJOS) then
           Continue;
         if T.StartsWith('Message:', True) and (Rojos.Count > 0) then
           Rojos[Rojos.Count - 1] := Rojos[Rojos.Count - 1] + ' - ' + T.Substring(8).Trim

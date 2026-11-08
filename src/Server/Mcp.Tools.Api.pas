@@ -321,17 +321,7 @@ begin
           M.Add(X);
       end
       else
-      begin
-        if Inutiles = nil then
-        begin
-          Inutiles := TJSONArray.Create;
-          R.AddPair('unusable', Inutiles);
-        end;
-        var U := TJSONObject.Create;
-        Inutiles.AddElement(U);
-        U.AddPair('api', NombreDeConexion(C));
-        U.AddPair('why', C.Defecto);
-      end;
+        ApuntaConexionInutil(R, Inutiles, 'api', NombreDeConexion(C), C.Defecto);
     Result := R.ToJSON;
   finally
     R.Free;

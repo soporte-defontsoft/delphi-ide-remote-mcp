@@ -418,6 +418,12 @@ begin
   Assert.IsFalse(EsNombreNuevo('Begin'), 'una palabra reservada, con cualquier mayuscula');
   Assert.IsFalse(EsNombreNuevo('2Form'), 'no empieza por un digito');
   Assert.IsFalse(EsNombreNuevo('A.B'), 'un nombre de form no lleva puntos');
+  // lo que mide dcc (8-nov-2026, 'var <palabra>: Integer;'): string y object no
+  // son nombres; out si (es una directiva, como operator u override)
+  Assert.IsFalse(EsNombreNuevo('String'), 'string es reservada');
+  Assert.IsFalse(EsNombreNuevo('object'), 'object es reservada');
+  Assert.IsTrue(EsNombreNuevo('Out'), 'out compila como nombre: no es reservada');
+  Assert.IsTrue(EsNombreNuevo('Operator'), 'operator tampoco');
 end;
 
 { Un paquete por su CABECERA, como lo compila dcc (A30 de la 1.23): un .dpr

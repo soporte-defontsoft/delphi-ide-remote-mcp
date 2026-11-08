@@ -239,18 +239,14 @@ begin
 end;
 
 { El nombre del perfil, apto para un nombre de fichero (lo eligio el operador
-  en el IDE: puede traer espacios y acentos). }
+  en el IDE: puede traer espacios y acentos), por EL normalizador de lo que se
+  nombra y acaba en el disco (Lsp.Casa.Slug): tenia su propia regla (WHEN SEEN
+  de F1 de la 1.29). }
 function NombreSeguro(const S: string): string;
-var
-  C: Char;
 begin
-  Result := '';
-  for C in S do
-    if CharInSet(C, ['A'..'Z', 'a'..'z', '0'..'9', '-', '_']) then
-      Result := Result + C;
+  Result := Slug(S);
   if Result = '' then
     Result := 'perfil';
-  Result := SinMayusculas(Result);
 end;
 
 { Una tecla de Windows se nombra (escape, enter, f4) o es una cifra SOLA, que
@@ -617,33 +613,24 @@ begin
       // el formato que trae la captura remota. Se resuelve ANTES de bajar
       // nada: un "out" con la extension equivocada no merece el viaje.
       var EnLaCasa: Boolean;
-      Fallo := CaptureTarget(Params.Out_, CAPTURE_SUB_DESKTOP,
+      // se baja SIEMPRE a nuestra casa de capturas: bajar es trabajo nuestro,
+      // y con out= se bajaba a un __tmp- DENTRO de la carpeta que nombro el
+      // agente (2z/2af de la 1.18.2); el out= se coloca despues (Coloca), como
+      // en adb y el disenador. Los dos por EL que lo decide
+      // (CaptureTargetYTrabajo): de la bajada solo cuenta su CARPETA, y lo que
+      // se queda es el out= del agente, con su formato; aqui el de lo que
+      // viaja, CAPTURE_EXT
+      var EnCasa: string;
+      Fallo := CaptureTargetYTrabajo(Params.Out_, CAPTURE_SUB_DESKTOP,
         'desktop-' + NombreSeguro(Params.Profile.Trim),
-        TPath.GetExtension(Remota), Propia, EnLaCasa);
+        TPath.GetExtension(Remota), CAPTURE_EXT, Propia, EnCasa, EnLaCasa);
       { Con un "out" rechazado Propia viene VACIA, y calcular su carpeta
         reventaba con "File name is empty" en vez de dar la negativa - lo
         cazo la primera prueba en vivo contra el Fedora (2026-09-21); en
         Windows no pasaba porque alli el rechazo sale por excepcion. Todo lo
         que depende del destino va DENTRO del if. }
       if Fallo = '' then
-      begin
-      Destino := TPath.GetDirectoryName(Propia);
-      // se baja SIEMPRE a nuestra casa de capturas: bajar es trabajo nuestro,
-      // y con out= se bajaba a un __tmp- DENTRO de la carpeta que nombro el
-      // agente (2z/2af de la 1.18.2); el out= se coloca despues (Coloca), como
-      // en adb y el disenador
-      if not EnLaCasa then
-      begin
-        var EnCasa: string;
-        // (solo su CARPETA, la de la bajada: lo que se queda es el out= del
-        // agente, con su formato; aqui el de lo que viaja, CAPTURE_EXT)
-        Fallo := CaptureTarget('', CAPTURE_SUB_DESKTOP,
-          'desktop-' + NombreSeguro(Params.Profile.Trim),
-          CAPTURE_EXT, EnCasa);
-        if Fallo = '' then // (vacia, GetDirectoryName lanza: la nota de arriba)
-          Destino := TPath.GetDirectoryName(EnCasa);
-      end;
-      end;
+        Destino := TPath.GetDirectoryName(EnCasa);
       if Fallo = '' then
       begin
       { La captura baja con SU nombre remoto (captura.png), igual para todos

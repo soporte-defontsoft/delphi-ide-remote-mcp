@@ -640,22 +640,15 @@ begin
     Denied := CapturaSinSalidaDenegada(Params.Inline_, Params.Out);
     if Denied <> '' then
       Exit(Denied);
-    Denied := CaptureTarget(Params.Out, CAPTURE_SUB_ANDROID, 'android',
-      DevExt, Propia, EnLaCasa);
-    if Denied <> '' then
-      Exit(Denied);
     // se baja SIEMPRE a un temporal nuestro y sin cerrojo (el pull tarda
     // hasta 60 s); un out= se coloca despues con ColocaProducto, como preview
     // y delphi_desktop: la puerta en el momento de escribir, la copia sellada
-    // de lo que habia y el cerrojo, en un solo sitio (revision de la 1.17.0)
-    Destino := Propia;
-    if not EnLaCasa then // un out=: lo dice EL que lo decide (CaptureTarget)
-    begin
-      Denied := CaptureTarget('', CAPTURE_SUB_ANDROID, 'android',
-        DevExt, Destino);
-      if Denied <> '' then
-        Exit(Denied);
-    end;
+    // de lo que habia y el cerrojo, en un solo sitio (revision de la 1.17.0).
+    // Los dos, por EL que lo decide (CaptureTargetYTrabajo)
+    Denied := CaptureTargetYTrabajo(Params.Out, CAPTURE_SUB_ANDROID, 'android',
+      DevExt, DevExt, Propia, Destino, EnLaCasa);
+    if Denied <> '' then
+      Exit(Denied);
     CrearCarpeta(TPath.GetDirectoryName(Destino));
     DevPng := DevDir + TPath.GetFileName(Destino);
     var ExitRm: Cardinal;

@@ -116,6 +116,13 @@ function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
   disenador y el escritorio, cada uno con su "out vacio" (revisor del 2i). }
 function CaptureTarget(const AOut, ASub, APrefix, AExt: string;
   out AFile: string; out AEnLaCasa: Boolean): string; overload;
+{ ...y el fichero de TRABAJO donde el servidor baja o dibuja la captura antes
+  de colocarla: el mismo AFile si va a la casa; con un out=, uno de la casa
+  con AExtTrabajo (el formato de lo que viaja), y el out= se coloca despues.
+  El par lo escribian adb, el disenador y el escritorio (WHEN SEEN de F1 de
+  la 1.29). }
+function CaptureTargetYTrabajo(const AOut, ASub, APrefix, AExt, AExtTrabajo: string;
+  out AFile, ATrabajo: string; out AEnLaCasa: Boolean): string;
 
 implementation
 
@@ -331,6 +338,18 @@ var
   EnLaCasa: Boolean;
 begin
   Result := CaptureTarget(AOut, ASub, APrefix, AExt, AFile, EnLaCasa);
+end;
+
+function CaptureTargetYTrabajo(const AOut, ASub, APrefix, AExt, AExtTrabajo: string;
+  out AFile, ATrabajo: string; out AEnLaCasa: Boolean): string;
+begin
+  ATrabajo := '';
+  Result := CaptureTarget(AOut, ASub, APrefix, AExt, AFile, AEnLaCasa);
+  if Result <> '' then
+    Exit;
+  ATrabajo := AFile;
+  if not AEnLaCasa then
+    Result := CaptureTarget('', ASub, APrefix, AExtTrabajo, ATrabajo);
 end;
 
 function CaptureTarget(const AOut, ASub, APrefix, AExt: string;

@@ -577,13 +577,21 @@ end;
 
 function EsPalabraReservada(const S: string): Boolean;
 const
-  RESERVADAS: array [0 .. 64] of string = ('and', 'array', 'as', 'asm', 'begin',
+  { LISTA QUE IMITA A UN JUEZ, declarada (WHEN SEEN de F1 de la 1.29): las
+    palabras que dcc no admite como identificador. Su juez es el compilador, y
+    solo contesta compilando; preguntarle por cada nombre que se propone (un
+    rename, una unit, un proyecto) cuesta un build. Medida el 8-nov-2026 con
+    dcc32 de la 37.0, una por una ('var <palabra>: Integer;'): las 64 las niega
+    con E2029; 'out' estaba y compila (es una directiva, como operator u
+    override), y se fue - references saltaba los usos de una variable Out. Una
+    palabra que una version nueva reserve se anade cuando se mida. }
+  RESERVADAS: array [0 .. 63] of string = ('and', 'array', 'as', 'asm', 'begin',
     'case', 'class', 'const', 'constructor', 'destructor', 'dispinterface',
     'div', 'do', 'downto', 'else', 'end', 'except', 'exports', 'file',
     'finalization', 'finally', 'for', 'function', 'goto', 'if',
     'implementation', 'in', 'inherited', 'initialization', 'inline',
     'interface', 'is', 'label', 'library', 'mod', 'nil', 'not', 'object',
-    'of', 'or', 'out', 'packed', 'procedure', 'program', 'property',
+    'of', 'or', 'packed', 'procedure', 'program', 'property',
     'raise', 'record', 'repeat', 'resourcestring', 'set', 'shl', 'shr',
     'string', 'then', 'threadvar', 'to', 'try', 'type', 'unit', 'until',
     'uses', 'var', 'while', 'with', 'xor');

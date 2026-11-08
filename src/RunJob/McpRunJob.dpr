@@ -100,9 +100,9 @@ end;
 function LineaEnv(AGrafico: Boolean; const AAnadido: string): string;
 begin
   if AGrafico then
-    Result := JOB_ENV + '1|' + AAnadido + #10
+    Result := JOB_ENV + JOB_ENV_GRAFICO + JOB_ENV_SEP + AAnadido + #10
   else
-    Result := JOB_ENV + '0|' + AAnadido + #10;
+    Result := JOB_ENV + JOB_ENV_SIN_GRAFICO + JOB_ENV_SEP + AAnadido + #10;
 end;
 
 { El fichero donde vive el PID de un trabajo mientras corre: <job>.pid, al
@@ -674,8 +674,11 @@ begin
       Lineas.LoadFromFile(JobFile, TEncoding.UTF8);
       if Lineas.Count < 2 then
         Exit;
-      Exe := Lineas[0].Trim;
-      Salida := TPath.Combine(Carpeta, Lineas[1].Trim);
+      // TAL CUAL, como las escribe Lsp.RemoteRun.TrabajoDeEjecucion (su inverso):
+      // con Trim, un nombre con un blanco en un extremo (Linux lo admite) se
+      // buscaba con otro (WHEN SEEN de F1 de la 1.29)
+      Exe := Lineas[0];
+      Salida := TPath.Combine(Carpeta, Lineas[1]);
       // un argumento por linea, TAL CUAL (una linea vacia es un argumento
       // vacio; el servidor no manda lineas de mas)
       SetLength(Args, Lineas.Count - 2);

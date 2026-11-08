@@ -209,6 +209,10 @@ type
       is taken - others stay queued. }
     function WaitForNotification(const AMethod: string; ATimeoutMs: Integer;
       const AUriFilter: string = ''): TJSONObject;
+    { ...los diagnosticos que el motor publica de AUri (sus params; caller
+      frees), o nil al vencer: el nombre del metodo, aqui con los demas (iba
+      dos veces en Lsp.Session; WHEN SEEN de F1 de la 1.29) }
+    function EsperaDiagnosticos(ATimeoutMs: Integer; const AUri: string): TJSONObject;
 
     { Helpers }
     { LA negativa de una ruta que no se le puede NOMBRAR al motor (LSP-044):
@@ -911,6 +915,18 @@ begin
   DidOpenText(PathToUri(AFilePath), LoadSourceText(AFilePath));
 end;
 
+// EL TextDocumentIdentifier del protocolo (con AVersion >= 0, el
+// VersionedTextDocumentIdentifier), con la uri por el codificador de la casa.
+// Se componia a mano en cuatro sitios y sin escapar la uri (WHEN SEEN de F1 de
+// la 1.29; las de PathToUri no llevan nada que escapar)
+function DocumentoDelMotor(const AUri: string; AVersion: Integer = -1): string;
+begin
+  Result := '{"uri":"' + TextoEnJson(AUri) + '"';
+  if AVersion >= 0 then
+    Result := Result + ',"version":' + IntToStr(AVersion);
+  Result := Result + '}';
+end;
+
 procedure TLspClient.DidChangeText(const AUri, AText: string; AVersion: Integer);
 var
   Change: TJSONObject;
@@ -918,9 +934,8 @@ begin
   Change := TJSONObject.Create;
   try
     Change.AddPair('text', AText);
-    Notify('textDocument/didChange', Format(
-      '{"textDocument":{"uri":"%s","version":%d},"contentChanges":[%s]}',
-      [AUri, AVersion, Change.ToJSON]));
+    Notify('textDocument/didChange', '{"textDocument":' + DocumentoDelMotor(AUri, AVersion) +
+      ',"contentChanges":[' + Change.ToJSON + ']}');
     GuardaLineas(AUri, AText);
   finally
     Change.Free;
@@ -931,7 +946,7 @@ end;
   disk when a question crosses it, as it does with one never opened. }
 procedure TLspClient.DidClose(const AUri: string);
 begin
-  Notify('textDocument/didClose', Format('{"textDocument":{"uri":"%s"}}', [AUri]));
+  Notify('textDocument/didClose', '{"textDocument":' + DocumentoDelMotor(AUri) + '}');
   // desde aqui el motor lo lee del disco, y su columna se cuenta con el disco
   var K := UriCanonica(AUri);
   FLock.Enter;
@@ -969,7 +984,7 @@ end;
 function TLspClient.DocumentSymbols(const AUri: string): TJSONObject;
 begin
   Result := RequestWithRetry('textDocument/documentSymbol',
-    Format('{"textDocument":{"uri":"%s"}}', [AUri]), 60000);
+    '{"textDocument":' + DocumentoDelMotor(AUri) + '}', 60000);
   PosicionesDelMotor(Result, AUri);
 end;
 
@@ -996,6 +1011,11 @@ end;
 { Whoever waits for a notification is USING the engine (Busy): a lint waits
   for its diagnostics here, and an engine "nobody uses" must not be stopped
   under it. }
+function TLspClient.EsperaDiagnosticos(ATimeoutMs: Integer; const AUri: string): TJSONObject;
+begin
+  Result := WaitForNotification('textDocument/publishDiagnostics', ATimeoutMs, AUri);
+end;
+
 function TLspClient.WaitForNotification(const AMethod: string;
   ATimeoutMs: Integer; const AUriFilter: string): TJSONObject;
 begin
@@ -1335,8 +1355,8 @@ begin
     if (ALine >= 0) and (ALine < Length(Lineas)) then
       Col := ColumnaAlMotor(Lineas[ALine], Col);
   end;
-  Result := Format('{"textDocument":{"uri":"%s"},"position":{"line":%d,"character":%d}%s}',
-    [AUri, ALine, Col, AMas]);
+  Result := Format('{"textDocument":%s,"position":{"line":%d,"character":%d}%s}',
+    [DocumentoDelMotor(AUri), ALine, Col, AMas]);
 end;
 
 procedure TLspClient.PosicionesDelMotor(AValor: TJSONValue; const AUri: string);
