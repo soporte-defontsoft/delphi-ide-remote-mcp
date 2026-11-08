@@ -10913,6 +10913,13 @@ const
     'its long form) and this server writes up to %d (Windows MAX_PATH minus ' +
     'the atomic writer''s temporary suffix). Reading it is fine; to write, ' +
     'use a shorter path.';
+  { Una ruta de mas de MAX_PATH: Windows no la abre a este servidor y cada tool
+    decia "no existe" con el fichero en el disco (A24 de la 1.29, medido). }
+  SR_GUARD_RUTA_QUE_WINDOWS_NO_ABRE_FMT =
+    '[GUARD-046 INVALID_PARAM] The path is %d characters long and Windows opens ' +
+    'paths of up to %d for this server (MAX_PATH): the file may well be there, but ' +
+    'no tool can read or write it. Nothing was done. Use a shorter path: move the ' +
+    'file to a shallower folder, or shorten the folder names.';
   { El sitio antes de copiar o mover (V19; David, 17-oct-2026: "espacio
     suficiente y con margen"): el margen es MARGEN_DISCO_LIBRE (Lsp.Guard). }
   SR_GUARD_SIN_ESPACIO_FMT =

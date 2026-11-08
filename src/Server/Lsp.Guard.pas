@@ -104,9 +104,14 @@ uses
   System.JSON;
 
 const
-  { Lo mas larga que puede ser una ruta que se ESCRIBE: MAX_PATH (259) menos
-    el sufijo temporal del escritor atomico (27). Leer no tiene tope. }
-  RUTA_ESCRIBIBLE_MAX = 259 - 27;
+  { Lo mas larga que Windows abre a este proceso, que no declara longPathAware:
+    MAX_PATH (260) menos su NUL. Medido el 8-nov-2026 con LongPathsEnabled=1 en
+    la maquina: 259 se lee, 260 contesta "no existe" con el fichero en el disco
+    (A24 de la 1.29). Atada a MAX_PATH al compilar (Lsp.Guard). }
+  RUTA_MAX_DE_WINDOWS = 259;
+  { Lo mas larga que puede ser una ruta que se ESCRIBE: esa menos el sufijo
+    temporal del escritor atomico (27). Leer llega hasta RUTA_MAX_DE_WINDOWS. }
+  RUTA_ESCRIBIBLE_MAX = RUTA_MAX_DE_WINDOWS - 27;
 
 { La medida del escritor atomico (GUARD-028): '' si cabe. La preguntan
   WriteTargetDenied (el DESTINO que nombra el agente, antes de crear
@@ -236,6 +241,12 @@ function RaicesNoDisponibles(const ASitios: TArray<string>): TArray<TRaizNoDispo
   conectada en este proceso (WS-022); '' si no es el caso. Sin disco ni red:
   va en la puerta de cada llamada (ArgPathOutsideDenied). }
 function RaizEnLetraNoConectada(const APath: string): string;
+
+{ La negativa de una ruta mas larga de lo que Windows abre a este proceso
+  (RUTA_MAX_DE_WINDOWS); '' si cabe. Ninguna tool la lee ni la escribe, y cada
+  una decia "no existe" con el fichero alli (A24 de la 1.29): va en la puerta de
+  cada llamada (ArgPathOutsideDenied), sobre lo que nombra el agente. }
+function RutaQueWindowsNoAbre(const APath: string): string;
 
 { TRES CLASES DE ESCRITURA, y lo que las separa es QUIEN COMPONE LA RUTA
   (David, 28-sep-2026):
@@ -989,10 +1000,22 @@ uses
   System.Character,
   Lsp.Papelera;
 
+// el tope es el de Windows: si su MAX_PATH no es el de aqui, no compila
+{$IF RUTA_MAX_DE_WINDOWS <> MAX_PATH - 1}
+  {$MESSAGE ERROR 'RUTA_MAX_DE_WINDOWS no es MAX_PATH - 1'}
+{$IFEND}
+
 var
   // los dias de la papelera que ya dijeron en el log que se quedan: UNA vez
   // por dia mientras viva el servidor (la purga corre en cada copia)
   GDiasQueSeQuedan: TDictionary<string, Boolean>;
+
+function RutaQueWindowsNoAbre(const APath: string): string;
+begin
+  Result := '';
+  if Length(APath) > RUTA_MAX_DE_WINDOWS then
+    Result := MsgFmt(SR_GUARD_RUTA_QUE_WINDOWS_NO_ABRE_FMT, [Length(APath), RUTA_MAX_DE_WINDOWS]);
+end;
 
 function RutaLargaDenegada(const APath: string): string;
 begin

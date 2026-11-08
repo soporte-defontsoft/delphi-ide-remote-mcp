@@ -632,6 +632,11 @@ begin
       Result := RaizEnLetraNoConectada(R);
       if Result <> '' then
         Exit;
+      // ...ni en una ruta mas larga de lo que Windows abre a este proceso: cada
+      // tool decia "no existe" con el fichero alli (A24 de la 1.29, medido)
+      Result := RutaQueWindowsNoAbre(R);
+      if Result <> '' then
+        Exit;
     end;
     end;
   end;
