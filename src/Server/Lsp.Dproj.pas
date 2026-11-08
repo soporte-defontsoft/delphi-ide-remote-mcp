@@ -14,6 +14,15 @@ unit Lsp.Dproj;
 
 interface
 
+const
+  { Los valores de <FrameworkType>, como los escribe el IDE: los pone la plantilla
+    de un proyecto nuevo (Lsp.Scaffold) y los leen el juez de las plataformas
+    (CanTarget), delphi_config view y el marco de un proyecto (ProjectFramework).
+    Eran literales en cinco sitios de tres unidades (B12 de la 1.29). }
+  FRAMEWORK_TYPE_VCL = 'VCL';
+  FRAMEWORK_TYPE_FMX = 'FMX';
+  FRAMEWORK_TYPE_NINGUNO = 'None';
+
 type
   TDprojPlatform = record
     Name: string;     // 'Win32', 'Win64', 'Linux64', 'OSX64', 'Android64'...
@@ -2054,7 +2063,7 @@ function TDprojInfo.CanTarget(const APlatform: string; out AReason: string): Boo
 begin
   AReason := '';
   // VCL is Windows-only: Vcl.Forms does not exist on Linux/macOS/mobile.
-  if SameText(FrameworkType, 'VCL') and not IsLocalPlatform(APlatform) then
+  if SameText(FrameworkType, FRAMEWORK_TYPE_VCL) and not IsLocalPlatform(APlatform) then
   begin
     AReason := MsgFmt(SF_CFG_VCL_SOLO_WINDOWS_FMT, [APlatform]);
     Exit(False);

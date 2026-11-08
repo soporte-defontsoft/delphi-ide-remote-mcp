@@ -68,7 +68,8 @@ uses
   Lsp.Docs,
   Lsp.Guard,
   Lsp.Pascal,   // SinMayusculas: EL pliegue de lo que no es una ruta
-  Lsp.Listas;   // TPagina: la pagina de un trozo, la de las listas
+  Lsp.Listas,   // TPagina: la pagina de un trozo, la de las listas
+  Lsp.DesignerForma;
 
 const
   // lo que se da de una pagina de una vez, unos 2.000 tokens (medido: la
@@ -281,7 +282,7 @@ begin
     Exit(Lee(Params, Ayudas));
   // framework es de la busqueda: en una lectura no se mira
   Fw := SinMayusculas(Params.Framework.Trim);
-  if (Fw <> '') and not MatchText(Fw, ['vcl', 'fmx']) then
+  if (Fw <> '') and not MatchText(Fw, [MARCO_VCL, MARCO_FMX]) then
     Exit(MsgFmt(SR_DOCS_FRAMEWORK_FMT, [Params.Framework.Trim]));
   Result := Busca(Params, Fw, Ayudas);
 end;

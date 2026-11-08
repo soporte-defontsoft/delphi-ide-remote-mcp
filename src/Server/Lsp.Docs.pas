@@ -164,7 +164,8 @@ uses
   System.Character,
   Lsp.Pascal,
   Lsp.NetDrives,
-  Lsp.Dproj;     // ExpandeMacros: EL expansor de $(X)
+  Lsp.Dproj,     // ExpandeMacros: EL expansor de $(X)
+  Lsp.DesignerForma;
 
 { ---------------------------------------------------------------- bytes }
 
@@ -1623,10 +1624,12 @@ begin
       Base := '';
       if PartesDeId(R.Id, Corto, Pagina, Ancla) then
         Base := SinMayusculas(NombreDePagina(Pagina));
-      // framework=fmx|vcl: la pagina de ese, antes
-      if (Fw = 'fmx') and Base.StartsWith('fmx.') or (Fw = 'vcl') and Base.StartsWith('vcl.') then
+      // framework=fmx|vcl: la pagina de ese, antes, y la del otro, despues; la de
+      // un marco empieza por su espacio de nombres, que se llama como el (FMX.,
+      // Vcl.). El marco por EL vocabulario (MARCO_*, MarcoDe; B12 de la 1.29)
+      if (Fw <> '') and Base.StartsWith(Fw + '.') then
         Inc(R.Puntos, 15)
-      else if (Fw = 'fmx') and Base.StartsWith('vcl.') or (Fw = 'vcl') and Base.StartsWith('fmx.') then
+      else if (Fw <> '') and Base.StartsWith(MarcoDe(Fw = MARCO_VCL) + '.') then
         Dec(R.Puntos, 15);
       // lo que es de C++ (ejemplos "(C++)", temas de C++Builder), mas abajo:
       // quien pregunta aqui escribe Delphi

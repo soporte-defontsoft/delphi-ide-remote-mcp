@@ -1072,7 +1072,7 @@ begin
   F.Dfm := APath;
   F.DfmNombre := TPath.GetFileName(APath);
   F.EsFmx := EsDesignerFmx(APath);
-  F.Marco := IfThen(F.EsFmx, 'FMX', 'VCL');
+  F.Marco := UpperCase(MarcoDe(F.EsFmx));
   if IsBinaryDesignerFile(APath) then
     Exit(MsgFmt(SR_DESIGNER_EDIT_BINARIO_FMT, [F.DfmNombre]));
   // por lineas como las lee el parser del IDE, o nada: con el '>' de una

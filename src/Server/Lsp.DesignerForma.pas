@@ -170,6 +170,19 @@ function EsDesignerFmx(const ADesigner: string): Boolean;
   extension y media con la VCL un modulo de datos de FMX (A13 de la 1.23). }
 function EsDesignerVcl(const ADesigner: string): Boolean;
 
+const
+  { El nombre de un marco tal como lo da el agente (framework= del disenador y de
+    delphi_docs) y como se habla dentro: la tabla del disenador, el ayudante que
+    dibuja, el marco de un proyecto. Se escribia a mano en unos treinta sitios
+    (B12 de la 1.29); en mayusculas es como se ensena (UpperCase). }
+  MARCO_VCL = 'vcl';
+  MARCO_FMX = 'fmx';
+{ MARCO_FMX o MARCO_VCL }
+function MarcoDe(AEsFmx: Boolean): string;
+{ El marco de un designer por su juez (EsDesignerFmx / EsDesignerVcl): MARCO_FMX,
+  MARCO_VCL, o '' si no es ninguno de los dos. }
+function MarcoDeDesigner(const ADesigner: string): string;
+
 var
   { El texto de la unidad de un designer por la puerta de leer del servidor
     ('' si no se puede): lo pone el servidor al arrancar. En los
@@ -496,6 +509,23 @@ end;
 function EsDesignerVcl(const ADesigner: string): Boolean;
 begin
   Result := SameText(ExtractFileExt(ADesigner.Trim), '.dfm') and not EsDesignerFmx(ADesigner);
+end;
+
+function MarcoDe(AEsFmx: Boolean): string;
+begin
+  if AEsFmx then
+    Result := MARCO_FMX
+  else
+    Result := MARCO_VCL;
+end;
+
+function MarcoDeDesigner(const ADesigner: string): string;
+begin
+  if EsDesignerFmx(ADesigner) then
+    Exit(MARCO_FMX);
+  if EsDesignerVcl(ADesigner) then
+    Exit(MARCO_VCL);
+  Result := '';
 end;
 
 function UnidadDeDesigner(const ADesigner: string): string;

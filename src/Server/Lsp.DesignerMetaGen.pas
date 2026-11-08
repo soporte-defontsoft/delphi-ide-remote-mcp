@@ -300,7 +300,8 @@ uses
   Lsp.Texts,
   Lsp.Casa,             // ServerCacheDir (EscribeEnCasaDelServidor vive en Lsp.Puertas)
   Lsp.Rutas,            // RutaDesde: EL resolutor de una ruta leida de un fichero
-  Lsp.Puertas;          // PatchLoadText: el fuente con su codificacion real
+  Lsp.Puertas,          // PatchLoadText: el fuente con su codificacion real
+  Lsp.DesignerForma;
 
 var
   // el servidor se cierra: el generador lo mira entre unidad y unidad
@@ -308,10 +309,8 @@ var
 
 function NombreDeMarco(AMarco: TMarcoDisenador): string;
 begin
-  if AMarco = mdFmx then
-    Result := 'fmx'
-  else
-    Result := 'vcl';
+  // EL nombre de un marco (MarcoDe, Lsp.DesignerForma; B12 de la 1.29)
+  Result := MarcoDe(AMarco = mdFmx);
 end;
 
 const

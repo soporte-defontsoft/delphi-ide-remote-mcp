@@ -196,15 +196,11 @@ end;
 function ResolveFramework(const AParam, APath: string): string;
 begin
   Result := SinMayusculas(AParam.Trim);
-  if MatchText(Result, ['vcl', 'fmx']) then
+  if MatchText(Result, [MARCO_VCL, MARCO_FMX]) then
     Exit;
   if Result <> '' then
     Exit('?');
-  if EsDesignerFmx(APath) then
-    Exit('fmx');
-  if EsDesignerVcl(APath) then
-    Exit('vcl');
-  Result := '';
+  Result := MarcoDeDesigner(APath);
 end;
 
 // (ClaseQueNoEsta vive en Lsp.DesignerMeta desde la 1.17.0: el insert de
@@ -317,7 +313,7 @@ var
   end;
 
 begin
-  M := MetaTable(AFramework = 'fmx', Falta);
+  M := MetaTable(AFramework = MARCO_FMX, Falta);
   if M = nil then
     Exit(Falta.Negativa); // sin fuente, generandose o fallida: lo dice ella
   // por su nombre o por su identidad con la unidad (dos unidades pueden
@@ -413,7 +409,7 @@ var
   Falta: TFaltaTabla;
   HayHoja: Boolean;
 begin
-  M := MetaTable(AFramework = 'fmx', Falta);
+  M := MetaTable(AFramework = MARCO_FMX, Falta);
   if M = nil then
     Exit(Falta.Negativa);
   if not M.ClaseDeNombre(AClass, ClsId) then
@@ -1891,7 +1887,7 @@ begin
     // sin estilo: nada que juzgar
   else if TRegEx.IsMatch(Estilo, '^[A-Za-z0-9-]+$') then
   begin
-    if Fw = 'vcl' then
+    if Fw = MARCO_VCL then
       Exit(MsgFmt(SR_DESIGNER_STYLE_VCL_FMT, [Estilo]));
   end
   else if Estilo <> '' then
@@ -2065,7 +2061,7 @@ begin
       var NoVistas := '';
       var NoConfirmadas := '';
       var DelForm := 0;
-      var RaizL := RaizParaElLector(Ruta, R.RaizClase, Fw = 'fmx');
+      var RaizL := RaizParaElLector(Ruta, R.RaizClase, Fw = MARCO_FMX);
       var Sustituto := ClaseDelSustituto(R.RaizTipo);
       // los documentos de lo leido: el form y el frame o el ancestro en el que esta
       // escrito lo que se salto (EL localizador: Lsp.FormRender.TFicherosDelForm)
@@ -2087,7 +2083,7 @@ begin
       Juicio.Raiz := RaizL;
       Juicio.Sustituto := Sustituto;
       Juicio.Sustituidas := R.Sustituidas;
-      Juicio.EsFmx := Fw = 'fmx';
+      Juicio.EsFmx := Fw = MARCO_FMX;
       for var Ig in R.Ignoradas do
       begin
         var Suya: TPropiedadDelUsuario;
@@ -2163,7 +2159,7 @@ begin
     begin
       Return.AddPair('scale', TJSONNumber.Create(Params.Scale));
       Return.AddPair('scaleNote', MsgFmt(SN_DESIGNER_ESCALA_FMT, [Params.Scale,
-        (if Fw = 'vcl' then MsgText(SF_DESIGNER_ESCALA_VCL) else '')]));
+        (if Fw = MARCO_VCL then MsgText(SF_DESIGNER_ESCALA_VCL) else '')]));
     end;
     Ms := TJSONObject.Create;
     Ms.AddPair('load', TJSONNumber.Create(R.MsCarga));
@@ -2296,7 +2292,7 @@ begin
     if Fw = '?' then
       Exit(MsgText(SR_DESIGNER_FRAMEWORK));
     if Fw = '' then
-      Fw := 'vcl';
+      Fw := MARCO_VCL;
     if Params.ClassName_.Trim = '' then
       Exit(MsgText(SR_DESIGNER_NEED_CLASS));
     if Cmd = 'info' then

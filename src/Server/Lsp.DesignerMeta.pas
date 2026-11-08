@@ -549,7 +549,7 @@ begin
       if not GTablas.TryGetValue(AnsiLowerCase(Fichero), Result) then
       begin
         Result := TMetaTable.DeFichero(Fichero);
-        Result.Marco := IfThen(AIsFmx, 'FMX', 'VCL');
+        Result.Marco := UpperCase(MarcoDe(AIsFmx));
         GTablas.Add(AnsiLowerCase(Fichero), Result);
         JubilaLocked(AnsiLowerCase(Fichero));
       end;
@@ -1223,7 +1223,7 @@ begin
   if (M = nil) or (M.Marco = '') or (ARuta = '') or not M.Classes.TryGetValue(AClase, Nombre) then
     Exit;
   // la del otro marco de la misma instalacion, sin esperar a que se genere
-  Otra := MetaTable(SameText(M.Marco, 'VCL'), Falta, 0);
+  Otra := MetaTable(SameText(M.Marco, MARCO_VCL), Falta, 0);
   if (Otra = nil) or (Otra = M) or not Otra.ClaseDeNombre(Nombre, Id) or
      not LlegaALaHoja(Otra, Id, ARuta) then
     Exit;
@@ -1929,10 +1929,10 @@ begin
                 Unknown := Unknown + Cur + ',';
                 if M.Ambiguas.TryGetValue(Cur, Have) then
                   Nota(MsgFmt(SN_LINT_CLASE_AMBIGUA_FMT, [OClase,
-                    IfThen(AIsFmx, 'FMX', 'VCL'), Have.Substring(Have.IndexOf('|') + 1)]))
+                    UpperCase(MarcoDe(AIsFmx)), Have.Substring(Have.IndexOf('|') + 1)]))
                 else
                   Nota(MsgFmt(SN_LINT_UNKNOWN_CLASS_FMT,
-                    [OClase, IfThen(AIsFmx, 'FMX', 'VCL')]));
+                    [OClase, UpperCase(MarcoDe(AIsFmx))]));
               end;
               Cur := '';
             end;

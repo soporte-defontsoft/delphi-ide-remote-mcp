@@ -181,8 +181,8 @@ begin
   // Win64 activas, y sin DCC_UsePackage (es la lista de los paquetes de ESA
   // maquina) ni los grupos de las plataformas que no se activan (los escribe
   // add-platform).
-  EsVcl := SameText(AFramework, 'VCL');
-  EsFmx := SameText(AFramework, 'FMX');
+  EsVcl := SameText(AFramework, FRAMEWORK_TYPE_VCL);
+  EsFmx := SameText(AFramework, FRAMEWORK_TYPE_FMX);
   EsVisual := EsVcl or EsFmx;
   EsConsola := SameText(AAppType, 'Console') and not AEsTest;
   // Los ambitos de unidad como los reparte el IDE (medido en los Samples de
@@ -747,7 +747,7 @@ begin
         '  ' + REQUIRES_DEL_PAQUETE_NUEVO + ';' + CRLF + CRLF +
         'end.' + CRLF);
       WriteNewFile(Dproj,
-        DprojTemplate(AName, NewGuidStr, 'Package', 'None', '', '', ''));
+        DprojTemplate(AName, NewGuidStr, 'Package', FRAMEWORK_TYPE_NINGUNO, '', '', ''));
       Files.Add(AName + '.dpk');
       Files.Add(TPath.GetFileName(Dproj));
     end
@@ -771,7 +771,7 @@ begin
         '  end;' + CRLF +
         'end.' + CRLF);
       WriteNewFile(Dproj,
-        DprojTemplate(AName, NewGuidStr, 'Console', 'None', '', '', ''));
+        DprojTemplate(AName, NewGuidStr, 'Console', FRAMEWORK_TYPE_NINGUNO, '', '', ''));
       Files.Add(AName + '.dpr');
       Files.Add(TPath.GetFileName(Dproj));
     end
@@ -837,7 +837,7 @@ begin
         '  TDUnitX.RegisterTestFixture(T' + AName + ');' + CRLF + CRLF +
         'end.' + CRLF);
       WriteNewFile(Dproj,
-        DprojTemplate(AName, NewGuidStr, 'Console', 'None', MainUnit, '', '', True));
+        DprojTemplate(AName, NewGuidStr, 'Console', FRAMEWORK_TYPE_NINGUNO, MainUnit, '', '', True));
       Files.Add(AName + '.dpr');
       Files.Add(TPath.GetFileName(Dproj));
       Files.Add(MainUnit + '.pas');
@@ -863,7 +863,7 @@ begin
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.pas'), VclFormPas(MainUnit, MainForm));
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.dfm'), VclFormDfm(MainForm));
         WriteNewFile(Dproj,
-          DprojTemplate(AName, NewGuidStr, 'Application', 'VCL', MainUnit, MainForm, 'dfm'));
+          DprojTemplate(AName, NewGuidStr, 'Application', FRAMEWORK_TYPE_VCL, MainUnit, MainForm, 'dfm'));
       end
       else // fmx
       begin
@@ -882,7 +882,7 @@ begin
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.pas'), FmxFormPas(MainUnit, MainForm));
         WriteNewFile(TPath.Combine(Dir, MainUnit + '.fmx'), FmxFormFmx(MainForm));
         WriteNewFile(Dproj,
-          DprojTemplate(AName, NewGuidStr, 'Application', 'FMX', MainUnit, MainForm, 'fmx'));
+          DprojTemplate(AName, NewGuidStr, 'Application', FRAMEWORK_TYPE_FMX, MainUnit, MainForm, 'fmx'));
       end;
       Files.Add(AName + '.dpr');
       Files.Add(TPath.GetFileName(Dproj));
@@ -959,9 +959,9 @@ begin
   try
     for var N in U.UsesInterface + U.UsesImplementation do
       if SameText(N, 'FMX.Forms') then
-        Exit('fmx')
+        Exit(MARCO_FMX)
       else if SameText(N, 'Vcl.Forms') then
-        Result := 'vcl';
+        Result := MARCO_VCL;
   finally
     U.Free;
   end;
@@ -971,16 +971,17 @@ begin
   // IDE guarda en su .dproj, el juez que ya mira el modulo de datos aqui
   // abajo: daba '' y un CREATE-016 'de consola' falso (revisor 7, B6)
   var Fw := ReadDproj(DprojDe(Dpr)).FrameworkType;
-  if SameText(Fw, 'FMX') then
-    Exit('fmx');
-  if SameText(Fw, 'VCL') then
-    Exit('vcl');
+  if SameText(Fw, FRAMEWORK_TYPE_FMX) then
+    Exit(MARCO_FMX);
+  if SameText(Fw, FRAMEWORK_TYPE_VCL) then
+    Exit(MARCO_VCL);
   if ClausulaRequires(Txt, Requiere, Ini, Largo) then
     for var R in Requiere do
+      // los paquetes del marco por su nombre de paquete (fmx.bpl, vcl.bpl)
       if SameText(R, 'fmx') then
-        Exit('fmx')
+        Exit(MARCO_FMX)
       else if SameText(R, 'vcl') then
-        Result := 'vcl';
+        Result := MARCO_VCL;
 end;
 
 { DONDE CAE LO QUE SE CREA DENTRO DE UN PROYECTO: la estructura de carpetas la
@@ -1073,7 +1074,7 @@ begin
   if Kind <> 'datamodule' then
   begin
     Have := ProjectFramework(ADprPath);
-    Want := IfThen(Kind.EndsWith('fmx'), 'fmx', 'vcl');
+    Want := MarcoDe(Kind.EndsWith('fmx'));
     if (Have <> '') and (Have <> Want) then
       Exit(MsgFmt(SR_CREATE_FRAMEWORK_FMT,
         [AKind, TPath.GetFileName(ADprPath), UpperCase(Have)]));
@@ -1206,7 +1207,7 @@ begin
     // data module: the designer file is a .dfm on BOTH frameworks
     // EL juez del marco, el del form y el frame (uses, FrameworkType,
     // requires): un paquete FMX sin FrameworkType recibia el de la VCL (V214)
-    Fmx := ProjectFramework(ADprPath) = 'fmx';
+    Fmx := ProjectFramework(ADprPath) = MARCO_FMX;
     WriteNewFile(PasPath, DataModulePas(AUnitName, FormName, Fmx));
     WriteNewFile(TPath.Combine(Dir, AUnitName + '.dfm'), DataModuleDfm(FormName));
   end;

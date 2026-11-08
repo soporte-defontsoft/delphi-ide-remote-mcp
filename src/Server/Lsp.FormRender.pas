@@ -618,7 +618,7 @@ const
 
 function FormRenderExe(const AFramework: string; out ANombre: string): string;
 begin
-  if SameText(AFramework, 'fmx') then
+  if SameText(AFramework, MARCO_FMX) then
     ANombre := 'DelphiFormRenderFmx.exe'
   else
     ANombre := 'DelphiFormRenderVcl.exe';
@@ -1949,7 +1949,7 @@ begin
   try
     try
       // los ayudantes, con los recursos de idioma que lleven a su lado
-      for var Fw in TArray<string>.Create('vcl', 'fmx') do
+      for var Fw in TArray<string>.Create(MARCO_VCL, MARCO_FMX) do
       begin
         var Nombre: string;
         var Ayudante := FormRenderExe(Fw, Nombre);
@@ -2451,7 +2451,7 @@ begin
   Result := Default(TPeticionRender);
   Result.Framework := AFramework;
   if Result.Framework = '' then
-    Result.Framework := (if EsDesignerFmx(APath) then 'fmx' else 'vcl');
+    Result.Framework := MarcoDe(EsDesignerFmx(APath));
   Result.Path := APath;
   Result.Bds := DiscoverRadStudio.Version;
   // form o frame lo dice EL lector de clases (RaizParaElRender): el ayudante
@@ -2484,7 +2484,7 @@ begin
       // la version del IDE, y DSGN-063 salia sin ella (V102 de la 1.23.1). El
       // conversor es la RTL de 32 bits, la misma en los dos ayudantes; junto a
       // la copia no hay .pas que leer
-      Pet := PeticionDeRender(TPath.Combine(Dir, 'form.dfm'), 'vcl');
+      Pet := PeticionDeRender(TPath.Combine(Dir, 'form.dfm'), MARCO_VCL);
       Pet.Salida := TPath.Combine(Dir, 'convertido');
       Pet.Convierte := (if AATexto then FR_CONVIERTE_TEXTO else FR_CONVIERTE_BINARIO);
       EscribeBytes(Pet.Path, ABytes, ltTemporal);

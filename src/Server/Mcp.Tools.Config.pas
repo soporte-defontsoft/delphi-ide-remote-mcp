@@ -414,7 +414,7 @@ begin
     begin
       Return.AddPair('frameworkType', Info.FrameworkType);
       Return.AddPair('appType', Info.AppType);
-      if SameText(Info.FrameworkType, 'VCL') then
+      if SameText(Info.FrameworkType, FRAMEWORK_TYPE_VCL) then
         Return.AddPair('crossPlatform', MsgText(SF_CFG_NO_VCL_WINDOWS_ONLY))
       else
         Return.AddPair('crossPlatform', MsgText(SF_CFG_YES_FMX_CONSOLE_TARGET));
