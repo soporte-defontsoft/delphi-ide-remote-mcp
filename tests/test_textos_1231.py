@@ -5,6 +5,8 @@ Cada uno se compara con SU texto del catalogo (Lsp.Texts), que contra el build a
 
   X1 V146 EDIT-019 (un rango que toma el fichero entero) dice tambien como REEMPLAZAR, no solo como
      borrar
+  X1b (Hermes, completo de la 1.29) un ancla de BLOQUE con todas las lineas del fichero se niega como el
+     rango (EDIT-019) en delphi_edit (edits y old) y delphi_textedit, y nada se escribe
   X2 V133 GIT-038 de command=branch con create/name dice como se crea una rama (switch create=true)
   X3 V138 la descripcion de delphi_completion dice que reubica la columna tras el punto (LSP-027)
   X4 V139 delphi_move copy=true de un fichero con extension a un dest sin ella: MOVE-025 (dest es la
@@ -36,7 +38,29 @@ try:
         f.write('unit UTres;\r\ninterface\r\nimplementation\r\nend.\r\n')
     r = srv.call('delphi_edit', {'path': pas, 'old': 'unit UTres;', 'toline': 4, 'new': 'unit UOtra;'})
     check('X1 EDIT-019 dice tambien como reemplazar (V146)',
-          mc.es(r, 'SR_RANGE_WHOLE_FMT') and (CAT['SR_RANGE_WHOLE_FMT'] % 4) in r, r[:500])
+          mc.es(r, 'SR_RANGE_WHOLE_FMT') and (CAT['SR_RANGE_WHOLE_FMT'] % (CAT['SF_RANGO_TODO'], 4)) in r, r[:500])
+    # X1b (Hermes, completo de la 1.29): un ancla de BLOQUE con TODAS las lineas era la puerta de al lado del
+    # rango: reescribia el fichero entero. Se niega como el rango (EDIT-019), en las dos tools que la toman, y
+    # nada se escribe. ROJO contra 0b408580
+    original = open(pas, 'rb').read()
+    txt = os.path.join(JAIL, 'Tres.txt')
+    with open(txt, 'w', newline='') as f:
+        f.write('uno\r\ndos\r\ntres\r\n')
+    original_txt = open(txt, 'rb').read()
+    TODO_PAS = 'unit UTres;\ninterface\nimplementation\nend.'
+    casos = [
+        ('delphi_edit edits', 'delphi_edit', {'path': pas, 'edits': [{'old': TODO_PAS, 'new': 'unit UOtra;\nend.'}]}, pas,
+         original),
+        ('delphi_edit old', 'delphi_edit', {'path': pas, 'old': TODO_PAS, 'new': 'unit UOtra;\nend.'}, pas, original),
+        ('delphi_textedit edits', 'delphi_textedit', {'path': txt, 'edits': [{'old': 'uno\ndos\ntres', 'new': 'x'}]},
+         txt, original_txt)]
+    # (delphi_changeset no toma anclas de bloque: su old es UNA linea)
+    for nombre, tool, args, fichero, antes in casos:
+        r = srv.call(tool, args)
+        check('X1b %s con un bloque de todas las lineas: EDIT-019 y nada escrito' % nombre,
+              mc.es(r, 'SR_RANGE_WHOLE_FMT') and (CAT['SR_RANGE_WHOLE_FMT'] % (CAT['SF_BLOQUE_TODO'], 4 if fichero == pas
+                                                                                  else 3)) in r
+              and open(fichero, 'rb').read() == antes, r[:500])
 
     repo = os.path.join(JAIL, 'repo')
     os.makedirs(repo)

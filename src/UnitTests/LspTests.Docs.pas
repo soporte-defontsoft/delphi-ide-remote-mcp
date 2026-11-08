@@ -63,6 +63,8 @@ type
     procedure UnaSeccionPorSuTituloComoSeLee;
     [Test]
     procedure LaQueEnvuelveLaPaginaAcabaEnSuPrimerSubtitulo;
+    [Test]
+    procedure LasPlantillasDeLaWikiSinResolver;
   end;
 
 implementation
@@ -728,6 +730,55 @@ begin
     'class="mw-headline" id="Y1">Y1</span></h3><p>y1</p></div>', 'Y');
   Assert.Contains(P.Texto, 'y1', 'uno sin ancla delante tambien cuenta');
   Assert.AreEqual(0, Integer(Length(P.Subsecciones)));
+end;
+
+procedure TDocsPurasTests.LasPlantillasDeLaWikiSinResolver;
+const
+  // la lista que lleva cada plantilla de la ayuda de la 13.2 (77 586 en sus
+  // siete .chm, todas iguales; medido el 8-nov-2026)
+  SUST = '|H21=&#33;|H25=&#37;|H28=&#40;|H29=&#41;|H2A=&#42;|H2B=&#43;|H2F=&#47;' +
+    '|H3C=&#60;|H3D=&#61;|H3E=&#62;|H5B=&#91;|H5D=&#93;|H5E=&#94;|H7C=&#124;}}';
+  // la franja de un miembro heredado, tal cual en fmx.chm de la 13.2
+  // (FMX.Forms.TCustomForm.operator_H28H29.htm)
+  FRANJA =
+    '<div id="mw-content-text"><p><span id="inherits">{{#multireplace:' +
+    'FMX.Forms.TCustomForm.operator H28H29' + SUST + ' inherits from <a href="' +
+    'FMX.Types.TFmxObject.operator_H28H29.htm" title="FMX.Types.TFmxObject.operator ' +
+    'H28H29">{{#multireplace:FMX.Types.TFmxObject.operator H28H29' + SUST + '</a>. ' +
+    'All content below this line refers to <a href="FMX.Types.TFmxObject.operator_' +
+    'H28H29.htm" title="FMX.Types.TFmxObject.operator H28H29">{{#multireplace:' +
+    'FMX.Types.TFmxObject.operator H28H29' + SUST + '</a>.</span></p></div>';
+var
+  P: TPaginaDoc;
+  E: TEnlace;
+begin
+  // lo que dice la misma pagina de la 13.1, que la trae resuelta: la plantilla
+  // deja su texto con las sustituciones que ella misma declara
+  P := PaginaComoTexto(FRANJA, '');
+  Assert.Contains(P.Texto, 'FMX.Forms.TCustomForm.operator () inherits from ' +
+    'FMX.Types.TFmxObject.operator (). All content below this line refers to ' +
+    'FMX.Types.TFmxObject.operator ().', 'como la misma pagina de la 13.1');
+  Assert.DoesNotContain(P.Texto, '{{', 'nada de la plantilla');
+  Assert.DoesNotContain(P.Texto, 'H28', 'las sustituciones, hechas');
+  // un nombre sin nada que sustituir, y una H con dos cifras que no es de la
+  // lista (THashSHA1: 'HA1') se queda como esta
+  P := PaginaComoTexto('<div id="mw-content-text"><p><span id="inherits">' +
+    '{{#multireplace:FMX.Forms.TForm.StyleBook' + SUST + ' inherits from ' +
+    '{{#multireplace:System.Hash.THashSHA1.Reset' + SUST + '.</span></p></div>', '');
+  Assert.Contains(P.Texto, 'FMX.Forms.TForm.StyleBook inherits from System.Hash.THashSHA1.Reset.');
+  // lo que no es esta plantilla, o no se cierra, se queda como viene (topics.chm
+  // de la 13.2 trae {{Parent|...}} y {{Delphi}} en el texto de 10 paginas)
+  P := PaginaComoTexto('<div id="mw-content-text"><p>{{Parent|higher topic}} y ' +
+    '{{Delphi}} y {{#multireplace:sin cerrar|H28=&#40;</p></div>', '');
+  Assert.Contains(P.Texto, '{{Parent|higher topic}} y {{Delphi}} y {{#multireplace:sin cerrar|H28=(',
+    'solo la que se conoce, y entera');
+  // el texto de un enlace de la barra pasa por la misma puerta
+  P := PaginaComoTexto('<div id="mw-content-text"><p><i>Up to Parent: <a href="P.htm">' +
+    '{{#multireplace:FMX.Forms.TCustomForm' + SUST + '</a></i></p><h2><span ' +
+    'class="mw-headline" id="A">A</span></h2><p>a</p></div>', '');
+  Assert.AreEqual(1, Integer(Length(P.Enlaces)), 'el padre');
+  E := P.Enlaces[0];
+  Assert.AreEqual('FMX.Forms.TCustomForm', E.Texto);
 end;
 
 initialization

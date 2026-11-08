@@ -35,6 +35,11 @@ type
     TipoDeCampo: TFieldType; // el de FireDAC
     Nulo: Boolean;
     Clave: Boolean;
+    { lo que la base pone sola en un insert que no lo da: su valor por defecto
+      (caDefault) o su contador (caAutoInc), como lo dice el catalogo; un
+      agente sabia que campos obligatorios tenia que dar a base de errores
+      (la pasada en vivo de la 1.29) }
+    Defecto, AutoInc: Boolean;
     Longitud, Precision, Escala: Integer;
   end;
 
@@ -484,6 +489,8 @@ begin
       Atr := [];
       Move(N, Atr, SizeOf(Atr));
       C.Nulo := caAllowNull in Atr;
+      C.Defecto := caDefault in Atr;
+      C.AutoInc := caAutoInc in Atr;
       C.Clave := Claves.IndexOf(C.Nombre) >= 0;
       Tam := 0;
       P := 0;

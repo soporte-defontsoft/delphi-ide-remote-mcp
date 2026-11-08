@@ -1003,13 +1003,36 @@ check('end.: una sentencia delante del end. en su linea no es BROKEN STRUCTURE',
       not mc.fallo(out) and not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT') and
       not mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA') and
       open(DPRE, 'rb').read() == b"program EndJunto;\r\n\r\nbegin\r\nWriteln('x'); end.\r\n", out[:300])
-# y una tanda de BLOQUE que se lleva el end. avisa: el bloque no preguntaba por la
-# estructura y la tanda solo la juzgaba si una entrada de una linea habia avisado
+# y una tanda de BLOQUE que se lleva el end. NO se escribe (EDIT-133, Hermes, dirigido de la 1.29: se
+# escribia y lo decia despues EDIT-085, con la orden de deshacer). El bloque no preguntaba por la estructura
+# y la tanda solo la juzgaba si una entrada de una linea habia avisado. ROJO contra 0b408580
 DPRB = os.path.join(DIR, 'EndBloque.dpr')
-open(DPRB, 'wb').write(b'program EndBloque;\r\n\r\nbegin\r\nend.\r\n')
+_endb = b'program EndBloque;\r\n\r\nbegin\r\nend.\r\n'
+open(DPRB, 'wb').write(_endb)
 out = call('delphi_edit', {"path": DPRB, "edits": [{"old": "begin\nend.", "new": "begin"}]})
-check('end.: una tanda de bloque que quita el end. avisa de BROKEN STRUCTURE',
-      mc.es(out, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT'), out[:300])
+check('end.: una tanda de bloque que quita el end. se niega (EDIT-133) y el fichero queda como estaba',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_SIN_END_FINAL_FMT') and open(DPRB, 'rb').read() == _endb,
+      out[:300])
+# ...la edicion suelta que lo quita (old sin new, el caso de Hermes), tambien antes de escribir
+out = call('delphi_edit', {"path": DPRB, "old": "end.", "delete": True})
+check('end.: una edicion suelta que borra el end. se niega (EDIT-133) y no escribe',
+      mc.rechazado(out) and mc.es(out, 'SR_EDIT_SIN_END_FINAL_FMT') and open(DPRB, 'rb').read() == _endb,
+      out[:300])
+# ...y un changeset que lo quita deshace el lote entero, sobre lo que queda
+_cs = call('delphi_changeset', {'command': 'begin'})
+_m = re.search(r'CHANGESET (\S+) opened', _cs)
+_cid = _m.group(1) if _m else ''
+call('delphi_changeset', {'command': 'stage', 'id': _cid, 'kind': 'edit', 'path': DPRB, 'old': 'end.', 'new': ''})
+call('delphi_changeset', {'command': 'preview', 'id': _cid})
+out = call('delphi_changeset', {'command': 'commit', 'id': _cid})
+check('end.: un changeset que deja el fuente sin end. se deshace entero (EDIT-133)',
+      mc.es(out, 'SR_EDIT_SIN_END_FINAL_FMT') and open(DPRB, 'rb').read() == _endb, (_cs[:120], out[:300]))
+# ...pero una tanda que lo quita en una entrada y lo pone en otra se escribe: se juzga lo que queda
+out = call('delphi_edit', {"path": DPRB, "edits": [{"old": "end.", "new": "end"},
+                                                  {"old": "begin", "new": "begin\n  Writeln('x');"},
+                                                  {"old": "end", "new": "end."}]})
+check('end.: una tanda que lo quita y lo vuelve a poner se escribe (se juzga el fichero final)',
+      mc.abre(out, 'SN_PATCH_EDITS_OK_FMT') and open(DPRB, 'rb').read().endswith(b'end.\r\n'), out[:300])
 # la frontera del insert en una unit: un 'end' con su '.' en la linea de abajo
 # compila (medido con delphi_build), y la rutina va delante del end; se negaba
 PASE = os.path.join(DIR, 'UEndPartido.pas')

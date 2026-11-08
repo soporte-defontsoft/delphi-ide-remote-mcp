@@ -639,6 +639,12 @@ REGLAS = [
     ('quien recorta lo que pinta FMX', r'\bClipChildren\s+or\b[^;]*SmallSizeControl',
      [('FormRender.Fmx.pas', 'LoQuePinta')],
      'LoQuePinta (FormRender.Fmx): la regla de TControl.PaintAndClipChild, con lo que dicen los controles vivos'),
+    # las plantillas de la wiki que la ayuda de la 13.2 trae sin resolver ({{#multireplace:...}}): no
+    # hay juez que las resuelva aqui (ni el IDE ni el visor de Windows, medido el 8-nov-2026), asi
+    # que es gramatica nuestra, UNA, medida contra la 13.1 (25 831 franjas iguales)
+    ('las plantillas de la wiki de la ayuda leidas a mano', r"\{\{#",
+     [('Lsp.Docs.pas', 'SinPlantillasDeWiki')],
+     'SinPlantillasDeWiki (Lsp.Docs): la llama DecodificaEntidades, la puerta del texto de la ayuda'),
     ('el numero de un nombre mDNS de adb leido a mano', r"Pos\(\s*'\)\.'",
      [('Lsp.Settings.pas', 'DispositivoSinNumeroMdns')],
      'DispositivoSinNumeroMdns (Lsp.Settings): lo leen BadDeviceName y AdbTargetAllowed'),
@@ -2294,6 +2300,8 @@ PLANTADO = {
         "  if not (SameText(Prop, 'StyleLookup') and LeeLiteralDeForm(Valor, Lookup)) then Continue;",
     # una segunda copia de la regla del pintado de FMX (B11 de la 1.28)
     'quien recorta lo que pinta FMX': '  if P.ClipChildren or TControlCrack(P).SmallSizeControl then',
+    # una segunda lectura de las plantillas que la ayuda de la 13.2 trae sin resolver (8-nov-2026)
+    'las plantillas de la wiki de la ayuda leidas a mano': "  P := Pos('{{#multireplace:', S);",
     # las de Lsp.DesignerForma y Lsp.ClausulaUses hasta el 7-nov-2026 (B5 de la 1.28)
     'un grupo de una regex juzgado a mano': '  if M.Success and (M.Groups.Count > 2) then X := 1;',
     # las siete de Lsp.DesignerEdit hasta el 7-nov-2026 (C1-2 de la 1.28)

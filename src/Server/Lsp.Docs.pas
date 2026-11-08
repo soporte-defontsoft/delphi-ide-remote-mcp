@@ -325,6 +325,65 @@ end;
 
 { ------------------------------------------------------------ entidades }
 
+(* Las plantillas de la wiki de Embarcadero que su ayuda trae SIN resolver: la
+  de la 13.2 (sus .chm del 2 y el 4-sep-2026) lleva en la franja "inherits"
+  de ~25 900 paginas de miembro heredado tres '{{#multireplace:TEXTO|H21=&#33;
+  |H28=&#40;...}}' (77 586, todas con la misma lista); la 13.1 las trae
+  resueltas. Cada una deja su TEXTO con las sustituciones que ELLA declara, en
+  su orden ('operator H28H29' -> 'operator &#40;&#41;', que las entidades
+  hacen '()'). No hay juez que la resuelva aqui: ni el IDE ni el visor de
+  Windows la conocen (30 GB de la instalacion, medido el 8-nov-2026), la
+  resolvia la wiki al generar la ayuda. Gramatica PROPIA, UNA, vigilada en
+  test_paisaje, y medida contra la 13.1: 25 831 franjas iguales de 25 835 (las
+  4 otras cambian de contenido). Otra plantilla, o una sin cerrar, se queda
+  como viene; sin ninguna, el texto vuelve tal cual. *)
+function SinPlantillasDeWiki(const S: string): string;
+const
+  ABRE = '{{#multireplace:';
+  CIERRA = '}}';
+var
+  P, Q, Desde, Igual: Integer;
+  Partes: TArray<string>;
+  Texto: string;
+  Sb: TStringBuilder;
+begin
+  P := Pos(ABRE, S);
+  if P = 0 then
+    Exit(S);
+  Sb := TStringBuilder.Create(Length(S));
+  try
+    Desde := 1;
+    while P > 0 do
+    begin
+      Q := PosEx(CIERRA, S, P + Length(ABRE));
+      if Q = 0 then
+        Break;
+      Sb.Append(S, Desde - 1, P - Desde);
+      // el TEXTO y sus pares DE=A: un '|' del nombre va como H7C
+      Partes := Copy(S, P + Length(ABRE), Q - P - Length(ABRE)).Split(['|']);
+      Texto := '';
+      if Length(Partes) > 0 then
+        Texto := Partes[0];
+      for var I := 1 to High(Partes) do
+      begin
+        Igual := Pos('=', Partes[I]);
+        if Igual > 1 then
+          Texto := Texto.Replace(Copy(Partes[I], 1, Igual - 1), Copy(Partes[I], Igual + 1, MaxInt));
+      end;
+      Sb.Append(Texto);
+      Desde := Q + Length(CIERRA);
+      P := PosEx(ABRE, S, Desde);
+    end;
+    Sb.Append(S, Desde - 1, Length(S) - Desde + 1);
+    Result := Sb.ToString;
+  finally
+    Sb.Free;
+  end;
+end;
+
+{ EL texto de la ayuda como texto: sus entidades y, antes, las plantillas de
+  la wiki que trae sin resolver (SinPlantillasDeWiki). La puerta de todo lo
+  que se lee de una pagina: su texto, sus titulos y el de sus enlaces. }
 function DecodificaEntidades(const S: string): string;
 var
   I, J: Integer;
@@ -332,6 +391,10 @@ var
   Sb: TStringBuilder;
   Codigo: Integer;
 begin
+  // una sin cerrar vuelve igual y sigue como texto
+  Ent := SinPlantillasDeWiki(S);
+  if Ent <> S then
+    Exit(DecodificaEntidades(Ent));
   if S.IndexOf('&') < 0 then
     Exit(S);
   Sb := TStringBuilder.Create(Length(S));

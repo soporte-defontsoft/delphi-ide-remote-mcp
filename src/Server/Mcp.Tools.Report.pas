@@ -253,6 +253,24 @@ begin
   // "no esta" y no sabia que su nombre no podia ser uno)
   if Ruta = '' then
     Exit(MsgFmt(SR_REPORT_NOMBRE_FMT, [AName.Trim]));
+  // un nombre solo (lo que REPORT-012 ofrece) se busca tambien en las carpetas de
+  // los agentes, donde van casi todos desde la 1.29 (F1-9): solo miraba la raiz del
+  // buzon y contestaba REPORT-008 con el informe en la carpeta de su agente (Hermes,
+  // completo de la 1.29; medido aqui). Por EL que los lista, con su puerta, y su
+  // nombre por EL que lo lee (RutaDeInforme); uno: ese; varios: se dicen como list
+  // los ensena, no se elige
+  if not TFile.Exists(Ruta) and
+     SameFileName(TPath.GetDirectoryName(Ruta), ExcludeTrailingPathDelimiter(BuzonDeInformes)) then
+  begin
+    var Suyos: TArray<string> := [];
+    for var R in InformesDelBuzon do
+      if SameText(TPath.GetFileName(R), TPath.GetFileName(Ruta)) then
+        Suyos := Suyos + [R];
+    if Length(Suyos) > 1 then
+      Exit(MsgFmt(SR_REPORT_VARIOS_FMT, [AName.Trim, string.Join(', ', Suyos)]));
+    if Length(Suyos) = 1 then
+      Ruta := RutaDeInforme(Suyos[0]);
+  end;
   // lo que no esta o la puerta no admite (una union hacia fuera) es lo mismo
   // para quien pregunta: no es un informe de su workspace, y la negativa no
   // ensena donde vive la casa

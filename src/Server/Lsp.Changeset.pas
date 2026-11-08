@@ -1248,22 +1248,27 @@ begin
         // se avisaba despues (B3 de la 1.28). Sobre lo que quedo, no paso a paso
         // (un paso intermedio puede no leerse), y por lo que cambia su texto:
         // un move no cambia lo que dice el form. La operacion que se cita es la
-        // ULTIMA que lo toco
+        // ULTIMA que lo toco. Y un fuente que tenia su end. final y el lote deja
+        // sin ninguno, igual (EDIT-133: DoEdit no lo juzga dentro de un lote)
         if Applied then
         begin
           var Juzgados: TArray<string> := [];
           for var J := C.Ops.Count - 1 downto 0 do
           begin
             var FPath := C.Ops[J].Path;
-            if not (C.Ops[J].Kind in [opEdit, opCreate, opDeleteLine]) or not EsRutaDeDesigner(FPath) or
+            if not (C.Ops[J].Kind in [opEdit, opCreate, opDeleteLine]) or
+               not (EsRutaDeDesigner(FPath) or EsRutaDeFuente(FPath)) or
                RutaEnLista(FPath, Juzgados) or not TFile.Exists(FPath) or not Foto.Cambio(FPath) then
               Continue;
             Juzgados := Juzgados + [FPath];
             var Rompe := '';
             try
               var EncF: string;
-              Rompe := NegativaDelParser(TPath.GetFileName(FPath), TextoDeLaFoto(Foto, FPath),
-                PatchLoadText(FPath, EncF), EncF, False);
+              if EsRutaDeDesigner(FPath) then
+                Rompe := NegativaDelParser(TPath.GetFileName(FPath), TextoDeLaFoto(Foto, FPath),
+                  PatchLoadText(FPath, EncF), EncF, False)
+              else
+                Rompe := SinEndFinalDenegado(FPath, TextoDeLaFoto(Foto, FPath), PatchLoadText(FPath, EncF));
             except
               Rompe := ''; // un form que no se relee: lo dice el juicio de abajo
             end;

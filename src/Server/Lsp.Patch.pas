@@ -94,6 +94,15 @@ function AnclaPerdida(const ALines: TArray<string>;
 function RangoHasta(const APath: string;
   ATarget0, AToLine, ATotal: Integer; out AFin: Integer): string;
 
+{ EL juicio del end. final de un fuente ANTES de escribirlo (EDIT-133): ''
+  si ADespues lo sigue teniendo o AAntes no lo tenia (un .inc, un fichero
+  nuevo); si no, la negativa. Los end. del CODIGO, por EL lector
+  (Lsp.Pascal.EndsConPunto), como el aviso de despues (EDIT-085). Lo
+  preguntan la edicion suelta (DoEdit) sobre lo que va a escribir, y la
+  tanda (AplicaTanda) y el changeset sobre lo que queda al acabar: un paso
+  intermedio puede quitarlo y el siguiente ponerlo. }
+function SinEndFinalDenegado(const APath, AAntes, ADespues: string): string;
+
 { EL modo fragmento, resuelto en un solo sitio.
 
   Convierte (fragmento + atline + new) en lo unico que entienden los motores:
@@ -795,6 +804,19 @@ begin
     Result := Result + #10 + Aviso;
 end;
 
+{ EL "vaciame el fichero" por la puerta de al lado (EDIT-019): un tramo de la
+  primera linea a la ultima de las ATotal reales. Estas tools no reescriben un
+  fichero entero; lo preguntan el rango (RangoHasta) y el ancla de bloque
+  (ApplyBlockEdit), que lo dejaba pasar: un bloque con todas sus lineas y un
+  new lo reescribia (Hermes, completo de la 1.29). AQue: SF_RANGO_TODO o
+  SF_BLOQUE_TODO. }
+function TodoElFicheroDenegado(AIni0, AFin0, ATotal: Integer; const AQue: string): string;
+begin
+  Result := '';
+  if (AIni0 = 0) and (AFin0 >= ATotal - 1) then
+    Result := MsgFmt(SR_RANGE_WHOLE_FMT, [AQue, ATotal]);
+end;
+
 function ApplyBlockEdit(const APath, AOld, ANew: string;
   AOccurrence: Integer; AAtLine: Integer): string;
 var
@@ -859,6 +881,12 @@ begin
   end;
   if Count > 1 then
     Exit(MsgFmt(SR_PATCH_BLOCK_AMBIGUOUS_FMT, [Count, OldLines[0].Trim]));
+  // un bloque con TODAS las lineas reales, como el rango de la primera a la
+  // ultima: nada se escribe
+  Result := TodoElFicheroDenegado(Hit, Hit + Length(OldLines) - 1, CuantasLineasReales(Lines),
+    MsgText(SF_BLOQUE_TODO));
+  if Result <> '' then
+    Exit;
   NewLines := LineasDeNew(ANew);
   // El compositor de todos (CambiaLineasEnSuTexto): las lineas nuevas sobre
   // las del bloque, cada linea de fuera con SU salto y el salto final tal
@@ -956,8 +984,9 @@ begin
   // puerta, y estas tools ya rechazan reescribirlo entero. La puerta de al
   // lado es justo donde se cuelan los agujeros (medido tres veces el
   // 2026-09-20), asi que se cierra aqui, con el mismo criterio.
-  if (ATarget0 = 0) and (AToLine >= ATotal) then
-    Exit(MsgFmt(SR_RANGE_WHOLE_FMT, [ATotal]));
+  Result := TodoElFicheroDenegado(ATarget0, AToLine - 1, ATotal, MsgText(SF_RANGO_TODO));
+  if Result <> '' then
+    Exit;
   AFin := AToLine - 1;
 end;
 
@@ -1036,6 +1065,17 @@ begin
   var Detras := Copy(VistaDespues, ED[0].Fin, MaxInt).Trim;
   if (Detras <> '') and (Detras <> Copy(VistaAntes, EA[0].Fin, MaxInt).Trim) then
     Result := MsgText(SN_EDIT_ESTRUCTURA_ROTA_ULTIMA);
+end;
+
+function SinEndFinalDenegado(const APath, AAntes, ADespues: string): string;
+begin
+  Result := '';
+  // la misma pregunta que la primera de AvisoDeEstructura, que sigue avisando
+  // despues donde nadie niega antes (los insert de delphi_edit, con el juicio
+  // aplazado entre sus dos pasos)
+  if (Length(EndsConPunto(CodigoPascal(AAntes))) > 0) and
+     (Length(EndsConPunto(CodigoPascal(ADespues))) = 0) then
+    Result := MsgFmt(SR_EDIT_SIN_END_FINAL_FMT, [TPath.GetFileName(APath)]);
 end;
 
 function IniciosDelAncla(const ALines: TArray<string>; const AAncla: string): TArray<Integer>;
@@ -1581,14 +1621,19 @@ begin
       // un form que se leia y la tanda deja ilegible para el parser del IDE
       // vuelve entero, byte a byte, como una entrada que falla (B3 de la 1.28):
       // juzgado sobre lo que queda, no entrada a entrada (un paso intermedio
-      // puede no leerse; DoEdit no juzga dentro de una tanda)
-      if EsRutaDeDesigner(APath) and (SinCambios < Arr.Count) then
+      // puede no leerse; DoEdit no juzga dentro de una tanda). Y un fuente que
+      // tenia su end. final y la tanda deja sin ninguno, igual (EDIT-133)
+      if (SinCambios < Arr.Count) and
+         (EsRutaDeDesigner(APath) or ((TextoAntes <> '') and EsRutaDeFuente(APath))) then
       begin
         var Rompe := '';
         try
           var EncFinal: string;
-          Rompe := NegativaDelParser(TPath.GetFileName(APath), TextoAntes,
-            PatchLoadText(APath, EncFinal), EncFinal, False);
+          var Final := PatchLoadText(APath, EncFinal);
+          if EsRutaDeDesigner(APath) then
+            Rompe := NegativaDelParser(TPath.GetFileName(APath), TextoAntes, Final, EncFinal, False)
+          else
+            Rompe := SinEndFinalDenegado(APath, TextoAntes, Final);
         except
           Rompe := ''; // un form que no se relee: lo dice el juicio de abajo
         end;
@@ -3107,6 +3152,16 @@ begin
       var Rompe := NegativaDelParser(TPath.GetFileName(APath), Text, Joined, EncName(K), False);
       if Rompe <> '' then
         Exit(Rompe);
+    end;
+    // un fuente que tenia su end. final y esta edicion deja sin ninguno no se
+    // escribe (EDIT-133): se escribia y lo decia despues EDIT-085, con la orden
+    // de deshacer (Hermes, dirigido de la 1.29: una edicion se lo llevo).
+    // Como el form de arriba, en una tanda o un changeset juzga quien agrupa
+    if not AIsDesigner and (GJuicioDeFormAplazado = 0) then
+    begin
+      var SinEnd := SinEndFinalDenegado(APath, Text, Joined);
+      if SinEnd <> '' then
+        Exit(SinEnd);
     end;
     var CopyNote := BackupFile(APath);
     AtomicWrite(APath, NewBytes);

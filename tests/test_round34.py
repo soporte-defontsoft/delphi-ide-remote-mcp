@@ -167,16 +167,17 @@ try:
           mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and '(* apartado' in txt and '*)' in txt and
           not mc.es(r, 'SN_EDIT_ESTRUCTURA_ROTA_END_FMT') and
           not mc.es(r, 'SN_EDIT_ESTRUCTURA_ROTA_ULTIMA'), r[:300])
-    # ...y el aviso sigue saliendo cuando el fichero FINAL esta roto: el (*
-    # se abre y nadie lo cierra
+    # ...y cuando el fichero FINAL queda sin su end. (el (* se abre y nadie lo
+    # cierra: el end. queda dentro), la tanda NO se escribe y vuelve entera
+    # (EDIT-133 desde la 1.29: se escribia y lo decia despues EDIT-085)
     open(f, 'w', newline='\r\n').write(unidad())
     r = call('delphi_edit', {'path': f, 'edits': json.dumps([
         {'old': 'procedure Uno;', 'new': '(* apartado un rato\nprocedure Uno;'},
         {'old': 'interface', 'new': 'interface\n// nada'},
     ])})
-    check('B6b ...y si el fichero FINAL queda roto (el (* no se cierra), la tanda avisa UNA vez',
-          mc.abre(r, 'SN_PATCH_EDITS_OK_FMT') and
-          mc.ids(r).count(mc.id_de('SN_EDIT_ESTRUCTURA_ROTA_END_FMT')) == 1, r[:400])
+    check('B6b ...y si el fichero FINAL queda sin su end. (el (* no se cierra), la tanda se niega '
+          '(EDIT-133) y el fichero vuelve como estaba',
+          mc.rechazado(r) and mc.es(r, 'SR_EDIT_SIN_END_FINAL_FMT') and open(f).read() == unidad(), r[:400])
 
     # B7 (medido el 9-oct-2026): anclas que solo difieren en la SANGRIA. La
     # descripcion promete que la sangria no cuenta; delphi_edit casaba "la

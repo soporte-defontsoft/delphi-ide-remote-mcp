@@ -1382,15 +1382,19 @@ const
 
   { V146 de la 1.23.1: a quien TRAIA contenido (un form entero en lugar del
     recien creado) solo le decia como borrar; lo que acabo haciendo el agente
-    (anclar la ultima linea que se queda) no lo decia nadie }
+    (anclar la ultima linea que se queda) no lo decia nadie. %s = que lo pide
+    (SF_RANGO_TODO, SF_BLOQUE_TODO): un ancla de bloque con TODAS las lineas
+    era la puerta de al lado (Hermes, completo de la 1.29) }
   SR_RANGE_WHOLE_FMT =
-    '[EDIT-019 DENIED] That range (1-%d) takes the WHOLE file. This tool ' +
+    '[EDIT-019 DENIED] %s (1-%d) takes the WHOLE file. This tool ' +
     'does not empty files, just as it does not rewrite them whole. To ' +
-    'REPLACE what is in it, leave at least one line out of the range - the ' +
+    'REPLACE what is in it, leave at least one line out of it - the ' +
     'last one (in a form, the root''s closing end) - and give in new what ' +
     'goes before it; or anchor that last line alone and give in new the new ' +
     'text followed by that same line. To remove the file, delphi_delete sends it to the trash ' +
     'and it can be recovered.';
+  SF_RANGO_TODO = 'That range';
+  SF_BLOQUE_TODO = 'That block anchor';
 
   SR_RANGE_WITH_BLOCK =
     '[EDIT-020 INVALID_PARAM] "toline" does not combine with a ' +
@@ -4867,20 +4871,32 @@ const
   SN_DB_CREADO =
     '[DB-026] Created with the SQL FireDAC writes for this engine (sql), in ' +
     'one transaction. command=fields shows it as the database names it.';
+  { un update o un delete que tocaria mas filas que su max: se deshace en su
+    transaccion y se dice cuantas. %s = el comando; %d cuantas; %d el max;
+    %d cuantas, para repetirlo }
+  SR_DB_TOCARIA_FMT =
+    '[DB-028 DENIED] %s would change %d rows and max allows %d: nothing was ' +
+    'changed. If those are the rows you mean, repeat it with max=%d; if not, ' +
+    'narrow the filters (rows with the same filters shows them).';
+  { tables de una base sin ninguna: el esquema que se miro, el de la conexion
+    (en mcp_pruebas, un agente no sabia si estaba vacia o no la veia) }
+  SN_DB_SIN_TABLAS_FMT =
+    '[DB-029] Schema "%s" (the connection''s) has no tables or views. ' +
+    'create-table makes one where allowCreate is set; otherwise they are the ' +
+    'operator''s to create.';
 
   SD_DB =
     'The databases the operator gave this workspace, by NAME and through ' +
-    'operations: you never write SQL - the server composes it from these ' +
-    'fields and FireDAC turns it into each engine''s dialect. connections ' +
-    'lists them ("db" = project/alias, engine, readonly; the ones declared ' +
-    'wrong under "unusable"); tables and fields, what one holds (fields also ' +
-    'its foreign keys and indexes); rows reads ' +
-    '(filters, fields, order, limit/offset, and always the total); summary ' +
-    'groups and adds up; insert, update and delete write, only where ' +
-    'readonly=false (update and delete only the rows their filters select, ' +
-    'and they need filters), and say how many rows they touched; ' +
-    'create-table and create-view make new ones where allowCreate is set ' +
-    '(FireDAC writes each engine''s SQL; nothing is dropped or altered).';
+    'operations: you never write SQL, the server composes it. connections ' +
+    'lists them ("db" = ' +
+    'project/alias, engine, readonly; the ones declared wrong under ' +
+    '"unusable"); tables and fields, what one holds (fields also its ' +
+    'defaults, foreign keys and indexes); rows reads (filters, fields, order, ' +
+    'limit/offset, always the total); summary groups and adds up; insert, ' +
+    'update and delete write where readonly=false and say how many rows ' +
+    'changed; update and delete need filters, at most max rows; ' +
+    'create-table and create-view make new ones where ' +
+    'allowCreate is set (nothing is dropped or altered).';
   SP_DB_COMMAND =
     'connections (the default) | tables | fields | rows | summary | insert | ' +
     'update | delete | create-table | create-view.';
@@ -4893,7 +4909,7 @@ const
     'create-view: its columns (default: all).';
   SP_DB_COLUMNS =
     'create-table: a list of {"name", "type"; optional "size", "precision", ' +
-    '"scale", "required", "key" (in the primary key), "autoinc"}; type as ' +
+    '"scale", "required", "key" (primary), "autoinc"}; type as ' +
     'FireDAC names it (dtInt32, dtWideString, dtFmtBCD, dtDateTime...).';
   SP_DB_VIEW =
     'create-view: the NEW view''s name; it selects fields of table, no filters.';
@@ -4916,6 +4932,13 @@ const
   SP_DB_LIMIT = 'rows (default ' + PAGINA_DB_ROWS + ') and summary (default ' + PAGINA_DB_SUMMARY +
     '); at most ' + TOPE_DB + '.';
   SP_DB_OFFSET = 'rows and summary: how many to skip, for the next page.';
+  { cuantas filas puede cambiar un update o un delete sin pedirlo: la pasada en
+    vivo de la 1.29 (un filtro equivocado toca miles, y una fila no va a la
+    papelera). UNA vez, como las paginas de arriba }
+  TOPE_DB_ESCRITURA = '100';
+  SP_DB_MAX =
+    'update, delete: most rows to change (default ' + TOPE_DB_ESCRITURA +
+    '); more, and nothing changes.';
   SP_DB_GROUP =
     'summary: the fields to group by; a date field also as field:year, ' +
     'field:month, field:day or field:hour.';
@@ -9657,6 +9680,11 @@ const
   SR_REPORT_NO_ESTA_FMT =
     '[REPORT-008 NOT_FOUND] No report "%s" in your workspace''s reports. ' +
     'command=list shows their names (each workspace sees only its own).';
+  { un nombre solo que esta en VARIAS carpetas de agente: se dicen, no se elige
+    (Hermes, completo de la 1.29: el nombre solo no buscaba en esas carpetas) }
+  SR_REPORT_VARIOS_FMT =
+    '[REPORT-014 INVALID_PARAM] "%s" names several reports: %s. Ask for one with ' +
+    'its folder (<dir>\<name>, as command=list shows it).';
 
   { Un nombre que no tiene la forma de un informe se dice como tal (Hermes,
     1.18.0: '..\..\etc\passwd' contestaba REPORT-008, "no esta", y quien
@@ -11235,6 +11263,16 @@ const
     '[EDIT-086] *** BROKEN STRUCTURE: what follows the final ''end.'' has ' +
     'changed - the compiler reads nothing after it, so that code drops out. ' +
     'Restore with restore:true and STOP. ***';
+
+  { lo de EDIT-085, ANTES de escribir: un fuente que tenia su end. final y la
+    edicion (la suelta, la tanda o el changeset, sobre lo que queda) deja sin
+    ninguno no se escribe (Hermes, dirigido de la 1.29: un old sin new se llevo
+    el end. y el aviso llego despues). %s = el fichero }
+  SR_EDIT_SIN_END_FINAL_FMT =
+    '[EDIT-133 DENIED] %s had its final ''end.'' and this change leaves it ' +
+    'without one, so nothing was written (all or none). The compiler needs it ' +
+    'to close the unit. To replace the last lines, keep the ''end.'' line out ' +
+    'of the anchor, or end new with it again.';
 
   SK_EDIT_ESCRITO_EN_FMT =
     '[EDIT-087] WRITTEN to %s';

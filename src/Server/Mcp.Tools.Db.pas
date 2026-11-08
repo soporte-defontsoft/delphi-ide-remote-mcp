@@ -29,7 +29,7 @@ type
   TDelphiDbParams = class
   private
     FCommand, FDb, FTable, FFields, FFilters, FOrder, FGroup, FValues, FColumns, FView: string;
-    FLimit, FOffset: Integer;
+    FLimit, FOffset, FMax: Integer;
   public
     [SchemaDescription(SP_DB_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -49,6 +49,8 @@ type
     property Limit: Integer read FLimit write FLimit;
     [SchemaDescription(SP_DB_OFFSET)]
     property Offset: Integer read FOffset write FOffset;
+    [SchemaDescription(SP_DB_MAX)]
+    property Max: Integer read FMax write FMax;
     [SchemaDescription(SP_DB_GROUP)]
     [JsonComoTexto('string')]
     property Group: string read FGroup write FGroup;
@@ -687,22 +689,51 @@ begin
   end;
 end;
 
+{ Los campos de ATabla que la base cuenta sola (caAutoInc) como los ve FireDAC
+  al abrirla - los metadatos de una consulta sin filas, los que usa su
+  generador al insertar -: el catalogo de SQL Server (mkTableFields) no lo
+  dice de una columna identity (medido el 8-nov-2026). }
+function AutosDeTabla(const S: TSesionDb; const ATabla: string): TArray<string>;
+var
+  Q: TFDQuery;
+begin
+  Result := [];
+  Q := NuevaConsulta(S, 'SELECT * FROM ' + CitaNombre(S.Conn, ATabla) + ' WHERE 1 = 0', []);
+  try
+    Q.Open;
+    for var I := 0 to Q.Table.Columns.Count - 1 do
+      if caAutoInc in Q.Table.Columns[I].Attributes then
+        Result := Result + [Q.Table.Columns[I].Name];
+  finally
+    Q.Free;
+  end;
+end;
+
 function TablesEn(const S: TSesionDb; const P: TDelphiDbParams): string;
 var
   R: TJSONObject;
   L: TJSONArray;
+  Tablas, Vistas: TArray<string>;
 begin
+  Tablas := TablasDeBase(S.Conn, False);
+  Vistas := TablasDeBase(S.Conn, True);
   R := TJSONObject.Create;
   try
     R.AddPair('db', NombreDeConexion(S.Conexion));
     L := TJSONArray.Create;
     R.AddPair('tables', L);
-    for var T in TablasDeBase(S.Conn, False) do
+    for var T in Tablas do
       L.Add(T);
     L := TJSONArray.Create;
     R.AddPair('views', L);
-    for var T in TablasDeBase(S.Conn, True) do
+    for var T in Vistas do
       L.Add(T);
+    // sin ninguna, el esquema que se miro (un agente no sabia si la base estaba
+    // vacia o no la veia); por el enmascarador: en PG puede llamarse como el
+    // usuario
+    if (Length(Tablas) = 0) and (Length(Vistas) = 0) then
+      R.AddPair('note', MsgFmt(SN_DB_SIN_TABLAS_FMT,
+        [EnmascaraConexion(S.Conn.CurrentSchema, S.Conexion)]));
     Result := R.ToJSON;
   finally
     R.Free;
@@ -717,6 +748,7 @@ var
 begin
   if not TablaDe(S, P.Table, Tabla, Neg) then
     Exit(Neg);
+  var Autos := AutosDeTabla(S, Tabla);
   R := TJSONObject.Create;
   try
     R.AddPair('db', NombreDeConexion(S.Conexion));
@@ -739,6 +771,12 @@ begin
       O.AddPair('nullable', TJSONBool.Create(C.Nulo));
       if C.Clave then
         O.AddPair('key', TJSONBool.Create(True));
+      // lo que la base pone sola si un insert no lo da; el contador, tambien
+      // como lo ve el generador (SQL Server no lo dice en su catalogo)
+      if C.AutoInc or MatchText(C.Nombre, Autos) then
+        O.AddPair('autoinc', TJSONBool.Create(True))
+      else if C.Defecto then
+        O.AddPair('default', TJSONBool.Create(True));
     end;
     // como se relaciona con las demas y por que se busca rapido, del
     // catalogo de la base (DB-P5 de la 1.29)
@@ -1121,7 +1159,16 @@ end;
   seleccionen algo. La sentencia la compone el servidor como las lecturas
   (nombres del catalogo citados por FireDAC, valores por parametro tipado) y
   va en una transaccion que solo se confirma si la base la acepta. La
-  respuesta dice cuantas filas toco. }
+  respuesta dice cuantas filas toco; un update o un delete que tocaria mas que
+  su max se deshace (DB-028).
+  El insert NO devuelve la clave de la fila nueva (medido el 8-nov-2026): por
+  un dataset de FireDAC (Append/Post) la daba en los dos motores, pero su INSERT
+  sale ya en ejecucion y con su plazo, y con la red callada la cancelacion
+  dejaba el hilo colgado para siempre - ni la red de vuelta ni el cierre del
+  servidor lo despertaban (P4 y P6 de test_db_plazo_llamada_129, rojos); el
+  compuesto calla en la preparacion, sin plazo, y vuelve. El camino que queda:
+  el INSERT con su relectura compuesto por EL generador de FireDAC y ejecutado
+  por aqui (1.29.1). }
 function EscribeEn(const ACmd: string; const S: TSesionDb; const P: TDelphiDbParams): string;
 var
   Campos: TArray<TCampoDb>;
@@ -1130,7 +1177,7 @@ var
   Tabla, Neg, Where, Sql, Sets: string;
   Q: TFDQuery;
   R: TJSONObject;
-  Tocadas: Int64;
+  Tocadas, Tope: Int64;
 begin
   S.Conn.StartTransaction;
   try
@@ -1173,6 +1220,17 @@ begin
       Tocadas := Q.RowsAffected;
     finally
       Q.Free;
+    end;
+    // mas filas que su max: no se confirma (el finally deshace) y se dice
+    // cuantas; un filtro equivocado tocaba miles, y una fila no va a la
+    // papelera (la pasada en vivo de la 1.29). El insert, una
+    if ACmd <> 'insert' then
+    begin
+      Tope := P.Max;
+      if Tope <= 0 then
+        Tope := StrToInt(TOPE_DB_ESCRITURA);
+      if Tocadas > Tope then
+        Exit(MsgFmt(SR_DB_TOCARIA_FMT, [ACmd, Tocadas, Tope, Tocadas]));
     end;
     // solo si quien la pidio sigue esperando (DB-022)
     S.Confirma;
@@ -1570,14 +1628,15 @@ begin
       'rows', 'db table fields filters order limit offset',
       'summary', 'db table filters group values order limit offset',
       'insert', 'db table values',
-      'update', 'db table values filters',
-      'delete', 'db table filters',
+      'update', 'db table values filters max',
+      'delete', 'db table filters max',
       'create-table', 'db table columns',
       'create-view', 'db table view fields'],
     ['db', Params.Db, '', 'table', Params.Table, '', 'fields', Params.Fields, '',
      'filters', Params.Filters, '', 'order', Params.Order, '',
      'limit', IfThen(Params.Limit <> 0, IntToStr(Params.Limit)), '',
      'offset', IfThen(Params.Offset <> 0, IntToStr(Params.Offset)), '',
+     'max', IfThen(Params.Max <> 0, IntToStr(Params.Max)), '',
      'group', Params.Group, '', 'values', Params.Values, '', 'columns', Params.Columns, '',
      'view', Params.View, ''], Suyos, VaCon);
   if Sobra <> '' then

@@ -28,6 +28,12 @@ informes del propio workspace, sin moverlos ni borrarlos.
   W11 la carpeta de un agente del formato de ANTES con el nombre de un
       workspace (reports\\uno\\, de todos los tokens) no es el buzon de 'Uno':
       list no la ensena y read no la lee (revisor de version de la 1.18.0)
+  W12 sin agent= y con nombre en el saludo: la carpeta de ese nombre (F1-9)
+  W13 read por el nombre SOLO (lo que REPORT-012 ofrece) de un informe que
+      esta en la carpeta de su agente: lo lee (contestaba REPORT-008; Hermes,
+      completo de la 1.29); el de la union hacia fuera sigue sin leerse
+  W14 el nombre solo en DOS carpetas de agente: REPORT-014 las nombra como
+      list las ensena y no lee ninguno
 
 Usage:  python tests/test_buzon_workspace.py [path-to-DelphiLspMcp.exe]
 """
@@ -212,6 +218,23 @@ try:
     check('W12 sin agent= y con nombre en el saludo: en reports\\<workspace>\\<ese nombre>, no en la raiz',
           mc.abre(r, 'SN_REPORT_OK_FMT') and 'hermes/' in r and len(md(B2)) == antes + 1
           and not md(os.path.dirname(B2)), (r[:200], md(B2)))
+
+    # W13
+    solo = os.path.basename(nuevo)
+    r = c1.call('delphi_report', {'command': 'read', 'name': solo})
+    rs = c1.call('delphi_report', {'command': 'read', 'name': SECRETO})
+    check('W13 read por el nombre solo de un informe de la carpeta de su agente: lo lee; el de la union, no',
+          mc.abre(r, 'SN_REPORT_LEIDO_FMT') and 'el mas nuevo' in r
+          and mc.es(rs, 'SR_REPORT_NO_ESTA_FMT') and 'SECRETO-DE-FUERA' not in rs, (r[:300], rs[:200]))
+
+    # W14
+    DOBLE = '20260102-000000-bug-doble.md'
+    for ag, que in (('hermes', 'DE-HERMES'), ('codex', 'DE-CODEX')):
+        open(os.path.join(mc.buzon(REPORTS, ag, WS1), DOBLE), 'w', encoding='utf-8').write('# x\n\n%s\n' % que)
+    r = c1.call('delphi_report', {'command': 'read', 'name': DOBLE})
+    check('W14 el nombre solo en dos carpetas de agente: REPORT-014 las nombra como list, nada leido',
+          mc.rechazado(r) and mc.es(r, 'SR_REPORT_VARIOS_FMT') and '.\\hermes\\' + DOBLE in r
+          and '.\\codex\\' + DOBLE in r and 'DE-HERMES' not in r and 'DE-CODEX' not in r, r[:300])
 finally:
     mc.borra(union)  # la union como union: lo de detras no se toca
     proc.kill()
