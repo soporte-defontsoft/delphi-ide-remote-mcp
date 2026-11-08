@@ -11,12 +11,14 @@ servidor, en MSSQL y PostgreSQL.
   N4  ...un summary sin choque (grupo, sum_n y n) contesta como siempre (control)
   N5  CH15 una entrada del fichero de conexiones con el separador en su nombre (mal/alias): no se usa, y dice por
       que (a/b + c y a + b/c eran el mismo nombre). ROJO contra 166bea8b
-  N6  CH14 el contrato dice los topes del codigo: limit (rows, summary y el maximo) son LIMITE_FILAS_DB,
-      LIMITE_GRUPOS_DB y LIMITE_MAXIMO_DB del fuente (el texto los escribe: si uno cambia, esto lo caza)
+  N6  CH14 el contrato dice los topes del codigo: limit (rows, summary y el maximo) son PAGINA_DB_ROWS,
+      PAGINA_DB_SUMMARY y TOPE_DB de Lsp.Texts, los que pasa Mcp.Tools.Db a PaginaDe (desde F1-8 de la 1.29
+      el texto se compone con ellos y viven alli: antes eran LIMITE_*_DB de Mcp.Tools.Db)
 
 Uso:  python tests/test_db_nombres_129.py [ruta-a-DelphiLspMcp.exe]
 """
 import json
+import os
 import re
 import db_arnes as arnes
 import mcp_cliente as mc
@@ -74,10 +76,13 @@ try:
     check('N5 una entrada con el separador en su nombre: no se usa y dice por que. ROJO contra 166bea8b',
           malas.get(P + 'mal/alias') == mc.catalogo()['SF_CONEXIONES_NOMBRE_FMT'] % '/', json.dumps(malas)[:400])
     contrato = mc.catalogo()['SP_DB_LIMIT']
-    topes = [mc.entero_del_fuente('Server/Mcp.Tools.Db.pas', n)
-             for n in ('LIMITE_FILAS_DB', 'LIMITE_GRUPOS_DB', 'LIMITE_MAXIMO_DB')]
-    check('N6 el contrato de limit dice los topes del codigo (%s)' % topes,
-          [int(x) for x in re.findall(r'\d+', contrato)] == topes, contrato)
+    topes = [int(mc.cadena_del_fuente('Server/Lsp.Texts.pas', n))
+             for n in ('PAGINA_DB_ROWS', 'PAGINA_DB_SUMMARY', 'TOPE_DB')]
+    with open(os.path.join(mc.REPO, 'src', 'Server', 'Mcp.Tools.Db.pas'), encoding='utf-8-sig') as fh:
+        db_pas = fh.read()
+    check('N6 el contrato de limit dice los topes del codigo (%s), los que rows y summary pasan a PaginaDe' % topes,
+          [int(x) for x in re.findall(r'\d+', contrato)] == topes and
+          'PAGINA_DB_ROWS, TOPE_DB)' in db_pas and 'PAGINA_DB_SUMMARY, TOPE_DB)' in db_pas, contrato)
 finally:
     if srv:
         srv.cierra()
