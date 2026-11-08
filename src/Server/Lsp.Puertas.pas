@@ -11,6 +11,7 @@ unit Lsp.Puertas;
 interface
 
 uses
+  System.Classes, // TStream: lo que AbreParaLeer entrega
   Lsp.Codificacion;
 
 type
@@ -99,6 +100,12 @@ function LeeBytes(const APath: string; ALugares: TLugaresDeTexto): TArray<Byte>;
   del fichero entero. La misma pregunta y la misma negativa. }
 function LeeTrozoDeBytes(const APath: string; ALugares: TLugaresDeTexto;
   ADesde: Int64; AMax: Integer; out ATamano: Int64): TArray<Byte>;
+{ ...y el fichero ABIERTO para leerlo a trozos, para quien lo sirve sin tenerlo
+  entero en memoria (/files, P8 de la 1.29: abria su TFileStream a pelo tras su
+  ReadPathDenied) y para LeeTrozoDeBytes: la misma pregunta y la misma negativa,
+  y abierto como TFile.ReadAllBytes (quien escribe no puede, quien lee si). Lo
+  libera quien lo pide. }
+function AbreParaLeer(const APath: string; ALugares: TLugaresDeTexto): TStream;
 
 { LA PUERTA DE ESCRIBIR, su pregunta: '' si APath se puede escribir en el
   lugar ALugar; si no, su negativa. La jaula, lo que pregunta su escritor
@@ -339,7 +346,6 @@ implementation
 
 uses
   System.SysUtils,
-  System.Classes,
   System.IOUtils,
   System.SyncObjs,
   System.RegularExpressions,
@@ -1160,15 +1166,20 @@ begin
   Result := TFile.ReadAllBytes(APath);
 end;
 
-function LeeTrozoDeBytes(const APath: string; ALugares: TLugaresDeTexto;
-  ADesde: Int64; AMax: Integer; out ATamano: Int64): TArray<Byte>;
-var
-  F: TFileStream;
-  N: Int64;
+function AbreParaLeer(const APath: string; ALugares: TLugaresDeTexto): TStream;
 begin
   ExigeLugarDeLectura(APath, ALugares);
   // como TFile.ReadAllBytes: quien escribe no puede, quien lee si
-  F := TFileStream.Create(APath, fmOpenRead or fmShareDenyWrite);
+  Result := TFileStream.Create(APath, fmOpenRead or fmShareDenyWrite);
+end;
+
+function LeeTrozoDeBytes(const APath: string; ALugares: TLugaresDeTexto;
+  ADesde: Int64; AMax: Integer; out ATamano: Int64): TArray<Byte>;
+var
+  F: TStream;
+  N: Int64;
+begin
+  F := AbreParaLeer(APath, ALugares);
   try
     ATamano := F.Size;
     if ADesde < 0 then

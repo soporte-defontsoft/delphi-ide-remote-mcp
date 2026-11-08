@@ -27,7 +27,8 @@ uses
   FMX.Consts, // SCannotLoadStyleFromFile: la negativa de TStyleStreaming.LoadFromFile
   FMX.Controls.Win, // links the platform style resources (win10style...)
   Lsp.DesignerForma in '..\Server\Lsp.DesignerForma.pas', // DesignerAFlujo, como los renderizadores
-  Lsp.Pascal in '..\Server\Lsp.Pascal.pas'; // la usa Lsp.DesignerForma (GrupoDeClasesDe), como en los renderizadores
+  Lsp.Pascal in '..\Server\Lsp.Pascal.pas', // la usa Lsp.DesignerForma (GrupoDeClasesDe), como en los renderizadores
+  FormRender.Partes in '..\Render\FormRender.Partes.pas';
 
 const
   {$I StyleConvertProtocolo.inc}
@@ -137,8 +138,11 @@ begin
         EndGlobalLoading;
       end;
       Raiz.Free;
+      // en partes, por EL compositor de los renderizadores (LecturaEnPartes: el
+      // formato del RTL de ESTE proceso); el servidor las lee con PartesDeLectura y
+      // las reconstruia a mano (DH6 de la 1.29)
       for L in R.Ignorado do
-        Writeln(SC_IGNORED + L);
+        Writeln(SC_IGNORED + LecturaEnPartes(L));
     finally
       R.Free;
     end;
@@ -194,7 +198,7 @@ begin
   except
     on E: Exception do
     begin
-      Writeln(ErrOutput, SC_ERROR, E.ClassName, ': ', E.Message);
+      Writeln(ErrOutput, SC_ERROR, E.ClassName, SC_CLASE_SEP, E.Message);
       Halt(SC_RC_ERROR);
     end;
   end;

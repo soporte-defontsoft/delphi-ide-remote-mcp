@@ -909,16 +909,40 @@ AYUDANTES.update({r: os.path.join(REPO, 'src', 'Render', 'Win32', 'Release', r) 
 # incluye de las de sus ayudantes. Un binario mas viejo que sus fuentes es el de un build fallido, y
 # las baterias probaban el codigo de ayer (27-sep-2026). UNA tabla para release_check y run_all: la
 # frescura del servidor no veia esos .inc, y el conversor no tenia ninguna (revisor de baterias de la 1.27)
+def _de_otra_carpeta(*rel_dpr):
+    """Lo que un .dpr compila de OTRA carpeta, como lo lee dcc: cada unidad que nombra con su
+    ruta (in '...'), por su mascara, y los .inc de esas carpetas (los incluye una de ellas). El
+    juez es el .dpr: la tabla de abajo lo imitaba a mano y no veia que el conversor compila
+    Lsp.DesignerForma, Lsp.Pascal y FormRender.Partes, ni los renderizadores sus seis de
+    src/Server (8-nov-2026)."""
+    partes = []
+    dpr = os.path.join(REPO, *rel_dpr)
+    carpeta = os.path.normcase(os.path.dirname(dpr))
+    with open(dpr, encoding='utf-8-sig', errors='replace') as f:
+        texto = f.read()
+    for rel in re.findall(r"\bin\s+'([^']+)'", texto):
+        full = os.path.normpath(os.path.join(os.path.dirname(dpr), rel))
+        if os.path.normcase(os.path.dirname(full)) == carpeta:
+            continue
+        p = os.path.relpath(full, REPO).split(os.sep)
+        for mascara in (os.path.splitext(p[-1])[0] + '.*', '*.inc'):
+            t = tuple(p[:-1] + [mascara])
+            if t not in partes:
+                partes.append(t)
+    return tuple(partes)
+
+
 FUENTES_DE = {
     EXE_COMPILADO: (('src', 'Server'), ('vendor', 'src'), ('src', 'Render', '*.inc'),
                     ('src', 'DesktopNode', '*.inc'), ('src', 'StyleConvert', '*.inc')),
-    CONVERSOR_COMPILADO: (('src', 'StyleConvert'),),
+    CONVERSOR_COMPILADO: (('src', 'StyleConvert'),) + _de_otra_carpeta('src', 'StyleConvert', 'DelphiStyleConvert.dpr'),
     os.path.join(REPO, 'node', 'McpDesktopNode'): (('src', 'DesktopNode'),),
     os.path.join(REPO, 'node', 'McpDesktopNode.exe'): (('src', 'DesktopNode'),),
     os.path.join(REPO, 'node', 'McpRunJob'): (('src', 'RunJob'),),
     os.path.join(REPO, 'node', 'McpRunJob.exe'): (('src', 'RunJob'),),
 }
-FUENTES_DE.update({AYUDANTES[r]: (('src', 'Render'),) for r in RENDERIZADORES})
+FUENTES_DE.update({AYUDANTES[r]: (('src', 'Render'),) + _de_otra_carpeta('src', 'Render', os.path.splitext(r)[0] + '.dpr')
+                   for r in RENDERIZADORES})
 
 
 def fuente_mas_nueva(*partes):

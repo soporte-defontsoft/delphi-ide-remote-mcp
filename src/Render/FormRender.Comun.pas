@@ -198,13 +198,8 @@ procedure Responde(const AClave, AValor: string);
 procedure Aviso(const S: string);
 procedure Traza(const S: string);      // '# ...' solo con --verbose
 procedure SinDesbordar(var S: string); // una linea: sin saltos
-{ EL compositor de un mensaje del lector EN PARTES (FormRenderProtocolo.inc,
-  FR_PARTES_SEP), partido por EL formato que lo compuso: SPropertyException
-  de System.RTLConsts, en el idioma que cargo ESTE proceso (rtl370.de/.fr/.ja
-  junto a rtl370.bpl, por el de Windows: medido el 18-oct-2026, "Fehler beim
-  Lesen von EditRight.FontColor"). El servidor lo partia con el ingles, y un
-  lector aleman no nombraba nada. }
-function LecturaEnPartes(const AMensaje: string): string;
+// (EL compositor de un mensaje del lector en partes, LecturaEnPartes, vive en
+// FormRender.Partes desde DH6 de la 1.29: lo usa tambien el conversor de estilos)
 
 { El vigia: pasado AMs (o --packagestimeout, si sigue cargando los paquetes del IDE)
   el proceso escribe ERROR= (RENDER-007, o RENDER-027) y se mata con FR_RC_TIMEOUT }
@@ -426,6 +421,7 @@ uses
   Lsp.ShaCache,      // Sha256DeBytes: la huella de READ=, la misma con la que compara el servidor
   Lsp.Reparse,
   Lsp.AtomosRtl,
+  FormRender.Partes, // LecturaEnPartes: EL compositor de un mensaje del lector en partes
   System.StrUtils;
 
 type
@@ -533,36 +529,6 @@ begin
   Responde(FR_WARNING, S);
 end;
 
-function LecturaEnPartes(const AMensaje: string): string;
-var
-  Formato: string;
-  Trozos: TArray<string>;
-  M: TMatch;
-begin
-  Result := FR_PARTES_SEP + FR_PARTES_SEP + FR_PARTES_SEP + AMensaje;
-  // Format(SPropertyException, [Name, DotSep, PropPath, E.Message]) de
-  // TReader.ReadProperty: cuatro %s; con otro especificador (%0:s, %%) no se
-  // invierte a mano, y va sin partes
-  Formato := SPropertyException;
-  Trozos := Formato.Split(['%s']);
-  if Length(Trozos) <> 5 then
-    Exit;
-  for var T in Trozos do
-    if T.Contains('%') then
-      Exit;
-  // el Name no lleva puntos; la ruta (Font.Size) llega hasta lo que separa el
-  // motivo, y el motivo es lo demas: uno anidado (una coleccion) es el suyo
-  M := TRegEx.Match(AMensaje, '\A' + TRegEx.Escape(Trozos[0]) + '([^.]+)' +
-    TRegEx.Escape(Trozos[1] + DotSep + Trozos[2]) + '(.+?)' + TRegEx.Escape(Trozos[3]) + '(.*)' +
-    TRegEx.Escape(Trozos[4]) + '\z', [roSingleLine]);
-  if not M.Success then
-    Exit;
-  for var G := 1 to 3 do
-    if M.Groups[G].Value.Contains(FR_PARTES_SEP) then
-      Exit;
-  Result := M.Groups[1].Value + FR_PARTES_SEP + M.Groups[2].Value + FR_PARTES_SEP + M.Groups[3].Value +
-    FR_PARTES_SEP + AMensaje;
-end;
 
 { EL escritor de un valor <cabeza>|<fichero>|<mensaje en partes> (IGNORED=, NOTLOADED=):
   la cabeza (de quien, o la clase de la excepcion), el fichero que se leia (el de un

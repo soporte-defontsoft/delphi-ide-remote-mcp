@@ -2060,7 +2060,7 @@ begin
       // error del form (1.19.2). Y lo que es de la clase de la RAIZ y no de la
       // form en la que la lee (un TQuickRep, un TForm3D, un modulo de datos
       // FMX: DSGN-157, corpus del 18-oct-2026). EL juicio, el de lo que no
-      // carga: Lsp.FormRender.IgnoradaDelUsuario y DeLaRaizQueElLectorNoVe
+      // carga: Lsp.FormRender.ClaseDeIgnorada
       var Suyas := '';
       var NoVistas := '';
       var NoConfirmadas := '';
@@ -2079,35 +2079,39 @@ begin
       var Ficheros := TFicherosDelForm.Create(DocP, Ruta);
       try
       Return.AddPair('ignored', IgnoradasConLinea(Ficheros, R.Ignoradas));
-      // las partes de una clase del proyecto, en el documento de lo saltado (el
-      // juicio es el del lint: Lsp.FormRender.PartesDeClaseNoInstalada)
+      // EL juicio de lo saltado, el del lint (Lsp.FormRender.ClaseDeIgnorada, DH5 de
+      // la 1.29: cada uno lo escribia a mano, en su orden y con su comparacion)
+      var Juicio := Default(TJuicioDeIgnoradas);
+      Juicio.Ficheros := Ficheros;
+      Juicio.RaizNombre := R.RaizNombre;
+      Juicio.Raiz := RaizL;
+      Juicio.Sustituto := Sustituto;
+      Juicio.Sustituidas := R.Sustituidas;
+      Juicio.EsFmx := Fw = 'fmx';
       for var Ig in R.Ignoradas do
       begin
         var Suya: TPropiedadDelUsuario;
-        var PropCn, ClaseCn, Otro: string;
-        // lo publicado por las clases del usuario NO es del form (DSGN-152 lo
-        // dice) y lo de una clase sustituida es la nota de una clase de
-        // terceros (DSGN-039): ninguno cuenta para DSGN-114, "fix them or
-        // remove them". Lo contaban, y el preview se contradecia en dos notas
-        // seguidas; el lint ya no los contaba (DeClaseSustituida, EL juicio de
-        // los dos; revisor del paisaje de la 1.28, J2)
-        if IgnoradaDelUsuario(R.RaizNombre, Ig, RaizL.Propias, Suya) then
-          Suyas := Suyas + IfThen(Suyas <> '', ', ') + Ig.Propiedad + ' (' + Suya.Clase + ', ' +
-            TPath.GetFileName(Suya.Fichero) + ')'
-        else if DeClaseSustituida(Ficheros, Ig, R.Sustituidas) then
-          Continue
-        else if (R.RaizNombre <> '') and MismoIdentificador(Ig.Componente, R.RaizNombre) and
-                DeLaRaizQueElLectorNoVe(RaizL, Sustituto, Ig.Propiedad) then
-          NoVistas := NoVistas + IfThen(NoVistas <> '', ', ') + Ig.Propiedad
-        // una excepcion del codigo de un componente (no del lector), o bajo las
-        // partes de una clase del proyecto: no es del fichero que se sepa
-        else if DelCodigoDeUnComponente(Ig) or
-                PartesDeClaseNoInstalada(Ficheros.Doc(Ig.Fichero, Otro), Ig, Fw = 'fmx', PropCn, ClaseCn) then
-          NoConfirmadas := NoConfirmadas + IfThen(NoConfirmadas <> '', ' | ') + TextoDeIgnorada(Ig)
-        // un frame que se contiene a si mismo no es una propiedad con su linea:
-        // RENDER-026 ya dice su fichero y que hacer (Hermes, dirigido de la 1.26)
-        else if not EsFrameCiclico(Ig) then
-          Inc(DelForm);
+        var PropCn, ClaseCn: string;
+        case ClaseDeIgnorada(Juicio, Ig, Suya, PropCn, ClaseCn) of
+          // lo publicado por las clases del usuario NO es del form (DSGN-152 lo
+          // dice) y lo de una clase sustituida es la nota de una clase de
+          // terceros (DSGN-039): ninguno cuenta para DSGN-114, "fix them or
+          // remove them" (revisor del paisaje de la 1.28, J2)
+          ciDelUsuario:
+            Suyas := Suyas + IfThen(Suyas <> '', ', ') + Ig.Propiedad + ' (' + Suya.Clase + ', ' +
+              TPath.GetFileName(Suya.Fichero) + ')';
+          ciRaizNoVista:
+            NoVistas := NoVistas + IfThen(NoVistas <> '', ', ') + Ig.Propiedad;
+          // una excepcion del codigo de un componente (no del lector), o bajo las
+          // partes de una clase del proyecto: no es del fichero que se sepa
+          ciDelCodigo, ciDelProyecto:
+            NoConfirmadas := NoConfirmadas + IfThen(NoConfirmadas <> '', ' | ') + TextoDeIgnorada(Ig);
+          ciDelForm:
+            Inc(DelForm);
+          // (ciSustituida: su nota; ciFrameCiclico: un frame que se contiene a si
+          // mismo no es una propiedad con su linea, RENDER-026 ya dice su fichero y
+          // que hacer: Hermes, dirigido de la 1.26)
+        end;
       end;
       finally
         Ficheros.Free;

@@ -334,6 +334,7 @@ uses
   Lsp.Session,          // FindDproj: el proyecto de un fuente
   Lsp.Lineas,
   Lsp.Puertas,
+  Lsp.PackageMap, // DcpDePaquete: la referencia de un requires en el .dproj
   // la ultima: lo suyo pesaba mas que lo de cualquier otra unidad cuando
   // vivia aqui, y asi sigue
   Lsp.ClausulaUses;
@@ -996,13 +997,25 @@ begin
 end;
 
 { Inserts the element after the last DCCReference; else after </DelphiCompile>;
-  else before the first <BuildConfiguration; else before the first </ItemGroup>. }
-function InsertDccRef(const Xml, AElement: string): string;
+  else before the first <BuildConfiguration; else before the first </ItemGroup>.
+  ADeRequires: the .dcp of a requires goes where the IDE writes it, after the
+  last .dcp and the first right after </DelphiCompile>, ahead of the units (the
+  17 packages of the Samples, measured 8-nov-2026). }
+function InsertDccRef(const Xml, AElement: string; ADeRequires: Boolean = False): string;
 var
   At, Desde, Hasta: Integer;
 begin
   // los mismos cuatro sitios, por EL analisis (eran cuatro regex)
   var Refs := TramosDeEtiqueta(Xml, 'DCCReference', True);
+  if ADeRequires then
+  begin
+    // las de .dcp solas: si no hay ninguna, el primer sitio es </DelphiCompile>
+    var Dcps: TArray<TTramoXml> := [];
+    for var T in Refs do
+      if SameText(TPath.GetExtension(AtributoDeTramo(Xml, T, 'DCCReference', 'Include')), '.dcp') then
+        Dcps := Dcps + [T];
+    Refs := Dcps;
+  end;
   var Compila := TramosDeEtiqueta(Xml, 'DelphiCompile', True);
   var Configs := TramosDeEtiqueta(Xml, 'BuildConfiguration', True);
   var Grupos := TramosDeEtiqueta(Xml, 'ItemGroup');
@@ -1534,92 +1547,140 @@ begin
   end;
 end;
 
-function AddPackageRequires(const AProject, ANames: string): string;
+{ El nucleo de add-requires, con el cerrojo y TODO O NADA por delante: el requires
+  del .dpk y, en su .dproj, la DCCReference al .dcp de cada paquete pedido que no
+  la tenga, donde la escribe el IDE (B7 de la 1.29: entraba solo en el .dpk, y el
+  .dproj se quedaba sin lo que el IDE pone en el, medido en los 17 paquetes de los
+  Samples). Uno ya en el requires y sin la suya en el .dproj, tambien se le pone. }
+function RequiresNucleo(const ADpr, ADproj: string; const APedidos: TArray<string>): string;
 var
-  Dpr, Dproj, Enc, Text, NL, N, E: string;
-  Nombres, Nuevos: TStringList;
-  Entradas, Existentes: TArray<string>;
+  Enc, Text, NL, N, E, Note: string;
+  Nuevos, Entradas, Existentes, EnDproj: TArray<string>;
   Ya: Boolean;
   U: TUsesClause;
+  S, L: Integer;
+begin
+  Text := PatchLoadText(ADpr, Enc);
+  // un paquete por su cabecera, como lo compila dcc, no por ser un .dpk
+  // (EsFuenteDePaquete, A30 de la 1.23)
+  if not EsFuenteDePaquete(Text) then
+    Exit(MsgFmt(SR_REQUIRES_NOT_PACKAGE_FMT, [TPath.GetFileName(ADpr)]));
+  NL := SaltoDominante(Text);
+  // EL lector y EL escritor de las clausulas (FindUses / ReplaceUses, los
+  // de contains): se reescribia entera, un nombre por linea, y se perdian
+  // sus comentarios y sus {$IFDEF} - en 'rtl, dbrtl{$IFDEF MSWINDOWS},
+  // vcl{$ENDIF}' vcl pasaba a ser de todas las plataformas (medido el
+  // 18-oct-2026). Partida en ramas no se toca, como contains
+  U := FindUses(Text, 0, 'requires');
+  var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(ADpr));
+  if NoSe <> '' then
+    Exit(NoSe);
+  Entradas := U.Entries;
+  Nuevos := [];
+  for N in APedidos do
+  begin
+    Ya := False;
+    for E in Entradas do
+      if MismoIdentificador(EntryUnitName(E), N) then
+        Ya := True;
+    if not Ya then
+    begin
+      Entradas := Entradas + [N];
+      Nuevos := Nuevos + [N];
+    end;
+  end;
+  Existentes := [];
+  for E in Entradas do
+    Existentes := Existentes + [EntryUnitName(E)];
+  if Length(Nuevos) > 0 then
+  begin
+    if U.Found then
+      Text := ReplaceUses(Text, U, Entradas)
+    else
+    begin
+      // por EL escritor de una clausula nueva (D9 del revisor de la 1.28)
+      // delante de contains (EL lector de la clausula: FindUses) o del end.
+      // final (EL suyo: Lsp.Pascal). contains se buscaba al principio de una
+      // linea, y en un .dpk de una linea el requires caia DETRAS de el
+      // (revisor 8, 10-oct-2026)
+      var Donde := 0;
+      var Contains := FindUses(Text);
+      if Contains.Found then
+        Donde := Contains.StartPos;
+      var Ends := EndsConPunto(CodigoPascal(Text));
+      if (Length(Ends) > 0) and ((Donde = 0) or (Ends[0].Ini < Donde)) then
+        Donde := Ends[0].Ini;
+      if Donde = 0 then
+        Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(ADpr)]));
+      EstrenaClausulaDelante(Text, Donde, 'requires', string.Join(',' + NL + '  ', Existentes));
+    end;
+    PatchSaveText(ADpr, Text, Enc);
+  end;
+  // .dproj: la referencia de cada pedido que no la tenga, por LOS de add-unit
+  // (FindDccRef, DccRefXml) y con el sitio de un requires (InsertDccRef)
+  Note := '';
+  EnDproj := [];
+  if TFile.Exists(ADproj) then
+  begin
+    Text := PatchLoadText(ADproj, Enc);
+    var Antes := Text;
+    for N in APedidos do
+      if not FindDccRef(Text, ADproj, ADpr, DcpDePaquete(N), S, L) then
+      begin
+        var Con := InsertDccRef(Text, DccRefXml(Default(TUnitInfo), DcpDePaquete(N)), True);
+        if Con = Text then
+        begin
+          Note := MsgText(SN_UNIT_NO_ITEMGROUP);
+          Break;
+        end;
+        Text := Con;
+        EnDproj := EnDproj + [DcpDePaquete(N)];
+      end;
+    // con el salto del .dproj (DccRefXml compone en CRLF), como add-unit
+    if Text <> Antes then
+      PatchSaveConSuSalto(ADproj, Text, Enc);
+  end
+  else
+    Note := MsgText(SN_UNIT_NO_DPROJ);
+  if Length(Nuevos) > 0 then
+    Result := MsgFmt(SN_REQUIRES_ADDED_FMT, [TPath.GetFileName(ADpr),
+      string.Join(', ', Nuevos), string.Join(', ', Existentes)])
+  else if Length(EnDproj) > 0 then
+    Result := MsgFmt(SN_REQUIRES_EN_DPROJ_FMT, [TPath.GetFileName(ADpr), string.Join(', ', EnDproj)])
+  else
+    Exit(MsgFmt(SN_REQUIRES_PRESENT_FMT, [TPath.GetFileName(ADpr)]));
+  if Note <> '' then
+    Result := Result + #10 + Note;
+end;
+
+function AddPackageRequires(const AProject, ANames: string): string;
+var
+  Dpr, Dproj: string;
+  Pedidos: TArray<string>;
 begin
   Result := ResolveProjectPair(AProject, Dpr, Dproj);
   if Result <> '' then
     Exit;
-  Nombres := TStringList.Create;
-  Nuevos := TStringList.Create;
+  Pedidos := [];
+  for var N in NombresDeUnidades(ANames) do
+  begin
+    if not EsIdentificador(N, True) then
+      Exit(MsgFmt(SR_REQUIRES_BAD_NAME_FMT, [N]));
+    Pedidos := Pedidos + [N];
+  end;
+  if Length(Pedidos) = 0 then
+    Exit(MsgText(SR_REQUIRES_NEED_NAMES));
+  EnterFileEdit;
   try
-    for N in NombresDeUnidades(ANames) do
-    begin
-      if not EsIdentificador(N, True) then
-        Exit(MsgFmt(SR_REQUIRES_BAD_NAME_FMT, [N]));
-      Nombres.Add(N);
-    end;
-    if Nombres.Count = 0 then
-      Exit(MsgText(SR_REQUIRES_NEED_NAMES));
-    EnterFileEdit;
-    try
-      Text := PatchLoadText(Dpr, Enc);
-      // un paquete por su cabecera, como lo compila dcc, no por ser un .dpk
-      // (EsFuenteDePaquete, A30 de la 1.23)
-      if not EsFuenteDePaquete(Text) then
-        Exit(MsgFmt(SR_REQUIRES_NOT_PACKAGE_FMT, [TPath.GetFileName(Dpr)]));
-      NL := SaltoDominante(Text);
-      // EL lector y EL escritor de las clausulas (FindUses / ReplaceUses, los
-      // de contains): se reescribia entera, un nombre por linea, y se perdian
-      // sus comentarios y sus {$IFDEF} - en 'rtl, dbrtl{$IFDEF MSWINDOWS},
-      // vcl{$ENDIF}' vcl pasaba a ser de todas las plataformas (medido el
-      // 18-oct-2026). Partida en ramas no se toca, como contains
-      U := FindUses(Text, 0, 'requires');
-      var NoSe := ClausulaQueNoSeReescribe(U, TPath.GetFileName(Dpr));
-      if NoSe <> '' then
-        Exit(NoSe);
-      Entradas := U.Entries;
-      for N in Nombres do
+    // TODO O NADA, como add-unit (ProyectoTodoONada): desde que escribe tambien
+    // el .dproj, uno que no se deja escribir no deja el .dpk a medias
+    Result := ProyectoTodoONada(AProject,
+      function: string
       begin
-        Ya := False;
-        for E in Entradas do
-          if MismoIdentificador(EntryUnitName(E), N) then
-            Ya := True;
-        if not Ya then
-        begin
-          Entradas := Entradas + [N];
-          Nuevos.Add(N);
-        end;
-      end;
-      if Nuevos.Count = 0 then
-        Exit(MsgFmt(SN_REQUIRES_PRESENT_FMT, [TPath.GetFileName(Dpr)]));
-      Existentes := [];
-      for E in Entradas do
-        Existentes := Existentes + [EntryUnitName(E)];
-      if U.Found then
-        Text := ReplaceUses(Text, U, Entradas)
-      else
-      begin
-        // por EL escritor de una clausula nueva (D9 del revisor de la 1.28)
-        // delante de contains (EL lector de la clausula: FindUses) o del end.
-        // final (EL suyo: Lsp.Pascal). contains se buscaba al principio de una
-        // linea, y en un .dpk de una linea el requires caia DETRAS de el
-        // (revisor 8, 10-oct-2026)
-        var Donde := 0;
-        var Contains := FindUses(Text);
-        if Contains.Found then
-          Donde := Contains.StartPos;
-        var Ends := EndsConPunto(CodigoPascal(Text));
-        if (Length(Ends) > 0) and ((Donde = 0) or (Ends[0].Ini < Donde)) then
-          Donde := Ends[0].Ini;
-        if Donde = 0 then
-          Exit(MsgFmt(SR_UNIT_NO_USES_FMT, [TPath.GetFileName(Dpr)]));
-        EstrenaClausulaDelante(Text, Donde, 'requires', string.Join(',' + NL + '  ', Existentes));
-      end;
-      PatchSaveText(Dpr, Text, Enc);
-    finally
-      LeaveFileEdit;
-    end;
-    Result := MsgFmt(SN_REQUIRES_ADDED_FMT, [TPath.GetFileName(Dpr),
-      string.Join(', ', Nuevos.ToStringArray), string.Join(', ', Existentes)]);
+        Result := RequiresNucleo(Dpr, Dproj, Pedidos);
+      end);
   finally
-    Nombres.Free;
-    Nuevos.Free;
+    LeaveFileEdit;
   end;
 end;
 

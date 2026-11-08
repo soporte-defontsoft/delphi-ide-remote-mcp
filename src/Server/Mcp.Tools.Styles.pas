@@ -239,7 +239,7 @@ var
     lo niega Guarda con el parser del IDE y su linea (DSGN-124). }
   function NuevoIgnoradoPorFmx(out ANoCarga: string): string;
   var
-    Antes, Despues: TArray<string>;
+    Antes, Despues: TArray<TIgnoradoPorFmx>;
     Quedan: TList<string>;
     NoCargaba: string;
   begin
@@ -248,7 +248,7 @@ var
       Exit;
     if ANoCarga <> '' then
     begin
-      if ANoCarga.StartsWith(EParserError.ClassName + ':') or
+      if NoCargaDelParser(ANoCarga) or
          not IgnoradoPorFmx(Doc.Path, Antes, NoCargaba) or (NoCargaba <> '') then
         ANoCarga := '';
       Exit;
@@ -257,7 +257,8 @@ var
       Exit;
     Quedan := TList<string>.Create;
     try
-      Quedan.AddRange(Antes);
+      for var A in Antes do
+        Quedan.Add(A.Texto);
       // La propiedad que ESTE set escribe es de este cambio aunque FMX ya la
       // ignorase antes: reescribirla salia CHANGED y nunca llegaba a la app
       // (deep-test de Hermes sobre la 1.21.2, 21-oct-2026: Fill.Color en un
@@ -265,14 +266,15 @@ var
       // la CLASE del objeto y la propiedad: "Error reading TButton.Fill.Color:
       // Property Fill.Color does not exist". Solo si la propiedad YA ESTABA en
       // este objeto (WasThere): si es nueva, el diff de abajo la ve.
-      var Mia := O.ClassName_ + '.' + AProp.Trim + ':';
+      // (por sus partes, que manda el conversor partidas por SU RTL:
+      // Lsp.Styles.IgnoradoDeLaPropiedad, DH6 de la 1.29; se componia aqui, 'Clase.Prop:')
       for var D in Despues do
-        if WasThere and ContainsText(D, Mia) then
-          Result := Result + IfThen(Result = '', '', '; ') + D
-        else if Quedan.Contains(D) then
-          Quedan.Remove(D) // uno que ya estaba: no es de este cambio
+        if WasThere and IgnoradoDeLaPropiedad(D, O.ClassName_, AProp) then
+          Result := Result + IfThen(Result = '', '', '; ') + D.Texto
+        else if Quedan.Contains(D.Texto) then
+          Quedan.Remove(D.Texto) // uno que ya estaba: no es de este cambio
         else
-          Result := Result + IfThen(Result = '', '', '; ') + D;
+          Result := Result + IfThen(Result = '', '', '; ') + D.Texto;
     finally
       Quedan.Free;
     end;
@@ -728,7 +730,7 @@ var
   Ret, Issue: TJSONObject;
   Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas, NoCargan, ConStyleBookF, SinAlfa: TJSONArray;
   Colores: TArray<TColorSinAlfa>;
-  Ignorado: TArray<string>;
+  Ignorado: TArray<TIgnoradoPorFmx>;
   NoCarga: string;
   CarganTodos, ConAlfaTodos: Boolean;
   NIgnorados, NFormas: Integer;
@@ -1127,7 +1129,7 @@ begin
         Issue.AddPair('file', TPath.GetFileName(F));
         var Lista := TJSONArray.Create;
         for var Cosa in Ignorado do
-          Lista.Add(Cosa);
+          Lista.Add(Cosa.Texto);
         Issue.AddPair('ignored', Lista);
         PorFmx.AddElement(Issue);
         Inc(NIgnorados, Length(Ignorado));
@@ -1425,7 +1427,7 @@ var
   Code: Cardinal;
   AllOk: Boolean;
   N, Ignorados: Integer;
-  Ignorado: TArray<string>;
+  Ignorado: TArray<TIgnoradoPorFmx>;
 begin
   Dir := StylesDirOf(APath);
   Exe := StyleConverterExe;
@@ -1503,7 +1505,7 @@ begin
         begin
           var Lista := TJSONArray.Create;
           for var Cosa in Ignorado do
-            Lista.Add(Cosa);
+            Lista.Add(Cosa.Texto);
           E.AddPair('ignored', Lista);
           Inc(Ignorados, Length(Ignorado));
         end;

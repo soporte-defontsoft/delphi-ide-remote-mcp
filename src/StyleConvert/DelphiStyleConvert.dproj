@@ -152,6 +152,7 @@
         </DelphiCompile>
         <DCCReference Include="..\Server\Lsp.DesignerForma.pas"/>
         <DCCReference Include="..\Server\Lsp.Pascal.pas"/>
+        <DCCReference Include="..\Render\FormRender.Partes.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

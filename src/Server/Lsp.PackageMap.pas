@@ -19,6 +19,12 @@ uses
   de la instalacion la declara. }
 function PaqueteDeUnit(const AInfo: TRadStudioInfo; const AUnit: string): string;
 
+{ EL nombre del .dcp de un paquete (rtl -> rtl.dcp): el fichero de la biblioteca
+  del IDE y la DCCReference que un .dproj de paquete lleva por cada requires (los
+  17 paquetes de los Samples de la 37.0, medido el 8-nov-2026). Se componia a mano
+  aqui; add-requires y project-package lo escriben tambien. }
+function DcpDePaquete(const APaquete: string): string;
+
 implementation
 
 uses
@@ -47,6 +53,11 @@ begin
     TDictionary<string, string>(Param).AddOrSetValue(ClaveDeIdentificador(Name), GPaqueteActual);
 end;
 
+function DcpDePaquete(const APaquete: string): string;
+begin
+  Result := APaquete + '.dcp';
+end;
+
 { vcl290.bpl -> vcl si existe vcl.dcp en ALib (la biblioteca Win32 del IDE); si
   no, el nombre entero: la instalacion decide, no una regla de sufijos. }
 function NombreDePaquete(const ALib, ABpl: string): string;
@@ -60,7 +71,7 @@ begin
     Dec(I);
   SinSufijo := Copy(Stem, 1, I);
   if (SinSufijo <> '') and (SinSufijo <> Stem) and
-     TFile.Exists(TPath.Combine(ALib, SinSufijo + '.dcp')) then
+     TFile.Exists(TPath.Combine(ALib, DcpDePaquete(SinSufijo))) then
     Result := SinSufijo
   else
     Result := Stem;
@@ -75,7 +86,7 @@ begin
   GMapa.Clear;
   GRoot := AInfo.RootDir;
   Bin := BinDelIde(AInfo.RootDir);
-  Lib := LibDelIde(AInfo, 'Win32'); // los BPL del IDE son de 32 bits
+  Lib := LibDelIde(AInfo, PLATAFORMA_DE_LOS_PAQUETES_DEL_IDE); // los BPL del IDE son de 32 bits
   if not TDirectory.Exists(Bin) then
     Exit;
   for F in TDirectory.GetFiles(Bin, '*.bpl') do

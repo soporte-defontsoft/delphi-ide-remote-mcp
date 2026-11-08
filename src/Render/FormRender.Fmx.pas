@@ -232,6 +232,11 @@ begin
 end;
 
 { Los no visuales como los ensena el designer: icono en su Left/Top y el nombre debajo }
+const
+  // la caja del nombre de un no visual, debajo de su icono: la que pinta
+  // DibujaNoVisuales y la que da RectDe (estaba escrita dos veces, C2-6 de la 1.29)
+  ALTO_DEL_ROTULO = 14;
+
 function DibujaNoVisuales(ARaiz: TComponent; ABmp: TBitmap): Integer;
 const
   LADO = LADO_DE_NO_VISUAL;
@@ -278,7 +283,7 @@ begin
         ABmp.Canvas.FillText(R, C.ClassName.Substring(1, 3), False, 1, [], TTextAlign.Center, TTextAlign.Center);
       end;
       ABmp.Canvas.Fill.Color := TAlphaColors.Black;
-      ABmp.Canvas.FillText(TRectF.Create(P.X - 40, P.Y + LADO, P.X + LADO + 40, P.Y + LADO + 14), C.Name,
+      ABmp.Canvas.FillText(TRectF.Create(P.X - 40, P.Y + LADO, P.X + LADO + 40, P.Y + LADO + ALTO_DEL_ROTULO), C.Name,
         False, 1, [], TTextAlign.Center, TTextAlign.Leading);
       Inc(Result);
     end;
@@ -319,7 +324,7 @@ begin
         begin
           P := PosicionDeNoVisual(C);
           R := Rect(Round(P.X * AEscala), Round(P.Y * AEscala), Round((P.X + LADO_DE_NO_VISUAL) * AEscala),
-            Round((P.Y + LADO_DE_NO_VISUAL + 14) * AEscala));
+            Round((P.Y + LADO_DE_NO_VISUAL + ALTO_DEL_ROTULO) * AEscala));
           Exit(True);
         end;
 end;

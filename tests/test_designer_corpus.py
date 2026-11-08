@@ -145,6 +145,9 @@ VERDADEROS = {os.path.join('Object Pascal', 'Database', 'FireDAC', 'Samples', 'D
 vistos_verdaderos = set()
 falsos, familia, notas, ejemplos, sin_lint = 0, 0, 0, [], []
 sin_lector, sin_render, contesto, sin_conversor, lookups_sin_estilo = {}, [], {}, [], []
+# ...y lo que dijo, entero: el rojo de un id inesperado salia con el id solo, y un SYS-009
+# (una excepcion: su clase y su mensaje) no se podia diagnosticar (run_all de 8cde5875)
+motivo_de = {}
 # el motivo de DSGN-154 va detras de su cabecera: o el lector CONTESTO y lo que salto no se
 # puede cargar a este fichero (un fragmento SF_DSGN_LECTOR_*, sin id: el ancestro que falta,
 # la raiz que no ve, una excepcion del codigo de un componente, una clase del proyecto), o no
@@ -193,6 +196,7 @@ for dst, r in zip(copiados, respuestas):
             else:
                 m = mc.ETIQUETA.match(motivo.lstrip())
                 sin_lector.setdefault(m.group(1) if m else 'sin id', []).append(rel)
+                motivo_de[rel] = ' '.join(motivo.split())[:400]
     # los avisos del bloque de DSGN-038 sin linea de este fichero: los del
     # lector y los del form contra su clase (check-binding)
     bloque = None
@@ -258,7 +262,7 @@ NO_SE_LEEN = {
     os.path.join(_MD, 'Device Sensors and Services', 'Address Book', 'Contacts', 'main_u.iPhone47in.fmx'):
         'SR_DESIGNER_LITERAL_FUERA_FMT'}
 sin_preguntar = {f: m for m, fs in sin_lector.items() for f in fs}
-otros = ['%s: %s' % (f, m) for f, m in sorted(sin_preguntar.items())
+otros = ['%s: %s' % (f, motivo_de.get(f, m)) for f, m in sorted(sin_preguntar.items())
          if m not in PLAZOS and (f not in NO_SE_LEEN or mc.id_de(NO_SE_LEEN[f]) != m)]
 check('corpus: al lector se le pregunta de cada form, salvo su plazo y los medidos que no se leen (%d)'
       % len(NO_SE_LEEN), not otros, ' || '.join(otros[:5]))

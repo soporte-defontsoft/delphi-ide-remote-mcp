@@ -3978,6 +3978,12 @@ const
     '[CFG-053] ADDED to the requires of %s: %s. The clause is now: %s. ' +
     'Compile again: the units of those packages stop being duplicated ' +
     'inside yours. Backup in __delphi-patch.';
+  { ...y su .dproj, como lo escribe el IDE: una DCCReference al .dcp de cada
+    requires (B7 de la 1.29: entraba solo en el .dpk). Ya en el requires y sin
+    la suya en el .dproj, se le pone y se dice. }
+  SN_REQUIRES_EN_DPROJ_FMT =
+    '[CFG-153] Those packages were already in the requires of %s; its .dproj ' +
+    'now references them too, as the IDE writes it: %s. Backup in __delphi-patch.';
 
   { adduses de delphi_edit (David, 2026-09-23): la unit entra en el uses de
     OTRA unit y la clausula la escribe el motor. }

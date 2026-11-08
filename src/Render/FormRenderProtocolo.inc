@@ -149,7 +149,7 @@
   // un mensaje del lector EN PARTES: <Componente>|<Propiedad>|<Motivo>|<texto tal cual>, partido por el
   // ayudante con EL formato que lo compuso (SPropertyException, en el idioma de ese proceso: el RTL lo
   // traduce por el de Windows, medido el 18-oct-2026); '|||<texto>' si no tiene esa forma. Lo compone
-  // FormRender.Comun.LecturaEnPartes y lo lee Lsp.FormRender.PartesDeLectura
+  // FormRender.Partes.LecturaEnPartes y lo lee Lsp.FormRender.PartesDeLectura
   FR_PARTES_SEP = '|';
   FR_RC_OK = 0;
   FR_RC_ERROR = 1;

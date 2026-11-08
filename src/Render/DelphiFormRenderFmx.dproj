@@ -66,6 +66,7 @@
         <DCCReference Include="..\Server\Lsp.AtomosRtl.pas"/>
         <DCCReference Include="..\Server\Lsp.Reparse.pas"/>
         <DCCReference Include="..\Server\Lsp.PascalDecl.pas"/>
+        <DCCReference Include="FormRender.Partes.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

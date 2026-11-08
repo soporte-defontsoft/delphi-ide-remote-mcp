@@ -364,7 +364,7 @@ end;
   veia despues). Solo lo escrito con exito; una negativa, nada. }
 function NotaDeEstiloFmx(const APath, AResultado: string): string;
 var
-  Ignorado: TArray<string>;
+  Ignorado: TArray<TIgnoradoPorFmx>;
   NoCarga: string;
 begin
   Result := '';

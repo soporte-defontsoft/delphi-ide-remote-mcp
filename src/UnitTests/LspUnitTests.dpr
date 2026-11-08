@@ -35,7 +35,8 @@ uses
   LspTests.RutasOrdinal in 'LspTests.RutasOrdinal.pas',
   LspTests.RestauraEnlaceDuro in 'LspTests.RestauraEnlaceDuro.pas',
   LspTests.Comun in 'LspTests.Comun.pas',
-  LspTests.Huella in 'LspTests.Huella.pas';
+  LspTests.Huella in 'LspTests.Huella.pas',
+  FormRender.Partes in '..\Render\FormRender.Partes.pas';
 
 var
   Runner: ITestRunner;

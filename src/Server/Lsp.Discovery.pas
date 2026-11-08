@@ -44,6 +44,13 @@ type
     function Found: Boolean;
   end;
 
+const
+  { La plataforma de los paquetes del IDE que carga lo nuestro: los BPL de su bin
+    (bin\, el IDE de 32 bits: el mapa de paquetes de Lsp.PackageMap) y los que
+    cargan los ayudantes, de 32 bits como el (los de Lsp.FormRender). Se escribia
+    a mano en los dos (D12b de la 1.29). }
+  PLATAFORMA_DE_LOS_PAQUETES_DEL_IDE = 'Win32';
+
 { The IDE's macro table for an install: HKCU\...\BDS\<ver>\Environment
   Variables, filled into ADest as NAME=VALUE. This is the AUTHORITATIVE
   source for macros used in library paths - notably

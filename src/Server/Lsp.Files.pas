@@ -62,6 +62,7 @@ uses
   Lsp.Texts,
   Lsp.ShaCache,
   Lsp.Mascara,
+  Lsp.Puertas, // AbreParaLeer: el fichero que se sirve, por la puerta de leer
   Lsp.Capturas;
 
 const
@@ -248,7 +249,9 @@ begin
     // Whole-file hash in a header: the client verifies with sha256sum, the
     // same contract delphi_fetch offers on its offset=0 answer.
     Sha := CachedFileSha256(Full); // shared with delphi_fetch: hashed once per (path, mtime, size)
-    Sirve(Full, Sha, TFileStream.Create(Full, fmOpenRead or fmShareDenyWrite));
+    // abierto por LA puerta de leer, que pregunta otra vez sobre la ruta completa
+    // (P8 de la 1.29: lo abria aqui a pelo; la segunda barrera se queda)
+    Sirve(Full, Sha, AbreParaLeer(Full, [ltJaula]));
   except
     on E: Exception do
     begin

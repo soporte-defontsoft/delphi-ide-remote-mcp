@@ -1407,14 +1407,13 @@ REGLAS = [
       # (y el fichero de conexiones del operador, que lleva credenciales: desde CH9 de la 1.29 lo lee
       # BytesDelIni, el lector de la configuracion del servidor, y su casa propia se fue)
       ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'), ('Lsp.Settings.pas', 'BytesDelIni'),
-      # LA puerta (LeeBytes, y su trozo LeeTrozoDeBytes: V80 de la 1.23.1) y el
+      # LA puerta (LeeBytes, y el fichero abierto para leerlo a trozos, AbreParaLeer: el de
+      # LeeTrozoDeBytes, V80 de la 1.23.1, y el de /files, P8 de la 1.29) y el
       # decodificador que usan ella y LeeTexto, tras la puerta
-      ('Lsp.Puertas.pas', 'LeeBytes'), ('Lsp.Puertas.pas', 'LeeTrozoDeBytes'), ('Lsp.Puertas.pas', 'TextoDeFichero'),
+      ('Lsp.Puertas.pas', 'LeeBytes'), ('Lsp.Puertas.pas', 'AbreParaLeer'), ('Lsp.Puertas.pas', 'TextoDeFichero'),
       # (RepoOf leia .git\HEAD a mano: desde la 1.22.2 la rama la da git, RamaDelRepo)
-     # BYTES de la jaula que la tool ya comprobo (la descarga). La captura y su recorte ya
-     # van por la puerta (1.18.2, 2b), y el trozo de delphi_fetch por LeeTrozoDeBytes, la
-     # de remote-run (forma 10 de la 1.26: era un TFileStream a mano)
-      ('Lsp.Files.pas', 'ServeFile'),
+     # (la descarga de /files abria su TFileStream a mano tras ReadPathDenied: desde P8 de la
+     # 1.29 la abre AbreParaLeer, como el trozo de delphi_fetch y el de remote-run)
       # el HASH de un fichero que su tool ya paso por la puerta (delphi_fetch, la descarga, el
       # binario de remote-run, lo recien subido): Lsp.ShaCache lo comparten los renderizadores,
       # que no llevan la puerta ni lo que arrastra
@@ -1832,10 +1831,12 @@ REGLAS = [
     # CONTIENE ese texto (las baterias, los tests) no es partirlo
     ('el mensaje del lector de forms partido a mano',
      r"TRegEx\.\w+\s*\([^;]*'[^']*Error reading|\bSPropertyException\b",
-     [('FormRender.Comun.pas', 'LecturaEnPartes')],
-     'LecturaEnPartes (FormRender.Comun): el ayudante lo parte con el formato que lo compuso, en '
-     'su idioma, y lo manda en partes (FR_PARTES_SEP); el servidor lo lee con PartesDeLectura '
-     '(Lsp.FormRender)'),
+     # (en FormRender.Partes desde DH6 de la 1.29: el conversor de estilos lo usa tambien, y
+     # Lsp.Styles reconstruia el formato del suyo)
+     [('FormRender.Partes.pas', 'LecturaEnPartes')],
+     'LecturaEnPartes (FormRender.Partes): el ayudante o el conversor lo parte con el formato que '
+     'lo compuso, en su idioma, y lo manda en partes (FR_PARTES_SEP); el servidor lo lee con '
+     'PartesDeLectura (Lsp.FormRender)'),
     # que una linea de un form es un EVENTO, por el prefijo On: los de un TDataSet (AfterOpen,
     # BeforePost) y los de un TWebModule (BeforeDispatch) no lo llevan, y check-binding los
     # daba por buenos sin manejador o con el suyo en public (medido el 18-oct-2026). Dos
@@ -3078,7 +3079,8 @@ check('mutante del protocolo: el numero solo no cambia la firma',
       firma_del_protocolo(INC_PROTO.replace('FR_PROTOCOLO_VERSION = 1', 'FR_PROTOCOLO_VERSION = 2'), COMUN_PROTO) == _ahora[1])
 # ...y el del conversor de estilos (forma 6 de la 1.26): sus claves, sus ordenes y sus codigos en
 # StyleConvertProtocolo.inc, que incluyen los dos lados. Cambia: sube SC_PROTOCOLO_VERSION y pon aqui la firma
-FIRMA_DEL_CONVERSOR = (1, '432b3ef55d125c3f')
+# la 2: SC_CLASE_SEP, el separador de SC_ERROR que Mcp.Tools.Styles leia a mano (DH6 de la 1.29)
+FIRMA_DEL_CONVERSOR = (2, '830667d8ff04f237')
 
 
 def firma_del_conversor(inc):

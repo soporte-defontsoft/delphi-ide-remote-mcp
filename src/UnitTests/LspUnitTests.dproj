@@ -197,6 +197,7 @@
         <DCCReference Include="LspTests.RestauraEnlaceDuro.pas"/>
         <DCCReference Include="LspTests.Comun.pas"/>
         <DCCReference Include="LspTests.Huella.pas"/>
+        <DCCReference Include="..\Render\FormRender.Partes.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -6,9 +6,12 @@
   SC_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<SC_PROTOCOLO_VERSION>, lo primero que escribe: un conversor y un
                                  // servidor de versiones distintas no se entienden, y sin decirlo se leerian mal
   // Se sube al cambiar una clave de aqui o una orden del conversor (test_paisaje lo vigila)
-  SC_PROTOCOLO_VERSION = 1;
-  SC_IGNORED = 'IGNORED'#9;      // IGNORED<tab><mensaje del RTL, con clase y propiedad> (repetible, check)
+  // la 2: SC_IGNORED en partes y SC_CLASE_SEP (DH6 de la 1.29)
+  SC_PROTOCOLO_VERSION = 2;
+  SC_IGNORED = 'IGNORED'#9;      // IGNORED<tab><mensaje del RTL EN PARTES: LecturaEnPartes (FormRender.Partes), su lector
+                                 // PartesDeLectura (Lsp.FormRender)> (repetible, check)
   SC_ERROR = 'ERROR: ';          // ERROR: <clase>: <mensaje> de la excepcion que paro la orden, con SC_RC_ERROR
+  SC_CLASE_SEP = ': ';           // entre la <clase> y el <mensaje> de SC_ERROR (lo leia a mano Mcp.Tools.Styles, DH6 de la 1.29)
   SC_OK = 'OK';                  // la ultima linea de una orden que acabo bien
   // las ordenes; las rutas, relativas a la carpeta en la que corre (la etapa de la llamada)
   SC_TOBIN = 'tobin';            // tobin <entrada> <salida>: el texto a binario

@@ -268,7 +268,8 @@ function ClaseDelSustituto(const ARaizTipo: string): string;
 function EsFidelidadDeImpresion(const AFidelidad: string): Boolean;
 
 { Un mensaje del lector EN PARTES (FR_PARTES_SEP, de IGNORED= y NOTLOADED=)
-  -> TIgnorada: EL lector, inverso de FormRender.Comun.LecturaEnPartes.
+  -> TIgnorada: EL lector, inverso de FormRender.Partes.LecturaEnPartes (el de los
+  renderizadores y el del conversor de estilos).
   Componente es el Name del objeto (o su clase, el de un item de una
   coleccion: lo que pone TReader) y Propiedad su ruta (Font.Size). Aqui se
   partia el texto con el formato INGLES, y el RTL del ayudante habla el idioma
@@ -350,6 +351,41 @@ function PartesDeClaseNoInstalada(ADoc: TStyleDoc; const AI: TIgnorada; AFmx: Bo
   suya ('EIBClientError: ...'): EL compositor, para el lint (LoQueNoCargo) y
   el preview (revisor de la 1.20.2: dos emisores). }
 function TextoDeIgnorada(const AI: TIgnorada): string;
+
+type
+  { Lo que es cada cosa que el lector del IDE se salto de un form, por EL juicio
+    (ClaseDeIgnorada) del lint (LoQueNoCargo) y del preview: lo escribian los dos
+    a mano, cada uno en su orden y con su comparacion (DH5 de la 1.29). }
+  TClaseDeIgnorada = (
+    ciDelUsuario,   // la publica en la raiz una clase del usuario (DSGN-152)
+    ciSustituida,   // de un objeto cuya clase sustituyo el ayudante (DSGN-039)
+    ciRaizNoVista,  // de la clase de la raiz, que el lector lee en otra (DSGN-157)
+    ciDelCodigo,    // una excepcion del codigo de un componente, no del lector
+    ciDelProyecto,  // bajo las partes de una clase que esta instalacion no tiene
+    ciFrameCiclico, // un frame que se contiene a si mismo (RENDER-026)
+    ciDelForm);     // del fichero: lo que no carga
+
+  { Lo que hace falta para juzgar lo que se salto de UN form: sus documentos (de
+    quien llama, que los libera), el Name de su raiz, lo que publica la cadena
+    del usuario (RaizParaElLector), la clase en la que el lector la lee
+    (ClaseDelSustituto), las clases que sustituyo el ayudante y el marco. }
+  TJuicioDeIgnoradas = record
+    Ficheros: TFicherosDelForm;
+    RaizNombre: string;
+    Raiz: TRaizParaElLector;
+    Sustituto: string;
+    Sustituidas: TArray<string>;
+    EsFmx: Boolean;
+  end;
+
+{ Lo que es AI (TClaseDeIgnorada), en ESTE orden: lo del usuario, lo sustituido,
+  lo de la raiz que el lector no ve, lo del codigo de un componente, lo de las
+  partes de una clase del proyecto, un frame ciclico y, si no, del form. ASuya,
+  la propiedad del usuario (ciDelUsuario); APropCn y AClaseCn, la propiedad que
+  elige las partes y su clase (ciDelProyecto). La raiz se compara como
+  identificador (MismoIdentificador, la regla de B-C4: el lint tenia SameText). }
+function ClaseDeIgnorada(const AJ: TJuicioDeIgnoradas; const AI: TIgnorada;
+  out ASuya: TPropiedadDelUsuario; out APropCn, AClaseCn: string): TClaseDeIgnorada;
 
 { La salida del renderizador -> sus campos (las lineas '#' son traza). }
 function LeeRespuestaDeRender(const ASalida: string): TRespuestaRender;
@@ -1040,11 +1076,20 @@ begin
     Result := Ini + 1;
 end;
 
+{ Lo que dijo el lector en AI es de la raiz ARaizNombre: su nombre como
+  identificador (MismoIdentificador, la regla de B-C4 de la 1.29; aqui y en el
+  lint era SameText, que solo pliega A-Z). EL de IgnoradaDelUsuario y de
+  ClaseDeIgnorada. }
+function EsDeLaRaiz(const ARaizNombre: string; const AI: TIgnorada): Boolean;
+begin
+  Result := (ARaizNombre <> '') and MismoIdentificador(AI.Componente, ARaizNombre);
+end;
+
 function IgnoradaDelUsuario(const ARaizNombre: string; const AI: TIgnorada;
   const APublicadas: TArray<TPropiedadDelUsuario>; out ASuya: TPropiedadDelUsuario): Boolean;
 begin
   ASuya := Default(TPropiedadDelUsuario);
-  Result := (ARaizNombre <> '') and SameText(AI.Componente, ARaizNombre) and
+  Result := EsDeLaRaiz(ARaizNombre, AI) and
     PropiedadDelUsuarioLlamada(APublicadas, AI.Propiedad, ASuya);
 end;
 
@@ -1072,7 +1117,7 @@ begin
   var Obj := D.ObjetoDeNombre(AI.Componente, True);
   if Obj <> nil then
     for var S in ASustituidas do
-      if SameText(S, Obj.ClassName_) then
+      if MismoIdentificador(S, Obj.ClassName_) then
         Exit(True);
 end;
 
@@ -1130,6 +1175,35 @@ begin
   end;
 end;
 
+function ClaseDeIgnorada(const AJ: TJuicioDeIgnoradas; const AI: TIgnorada;
+  out ASuya: TPropiedadDelUsuario; out APropCn, AClaseCn: string): TClaseDeIgnorada;
+var
+  Otro: string;
+  Doc: TStyleDoc;
+begin
+  APropCn := '';
+  AClaseCn := '';
+  // el preview decia las del usuario antes que las sustituidas, y el lint las
+  // saltaba juntas: este orden es el de los dos
+  if IgnoradaDelUsuario(AJ.RaizNombre, AI, AJ.Raiz.Propias, ASuya) then
+    Exit(ciDelUsuario);
+  if DeClaseSustituida(AJ.Ficheros, AI, AJ.Sustituidas) then
+    Exit(ciSustituida);
+  if EsDeLaRaiz(AJ.RaizNombre, AI) and DeLaRaizQueElLectorNoVe(AJ.Raiz, AJ.Sustituto, AI.Propiedad) then
+    Exit(ciRaizNoVista);
+  if DelCodigoDeUnComponente(AI) then
+    Exit(ciDelCodigo);
+  // en el documento en el que esta escrito lo saltado (el form, un frame, un ancestro)
+  Doc := nil;
+  if AJ.Ficheros <> nil then
+    Doc := AJ.Ficheros.Doc(AI.Fichero, Otro);
+  if PartesDeClaseNoInstalada(Doc, AI, AJ.EsFmx, APropCn, AClaseCn) then
+    Exit(ciDelProyecto);
+  if EsFrameCiclico(AI) then
+    Exit(ciFrameCiclico);
+  Result := ciDelForm;
+end;
+
 type
   // las partes de un componente de una clase que no esta instalada: que
   // propiedad las elige, con que clase, y lo que el lector salto debajo
@@ -1168,14 +1242,6 @@ var
       Lineas := Lineas + [MsgFmt(SF_DSGN_LECTOR_SIN_LINEA_FMT, [AI.Texto])];
   end;
 
-  // el documento en el que esta escrito lo que dijo el lector en AI
-  function DocDe(const AI: TIgnorada): TStyleDoc;
-  var
-    Otro: string;
-  begin
-    Result := Ficheros.Doc(AI.Fichero, Otro);
-  end;
-
 begin
   // los documentos de lo leido, el form y los ficheros que nombra el lector (el
   // cuerpo, sin reindentar)
@@ -1200,48 +1266,53 @@ begin
   // la clase en la que el lector lee la raiz
   Sustituto := ClaseDelSustituto(R.RaizTipo);
   NoVistas := '';
+  // EL juicio de lo saltado, el del preview (ClaseDeIgnorada, DH5 de la 1.29)
+  var Juicio := Default(TJuicioDeIgnoradas);
+  Juicio.Ficheros := Ficheros;
+  Juicio.RaizNombre := RaizNombre;
+  Juicio.Raiz := Raiz;
+  Juicio.Sustituto := Sustituto;
+  Juicio.Sustituidas := R.Sustituidas;
+  Juicio.EsFmx := EsDesignerFmx(AForm);
   for var I in R.Ignoradas do
   begin
     var Suya: TPropiedadDelUsuario;
-    // lo de una clase sustituida no es un valor malo: la nota de una clase de
-    // terceros (DSGN-039), no un aviso por edicion (DeClaseSustituida, EL juicio)
-    if DeClaseSustituida(Ficheros, I, R.Sustituidas) or IgnoradaDelUsuario(RaizNombre, I, Raiz.Propias, Suya) then
-      Continue;
-    // de la raiz, y de su clase y no de la form en la que la lee el lector: un
-    // TQuickRep, un TForm3D, un modulo de datos FMX - no se sabe (DSGN-154)
-    if (RaizNombre <> '') and SameText(I.Componente, RaizNombre) and
-       DeLaRaizQueElLectorNoVe(Raiz, Sustituto, I.Propiedad) then
-    begin
-      NoVistas := NoVistas + (if NoVistas <> '' then ', ' else '') + I.Propiedad;
-      Continue;
-    end;
-    // una excepcion del codigo de un componente (no del lector) y lo saltado
-    // bajo las partes de una clase del proyecto: no se sabe (DSGN-154)
-    if DelCodigoDeUnComponente(I) then
-    begin
-      SinProp := SinProp + [TextoDeIgnorada(I)];
-      Continue;
-    end;
-    if PartesDeClaseNoInstalada(DocDe(I), I, EsDesignerFmx(AForm), PropCn, ClaseCn) then
-    begin
-      var K := -1;
-      for var J := 0 to High(Proyecto) do
-        if SameText(Proyecto[J].Componente, I.Componente) then
-          K := J;
-      if K < 0 then
+    case ClaseDeIgnorada(Juicio, I, Suya, PropCn, ClaseCn) of
+      // lo que publica el usuario no lo conoce el lector, y lo de una clase
+      // sustituida es la nota de una clase de terceros (DSGN-039): ningun aviso
+      ciDelUsuario, ciSustituida:
+        Continue;
+      // de la raiz, y de su clase y no de la form en la que la lee el lector: un
+      // TQuickRep, un TForm3D, un modulo de datos FMX - no se sabe (DSGN-154)
+      ciRaizNoVista:
+        NoVistas := NoVistas + (if NoVistas <> '' then ', ' else '') + I.Propiedad;
+      // una excepcion del codigo de un componente (no del lector) y lo saltado
+      // bajo las partes de una clase del proyecto: no se sabe (DSGN-154)
+      ciDelCodigo:
+        SinProp := SinProp + [TextoDeIgnorada(I)];
+      ciDelProyecto:
       begin
-        var Nueva: TPartesDelProyecto;
-        Nueva.Componente := I.Componente;
-        Nueva.Prop := PropCn;
-        Nueva.Clase := ClaseCn;
-        Nueva.Saltado := I.Propiedad;
-        Proyecto := Proyecto + [Nueva];
-      end
-      else
-        Proyecto[K].Saltado := Proyecto[K].Saltado + ', ' + I.Propiedad;
-      Continue;
+        // el componente, como identificador (B-C4)
+        var K := -1;
+        for var J := 0 to High(Proyecto) do
+          if MismoIdentificador(Proyecto[J].Componente, I.Componente) then
+            K := J;
+        if K < 0 then
+        begin
+          var Nueva: TPartesDelProyecto;
+          Nueva.Componente := I.Componente;
+          Nueva.Prop := PropCn;
+          Nueva.Clase := ClaseCn;
+          Nueva.Saltado := I.Propiedad;
+          Proyecto := Proyecto + [Nueva];
+        end
+        else
+          Proyecto[K].Saltado := Proyecto[K].Saltado + ', ' + I.Propiedad;
+      end;
+    else
+      // del form, y un frame que se contiene a si mismo: el aviso con su linea
+      Pon(I);
     end;
-    Pon(I);
   end;
   ANoConfirmado := '';
   if NoVistas <> '' then
@@ -1893,7 +1964,7 @@ begin
       // repetido: el primero, como el cargador
       // la de lo compilado, la que el IDE dice para Win32 (la de los
       // ayudantes): era $(BDSCOMMONDIR)\Bpl compuesto aqui (C15 de la 1.26)
-      var Bpls := IdePlatformLibraryPaths(AInfo, 'Win32', 'Package DPL Output');
+      var Bpls := IdePlatformLibraryPaths(AInfo, PLATAFORMA_DE_LOS_PAQUETES_DEL_IDE, 'Package DPL Output');
       // sin ese valor (o uno que no se resuelve), la que usa el IDE sin el:
       // $(BDSCOMMONDIR)\Bpl, la que se miraba antes (revisor de correccion del
       // cierre de la 1.26)

@@ -58,6 +58,8 @@ type
     procedure UnProgramaSeReconocePorSuCabecera;
     [Test]
     procedure LaEscalaDelPngTieneLector;
+    [Test]
+    procedure ClaseDeIgnoradaEnUnOrdenYComoIdentificador;
   end;
 
 { Una UNION de carpeta (punto de montaje) AUnion -> ADestino, para las pruebas
@@ -885,6 +887,45 @@ begin
   P.Escala := 150;
   Assert.AreEqual('', ComponeOrdenDeRender('C:\r\DelphiFormRenderVcl.exe', P, O));
   Assert.Contains(O, ' ' + FR_ARG_SCALE + ' 150');
+end;
+
+procedure TFormRenderTests.ClaseDeIgnoradaEnUnOrdenYComoIdentificador;
+var
+  J: TJuicioDeIgnoradas;
+  I: TIgnorada;
+  Suya: TPropiedadDelUsuario;
+  PropCn, ClaseCn: string;
+  P: TPropiedadDelUsuario;
+begin
+  // EL juicio del lint y del preview (DH5 de la 1.29): sin documentos ni tabla,
+  // lo que se decide por lo que dijo el lector y por la raiz
+  J := Default(TJuicioDeIgnoradas);
+  J.RaizNombre := 'ñandu';
+  P := Default(TPropiedadDelUsuario);
+  P.Nombre := 'Titulo';
+  P.Clase := 'TBaseDelUsuario';
+  P.Fichero := 'C:\w\UBase.pas';
+  J.Raiz.Propias := [P];
+  // la raiz se compara como identificador: dcc pliega la letra acentuada
+  // (B-C4); con SameText, ÑANDU no era ñandu y lo del usuario salia como aviso
+  I := Default(TIgnorada);
+  I.Componente := 'ÑANDU';
+  I.Propiedad := 'Titulo';
+  Assert.IsTrue(IgnoradaDelUsuario(J.RaizNombre, I, J.Raiz.Propias, Suya), 'IgnoradaDelUsuario');
+  Assert.IsTrue(ClaseDeIgnorada(J, I, Suya, PropCn, ClaseCn) = ciDelUsuario, 'del usuario');
+  Assert.AreEqual('TBaseDelUsuario', Suya.Clase);
+  // lo de otro componente con la misma propiedad no es del usuario: del form
+  I.Componente := 'Edit1';
+  Assert.IsTrue(ClaseDeIgnorada(J, I, Suya, PropCn, ClaseCn) = ciDelForm, 'del form');
+  // una excepcion del codigo de un componente, antes que el frame ciclico
+  I.Origen := 'EAccessViolation';
+  Assert.IsTrue(ClaseDeIgnorada(J, I, Suya, PropCn, ClaseCn) = ciDelCodigo, 'del codigo');
+  I.Origen := FR_ORIGEN_FRAME_CICLICO;
+  Assert.IsTrue(ClaseDeIgnorada(J, I, Suya, PropCn, ClaseCn) = ciFrameCiclico, 'frame ciclico');
+  // ...y lo del usuario va antes que todo: una propiedad de la raiz con origen
+  I.Componente := 'Ñandu';
+  I.Origen := 'EAccessViolation';
+  Assert.IsTrue(ClaseDeIgnorada(J, I, Suya, PropCn, ClaseCn) = ciDelUsuario, 'el usuario primero');
 end;
 
 initialization

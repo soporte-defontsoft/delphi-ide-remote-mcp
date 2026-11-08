@@ -289,6 +289,16 @@ type
     [Test] procedure ElTrabajoConPlazoLlevaLaLlamada;
   end;
 
+  { EL lector de rsvars.bat (Lsp.Discovery.VariablesDeRsVars) es gramatica
+    propia: el build lanza msbuild sin cmd.exe (2an de la 1.18.2). Su juez es
+    cmd, que lo ejecuta: lo que deja puesto "call rsvars.bat && set" es lo que
+    tiene que leer (D12a de la 1.29: nadie se lo preguntaba) }
+  [TestFixture]
+  TRsVarsTests = class
+  public
+    [Test] procedure ElLectorDiceLoQueDejaCmd;
+  end;
+
 implementation
 
 uses
@@ -1866,6 +1876,75 @@ begin
   end;
 end;
 
+procedure TRsVarsTests.ElLectorDiceLoQueDejaCmd;
+var
+  Info: TRadStudioInfo;
+  Salida, Cmd, Sistema: string;
+  SI: TStartupInfo;
+  PI: TProcessInformation;
+  Dejo: TStringList;
+  Buf: array[0..MAX_PATH] of Char;
+  Oem: TEncoding;
+begin
+  Info := DiscoverRadStudio;
+  Assert.IsTrue(Info.Found, 'el ejecutor ve su Delphi');
+  if not FileExists(Info.RsVarsBat) then
+  begin
+    NoSeMide('esta instalacion no trae rsvars.bat');
+    Exit;
+  end;
+  // el juez, por su ruta: cmd del sistema, sin AutoRun (/d), y lo que deja en un
+  // fichero de la carpeta del ejecutor (la unica donde escribe el contenedor)
+  SetString(Sistema, Buf, GetSystemDirectory(Buf, MAX_PATH));
+  Salida := ExtractFilePath(ParamStr(0)) + 'rsvars-cmd-' + TGUID.NewGuid.ToString.Trim(['{', '}']) + '.txt';
+  Cmd := '"' + TPath.Combine(Sistema, 'cmd.exe') + '" /d /c "call "' + Info.RsVarsBat +
+    '" && set > "' + Salida + '""';
+  UniqueString(Cmd);
+  FillChar(SI, SizeOf(SI), 0);
+  SI.cb := SizeOf(SI);
+  FillChar(PI, SizeOf(PI), 0);
+  // el motivo DESPUES de la llamada: el orden de los argumentos no esta garantizado
+  var Arranca := CreateProcess(nil, PChar(Cmd), nil, nil, False, CREATE_NO_WINDOW, nil, nil, SI, PI);
+  Assert.IsTrue(Arranca, 'cmd arranca: ' + SysErrorMessage(GetLastError));
+  try
+    Assert.IsTrue(WaitForSingleObject(PI.hProcess, 30000) = WAIT_OBJECT_0, 'cmd acaba');
+  finally
+    CloseHandle(PI.hThread);
+    CloseHandle(PI.hProcess);
+  end;
+  Dejo := TStringList.Create;
+  Oem := TEncoding.GetEncoding(GetOEMCP);
+  try
+    try
+      Dejo.Text := TFile.ReadAllText(Salida, Oem);
+    finally
+      if FileExists(Salida) then
+        System.SysUtils.DeleteFile(Salida);
+    end;
+    Assert.IsTrue(Dejo.IndexOfName('BDS') >= 0, 'cmd dejo el entorno de rsvars.bat');
+    var Leidas := VariablesDeRsVars(Info);
+    Assert.IsTrue(Length(Leidas) > 0, 'el lector lee rsvars.bat');
+    for var V in Leidas do
+    begin
+      var P := V.IndexOf('=');
+      var N := V.Substring(0, P);
+      var Valor := V.Substring(P + 1);
+      var K := Dejo.IndexOfName(N);
+      // SET N= la QUITA del entorno de cmd: el lector la da vacia
+      if Valor = '' then
+        Assert.IsTrue(K < 0, N + ': cmd la quita y el lector la da vacia')
+      else
+      begin
+        Assert.IsTrue(K >= 0, N + ': cmd la deja');
+        Assert.AreEqual(Dejo.ValueFromIndex[K], Valor, N);
+      end;
+    end;
+  finally
+    Oem.Free;
+    Dejo.Free;
+  end;
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TFinalDeUnTrabajoTests);
   TDUnitX.RegisterTestFixture(TLectoresDeJaulaTests);
@@ -1884,5 +1963,6 @@ initialization
   TDUnitX.RegisterTestFixture(TAncestrosTests);
   TDUnitX.RegisterTestFixture(TPerfilPorLaListaTests);
   TDUnitX.RegisterTestFixture(TMudanzaDeOperadorTests);
+  TDUnitX.RegisterTestFixture(TRsVarsTests);
 
 end.

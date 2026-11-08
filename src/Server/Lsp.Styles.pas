@@ -269,6 +269,18 @@ function StyleConverterExe: string;
 function EstiloEnBinario(const AFuente: TArray<Byte>; const ANombre: string;
   out ABinario: TArray<Byte>; out ACodigo: Cardinal): string;
 
+type
+  { Una cosa que FMX ignoro de un estilo, en sus partes: el conversor las manda
+    partidas por el formato del RTL que lo leyo (LecturaEnPartes, el compositor de
+    los renderizadores) y aqui las lee PartesDeLectura. Clase, la del objeto (un
+    estilo no tiene nombres: el RTL nombra su clase); Propiedad, su ruta
+    (Fill.Color); Texto, el mensaje entero, el que se ensena. Clase y Propiedad
+    vacias si no se supo partir. Se partia a mano en Mcp.Tools.Styles con el
+    formato ingles (DH6 de la 1.29). }
+  TIgnoradoPorFmx = record
+    Clase, Propiedad, Texto: string;
+  end;
+
 { Lo que el cargador de estilos de FMX IGNORA de un .style de texto: su
   lector se traga cada error - una propiedad que la clase no publica, un valor
   que no lee, una clase que no conoce con todo lo de dentro - y el estilo carga
@@ -283,13 +295,22 @@ function EstiloEnBinario(const AFuente: TArray<Byte>; const ANombre: string;
   value' de un TextSettings.FontColor = $FFFF0000), '' si cargo. Es el juicio
   mas fuerte y se tomaba por "no se sabe": set lo escribia, lint decia clean
   y solo build lo negaba (Hermes, test completo de la 1.21.0). }
-function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>;
+function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<TIgnoradoPorFmx>;
   out ANoCarga: string): Boolean;
 { ...de un texto que aun no esta en disco (lo que set va a escribir), con la
   codificacion AEnc de su fichero: la copia que se pregunta va a la temporal
   del servidor, no a la jaula. }
-function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>;
+function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<TIgnoradoPorFmx>;
   out ANoCarga: string): Boolean;
+{ Lo que dijo FMX (AIgnorado, uno de los de IgnoradoPorFmx) es de la propiedad
+  AProp de un objeto de la clase AClase: por sus partes, como identificadores
+  (MismoIdentificador). Mcp.Tools.Styles lo reconstruia a mano, 'Clase.Prop:'
+  (DH6 de la 1.29). }
+function IgnoradoDeLaPropiedad(const AIgnorado: TIgnoradoPorFmx; const AClase, AProp: string): Boolean;
+{ El error con el que FMX no cargo un estilo (el ANoCarga de IgnoradoPorFmx) es
+  del PARSER del texto (EParserError, la conversion a binario) y no de su lector:
+  por el separador del protocolo del conversor (SC_CLASE_SEP), que se leia a mano. }
+function NoCargaDelParser(const ANoCarga: string): Boolean;
 
 { Como ESCRIBE el escritor de FMX - el del IDE: el conversor de 32 bits,
   totext, que carga el estilo como FMX y lo guarda con TStyleStreaming - el
@@ -1348,12 +1369,12 @@ end;
 { Lo que FMX ignora de un .style (check), que AEntrada escribe en la etapa del
   conversor, o el error con el que no lo pudo cargar: IgnoradoPorFmx, para un
   fichero y para un texto }
-function IgnoradoDe(const AEntrada: TProc<string>; out AIgnorado: TArray<string>;
+function IgnoradoDe(const AEntrada: TProc<string>; out AIgnorado: TArray<TIgnoradoPorFmx>;
   out ANoCarga: string): Boolean;
 var
   Code: Cardinal;
   Nada: TArray<Byte>;
-  L: TList<string>;
+  L: TList<TIgnoradoPorFmx>;
 begin
   AIgnorado := [];
   ANoCarga := '';
@@ -1368,11 +1389,19 @@ begin
           ANoCarga := Linea.Substring(Length(SC_ERROR)).Trim;
     Exit(ANoCarga <> '');
   end;
-  L := TList<string>.Create;
+  L := TList<TIgnoradoPorFmx>.Create;
   try
     for var Linea in SplitToLines(Salida) do
       if Linea.StartsWith(SC_IGNORED) then
-        L.Add(Linea.Substring(Length(SC_IGNORED)).Trim);
+      begin
+        // en partes (LecturaEnPartes), por EL lector de las del lector
+        var P := PartesDeLectura(Linea.Substring(Length(SC_IGNORED)).Trim);
+        var I: TIgnoradoPorFmx;
+        I.Clase := P.Componente;
+        I.Propiedad := P.Propiedad;
+        I.Texto := P.Texto;
+        L.Add(I);
+      end;
     AIgnorado := L.ToArray;
   finally
     L.Free;
@@ -1380,7 +1409,7 @@ begin
   Result := True;
 end;
 
-function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<string>;
+function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<TIgnoradoPorFmx>;
   out ANoCarga: string): Boolean;
 var
   Bytes: TArray<Byte>;
@@ -1419,10 +1448,21 @@ begin
     end;
 end;
 
-function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<string>;
+function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<TIgnoradoPorFmx>;
   out ANoCarga: string): Boolean;
 begin
   Result := IgnoradoDe(EscribeLaCopia(ATexto, AEnc), AIgnorado, ANoCarga);
+end;
+
+function IgnoradoDeLaPropiedad(const AIgnorado: TIgnoradoPorFmx; const AClase, AProp: string): Boolean;
+begin
+  Result := (AIgnorado.Clase <> '') and MismoIdentificador(AIgnorado.Clase, AClase) and
+    MismoIdentificador(AIgnorado.Propiedad, AProp.Trim);
+end;
+
+function NoCargaDelParser(const ANoCarga: string): Boolean;
+begin
+  Result := ANoCarga.StartsWith(EParserError.ClassName + SC_CLASE_SEP);
 end;
 
 function ComoLoEscribeFmxDeTexto(const ATexto, AEnc: string; out AEscrito: string): Boolean;

@@ -80,10 +80,14 @@ uses
   Lsp.Deteccion,
   Lsp.Puertas,
   Lsp.JuicioDeForms,
+  Lsp.PackageMap, // DcpDePaquete: el requires del paquete nuevo en su .dproj
   Lsp.ClausulaUses;
 
 const
   CRLF = #13#10;
+  // el requires de un paquete nuevo: UNO para el .dpk y para la DCCReference de su
+  // .dproj, que el IDE escribe con el (B7 de la 1.29: nacia sin ella)
+  REQUIRES_DEL_PAQUETE_NUEVO = 'rtl';
   // los ambitos de unidad de un proyecto nuevo, como los reparte el IDE (la
   // nota, en el .dproj de abajo; medidos en los Samples de la 37.0): los de
   // todas las plataformas y los de Windows (Lsp.ConfigFabricator: AMBITOS_BASE,
@@ -296,7 +300,11 @@ begin
       GrupoDeValores('Win64', CFG_RELEASE, Dpi);
   end;
   FormRef := '';
-  if AFormUnit <> '' then
+  // un paquete, la de su requires, donde la escribe el IDE: tras </DelphiCompile>
+  // (los 17 paquetes de los Samples de la 37.0, medido el 8-nov-2026)
+  if SameText(AAppType, 'Package') then
+    FormRef := DccRefXml(Default(TUnitInfo), DcpDePaquete(REQUIRES_DEL_PAQUETE_NUEVO))
+  else if AFormUnit <> '' then
   begin
     // EL escritor de una <DCCReference> (DccRefXml, el de add-unit): una
     // unit sin form (el fixture de un proyecto de test) es la referencia a
@@ -736,7 +744,7 @@ begin
         '{$R *.res}' + CRLF +
         '{$IMPLICITBUILD ON}' + CRLF + CRLF +
         'requires' + CRLF +
-        '  rtl;' + CRLF + CRLF +
+        '  ' + REQUIRES_DEL_PAQUETE_NUEVO + ';' + CRLF + CRLF +
         'end.' + CRLF);
       WriteNewFile(Dproj,
         DprojTemplate(AName, NewGuidStr, 'Package', 'None', '', '', ''));
