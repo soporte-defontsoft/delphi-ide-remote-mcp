@@ -7,10 +7,12 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 11; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+  FR_PROTOCOLO_VERSION = 12; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
                             // la 9: los VALORES de abajo como constantes (C2-3 de la 1.28; en el cable, los mismos);
                             // la 10: --scale y SCALE= (C2 de la 1.29); la 11: el estilo none y windows
-                            // y la fidelidad canvas como constantes (DH4 de la 1.29; en el cable, los mismos)
+                            // y la fidelidad canvas como constantes (DH4 de la 1.29; en el cable, los mismos);
+                            // la 12: los separadores de NONVISUALS= como constantes (B-I18 de la 1.29; en el
+                            // cable, los mismos)
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados
@@ -151,6 +153,10 @@
   // traduce por el de Windows, medido el 18-oct-2026); '|||<texto>' si no tiene esa forma. Lo compone
   // FormRender.Partes.LecturaEnPartes y lo lee Lsp.FormRender.PartesDeLectura
   FR_PARTES_SEP = '|';
+  // los de NONVISUALS=<Nombre:Clase,...>: entre los no visuales y entre el nombre y la clase de cada uno. Los
+  // compone FormRender.Comun.ListaDeNoVisuales y los lee Lsp.FormRender (se escribian a mano en los dos lados)
+  FR_NOVISUALES_SEP = ',';
+  FR_NOVISUAL_CLASE_SEP = ':';
   FR_RC_OK = 0;
   FR_RC_ERROR = 1;
   FR_RC_USAGE = 2;

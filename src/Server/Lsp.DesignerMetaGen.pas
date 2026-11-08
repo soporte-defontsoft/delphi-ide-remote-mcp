@@ -109,6 +109,17 @@ const
   // cargan en un TAlphaColor, Rojo no -; segunda revision de la 1.17.0)
   // lo que se recuerda un fallo del generador antes de intentarlo otra vez
   MINUTOS_REINTENTO_TABLA = 10;
+  // los nombres de las BASES de la tabla (la familia con que se juzga y se escribe
+  // un valor: TInfoTipo.Base). Los compone el generador (InfoBase, Clasifica) y los
+  // leen el juez de un valor (Lsp.DesignerMeta) y el escritor (Lsp.DesignerEdit):
+  // eran literales en las tres unidades (B19 de la 1.29)
+  BASE_STRING = 'string';
+  BASE_CHAR = 'char';
+  BASE_INTEGER = 'integer';
+  BASE_INT64 = 'int64';
+  BASE_SINGLE = 'single';
+  BASE_FLOAT = 'float';
+  BASE_VARIANT = 'variant';
 
 // 'vcl' / 'fmx': el trozo del nombre de una tabla
 function NombreDeMarco(AMarco: TMarcoDisenador): string;
@@ -1734,51 +1745,51 @@ function Intrinseco(const L, APlataforma: string; out AInfo: TInfoTipo): Boolean
 begin
   Result := True;
   if (L = 'string') or (L = 'unicodestring') then
-    AInfo := InfoBase('string', 'string')
+    AInfo := InfoBase('string', BASE_STRING)
   else if L = 'ansistring' then
-    AInfo := InfoBase('AnsiString', 'string')
+    AInfo := InfoBase('AnsiString', BASE_STRING)
   else if L = 'widestring' then
-    AInfo := InfoBase('WideString', 'string')
+    AInfo := InfoBase('WideString', BASE_STRING)
   else if L = 'shortstring' then
-    AInfo := InfoBase('ShortString', 'string')
+    AInfo := InfoBase('ShortString', BASE_STRING)
   else if (L = 'char') or (L = 'widechar') then
-    AInfo := InfoBase('Char', 'char')
+    AInfo := InfoBase('Char', BASE_CHAR)
   else if L = 'ansichar' then
-    AInfo := InfoBase('AnsiChar', 'char')
+    AInfo := InfoBase('AnsiChar', BASE_CHAR)
   else if (L = 'integer') or (L = 'longint') then
-    AInfo := InfoBase('Integer', 'integer')
+    AInfo := InfoBase('Integer', BASE_INTEGER)
   else if (L = 'cardinal') or (L = 'longword') then
-    AInfo := InfoBase('Cardinal', 'integer')
+    AInfo := InfoBase('Cardinal', BASE_INTEGER)
   else if L = 'shortint' then
-    AInfo := InfoBase('ShortInt', 'integer')
+    AInfo := InfoBase('ShortInt', BASE_INTEGER)
   else if L = 'smallint' then
-    AInfo := InfoBase('SmallInt', 'integer')
+    AInfo := InfoBase('SmallInt', BASE_INTEGER)
   else if L = 'byte' then
-    AInfo := InfoBase('Byte', 'integer')
+    AInfo := InfoBase('Byte', BASE_INTEGER)
   else if L = 'word' then
-    AInfo := InfoBase('Word', 'integer')
+    AInfo := InfoBase('Word', BASE_INTEGER)
   else if (L = 'nativeint') and not SameText(APlataforma, 'Win64') then
-    AInfo := InfoBase('Integer', 'integer')
+    AInfo := InfoBase('Integer', BASE_INTEGER)
   else if (L = 'nativeuint') and not SameText(APlataforma, 'Win64') then
-    AInfo := InfoBase('Cardinal', 'integer')
+    AInfo := InfoBase('Cardinal', BASE_INTEGER)
   else if (L = 'int64') or (L = 'nativeint') then
-    AInfo := InfoBase('Int64', 'int64')
+    AInfo := InfoBase('Int64', BASE_INT64)
   else if (L = 'uint64') or (L = 'nativeuint') then
-    AInfo := InfoBase('UInt64', 'int64')
+    AInfo := InfoBase('UInt64', BASE_INT64)
   else if L = 'single' then
-    AInfo := InfoBase('Single', 'single') // se escribe redondeado a Single (FlotanteDeForm)
+    AInfo := InfoBase('Single', BASE_SINGLE) // se escribe redondeado a Single (FlotanteDeForm)
   else if (L = 'double') or (L = 'real') then
-    AInfo := InfoBase('Double', 'float')
+    AInfo := InfoBase('Double', BASE_FLOAT)
   else if L = 'extended' then
-    AInfo := InfoBase('Extended', 'float')
+    AInfo := InfoBase('Extended', BASE_FLOAT)
   else if L = 'currency' then
-    AInfo := InfoBase('Currency', 'float')
+    AInfo := InfoBase('Currency', BASE_FLOAT)
   else if L = 'comp' then
-    AInfo := InfoBase('Comp', 'float')
+    AInfo := InfoBase('Comp', BASE_FLOAT)
   else if L = 'variant' then
-    AInfo := InfoBase('Variant', 'variant')
+    AInfo := InfoBase('Variant', BASE_VARIANT)
   else if L = 'olevariant' then
-    AInfo := InfoBase('OleVariant', 'variant')
+    AInfo := InfoBase('OleVariant', BASE_VARIANT)
   else if L = 'pointer' then
     AInfo := Info('o', 'Pointer')
   else if L = 'boolean' then
@@ -1922,9 +1933,9 @@ begin
   if AProf > 16 then
     Exit;
   if TRegEx.IsMatch(ALimite, '^(?:[-+]|\$[0-9A-Fa-f]|\d)') then
-    Exit('integer');
+    Exit(BASE_INTEGER);
   if (ALimite = '') or ALimite.StartsWith('#') or ALimite.StartsWith('''') then
-    Exit('char');
+    Exit(BASE_CHAR);
   // Low(T)..High(T) (TModalResult = Low(Integer)..High(Integer),
   // System.UITypes): la base la dice T, preguntada al MISMO clasificador. Sin
   // ella el tipo quedaba sin base y set y lint dejaban pasar "mrOK", que el
@@ -1933,8 +1944,8 @@ begin
   Limite := TRegEx.Match(ALimite, '^(?i:low|high)\s*\(\s*(' + PATRON_IDENT + ')\s*\)\s*$');
   if Limite.Success then
   begin
-    if Clasifica(Limite.Groups[1].Value, AUnidad, AContexto, AEnImpl, AProf + 1).Base = 'integer' then
-      Result := 'integer';
+    if Clasifica(Limite.Groups[1].Value, AUnidad, AContexto, AEnImpl, AProf + 1).Base = BASE_INTEGER then
+      Result := BASE_INTEGER;
   end
   else if TRegEx.IsMatch(ALimite, '^' + PATRON_IDENT + '(?:\.' + PATRON_IDENT + ')*$') and
           ValorDeConstante(ALimite, AUnidad, AEnImpl, Valor, Donde) then

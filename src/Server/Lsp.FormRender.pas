@@ -911,10 +911,10 @@ begin
       Result.Ignoradas := Result.Ignoradas + [Ig];
     end
     else if Es(FR_NONVISUALS) then
-      for var Item in V.Split([','], TStringSplitOptions.ExcludeEmpty) do
+      for var Item in V.Split([FR_NOVISUALES_SEP], TStringSplitOptions.ExcludeEmpty) do
       begin
         var NV: TNoVisual;
-        P := Item.LastIndexOf(':');
+        P := Item.LastIndexOf(FR_NOVISUAL_CLASE_SEP);
         NV.Nombre := Item;
         NV.Clase := '';
         if P >= 0 then

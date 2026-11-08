@@ -2008,9 +2008,10 @@ const
   extension, los nombres (recortados, al menos uno, cada uno un identificador) y
   la seccion (implementation si no se dice). Un .dpr tiene UN uses y la seccion
   no aplica: AEsPrograma, sin juzgarla. '' si vale, o la negativa; lo propio de
-  cada puerta son sus dos textos. }
+  cada puerta son sus dos negativas, ya compuestas por su helper (MsgFmt /
+  MsgText: test_catalogo C9). }
 function PreambuloDeUses(const APasPath: string; const ANames: TArray<string>;
-  const ASection, ANoEsPasFmt, ASinNombres: string; out ANombres: TArray<string>;
+  const ASection, ANoEsPas, ASinNombres: string; out ANombres: TArray<string>;
   out ASec: string; out AEsPrograma: Boolean): string;
 var
   Nombre: string;
@@ -2019,10 +2020,10 @@ begin
   ASec := '';
   AEsPrograma := False;
   if not TieneExtension(APasPath, EXTS_CON_USES) then
-    Exit(MsgFmt(ANoEsPasFmt, [TPath.GetFileName(APasPath)]));
+    Exit(ANoEsPas);
   ANombres := Recortados(ANames);
   if Length(ANombres) = 0 then
-    Exit(MsgText(ASinNombres));
+    Exit(ASinNombres);
   for Nombre in ANombres do
     if not EsIdentificador(Nombre, True) then
       Exit(MsgFmt(SR_ADDUSES_BAD_NAME_FMT, [Nombre]));
@@ -2050,7 +2051,8 @@ var
   Names, Faltan, YaEstan, EnOtra: TArray<string>;
   Creada, EsPrograma: Boolean;
 begin
-  Result := PreambuloDeUses(APasPath, ANames, ASection, SR_ADDUSES_NOT_PAS_FMT, SR_ADDUSES_NEED_NAMES,
+  Result := PreambuloDeUses(APasPath, ANames, ASection,
+    MsgFmt(SR_ADDUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]), MsgText(SR_ADDUSES_NEED_NAMES),
     Names, Sec, EsPrograma);
   if Result <> '' then
     Exit;
@@ -2186,7 +2188,8 @@ var
   end;
 
 begin
-  Result := PreambuloDeUses(APasPath, ANames, ASection, SR_REMOVEUSES_NOT_PAS_FMT, SR_REMOVEUSES_NEED_NAMES,
+  Result := PreambuloDeUses(APasPath, ANames, ASection,
+    MsgFmt(SR_REMOVEUSES_NOT_PAS_FMT, [TPath.GetFileName(APasPath)]), MsgText(SR_REMOVEUSES_NEED_NAMES),
     Names, Sec, EsPrograma);
   if Result <> '' then
     Exit;

@@ -1329,7 +1329,7 @@ begin
   K := ClaveDeIdentificador(AHoja.TypeId);
   if not M.Bases.TryGetValue(K, Base) then
     Exit;
-  if (Base = 'integer') or (Base = 'int64') then
+  if (Base = BASE_INTEGER) or (Base = BASE_INT64) then
   begin
     // y que quepa donde lo lee el cargador: ReadInteger lee 32 bits (un
     // $FFFF0000 sale del texto como Int64 y el form no carga), ReadInt64 64
@@ -1337,9 +1337,9 @@ begin
     if EsEnteroDeForm(AValor) then
     begin
       if TryStrToInt64(AValor, N) and
-         ((Base = 'int64') or ((N >= Low(Integer)) and (N <= High(Integer)))) then
+         ((Base = BASE_INT64) or ((N >= Low(Integer)) and (N <= High(Integer)))) then
         Exit;
-      if Base = 'int64' then
+      if Base = BASE_INT64 then
         Exit(MsgText(SF_DESIGNER_TOMA_ENTERO64));
       Result := MsgText(SF_DESIGNER_TOMA_ENTERO32);
       // los mismos 32 bits que no caben con signo ($FF00A152 en un TAlphaColor:
@@ -1363,7 +1363,7 @@ begin
     end;
     // un identificador solo si el tipo registra constantes, y entonces una
     // de las suyas (ReadPropValue le pregunta a su IdentToInt); un Int64 no
-    if (Base = 'integer') and M.Constantes.TryGetValue(K, Lista) then
+    if (Base = BASE_INTEGER) and M.Constantes.TryGetValue(K, Lista) then
     begin
       if Lista = '*' then
       begin
@@ -1412,7 +1412,7 @@ begin
     end;
     Exit(MsgText(SF_DESIGNER_TOMA_ENTERO));
   end;
-  if (Base = 'float') or (Base = 'single') then
+  if (Base = BASE_FLOAT) or (Base = BASE_SINGLE) then
   begin
     // lo que lee ReadFloat, por el parser del IDE (Lsp.DesignerBin): con
     // exponente, y un $hex tambien, que lee como entero; el sufijo s/c/d no
@@ -1420,19 +1420,19 @@ begin
     if not EsNumeroDeFloat(AValor) then
       Result := MsgText(SF_DESIGNER_TOMA_NUMERO);
   end
-  else if Base = 'char' then
+  else if Base = BASE_CHAR then
   begin
     if not EsCaracterDeForm(AValor) then
       Result := MsgText(SF_DESIGNER_TOMA_CARACTER);
   end
-  else if Base = 'string' then
+  else if Base = BASE_STRING then
   begin
     if not EsLiteralDeForm(AValor) then
       Result := MsgText(SF_DESIGNER_TOMA_CADENA);
   end
   // un Variant: lo que ReadVariant lee - un numero, una cadena, True, False,
   // Null o nil; un identificador cualquiera, no (Valor = Hola pasaba)
-  else if Base = 'variant' then
+  else if Base = BASE_VARIANT then
   begin
     if not (EsNumeroDeForm(AValor) or EsLiteralDeForm(AValor) or
             MatchText(AValor, ['True', 'False', 'Null', 'nil'])) then
@@ -1451,7 +1451,7 @@ begin
   if AHoja.Kind <> 'o' then
     Exit;
   K := ClaveDeIdentificador(AHoja.TypeId);
-  if not (M.Bases.TryGetValue(K, Base) and (Base = 'integer')) then
+  if not (M.Bases.TryGetValue(K, Base) and (Base = BASE_INTEGER)) then
     Exit;
   // sin constantes que el lector de forms entienda: el numero, y se dice. prop
   // callaba de TModalResult, y el agente probaba mrOk para enterarse (Hermes, 1.25)

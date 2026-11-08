@@ -399,7 +399,7 @@ function PosicionDeNoVisual(AComp: TComponent): TPoint;
   tienen y el designer no los ensena sueltos). UN criterio para dibujarlos y
   para listarlos: estaba escrito en los dos renderizadores. }
 function NoVisualesDe(ARaiz: TComponent; AClaseControl: TClass): TArray<TComponent>;
-{ 'Nombre:Clase,Nombre:Clase' para NONVISUALS= }
+{ 'Nombre:Clase,Nombre:Clase' para NONVISUALS=, con sus separadores del protocolo }
 function ListaDeNoVisuales(const ALista: TArray<TComponent>): string;
 
 implementation
@@ -1661,8 +1661,8 @@ begin
   for var C in ALista do
   begin
     if Result <> '' then
-      Result := Result + ',';
-    Result := Result + C.Name + ':' + C.ClassName;
+      Result := Result + FR_NOVISUALES_SEP;
+    Result := Result + C.Name + FR_NOVISUAL_CLASE_SEP + C.ClassName;
   end;
 end;
 

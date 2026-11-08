@@ -3192,7 +3192,7 @@ begin
   // escribe como estaba (la cuenta por valor de los escritores); se negaba
   // igual que uno nuevo (R8 del revisor del punto 4 de la 1.18.2)
   var TextoAntes := F.Doc.LiteralDe(Obj, Prop);
-  if MatchText(Base, ['string', 'char']) then
+  if MatchText(Base, [BASE_STRING, BASE_CHAR]) then
   begin
     if not LeeLiteralDeForm(V, Texto) then
     begin
@@ -3249,7 +3249,7 @@ begin
   // el form no pasa por el IDE (David, 7-oct-2026)
   // (y un $hex, que el cargador tambien lee; uno que su tipo no guarda -
   // una Single de 1E39 - no se escribe)
-  if (Base = 'single') or (Base = 'float') then
+  if (Base = BASE_SINGLE) or (Base = BASE_FLOAT) then
   begin
     var Num: Extended;
     // leido por EL lector de un flotante de form (LeeFlotanteDeForm: el parser
@@ -3261,12 +3261,12 @@ begin
     // la gramatica ya paso (TipoQueNoCasa): uno que no se lee es que no cabe
     // (1E400 en un Double se escribia tal cual: segunda revision de la 1.17.0)
     var Tope: Extended := MaxDouble;
-    if Base = 'single' then
+    if Base = BASE_SINGLE then
       Tope := MaxSingle;
     if not EsNum or IsNan(Num) or IsInfinite(Num) or (Abs(Num) > Tope) then
       Exit(MsgFmt(SR_DESIGNER_SET_TIPO_FMT, [NombreDe(Obj), Prop, Hoja.TypeName,
         MsgText(SF_DESIGNER_TOMA_NUMERO_QUE_CABE), V, '']));
-    V := FlotanteDeForm(Num, Base = 'single');
+    V := FlotanteDeForm(Num, Base = BASE_SINGLE);
   end;
   if Length(Trozos) = 0 then
     Trozos := [V];
