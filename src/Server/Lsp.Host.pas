@@ -278,8 +278,9 @@ begin
       // la llamada acaba: sus bytes de antes no se quedan en el hilo
       OlvidaOrigenes(False);
       // ...y si lo que nombra lo esta cambiando otra llamada larga, lo dice
-      // (SYS-044, Lsp.EnCurso): lo que ve puede estar a medias
-      Result := MaskDriveText(ToolName, AText + NotaDeLaLlamada);
+      // (SYS-044, Lsp.EnCurso): lo que ve puede estar a medias. Por ConNota,
+      // como el buzon: pegada detras de un JSON lo dejaba sin parsear
+      Result := MaskDriveText(ToolName, ConNota(AText, 'inProgressNote', NotaDeLaLlamada));
       // the operator's mailbox: there is no push in MCP clients, so every
       // tool answer carries the notice while a message waits.
       if ToolName <> 'delphi_messages' then

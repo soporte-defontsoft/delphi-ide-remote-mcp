@@ -36,8 +36,11 @@ the MCP `initialize` response (`serverInfo.version`).
   same arguments) is refused while it runs (`SYS-042`: its answer comes, or goes to the
   mailbox); a call that writes where it is working is refused (`SYS-043`, which operation
   and since when; before, a `delphi_config set-version` rewrote a `.dproj` in the middle of
-  its build); and one that reads there answers as always, with a note that what it shows may
-  be half done (`SYS-044`). One registry for the process (`Lsp.EnCurso`), filled at the
+  its build), except a build or a test over another build or test of another agent, which
+  wait their turn as before (one msbuild at a time, each test in its own container); and one
+  that reads there answers as always, with a note that what it shows may be half done
+  (`SYS-044`, an `inProgressNote` field when the answer is JSON). One registry for the
+  process (`Lsp.EnCurso`), filled at the
   gate with the paths the gate already reads and emptied when each call ends, whatever
   happens to it. A short write (an edit) is not registered: it queues on the write lock as
   before.

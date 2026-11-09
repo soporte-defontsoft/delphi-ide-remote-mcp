@@ -1,7 +1,7 @@
 ﻿unit Lsp.EnCurso;
 
 { R3 de A22 (1.29.1): las operaciones LARGAS que escriben y siguen en marcha.
-  Medido el 7-nov-2026 (opencode, el informe de claude-galateaguia): mientras
+  Medido el 7-nov-2026 (opencode, el informe de un agente): mientras
   un delphi_move copy de ~5.000 ficheros seguia en el servidor, delphi_list de
   su destino decia WS-008 "does not exist", y repetir un borrado ya hecho
   SYS-012 NOT_FOUND; el agente lo tomo por fallido y lo repitio encima. El
@@ -17,7 +17,9 @@
   - la MISMA (el mismo agente y la misma huella) mientras sigue: se niega
     (SYS-042); su respuesta llegara, o ira a su buzon (Lsp.Progreso);
   - una que ESCRIBE en sus rutas (dentro, o la carpeta que las contiene): se
-    niega (SYS-043), diciendo cual sigue y desde cuando;
+    niega (SYS-043), diciendo cual sigue y desde cuando; salvo un build o
+    un test sobre otro build o test (EN_LA_FILA_DEL_BUILD): esos ya esperan
+    su turno solos;
   - una que LEE sus rutas: contesta como siempre y lleva SYS-044: lo que ve
     puede estar a medias.
   Que operaciones son LARGAS es una regla de la casa sin juez (cuanto tarda
@@ -59,6 +61,13 @@ const
   // Gramatica de la casa, UNA (test_paisaje)
   OPERACIONES_LARGAS: array[0..6] of string = ('delphi_move', 'delphi_delete',
     'delphi_build', 'delphi_package', 'delphi_test', 'delphi_git', 'delphi_paserver');
+  // las que ya se ponen en fila SOLAS: compilan por RunMsBuild, que no deja
+  // correr dos msbuild a la vez (GBuildLock, Lsp.BuildRunner), y cada test
+  // corre en su contenedor. Dos de ellas sobre el mismo proyecto esperan su
+  // turno, como antes de R3: negar la segunda quitaba a dos agentes probar
+  // el mismo proyecto a la vez (medido el 9-nov-2026 por
+  // test_delphi_test_servicio, S5-S7). Gramatica de la casa, UNA (test_paisaje)
+  EN_LA_FILA_DEL_BUILD: array[0..1] of string = ('delphi_build', 'delphi_test');
 
 type
   TOperacion = record
@@ -138,7 +147,8 @@ begin
     begin
       if Larga and (Op.Agente = Agente) and (Op.Huella = Huella) then
         Exit(MsgFmt(SR_SYS_OPERACION_REPETIDA_FMT, [Op.Tool, Desde(Op), Segundos(Op)]));
-      if SeTocan(Rutas, Op.Rutas, Ruta) then
+      if SeTocan(Rutas, Op.Rutas, Ruta) and not (MatchText(AToolName, EN_LA_FILA_DEL_BUILD) and
+         MatchText(Op.Tool, EN_LA_FILA_DEL_BUILD)) then
         Exit(MsgFmt(SR_SYS_OPERACION_EN_CURSO_FMT, [Ruta, Op.Tool, Desde(Op), Segundos(Op)]));
     end;
     if Larga then

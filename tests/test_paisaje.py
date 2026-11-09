@@ -650,6 +650,11 @@ REGLAS = [
     ('una lista de las operaciones largas', r"'delphi_move',\s*'delphi_delete'",
      [('Lsp.EnCurso.pas', '*')],
      'OPERACIONES_LARGAS (Lsp.EnCurso): la pregunta EmpiezaLlamada, al pasar la puerta'),
+    # que tools ya se ponen en fila SOLAS (comparten la fila de msbuild y el test corre en su
+    # contenedor): dos de ellas sobre el mismo proyecto esperan su turno, no se niegan (R3, 1.29.1)
+    ('una lista de las que se ponen en fila solas', r"'delphi_build',\s*'delphi_test'",
+     [('Lsp.EnCurso.pas', '*')],
+     'EN_LA_FILA_DEL_BUILD (Lsp.EnCurso): la pregunta EmpiezaLlamada antes de negar con SYS-043'),
     ('el numero de un nombre mDNS de adb leido a mano', r"Pos\(\s*'\)\.'",
      [('Lsp.Settings.pas', 'DispositivoSinNumeroMdns')],
      'DispositivoSinNumeroMdns (Lsp.Settings): lo leen BadDeviceName y AdbTargetAllowed'),
@@ -2031,6 +2036,7 @@ check('las fuentes del grupo se leen (83 unidades el 6-oct-2026: al menos 70)', 
 # regla tiene que cazar (y un comentario con el formato, que NO)
 PLANTADO = {
     'una lista de las operaciones largas': "  L := ['delphi_move', 'delphi_delete'];",
+    'una lista de las que se ponen en fila solas': "  L := ['delphi_build', 'delphi_test'];",
     'un fichero que nace acabado en salto a mano': "  if not Body.EndsWith(CRLF) then X := 1;",
     'una lista vacia dicha a mano': "  L := IfThen(X = '', '(none)', X);",
     'un contenedor creado o borrado a mano': "  CreaContenedor('x', AC);",
