@@ -15,8 +15,9 @@ them. What each is for, whether it ships, and when it runs:
 | [`RunJob/`](RunJob) | `McpRunJob` | The **run-job launcher**: what PAServer starts on a target for every remote execution and every desktop gesture. It reads a job file, starts the native binary unattended with its arguments and leaves a watcher that writes the exit code. No shell anywhere. | **Yes**, both binaries under `node/` | Every `remote-run` and every desktop gesture on a PAServer target. |
 | [`UnitTests/`](UnitTests) | `LspUnitTests` | The engine's **DUnitX suite**: unit tests of the encoding detector and its inverses, the designer binary shape and the RTL round trip, the `.dproj` hazard scan, the git argument splitter and its inverse, the captures, the message catalog (tags and outcomes), the Pascal lexer and the form renderers' protocol. The step below the black-box Python batteries in `tests/`. | No | `tests/test_engine_dunitx.py` runs its logic part through `delphi_test` and the whole suite directly in every regression; by hand, `delphi_test command=run` with the battery's filter, or the IDE. |
 
-Two things ship that are **not** projects: `settings.example.ini` (the
-configuration template) and `docs/`. The Python batteries in `tests/` are the
+Three things ship that are **not** projects: `settings.example.ini` (the
+configuration template), `connections/` (examples of the database and API
+connections files) and `docs/`. The Python batteries in `tests/` are the
 harness, not a client, and the vendored MCP plumbing in `vendor/` is frozen.
 
 ## Building

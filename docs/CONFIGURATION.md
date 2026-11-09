@@ -329,7 +329,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   `AllowTests`, `AllowRemoteRun`, `AllowBuildScripts`,
   `LibraryZone`,
   `AgentConfinement`, `SharedFolders`, `ReadOnlyPaths`, `ReadOnlyRoots`, `Profile` — and the reach lists `GitRemotes`,
-  `RemoteHosts`, `RemoteRunProjects`, `DesktopAllowedHosts`, `DesktopViewHosts`. Nothing is inherited from anywhere: an absent switch
+  `RemoteHosts`, `RemoteRunProjects`, `DesktopAllowedHosts`, `DesktopViewHosts`, `AdbAllowedDevices`, `DbAllowedProjects`, `ApiAllowedProjects`. Nothing is inherited from anywhere: an absent switch
   is off, an absent list is empty — one workspace can be a CI space that executes and dials
   its build machine while every other space stays compile-only and offline.
 - **Network shares are opt-in.** A share becomes part of the Delphi environment only when the
@@ -508,10 +508,11 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   existing profile name is never overwritten, and duplicates by host get a warning. `RemoteHosts` does the same for every PAServer dial —
   hand-named hosts AND connection profiles: since v0.98 having a profile in the IDE is not
   permission (the profile says HOW to connect; the workspace says WHETHER) — measured to
-  close a port-scanning primitive. In any of the four lists - `RemoteHosts`, `GitRemotes`,
-  `RemoteRunProjects` and `AdbAllowedDevices` - an entry `*` (or `all`, or `0.0.0.0`) declares
+  close a port-scanning primitive. In any of these lists - `RemoteHosts`, `GitRemotes`,
+  `RemoteRunProjects`, `AdbAllowedDevices`, `DesktopAllowedHosts`, `DesktopViewHosts`,
+  `DbAllowedProjects` and `ApiAllowedProjects` - an entry `*` (or `all`, or `0.0.0.0`) declares
   "anything" on purpose. Where each workspace may talk to is its own declaration, like
-  everything else. A list of NAMES (`GitRemotes`, `RemoteHosts`, `DesktopAllowedHosts`, `DesktopViewHosts`, `AdbAllowedDevices`,
+  everything else. A list of NAMES (`GitRemotes`, `RemoteHosts`, `DesktopAllowedHosts`, `DesktopViewHosts`, `AdbAllowedDevices`, `DbAllowedProjects`, `ApiAllowedProjects`,
   `SharedFolders`, `[Tools] Only`) takes `;` or `,` between its entries; a list of PATHS
   (`Roots`, `ReadOnlyPaths`, `ReadOnlyRoots`, `RemoteRunProjects`) only `;`, since a path may
   hold a comma. Blanks and quotes around an entry are ignored in both.
@@ -519,9 +520,10 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   what `tools/list` advertises — the whole list is ~26k tokens of schemas (measured in 1.27:
   `coder` ~25k, `reader` ~7k), which a client that loads it at once pays in context. Listing only:
   hidden tools stay callable, permissions live in the layers above. A workspace can carry its
-  own `Profile=`. Apart from the profile, `delphi_adb` and `delphi_desktop` are announced
-  only where the workspace declares somewhere for them to go (`AdbAllowedDevices`;
-  `DesktopAllowedHosts` or `DesktopViewHosts`): about 10 KB less of `tools/list` elsewhere.
+  own `Profile=`. Apart from the profile, `delphi_adb`, `delphi_desktop`, `delphi_db` and
+  `delphi_api` are announced only where the workspace declares somewhere for them to go
+  (`AdbAllowedDevices`; `DesktopAllowedHosts` or `DesktopViewHosts`; `DbAllowedProjects`;
+  `ApiAllowedProjects`): `tools/list` is that much shorter elsewhere.
 - **`VaultPath=` / `VaultReadOnly=` (per workspace)**: optional persistent memory for
   agents (a folder of Markdown notes) — each workspace declares its own, and two workspaces
   may remember in *different* vaults. Read-only by default; writes, when enabled, are
@@ -591,7 +593,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   in the PropertyGroup and it answers `BUILD-050` naming the element. Nothing is read or run
   either way. The copy of the original `.dproj` is in the `__delphi-patch` trash
   (`delphi_delete` the probe, then `delphi_move` the copy back).
-- **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist —
+- **`AdbAllowedDevices=` (per workspace)**: the `delphi_adb` device allowlist, which `delphi_build deviceid=` must be in too (`ADB-005`) —
   `AdbAllowedDevices=192.0.2.163;SERIAL123` (a `;` or `,` list; an IP entry covers whatever
   port wifi debugging negotiates, a USB serial is listed as-is, and a device adb lists by its
   mDNS name is listed by that name, without the ` (2)` adb adds when it sees it twice). Devices outside the

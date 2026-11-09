@@ -1,6 +1,6 @@
 # Delphi IDE Remote MCP Server
 
-[![Latest release](https://img.shields.io/badge/download-v1.28.0-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
+[![Latest release](https://img.shields.io/badge/download-v1.29.0-blue)](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)
 [![License: MIT](https://img.shields.io/badge/license-MIT-green.svg)](LICENSE)
 
 ![Delphi IDE Remote MCP — RAD Studio as a remote backend for AI programming agents: any MCP client on one side, Windows/Linux/Android test targets on the other, one workspace-jailed server in the middle](docs/media/hero.webp)
@@ -15,7 +15,7 @@ It is not a language-server bridge. Semantic understanding is one capability of 
 
 Runs as a **Windows Service**, a terminal process or a tray app — one executable, three modes — keeping language-server processes warm across agent sessions and serving multiple AI clients (Claude Code, Claude Desktop, or any MCP client) over Streamable HTTP, with a classic stdio mode as well. It speaks MCP 2026-07-28, which has no handshake and no sessions, next to the sessions of the earlier revisions, on the same endpoint.
 
-> **Status: latest 1.28.0 (published today, validated by its batteries and, before the release, through Hermes on a second machine by Qwen3.8 Flash Next); stable 1.22.1.** Covered by 382 end-to-end batteries — 8,932 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
+> **Status: latest 1.29.0 (published today, validated by its batteries and, before the release, through Hermes on a second machine by Qwen3.8 Flash Next); stable 1.22.1.** Covered by 420 end-to-end batteries — 9,637 checks — against DelphiLSP 37.0 (RAD Studio 13), and by a full day of real-world field testing by an independent agent using it as a client. A minor version adds tools or capabilities, a patch fixes, and a documented contract that changes is announced in the CHANGELOG first. See [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) and [docs/DELPHILSP-NOTES.md](docs/DELPHILSP-NOTES.md) for the measured research this project is built on, [CHANGELOG.md](CHANGELOG.md) for versions, and [docs/ROADMAP.md](docs/ROADMAP.md) for what is delivered, open, parked or declined.
 
 ## Why
 
@@ -68,6 +68,8 @@ The table below says which engine each one uses and why it matters:
 | **Its own `.style` parser and `DelphiStyleConvert.exe`** | `delphi_styles` | **FMX styles by StyleName**: `view`/`get` a text `.style`, `set` one property of a style or of a part, `clone` a variant, `delete` one, `lint` (duplicated StyleNames, `StyleLookup` values of the project's `.fmx`/`.pas` that no style defines (a form or frame whose StyleBook cannot be read goes apart: `formsWithAStyleBook`), colors with fewer than 8 hex digits, design tokens missing in a theme, `.rc` entries without file, what FMX ignores when it loads them and what it cannot load at all) and `build` (text `.style` → `.bin.style` the app embeds, `.rc` → `.res`). Ships `DelphiStyleConvert.exe` next to the server, run inside a Windows container of its own on a copy of the style |
 | **The IDE's registry** (Known Packages — what the palette loads) | `delphi_components` | The design packages installed in the server's RAD Studio, whatever the install channel — what the agent has available to program with. List only; installing stays a human decision. |
 | **The RAD Studio help** (the `.chm` files the IDE registers - the ones F1 opens - read in place with Windows' own help storage) | `delphi_docs` | The documentation of the Delphi installed here, as a wiki the agent pages through: `search` gives a short list (id + title, the best first; `framework=vcl\|fmx` for a class both have), `read` gives one page as text in chunks. It asks for no switch, in any workspace: it opens only the help files the IDE itself registers. For an exact signature the installed sources win (`delphi_hover`, `delphi_definition`). |
+| **FireDAC** (the drivers the server links: SQL Server, PostgreSQL) | `delphi_db` | The databases of the connections file the operator writes, opened per workspace (`DbAllowedProjects`): the server composes the SQL and FireDAC turns it into each dialect, every value travels as a parameter, a read is always rolled back and a write commits only when the database accepts it. The agent never writes SQL and never sees a server or a credential. |
+| **WinHTTP** (Windows' HTTP client) | `delphi_api` | The APIs of the operator's connections file (`ApiAllowedProjects`): a request by method and a path relative to the API; redirects returned, never followed; the service's Windows account never offered; with a certificate pin, only the server holding that key is spoken to. |
 | **Your Markdown vault** | `vault_read`, `vault_search`, `vault_append`, `vault_create`, `vault_patch` | Persistent memory, isolated from the code tools (see below). |
 | **A folder the server owns** | `delphi_messages` | The operator's **mailbox** (the way back of `delphi_report`): `.md` files left in `messages\<workspace>\<agent>\` are delivered once by `read`, which deletes them; while one waits every tool answer ends with a `PENDING MESSAGES` line. The workspace folder is `Workspace.` and its name in lower case (`messages\Workspace.claude\hermes\`), plus `-` and eight characters of its MD5 when the name has spaces, accents or signs (`[Workspace.Hermes VM]` is `Workspace.hermes-vm-xxxxxxxx`), taken from the token: one workspace never sees another's mail |
 | **The same folder** (`reports\`) | `delphi_report` | The feedback channel back to us; the one write a read-only client may perform. Reports land in `reports\<workspace>\<agent>\`, and `command=list` / `read` show them to that workspace only, moving nothing |
@@ -163,8 +165,9 @@ paths, for every workspace whatever its `LibraryZone` - names, not source.
 and catches overlaps, zero-size controls and anything falling outside its container, but neither
 can tell you the result is *pretty*. Members inside an inactive `{$IFDEF}` are counted as if they
 compiled. Neither `lint`
-nor `check-binding` checks that a component's class matches its field's type, that a handler's
-signature fits the event, or that `Action = X` points at something real.
+nor `check-binding` checks that a component's class matches its field's type, or that
+`Action = X` points at something real; a handler whose signature does not fit its event is
+listed (`eventsWithOtherSignature`, 1.29).
 
 **"MSBuild output will flood the context."** `delphi_build` never returns raw log. It returns one
 already-extracted line per problem in `errors[]`, `warnings[]` and `hints[]` (the last two with `verbosity=normal` or `verbose`), as MSBuild classifies them — file, line, code and message,
@@ -257,6 +260,8 @@ switch and its own allowlist; it will not arrive by accident.
 | [`delphi_package`](docs/TOOLS.md#delphi_package) | Zip a build output folder for download |
 | [`delphi_styles`](docs/TOOLS.md#delphi_styles) | **FMX styles by `StyleName`**: view/get/set/clone/delete, `lint`, and `build` the binary the app loads |
 | [`delphi_messages`](docs/TOOLS.md#delphi_messages) | The agents' mailbox: notes from the operator, delivered once |
+| [`delphi_db`](docs/TOOLS.md#delphi_db) | **The databases the operator gives a workspace**, by name and through operations: tables, fields, rows with filters, a summary, `insert`/`update`/`delete` (at most `max` rows), tables and views where the operator allows them - never SQL, never a server or a credential (1.29) |
+| [`delphi_api`](docs/TOOLS.md#delphi_api) | **The HTTP APIs the operator gives a workspace**, by name: a method, a path relative to the API, query, headers and a body; the address, the credential and the certificate pin stay with the operator (1.29) |
 | [`vault_read`](docs/TOOLS.md#vault_read) · [`vault_search`](docs/TOOLS.md#vault_search) | **Optional persistent memory**: read and search a vault of Markdown notes, lazy-loaded from its own rules and index |
 | [`vault_append`](docs/TOOLS.md#vault_append) · [`vault_create`](docs/TOOLS.md#vault_create) · [`vault_patch`](docs/TOOLS.md#vault_patch) | Let the agent record what it learned (opt-in): append, create, anchored replace; the governance files are refused and the original is always backed up. See [docs/VAULT.md](docs/VAULT.md) |
 

@@ -253,8 +253,10 @@ it. With no name, each request of that protocol is a stranger to the one before.
   your styles. `delphi_designer lint`, `set` and an edit of the form judge it
   against the platform's default style only (`DSGN-175`, a note): FMX draws a
   lookup with no style with the default look. A form or frame whose styles may
-  come from a StyleBook that cannot be read is not judged
-  (`formsWithAStyleBook`, `STYLE-057`).
+  come from a StyleBook that cannot be read is set apart there
+  (`formsWithAStyleBook`, `STYLE-057`); `delphi_designer lint
+  styles=<.style or folder>` judges it against those styles (`DSGN-192` for a
+  name none defines, with the closest one that does: `Did you mean`).
 - After editing styles: `command=build path=<Styles folder>` (text ->
   `.bin.style` -> `.res`; one `.rc` per styles folder, else `STYLE-067`), then `delphi_build target=Build`: the app embeds
   the binary form; the text form loads but does not resolve `StyleLookup`.
@@ -566,8 +568,9 @@ level and it is the correct move on an `INTERNAL`, when something looks
 broken, when a `DENIED` stops work you need (a feature the operator
 turned off), or when a package you need is missing. One honest report
 beats twenty blind retries. `command=list` shows the reports of your
-workspace (yours and its other agents') and `command=read name=<dir>\<name>`
-one whole - before filing, look whether it was already reported.
+workspace (yours and its other agents') and `command=read name=<name>` (or
+`<dir>\<name>`, as `list` shows it) one whole - before filing, look whether it
+was already reported.
 
 ## Access levels
 
@@ -597,4 +600,4 @@ not even in `tools/list` (`delphi_help` says which key opens them). A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (one of its settings - its roots, a protection - did not load): the operator's side, not yours.
 
-<!-- contract reviewed: v1.28.0 -->
+<!-- contract reviewed: v1.29.0 -->

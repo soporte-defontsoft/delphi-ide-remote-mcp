@@ -34,8 +34,9 @@ one Delphi version (the `370` BPLs), like the server since 1.14.0.
   one path per line). The server reads them from the IDE's registry and tells
   it: inside its container the renderer cannot read the registry.
 - Its manifest, built in as the IDE builds an application's (`default_app.manifest`:
-  Common Controls 6, the dependency `bds.exe` has, and no DPI awareness, so 1 pixel
-  stays 1 form unit). Without it a native FMX control (`ControlType = Platform`)
+  Common Controls 6, the dependency `bds.exe` has, and no DPI awareness: the machine's
+  display scale does not count, and `SCALE=` says how many pixels make a form unit).
+  Without it a native FMX control (`ControlType = Platform`)
   cannot be created; with it VCL previews are drawn with the Windows theme, as
   the IDE's designer shows them.
 - Nothing else. The standard palette (Standard, Additional, Win32, Dialogs,
@@ -110,12 +111,12 @@ a quote, and what followed it would be another switch.
 DelphiFormRenderVcl --path <dfm> --out <png> [--state Comp.Prop=Value]* [--component Name]
                     [--style <file.vsf>] [--nonvisual on|off] [--packages auto|none|all]
                     [--root auto|form|frame] [--fidelity auto|window|print]
-                    [--bds 37.0] [--bdsroot <dir>] [--knownfile <file>] [--timeout ms]
-                    [--packagestimeout ms] [--verbose]
+                    [--bds 37.0] [--bdsroot <dir>] [--bplsuffix 370] [--knownfile <file>]
+                    [--scale <percent>] [--timeout ms] [--packagestimeout ms] [--verbose]
 DelphiFormRenderFmx --path <fmx> --out <png> [--state ...]* [--component Name]
                     [--style <file.style>|none|windows|win7|win8|win10|win11|mobile|android|ios|ios-dark|osx|linux|gnome]
-                    [--nonvisual on|off] [--packages ...] [--root ...] [--bds] [--bdsroot] [--knownfile] [--timeout]
-                    [--packagestimeout] [--verbose]
+                    [--nonvisual on|off] [--packages ...] [--root ...] [--bds] [--bdsroot] [--bplsuffix]
+                    [--knownfile] [--scale <percent>] [--timeout] [--packagestimeout] [--verbose]
 DelphiFormRender*   --unreadableclasses
 DelphiFormRender*   --path <form> --boxes [--packages ...] [--bds] [--bdsroot] [--knownfile] [--timeout] [--packagestimeout]
 ```
@@ -154,8 +155,14 @@ DelphiFormRender*   --path <form> --boxes [--packages ...] [--bds] [--bdsroot] [
   would**, a `TStyleBook` on the form (the global `TStyleManager` style loses
   glyphs — measured): the form's own StyleBook by default, `none` for the
   Windows default, a `.style` file, or one of the designer's platform
-  previews read straight from `fmx370.bpl` / `fmxdesigner370.bpl` resources
-  (opened as data, nothing of theirs runs).
+  previews read straight from `fmx<suffix>.bpl` / `fmxdesigner<suffix>.bpl`
+  resources (opened as data, nothing of theirs runs; the suffix is the one the
+  server measures in the IDE's `bin` and passes as `--bplsuffix`: 370 for
+  Delphi 13, 290 for Delphi 12).
+- `--scale <percent>` (100 to 500): the form as an application shows it on a
+  display at that Windows scale. VCL: `ScaleForPPI` before it is shown (a form
+  with `Scaled = False` stays at its size, `RENDER-031`); FMX: the window's
+  scale forced to it, so the style picks its bitmaps for that scale.
 - `--root auto`: form or frame decided from the sibling `.pas`
   (`TX = class(TFrame)`); a frame is rendered inside a form of its size, as
   the designer shows it.
@@ -173,7 +180,13 @@ PROTOCOL=<n>                  always first: the version of this protocol
                               (FR_PROTOCOLO_VERSION). A renderer that states
                               another one, or none, is a stale one: the server
                               answers DSGN-184 and reads nothing else of it
-DPI=96                        the process is DPI-unaware: 1 pixel = 1 dfm unit
+DPI=96                        the process is DPI-unaware (the machine's scale
+                              does not count)
+SCALE=<pixels>/<units>        how many PNG pixels (and RECT= pixels) make how
+                              many units of the file. VCL: the PPI the form was
+                              painted at over its file's PixelsPerInch (96/96 =
+                              one pixel per unit; a 120 form drawn with a .vsf,
+                              96/120); FMX: --scale over 100
 SESSION=<n>                   0 = a service
 STYLE=<what was applied>
 ROOT=<Name>:<Class>:<form|frame>

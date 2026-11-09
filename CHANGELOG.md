@@ -8,6 +8,28 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.29.0] - 2026-11-09
+
+A minor version that closes the project's list: what follows are patches. Two new tools give
+an agent the databases and the HTTP APIs the operator defines, by name and through
+operations: `delphi_db` reads, sums up and writes (at most `max` rows at a time) without ever
+writing SQL, and creates tables and views where the operator allows it; `delphi_api` sends
+requests to an API, and the server keeps its address and credential. The agent never sees a
+server, an address or a credential; the operator writes them in two files of the server's
+own house (examples in the zip, `connections\`) and opens them per workspace with the new
+keys `DbAllowedProjects` and `ApiAllowedProjects`. The designer binds events (`set
+OnClick=<method>`, judged by the event's signature), inserts several controls in one write,
+draws a form at another display scale and an MDI child, and judges a form's style names
+against a `.style`; `delphi_config save-as` copies a project under another name as the IDE's Save As does, and
+`delphi_create` makes a DLL as the IDE does. An edit that would leave a unit without its
+final `end.`, or rewrite a file through one block anchor, is refused before writing, and the
+help of Delphi 13.2 reads as 13.1's. Pending tests: an API that needs a login call first.
+Deploy the server with its two form renderers (protocol 14) and the style converter
+(protocol 2). Validated before the release through Hermes on a second machine by Qwen3.8
+Flash Next (a directed test of what changed, a full test of every tool, and three rounds of
+what those found); the databases and APIs were measured here against SQL Server, PostgreSQL
+and a real API.
+
 ### Added
 
 - `delphi_db`: the databases the operator gives a workspace, used by NAME and through operations - the agent never writes SQL. The operator defines them in the server's connections file (`connections\databases\db-connections.json`, next to `settings.ini` and outside every root: projects, each with its databases - server, database, user, password, port, engine, readonly) and opens projects to a workspace with `DbAllowedProjects=` in its section of `settings.ini` (`*` = all); without one, `delphi_db` is not in `tools/list` and a call answers `DB-002`. `command=connections` lists the databases of the workspace as `project/alias` - the name every command takes - with their engine (the FireDAC driver) and whether they are read-only; the ones declared wrong come under `unusable` with why (`DB-001`, `DB-005`). The agent never sees the server, the real database or the credentials. `command=tables` and `fields` say what a database holds (its tables and views in the connection's schema; each field with the database's own type, length, precision, nullability and key); `rows` reads a table - `filters` as a list of `{field, op, value}` with a closed set of ops (equals, not_equals, greater, less, greater_or_equal, less_or_equal, contains, starts_with, words, empty), `fields`, `order`, `limit`/`offset`, and always the `total` with the same filters - and `summary` groups (also by a date's year, month, day or hour) and adds up (`sum`, `avg`, `min`, `max`, `count`, and `n` per group). The server composes the SQL once for every engine and FireDAC turns it into each dialect: names come from the database's catalog and are quoted by FireDAC, every value travels as a parameter typed by its field (PostgreSQL does not compare an integer with a text), and text compares as the database's collation does. Reads run in a transaction that is always rolled back; a database that does not answer is given up after 12 seconds (`DB-007`: SQL Server took 42 with its own login timeout of 5), and one that opens and then goes silent in the middle of a call after 65 (`DB-022`; nothing that call does afterwards is committed): FireDAC's own connection orders - BEGIN, COMMIT, ROLLBACK, the preparing of a command - carry no command timeout, the cancel of one that does comes back through the same silent connection, and the call did not come back in 240 seconds (measured with a proxy that goes silent); with such a call still waiting on PostgreSQL the server now stops at once (it closes that connection's socket, the only thing measured to wake libpq: it hung, or ended with an access violation), while one waiting on SQL Server keeps it from stopping on its own, as before (its ODBC driver gives no way to wake the call; the service manager ends it), a refused login is `DB-008`, and whatever the database says comes back with the operator's server, user, port, password and real database name masked. A PostgreSQL connection never reads the server account's `pgpass` file: it connected without a password through it (measured). `insert`, `update` and `delete` write, only where the connections file says `"readonly": false` (on a read-only database they are refused before connecting, `DB-017`, and a read-only credential cannot ask for them): `values` is a list of `{field, value}` (`null` writes NULL; a binary field takes only `null`), `update` and `delete` change only the rows their `filters` select and never run without filters - an empty list included (`DB-011`) -, each runs in a transaction committed only when the database accepts it, and the answer says how many rows it touched (`affected`); no DDL, no procedures. A date without a zone is the one written: it is never moved to the server's time zone. The engines are the FireDAC drivers the server links (MSSQL and PostgreSQL); a driver that needs a client library loads it from `drivers\<DriverID>\` of the server, never from anywhere else. The budget of `tools/list` rises to 110,000 characters for the new tools.
