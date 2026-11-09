@@ -11,12 +11,22 @@
   SUMIDERO del hilo (como llega un mensaje a ESE cliente: una linea de stdio,
   un evento del stream HTTP) y el procesador JSON-RPC envuelve el tools/call
   en ConLatido. Una llamada que acaba antes del primer latido sale como antes,
-  byte a byte: el transporte solo cambia de forma cuando hay algo que mandar. }
+  byte a byte: el transporte solo cambia de forma cuando hay algo que mandar.
+
+  A22: la respuesta de una llamada cuyo cliente dejo de esperar va a su buzon.
+  Se sabia por un latido que no se puede escribir (el cliente colgo). Medido
+  el 9-nov-2026 con Hermes (SDK mcp 2.3.0, jsonrpc_dispatcher "courtesy
+  cancel for timed-out request"): corta a los 300 s, manda un
+  notifications/cancelled con el id de la peticion y NO cuelga, asi que el
+  latido seguia llegando y la respuesta se perdia (tres rondas: su buzon
+  vacio). Cada tools/call queda EN VUELO (workspace del token, sesion, id)
+  mientras dura, y un cancelled que casa (AtiendeCancelaciones) la da por
+  perdida igual que un latido que no llega. }
 
 interface
 
 uses
-  System.SysUtils;
+  System.SysUtils, System.JSON;
 
 type
   { Escribe UN mensaje JSON-RPC al cliente de la llamada en curso. False = no
@@ -34,9 +44,19 @@ procedure QuitaSumideroDelHilo;
   tal cual: un numero o un texto entre comillas) y ProgressSeconds > 0, cada
   ProgressSeconds que siga en marcha manda un notifications/progress con los
   segundos que lleva y SYS-040 (ANombre: la tool); el ultimo latido acaba
-  antes de que ConLatido vuelva. True = un latido no llego: el cliente se fue
-  antes de la respuesta (A22). Una excepcion de ALlamada sale tal cual. }
-function ConLatido(const AToken, ANombre: string; const ALlamada: TProc): Boolean;
+  antes de que ConLatido vuelva. Mientras dura esta EN VUELO con su AId (el
+  JSON del id de la peticion) y ASesion ('' sin sesion), para
+  AtiendeCancelaciones. True = el cliente dejo de esperar antes de la
+  respuesta: un latido no llego o mando su cancelled (A22). Una excepcion de
+  ALlamada sale tal cual. }
+function ConLatido(const AToken, ANombre, AId, ASesion: string; const ALlamada: TProc): Boolean;
+
+{ Los notifications/cancelled de AValor (uno, o los de un lote): la llamada
+  EN VUELO con ese requestId, del mismo workspace y de la misma sesion
+  (ASesion, '' sin sesion), queda por perdida y su respuesta ira al buzon al
+  acabar. Lo demas no se toca. Lo llama quien recibe una notificacion: el
+  transporte HTTP (que no las pasa al procesador) y el procesador (stdio). }
+procedure AtiendeCancelaciones(AValor: TJSONValue; const ASesion: string);
 
 { El notifications/progress de un latido, compuesto aqui y en ningun otro
   sitio. }
@@ -53,14 +73,16 @@ function BuzonDeEstaLlamada: string;
   filtro de salida -: cada respuesta de ese agente lo avisa hasta que lo lee,
   y asi no repite a ciegas lo que ya se hizo (el remote-run que corrio dos
   veces, 7-nov-2026). ARespuestaJson: la respuesta JSON-RPC o su result. Sin
-  buzon, o si no se puede escribir, solo queda en el log. Nunca lanza. }
+  buzon, o si no se puede escribir, solo queda en el log. UNA vez por
+  llamada: si el procesador ya la dejo (un cancelled), el transporte no la
+  deja otra vez cuando tampoco puede escribirla. Nunca lanza. }
 procedure DejaLaRespuestaEnElBuzon(const ABuzon, ATool, ARespuestaJson: string);
 
 implementation
 
 uses
-  System.Classes, System.SyncObjs, System.JSON,
-  Lsp.Settings, // ProgressSeconds
+  System.Classes, System.SyncObjs, System.Generics.Collections,
+  Lsp.Settings, // ProgressSeconds, CurrentWorkspaceName
   Lsp.Json, // ValorJson: EL lector de un valor JSON de la casa
   Lsp.Casa, // BuzonDeMensajes, Slug
   Lsp.Identidad, // AgenteDeLaLlamada
@@ -68,10 +90,26 @@ uses
   MCPServer.Logger,
   Lsp.Texts;
 
+type
+  { Una llamada en vuelo, para que un notifications/cancelled la encuentre: el
+    workspace de su token, su sesion y su id. Perdido lo pone un latido que
+    no llega o el cancelled que casa; ConLatido lo lee al acabar. }
+  TEnVuelo = class
+    Workspace, Sesion, Id: string;
+    Perdido: Boolean;
+  end;
+
+var
+  GVuelosLock: TCriticalSection = nil;
+  GVuelos: TList<TEnVuelo> = nil;
+
 threadvar
   // un tipo gestionado en un threadvar no se libera solo al acabar el hilo:
   // por eso el transporte lo quita tras cada peticion
   GSumidero: TSumidero;
+  // la respuesta de la llamada de este hilo ya esta en el buzon (la pone a
+  // False ConLatido, por donde pasa toda llamada que puede dejarla)
+  GDejada: Boolean;
 
 procedure PonSumideroDelHilo(const ASumidero: TSumidero);
 begin
@@ -157,6 +195,9 @@ var
   Motivo, Ruta: string;
   Ahora: TDateTime;
 begin
+  if GDejada then
+    Exit;
+  GDejada := True;
   if ABuzon = '' then
   begin
     TLogger.Info('The answer of ' + ATool + ' did not reach its client, which has no mailbox');
@@ -180,15 +221,14 @@ begin
   end;
 end;
 
-function ConLatido(const AToken, ANombre: string; const ALlamada: TProc): Boolean;
+{ Corre ALlamada con su latido (si lo pidio) mientras Vuelo esta en vuelo. }
+procedure CorreConLatido(const AToken, ANombre: string; const ALlamada: TProc; Vuelo: TEnVuelo);
 var
   Sumidero: TSumidero;
   PasoMs: Cardinal;
   Fin: TEvent;
   Latido: TThread;
-  Perdido: Boolean;
 begin
-  Result := False;
   Sumidero := GSumidero;
   if (not Assigned(Sumidero)) or (AToken = '') or (ProgressSeconds <= 0) then
   begin
@@ -198,18 +238,20 @@ begin
   PasoMs := Round(ProgressSeconds * 1000);
   if PasoMs = 0 then
     PasoMs := 1;
-  Perdido := False;
   Fin := TEvent.Create(nil, True, False, '');
   try
+    // un cliente que dejo de esperar (su cancelled o un latido que no
+    // llego) no recibe mas latidos
     Latido := TThread.CreateAnonymousThread(
       procedure
       var
         Inicio: UInt64;
       begin
         Inicio := TThread.GetTickCount64;
-        while (not Perdido) and (Fin.WaitFor(PasoMs) = wrTimeout) do
-          if not Sumidero(MensajeDeProgreso(AToken, (TThread.GetTickCount64 - Inicio) / 1000, ANombre)) then
-            Perdido := True;
+        while (not Vuelo.Perdido) and (Fin.WaitFor(PasoMs) = wrTimeout) do
+          if not Vuelo.Perdido and
+             not Sumidero(MensajeDeProgreso(AToken, (TThread.GetTickCount64 - Inicio) / 1000, ANombre)) then
+            Vuelo.Perdido := True;
       end);
     Latido.FreeOnTerminate := False;
     Latido.Start;
@@ -223,7 +265,96 @@ begin
   finally
     Fin.Free;
   end;
-  Result := Perdido;
 end;
+
+function ConLatido(const AToken, ANombre, AId, ASesion: string; const ALlamada: TProc): Boolean;
+var
+  Vuelo: TEnVuelo;
+begin
+  GDejada := False;
+  Vuelo := TEnVuelo.Create;
+  try
+    Vuelo.Workspace := CurrentWorkspaceName;
+    Vuelo.Sesion := ASesion;
+    Vuelo.Id := AId;
+    if AId <> '' then
+    begin
+      GVuelosLock.Enter;
+      try
+        GVuelos.Add(Vuelo);
+      finally
+        GVuelosLock.Leave;
+      end;
+    end;
+    try
+      CorreConLatido(AToken, ANombre, ALlamada, Vuelo);
+    finally
+      if AId <> '' then
+      begin
+        GVuelosLock.Enter;
+        try
+          GVuelos.Remove(Vuelo);
+        finally
+          GVuelosLock.Leave;
+        end;
+      end;
+    end;
+    Result := Vuelo.Perdido;
+  finally
+    Vuelo.Free;
+  end;
+end;
+
+procedure AtiendeCancelaciones(AValor: TJSONValue; const ASesion: string);
+var
+  Params, IdV: TJSONValue;
+  Id, Workspace: string;
+  N: Integer;
+begin
+  if AValor is TJSONArray then
+  begin
+    for var V in TJSONArray(AValor) do
+      AtiendeCancelaciones(V, ASesion);
+    Exit;
+  end;
+  if not (AValor is TJSONObject) or (CampoDeTexto(AValor, 'method') <> 'notifications/cancelled') then
+    Exit;
+  Params := TJSONObject(AValor).GetValue('params');
+  if not (Params is TJSONObject) then
+    Exit;
+  IdV := TJSONObject(Params).GetValue('requestId');
+  if IdV = nil then
+    Exit;
+  // el id como lo escribio el cliente (586, "abc"): la misma forma que el
+  // del tools/call en vuelo
+  Id := IdV.ToJSON;
+  Workspace := CurrentWorkspaceName;
+  N := 0;
+  GVuelosLock.Enter;
+  try
+    for var V in GVuelos do
+      if (V.Id = Id) and SameText(V.Workspace, Workspace) and (V.Sesion = ASesion) then
+      begin
+        V.Perdido := True;
+        Inc(N);
+      end;
+  finally
+    GVuelosLock.Leave;
+  end;
+  if N > 0 then
+    TLogger.Info('notifications/cancelled for request ' + Id +
+      ': its client stopped waiting; its answer will go to the mailbox')
+  else
+    TLogger.Info('notifications/cancelled for request ' + Id + ': no call of this client is running with that id');
+end;
+
+initialization
+  GVuelosLock := TCriticalSection.Create;
+  GVuelos := TList<TEnVuelo>.Create;
+
+finalization
+  // las entradas son de sus llamadas; al cerrar no queda ninguna en vuelo
+  FreeAndNil(GVuelos);
+  FreeAndNil(GVuelosLock);
 
 end.

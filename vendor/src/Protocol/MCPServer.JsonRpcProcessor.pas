@@ -355,6 +355,9 @@ begin
           MsgText(SR_SYS_JSON_INVALIDO)));
       if NoSeContesta(Valor) then
       begin
+        // [local change 1.29.1, A22] un notifications/cancelled da por perdida
+        // la llamada en vuelo que casa: su respuesta ira al buzon (Lsp.Progreso)
+        AtiendeCancelaciones(Valor, SessionID);
         if CampoDeTexto(Valor, 'method') = 'notifications/initialized' then
           TLogger.Info('MCP Initialized notification received')
         else
@@ -426,15 +429,20 @@ begin
         var Registro := FManagerRegistry;
         var Resultado: TValue;
         var Herramienta := CampoDeTexto(Params, 'name');
-        var Perdido := ConLatido(TokenDeProgreso(Params), Herramienta,
+        // su id tal como lo mando el cliente: el requestId de su cancelled
+        var IdJson := '';
+        if Assigned(JSONRequest.GetValue('id')) then
+          IdJson := JSONRequest.GetValue('id').ToJSON;
+        var Perdido := ConLatido(TokenDeProgreso(Params), Herramienta, IdJson, SessionID,
           procedure
           begin
             Resultado := ExecuteMethodCall(Registro, MethodName, Params);
           end);
         ExecuteResult := Resultado;
-        // [local change 1.29.1, A22] un latido no llego: el cliente dejo de
-        // esperar y esta respuesta tampoco le llegara; va al buzon del agente
-        // (la identidad de la llamada sigue puesta: la quita el transporte)
+        // [local change 1.29.1, A22] un latido no llego o el cliente mando su
+        // cancelled: dejo de esperar y esta respuesta no la leera; va al buzon
+        // del agente (la identidad de la llamada sigue puesta: la quita el
+        // transporte)
         if Perdido and Resultado.IsType<TJSONObject> then
           DejaLaRespuestaEnElBuzon(BuzonDeEstaLlamada, Herramienta,
             Resultado.AsType<TJSONObject>.ToJSON);

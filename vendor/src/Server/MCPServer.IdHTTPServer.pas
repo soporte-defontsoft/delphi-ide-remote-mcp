@@ -804,6 +804,11 @@ begin
     // dos (octava revision)
     if TMCPJsonRpcProcessor.NoSeContesta(JSONRequest) then
     begin
+      // [local change 1.29.1, A22] el cancelled de un cliente que dejo de
+      // esperar (Hermes, medido: lo manda al cortar y no cuelga): la llamada
+      // en vuelo que casa deja su respuesta en el buzon (Lsp.Progreso). La
+      // sesion, la misma con la que el procesador la apunto ('' sin sesion)
+      AtiendeCancelaciones(JSONRequest, IfThen(SinSesion, '', SessionID));
       TLogger.Info('Request contains only notifications/responses, returning 202 Accepted');
       ResponseInfo.ResponseNo := HTTP_ACCEPTED;
       if not SinSesion then

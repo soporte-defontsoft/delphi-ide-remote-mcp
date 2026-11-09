@@ -273,8 +273,9 @@ it. With no name, each request of that protocol is a stranger to the one before.
   once; act on them and, when an answer is due, reply with
   `delphi_report`.
 - If your client gave up on a call (its own timeout), look in that
-  mailbox: when the client hung up, the server finished the call and left
-  its answer there (`SYS-041`). Do not run it again blind: while it still
+  mailbox: when the client hung up or said it gave up (its
+  `notifications/cancelled`), the server finished the call and left its
+  answer there (`SYS-041`). Do not run it again blind: while it still
   runs, the same call is refused (`SYS-042`), a write where it works is
   refused (`SYS-043`) and a read there says what it shows may be half
   done (`SYS-044`).

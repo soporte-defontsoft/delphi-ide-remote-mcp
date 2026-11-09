@@ -27,6 +27,13 @@ PostgreSQL de produccion (sin ellas, la bateria termina sin checks y lo dice).
   R2 ...la siguiente respuesta de ese agente avisa de que hay correo (MESSAGES_PENDING)
   R3 ...y delphi_messages la entrega: SYS-041, la tool y su respuesta tal como habria llegado
   R4 las llamadas cuyo cliente se quedo (H1, H3) no dejan nada en el buzon
+  C1 (A22, medido con Hermes el 9-nov: corta a los 300 s, manda notifications/cancelled con el id y NO
+     cuelga) un cliente con stream manda su cancelled por otra peticion y sigue leyendo: su respuesta le
+     llega igual Y queda en su buzon, una vez (hasta esto se perdia: el latido seguia llegando)
+  C2 ...lo mismo con un cliente de JSON a secas (sin latido)
+  C3 un cancelled con un id que no esta en vuelo no deja nada
+  C4 cancelled y luego cuelga: en el buzon UNA vez (el procesador la dejo; el transporte, que tampoco puede
+     escribirla, no la deja otra vez)
 
 Uso:  python tests/test_progreso_1291.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -226,6 +233,62 @@ try:
         check('R3 delphi_messages la entrega: SYS-041, la tool y su respuesta tal como habria llegado',
               mc.es(leido, 'SN_SYS_RESPUESTA_PERDIDA_FMT') and 'delphi_db' in leido and negativa_de_siempre(leido)
               and not en_el_buzon(), (leido[:500], en_el_buzon()))
+
+        # ---- C: el cliente que avisa de que deja de esperar (notifications/cancelled), como Hermes
+        import threading
+
+        def cancela(rid):
+            return mc.post(url, {'jsonrpc': '2.0', 'method': 'notifications/cancelled',
+                                 'params': {'requestId': rid, 'reason': 'timed out'}}, TOKEN, None,
+                           mc.ACCEPT_STREAMABLE, 30, dict(cab, **{'Mcp-Method': 'notifications/cancelled'}))
+
+        def vacia_el_buzon():
+            for f in en_el_buzon():
+                os.remove(os.path.join(buzon, f))
+
+        def lee_el_buzon():
+            return [io.open(os.path.join(buzon, f), encoding='utf-8-sig').read() for f in en_el_buzon()]
+
+        for etiqueta, rid, token, accept in (('C1 con stream', 921, 'tok-c', mc.ACCEPT_STREAMABLE),
+                                             ('C2 JSON a secas', 922, None, 'application/json')):
+            vacia_el_buzon()
+            res = {}
+            hilo = threading.Thread(target=lambda: res.setdefault('r', moderna(LARGA, token, accept, rid)))
+            hilo.start()
+            time.sleep(4)
+            stc, _, _ = cancela(rid)
+            hilo.join(60)
+            st, hs, raw = res.get('r', (None, None, ''))
+            fin = [m for m in mc.Http.mensajes(raw) if m.get('id') == rid]
+            time.sleep(1)
+            dejados = lee_el_buzon()
+            check('%s: el cancelled (202) deja su respuesta en el buzon, una vez, y al cliente le llega igual' % etiqueta,
+                  stc == 202 and fin and negativa_de_siempre(texto_de(fin[0])) and len(dejados) == 1
+                  and mc.es(dejados[0], 'SN_SYS_RESPUESTA_PERDIDA_FMT') and 'delphi_db' in dejados[0],
+                  (stc, raw[-200:], [d[:200] for d in dejados]))
+        vacia_el_buzon()
+        stc, _, _ = cancela(999)
+        time.sleep(1)
+        check('C3 un cancelled con un id que no esta en vuelo no deja nada', stc == 202 and not en_el_buzon(),
+              (stc, en_el_buzon()))
+        # C4: cancelled tras el primer latido, y cuelga
+        c = http.client.HTTPConnection('127.0.0.1', puerto, timeout=60)
+        p = mc.params_modernos(LARGA, 'progreso')
+        p['_meta']['progressToken'] = 'tok-c4'
+        c.request('POST', '/mcp', json.dumps({'jsonrpc': '2.0', 'id': 924, 'method': 'tools/call', 'params': p}),
+                  dict(cab, **{'Mcp-Name': 'delphi_db', 'Content-Type': 'application/json',
+                               'Accept': mc.ACCEPT_STREAMABLE, 'Authorization': 'Bearer ' + TOKEN}))
+        r = c.getresponse()
+        primero = r.fp.readline()
+        stc, _, _ = cancela(924)
+        c.close()
+        hasta = time.time() + 40
+        while time.time() < hasta and not en_el_buzon():
+            time.sleep(1)
+        time.sleep(3)
+        check('C4 cancelled y luego cuelga: en el buzon UNA vez', primero and stc == 202 and len(en_el_buzon()) == 1,
+              (primero, stc, en_el_buzon()))
+        vacia_el_buzon()
     finally:
         proc.kill()
 finally:
