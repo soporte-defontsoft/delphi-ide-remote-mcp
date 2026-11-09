@@ -95,6 +95,26 @@ def sql_mssql(base, srv, alias, sql):
     return r.returncode == 0 and 'ok' in r.stdout
 
 
+def _psql(base, pg, sql, fichero):
+    """La orden de psql y su entorno: la credencial por el entorno (no se imprime), sin el pgpass, y el SQL en
+    un fichero UTF-8 de la carpeta de la bateria. UNA para sql_pg y sql_pg_fondo."""
+    env = dict(os.environ, PGPASSWORD=pg['password'], PGPASSFILE=os.path.join(base, 'no-existe.pgpass'),
+               PGCLIENTENCODING='UTF8')
+    f = os.path.join(base, fichero)
+    io.open(f, 'w', encoding='utf-8').write(sql)
+    return [PSQL, '-h', pg['server'], '-p', str(pg.get('port') or 5432), '-U', pg['user'], '-d',
+            pg['database'], '-w', '-v', 'ON_ERROR_STOP=1', '-q', '-f', f], env
+
+
+def sql_pg_fondo(base, pg, sql):
+    """El mismo psql sin esperarlo: para retener un bloqueo mientras se mide otra cosa (P7 de
+    test_db_plazo_llamada_129). El proceso, o None sin psql; quien lo lanza lo espera o lo mata."""
+    if not os.path.isfile(PSQL):
+        return None
+    orden, env = _psql(base, pg, sql, 'arnes_pg_fondo.sql')
+    return subprocess.Popen(orden, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, env=env)
+
+
 def sql_pg(base, pg, sql):
     """El arnes en PostgreSQL: psql con la credencial por el entorno (no se imprime) y sin el pgpass. El SQL
     en un fichero UTF-8 (-f): por la linea de ordenes Windows lo pasa en su pagina ANSI y la A con tilde
@@ -102,13 +122,8 @@ def sql_pg(base, pg, sql):
     if not os.path.isfile(PSQL):
         print('  (arnes PG: no hay psql en la carpeta del usuario)')
         return False
-    env = dict(os.environ, PGPASSWORD=pg['password'], PGPASSFILE=os.path.join(base, 'no-existe.pgpass'),
-               PGCLIENTENCODING='UTF8')
-    f = os.path.join(base, 'arnes_pg.sql')
-    io.open(f, 'w', encoding='utf-8').write(sql)
-    r = subprocess.run([PSQL, '-h', pg['server'], '-p', str(pg.get('port') or 5432), '-U', pg['user'], '-d',
-                        pg['database'], '-w', '-v', 'ON_ERROR_STOP=1', '-q', '-f', f],
-                       capture_output=True, text=True, encoding='utf-8', env=env, timeout=120)
+    orden, env = _psql(base, pg, sql, 'arnes_pg.sql')
+    r = subprocess.run(orden, capture_output=True, text=True, encoding='utf-8', env=env, timeout=120)
     if r.returncode != 0:
         print('  (arnes PG: %s)' % r.stderr.strip()[:200].replace(pg['password'], '***'))
     return r.returncode == 0
@@ -172,6 +187,14 @@ class ProxyPg:
                 pass
 
 
+def _cierra_escritura(sock):
+    """El FIN de TCP hacia el otro lado (shutdown de escritura); sin error si ya estaba cerrado."""
+    try:
+        sock.shutdown(socket.SHUT_WR)
+    except OSError:
+        pass
+
+
 class Tramo:
     """Una conexion a traves de ProxyPg: si callo (orden: el mensaje en que callo), lo retenido, y cuando
     la cerro el cliente (cerrada: su hora)."""
@@ -227,6 +250,8 @@ class Tramo:
             return
         finally:
             self.cerrada = time.time()
+            # el cierre del cliente llega al servidor, como en TCP
+            _cierra_escritura(self.s)
 
     def del_servidor(self, s, c):
         try:
@@ -237,3 +262,8 @@ class Tramo:
                 c.sendall(b)
         except OSError:
             return
+        finally:
+            # ...y el del servidor al cliente: PQcancel espera a que la base CIERRE la conexion de la
+            # cancelacion, y sin esto el proxy la dejaba abierta y libpq esperaba para siempre (medido el
+            # 9-nov-2026: era el "cuelgue" del dataset de FireDAC del 8-nov, P4/P4b/P6, y no FireDAC)
+            _cierra_escritura(c)

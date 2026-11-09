@@ -961,7 +961,7 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-The databases the operator gave this workspace, by NAME and through operations: you never write SQL, the server composes it. connections lists them ("db" = project/alias, engine, readonly; the ones declared wrong under "unusable"); tables and fields, what one holds (fields also its defaults, foreign keys and indexes); rows reads (filters, fields, order, limit/offset, always the total); summary groups and adds up; insert, update and delete write where readonly=false and say how many rows changed; update and delete need filters, at most max rows; create-table and create-view make new ones where allowCreate is set (nothing is dropped or altered).
+The databases the operator gave this workspace, by NAME and through operations: you never write SQL, the server composes it. connections lists them ("db" = project/alias, engine, readonly; misdeclared in "unusable"); tables and fields, what one holds (fields also defaults, foreign keys and indexes); rows reads (filters, fields, order, limit/offset, always the total); summary groups and adds up; insert, update and delete write where readonly=false and say how many rows changed (insert: also the row); update and delete need filters, at most max rows; create-table and create-view make new ones where allowCreate is set (nothing dropped or altered).
 
 *Access: mixed (`command` connections / tables / fields / rows / summary read-only; every other command read-write, refused to a read-only credential).*
 

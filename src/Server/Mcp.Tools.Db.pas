@@ -93,7 +93,8 @@ uses
   Lsp.BaseDeDatos, // TrabajoConLaBase: el plazo de la llamada entera (EnLaBase)
   System.Rtti, // CopiaDeParams: los parametros, campo a campo
   System.SyncObjs, // TInterlocked: la llamada abandonada
-  FireDAC.Stan.Intf, FireDAC.Phys.Intf, FireDAC.DatS; // create-table: EL generador de FireDAC
+  FireDAC.Stan.Intf, FireDAC.Phys.Intf, FireDAC.DatS, // create-table: EL generador de FireDAC
+  FireDAC.Stan.Option;
 
 const
   // (las paginas de rows y summary, y su tope: PAGINA_DB_* y TOPE_DB de
@@ -1116,7 +1117,7 @@ end;
   las marcas de sus parametros, cada valor tipado por su campo (null escribe
   NULL; un binario, solo NULL: el JSON no lo trae); o la negativa. }
 function ValoresParaEscribir(const S: TSesionDb; const ATabla: string; const ACampos: TArray<TCampoDb>;
-  const AValores: string; var AParams: TArray<TParametroDb>; out ACols, AMarcas: TArray<string>): string;
+  const AValores: string; var AParams: TArray<TParametroDb>; out ACols, AMarcas, ANombres: TArray<string>): string;
 var
   Lista: TJSONArray;
   Obj: TJSONObject;
@@ -1129,6 +1130,7 @@ begin
   Result := '';
   ACols := [];
   AMarcas := [];
+  ANombres := [];
   Lista := ListaJson(AValores);
   if Lista = nil then
     Exit(MsgFmt(SR_DB_LISTA_FMT, ['values', MsgText(SF_DB_VALOR_FORMA)]));
@@ -1147,10 +1149,65 @@ begin
       else if not ValorParaCampo(Valor, C, V) then
         Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['values', I + 1, MsgFmt(SF_DB_VALOR_NO_CABE_FMT, [C.Nombre, C.Tipo])]));
       ACols := ACols + [CitaNombre(S.Conn, C.Nombre)];
+      ANombres := ANombres + [C.Nombre]; // el campo, para el dataset del insert
       AMarcas := AMarcas + [':' + NuevoParametro(AParams, V, C.TipoDeCampo)];
     end;
   finally
     Lista.Free;
+  end;
+end;
+
+{ El insert por un dataset de FireDAC (Append/Post): su refresco tras el Post
+  (UpdateOptions.RefreshMode) relee DENTRO del mismo INSERT lo que puso la
+  base - la clave autoincremental, los automaticos y los predeterminados
+  (RETURNING en PostgreSQL, el mismo lote en SQL Server) - y la fila vuelve
+  como quedo (P3 de la 1.29.1; David: "despues de cada post se actualizan los
+  predeterminados... o automaticos"). Los valores, los de ValoresParaEscribir,
+  ya tipados por su campo y en el orden de ANombres.
+  El 8-nov este camino se retiro por P4/P6 de test_db_plazo_llamada_129 (el
+  hilo no volvia ni con la red de vuelta ni al cerrar el servidor). MEDIDO el
+  9-nov: era el PROXY de la bateria, no FireDAC - al vencer el plazo de la
+  orden, FireDAC cancela con PQcancel, que abre OTRA conexion y espera a que la
+  base la CIERRE; el proxy no pasaba ese cierre al cliente y libpq esperaba
+  para siempre. Con el proxy fiel a TCP, y contra una fila bloqueada por otra
+  sesion (P7, la base directa), la cancelacion corta la orden y contesta. }
+function InsertaConRelectura(const S: TSesionDb; const ATabla: string; const ANombres: TArray<string>;
+  const APars: TArray<TParametroDb>): TJSONObject;
+var
+  Q: TFDQuery;
+begin
+  Q := NuevaConsulta(S, 'SELECT * FROM ' + CitaNombre(S.Conn, ATabla) + ' WHERE 1 = 0', []);
+  try
+    // un dataset que se escribe va y vuelve (NuevaConsulta es de solo ida)
+    Q.FetchOptions.Unidirectional := False;
+    // un NOT NULL con predeterminado o automatico lo pone la base, no el agente
+    Q.UpdateOptions.CheckRequired := False;
+    // la fila entera tras el Post: con rmOnDemand ni la clave serial de
+    // PostgreSQL ni los predeterminados volvian (medido el 9-nov, K2b)
+    Q.UpdateOptions.RefreshMode := rmAll;
+    // el INSERT nombra EXACTAMENTE los campos que da el agente - tambien un
+    // null, que escribe NULL y no el predeterminado: con los cambiados,
+    // FireDAC callaba un null puesto sobre un null (medido el 9-nov, K4) -;
+    // los demas no van, y los pone la base (predeterminado o automatico)
+    Q.UpdateOptions.UpdateChangedFields := False;
+    Q.Open;
+    for var K := 0 to Q.FieldCount - 1 do
+      if IndexText(Q.Fields[K].FieldName, ANombres) < 0 then
+        Q.Fields[K].ProviderFlags := Q.Fields[K].ProviderFlags - [pfInUpdate];
+    Q.Append;
+    for var K := 0 to High(ANombres) do
+      Q.FieldByName(ANombres[K]).Value := APars[K].Valor;
+    Q.Post;
+    Result := TJSONObject.Create;
+    try
+      for var K := 0 to Q.FieldCount - 1 do
+        Result.AddPair(Q.Fields[K].FieldName, ValorDeCampo(Q.Fields[K]));
+    except
+      Result.Free;
+      raise;
+    end;
+  finally
+    Q.Free;
   end;
 end;
 
@@ -1161,24 +1218,18 @@ end;
   va en una transaccion que solo se confirma si la base la acepta. La
   respuesta dice cuantas filas toco; un update o un delete que tocaria mas que
   su max se deshace (DB-028).
-  El insert NO devuelve la clave de la fila nueva (medido el 8-nov-2026): por
-  un dataset de FireDAC (Append/Post) la daba en los dos motores, pero su INSERT
-  sale ya en ejecucion y con su plazo, y con la red callada la cancelacion
-  dejaba el hilo colgado para siempre - ni la red de vuelta ni el cierre del
-  servidor lo despertaban (P4 y P6 de test_db_plazo_llamada_129, rojos); el
-  compuesto calla en la preparacion, sin plazo, y vuelve. El camino que queda:
-  el INSERT con su relectura compuesto por EL generador de FireDAC y ejecutado
-  por aqui (1.29.1). }
+  El insert va por InsertaConRelectura y devuelve la fila como quedo (1.29.1). }
 function EscribeEn(const ACmd: string; const S: TSesionDb; const P: TDelphiDbParams): string;
 var
   Campos: TArray<TCampoDb>;
   Pars: TArray<TParametroDb>;
-  Cols, Marcas: TArray<string>;
+  Cols, Marcas, Nombres: TArray<string>;
   Tabla, Neg, Where, Sql, Sets: string;
   Q: TFDQuery;
-  R: TJSONObject;
+  R, Fila: TJSONObject;
   Tocadas, Tope: Int64;
 begin
+  Fila := nil;
   S.Conn.StartTransaction;
   try
     if not TablaDe(S, P.Table, Tabla, Neg) then
@@ -1189,7 +1240,7 @@ begin
     Marcas := [];
     if ACmd <> 'delete' then
     begin
-      Result := ValoresParaEscribir(S, Tabla, Campos, P.Values, Pars, Cols, Marcas);
+      Result := ValoresParaEscribir(S, Tabla, Campos, P.Values, Pars, Cols, Marcas, Nombres);
       if Result <> '' then
         Exit;
       if Length(Cols) = 0 then
@@ -1203,23 +1254,28 @@ begin
     if (ACmd <> 'insert') and (Where = '') then
       Exit(MsgFmt(SR_DB_FALTA_FMT, [ACmd, 'filters']));
     if ACmd = 'insert' then
-      Sql := 'INSERT INTO ' + CitaNombre(S.Conn, Tabla) + ' (' + string.Join(', ', Cols) + ') VALUES (' +
-        string.Join(', ', Marcas) + ')'
-    else if ACmd = 'update' then
     begin
-      Sets := '';
-      for var K := 0 to High(Cols) do
-        Sets := Sets + IfThen(Sets <> '', ', ') + Cols[K] + ' = ' + Marcas[K];
-      Sql := 'UPDATE ' + CitaNombre(S.Conn, Tabla) + ' SET ' + Sets + Where;
+      Fila := InsertaConRelectura(S, Tabla, Nombres, Pars);
+      Tocadas := 1;
     end
     else
-      Sql := 'DELETE FROM ' + CitaNombre(S.Conn, Tabla) + Where;
-    Q := NuevaConsulta(S, Sql, Pars);
-    try
-      Q.ExecSQL;
-      Tocadas := Q.RowsAffected;
-    finally
-      Q.Free;
+    begin
+      if ACmd = 'update' then
+      begin
+        Sets := '';
+        for var K := 0 to High(Cols) do
+          Sets := Sets + IfThen(Sets <> '', ', ') + Cols[K] + ' = ' + Marcas[K];
+        Sql := 'UPDATE ' + CitaNombre(S.Conn, Tabla) + ' SET ' + Sets + Where;
+      end
+      else
+        Sql := 'DELETE FROM ' + CitaNombre(S.Conn, Tabla) + Where;
+      Q := NuevaConsulta(S, Sql, Pars);
+      try
+        Q.ExecSQL;
+        Tocadas := Q.RowsAffected;
+      finally
+        Q.Free;
+      end;
     end;
     // mas filas que su max: no se confirma (el finally deshace) y se dice
     // cuantas; un filtro equivocado tocaba miles, y una fila no va a la
@@ -1239,11 +1295,19 @@ begin
       R.AddPair('db', NombreDeConexion(S.Conexion));
       R.AddPair('table', Tabla);
       R.AddPair('affected', TJSONNumber.Create(Tocadas));
+      // la fila nueva como la dejo la base: su clave, sus automaticos y sus
+      // predeterminados
+      if Fila <> nil then
+      begin
+        R.AddPair('row', Fila);
+        Fila := nil; // ya es de R
+      end;
       Result := R.ToJSON;
     finally
       R.Free;
     end;
   finally
+    Fila.Free; // la que no llego a la respuesta
     if S.Conn.InTransaction then
       S.Conn.Rollback;
   end;

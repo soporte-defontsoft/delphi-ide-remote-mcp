@@ -7,9 +7,12 @@ tabla que el arnes crea con su SQL.
       en los campos con valor por defecto, y nada en los demas (el agente lo sabia a base de DB-010, uno por
       campo). ROJO contra 0b408580
   K2  un insert sin los campos con defecto: affected 1 y la base pone los suyos (el contador y los defectos que
-      fields anuncia). La clave de la fila nueva NO viene en la respuesta (medido el 8-nov-2026: por un
-      dataset de FireDAC venia, pero colgaba el hilo con la red callada, P4/P6 de test_db_plazo_llamada_129;
-      queda para la 1.29.1, compuesta por el generador de FireDAC)
+      fields anuncia).
+  K2b (P3 de la 1.29.1) ...y la respuesta trae la fila como quedo (row): la clave que puso la base, los
+      defectos. En SQL Server la tabla tiene un trigger que inserta en OTRA con su identidad (desde 1000): la
+      clave tiene que ser la de esta fila (lo de SCOPE_IDENTITY y no @@IDENTITY)
+  K2c ...y lo que un trigger pone en la PROPIA fila (codigo = 'K-<id>': AFTER INSERT con UPDATE en SQL Server,
+      BEFORE INSERT en PostgreSQL) viene en la fila devuelta, como lo ve el ADO de Galatea tras su Post (David)
   K4  un null dado a un campo con valor por defecto escribe NULL, no el defecto
   K5  un insert que la base rechaza (un obligatorio sin dar): DB-010 y nada escrito
   K6  update y delete de MAS filas que su max (por defecto 100): DB-028 con cuantas, y nada cambiado (se deshace
@@ -37,19 +40,25 @@ MS_BORRA = ("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; IF OBJECT_ID(
 MS_DDL = MS_BORRA + (
     "CREATE TABLE dbo.%s (n int IDENTITY(1000,1) PRIMARY KEY, nota nvarchar(20) NULL); "
     "CREATE TABLE dbo.%s (id int IDENTITY(1,1) PRIMARY KEY, nombre nvarchar(40) NOT NULL, "
-    "estado int NOT NULL DEFAULT 5, marca nvarchar(10) NULL DEFAULT N'def', obligado int NOT NULL); "
+    "estado int NOT NULL DEFAULT 5, marca nvarchar(10) NULL DEFAULT N'def', obligado int NOT NULL, "
+    "codigo nvarchar(20) NULL); "
     "CREATE TABLE dbo.%s (id int PRIMARY KEY, v int NOT NULL); "
     ";WITH n AS (SELECT 1 AS i UNION ALL SELECT i + 1 FROM n WHERE i < 150) "
     "INSERT INTO dbo.%s (id, v) SELECT i, 0 FROM n OPTION (MAXRECURSION 200);" % (TL, TK, TN, TN))
 # CREATE TRIGGER va solo en su lote
-MS_TRIGGER = ("CREATE TRIGGER dbo.%s_tr ON dbo.%s AFTER INSERT AS INSERT INTO dbo.%s (nota) SELECT N'trigger' "
-              "FROM inserted;" % (TK, TK, TL))
-PG_BORRA = 'DROP TABLE IF EXISTS %s, %s, %s;' % (TK, TL, TN)
+MS_TRIGGER = ("CREATE TRIGGER dbo.%s_tr ON dbo.%s AFTER INSERT AS BEGIN SET NOCOUNT ON; "
+              "INSERT INTO dbo.%s (nota) SELECT N'trigger' FROM inserted; "
+              "UPDATE t SET codigo = N'K-' + CAST(t.id AS nvarchar(10)) FROM dbo.%s t JOIN inserted i ON i.id = t.id; "
+              "END;" % (TK, TK, TL, TK))
+PG_BORRA = 'DROP TABLE IF EXISTS %s, %s, %s; DROP FUNCTION IF EXISTS %s_codigo() CASCADE;' % (TK, TL, TN, TK)
 PG_DDL = PG_BORRA + (
     " CREATE TABLE %s (id serial PRIMARY KEY, nombre varchar(40) NOT NULL, estado int NOT NULL DEFAULT 5, "
-    "marca varchar(10) NULL DEFAULT 'def', obligado int NOT NULL);"
+    "marca varchar(10) NULL DEFAULT 'def', obligado int NOT NULL, codigo varchar(20) NULL);"
+    " CREATE FUNCTION %s_codigo() RETURNS trigger AS $$ BEGIN NEW.codigo := 'K-' || NEW.id; RETURN NEW; END $$"
+    " LANGUAGE plpgsql;"
+    " CREATE TRIGGER %s_tr BEFORE INSERT ON %s FOR EACH ROW EXECUTE FUNCTION %s_codigo();"
     " CREATE TABLE %s (id int PRIMARY KEY, v int NOT NULL);"
-    " INSERT INTO %s SELECT g, 0 FROM generate_series(1, 150) g;" % (TK, TN, TN))
+    " INSERT INTO %s SELECT g, 0 FROM generate_series(1, 150) g;" % (TK, TK, TK, TK, TK, TN, TN))
 
 srv = None
 respuestas = []
@@ -94,7 +103,7 @@ try:
         marcas = {f['name']: (bool(f.get('autoinc')), bool(f.get('default'))) for f in j.get('fields', [])}
         check('K1 %s fields: autoinc en el contador, default en estado y marca, nada en nombre y obligado' % motor,
               marcas == {'id': (True, False), 'nombre': (False, False), 'estado': (False, True),
-                         'marca': (False, True), 'obligado': (False, False)}, j)
+                         'marca': (False, True), 'obligado': (False, False), 'codigo': (False, False)}, j)
 
         r1 = mc.como_json(llama({'command': 'insert', 'db': D, 'table': TK, 'values': [
             {'field': 'nombre', 'value': 'uno'}, {'field': 'obligado', 'value': 7}]}))
@@ -102,12 +111,19 @@ try:
         check('K2 %s insert sin los campos con defecto: affected 1 y la base pone el contador y los defectos' % motor,
               r1.get('affected') == 1 and isinstance(f1.get('id'), int) and f1.get('estado') == 5
               and f1.get('marca') == 'def', (r1, f1))
+        row1 = r1.get('row') or {}
+        check('K2b %s ...y la respuesta trae la fila como quedo: su clave (no la del trigger) y los defectos' % motor,
+              row1.get('id') == f1.get('id') and row1.get('estado') == 5 and row1.get('marca') == 'def'
+              and row1.get('nombre') == 'uno' and row1.get('obligado') == 7, (row1, f1))
+        check('K2c %s ...y lo que un trigger pone en la propia fila (codigo) viene en la fila devuelta' % motor,
+              f1.get('codigo') == 'K-%s' % f1.get('id') and row1.get('codigo') == f1.get('codigo'), (row1, f1))
 
         r = mc.como_json(llama({'command': 'insert', 'db': D, 'table': TK, 'values': [
             {'field': 'nombre', 'value': 'nulo'}, {'field': 'obligado', 'value': 1}, {'field': 'marca', 'value': None}]}))
         fn = (filas(TK, filters=[{'field': 'nombre', 'op': 'equals', 'value': 'nulo'}]).get('rows') or [{}])[0]
-        check('K4 %s un null dado a un campo con defecto escribe NULL, no el defecto (y sin clave)' % motor,
-              r.get('affected') == 1 and 'key' not in r and fn.get('marca', 'falta') is None, (r, fn))
+        check('K4 %s un null dado a un campo con defecto escribe NULL, no el defecto (tambien en la fila devuelta)' % motor,
+              r.get('affected') == 1 and fn.get('marca', 'falta') is None
+              and (r.get('row') or {}).get('marca', 'falta') is None, (r, fn))
 
         antes = filas(TK).get('total')
         r = llama({'command': 'insert', 'db': D, 'table': TK, 'values': [{'field': 'nombre', 'value': 'sin obligado'}]})

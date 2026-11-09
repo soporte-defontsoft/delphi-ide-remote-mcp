@@ -4907,14 +4907,15 @@ const
     'The databases the operator gave this workspace, by NAME and through ' +
     'operations: you never write SQL, the server composes it. connections ' +
     'lists them ("db" = ' +
-    'project/alias, engine, readonly; the ones declared wrong under ' +
-    '"unusable"); tables and fields, what one holds (fields also its ' +
+    'project/alias, engine, readonly; misdeclared in "unusable"); ' +
+    'tables and fields, what one holds (fields also ' +
     'defaults, foreign keys and indexes); rows reads (filters, fields, order, ' +
     'limit/offset, always the total); summary groups and adds up; insert, ' +
     'update and delete write where readonly=false and say how many rows ' +
-    'changed; update and delete need filters, at most max rows; ' +
+    'changed (insert: also the row); update and ' +
+    'delete need filters, at most max rows; ' +
     'create-table and create-view make new ones where ' +
-    'allowCreate is set (nothing is dropped or altered).';
+    'allowCreate is set (nothing dropped or altered).';
   SP_DB_COMMAND =
     'connections (the default) | tables | fields | rows | summary | insert | ' +
     'update | delete | create-table | create-view.';

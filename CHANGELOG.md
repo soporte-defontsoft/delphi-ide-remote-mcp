@@ -44,6 +44,17 @@ the MCP `initialize` response (`serverInfo.version`).
   gate with the paths the gate already reads and emptied when each call ends, whatever
   happens to it. A short write (an edit) is not registered: it queues on the write lock as
   before.
+- `delphi_db insert` returns the new row as the database left it (`row`): the key it gave
+  it (an identity or a `serial`), its defaults and what a trigger wrote in that row, in
+  SQL Server and PostgreSQL - the agent no longer has to look for the row it just wrote.
+  It goes through a FireDAC dataset that re-reads the whole row after posting (as ADO's
+  resync does), names exactly the fields given (a `null` writes NULL, not the default)
+  and leaves the rest to the database. On 8-nov this path had been taken out because a
+  call stayed hung when the network went silent; measured on 9-nov, that was the test
+  harness, not FireDAC: its proxy did not pass on the database closing the cancel
+  connection, which libpq waits for. With the harness fixed, a silent network is answered
+  in time and the server still exits clean, and an insert waiting on a row another
+  session holds is cancelled by its timeout and answered.
 
 ### Security
 
