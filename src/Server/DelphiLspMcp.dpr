@@ -323,6 +323,7 @@ begin
   try
     // antes de lanzar nada, y en los tres modos
     SacaLaCarpetaActualDeLasDll;
+    SoloLaCasaYElSistemaParaLasDll;
     // /install and /uninstall are TServiceApplication's own switches, so they
     // have to reach the service branch too - otherwise installing the service
     // would just start a terminal. Y quien dice si este arranque instala es SU

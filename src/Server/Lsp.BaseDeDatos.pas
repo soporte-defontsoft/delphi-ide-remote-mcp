@@ -260,6 +260,8 @@ type
     Conn: TFDConnection;
     Fallo: Boolean;
     DelMotor: Boolean;
+    // FireDAC no pudo cargar la libreria cliente del motor (DB-030)
+    SinLibreria: Boolean;
     Kind: TFDCommandExceptionKind;
     Mensaje: string;
   end;
@@ -392,6 +394,13 @@ begin
           A.Kind := E.Kind;
           A.Mensaje := E.Message;
         end;
+        // la libreria cliente no se cargo: lo dice su codigo, no su texto
+        on E: EFDException do
+        begin
+          A.Fallo := True;
+          A.SinLibreria := E.FDCode = er_FD_AccCantLoadLibrary;
+          A.Mensaje := E.Message;
+        end;
         on E: Exception do
         begin
           A.Fallo := True;
@@ -415,6 +424,8 @@ begin
     A.Conn.Free;
     if A.DelMotor and (A.Kind in [ekUserPwdInvalid, ekUserPwdExpired]) then
       Exit(MsgFmt(SR_DB_LOGIN_FMT, [Nombre]));
+    if A.SinLibreria then
+      Exit(MsgFmt(SR_DB_SIN_LIBRERIA_FMT, [Nombre, AConexion.Motor]));
     Result := MsgFmt(SR_DB_NO_ABRE_FMT, [Nombre, TextoDelMotor(A.Mensaje, AConexion)]);
   finally
     A.Free;

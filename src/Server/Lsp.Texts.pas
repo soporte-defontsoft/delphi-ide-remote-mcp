@@ -4748,6 +4748,17 @@ const
   SR_DB_NO_ABRE_FMT =
     '[DB-009 DENIED] The database "%s" could not be opened: %s. Nothing ' +
     'was done.';
+  // %s = el nombre, %s = el motor (su DriverID: la carpeta de su casa). Lo
+  // que FireDAC no pudo cargar es la libreria cliente del motor
+  // (er_FD_AccCantLoadLibrary): su pista ("check it is in the PATH or
+  // application EXE directories") no vale aqui, donde el servidor solo la
+  // busca en su casa (P5 de la 1.29.1)
+  SR_DB_SIN_LIBRERIA_FMT =
+    '[DB-030 DENIED] The database "%s" could not be opened: this server ' +
+    'could not load the client library of its engine. Only the operator ' +
+    'can fix it: it goes next to the server, in drivers\%s\, with every ' +
+    'DLL it loads, all 64-bit (the server looks for them nowhere else, ' +
+    'not in the PATH). Nothing was done.';
   SR_DB_RESPONDE_FMT =
     '[DB-010 DENIED] The database "%s" refused it: %s. Nothing was ' +
     'changed.';

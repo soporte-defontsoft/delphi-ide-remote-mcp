@@ -498,11 +498,11 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
     copy them from the `bin\` of a PostgreSQL for Windows x64 (another build may name its
     `libssl*`, `libcrypto*`, `libintl*`, `libiconv*` and `libwinpthread*` differently:
     take the ones next to its `libpq.dll`). With the six there, all six load from that
-    folder (measured). **Copy all of them**: a missing companion is not an error, Windows
-    looks for it in the folders of the `PATH` and takes whatever it finds there (measured:
-    the OpenSSL of Git for Windows). Without `libpq.dll`, a call answers `DB-009` with
-    FireDAC's "Cannot load vendor library"; its hint to look in the `PATH` or the exe's
-    folder does not apply here: only `drivers\PG\lib\` is looked at.
+    folder (measured). **Copy all of them**: the server looks for the DLLs it loads only
+    in its own folder, in `System32` and in that one - never in the `PATH` (1.29.1; before
+    it, a missing companion was taken from the `PATH`, measured with the OpenSSL of Git for
+    Windows) - so with one missing, or `libpq.dll` itself, a call answers `DB-030`, which
+    says where they go.
   - **SQL Server** (`engine: "MSSQL"`): nothing in `drivers\`; it goes through the
     system's 64-bit ODBC, and FireDAC takes the first one installed of: ODBC Driver 18 for
     SQL Server, ODBC Driver 17, SQL Server Native Client 11.0, ODBC Driver 13, ODBC Driver

@@ -101,6 +101,19 @@ function CarpetasDelPath(const APath: string): TArray<string>;
   esta unidad, y el programa de un agente en su destino no se toca. }
 procedure SacaLaCarpetaActualDeLasDll;
 
+{ Las DLL que carga ESTE proceso, solo de la carpeta de su exe (la casa), de
+  System32 y de las carpetas que se le ANADEN (la de SacaLaCarpetaActualDeLasDll
+  y la que pone FireDAC al cargar la libreria cliente de un motor): nunca del
+  PATH. Medido el 9-nov-2026 (P4 de la 1.29.1): con libpq.dll sola en
+  drivers\PG\lib, sus cinco dependencias se cargaban de las carpetas del PATH
+  (la de Git for Windows, un pgsql\bin), codigo ajeno con la cuenta del
+  servicio. Lo que el proceso cargaba ya salia todo de esos tres sitios (medido:
+  FireDAC PG y MSSQL, la ayuda por COM, el XML de un .dproj), asi que no se
+  pierde nada. NO se hereda: los hijos (msbuild, dcc, el motor, los
+  renderizadores, que cargan los paquetes del IDE por su PATH) siguen como
+  estaban. Solo el servidor, como la otra. }
+procedure SoloLaCasaYElSistemaParaLasDll;
+
 implementation
 
 const
@@ -415,6 +428,21 @@ var
 begin
   if GetSystemDirectory(Sistema, MAX_PATH) > 0 then
     SetDllDirectory(Sistema);
+end;
+
+procedure SoloLaCasaYElSistemaParaLasDll;
+const
+  // la carpeta del exe, System32 y las anadidas (AddDllDirectory/SetDllDirectory)
+  LOAD_LIBRARY_SEARCH_DEFAULT_DIRS_ = $00001000;
+var
+  // no la declara Winapi.Windows de la 37.0, y por GetProcAddress y no
+  // external: McpRunJob enlaza esta unidad y corre en el DESTINO, y una
+  // importacion estatica que su Windows no tenga no le dejaria ni arrancar
+  Fijar: function(DirectoryFlags: DWORD): BOOL; stdcall;
+begin
+  @Fijar := GetProcAddress(GetModuleHandle(kernel32), 'SetDefaultDllDirectories');
+  if Assigned(Fijar) then
+    Fijar(LOAD_LIBRARY_SEARCH_DEFAULT_DIRS_);
 end;
 
 end.
