@@ -21,6 +21,13 @@ the MCP `initialize` response (`serverInfo.version`).
   first one opens the answer as a stream sent in chunks and the answer comes as its last
   event. A call that ends before the first one is answered byte for byte as before. The
   log line of a request without a session now carries its `Accept` header.
+- The answer of a call whose client stopped waiting for it is not lost: when a heartbeat or
+  the answer itself cannot be written (the client left), the server finishes the call and
+  leaves its answer in that agent's mailbox (`SYS-041`, read with `delphi_messages`), and
+  every answer of the agent says mail is waiting until it reads it - so it does not run
+  again, blind, what was already done (measured on 7-nov: a `remote-run` cut by its client
+  ran twice on the target). Writing a new document in the server's house without
+  overwriting one is now one helper (`EscribeDocumentoNuevo`), used by `delphi_report` too.
 
 ### Security
 

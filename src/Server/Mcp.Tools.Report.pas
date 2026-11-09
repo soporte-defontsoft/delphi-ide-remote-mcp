@@ -96,13 +96,12 @@ const
   // single call" stops being free. Bounded HERE, next to the empty-message
   // check: it is this tool's own input contract, not an access decision.
   MAX_REPORT_BYTES = 256 * 1024;
-  // the names a report may try in one folder before giving up (-2 .. -500)
-  MAX_REPORT_NAME_TRIES = 500;
   // los tipos: los que acepta la tool y los que reconoce el lector del nombre
   REPORT_KINDS: array[0..3] of string = ('bug', 'limitation', 'suggestion', 'question');
 
 { EL nombre de un informe: '<fecha>-<hora>-<tipo>', el titulo por Slug si
-  lo hay y, del segundo intento en adelante, '-N'; '.md'. EsNombreDeInforme
+  lo hay y, del segundo intento en adelante, '-N'; '.md' (los dos ultimos los
+  pone EscribeDocumentoNuevo, Lsp.Puertas). EsNombreDeInforme
   es su inversa: lo que list ensena y read acepta. }
 function BaseDeInforme(AStamp: TDateTime; const AKind, ATitle: string): string;
 begin
@@ -111,13 +110,6 @@ begin
     Result := Result + '-' + Slug(ATitle);
 end;
 
-function NombreDeInforme(const ABase: string; AIntento: Integer): string;
-begin
-  if AIntento > 1 then
-    Result := Format('%s-%d.md', [ABase, AIntento])
-  else
-    Result := ABase + '.md';
-end;
 
 function EsNombreDeInforme(const ANombre: string): Boolean;
 begin
@@ -127,20 +119,6 @@ end;
 
 // Slug: EL normalizador de nombres de cliente vive en Lsp.Casa (uno solo).
 
-{ Reserva el nombre creando el fichero VACIO en exclusiva: si ya existe (o lo
-  acaba de crear otro hilo en este mismo instante) devuelve False y el llamante
-  prueba el siguiente. CREATE_NEW es atomico en el sistema de ficheros, que es
-  justo lo que "if not FileExists then escribir" no es. }
-function ReservarNombre(const APath: string): Boolean;
-var
-  H: THandle;
-begin
-  H := CreateFile(PChar(APath), GENERIC_WRITE, 0, nil, CREATE_NEW,
-    FILE_ATTRIBUTE_NORMAL, 0);
-  Result := H <> INVALID_HANDLE_VALUE;
-  if Result then
-    CloseHandle(H);
-end;
 
 { Los informes del buzon de la sesion que se pueden leer, por su ruta
   relativa al buzon ('.\x.md' los de sin agente, '.\<agente>\x.md'): la
@@ -295,7 +273,7 @@ var
   Dir, FileName, Path, Kind, Title, Agent, Body, KindNote: string;
   Stamp: TDateTime;
   Sb: TStringBuilder;
-  I, Size: Integer;
+  Size: Integer;
 begin
   // leer lo del propio workspace (la via de operador): ni mueve ni borra
   var Cmd := SinMayusculas(Params.Command.Trim);
@@ -353,31 +331,6 @@ begin
 
   Stamp := Now;
   FileName := BaseDeInforme(Stamp, Kind, Title);
-  // la puerta de escribir ANTES de crear nada: la carpeta y la reserva del
-  // nombre ya escriben, y por una union en reports\ se escribian fuera. Con
-  // el nombre MAS LARGO que se puede llegar a probar: la medida del escritor
-  // atomico es por longitud, y con el corto pasaba, se reservaba un -N mas
-  // largo y la escritura lo negaba dejando la reserva vacia (revisor de P3)
-  var Motivo := LugarDeEscrituraDenegado(TPath.Combine(Dir,
-    NombreDeInforme(FileName, MAX_REPORT_NAME_TRIES)), ltCasa);
-  if Motivo <> '' then
-    Exit(Motivo);
-  CrearCarpeta(Dir);
-  // Never overwrite a previous report, even within the same second - and
-  // "existe? pues el siguiente" NO basta: dos informes simultaneos contestan
-  // que no a la vez, eligen el mismo nombre y uno pisa al otro (medido
-  // 2026-09-20: de 8 informes a la vez llegaban 6). El nombre se RESERVA
-  // creando el fichero en exclusiva, que es una sola operacion del sistema.
-  Path := TPath.Combine(Dir, NombreDeInforme(FileName, 1));
-  I := 1;
-  while not ReservarNombre(Path) do
-  begin
-    Inc(I);
-    if I > MAX_REPORT_NAME_TRIES then // absurdo, pero nunca un bucle infinito
-      Exit(MsgText(SR_REPORT_NO_NAME));
-    Path := TPath.Combine(Dir, NombreDeInforme(FileName, I));
-  end;
-
   Sb := TStringBuilder.Create;
   try
     if Title <> '' then
@@ -401,18 +354,15 @@ begin
     Sb.Free;
   end;
 
-  // UTF-8 with BOM: these are documents for humans, not Delphi sources. Por
-  // la puerta de escribir, entero o nada, sobre el nombre ya reservado
-  try
-    EscribeTexto(Path, Body, ltCasa, ekUtf8Bom);
-  except
-    // la reserva vacia no se queda: un informe sin cuerpo no es de nadie
-    try
-      BorraFichero(Path, ltCasa);
-    except
-    end;
-    raise;
-  end;
+  // Never overwrite a previous report, even within the same second (el nombre
+  // se RESERVA: de 8 informes a la vez llegaban 6, medido 2026-09-20), por la
+  // puerta de escribir ANTES de crear nada (por una union en reports\ se
+  // escribian fuera), entero o nada y en UTF-8 con BOM: EscribeDocumentoNuevo
+  // (Lsp.Puertas), el mismo que deja en el buzon una respuesta que no llego
+  var Motivo: string;
+  Path := EscribeDocumentoNuevo(Dir, FileName, Body, Motivo);
+  if Path = '' then
+    Exit(IfThen(Motivo <> '', Motivo, MsgText(SR_REPORT_NO_NAME)));
   TLogger.Info(MsgFmt(SL_REPORT_DELPHI_REPORT_FROM_FMT,
     [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path), Kind,
      Params.From.Trim]));

@@ -1141,7 +1141,7 @@ From then on this server does the rest with no hands anywhere: `get-sdk` (once p
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Your MAILBOX: messages the operator leaves for you (the way back of delphi_report). command=read delivers every pending message in YOUR box and DELETES it (read once, nothing kept); check only lists what waits. While mail for you waits, every tool answer ends with a PENDING MESSAGES line - read it then: it may change what you are doing. PRIVACY, honestly: your token picks your workspace's boxes, but inside it the box is the agent id YOU declare, unbound to the caller: anyone with your token can list and consume the mail of an id they guess, and a consumed message is gone. Treat it as a shared noticeboard: read YOUR id, not other people's, and send nothing secret.
+Your MAILBOX: messages the operator leaves for you (the way back of delphi_report), and answers your client gave up on (SYS-041). command=read delivers every pending message in YOUR box and DELETES it; check only lists what waits. While mail for you waits, every tool answer ends with a PENDING MESSAGES line - read it: it may change your work. PRIVACY: your token picks your workspace's boxes, but inside it the box is the agent id YOU declare, unbound to the caller: anyone with your token can list and consume the mail of an id they guess, and a consumed message is gone. Treat it as a shared noticeboard: read YOUR id, not other people's, and send nothing secret.
 
 *Access: read-only OK (side effect: command=read consumes (deletes) the message it delivers).*
 

@@ -425,12 +425,19 @@ begin
       begin
         var Registro := FManagerRegistry;
         var Resultado: TValue;
-        ConLatido(TokenDeProgreso(Params), CampoDeTexto(Params, 'name'),
+        var Herramienta := CampoDeTexto(Params, 'name');
+        var Perdido := ConLatido(TokenDeProgreso(Params), Herramienta,
           procedure
           begin
             Resultado := ExecuteMethodCall(Registro, MethodName, Params);
           end);
         ExecuteResult := Resultado;
+        // [local change 1.29.1, A22] un latido no llego: el cliente dejo de
+        // esperar y esta respuesta tampoco le llegara; va al buzon del agente
+        // (la identidad de la llamada sigue puesta: la quita el transporte)
+        if Perdido and Resultado.IsType<TJSONObject> then
+          DejaLaRespuestaEnElBuzon(BuzonDeEstaLlamada, Herramienta,
+            Resultado.AsType<TJSONObject>.ToJSON);
       end
       else
         ExecuteResult := ExecuteMethodCall(FManagerRegistry, MethodName, Params);

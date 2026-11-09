@@ -923,11 +923,16 @@ type
     FServidor: TMCPIdHTTPServer;
     FAntesDeAbrir: TProc;
     FAbierto: Boolean;
+    // un latido no se pudo escribir: el cliente se fue y el procesador ya
+    // dejo la respuesta en su buzon (A22)
+    FPerdido: Boolean;
     procedure Trozo(const ATexto: string);
   public
     constructor Create(AContext: TIdContext; AResponseInfo: TIdHTTPResponseInfo;
       AServidor: TMCPIdHTTPServer; const AAntesDeAbrir: TProc);
     function Evento(const AJson: string): Boolean;
+    { False = la respuesta no se pudo escribir y nadie la ha dejado aun en el
+      buzon (si un latido ya fallo, la dejo el procesador: True) }
     function Termina(const AJson: string): Boolean;
     property Abierto: Boolean read FAbierto;
   end;
@@ -977,6 +982,7 @@ begin
     on E: Exception do
     begin
       TLogger.Info('SSE stream lost: ' + E.Message);
+      FPerdido := True;
       Result := False;
     end;
   end;
@@ -985,6 +991,9 @@ end;
 function TStreamSse.Termina(const AJson: string): Boolean;
 begin
   Result := True;
+  FResponseInfo.ContentText := '';
+  if FPerdido then
+    Exit;
   try
     if AJson <> '' then
       Trozo(FServidor.EventoSse(AJson));
@@ -997,7 +1006,6 @@ begin
       Result := False;
     end;
   end;
-  FResponseInfo.ContentText := '';
 end;
 
 { [local change] Una peticion de la revision 2026-07-28: quien es lo dice ella, nada se
@@ -1008,7 +1016,7 @@ end;
 procedure TMCPIdHTTPServer.HandlePostRequestModerno(Context: TIdContext; RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const APeticion: TPeticionModerna);
 var
-  Cuerpo, Fallo: string;
+  Cuerpo, Fallo, Buzon: string;
   Stream: TStreamSse;
 begin
   // el Accept, al log: si el cliente puede recibir el latido (medido el 9-nov-2026:
@@ -1035,6 +1043,10 @@ begin
       SetThreadIdentityByRequest(APeticion.Cliente);
       try
         Cuerpo := FJsonRpcProcessor.ProcessRequest(RequestBody, '');
+        // el buzon de ESTE agente, mientras la llamada tiene su identidad: si
+        // la respuesta no se puede escribir, va alli (A22)
+        if Assigned(Stream) then
+          Buzon := BuzonDeEstaLlamada;
       finally
         QuitaSumideroDelHilo;
         ClearThreadIdentity;
@@ -1042,7 +1054,8 @@ begin
     end;
     if Assigned(Stream) and Stream.Abierto then
     begin
-      Stream.Termina(Cuerpo);
+      if not Stream.Termina(Cuerpo) then
+        DejaLaRespuestaEnElBuzon(Buzon, APeticion.Nombre, Cuerpo);
       TLogger.Info('Response (the last event of its stream): ' + Cuerpo);
       Exit;
     end;
@@ -1091,7 +1104,10 @@ begin
     end;
     if Stream.Abierto then
     begin
-      Stream.Termina(JSONResponse);
+      // la identidad de la sesion sigue puesta (la quita HandlePostRequest)
+      if not Stream.Termina(JSONResponse) then
+        DejaLaRespuestaEnElBuzon(BuzonDeEstaLlamada,
+          TMCPJsonRpcProcessor.LeeModernaDeTexto(RequestBody).Nombre, JSONResponse);
       TLogger.Info('Response (the last event of its stream): ' + JSONResponse);
       Exit;
     end;

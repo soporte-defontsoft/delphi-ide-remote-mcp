@@ -23,6 +23,10 @@ PostgreSQL de produccion (sin ellas, la bateria termina sin checks y lo dice).
   H3 HTTP con sesion (SSE): latidos y la respuesta en el mismo stream
   H4 HTTP moderno, una llamada rapida con token: application/json como antes (no se abre el stream)
   H5 un cliente que se va a mitad del stream: el servidor sigue contestando a la siguiente
+  R1 (A22) ...y la respuesta que no le llego queda en SU buzon (messages\\<workspace>\\<agente>), una vez
+  R2 ...la siguiente respuesta de ese agente avisa de que hay correo (MESSAGES_PENDING)
+  R3 ...y delphi_messages la entrega: SYS-041, la tool y su respuesta tal como habria llegado
+  R4 las llamadas cuyo cliente se quedo (H1, H3) no dejan nada en el buzon
 
 Uso:  python tests/test_progreso_1291.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -186,6 +190,11 @@ try:
         check('H3 HTTP con sesion: latidos y la respuesta en el mismo stream',
               st == 200 and len(lat) >= 3 and bien_formados(lat, 'tok-ss') and msgs and msgs[-1].get('id') == 914,
               (st, len(lat), raw[-300:]))
+        buzon = os.path.join(SRV, 'messages', 'Workspace.P', 'progreso')
+
+        def en_el_buzon():
+            return sorted(f for f in os.listdir(buzon) if f.endswith('.md')) if os.path.isdir(buzon) else []
+        check('R4 las llamadas cuyo cliente se quedo no dejan nada en el buzon', not en_el_buzon(), en_el_buzon())
         # H5: el cliente se va tras el primer latido
         c = http.client.HTTPConnection('127.0.0.1', puerto, timeout=60)
         p = mc.params_modernos(LARGA, 'progreso')
@@ -199,6 +208,24 @@ try:
         st, hs, raw = moderna(RAPIDA, None, mc.ACCEPT_STREAMABLE, 916)
         check('H5 un cliente que se va a mitad del stream: el servidor contesta a la siguiente',
               r.status == 200 and primero and st == 200 and '"id":916' in raw.replace(' ', ''), (r.status, primero, st, raw[:200]))
+        # la llamada abandonada acaba sola (los 10-12 s de la base que no contesta)
+        import time
+        hasta = time.time() + 40
+        while time.time() < hasta and not en_el_buzon():
+            time.sleep(1)
+        time.sleep(1)
+        dejados = en_el_buzon()
+        check('R1 la respuesta que no llego queda en SU buzon, una vez', len(dejados) == 1 and 'delphi-db' in dejados[0],
+              dejados)
+        st, hs, raw = moderna(RAPIDA, None, mc.ACCEPT_STREAMABLE, 917)
+        check('R2 la siguiente respuesta de ese agente avisa de que hay correo', mc.es(raw, 'SN_MESSAGES_PENDING_FMT'),
+              raw[-300:])
+        st, hs, raw = moderna({'name': 'delphi_messages', 'arguments': {'command': 'read'}}, None,
+                              mc.ACCEPT_STREAMABLE, 918)
+        leido = texto_de(next((m for m in mc.Http.mensajes(raw) if m.get('id') == 918), None))
+        check('R3 delphi_messages la entrega: SYS-041, la tool y su respuesta tal como habria llegado',
+              mc.es(leido, 'SN_SYS_RESPUESTA_PERDIDA_FMT') and 'delphi_db' in leido and negativa_de_siempre(leido)
+              and not en_el_buzon(), (leido[:500], en_el_buzon()))
     finally:
         proc.kill()
 finally:

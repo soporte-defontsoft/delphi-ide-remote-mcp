@@ -1505,7 +1505,7 @@ REGLAS = [
       ('Lsp.Puertas.pas', 'PonFechaDeCreacion'),
       # la reserva del nombre de un informe, tras la puerta sobre su carpeta con el
       # nombre mas largo (CREATE_NEW: no pisa nada)
-      ('Mcp.Tools.Report.pas', 'ReservarNombre'),
+      ('Lsp.Puertas.pas', 'ReservaNombreDeDocumento'),  # la reserva CREATE_NEW de un documento nuevo (1.29.1: era de Mcp.Tools.Report, ReservarNombre)
       # settings.ini: su lector y escritor es Lsp.Settings (C1), ninguna puerta
       ('Lsp.Settings.pas', 'LoadSecurity'), ('Lsp.Settings.pas', 'FijaDelphiVersionEnElIni'),
       # NUL como salida de error de un hijo: no es un fichero

@@ -42,12 +42,30 @@ function ConLatido(const AToken, ANombre: string; const ALlamada: TProc): Boolea
   sitio. }
 function MensajeDeProgreso(const AToken: string; ASegundos: Double; const ANombre: string): string;
 
+{ A22 de la 1.29.1: el buzon (delphi_messages) del agente de la llamada en
+  curso, '' si no tiene agente. Se toma mientras la llamada tiene su
+  identidad: el transporte la quita al acabar. }
+function BuzonDeEstaLlamada: string;
+
+{ La respuesta de ATool que no llego a su cliente (un latido o la respuesta no
+  se pudieron escribir: dejo de esperar) al buzon ABuzon, como un mensaje
+  (SYS-041) con su texto tal como habria llegado - ya enmascarado por el
+  filtro de salida -: cada respuesta de ese agente lo avisa hasta que lo lee,
+  y asi no repite a ciegas lo que ya se hizo (el remote-run que corrio dos
+  veces, 7-nov-2026). ARespuestaJson: la respuesta JSON-RPC o su result. Sin
+  buzon, o si no se puede escribir, solo queda en el log. Nunca lanza. }
+procedure DejaLaRespuestaEnElBuzon(const ABuzon, ATool, ARespuestaJson: string);
+
 implementation
 
 uses
   System.Classes, System.SyncObjs, System.JSON,
   Lsp.Settings, // ProgressSeconds
   Lsp.Json, // ValorJson: EL lector de un valor JSON de la casa
+  Lsp.Casa, // BuzonDeMensajes, Slug
+  Lsp.Identidad, // AgenteDeLaLlamada
+  Lsp.Puertas, // EscribeDocumentoNuevo
+  MCPServer.Logger,
   Lsp.Texts;
 
 threadvar
@@ -90,6 +108,75 @@ begin
     Result := Msg.ToJSON;
   finally
     Msg.Free;
+  end;
+end;
+
+function BuzonDeEstaLlamada: string;
+var
+  Agente: string;
+begin
+  Agente := AgenteDeLaLlamada('');
+  if Agente = '' then
+    Exit('');
+  Result := BuzonDeMensajes(Agente);
+end;
+
+{ El texto de una respuesta: el de su content (los trozos de texto, por
+  orden), el message de su error, o el JSON tal cual si no es ninguno. }
+function TextoDeLaRespuesta(const AJson: string): string;
+var
+  O, R: TJSONObject;
+  C: TJSONValue;
+  Partes: TArray<string>;
+begin
+  Result := AJson;
+  O := ObjetoJson(AJson);
+  if O = nil then
+    Exit;
+  try
+    if O.GetValue('error') is TJSONObject then
+      Exit(CampoDeTexto(O.GetValue('error'), 'message'));
+    R := O;
+    if O.GetValue('result') is TJSONObject then
+      R := TJSONObject(O.GetValue('result'));
+    C := R.GetValue('content');
+    Partes := [];
+    if C is TJSONArray then
+      for var V in TJSONArray(C) do
+        if CampoDeTexto(V, 'text') <> '' then
+          Partes := Partes + [CampoDeTexto(V, 'text')];
+    if Length(Partes) > 0 then
+      Result := string.Join(#10#10, Partes);
+  finally
+    O.Free;
+  end;
+end;
+
+procedure DejaLaRespuestaEnElBuzon(const ABuzon, ATool, ARespuestaJson: string);
+var
+  Motivo, Ruta: string;
+  Ahora: TDateTime;
+begin
+  if ABuzon = '' then
+  begin
+    TLogger.Info('The answer of ' + ATool + ' did not reach its client, which has no mailbox');
+    Exit;
+  end;
+  try
+    Ahora := Now;
+    Ruta := EscribeDocumentoNuevo(ABuzon, FormatDateTime('yyyymmdd-hhnnss', Ahora) + '-' +
+      Slug('answer ' + ATool), MsgFmt(SN_SYS_RESPUESTA_PERDIDA_FMT, [ATool, ATool,
+      FormatDateTime('yyyy-mm-dd hh:nn:ss', Ahora), TextoDeLaRespuesta(ARespuestaJson)]), Motivo);
+    if Ruta <> '' then
+      TLogger.Info('The answer of ' + ATool + ' did not reach its client: left in its mailbox, ' +
+        ExtractFileName(Ruta))
+    else
+      TLogger.Info('The answer of ' + ATool + ' did not reach its client and could not be left ' +
+        'in its mailbox: ' + Motivo);
+  except
+    on E: Exception do
+      TLogger.Info('The answer of ' + ATool + ' did not reach its client and could not be left ' +
+        'in its mailbox: ' + E.Message);
   end;
 end;
 

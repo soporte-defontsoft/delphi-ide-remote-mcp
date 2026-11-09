@@ -154,6 +154,20 @@ function BorraFichero(const APath: string; ALugar: TLugarDeTexto): string;
   pregunta de "dentro". }
 procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
 
+{ Un DOCUMENTO NUEVO en una carpeta de la casa (ADir), sin pisar nada: su
+  nombre es <ABase>.md, o <ABase>-N.md (N = 2, 3...) si ya esta, y se RESERVA
+  creandolo en exclusiva (CREATE_NEW: "existe? pues el siguiente" no basta,
+  dos a la vez eligen el mismo - medido el 20-sep-2026 con ocho informes a la
+  vez); luego el texto, por la puerta de escribir, entero o nada, en UTF-8
+  con BOM (documentos para personas), y si no se pudo la reserva vacia no se
+  queda. La puerta se pregunta ANTES con el nombre mas largo que se puede
+  probar: la medida del escritor atomico es por longitud. Devuelve la ruta
+  escrita; '' con AMotivo = la negativa de la puerta, o '' sin motivo si no
+  quedo nombre libre. Lanza lo que lance la escritura. Los informes de
+  delphi_report y la respuesta que no llego, al buzon (Lsp.Progreso, 1.29.1):
+  estaba escrito en el primero. }
+function EscribeDocumentoNuevo(const ADir, ABase, ATexto: string; out AMotivo: string): string;
+
 { Encoding-preserving load/save for other engines (scaffolder): text is
   decoded with the real encoding; save re-encodes with the SAME one, makes
   the pre-edit backup and writes atomically. AEncName as in delphi_read.
@@ -1290,6 +1304,62 @@ function EscribeTexto(const APath, ATexto: string; ALugar: TLugarDeTexto;
   AK: TEncKind; AEstricto: Boolean): string;
 begin
   Result := EscribeBytes(APath, EncodeText(ATexto, AK, AEstricto), ALugar);
+end;
+
+const
+  // absurdo pasar de ahi, pero nunca un bucle sin fin
+  MAX_INTENTOS_DOCUMENTO = 500;
+
+function NombreDeDocumento(const ABase: string; AIntento: Integer): string;
+begin
+  if AIntento > 1 then
+    Result := Format('%s-%d.md', [ABase, AIntento])
+  else
+    Result := ABase + '.md';
+end;
+
+{ Reserva el nombre creando el fichero VACIO en exclusiva: si ya existe (o lo
+  acaba de crear otro hilo en este mismo instante) devuelve False. CREATE_NEW
+  es atomico en el sistema de ficheros. }
+function ReservaNombreDeDocumento(const APath: string): Boolean;
+var
+  H: THandle;
+begin
+  H := CreateFile(PChar(APath), GENERIC_WRITE, 0, nil, CREATE_NEW,
+    FILE_ATTRIBUTE_NORMAL, 0);
+  Result := H <> INVALID_HANDLE_VALUE;
+  if Result then
+    CloseHandle(H);
+end;
+
+function EscribeDocumentoNuevo(const ADir, ABase, ATexto: string; out AMotivo: string): string;
+var
+  I: Integer;
+begin
+  Result := '';
+  AMotivo := LugarDeEscrituraDenegado(TPath.Combine(ADir,
+    NombreDeDocumento(ABase, MAX_INTENTOS_DOCUMENTO)), ltCasa);
+  if AMotivo <> '' then
+    Exit;
+  CrearCarpeta(ADir);
+  I := 1;
+  while not ReservaNombreDeDocumento(TPath.Combine(ADir, NombreDeDocumento(ABase, I))) do
+  begin
+    Inc(I);
+    if I > MAX_INTENTOS_DOCUMENTO then
+      Exit;
+  end;
+  Result := TPath.Combine(ADir, NombreDeDocumento(ABase, I));
+  try
+    EscribeTexto(Result, ATexto, ltCasa, ekUtf8Bom);
+  except
+    // la reserva vacia no se queda: un documento sin cuerpo no es de nadie
+    try
+      BorraFichero(Result, ltCasa);
+    except
+    end;
+    raise;
+  end;
 end;
 
 procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);

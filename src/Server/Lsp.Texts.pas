@@ -4632,11 +4632,11 @@ const
 
   SD_MESSAGES =
     'Your MAILBOX: messages the operator leaves for you (the way back of ' +
-    'delphi_report). command=read delivers every pending message in YOUR ' +
-    'box and DELETES it (read once, nothing kept); check only lists what ' +
-    'waits. While mail for you waits, every tool answer ends with a ' +
-    'PENDING MESSAGES line - read it then: it may change what you are ' +
-    'doing. PRIVACY, honestly: your token picks your workspace''s boxes, ' +
+    'delphi_report), and answers your client gave up on (SYS-041). ' +
+    'command=read delivers every pending message in YOUR box and DELETES ' +
+    'it; check only lists what waits. While mail for you waits, every tool ' +
+    'answer ends with a PENDING MESSAGES line - read it: it may change your ' +
+    'work. PRIVACY: your token picks your workspace''s boxes, ' +
     'but inside it the box is the agent id YOU declare, unbound to the ' +
     'caller: anyone with your token can list and consume the mail of an ' +
     'id they guess, and a consumed message is gone. Treat it as a shared ' +
@@ -9549,6 +9549,16 @@ const
     de cada notifications/progress. %s = la tool, %s = los segundos que lleva }
   SN_SYS_SIGUE_EN_MARCHA_FMT =
     '[SYS-040] %s is still running (%s s); its answer comes when it ends.';
+  { La respuesta que no llego (A22 de la 1.29.1): el cliente dejo de esperar
+    -un latido o la respuesta no se pudieron escribir- y el servidor acabo la
+    llamada igual; queda en el buzon del agente (delphi_messages), y cada
+    respuesta suya lo avisa. %s = la tool, %s = la tool, %s = cuando acabo,
+    %s = su respuesta como habria llegado }
+  SN_SYS_RESPUESTA_PERDIDA_FMT =
+    '[SYS-041] The answer of %s that did not reach you'#10#10 +
+    'Your client stopped waiting for this call to %s before its answer ' +
+    'came; the server finished it anyway at %s. Before doing it again, read its ' +
+    'answer, as it would have come:'#10#10'---'#10#10'%s';
 
   SN_COMPONENTS_NONE_FMT =
     '[COMP-005] Neither a registered package nor a folder of the Library ' +
