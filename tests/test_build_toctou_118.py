@@ -161,14 +161,21 @@ try:
         a_dur = a1 - a0
         poison_en_disco = (os.path.isfile(B_PROJ)
                            and 'Toctou118' in open(B_PROJ, encoding='utf-8', errors='replace').read())
+        # 1.29.1 (R3 de A22): B queda apuntado en el registro de las operaciones en curso al pasar la
+        # puerta, ANTES de esperar su turno, y una escritura de una tool sobre su .dproj se niega
+        # (SYS-043): la ventana que esta bateria abria por el MCP ya no se abre. El escaneo dentro del
+        # cerrojo sigue detras, como segunda barrera; por el MCP ya no se llega a el (una escritura a
+        # pelo no toma el cerrojo de escritura: mediria otra cosa)
+        r3_niega = mc.es(str(r_iny), 'SR_SYS_OPERACION_EN_CURSO_FMT')
 
         # ---- validez de la secuencia (si no se dio, SIN_CHECKS, nunca falso verde) ----
         if falta_rad(ar) or falta_rad(br):
             SKIP = 'no hay RAD Studio en esta maquina'
         elif not compilo(ar):
             check('fixture: el build largo A compila', False, str(ar)[:200])
-        elif not poison_en_disco:
-            check('fixture: la inyeccion entra en el .dproj de B (delphi_upload)', False, str(r_iny)[:160])
+        elif not poison_en_disco and not r3_niega:
+            check('fixture: la inyeccion entra en el .dproj de B (delphi_upload) o la niega SYS-043', False,
+                  str(r_iny)[:160])
         elif a_dur < MIN_A:
             SKIP = ('A compilo en %.1fs (< %.1fs): no retuvo el turno el tiempo necesario; '
                     'sube UNIDADES_A/PROCS_POR_UNIDAD' % (a_dur, MIN_A))
@@ -183,13 +190,18 @@ try:
                   not hay_marcador,
                   'marcador presente = el .dproj envenenado se compilo (vulnerable, f0557ab). '
                   'A=%.1fs B=%.1fs inyeccion=[+%.1f,+%.1f]s' % (a_dur, b1 - b0, iny0 - a0, iny1 - a0))
+            if r3_niega:
+                check('TOCTOU build (1.29.1): la edicion del .dproj de un build en curso la niega el registro de '
+                      'las operaciones en curso (SYS-043) y el .dproj sigue limpio', not poison_en_disco,
+                      str(r_iny)[:200])
             # Serializacion: con el arreglo, la edicion del .dproj ESPERA a que A suelte
             # el cerrojo de escritura (GLock); en f0557ab no espera y acaba enseguida.
-            check('TOCTOU build: la edicion del .dproj espera a que A suelte el cerrojo',
-                  iny1 >= a1 - 1.5,
-                  'la edicion acabo a +%.1fs y A a +%.1fs (duro %.1fs)' % (iny1 - a0, a_dur, iny1 - iny0))
+            else:
+                check('TOCTOU build: la edicion del .dproj espera a que A suelte el cerrojo',
+                      iny1 >= a1 - 1.5,
+                      'la edicion acabo a +%.1fs y A a +%.1fs (duro %.1fs)' % (iny1 - a0, a_dur, iny1 - iny0))
             # el control positivo: el MISMO .dproj envenenado, de un build confiado
-            if not hay_marcador:
+            if not hay_marcador and poison_en_disco:
                 rc = mc.Http(PORT, TOKEN_CONFIADO, t=600).call('delphi_build', {'project': B_PROJ, 'config': 'Debug'}, t=600)
                 check('TOCTOU build (control positivo): confiado, el mismo veneno SI escribe el marcador',
                       compilo(rc) and os.path.exists(MARKER), str(rc)[:300])

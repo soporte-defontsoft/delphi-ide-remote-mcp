@@ -28,6 +28,19 @@ the MCP `initialize` response (`serverInfo.version`).
   again, blind, what was already done (measured on 7-nov: a `remote-run` cut by its client
   ran twice on the target). Writing a new document in the server's house without
   overwriting one is now one helper (`EscribeDocumentoNuevo`), used by `delphi_report` too.
+- A long operation that writes (`delphi_move`, `delphi_delete`, `delphi_build`,
+  `delphi_package`, `delphi_test`, `delphi_git`, `delphi_paserver`) tells the other calls
+  while it runs. Measured on 7-nov: while a `delphi_move` copy still ran, `delphi_list` of
+  its destination said `WS-008` "does not exist" and repeating a delete already done said
+  `SYS-012`, and the agent ran them again on top. Now the same call (the same agent, the
+  same arguments) is refused while it runs (`SYS-042`: its answer comes, or goes to the
+  mailbox); a call that writes where it is working is refused (`SYS-043`, which operation
+  and since when; before, a `delphi_config set-version` rewrote a `.dproj` in the middle of
+  its build); and one that reads there answers as always, with a note that what it shows may
+  be half done (`SYS-044`). One registry for the process (`Lsp.EnCurso`), filled at the
+  gate with the paths the gate already reads and emptied when each call ends, whatever
+  happens to it. A short write (an edit) is not registered: it queues on the write lock as
+  before.
 
 ### Security
 

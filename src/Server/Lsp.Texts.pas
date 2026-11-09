@@ -9559,6 +9559,19 @@ const
     'Your client stopped waiting for this call to %s before its answer ' +
     'came; the server finished it anyway at %s. Before doing it again, read its ' +
     'answer, as it would have come:'#10#10'---'#10#10'%s';
+  { Las operaciones largas en curso (Lsp.EnCurso, R3 de A22, 1.29.1). %s = la
+    tool, %s = cuando empezo (hh:nn:ss), %d = los segundos que lleva }
+  SR_SYS_OPERACION_REPETIDA_FMT =
+    '[SYS-042 DENIED] This same call to %s is still running, since %s (%d s): ' +
+    'its answer comes when it ends, or to your mailbox (delphi_messages) if ' +
+    'your client stopped waiting. Nothing was done.';
+  // %s = la ruta, %s = la tool que la esta cambiando, %s = desde, %d = segundos
+  SR_SYS_OPERACION_EN_CURSO_FMT =
+    '[SYS-043 DENIED] %s is being changed right now by %s (since %s, %d s): ' +
+    'wait for it to end and try again. Nothing was done.';
+  SN_SYS_OPERACION_EN_CURSO_FMT =
+    #10#10'[SYS-044] %s is being changed right now by %s (since %s, %d s): what ' +
+    'this answer shows of it may be half done.';
 
   SN_COMPONENTS_NONE_FMT =
     '[COMP-005] Neither a registered package nor a folder of the Library ' +

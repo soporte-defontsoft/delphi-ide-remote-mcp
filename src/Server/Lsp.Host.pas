@@ -107,6 +107,7 @@ uses
   Lsp.Settings,
   Lsp.Mascara,
   Lsp.PuertaDeLaLlamada,
+  Lsp.EnCurso, // R3 de A22 (1.29.1): las operaciones largas en curso
   Lsp.PurgaDelArranque,
   Lsp.NetDrives;
 
@@ -238,6 +239,11 @@ begin
       if not TMCPRegistry.HasTool(ToolName) then
         Exit('');
       Result := ToolCallDenied(ToolName, Arguments);
+      // ...y lo que dicen las operaciones largas en curso (Lsp.EnCurso): la
+      // misma repetida, o una escritura sobre lo que otra esta cambiando, se
+      // niegan; la que pasa y es larga queda apuntada hasta CallEnded
+      if Result = '' then
+        Result := EmpiezaLlamada(ToolName, Arguments);
       // Una negativa de la PUERTA nunca trae contenido de un fichero: sale
       // enmascarada entera aqui, antes del filtro de salida, que en las tools
       // de eco deja tal cual las lineas 'N|texto'. Una ruta con un salto y
@@ -271,7 +277,9 @@ begin
     begin
       // la llamada acaba: sus bytes de antes no se quedan en el hilo
       OlvidaOrigenes(False);
-      Result := MaskDriveText(ToolName, AText);
+      // ...y si lo que nombra lo esta cambiando otra llamada larga, lo dice
+      // (SYS-044, Lsp.EnCurso): lo que ve puede estar a medias
+      Result := MaskDriveText(ToolName, AText + NotaDeLaLlamada);
       // the operator's mailbox: there is no push in MCP clients, so every
       // tool answer carries the notice while a message waits.
       if ToolName <> 'delphi_messages' then
@@ -284,6 +292,9 @@ begin
     begin
       Result := WrapWithAttachedImages(AText);
     end;
+  // ...y al acabar CADA llamada, pase lo que pase: lo que apunto la puerta
+  // en el registro de las operaciones en curso se borra (Lsp.EnCurso)
+  TMCPToolsManager.CallEnded := TerminaLlamada;
 end;
 
 function TMcpHost.StartupNotes: TArray<string>;

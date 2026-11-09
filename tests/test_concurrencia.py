@@ -253,8 +253,11 @@ try:
                 zip_why = '%d entradas' % len(z.namelist())
         except Exception as e:                   # noqa: BLE001
             zip_why = repr(e)
-    check('F package x2: las dos llamadas terminan bien', ok_f == 2,
-          [r[:120] for r in rf])
+    # 1.29.1 (R3 de A22): la MISMA llamada del mismo agente mientras la primera sigue se niega
+    # (SYS-042: no se repite encima); si la primera ya acabo, la segunda corre. Las dos formas son buenas
+    repetida = sum(1 for r in rf if mc.es(r, 'SR_SYS_OPERACION_REPETIDA_FMT'))
+    check('F package x2: las dos terminan bien, o una y la otra la niega SYS-042 (la misma en curso)',
+          ok_f == 2 or (ok_f == 1 and repetida == 1), [r[:120] for r in rf])
     check('F package x2: el zip resultante es valido y completo', zip_ok, zip_why)
 
     # ---------------------------------------------------------------- G ----

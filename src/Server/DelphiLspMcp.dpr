@@ -171,7 +171,8 @@ uses
   Lsp.ClienteHttp in 'Lsp.ClienteHttp.pas',
   Mcp.Tools.Api in 'Mcp.Tools.Api.pas',
   Lsp.ConPlazo in 'Lsp.ConPlazo.pas',
-  Lsp.Progreso in 'Lsp.Progreso.pas';
+  Lsp.Progreso in 'Lsp.Progreso.pas',
+  Lsp.EnCurso in 'Lsp.EnCurso.pas';
 
 {$R *.res}
 

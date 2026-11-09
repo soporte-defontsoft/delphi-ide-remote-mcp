@@ -274,6 +274,7 @@
         <DCCReference Include="Mcp.Tools.Api.pas"/>
         <DCCReference Include="Lsp.ConPlazo.pas"/>
         <DCCReference Include="Lsp.Progreso.pas"/>
+        <DCCReference Include="Lsp.EnCurso.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

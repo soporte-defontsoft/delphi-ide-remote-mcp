@@ -645,6 +645,11 @@ REGLAS = [
     ('las plantillas de la wiki de la ayuda leidas a mano', r"\{\{#",
      [('Lsp.Docs.pas', 'SinPlantillasDeWiki')],
      'SinPlantillasDeWiki (Lsp.Docs): la llama DecodificaEntidades, la puerta del texto de la ayuda'),
+    # que operaciones son LARGAS (las que se apuntan en el registro de las operaciones en curso): cuanto
+    # tarda algo no lo dice nadie antes de hacerlo, asi que es gramatica nuestra, UNA (R3 de A22, 1.29.1)
+    ('una lista de las operaciones largas', r"'delphi_move',\s*'delphi_delete'",
+     [('Lsp.EnCurso.pas', '*')],
+     'OPERACIONES_LARGAS (Lsp.EnCurso): la pregunta EmpiezaLlamada, al pasar la puerta'),
     ('el numero de un nombre mDNS de adb leido a mano', r"Pos\(\s*'\)\.'",
      [('Lsp.Settings.pas', 'DispositivoSinNumeroMdns')],
      'DispositivoSinNumeroMdns (Lsp.Settings): lo leen BadDeviceName y AdbTargetAllowed'),
@@ -2025,6 +2030,7 @@ check('las fuentes del grupo se leen (83 unidades el 6-oct-2026: al menos 70)', 
 # el MUTANTE de cada regla: una copia plantada, fuera de su casa, que la
 # regla tiene que cazar (y un comentario con el formato, que NO)
 PLANTADO = {
+    'una lista de las operaciones largas': "  L := ['delphi_move', 'delphi_delete'];",
     'un fichero que nace acabado en salto a mano': "  if not Body.EndsWith(CRLF) then X := 1;",
     'una lista vacia dicha a mano': "  L := IfThen(X = '', '(none)', X);",
     'un contenedor creado o borrado a mano': "  CreaContenedor('x', AC);",

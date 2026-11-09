@@ -49,6 +49,8 @@ type
     function BuildToolCallResponse(const ResultValue: TValue): TJSONObject;
     function BuildToolListResponse: TJSONObject;
     function CreateToolJSON(const Tool: IMCPTool): TJSONObject;
+    // [local change 1.29.1] el cuerpo de CallTool, que lo envuelve con CallEnded
+    function CallToolDentro(const Params: System.JSON.TJSONObject): TValue;
   private
     FTools: TDictionary<string, IMCPTool>;
     procedure RegisterTool(const Tool: IMCPTool);
@@ -76,6 +78,10 @@ type
     class var ListFilter: TToolListFilter;
     // [local change 2026-09-28] see TToolDecorator
     class var ToolDecorator: TToolDecorator;
+    // [local change 1.29.1] al acabar CADA tools/call, pase lo que pase (una
+    // negativa de la puerta, una excepcion, un resultado que no es texto): el
+    // host suelta lo que la llamada apunto al pasar la puerta (Lsp.EnCurso)
+    class var CallEnded: TProc;
   end;
 
 implementation
@@ -484,6 +490,16 @@ begin
 end;
 
 function TMCPToolsManager.CallTool(const Params: System.JSON.TJSONObject): TValue;
+begin
+  try
+    Result := CallToolDentro(Params);
+  finally
+    if Assigned(CallEnded) then
+      CallEnded();
+  end;
+end;
+
+function TMCPToolsManager.CallToolDentro(const Params: System.JSON.TJSONObject): TValue;
 var
   Arguments: TJSONObject;
   ResultValue: TValue;

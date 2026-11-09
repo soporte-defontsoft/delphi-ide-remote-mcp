@@ -108,6 +108,14 @@ function ComandoQueLee(const ATool, ACmd: string): Boolean;
   LecturaDenegada y el suelo no la podia usar. }
 function LlamadaLee(const AToolName: string; const AArguments: TJSONObject;
   out AQue: string): Boolean;
+{ Las rutas ABSOLUTAS que nombra una llamada: cada texto de cada parametro
+  marcado [RutaDelServidor] (tambien los de una lista de rutas), como los
+  juzga el suelo (RutaQueSeJuzga: la carpeta de un comodin), salvo el de un
+  comando cuya ruta es lo que el proyecto DICE ([NombreSiComando]). Ya pasadas
+  por la entrada: unidades virtuales traducidas y alargadas. Con las piezas
+  del suelo (ArgPathOutsideDenied): lo pregunta el registro de las
+  operaciones en curso (Lsp.EnCurso, R3 de la 1.29.1). }
+function RutasDeLaLlamada(const AToolName: string; const AArguments: TJSONObject): TArray<string>;
 function LecturaDenegada(const AToolName: string; const AArguments: TJSONObject): string;
 { Lo que tools/list anuncia de la tool, desde la tabla: annotations
   (readOnlyHint, MCP) y _meta (access: read-only | read-write | mixed;
@@ -639,6 +647,27 @@ begin
         Exit;
     end;
     end;
+  end;
+end;
+
+function RutasDeLaLlamada(const AToolName: string; const AArguments: TJSONObject): TArray<string>;
+var
+  I: Integer;
+  P: TJSONPair;
+  V: string;
+begin
+  Result := [];
+  if not Assigned(AArguments) then
+    Exit;
+  for I := 0 to AArguments.Count - 1 do
+  begin
+    P := AArguments.Pairs[I];
+    var Clave := ClaveDeParam(AToolName, P.JsonString.Value);
+    if not RutasNuestras.ContainsKey(Clave) or EsNombreConEsteComando(AToolName, AArguments, Clave) then
+      Continue;
+    for V in CadenasDeValor(P.JsonValue) do
+      if (V.Trim <> '') and EsRutaAbsoluta(V) then
+        Result := Result + [RutaQueSeJuzga(Clave, V)];
   end;
 end;
 
