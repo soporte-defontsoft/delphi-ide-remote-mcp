@@ -56,6 +56,19 @@ the MCP `initialize` response (`serverInfo.version`).
   in time and the server still exits clean, and an insert waiting on a row another
   session holds is cancelled by its timeout and answered.
 
+### Changed
+
+- **Operators: the database connections file changes.** What an agent may do in each
+  database is now ONE key, `"access"`: `"read"` (only reads), `"write"` (also inserts,
+  updates and deletes) or `"create"` (also creates tables and views). In 1.29.0 it was two
+  yes/no keys, `readonly` and `allowCreate`, with a combination that made no sense
+  (`readonly: true` with `allowCreate: true`). An entry that still has either of them, or
+  no `access`, is not used, and `delphi_db connections` lists it under `unusable` saying
+  why: change `"readonly": true` to `"access": "read"`, `"readonly": false` to
+  `"access": "write"`, and `"readonly": false` with `"allowCreate": true` to
+  `"access": "create"`. `connections` shows each database's `access` instead of the two
+  keys; the example in the zip and `docs/CONFIGURATION.md` use the new key.
+
 ### Security
 
 - The DLLs the server loads come from its own folder, `System32` and the folders it adds -

@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """delphi_db 1.29 (C5, DB-P6): create-table y create-view, en MSSQL y PostgreSQL, solo donde el json de conexiones
-da allowCreate:true (y readonly:false). El SQL de una tabla lo compone EL generador de FireDAC para cada motor
+da access create (1.29.1: eran readonly:false + allowCreate:true). El SQL de una tabla lo compone EL generador de FireDAC para cada motor
 (GenerateCreateTable, sin goSkipUnsupTypes: un tipo que el motor no tiene lo niega el, no se salta); el de una
 vista es CREATE VIEW <vista> AS SELECT <campos> FROM <tabla>, sin filtros (un WHERE pediria literales y las macros
 de texto de FireDAC dejan el SQL sin cerrar con una comilla: medido el 7-nov-2026 con la sonda MideDdl129). Nunca
@@ -10,8 +10,8 @@ DROP ni ALTER: un nombre que ya existe se niega.
       una columna 'real' - palabra reservada que el generador cita -): la respuesta da el SQL ejecutado, tables la
       lista, fields la lee como la nombra la base, y un insert sin id le da su clave. ROJO contra 166bea8b (no habia
       create-table: DB-006)
-  S2  el permiso: sin allowCreate DB-023; con readonly:true DB-017 (el de leer manda); allowCreate que no es
-      true/false = la entrada no se usa (unusable); connections dice allowCreate como vale
+  S2  el permiso: con access write DB-023; con access read DB-017 (el de leer manda); un access que no es
+      read/write/create = la entrada no se usa (unusable); connections dice el access de cada una
   S3  un nombre que ya es una tabla o una vista: DB-024, nada cambia
   S4  un tipo que el motor no tiene (MSSQL: dtTimeIntervalFull; PG: dtCursorRef): DB-010 con el -353 de FireDAC y
       la tabla no existe (tampoco su otra columna)
@@ -40,13 +40,13 @@ TITULO = 'delphi_db 1.29 (create-table y create-view, MSSQL y PG)'
 BASE, JAIL, SRV, EXE, MS, PG = arnes.prepara('db_estructura_129', TITULO)
 SECRETOS = arnes.secretos(MS, PG)
 arnes.escribe_conexiones(SRV, {
-    'mssql': arnes.entrada(MS, readonly=False, allowCreate=True),
-    'pg': arnes.entrada(PG, readonly=False, allowCreate=True),
-    'mssql_sin': arnes.entrada(MS, readonly=False),
-    'pg_sin': arnes.entrada(PG, readonly=False),
-    'mssql_ro': arnes.entrada(MS, readonly=True, allowCreate=True),
-    'pg_ro': arnes.entrada(PG, readonly=True, allowCreate=True),
-    'mala': arnes.entrada(MS, readonly=False, allowCreate='si')})
+    'mssql': arnes.entrada(MS, access='create'),
+    'pg': arnes.entrada(PG, access='create'),
+    'mssql_sin': arnes.entrada(MS, access='write'),
+    'pg_sin': arnes.entrada(PG, access='write'),
+    'mssql_ro': arnes.entrada(MS, access='read'),
+    'pg_ro': arnes.entrada(PG, access='read'),
+    'mala': arnes.entrada(MS, access='si')})
 LIMPIA_MS = ''.join("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP VIEW dbo.%s; " % (v, v)
                     for v in (VISTA, VISTA_TODA, VISTA_MIXTA)) + \
     ''.join("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; " % (t, t) for t in (TABLA, RARA, MIXTA))
@@ -86,13 +86,13 @@ try:
     con = mc.como_json(db({'command': 'connections'})) or {}
     bases = {b.get('db'): b for b in con.get('databases') or []}
     P = arnes.PROYECTO + '/'
-    check('S2 connections: allowCreate como vale (si con permiso; no sin el, ni con readonly:true)',
-          bases.get(P + 'mssql', {}).get('allowCreate') is True and bases.get(P + 'pg', {}).get('allowCreate') is True
-          and bases.get(P + 'mssql_sin', {}).get('allowCreate') is False
-          and bases.get(P + 'pg_ro', {}).get('allowCreate') is False, json.dumps(con)[:600])
+    check('S2 connections: el access de cada una (create, write, read)',
+          bases.get(P + 'mssql', {}).get('access') == 'create' and bases.get(P + 'pg', {}).get('access') == 'create'
+          and bases.get(P + 'mssql_sin', {}).get('access') == 'write'
+          and bases.get(P + 'pg_ro', {}).get('access') == 'read', json.dumps(con)[:600])
     malas = {u.get('db'): u.get('why', '') for u in con.get('unusable') or []}
-    check('S2 allowCreate que no es true/false: la entrada no se usa y dice por que',
-          mc.catalogo()['SF_DB_DEF_CREAR'] in malas.get(P + 'mala', ''), json.dumps(con)[:600])
+    check('S2 un access que no es read/write/create: la entrada no se usa y dice por que',
+          mc.catalogo()['SF_DB_DEF_ACCESO'] in malas.get(P + 'mala', ''), json.dumps(con)[:600])
 
     for motor in [m for m in ('mssql', 'pg') if hay[m]]:
         D = P + motor
@@ -130,10 +130,10 @@ try:
 
         # ------------------------------------------------------------------ S2
         r = crea('t_db129c_sin', [{'name': 'id', 'type': 'dtInt32'}], D + '_sin')
-        check('S2 %s sin allowCreate: DB-023 y no existe' % motor,
+        check('S2 %s con access write: DB-023 y no existe' % motor,
               mc.abre(r, 'SR_DB_SIN_CREAR_FMT') and 't_db129c_sin' not in tablas()[0], r[:300])
         r = crea('t_db129c_ro', [{'name': 'id', 'type': 'dtInt32'}], D + '_ro')
-        check('S2 %s readonly:true aunque diga allowCreate: DB-017 y no existe' % motor,
+        check('S2 %s con access read: DB-017 y no existe' % motor,
               mc.abre(r, 'SR_DB_SOLO_LECTURA_FMT') and 't_db129c_ro' not in tablas()[0], r[:300])
 
         # ------------------------------------------------------------------ S3

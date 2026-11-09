@@ -10,7 +10,7 @@
             "database": "SalesHistory",
             "user": "mcp_reader",
             "password": "change-me",
-            "readonly": true
+            "access": "read"
           },
           "staging": {
             "engine": "PG",
@@ -20,8 +20,7 @@
             "database": "sales_staging",
             "user": "mcp_writer",
             "password": "change-me-too",
-            "readonly": false,
-            "allowCreate": true
+            "access": "create"
           }
         }
       }

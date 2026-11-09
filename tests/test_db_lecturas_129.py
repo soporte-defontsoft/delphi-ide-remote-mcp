@@ -47,13 +47,13 @@ NOMBRES = ['Ana 50%', 'ana_b', 'BETO', chr(0xC1) + 'nade', 'CASA', 'casa\\x']
 BASE, JAIL, SRV, EXE, MS, PG = arnes.prepara('db_lecturas_129', 'delphi_db 1.29 (lecturas)')
 SECRETOS = arnes.secretos(MS, PG)
 arnes.escribe_conexiones(SRV, {
-    'mssql': arnes.entrada(MS, readonly=True),
-    'pg': arnes.entrada(PG, readonly=True),
+    'mssql': arnes.entrada(MS, access='read'),
+    'pg': arnes.entrada(PG, access='read'),
     'caida': {'server': '192.0.2.1', 'database': 'x', 'user': 'x', 'password': 'x', 'engine': 'MSSQL',
-              'provider': 'FIREDAC', 'readonly': True},
-    'pg_mala': arnes.entrada(PG, password='clave-mal-129', readonly=True),
-    'pg_sin_clave': arnes.entrada(PG, password='', readonly=True),
-    'pg_local': arnes.entrada(PG, server='localhost', port='59999', readonly=True)})
+              'provider': 'FIREDAC', 'access': 'read'},
+    'pg_mala': arnes.entrada(PG, password='clave-mal-129', access='read'),
+    'pg_sin_clave': arnes.entrada(PG, password='', access='read'),
+    'pg_local': arnes.entrada(PG, server='localhost', port='59999', access='read')})
 
 
 def nombre_del_host(ip):
@@ -70,7 +70,7 @@ if NOMBRE_PG:
     arnes.escribe_conexiones(SRV, dict(json.load(io.open(os.path.join(
         SRV, 'connections', 'databases', 'db-connections.json'), encoding='utf-8'))['db-connections']['projects'][
         arnes.PROYECTO]['databases'], pg_nombrado=arnes.entrada(PG, server=NOMBRE_PG, database='nope_l14',
-                                                               readonly=True)))
+                                                               access='read')))
 
 
 def direcciones(texto):

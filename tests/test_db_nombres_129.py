@@ -28,9 +28,9 @@ TABLA = 't_db129n'
 TITULO = 'delphi_db 1.29 (nombres: order con espacios, etiquetas de summary, entradas)'
 BASE, JAIL, SRV, EXE, MS, PG = arnes.prepara('db_nombres_129', TITULO)
 arnes.escribe_conexiones(SRV, {
-    'mssql': arnes.entrada(MS, readonly=True),
-    'pg': arnes.entrada(PG, readonly=True),
-    'mal/alias': arnes.entrada(MS, readonly=True)})
+    'mssql': arnes.entrada(MS, access='read'),
+    'pg': arnes.entrada(PG, access='read'),
+    'mal/alias': arnes.entrada(MS, access='read')})
 FILAS = "(1, '2026-01-10', 5, 'a'), (2, '2026-03-01', 7, 'b'), (3, '2026-02-15', 5, 'a')"
 CREA_MS = ("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; CREATE TABLE dbo.%s (id int PRIMARY KEY, "
            "[Fecha Alta] date, n int, grupo nvarchar(10)); INSERT INTO dbo.%s VALUES %s;"

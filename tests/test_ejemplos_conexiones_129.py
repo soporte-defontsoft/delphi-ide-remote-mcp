@@ -7,13 +7,13 @@ modo que un ejemplo que el servidor no usaria entero, o que se aleja de lo que l
 una sorpresa del operador. No se conecta a nada: las direcciones son de example.internal / example.com.
 
   X1 los dos ejemplos son JSON y estan en el repo donde el zip los toma
-  X2 delphi_db connections: todas las bases del ejemplo usables (ninguna en unusable), con su motor y
-     readonly, y la que lo declara con allowCreate
+  X2 delphi_db connections: todas las bases del ejemplo usables (ninguna en unusable), con su motor y su
+     access, y el ejemplo ensena los niveles que escriben (write o create)
   X3 delphi_api connections: todas las APIs del ejemplo usables, con sus metodos
   X4 ningun valor del ejemplo que el agente no debe ver sale en las respuestas (servidor, base, usuario,
      contrasena, URL base, credenciales)
   X5 lo que el ejemplo declara son TODAS las claves que el lector lee (una clave nueva del lector sin su
-     linea en el ejemplo es un ejemplo que se queda atras)
+     linea en el ejemplo es un ejemplo que se queda atras), y NINGUNA de las retiradas (CLAVES_RETIRADAS_DB)
 
 Uso:  python tests/test_ejemplos_conexiones_129.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -62,13 +62,12 @@ try:
         for p in proyectos_db:
             for alias, e in ((db['db-connections']['projects'][p] or {}).get('databases') or {}).items():
                 declaradas['%s/%s' % (p, alias)] = e
-        check('X2 delphi_db connections: todas las bases del ejemplo usables, con su motor y readonly',
+        check('X2 delphi_db connections: todas las bases del ejemplo usables, con su motor y su access',
               declaradas and set(bases) == set(declaradas) and not j.get('unusable')
-              and all(bases[n].get('engine') == e.get('engine') and bases[n].get('readonly') is e.get('readonly')
+              and all(bases[n].get('engine') == e.get('engine') and bases[n].get('access') == e.get('access')
                       for n, e in declaradas.items()), r[:600])
-        check('X2 ...y el ejemplo ensena allowCreate en una base que escribe',
-              any(e.get('allowCreate') is True and e.get('readonly') is False for e in declaradas.values()),
-              list(declaradas))
+        check('X2 ...y el ejemplo ensena una base que lee y una que escribe y crea',
+              {'read', 'create'} <= {e.get('access') for e in declaradas.values()}, list(declaradas))
         r2 = srv.call('delphi_api', {'command': 'connections'})
         j2 = mc.como_json(r2)
         apis = {x.get('api'): x for x in j2.get('apis', [])}
@@ -95,6 +94,8 @@ try:
     # X5: las claves que lee Lsp.Conexiones (Campo / GetValue de un literal), contra las del ejemplo
     fuente = io.open(os.path.join(REPO, 'src', 'Server', 'Lsp.Conexiones.pas'), encoding='utf-8-sig').read()
     leidas = set(re.findall(r"(?:Campo\([A-Za-z]+(?:\([A-Za-z]+\))?, |GetValue\()'([A-Za-z]+)'\)", fuente))
+    m = re.search(r'CLAVES_RETIRADAS_DB:[^=]*=\s*\(([^)]*)\)', fuente)
+    retiradas = set(re.findall(r"'([A-Za-z]+)'", m.group(1))) if m else set()
     en_ejemplo = set()
 
     def claves(o):
@@ -109,6 +110,8 @@ try:
     claves(api)
     check('X5 el ejemplo declara todas las claves que el lector lee (%d)' % len(leidas),
           len(leidas) > 10 and not (leidas - en_ejemplo), sorted(leidas - en_ejemplo))
+    check('X5 ...y ninguna de las retiradas (%s)' % sorted(retiradas),
+          retiradas and not (retiradas & en_ejemplo), sorted(retiradas & en_ejemplo))
 finally:
     mc.borra(BASE)
 mc.fin('los ejemplos de conexiones del zip, por el lector (1.29)')

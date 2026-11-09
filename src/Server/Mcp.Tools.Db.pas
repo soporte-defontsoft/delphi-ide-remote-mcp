@@ -11,7 +11,7 @@
   aparte con el porque (un fragmento: un SR_ no va en un campo JSON).
   Segunda: tables, fields, rows y summary, en una transaccion que se
   deshace. Tercera: insert, update y delete, solo donde el json dice
-  readonly:false (la primera barrera, antes de conectar), y update y delete
+  access write o create (la primera barrera, antes de conectar), y update y delete
   solo con filters (tampoco una lista vacia: tocaria todas las filas).
   Todas, con plazo para la llamada ENTERA (EnLaBase): la base que abre y
   calla a mitad ya no deja a quien llama esperando sin fin (CH11). }
@@ -157,8 +157,8 @@ type
   TOperacionDb = reference to function(const S: TSesionDb; const P: TDelphiDbParams): string;
 
   { Lo que una orden pide de la base: leer, escribir filas (donde el json dice
-    readonly:false) o crear tablas y vistas (ademas allowCreate:true, C5 de la
-    1.29). }
+    access write o create) o crear tablas y vistas (solo access create; los tres
+    niveles de ACCESOS_DB, Lsp.Conexiones). }
   TAccesoDb = (adLee, adEscribe, adCrea);
 
 function EsTexto(T: TFieldType): Boolean;
@@ -311,7 +311,7 @@ end;
 { La base que nombra ADb, abierta, o la negativa: de la sesion, usable, y la
   conexion con su plazo (Lsp.BaseDeDatos.AbreBase). Para escribir o crear
   (AAcceso), una que el json no declara de solo lectura, y para crear, una a
-  la que da allowCreate: la primera barrera, antes de conectar. }
+  la que da access=create: la primera barrera, antes de conectar. }
 function AbreLaBase(const ACmd, ADb: string; AAcceso: TAccesoDb; out S: TSesionDb): string;
 var
   Por: string;
@@ -1211,7 +1211,7 @@ begin
   end;
 end;
 
-{ insert, update y delete (ACmd): solo donde el json dice readonly:false (lo
+{ insert, update y delete (ACmd): solo donde el json no dice access=read (lo
   niega AbreLaBase antes de conectar), y update y delete solo con filters que
   seleccionen algo. La sentencia la compone el servidor como las lecturas
   (nombres del catalogo citados por FireDAC, valores por parametro tipado) y
@@ -1655,9 +1655,8 @@ begin
         Bases.AddElement(B);
         B.AddPair('db', NombreDeConexion(C));
         B.AddPair('engine', C.Motor);
-        B.AddPair('readonly', TJSONBool.Create(C.SoloLectura));
-        // lo que vale: con readonly:true no se crea aunque lo diga
-        B.AddPair('allowCreate', TJSONBool.Create(C.CreaObjetos and not C.SoloLectura));
+        // su nivel, el valor que el lector acepto (read | write | create)
+        B.AddPair('access', C.Acceso);
       end
       else
         ApuntaConexionInutil(R, Inutiles, 'db', NombreDeConexion(C), Por);

@@ -4719,16 +4719,18 @@ const
   SF_DB_DEF_SIN_MOTOR = 'it has no "engine" (the FireDAC driver: MSSQL, PG...)';
   // %s = el provider que declara
   SF_DB_DEF_PROVEEDOR_FMT = 'its provider is "%s", and this server connects through FIREDAC only';
-  SF_DB_DEF_SOLO_LECTURA = 'its "readonly" is not true or false';
-  SF_DB_DEF_CREAR = 'its "allowCreate" is not true or false';
+  SF_DB_DEF_ACCESO = 'its "access" is not read, write or create';
+  SF_DB_DEF_CLAVES_VIEJAS =
+    'it still says "readonly" or "allowCreate", which became one "access": ' +
+    'read | write | create (1.29.1)';
   // %s = el motor declarado, %s = los que tiene el servidor
   SF_DB_DEF_MOTOR_FMT = 'its engine "%s" is not one this server has (%s)';
 
   SN_DB_CONNECTIONS =
     '[DB-005] Your databases: "db" is the name every other command of ' +
     'delphi_db takes. The server, the credentials and the real database ' +
-    'stay with the operator. readonly=true only reads; allowCreate=true may ' +
-    'also create tables and views.';
+    'stay with the operator. access=read only reads; write also inserts, ' +
+    'updates and deletes; create also makes tables and views.';
 
   SR_DB_COMANDO =
     '[DB-006 INVALID_PARAM] Command must be connections | tables | fields | ' +
@@ -4825,8 +4827,8 @@ const
     'out. Nothing was done.';
   // %s = la base, %s = el comando
   SR_DB_SOLO_LECTURA_FMT =
-    '[DB-017 DENIED] The database "%s" is read-only (so the operator ' +
-    'declared it), and command=%s writes. Nothing was done.';
+    '[DB-017 DENIED] The database "%s" is read-only (the operator declared ' +
+    'it access=read), and command=%s writes. Nothing was done.';
   SF_DB_AGREGADO_FORMA =
     'each entry is {"field": ..., "op": sum | avg | min | max | count}';
   // %s = el campo
@@ -4857,7 +4859,7 @@ const
   // %s = la base, %s = el comando
   SR_DB_SIN_CREAR_FMT =
     '[DB-023 DENIED] The database "%s" does not allow creating tables or ' +
-    'views (the operator did not declare allowCreate:true for it), and ' +
+    'views (the operator did not declare it access=create), and ' +
     'command=%s creates. Nothing was done.';
   // %s = el nombre, %s = la base
   SR_DB_YA_EXISTE_FMT =
@@ -4900,22 +4902,22 @@ const
     (en mcp_pruebas, un agente no sabia si estaba vacia o no la veia) }
   SN_DB_SIN_TABLAS_FMT =
     '[DB-029] Schema "%s" (the connection''s) has no tables or views. ' +
-    'create-table makes one where allowCreate is set; otherwise they are the ' +
+    'create-table makes one where its access is create; otherwise they are the ' +
     'operator''s to create.';
 
   SD_DB =
     'The databases the operator gave this workspace, by NAME and through ' +
     'operations: you never write SQL, the server composes it. connections ' +
     'lists them ("db" = ' +
-    'project/alias, engine, readonly; misdeclared in "unusable"); ' +
+    'project/alias, engine, access; misdeclared in "unusable"); ' +
     'tables and fields, what one holds (fields also ' +
     'defaults, foreign keys and indexes); rows reads (filters, fields, order, ' +
     'limit/offset, always the total); summary groups and adds up; insert, ' +
-    'update and delete write where readonly=false and say how many rows ' +
+    'update and delete write unless access=read and say how many rows ' +
     'changed (insert: also the row); update and ' +
     'delete need filters, at most max rows; ' +
     'create-table and create-view make new ones where ' +
-    'allowCreate is set (nothing dropped or altered).';
+    'access=create (nothing dropped or altered).';
   SP_DB_COMMAND =
     'connections (the default) | tables | fields | rows | summary | insert | ' +
     'update | delete | create-table | create-view.';

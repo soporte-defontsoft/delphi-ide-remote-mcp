@@ -15,32 +15,45 @@
   nombre en lo que vuelve de la base.
 
   Lo decidido por David (5 y 6-nov-2026): las credenciales en claro en el
-  servidor; se conecta SOLO con lo que dice el json; escribir o no lo dice
-  el "readonly" del json, no los permisos del login. Sin "readonly", o con
-  algo que no es true/false, la entrada no se usa (falla cerrado). Crear
-  tablas y vistas, su "allowCreate" (C5 de la 1.29: opcional, falta = no).
+  servidor; se conecta SOLO con lo que dice el json; lo que se puede hacer lo
+  dice el "access" del json, no los permisos del login: read (solo leer),
+  write (y escribir filas) o create (y crear tablas y vistas). Hasta la 1.29.0
+  eran dos si/no, "readonly" y "allowCreate", con una combinacion imposible
+  (readonly:true y allowCreate:true); David, 9-nov: uno, con sus tres niveles.
+  Sin "access", con otro valor o con las claves viejas, la entrada no se usa
+  y dice por que (falla cerrado).
 
   LAS APIS CON NOMBRE (1.29, delphi_api): el mismo lector y el mismo
   recorrido (RecorreConexiones) sobre su propio fichero, abierto a cada
   workspace con ApiAllowedProjects=. El agente ve <proyecto>/<alias> y sus
   metodos; la URL base, la credencial y el pin se quedan con el operador, y
   EnmascaraApi los tapa en lo que vuelve. Sin "methods" la entrada no se usa
-  (falla cerrado, como sin "readonly"). }
+  (falla cerrado, como sin "access"). }
 
 interface
 
 uses
   System.JSON; // ApuntaConexionInutil: la lista de las que no se usan
 
+const
+  { Los niveles de "access" de una base, de menos a mas: LA lista del lector
+    (ConexionDe) y de lo que connections ensena. Formato nuestro (el del
+    json del operador), sin juez fuera }
+  ACCESOS_DB: array[0..2] of string = ('read', 'write', 'create');
+  { Las claves de una base que una version anterior leia y esta ya no: las dos
+    si/no de la 1.29.0 que la 1.29.1 dejo en "access". Una entrada que aun las
+    trae no se usa y dice por que (SF_DB_DEF_CLAVES_VIEJAS); el ejemplo del zip
+    no puede traerlas (X5 de test_ejemplos_conexiones_129) }
+  CLAVES_RETIRADAS_DB: array[0..1] of string = ('readonly', 'allowCreate');
+
 type
   TConexionDb = record
     Proyecto: string;     // la clave del proyecto en el json
     Alias: string;        // la clave de la base dentro de su proyecto
     Motor: string;        // "engine": el DriverID de FireDAC (MSSQL, PG...)
-    SoloLectura: Boolean; // "readonly"
-    // "allowCreate": crear tablas y vistas (C5 de la 1.29); sin el, no; con
-    // readonly:true tampoco
-    CreaObjetos: Boolean;
+    Acceso: string;       // "access", uno de ACCESOS_DB ('' si no vale)
+    SoloLectura: Boolean; // access = read (o no vale: falla cerrado)
+    CreaObjetos: Boolean; // access = create
     Servidor: string;     // "server"
     Base: string;         // "database": la base REAL
     Usuario: string;      // "user"
@@ -276,7 +289,6 @@ end;
 
 function ConexionDe(const AProyecto, AAlias: string; const AObj: TJSONObject): TConexionDb;
 var
-  Ro: TJSONValue;
   Prov: string;
 begin
   Result := Default(TConexionDb);
@@ -298,18 +310,22 @@ begin
   Result.Clave := Campo(AObj, 'password');
   Result.Puerto := Campo(AObj, 'port').Trim;
   Prov := Campo(AObj, 'provider').Trim;
-  Ro := AObj.GetValue('readonly');
-  if Ro is TJSONBool then
-    Result.SoloLectura := TJSONBool(Ro).AsBoolean
+  // el nivel: uno de ACCESOS_DB, tal cual (un texto); otro, o ninguno, no se
+  // adivina y la entrada no se usa
+  var Nivel := IndexText(Campo(AObj, 'access').Trim, ACCESOS_DB);
+  if Nivel >= 0 then
+  begin
+    Result.Acceso := ACCESOS_DB[Nivel];
+    Result.SoloLectura := Nivel = 0;
+    Result.CreaObjetos := Nivel = 2;
+  end
   else
-    Result.Defecto := MsgText(SF_DB_DEF_SOLO_LECTURA);
-  // el de crear es opcional (falta = no), pero uno que no es true/false no se
-  // adivina: la entrada no se usa, como con readonly
-  var Crea := AObj.GetValue('allowCreate');
-  if Crea is TJSONBool then
-    Result.CreaObjetos := TJSONBool(Crea).AsBoolean
-  else if Crea <> nil then
-    Result.Defecto := MsgText(SF_DB_DEF_CREAR);
+    Result.Defecto := MsgText(SF_DB_DEF_ACCESO);
+  // ...y las claves retiradas se dicen, no se traducen: una entrada a medio
+  // pasar (access y readonly) seria una segunda forma de decirlo
+  for var Vieja in CLAVES_RETIRADAS_DB do
+    if AObj.GetValue(Vieja) <> nil then
+      Result.Defecto := MsgText(SF_DB_DEF_CLAVES_VIEJAS);
   if Result.Motor = '' then
     Result.Defecto := MsgText(SF_DB_DEF_SIN_MOTOR)
   else if (Prov <> '') and not SameText(Prov, PROVEEDOR_FIREDAC) then

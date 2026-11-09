@@ -881,7 +881,7 @@ begin
   // fields, rows y summary leen la base (en una transaccion que se deshace);
   // lo que no esta en la lista se niega a una credencial de lectura, cerrado:
   // insert, update y delete escriben (y la tool, ademas, solo donde el json
-  // de conexiones dice readonly:false)
+  // de conexiones no dice access=read)
   AnadeAcceso('delphi_db', atMixta, ['connections', 'tables', 'fields', 'rows', 'summary']);
   // las APIs con nombre (1.29): connections lee la configuracion; request LEE
   // con GET, HEAD u OPTIONS y sin out= (MetodoQueLee, Lsp.Conexiones: la MISMA

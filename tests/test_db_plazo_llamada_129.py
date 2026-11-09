@@ -41,10 +41,10 @@ BASE, JAIL, SRV, EXE, MS, PG = arnes.prepara('db_plazo_llamada_129', TITULO)
 SECRETOS = arnes.secretos(MS, PG)
 PX = arnes.ProxyPg((PG['server'], int(PG.get('port') or 5432)))
 arnes.escribe_conexiones(SRV, {
-    'pg': arnes.entrada(PG, readonly=True),
-    'pgx': arnes.entrada(PG, server='127.0.0.1', port=PX.puerto, readonly=False),
+    'pg': arnes.entrada(PG, access='read'),
+    'pgx': arnes.entrada(PG, server='127.0.0.1', port=PX.puerto, access='write'),
     # P7: la base DIRECTA y con escritura, sin el proxy (su cancelacion va por otra conexion a la base)
-    'pgw': arnes.entrada(PG, readonly=False)})
+    'pgw': arnes.entrada(PG, access='write')})
 D, DX, DW = arnes.PROYECTO + '/pg', arnes.PROYECTO + '/pgx', arnes.PROYECTO + '/pgw'
 DDL = ('DROP TABLE IF EXISTS %s, %s; CREATE TABLE %s (id int PRIMARY KEY, nombre varchar(60)); '
        'CREATE TABLE %s (id serial PRIMARY KEY, nombre varchar(60));' % (TABLA, TABLA_S, TABLA, TABLA_S))

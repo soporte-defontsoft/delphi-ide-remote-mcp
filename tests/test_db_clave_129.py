@@ -12,7 +12,7 @@ tabla que el arnes crea con su SQL.
       defectos. En SQL Server la tabla tiene un trigger que inserta en OTRA con su identidad (desde 1000): la
       clave tiene que ser la de esta fila (lo de SCOPE_IDENTITY y no @@IDENTITY)
   K2c ...y lo que un trigger pone en la PROPIA fila (codigo = 'K-<id>': AFTER INSERT con UPDATE en SQL Server,
-      BEFORE INSERT en PostgreSQL) viene en la fila devuelta, como lo ve el ADO de Galatea tras su Post (David)
+      BEFORE INSERT en PostgreSQL) viene en la fila devuelta, como lo ve un dataset de ADO tras su Post (David)
   K4  un null dado a un campo con valor por defecto escribe NULL, no el defecto
   K5  un insert que la base rechaza (un obligatorio sin dar): DB-010 y nada escrito
   K6  update y delete de MAS filas que su max (por defecto 100): DB-028 con cuantas, y nada cambiado (se deshace
@@ -33,8 +33,8 @@ TK, TL, TN = 't_db129k', 't_db129k_log', 't_db129k_n'
 BASE, JAIL, SRV, EXE, MS, PG = arnes.prepara('db_clave_129', TITULO)
 SECRETOS = arnes.secretos(MS, PG)
 arnes.escribe_conexiones(SRV, {
-    'mssql': arnes.entrada(MS, readonly=False),
-    'pg': arnes.entrada(PG, readonly=False)})
+    'mssql': arnes.entrada(MS, access='write'),
+    'pg': arnes.entrada(PG, access='write')})
 MS_BORRA = ("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE "
             "dbo.%s; IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s;" % (TK, TK, TL, TL, TN, TN))
 MS_DDL = MS_BORRA + (

@@ -8,8 +8,9 @@ servidor, la base real, el usuario ni la contrasena.
   D1 sin proyectos: tools/list no anuncia delphi_db, delphi_help dice su clave, y la llamada DB-002
   D2 con proyectos y sin fichero: DB-001 (no hay fichero)
   D3 un fichero que no es JSON, y uno sin db-connections.projects: DB-001 con su porque
-  D4 connections: las del proyecto permitido, con su motor y readonly; las declaradas mal, en unusable con
-     el porque (sin motor, otro proveedor, motor que el servidor no tiene, readonly que no es true/false);
+  D4 connections: las del proyecto permitido, con su motor y su access; las declaradas mal, en unusable con
+     el porque (sin motor, otro proveedor, motor que el servidor no tiene, access que no es read/write/create,
+     y las dos claves de la 1.29.0, readonly/allowCreate, que la 1.29.1 dejo en un access);
      las de un proyecto NO permitido, en ninguna parte
   D5 ...y ningun secreto del json en la respuesta (servidor, base real, usuario, contrasena, puerto)
   D6 el comodin (*) abre todos los proyectos
@@ -34,7 +35,7 @@ SECRETOS = ['SERVIDOR-SECRETO-129', 'base_real_129', 'usuario_secreto_129', 'cla
 
 
 def entrada(**kw):
-    e = {'server': SECRETOS[0] + '\\INSTANCIA', 'database': SECRETOS[1], 'readonly': True, 'user': SECRETOS[2],
+    e = {'server': SECRETOS[0] + '\\INSTANCIA', 'database': SECRETOS[1], 'access': 'read', 'user': SECRETOS[2],
          'port': SECRETOS[4], 'engine': 'MSSQL', 'provider': 'FIREDAC', 'password': SECRETOS[3]}
     e.update(kw)
     return {k: v for k, v in e.items() if v is not None}
@@ -49,11 +50,13 @@ def escribe_conexiones(datos):
 CONEXIONES = {'db-connections': {'projects': {
     'pruebas': {'databases': {
         'buena': entrada(),
-        'escribe': entrada(engine='PG', readonly=False),
+        'escribe': entrada(engine='PG', access='write'),
+        'crea': entrada(access='create'),
         'sinmotor': entrada(engine=None),
         'otroprov': entrada(provider='ADO'),
         'motorraro': entrada(engine='Ora'),
-        'ro_texto': entrada(readonly='yes')}},
+        'ro_texto': entrada(access='yes'),
+        'viejas': entrada(access=None, readonly=False, allowCreate=True)}},
     'ajeno': {'databases': {'oculta': entrada()}}}}}
 
 
@@ -101,16 +104,20 @@ try:
         j = mc.como_json(r)
         bases = {b.get('db'): b for b in j.get('databases', [])}
         malas = {u.get('db'): u.get('why', '') for u in j.get('unusable', [])}
-        check('D4 connections: las buenas del proyecto permitido, con su motor y readonly',
-              set(bases) == {'pruebas/buena', 'pruebas/escribe'}
-              and bases['pruebas/buena'].get('engine') == 'MSSQL' and bases['pruebas/buena'].get('readonly') is True
-              and bases['pruebas/escribe'].get('engine') == 'PG' and bases['pruebas/escribe'].get('readonly') is False
+        check('D4 connections: las buenas del proyecto permitido, con su motor y su access',
+              set(bases) == {'pruebas/buena', 'pruebas/escribe', 'pruebas/crea'}
+              and bases['pruebas/buena'].get('engine') == 'MSSQL' and bases['pruebas/buena'].get('access') == 'read'
+              and bases['pruebas/escribe'].get('engine') == 'PG' and bases['pruebas/escribe'].get('access') == 'write'
+              and bases['pruebas/crea'].get('access') == 'create'
+              and not any('readonly' in b or 'allowCreate' in b for b in bases.values())
               and mc.es(j.get('note', ''), 'SN_DB_CONNECTIONS'), r[:600])
         check('D4 ...las declaradas mal, en unusable con su porque',
-              set(malas) == {'pruebas/sinmotor', 'pruebas/otroprov', 'pruebas/motorraro', 'pruebas/ro_texto'}
+              set(malas) == {'pruebas/sinmotor', 'pruebas/otroprov', 'pruebas/motorraro', 'pruebas/ro_texto',
+                             'pruebas/viejas'}
+              and malas['pruebas/viejas'] == cat['SF_DB_DEF_CLAVES_VIEJAS']
               and malas['pruebas/sinmotor'] == cat['SF_DB_DEF_SIN_MOTOR']
               and 'ADO' in malas['pruebas/otroprov'] and 'Ora' in malas['pruebas/motorraro']
-              and 'MSSQL' in malas['pruebas/motorraro'] and malas['pruebas/ro_texto'] == cat['SF_DB_DEF_SOLO_LECTURA'],
+              and 'MSSQL' in malas['pruebas/motorraro'] and malas['pruebas/ro_texto'] == cat['SF_DB_DEF_ACCESO'],
               malas)
         check('D4 ...las de un proyecto NO permitido, en ninguna parte', 'ajeno' not in r, r[:600])
         check('D5 ...y ningun secreto del json en la respuesta', not [s for s in SECRETOS if s.lower() in r.lower()],

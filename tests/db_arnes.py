@@ -44,9 +44,14 @@ def prepara(nombre, titulo):
     return base, jail, srv, exe, e['mssql'], e['pg']
 
 
+CLAVES_DE_CONEXION = ('engine', 'provider', 'server', 'port', 'database', 'user', 'password')
+
+
 def entrada(base, **kw):
-    """Una entrada del json: la de base con lo que cambie kw."""
-    e = dict(base)
+    """Una entrada del json: COMO conectar, de base (el json de produccion), y lo que diga kw; lo que se puede hacer
+    (access) lo pone cada bateria. Copiaba la entrada entera, y el readonly de produccion junto al access de la
+    bateria eran dos formas a la vez: la entrada no se usaba (1.29.1, medido)."""
+    e = {k: v for k, v in base.items() if k in CLAVES_DE_CONEXION}
     e.update(kw)
     return e
 

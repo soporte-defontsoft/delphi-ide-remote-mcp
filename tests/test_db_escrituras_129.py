@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """delphi_db (1.29), tercera parte: las ESCRITURAS (insert, update, delete) contra bases reales, en los DOS
-motores enlazados (MSSQL y PostgreSQL), solo donde el json de conexiones dice readonly:false. El agente nunca
+motores enlazados (MSSQL y PostgreSQL), solo donde el json de conexiones dice access write. El agente nunca
 escribe SQL: nombra la tabla y los campos (del catalogo), da los valores (parametros tipados por su campo) y
 los filtros; el servidor compone y FireDAC traduce. Las bases y su arnes, en db_arnes.
 
@@ -37,12 +37,12 @@ TITULO = 'delphi_db 1.29 (escrituras, MSSQL y PG)'
 BASE, JAIL, SRV, EXE, MS, PG = arnes.prepara('db_escrituras_129', TITULO)
 SECRETOS = arnes.secretos(MS, PG)
 arnes.escribe_conexiones(SRV, {
-    'mssql': arnes.entrada(MS, readonly=False),
-    'pg': arnes.entrada(PG, readonly=False),
-    'mssql_ro': arnes.entrada(MS, readonly=True),
-    'pg_ro': arnes.entrada(PG, readonly=True),
+    'mssql': arnes.entrada(MS, access='write'),
+    'pg': arnes.entrada(PG, access='write'),
+    'mssql_ro': arnes.entrada(MS, access='read'),
+    'pg_ro': arnes.entrada(PG, access='read'),
     'ro_caida': {'server': '192.0.2.1', 'database': 'x', 'user': 'x', 'password': 'x', 'engine': 'MSSQL',
-                 'provider': 'FIREDAC', 'readonly': True}})
+                 'provider': 'FIREDAC', 'access': 'read'}})
 MS_DDL = ("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; CREATE TABLE dbo.%s (id int PRIMARY KEY, nombre "
           "nvarchar(60) NULL, alta datetime2 NULL, importe decimal(10,2) NULL, activo bit NULL, foto varbinary(100) "
           "NULL);" % (TABLA, TABLA, TABLA))
