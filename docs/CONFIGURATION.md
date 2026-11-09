@@ -671,7 +671,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   cannot be written (the client left), the call still finishes and its answer goes to that
   agent's mailbox (`messages\<workspace>\<agent>\`, `SYS-041`): its next answers say mail
   is waiting, and `delphi_messages` delivers it.
-- **`[CORS]` and `[SSL]`** — the HTTP transport. `[CORS] Enabled` (on by default) checks a browser's `Origin` against `AllowedOrigins`; `[SSL] Enabled` (off by default) serves HTTPS with `CertFile`, `KeyFile` and, when the chain needs it, `RootCertFile`. A value of either `Enabled` that is neither yes nor no is taken as on, the closed side. `[Server] Endpoint` (`/mcp`) is the path of the MCP endpoint, and `[Server] Host` (`localhost`) only the name in the URL the server shows: where it listens is `BindIP`.
+- **`[CORS]` and `[SSL]`** — the HTTP transport. `[CORS] Enabled` (on by default) checks a browser's `Origin` against `AllowedOrigins`; `[SSL] Enabled` (off by default) serves HTTPS with `CertFile`, `KeyFile` and, when the chain needs it, `RootCertFile`; the OpenSSL 1.0.2 libraries Indy loads for it (`libeay32.dll`, `ssleay32.dll`, 64-bit) go next to the server's exe - since 1.29.1 the server takes no DLL from the `PATH`. A value of either `Enabled` that is neither yes nor no is taken as on, the closed side. `[Server] Endpoint` (`/mcp`) is the path of the MCP endpoint, and `[Server] Host` (`localhost`) only the name in the URL the server shows: where it listens is `BindIP`.
 - **`[Log]`** — the server's log on disk, the **same in every mode** (service, terminal and
   tray), in `logs\` next to the exe. `logs\actual.log` is the live tail, appended every half
   second, so a process killed from outside loses half a second, not hours. Every

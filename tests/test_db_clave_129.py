@@ -21,6 +21,10 @@ tabla que el arnes crea con su SQL.
   K8  tables de una base sin tablas ni vistas: la nota dice el esquema que miro (DB-029); con tablas, ninguna
       nota. Lo de "sin tablas" lo dice el arnes (si otra bateria dejo las suyas, se dice y no se mide)
   K9  ningun secreto del json en ninguna respuesta
+  K10 un insert en una tabla SIN clave primaria que deja un campo a su defecto: se escribe (la base pone el
+      defecto), sin row y con la nota DB-031. Con la relectura de P3 FireDAC buscaba la fila por todos sus
+      campos, el defecto no casaba y SQL Server contestaba DApt-400 sin escribir nada, donde la 1.29.0 la
+      escribia (hallazgo 9 del revisor de la 1.29.1)
 
 Uso:  python tests/test_db_clave_129.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -29,28 +33,30 @@ import mcp_cliente as mc
 from mcp_cliente import check
 
 TITULO = 'delphi_db 1.29 (clave del insert, defectos, max, esquema vacio; MSSQL y PG)'
-TK, TL, TN = 't_db129k', 't_db129k_log', 't_db129k_n'
+TK, TL, TN, TS = 't_db129k', 't_db129k_log', 't_db129k_n', 't_db129k_s'
 BASE, JAIL, SRV, EXE, MS, PG = arnes.prepara('db_clave_129', TITULO)
 SECRETOS = arnes.secretos(MS, PG)
 arnes.escribe_conexiones(SRV, {
     'mssql': arnes.entrada(MS, access='write'),
     'pg': arnes.entrada(PG, access='write')})
 MS_BORRA = ("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE "
-            "dbo.%s; IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s;" % (TK, TK, TL, TL, TN, TN))
+            "dbo.%s; IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; "
+            "IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s;" % (TK, TK, TL, TL, TN, TN, TS, TS))
 MS_DDL = MS_BORRA + (
     "CREATE TABLE dbo.%s (n int IDENTITY(1000,1) PRIMARY KEY, nota nvarchar(20) NULL); "
     "CREATE TABLE dbo.%s (id int IDENTITY(1,1) PRIMARY KEY, nombre nvarchar(40) NOT NULL, "
     "estado int NOT NULL DEFAULT 5, marca nvarchar(10) NULL DEFAULT N'def', obligado int NOT NULL, "
     "codigo nvarchar(20) NULL); "
     "CREATE TABLE dbo.%s (id int PRIMARY KEY, v int NOT NULL); "
+    "CREATE TABLE dbo.%s (nombre nvarchar(40) NULL, v int NULL DEFAULT 7); "
     ";WITH n AS (SELECT 1 AS i UNION ALL SELECT i + 1 FROM n WHERE i < 150) "
-    "INSERT INTO dbo.%s (id, v) SELECT i, 0 FROM n OPTION (MAXRECURSION 200);" % (TL, TK, TN, TN))
+    "INSERT INTO dbo.%s (id, v) SELECT i, 0 FROM n OPTION (MAXRECURSION 200);" % (TL, TK, TN, TS, TN))
 # CREATE TRIGGER va solo en su lote
 MS_TRIGGER = ("CREATE TRIGGER dbo.%s_tr ON dbo.%s AFTER INSERT AS BEGIN SET NOCOUNT ON; "
               "INSERT INTO dbo.%s (nota) SELECT N'trigger' FROM inserted; "
               "UPDATE t SET codigo = N'K-' + CAST(t.id AS nvarchar(10)) FROM dbo.%s t JOIN inserted i ON i.id = t.id; "
               "END;" % (TK, TK, TL, TK))
-PG_BORRA = 'DROP TABLE IF EXISTS %s, %s, %s; DROP FUNCTION IF EXISTS %s_codigo() CASCADE;' % (TK, TL, TN, TK)
+PG_BORRA = 'DROP TABLE IF EXISTS %s, %s, %s, %s; DROP FUNCTION IF EXISTS %s_codigo() CASCADE;' % (TK, TL, TN, TS, TK)
 PG_DDL = PG_BORRA + (
     " CREATE TABLE %s (id serial PRIMARY KEY, nombre varchar(40) NOT NULL, estado int NOT NULL DEFAULT 5, "
     "marca varchar(10) NULL DEFAULT 'def', obligado int NOT NULL, codigo varchar(20) NULL);"
@@ -58,7 +64,8 @@ PG_DDL = PG_BORRA + (
     " LANGUAGE plpgsql;"
     " CREATE TRIGGER %s_tr BEFORE INSERT ON %s FOR EACH ROW EXECUTE FUNCTION %s_codigo();"
     " CREATE TABLE %s (id int PRIMARY KEY, v int NOT NULL);"
-    " INSERT INTO %s SELECT g, 0 FROM generate_series(1, 150) g;" % (TK, TK, TK, TK, TK, TN, TN))
+    " CREATE TABLE %s (nombre varchar(40), v int DEFAULT 7);"
+    " INSERT INTO %s SELECT g, 0 FROM generate_series(1, 150) g;" % (TK, TK, TK, TK, TK, TN, TS, TN))
 
 srv = None
 respuestas = []
@@ -158,6 +165,13 @@ try:
         r = llama({'command': 'insert', 'db': D, 'table': TK, 'max': 5,
                    'values': [{'field': 'nombre', 'value': 'x'}, {'field': 'obligado', 'value': 1}]})
         check('K7 %s max con insert: DB-020' % motor, mc.abre(r, 'SR_DB_NO_VA_CON_COMANDO_FMT'), r[:300])
+
+        r = mc.como_json(llama({'command': 'insert', 'db': D, 'table': TS,
+                                'values': [{'field': 'nombre', 'value': 'sin clave'}]}))
+        fs = (mc.como_json(llama({'command': 'rows', 'db': D, 'table': TS})).get('rows') or [{}])[0]
+        check('K10 %s insert en una tabla SIN clave con un defecto sin dar: escrito, sin row y DB-031' % motor,
+              r.get('affected') == 1 and 'row' not in r and str(r.get('rowNote', '')).startswith('[DB-031]')
+              and fs.get('nombre') == 'sin clave' and fs.get('v') == 7, (r, fs))
 
     fug = arnes.fugas(SECRETOS, respuestas)
     check('K9 ningun secreto del json en ninguna respuesta (%d respuestas)' % len(respuestas), not fug,

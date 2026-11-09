@@ -18,7 +18,9 @@ sin ellas, la bateria termina sin checks y lo dice.
      carpeta, y la respuesta es DB-030 (no se conecta con DLL ajenas)
   D2 con las seis en la casa y la carpeta del PATH tambien: las seis de la casa y ninguna del PATH; la
      respuesta no es DB-030 (llega a intentar conectar)
-  D3 sin drivers\\PG: DB-030, dice drivers\\PG, sin la pista del PATH de FireDAC y sin la ruta real
+  D3 sin drivers\\PG: DB-030, nombra el fichero que FireDAC busco (drivers\\PG\\lib\\libpq.dll: el lib lo pone
+     FireDAC; hasta el hallazgo 3 del revisor decia drivers\\PG, una carpeta por encima), sin la pista del PATH
+     de FireDAC y sin la ruta real
   D4 lo que ya funcionaba, con la busqueda nueva (regla 7): la ayuda por COM (delphi_docs) y el XML de un
      .dproj (delphi_create + delphi_read) siguen igual
 
@@ -56,7 +58,7 @@ os.makedirs(d)
 io.open(os.path.join(d, 'db-connections.json'), 'w', encoding='utf-8').write(json.dumps(
     {'db-connections': {'projects': {'p': {'databases': {'pg': {
         'server': '192.0.2.1', 'database': 'inventada', 'user': 'nadie', 'password': 'x1',
-        'engine': 'PG', 'provider': 'FIREDAC', 'readonly': True}}}}}}))
+        'engine': 'PG', 'provider': 'FIREDAC', 'access': 'read'}}}}}}))
 
 
 def modulos(pid):
@@ -121,8 +123,8 @@ try:
         r_lee = srv.call('delphi_read', {'path': os.path.join(JAIL, 'P1', 'P1.dproj'), 'toline': 3})
     finally:
         srv.cierra()
-    check('D3 sin drivers\\PG: DB-030 y dice drivers\\PG', mc.es(r, 'SR_DB_SIN_LIBRERIA_FMT') and 'drivers\\PG' in r,
-          r[:400])
+    check('D3 sin drivers\\PG: DB-030 y nombra drivers\\PG\\lib\\libpq.dll, el fichero que FireDAC busco',
+          mc.es(r, 'SR_DB_SIN_LIBRERIA_FMT') and 'drivers\\PG\\lib\\libpq.dll' in r, r[:400])
     check('D3 ...sin la pista del PATH de FireDAC ni la ruta real del servidor',
           'PATH or application EXE' not in r and mc.larga(SRV).lower() not in r.lower() and SRV.lower() not in r.lower(),
           r[:400])

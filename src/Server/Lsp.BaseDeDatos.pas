@@ -365,6 +365,34 @@ begin
   until (Cerradas = 0) or (GetTickCount64 > Hasta);
 end;
 
+{ El fichero que FireDAC intento cargar, como lo dice SU error
+  (er_FD_AccCantLoadLibrary: "Cannot load vendor library [<fichero>]"),
+  relativo a la carpeta del servidor: donde va la libreria lo decide FireDAC
+  (para PostgreSQL, <VendorHome>\lib\libpq.dll: su C_PgDllFolder, privada),
+  y DB-030 decia drivers\PG\, una carpeta por encima (hallazgo 3 del revisor
+  de la 1.29.1). Si su texto no lo trae, la carpeta que el servidor le dio. }
+function LibreriaQueBuscoFireDAC(const AMensaje, AMotor: string): string;
+const
+  MARCA = 'library [';
+var
+  P, F: Integer;
+begin
+  Result := '';
+  P := Pos(MARCA, AMensaje);
+  if P > 0 then
+  begin
+    Inc(P, Length(MARCA));
+    F := Pos(']', AMensaje, P);
+    if F > P then
+      Result := Copy(AMensaje, P, F - P);
+  end;
+  if Result = '' then
+    Result := IncludeTrailingPathDelimiter(CarpetaDeDriverDeBd(AMotor));
+  var Casa := IncludeTrailingPathDelimiter(ServerDir(''));
+  if StartsText(Casa, Result) then
+    Result := Copy(Result, Length(Casa) + 1, MaxInt);
+end;
+
 function AbreBase(const AConexion: TConexionDb; out AConn: TFDConnection): string;
 var
   A: TApertura;
@@ -425,7 +453,7 @@ begin
     if A.DelMotor and (A.Kind in [ekUserPwdInvalid, ekUserPwdExpired]) then
       Exit(MsgFmt(SR_DB_LOGIN_FMT, [Nombre]));
     if A.SinLibreria then
-      Exit(MsgFmt(SR_DB_SIN_LIBRERIA_FMT, [Nombre, AConexion.Motor]));
+      Exit(MsgFmt(SR_DB_SIN_LIBRERIA_FMT, [Nombre, LibreriaQueBuscoFireDAC(A.Mensaje, AConexion.Motor)]));
     Result := MsgFmt(SR_DB_NO_ABRE_FMT, [Nombre, TextoDelMotor(A.Mensaje, AConexion)]);
   finally
     A.Free;

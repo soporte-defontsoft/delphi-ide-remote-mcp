@@ -27,19 +27,24 @@ the MCP `initialize` response (`serverInfo.version`).
   every answer of the agent says mail is waiting until it reads it - so it does not run
   again, blind, what was already done (measured on 7-nov: a `remote-run` cut by its client
   ran twice on the target). Writing a new document in the server's house without
-  overwriting one is now one helper (`EscribeDocumentoNuevo`), used by `delphi_report` too.
+  overwriting one is now one helper (`EscribeDocumentoNuevo`), used by `delphi_report` too,
+  and a message whose text is still being written is not delivered empty.
 - A long operation that writes (`delphi_move`, `delphi_delete`, `delphi_build`,
   `delphi_package`, `delphi_test`, `delphi_git`, `delphi_paserver`) tells the other calls
   while it runs. Measured on 7-nov: while a `delphi_move` copy still ran, `delphi_list` of
   its destination said `WS-008` "does not exist" and repeating a delete already done said
-  `SYS-012`, and the agent ran them again on top. Now the same call (the same agent, the
-  same arguments) is refused while it runs (`SYS-042`: its answer comes, or goes to the
-  mailbox); a call that writes where it is working is refused (`SYS-043`, which operation
-  and since when; before, a `delphi_config set-version` rewrote a `.dproj` in the middle of
-  its build), except a build or a test over another build or test of another agent, which
+  `SYS-012`, and the agent ran them again on top. Now the same call (the same named agent,
+  the same arguments) is refused while it runs (`SYS-042`: its answer goes to the call that
+  started it, or to that agent's mailbox if its client hung up; clients without a name are
+  not "the same agent", and theirs is judged as any other write there); a call that writes
+  where it is working is refused (`SYS-043`, which operation and since when; before, a
+  `delphi_config set-version` rewrote a `.dproj` in the middle of its build) - a
+  `delphi_changeset commit` too, whose paths go in its staged operations and not in its
+  arguments -, except a build or a test over another build or test of another agent, which
   wait their turn as before (one msbuild at a time, each test in its own container); and one
   that reads there answers as always, with a note that what it shows may be half done
-  (`SYS-044`, an `inProgressNote` field when the answer is JSON). One registry for the
+  (`SYS-044`, an `inProgressNote` field when the answer is JSON; a refusal does not carry
+  it). One registry for the
   process (`Lsp.EnCurso`), filled at the
   gate with the paths the gate already reads and emptied when each call ends, whatever
   happens to it. A short write (an edit) is not registered: it queues on the write lock as
@@ -49,7 +54,10 @@ the MCP `initialize` response (`serverInfo.version`).
   SQL Server and PostgreSQL - the agent no longer has to look for the row it just wrote.
   It goes through a FireDAC dataset that re-reads the whole row after posting (as ADO's
   resync does), names exactly the fields given (a `null` writes NULL, not the default)
-  and leaves the rest to the database. On 8-nov this path had been taken out because a
+  and leaves the rest to the database. A table without a primary key leaves FireDAC no way
+  to find the row again: it is written as before and not read back, and the answer says so
+  (`rowNote`, `DB-031`) - re-reading it there made SQL Server refuse an insert that left a
+  field to its default. On 8-nov this path had been taken out because a
   call stayed hung when the network went silent; measured on 9-nov, that was the test
   harness, not FireDAC: its proxy did not pass on the database closing the cancel
   connection, which libpq waits for. With the harness fixed, a silent network is answered
@@ -80,14 +88,17 @@ the MCP `initialize` response (`serverInfo.version`).
   Measured before changing it: everything the process loaded (FireDAC with PostgreSQL and
   SQL Server, the help through COM, the XML of a `.dproj`) already came from those three
   places. It is not inherited: msbuild, the compiler, the engine and the form renderers
-  (which load the IDE's packages through their `PATH`) are as they were.
+  (which load the IDE's packages through their `PATH`) are as they were. An operator who
+  serves HTTPS (`[SSL] Enabled`) with OpenSSL libraries found in the `PATH` puts them next to
+  the server's exe.
 
 ### Fixed
 
 - `delphi_db` without its engine's client library said `DB-009` with FireDAC's text and its
   hint "check it is in the PATH or application EXE directories", which does not apply here;
-  it is now `DB-030`, told apart by FireDAC's error code and not its text, and it says the
-  library goes next to the server in `drivers\<engine>\`, with every DLL it loads, 64-bit.
+  it is now `DB-030`, told apart by FireDAC's error code and not its text, and it names the
+  file FireDAC looked for next to the server (`drivers\PG\lib\libpq.dll`), where it goes
+  with every DLL it loads, 64-bit.
 - Docs: what an operator puts next to the server for `delphi_db`, which the zip does not
   carry. `docs/CONFIGURATION.md` named only `drivers\PG\lib\libpq.dll` "with the DLLs it
   depends on" and `QUICKSTART.md` nothing; both now name the five (`libssl-3-x64`, `libcrypto-3-x64`,

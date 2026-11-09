@@ -4757,7 +4757,9 @@ const
   SR_DB_NO_ABRE_FMT =
     '[DB-009 DENIED] The database "%s" could not be opened: %s. Nothing ' +
     'was done.';
-  // %s = el nombre, %s = el motor (su DriverID: la carpeta de su casa). Lo
+  // %s = el nombre, %s = el fichero que FireDAC intento cargar, relativo a
+  // la carpeta del servidor (LibreriaQueBuscoFireDAC: para PostgreSQL,
+  // drivers\PG\lib\libpq.dll - el lib lo pone FireDAC, no nosotros). Lo
   // que FireDAC no pudo cargar es la libreria cliente del motor
   // (er_FD_AccCantLoadLibrary): su pista ("check it is in the PATH or
   // application EXE directories") no vale aqui, donde el servidor solo la
@@ -4765,9 +4767,9 @@ const
   SR_DB_SIN_LIBRERIA_FMT =
     '[DB-030 DENIED] The database "%s" could not be opened: this server ' +
     'could not load the client library of its engine. Only the operator ' +
-    'can fix it: it goes next to the server, in drivers\%s\, with every ' +
-    'DLL it loads, all 64-bit (the server looks for them nowhere else, ' +
-    'not in the PATH). Nothing was done.';
+    'can fix it: FireDAC looked for it next to the server, as %s; it goes ' +
+    'there with every DLL it loads, all 64-bit (the server looks for them ' +
+    'nowhere else, not in the PATH). Nothing was done.';
   SR_DB_RESPONDE_FMT =
     '[DB-010 DENIED] The database "%s" refused it: %s. Nothing was ' +
     'changed.';
@@ -4904,6 +4906,14 @@ const
     '[DB-029] Schema "%s" (the connection''s) has no tables or views. ' +
     'create-table makes one where its access is create; otherwise they are the ' +
     'operator''s to create.';
+  { insert en una tabla sin clave primaria: FireDAC no tiene con que volver a
+    encontrar la fila (la buscaba por TODOS sus campos y un predeterminado no
+    casaba: DApt-400 en SQL Server y nada escrito, hallazgo 9 del revisor de
+    la 1.29.1); se escribe sin releerla }
+  SN_DB_SIN_CLAVE_SIN_FILA =
+    '[DB-031] No row here: the table has no primary key, so the new row ' +
+    'cannot be found again to read it back as the database left it. It was ' +
+    'written; rows with filters finds it.';
 
   SD_DB =
     'The databases the operator gave this workspace, by NAME and through ' +
@@ -9577,16 +9587,20 @@ const
   { Las operaciones largas en curso (Lsp.EnCurso, R3 de A22, 1.29.1). %s = la
     tool, %s = cuando empezo (hh:nn:ss), %d = los segundos que lleva }
   SR_SYS_OPERACION_REPETIDA_FMT =
-    '[SYS-042 DENIED] This same call to %s is still running, since %s (%d s): ' +
-    'its answer comes when it ends, or to your mailbox (delphi_messages) if ' +
-    'your client stopped waiting. Nothing was done.';
-  // %s = la ruta, %s = la tool que la esta cambiando, %s = desde, %d = segundos
+    '[SYS-042 DENIED] The same call to %s (the same agent, the same ' +
+    'arguments) is still running, since %s (%d s), and was not started ' +
+    'again. Its answer goes to the call that started it - or, if that ' +
+    'client stopped waiting, to that agent''s mailbox (delphi_messages). ' +
+    'Nothing was done.';
+  // %s = la ruta, %s = la tool que sigue en marcha alli (escribe: un build
+  // lee el .dproj y escribe su salida), %s = desde, %d = segundos
   SR_SYS_OPERACION_EN_CURSO_FMT =
-    '[SYS-043 DENIED] %s is being changed right now by %s (since %s, %d s): ' +
-    'wait for it to end and try again. Nothing was done.';
+    '[SYS-043 DENIED] %s is in use by a %s still running, which writes ' +
+    'there (since %s, %d s): wait for it to end and try again. Nothing was ' +
+    'done.';
   SN_SYS_OPERACION_EN_CURSO_FMT =
-    #10#10'[SYS-044] %s is being changed right now by %s (since %s, %d s): what ' +
-    'this answer shows of it may be half done.';
+    #10#10'[SYS-044] %s is in use by a %s still running, which writes there ' +
+    '(since %s, %d s): what this answer shows of it may be half done.';
 
   SN_COMPONENTS_NONE_FMT =
     '[COMP-005] Neither a registered package nor a folder of the Library ' +

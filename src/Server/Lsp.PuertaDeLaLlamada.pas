@@ -571,6 +571,49 @@ begin
     Result := CarpetaDelComodin(AValor);
 end;
 
+type
+  TRutaNombrada = record
+    Clave, Valor: string;
+  end;
+
+{ Las rutas que el AGENTE nombra en esta llamada, como las ve el suelo: cada
+  texto no vacio de cada parametro marcado [RutaDelServidor] (RutasNuestras),
+  menos los que con este comando son lo que el proyecto DICE
+  ([NombreSiComando]); de una lista de rutas ("paths" de delphi_git), cada
+  una. UN recorrido para el suelo (ArgPathOutsideDenied) y para el registro de
+  lo que sigue en curso (RutasDeLaLlamada, Lsp.EnCurso): el segundo era una
+  copia del primero (hallazgo 6 del revisor de la 1.29.1). }
+function RutasNombradas(const AToolName: string; const AArguments: TJSONObject): TArray<TRutaNombrada>;
+var
+  I: Integer;
+  P: TJSONPair;
+  V: string;
+  N: TRutaNombrada;
+begin
+  Result := [];
+  if not Assigned(AArguments) then
+    Exit;
+  for I := 0 to AArguments.Count - 1 do
+  begin
+    P := AArguments.Pairs[I];
+    N.Clave := ClaveDeParam(AToolName, P.JsonString.Value);
+    // con estos comandos la ruta es lo que el proyecto DICE, no un sitio que
+    // la tool toque ([NombreSiComando]): el suelo no la juzga
+    if not RutasNuestras.ContainsKey(N.Clave) or EsNombreConEsteComando(AToolName, AArguments, N.Clave) then
+      Continue;
+    // cada texto del valor: el suyo, o cada uno de una lista de rutas
+    // ("paths" de delphi_git, 1.19.0): una ruta en una lista no se salta el
+    // suelo; un parametro opcional vacio no es una ruta: si falta, lo dice
+    // la tool
+    for V in CadenasDeValor(P.JsonValue) do
+      if V.Trim <> '' then
+      begin
+        N.Valor := V;
+        Result := Result + [N];
+      end;
+  end;
+end;
+
 { Las DOS pasadas del suelo, una funcion: ARelativas=False mira las rutas
   absolutas y va en su sitio de siempre; ARelativas=True mira las que no lo
   son y va la ultima. Las dos preguntan lo que preguntaria la tool
@@ -579,9 +622,7 @@ end;
 function ArgPathOutsideDenied(const AToolName: string;
   const AArguments: TJSONObject; ARelativas: Boolean): string;
 var
-  I: Integer;
-  P: TJSONPair;
-  V, Que, R: string;
+  Que, R: string;
   Mapa: TDictionary<string, Boolean>;
 begin
   Result := '';
@@ -592,32 +633,16 @@ begin
   if not HayJaula then
     Exit;
   Mapa := RutasNuestras;
-  for I := 0 to AArguments.Count - 1 do
+  for var N in RutasNombradas(AToolName, AArguments) do
   begin
-    P := AArguments.Pairs[I];
-    var Clave := ClaveDeParam(AToolName, P.JsonString.Value);
-    if not Mapa.ContainsKey(Clave) then
-      Continue;
-    // con estos comandos la ruta es lo que el proyecto DICE, no un sitio que
-    // la tool toque ([NombreSiComando]): el suelo no la juzga
-    if EsNombreConEsteComando(AToolName, AArguments, Clave) then
-      Continue;
-    // cada texto del valor: el suyo, o cada uno de una lista de rutas
-    // ("paths" de delphi_git, 1.19.0): una ruta en una lista no se salta el
-    // suelo
-    for V in CadenasDeValor(P.JsonValue) do
-    begin
-    // un parametro opcional vacio no es una ruta: si falta, lo dice la tool
-    if V.Trim = '' then
-      Continue;
-    R := RutaQueSeJuzga(Clave, V);
-    if EsRutaAbsoluta(V) = ARelativas then
+    R := RutaQueSeJuzga(N.Clave, N.Valor);
+    if EsRutaAbsoluta(N.Valor) = ARelativas then
       Continue;
     // Una relativa que la tool resuelve contra una base suya, o que explica
     // ella ([RutaRelativa]), es de la tool. En las demas se resolvia contra
     // la carpeta del proceso (fuera: DENIED enganoso; dentro, si el servidor
     // se lanzo desde una raiz: aceptada y escrita donde nadie dijo).
-    if ARelativas and Mapa[Clave] then
+    if ARelativas and Mapa[N.Clave] then
       Continue;
     // Quien LEE recibe la negativa de lectura (con la pista de la zona);
     // quien ESCRIBE, la jaula a secas: una pista de lectura en la negativa
@@ -646,29 +671,15 @@ begin
       if Result <> '' then
         Exit;
     end;
-    end;
   end;
 end;
 
 function RutasDeLaLlamada(const AToolName: string; const AArguments: TJSONObject): TArray<string>;
-var
-  I: Integer;
-  P: TJSONPair;
-  V: string;
 begin
   Result := [];
-  if not Assigned(AArguments) then
-    Exit;
-  for I := 0 to AArguments.Count - 1 do
-  begin
-    P := AArguments.Pairs[I];
-    var Clave := ClaveDeParam(AToolName, P.JsonString.Value);
-    if not RutasNuestras.ContainsKey(Clave) or EsNombreConEsteComando(AToolName, AArguments, Clave) then
-      Continue;
-    for V in CadenasDeValor(P.JsonValue) do
-      if (V.Trim <> '') and EsRutaAbsoluta(V) then
-        Result := Result + [RutaQueSeJuzga(Clave, V)];
-  end;
+  for var N in RutasNombradas(AToolName, AArguments) do
+    if EsRutaAbsoluta(N.Valor) then
+      Result := Result + [RutaQueSeJuzga(N.Clave, N.Valor)];
 end;
 
 { La forma de UNA ruta absoluta de la entrada (la regla, en AlargaRutas). }

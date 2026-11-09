@@ -16,6 +16,11 @@ apuntada mientras dura, con sus rutas, y el registro dice a las demas:
   E5 una escritura en otro sitio: como siempre, sin nota
   E6 al acabar, el registro se suelta: la escritura de E2 ya pasa y la lectura no lleva nota
   E7 y la llamada larga misma contesta lo de siempre (el test pasa)
+  E8 las negativas (SYS-042, SYS-043) no llevan la nota SYS-044 (hallazgo 7 del revisor de la 1.29.1)
+  E9 el commit de un delphi_changeset sobre su ruta: SYS-043 y nada se mueve; sus rutas van en las
+     operaciones, no en los argumentos, y la puerta no las veia (hallazgo 2)
+  E10 dos clientes SIN nombre con la misma llamada no son "el mismo agente": la segunda no es SYS-042
+     (un test sobre otro espera su turno y corre); hasta el hallazgo 4 lo era
 
 La llamada larga: delphi_test de un proyecto DUnitX de la jaula cuyo test espera 15 s (build + run). Por
 HTTP, dos agentes (clientInfo agente-a / agente-b) a la vez.
@@ -25,6 +30,7 @@ Uso:  python tests/test_en_curso_1291.py [ruta-a-DelphiLspMcp.exe]
 import io
 import json
 import os
+import re
 import threading
 import time
 import mcp_cliente as mc
@@ -64,6 +70,15 @@ try:
         fuente = fuente.replace("  Assert.AreEqual(4, 2 + 2", "  Sleep(15000);\n  Assert.AreEqual(4, 2 + 2", 1)
         io.open(unidad, 'w', encoding='utf-8-sig', newline='\r\n').write(fuente)
 
+        # E9: el changeset se prepara ANTES de la llamada larga (un stage durante ella lo niega ya la puerta:
+        # su path va en los argumentos) y su commit, que solo lleva el id, se intenta DURANTE
+        movido = os.path.join(PROY, 'LentoMovido.dproj')
+        rb = llama('agente-b', 'delphi_changeset', {'command': 'begin'})
+        cid = (re.search(r'CHANGESET (\S+) opened', rb) or [None, ''])[1]
+        rs = llama('agente-b', 'delphi_changeset', {'command': 'stage', 'id': cid, 'kind': 'move', 'path': DPROJ,
+                                                    'dest': movido})
+        rp = llama('agente-b', 'delphi_changeset', {'command': 'preview', 'id': cid})
+
         largo = {}
         RUN = {'command': 'run', 'project': DPROJ}
         hilo = threading.Thread(target=lambda: largo.setdefault('r', llama('agente-a', 'delphi_test', RUN)))
@@ -89,6 +104,14 @@ try:
         check('E3b una respuesta JSON con la nota sigue siendo JSON, con la nota en inProgressNote',
               mc.es(str(j3b.get('inProgressNote', '')), 'SN_SYS_OPERACION_EN_CURSO_FMT') and bool(j3b.get('folders')),
               r3b[-400:])
+        check('E8 las negativas (SYS-042, SYS-043) no llevan la nota SYS-044',
+              not mc.es(r1, 'SN_SYS_OPERACION_EN_CURSO_FMT') and not mc.es(r2, 'SN_SYS_OPERACION_EN_CURSO_FMT'),
+              (r1[-200:], r2[-200:]))
+        r9 = llama('agente-b', 'delphi_changeset', {'command': 'commit', 'id': cid})
+        check('E9 el commit de un changeset sobre su ruta: SYS-043 y nada se mueve',
+              mc.es(r9, 'SR_SYS_OPERACION_EN_CURSO_FMT') and os.path.isfile(DPROJ) and not os.path.exists(movido),
+              (rs[:120], rp[:120], r9[:300]))
+        llama('agente-b', 'delphi_changeset', {'command': 'rollback', 'id': cid})
         # sin compilar, como test_delphi_test_servicio: su build pisaria el .exe que el de agente-a esta
         # ejecutando (eso es cosa del build, F2039), y aqui se mide que el registro no lo niega
         r4 = llama('agente-b', 'delphi_test', dict(RUN, nobuild=True))
@@ -110,6 +133,16 @@ try:
         check('E6 al acabar se suelta: la escritura pasa y la lectura no lleva nota',
               not mc.es(r6a, 'SR_SYS_OPERACION_EN_CURSO_FMT') and not mc.es(r6b, 'SN_SYS_OPERACION_EN_CURSO_FMT'),
               (r6a[:200], r6b[-200:]))
+        RUN_NB = dict(RUN, nobuild=True)
+        sin = {}
+        hilo2 = threading.Thread(target=lambda: sin.setdefault('r', llama(None, 'delphi_test', RUN_NB)))
+        hilo2.start()
+        time.sleep(3)
+        r10 = llama(None, 'delphi_test', RUN_NB)
+        hilo2.join(120)
+        check('E10 la misma llamada de dos clientes sin nombre: no es SYS-042, y las dos corren',
+              not mc.es(r10, 'SR_SYS_OPERACION_REPETIDA_FMT') and '"result":"pass"' in r10.replace(' ', '')
+              and '"result":"pass"' in sin.get('r', '').replace(' ', ''), (r10[:300], sin.get('r', '')[:200]))
     finally:
         proc.kill()
 finally:

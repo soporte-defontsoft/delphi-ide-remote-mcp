@@ -690,6 +690,14 @@ begin
   end;
 end;
 
+{ ATabla sin ninguna fila: sus metadatos como los ve FireDAC al abrirla, los
+  que usa su generador al insertar. UNA forma de pedirlos (AutosDeTabla,
+  InsertaConRelectura). }
+function ConsultaSinFilas(const S: TSesionDb; const ATabla: string): TFDQuery;
+begin
+  Result := NuevaConsulta(S, 'SELECT * FROM ' + CitaNombre(S.Conn, ATabla) + ' WHERE 1 = 0', []);
+end;
+
 { Los campos de ATabla que la base cuenta sola (caAutoInc) como los ve FireDAC
   al abrirla - los metadatos de una consulta sin filas, los que usa su
   generador al insertar -: el catalogo de SQL Server (mkTableFields) no lo
@@ -699,7 +707,7 @@ var
   Q: TFDQuery;
 begin
   Result := [];
-  Q := NuevaConsulta(S, 'SELECT * FROM ' + CitaNombre(S.Conn, ATabla) + ' WHERE 1 = 0', []);
+  Q := ConsultaSinFilas(S, ATabla);
   try
     Q.Open;
     for var I := 0 to Q.Table.Columns.Count - 1 do
@@ -1170,13 +1178,16 @@ end;
   orden, FireDAC cancela con PQcancel, que abre OTRA conexion y espera a que la
   base la CIERRE; el proxy no pasaba ese cierre al cliente y libpq esperaba
   para siempre. Con el proxy fiel a TCP, y contra una fila bloqueada por otra
-  sesion (P7, la base directa), la cancelacion corta la orden y contesta. }
+  sesion (P7, la base directa), la cancelacion corta la orden y contesta.
+  Sin clave primaria no hay con que volver a encontrar la fila: se escribe
+  sin releer y devuelve nil (DB-031 lo dice). }
 function InsertaConRelectura(const S: TSesionDb; const ATabla: string; const ANombres: TArray<string>;
   const APars: TArray<TParametroDb>): TJSONObject;
 var
   Q: TFDQuery;
 begin
-  Q := NuevaConsulta(S, 'SELECT * FROM ' + CitaNombre(S.Conn, ATabla) + ' WHERE 1 = 0', []);
+  Result := nil;
+  Q := ConsultaSinFilas(S, ATabla);
   try
     // un dataset que se escribe va y vuelve (NuevaConsulta es de solo ida)
     Q.FetchOptions.Unidirectional := False;
@@ -1191,6 +1202,17 @@ begin
     // los demas no van, y los pone la base (predeterminado o automatico)
     Q.UpdateOptions.UpdateChangedFields := False;
     Q.Open;
+    // la fila se vuelve a encontrar por su clave; sin ella FireDAC la buscaba
+    // por TODOS sus campos, un predeterminado que el agente no dio no casaba,
+    // y SQL Server contestaba DApt-400 sin escribir nada, donde la 1.29.0 la
+    // escribia (medido el 9-nov-2026, hallazgo 9 del revisor). La clave, la
+    // que FireDAC lee del catalogo (pfInKey); sin ella, sin releer
+    var ConClave := False;
+    for var K := 0 to Q.FieldCount - 1 do
+      if pfInKey in Q.Fields[K].ProviderFlags then
+        ConClave := True;
+    if not ConClave then
+      Q.UpdateOptions.RefreshMode := rmManual;
     for var K := 0 to Q.FieldCount - 1 do
       if IndexText(Q.Fields[K].FieldName, ANombres) < 0 then
         Q.Fields[K].ProviderFlags := Q.Fields[K].ProviderFlags - [pfInUpdate];
@@ -1198,6 +1220,8 @@ begin
     for var K := 0 to High(ANombres) do
       Q.FieldByName(ANombres[K]).Value := APars[K].Valor;
     Q.Post;
+    if not ConClave then
+      Exit;
     Result := TJSONObject.Create;
     try
       for var K := 0 to Q.FieldCount - 1 do
@@ -1301,7 +1325,9 @@ begin
       begin
         R.AddPair('row', Fila);
         Fila := nil; // ya es de R
-      end;
+      end
+      else if ACmd = 'insert' then
+        R.AddPair('rowNote', MsgText(SN_DB_SIN_CLAVE_SIN_FILA));
       Result := R.ToJSON;
     finally
       R.Free;

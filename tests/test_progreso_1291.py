@@ -56,7 +56,7 @@ os.makedirs(d)
 io.open(os.path.join(d, 'db-connections.json'), 'w', encoding='utf-8').write(json.dumps(
     {'db-connections': {'projects': {'p': {'databases': {'pg': {
         'server': '192.0.2.1', 'database': 'inventada', 'user': 'nadie', 'password': 'x1',
-        'engine': 'PG', 'provider': 'FIREDAC', 'readonly': True}}}}}}))
+        'engine': 'PG', 'provider': 'FIREDAC', 'access': 'read'}}}}}}))
 LARGA = {'name': 'delphi_db', 'arguments': {'command': 'tables', 'db': 'p/pg'}}
 RAPIDA = {'name': 'delphi_workspace', 'arguments': {}}
 

@@ -83,9 +83,17 @@ var
 begin
   L := TList<string>.Create;
   try
+    // uno VACIO es un nombre reservado cuyo texto aun se escribe
+    // (EscribeDocumentoNuevo): entregarlo daba un mensaje vacio, y el texto
+    // llegaba otra vez despues (hallazgo 10 del revisor de la 1.29.1)
     if TDirectory.Exists(ADir) then
       for F in TDirectory.GetFiles(ADir, '*.md') do
-        L.Add(F);
+        try
+          if TFile.GetSize(F) > 0 then
+            L.Add(F);
+        except
+          // lo acaba de entregar (y borrar) otra lectura: ya no esta
+        end;
     L.Sort;
     Result := L.ToArray;
   finally

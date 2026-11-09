@@ -246,6 +246,17 @@ try:
     w = json.loads(c1.call('delphi_workspace', {}))
     check('W16 delphi_workspace dice "agent", el nombre de su carpeta en delphi_messages y delphi_report',
           w.get('agent') == 'hermes' and os.path.isdir(mc.buzon(REPORTS, w.get('agent', '?'), WS1)), str(w)[:300])
+
+    # W17 (hallazgo 10 del revisor de la 1.29.1): un .md VACIO es un nombre reservado cuyo texto aun se escribe
+    # (EscribeDocumentoNuevo): leerlo entregaba un mensaje vacio, lo borraba, y el texto llegaba otra vez despues
+    open(os.path.join(M1, '20261011-0900-reservado.md'), 'w').close()
+    open(os.path.join(M1, '20261011-0901-normal.md'), 'w', encoding='utf-8').write('# NORMAL\n\nentregado\n')
+    chk = a1.call('delphi_messages', {'command': 'check'})
+    lee = a1.call('delphi_messages', {'command': 'read'})
+    check('W17 un mensaje vacio (reservado, a medio escribir) ni se cuenta ni se entrega, y no se borra',
+          'normal' in chk and 'reservado' not in chk and 'NORMAL' in lee and 'reservado' not in lee
+          and os.path.isfile(os.path.join(M1, '20261011-0900-reservado.md'))
+          and not os.path.exists(os.path.join(M1, '20261011-0901-normal.md')), (chk[:300], lee[:300]))
 finally:
     mc.borra(union)  # la union como union: lo de detras no se toca
     proc.kill()

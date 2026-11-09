@@ -14,8 +14,10 @@
   puerta), su agente, su tool, su huella (tool + argumentos) y cuando empezo,
   y se borra al acabar (TerminaLlamada, en el finally del gestor de tools:
   pase lo que pase con la tool). Lo que dice el registro a OTRA llamada:
-  - la MISMA (el mismo agente y la misma huella) mientras sigue: se niega
-    (SYS-042); su respuesta llegara, o ira a su buzon (Lsp.Progreso);
+  - la MISMA (el mismo agente CON NOMBRE y la misma huella) mientras sigue:
+    se niega (SYS-042); su respuesta va a la llamada que la empezo, o al
+    buzon de ese agente si su cliente se fue (Lsp.Progreso). Sin nombre no
+    hay "el mismo agente": su repetida la juzga el cruce de rutas;
   - una que ESCRIBE en sus rutas (dentro, o la carpeta que las contiene): se
     niega (SYS-043), diciendo cual sigue y desde cuando; salvo un build o
     un test sobre otro build o test (EN_LA_FILA_DEL_BUILD): esos ya esperan
@@ -25,7 +27,10 @@
   Que operaciones son LARGAS es una regla de la casa sin juez (cuanto tarda
   algo no lo dice nadie antes de hacerlo): UNA lista con nombre,
   OPERACIONES_LARGAS, vigilada por test_paisaje. Una escritura corta (una
-  edicion) no se apunta: va en fila por el cerrojo de escritura. }
+  edicion) no se apunta: va en fila por el cerrojo de escritura. Un escritor
+  cuyas rutas no ve la puerta (delphi_changeset commit: van en sus
+  operaciones, no en sus argumentos) pregunta a EscrituraEnCurso. Una
+  negativa no lleva la nota SYS-044. }
 
 interface
 
@@ -40,6 +45,11 @@ function EmpiezaLlamada(const AToolName: string; const AArguments: TJSONObject):
 { La nota SYS-044 para la respuesta de esta llamada si alguna de sus rutas la
   esta cambiando OTRA llamada larga; '' si no. }
 function NotaDeLaLlamada: string;
+
+{ Para un escritor cuyas rutas no ve la puerta (delphi_changeset commit): la
+  negativa SYS-043 si una operacion larga de otra llamada esta en alguna de
+  ARutas; '' si no. }
+function EscrituraEnCurso(const ARutas: TArray<string>): string;
 
 { Al acabar la llamada, pase lo que pase: la borra del registro y olvida sus
   rutas. }
@@ -110,6 +120,20 @@ begin
   Result := Round((Now - AOp.Inicio) * SecsPerDay);
 end;
 
+{ La negativa SYS-043 si alguna de ARutas la tiene una operacion larga de
+  OTRA llamada; salvo un build o un test (AToolName) sobre otro build o test,
+  que esperan su turno solos. Con el cerrojo tomado. }
+function CruceConOtra(const ARutas: TArray<string>; const AToolName: string): string;
+var
+  Ruta: string;
+begin
+  Result := '';
+  for var Op in GOps do
+    if (Op.Hilo <> TThread.CurrentThread.ThreadID) and SeTocan(ARutas, Op.Rutas, Ruta) and
+       not (MatchText(AToolName, EN_LA_FILA_DEL_BUILD) and MatchText(Op.Tool, EN_LA_FILA_DEL_BUILD)) then
+      Exit(MsgFmt(SR_SYS_OPERACION_EN_CURSO_FMT, [Ruta, Op.Tool, Desde(Op), Segundos(Op)]));
+end;
+
 { Las de ESTE hilo fuera: una llamada nueva en un hilo que Indy reutiliza no
   hereda lo de la anterior, aunque algo se saltara su TerminaLlamada. Con el
   cerrojo tomado. }
@@ -123,7 +147,7 @@ end;
 function EmpiezaLlamada(const AToolName: string; const AArguments: TJSONObject): string;
 var
   Rutas: TArray<string>;
-  Que, Ruta, Agente, Huella: string;
+  Que, Agente, Huella: string;
   Larga: Boolean;
   Op: TOperacion;
 begin
@@ -143,13 +167,22 @@ begin
   GLock.Enter;
   try
     QuitaLasDelHilo;
-    for Op in GOps do
+    // la MISMA llamada: el mismo agente y la misma huella. AgenteDeLaLlamada
+    // da '' a todo cliente sin nombre: dos de ellos no son "el mismo", y su
+    // repetida va al cruce de rutas como cualquier otra (hallazgo 4 del
+    // revisor de la 1.29.1)
+    if Larga and (Agente <> '') then
+      for Op in GOps do
+        if (Op.Agente = Agente) and (Op.Huella = Huella) then
+        begin
+          TRutas := nil; // una negativa no lleva la nota SYS-044
+          Exit(MsgFmt(SR_SYS_OPERACION_REPETIDA_FMT, [Op.Tool, Desde(Op), Segundos(Op)]));
+        end;
+    Result := CruceConOtra(Rutas, AToolName);
+    if Result <> '' then
     begin
-      if Larga and (Op.Agente = Agente) and (Op.Huella = Huella) then
-        Exit(MsgFmt(SR_SYS_OPERACION_REPETIDA_FMT, [Op.Tool, Desde(Op), Segundos(Op)]));
-      if SeTocan(Rutas, Op.Rutas, Ruta) and not (MatchText(AToolName, EN_LA_FILA_DEL_BUILD) and
-         MatchText(Op.Tool, EN_LA_FILA_DEL_BUILD)) then
-        Exit(MsgFmt(SR_SYS_OPERACION_EN_CURSO_FMT, [Ruta, Op.Tool, Desde(Op), Segundos(Op)]));
+      TRutas := nil;
+      Exit;
     end;
     if Larga then
     begin
@@ -178,6 +211,16 @@ begin
     for var Op in GOps do
       if (Op.Hilo <> TThread.CurrentThread.ThreadID) and SeTocan(TRutas, Op.Rutas, Ruta) then
         Exit(MsgFmt(SN_SYS_OPERACION_EN_CURSO_FMT, [Ruta, Op.Tool, Desde(Op), Segundos(Op)]));
+  finally
+    GLock.Leave;
+  end;
+end;
+
+function EscrituraEnCurso(const ARutas: TArray<string>): string;
+begin
+  GLock.Enter;
+  try
+    Result := CruceConOtra(ARutas, '');
   finally
     GLock.Leave;
   end;

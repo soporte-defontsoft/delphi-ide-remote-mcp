@@ -94,7 +94,8 @@ uses
   Lsp.Papelera,
   Lsp.Deteccion,
   Lsp.Puertas,
-  Lsp.JuicioDeForms;
+  Lsp.JuicioDeForms,
+  Lsp.EnCurso;
 
 type
   TOpKind = (opEdit, opCreate, opDelete, opDeleteLine, opMove);
@@ -1111,6 +1112,13 @@ begin
         if Changed.Count > 0 then
           Exit(MsgFmt(SR_CHANGESET_FILE_CHANGED_FMT,
             [string.Join('; ', Changed.ToArray)]));
+        // ...ni una operacion larga de otra llamada (un move, un delete, un
+        // build) sigue en esas rutas: la puerta no las ve, van en las
+        // operaciones y no en los argumentos del commit (R3, hallazgo 2 del
+        // revisor de la 1.29.1)
+        Err := EscrituraEnCurso(TouchedPaths(C));
+        if Err <> '' then
+          Exit(Err);
         // 2. byte snapshots of everything BEFORE the first change
         Foto.Toma(TouchedPaths(C));
         // 3. apply in order; any failure = restore every snapshot

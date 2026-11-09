@@ -168,6 +168,12 @@ procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);
   estaba escrito en el primero. }
 function EscribeDocumentoNuevo(const ADir, ABase, ATexto: string; out AMotivo: string): string;
 
+{ El sello con que EMPIEZA el nombre de un documento de la casa (yyyymmdd-
+  hhnnss): ordenados por nombre, salen por fecha. UNO para los que lo
+  componen (delphi_report, la respuesta que no llego al buzon); estaba
+  escrito a mano en los dos (hallazgo 10 del revisor de la 1.29.1). }
+function SelloDeDocumento(AMomento: TDateTime): string;
+
 { Encoding-preserving load/save for other engines (scaffolder): text is
   decoded with the real encoding; save re-encodes with the SAME one, makes
   the pre-edit backup and writes atomically. AEncName as in delphi_read.
@@ -1360,6 +1366,11 @@ begin
     end;
     raise;
   end;
+end;
+
+function SelloDeDocumento(AMomento: TDateTime): string;
+begin
+  Result := FormatDateTime('yyyymmdd-hhnnss', AMomento);
 end;
 
 procedure EscribeEnCasaDelServidor(const AFichero, ATexto: string);

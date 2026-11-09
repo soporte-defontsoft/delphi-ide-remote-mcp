@@ -105,7 +105,7 @@ const
   es su inversa: lo que list ensena y read acepta. }
 function BaseDeInforme(AStamp: TDateTime; const AKind, ATitle: string): string;
 begin
-  Result := FormatDateTime('yyyymmdd-hhnnss', AStamp) + '-' + AKind;
+  Result := SelloDeDocumento(AStamp) + '-' + AKind;
   if Slug(ATitle) <> '' then
     Result := Result + '-' + Slug(ATitle);
 end;

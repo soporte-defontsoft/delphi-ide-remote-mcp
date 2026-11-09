@@ -164,7 +164,7 @@ begin
   end;
   try
     Ahora := Now;
-    Ruta := EscribeDocumentoNuevo(ABuzon, FormatDateTime('yyyymmdd-hhnnss', Ahora) + '-' +
+    Ruta := EscribeDocumentoNuevo(ABuzon, SelloDeDocumento(Ahora) + '-' +
       Slug('answer ' + ATool), MsgFmt(SN_SYS_RESPUESTA_PERDIDA_FMT, [ATool, ATool,
       FormatDateTime('yyyy-mm-dd hh:nn:ss', Ahora), TextoDeLaRespuesta(ARespuestaJson)]), Motivo);
     if Ruta <> '' then
