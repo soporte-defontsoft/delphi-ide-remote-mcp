@@ -219,7 +219,14 @@ begin
   AgrupaPorCarpeta(Result, 'projects');
   Result.AddPair('total', TJSONNumber.Create(N));
   if N = 0 then
-    Result.AddPair('note', MsgText(SN_TEST_NONE))
+  begin
+    Result.AddPair('note', MsgText(SN_TEST_NONE));
+    // con un FICHERO se busca en su carpeta, y TEST-021 no lo decia: el
+    // agente no sabia que "alli" era la carpeta y no el fichero (P13 de la
+    // 1.29.1, Hermes 8-nov)
+    if TFile.Exists(APath) then
+      Result.AddPair('pathNote', MsgFmt(SN_TEST_DISCOVER_FICHERO_FMT, [Dir]));
+  end
   else
   begin
     Result.AddPair('note', MsgText(SN_TEST_DISCOVER_NOTE));

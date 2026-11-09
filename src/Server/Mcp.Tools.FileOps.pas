@@ -1267,6 +1267,12 @@ begin
      (ExtractFileExt(Pasos[0].Destino) = '') and TFile.Exists(Pasos[0].Destino) then
     Result := Result + #10 + MsgFmt(SN_MOVE_DESTINO_SIN_EXTENSION_FMT,
       [Pasos[0].Destino, TPath.Combine(Pasos[0].Destino, ExtractFileName(Pasos[0].Origen))]);
+  // la carpeta que dest necesitaba y no existia: se crea, como un mkdir -p
+  // de un operador, y se dice (P6 de la 1.29.1). Su primer ancestro que
+  // existia, guardado para deshacer, es ella misma si ya estaba
+  for var I := 0 to High(CarpetasCreadas) do
+    if not RutaEnLista(AncestrosCreadas[I], [CarpetasCreadas[I]]) then
+      Result := Result + #10 + MsgFmt(SN_MOVE_CARPETA_CREADA_FMT, [CarpetasCreadas[I]]);
   if Length(NoSeguidos) > 0 then
     Result := Result + #10 + MsgFmt(SN_COPY_LINKS_NOT_FOLLOWED_FMT,
       [Length(NoSeguidos), string.Join(', ', NoSeguidos)]);

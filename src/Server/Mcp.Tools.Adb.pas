@@ -334,6 +334,15 @@ begin
     ANegativa := MsgFmt(SR_ADB_APP_NO_INSTALADA_FMT, [AApp]);
 end;
 
+{ Una linea de adb (discover, devices) como se lee en una consola: adb separa
+  sus columnas con un tabulador, que en el JSON salia como \t dentro del texto
+  (P7 de la 1.29.1, Hermes 8-nov). Dos blancos y no uno: un nombre mDNS
+  numerado lleva uno dentro ("adb-X (2)"). }
+function LineaDeAdb(const ALinea: string): string;
+begin
+  Result := ALinea.Trim.Replace(#9, '  ');
+end;
+
 function TDelphiAdbTool.ExecuteWithParams(const Params: TDelphiAdbParams): string;
 var
   Cmd, Adb, Args, Output, L, Denied, DevArg: string;
@@ -379,7 +388,7 @@ begin
     try
       for L in LineasDelTexto(Output) do
         if L.Contains('_adb') and L.Contains(':') then
-          Devices.Add(L.Trim);
+          Devices.Add(LineaDeAdb(L));
       Return.AddPair('note', MsgText(SN_ADB_DISCOVER));
       Result := Return.ToJSON;
     finally
@@ -396,7 +405,7 @@ begin
       for L in LineasDelTexto(Output) do
         if (L.Trim <> '') and not L.StartsWith('List of devices') and
            not L.Contains('daemon') then
-          Devices.Add(L.Trim);
+          Devices.Add(LineaDeAdb(L));
       Return.AddPair('note', MsgText(SN_ADB_DEVICES));
       Result := Return.ToJSON;
     finally

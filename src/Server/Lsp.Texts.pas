@@ -440,6 +440,13 @@ const
     '[REPORT-001] (NOTE: "%s" is not one of the kinds I handle, so I ' +
     'filed it as "bug". The valid ones: bug, limitation, suggestion, ' +
     'question.)';
+  { Sin title se guarda (es opcional), pero el nombre queda en fecha, hora y
+    tipo, y en list no se distingue de los demas: se guardaba sin decirlo
+    (P10 de la 1.29.1, Hermes 8-nov) }
+  SN_REPORT_SIN_TITULO =
+    '[REPORT-015] Saved without a title: its name is only date, time and ' +
+    'kind, which is all command=list shows of it. A one-line title= becomes ' +
+    'part of the name.';
 
   { Calentamiento del motor: definition vacia con hover lleno (medido por
     Hermes, 2026-09-22). Es "todavia no", asi que va como error: (corrige y
@@ -6012,6 +6019,11 @@ const
     'one is a .dpr with DUnitX or a console one whose name has the word ' +
     'test or spec, starts with it or ends with tests or specs (MyAppTests, ' +
     'unit_tests, mormot2tests).';
+  { %s: la carpeta que se recorrio, la del fichero que se dio como path }
+  SN_TEST_DISCOVER_FICHERO_FMT =
+    '[TEST-038] path is a file, so discover searched the folder that holds ' +
+    'it, %s, and everything under it. A test project''s .dpr is often above ' +
+    'its test units: give that folder.';
 
   SN_TEST_DISCOVER_NOTE =
     '[TEST-022] Run them with command=run project=<dir + name from the ' +
@@ -10428,6 +10440,20 @@ const
     '(that is what exit=1 with no output means for a read). A commit here ' +
     'would stop with "Author identity unknown": set it with command=config ' +
     'name=%s message=<value>.';
+  { ...y la que esta dice DE DONDE viene, como lo dice git (--show-scope): se
+    leia el valor sin saber si era del repo o de la cuenta del servidor (P8
+    de la 1.29.1, Hermes 8-nov). %0:s la clave, %1:s el valor, %2:s el
+    ambito tal como lo nombra git (local, global, system...) }
+  SN_GIT_CONFIG_VALOR_FMT =
+    '[GIT-088] %0:s = %1:s, from the %2:s git config (local = this ' +
+    'repository''s own; global = the server account''s, for every repository ' +
+    'without its own). command=config with message= writes the local one.';
+  { ...y la que se fija va al config de ESTE repositorio (lo que hace git
+    config sin --global), y la global no se toca }
+  SN_GIT_CONFIG_FIJADO_FMT =
+    '[GIT-089] %s is now set in this repository''s own git config (local): ' +
+    'commits here use it. The server account''s global value, if any, is ' +
+    'untouched.';
 
   { Un parametro que no es del comando: commit con path hacia un commit de
     TODO el indice, no de ese fichero (octava revision). }
@@ -10674,8 +10700,8 @@ const
 
   SN_LSP_NULL_SIGNATURE_NOTE =
     '[LSP-052] null - the engine has no signature there. It is not an error: the ' +
-    'position must be INSIDE the parentheses of a call, right after ( or , - on the ' +
-    'name of the routine there is none, and delphi_hover gives its declaration. ' +
+    'position must be INSIDE the parentheses of a call, right after ( or , (its index + 1; on the ( itself, or on the ' +
+    'name of the routine, there is none), and delphi_hover gives its declaration. ' +
     'Lines are 0-BASED here and 1-based in delphi_read, so line N of a read is N-1 ' +
     'here. If the position is right, the file may have no project configuration ' +
     '(the warning next to this says so, if it appears).';
@@ -11843,8 +11869,8 @@ const
   // descripcion: en el nombre de la rutina el motor no contesta (V182 de la
   // 1.23.1, Hermes; medido: detras del "(" la firma, en el nombre null)
   SP_LSP_SIGNATURE_CHARACTER =
-    'Zero-based character INSIDE the parentheses of the call: right after ' +
-    'its "(" or a "," (not on the routine''s name)';
+    'Zero-based character right after the call''s "(" or a ",": that index + 1 ' +
+    '(none on the "(" itself or the routine''s name)';
 
   SP_LSP_TRIGGER =
     'Optional trigger character, e.g. "." (empty = manual invocation). ' +
@@ -11883,8 +11909,8 @@ const
     'Signature help (parameter completion) for the call under a 0-based ' +
     'line:character position: the routine signatures with their ' +
     'parameter list, from the official DelphiLSP engine - the IDE''s ' +
-    'Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right ' +
-    'after "(" or a ","). Requires project settings for full answers. ' +
+    'Ctrl+Shift+Space. Point INSIDE the call''s parentheses (see character). ' +
+    'Requires project settings for full answers. ' +
     'Engine limits, measured: with overloads activeSignature stays 0 ' +
     'whatever the call, not the one it resolves to; a call to a METHOD ' +
     '(Obj.Method( ...) often answers null where a free routine answers. ' +
@@ -12856,7 +12882,8 @@ const
     'The lay of the land on the SERVER: the workspace roots this server ' +
     'operates within (your entire allowed universe here), the access ' +
     'level (read-write / read-only), the [Workspace.<name>] section of ' +
-    'the server this token is scoped to ("workspace"), and the active ' +
+    'the server this token is scoped to ("workspace"), your agent ' +
+    '("agent", your delphi_messages/delphi_report folder), and the active ' +
     'RAD Studio by version AND by name (activeDelphiName / Personality / ' +
     'Edition / Build, read from the installation - use them when you ' +
     'look anything up for this Delphi), plus delphiUpdate if declared. ' +
@@ -12864,8 +12891,7 @@ const
     '("server"): version, how this process was started (tray / service / ' +
     'console), transport, pid, uptime, the open sessions, the machine it ' +
     'runs on ("host", also in serverInfo) and the Windows account it runs ' +
-    'as - the way to check a deployment without looking ' +
-    'at the machine from outside. %s Call this FIRST. Read-only.';
+    'as - how to check a deployment. %s Call this FIRST. Read-only.';
 
   SF_WS_JAIL_CERRADA_FMT =
     'closed (%s): every path is refused (GUARD-030)';
@@ -13833,6 +13859,11 @@ const
   SR_MOVE_DEST_ES_CARPETA_FMT =
     '[MOVE-026 INVALID_PARAM] %0:s is a folder, and for a file dest is its final ' +
     'path. To put the file in that folder: dest=%1:s.';
+  SN_MOVE_CARPETA_CREADA_FMT =
+    '[MOVE-027] %s did not exist: it was created to receive dest (move and copy ' +
+    'create the missing parent folders).';
+  { %s: la carpeta de dest que no existia. Se creaba sin decirlo (P6 de la
+    1.29.1, Hermes 8-nov; V158 de la 1.23 lo dijo solo dentro de MOVE-025) }
 
   // MOVE-015, MOVE-016 y MOVE-018 (la cabecera "unit X;" reescrita, o no) se
   // retiraron en la 1.23 (V19): un move o una copia no reescriben el fichero

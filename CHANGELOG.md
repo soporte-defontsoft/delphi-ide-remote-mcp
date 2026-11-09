@@ -71,6 +71,19 @@ the MCP `initialize` response (`serverInfo.version`).
   64-bit, where to take them from and that all six are needed. For SQL Server, the order
   in which FireDAC picks the system's ODBC driver (ODBC Driver 18, 17, Native Client
   11.0...; measured here: Native Client 11.0).
+- Small things an agent met in the 1.29 test rounds, each said where it happens:
+  `delphi_move` and copy create the missing folders of `dest` and now say so (`MOVE-027`);
+  `delphi_adb discover` and `devices` gave adb's lines with its column tab inside the text,
+  now two blanks as a console shows them; `delphi_git config` read a value without saying
+  whether it was the repository's or the server account's, and now says it as git does
+  (`--show-scope`, `GIT-088`), and a value set says it went to this repository's config
+  (`GIT-089`); `delphi_report` without a title says its name is only date, time and kind
+  (`REPORT-015`); `delphi_workspace` says the agent's name, its folder in
+  `delphi_messages` and `delphi_report` (`agent`); `delphi_signature` says the position is
+  the index of the `(` or `,` plus one (measured: on the `(` itself the engine has none);
+  `delphi_test discover` with a file searches the folder that holds it and now says which
+  (`TEST-038`); and the preview of a `delphi_changeset` create says the line ending it
+  will write (`eol`).
 
 ## [1.29.0] - 2026-11-09
 

@@ -376,7 +376,8 @@ begin
   var Cola := FinalDeTexto(Guardado, 60).Replace(#13, ' ').Replace(#10, ' ');
   Result := MsgFmt(SN_REPORT_OK_FMT,
     [IfThen(Agent <> '', Agent + '/', '') + TPath.GetFileName(Path),
-     SERVER_VERSION, Length(Guardado), Cola]) + KindNote;
+     SERVER_VERSION, Length(Guardado), Cola]) + KindNote +
+    IfThen(Title = '', #10 + MsgText(SN_REPORT_SIN_TITULO));
 end;
 
 initialization

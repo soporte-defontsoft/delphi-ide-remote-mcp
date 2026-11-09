@@ -1153,6 +1153,13 @@ begin
     // existia desde v0.98 "para delphi_workspace" y nadie la llamaba.
     if CurrentWorkspaceName <> '' then
       Return.AddPair('workspace', CurrentWorkspaceName);
+    // ...y el nombre de ESTE agente, el de su carpeta en delphi_messages y
+    // delphi_report (el que declaro su cliente o el agent= de la llamada): solo
+    // lo decia el buzon, y Hermes no sabia que el suyo era "hermes-agent"
+    // (P11 de la 1.29.1). EL lector, el mismo de las dos (AgenteDeLaLlamada)
+    var Agente := AgenteDeLaLlamada('');
+    if Agente <> '' then
+      Return.AddPair('agent', Agente);
     // What may be READ beyond the roots: the RAD Studio installations, the
     // IDE library search paths and the GetIt catalog repositories. Announced
     // because "anything outside is refused" was not the whole truth for

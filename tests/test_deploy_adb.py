@@ -68,6 +68,12 @@ try:
     check('adb devices: note guia connect y el deploy por build',
           'connect' in d.get('note', '') and 'delphi_build' in d.get('note', ''),
           out[:300])
+    # P7 de la 1.29.1: las columnas de adb van separadas por un tabulador, que salia como \t en el texto
+    if d.get('devices'):
+        check('adb devices: ninguna linea lleva el tabulador de adb (columnas con dos blancos)',
+              not any('\t' in x for x in d['devices']), d['devices'][:3])
+    else:
+        print('NOTA: adb devices sin dispositivos: lo del tabulador no se mide aqui')
 except Exception:
     check('adb devices: parsea', False, out[:250])
 
@@ -78,6 +84,11 @@ try:
           isinstance(d.get('discovered'), list), out[:200])
     check('adb discover: note explica el flujo connect / ip:port del developer',
           'connect' in d.get('note', ''), out[:300])
+    if d.get('discovered'):
+        check('adb discover: ninguna linea lleva el tabulador de adb (columnas con dos blancos)',
+              not any('\t' in x for x in d['discovered']), d['discovered'][:3])
+    else:
+        print('NOTA: adb discover sin anuncios: lo del tabulador no se mide aqui')
 except Exception:
     check('adb discover: parsea', False, out[:250])
 

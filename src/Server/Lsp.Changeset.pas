@@ -958,6 +958,11 @@ begin
           Obj.AddPair('n', TJSONNumber.Create(I + 1));
           Obj.AddPair('kind', KindName(Op.Kind));
           Obj.AddPair('path', Op.Path);
+          // el salto con el que escribira un create: se aplico al apilarlo
+          // (SaltoPedido) y el preview no lo decia (P14 de la 1.29.1). Se mide
+          // del contenido, con los nombres del parametro eol
+          if Op.Kind = opCreate then
+            Obj.AddPair('eol', LowerCase(NombreDelSalto(SaltoDominante(Op.Content))));
           if Op.Kind in [opEdit, opDeleteLine] then
           begin
             // un fichero que un move ANTERIOR del lote trae de otro sitio se

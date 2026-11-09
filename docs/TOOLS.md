@@ -75,14 +75,14 @@ Resolve the identifier at a 0-based line:character position in a Delphi source f
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Signature help (parameter completion) for the call under a 0-based line:character position: the routine signatures with their parameter list, from the official DelphiLSP engine - the IDE's Ctrl+Shift+Space. Point INSIDE the parentheses of the call (right after "(" or a ","). Requires project settings for full answers. Engine limits, measured: with overloads activeSignature stays 0 whatever the call, not the one it resolves to; a call to a METHOD (Obj.Method( ...) often answers null where a free routine answers. delphi_hover on the routine's name gives the one the compiler picks.
+Signature help (parameter completion) for the call under a 0-based line:character position: the routine signatures with their parameter list, from the official DelphiLSP engine - the IDE's Ctrl+Shift+Space. Point INSIDE the call's parentheses (see character). Requires project settings for full answers. Engine limits, measured: with overloads activeSignature stays 0 whatever the call, not the one it resolves to; a call to a METHOD (Obj.Method( ...) often answers null where a free routine answers. delphi_hover on the routine's name gives the one the compiler picks.
 
 *Access: read-only OK.*
 
 | Parameter | Type | Required | Description |
 |---|---|---|---|
 | `line` | integer | **yes** | Zero-based line of the identifier (a hit's "line0") |
-| `character` | integer | **yes** | Zero-based character INSIDE the parentheses of the call: right after its "(" or a "," (not on the routine's name) |
+| `character` | integer | **yes** | Zero-based character right after the call's "(" or a ",": that index + 1 (none on the "(" itself or the routine's name) |
 | `path` | string | **yes** | ONE Delphi source (.pas/.dpr/.dpk/.inc), not a folder (its units: delphi_symbols). |
 <!-- /contract -->
 
@@ -258,7 +258,7 @@ No parameters.
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), the [Workspace.\<name>] section of the server this token is scoped to ("workspace"), and the active RAD Studio by version AND by name (activeDelphiName / Personality / Edition / Build, read from the installation - use them when you look anything up for this Delphi), plus delphiUpdate if declared. It also says WHO is answering ("server"): version, how this process was started (tray / service / console), transport, pid, uptime, the open sessions, the machine it runs on ("host", also in serverInfo) and the Windows account it runs as - the way to check a deployment without looking at the machine from outside. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only.
+The lay of the land on the SERVER: the workspace roots this server operates within (your entire allowed universe here), the access level (read-write / read-only), the [Workspace.\<name>] section of the server this token is scoped to ("workspace"), your agent ("agent", your delphi_messages/delphi_report folder), and the active RAD Studio by version AND by name (activeDelphiName / Personality / Edition / Build, read from the installation - use them when you look anything up for this Delphi), plus delphiUpdate if declared. It also says WHO is answering ("server"): version, how this process was started (tray / service / console), transport, pid, uptime, the open sessions, the machine it runs on ("host", also in serverInfo) and the Windows account it runs as - how to check a deployment. Server paths use VIRTUAL drive units - srvd:, srvc:, ... - which only exist inside this MCP: use them verbatim in every path argument and you will receive them back in results. They are NEVER your own local disks. Call this FIRST. Read-only.
 
 *Access: read-only OK.*
 

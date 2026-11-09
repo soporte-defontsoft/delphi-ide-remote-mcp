@@ -37,7 +37,7 @@ informes del propio workspace, sin moverlos ni borrarlos.
 
 Usage:  python tests/test_buzon_workspace.py [path-to-DelphiLspMcp.exe]
 """
-import glob, os, time
+import glob, json, os, time
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -235,6 +235,17 @@ try:
     check('W14 el nombre solo en dos carpetas de agente: REPORT-014 las nombra como list, nada leido',
           mc.rechazado(r) and mc.es(r, 'SR_REPORT_VARIOS_FMT') and '.\\hermes\\' + DOBLE in r
           and '.\\codex\\' + DOBLE in r and 'DE-HERMES' not in r and 'DE-CODEX' not in r, r[:300])
+
+    # W15 (P10 de la 1.29.1): sin title se guarda, y ahora lo dice; con title, no (W1 lo lleva)
+    r = informe(c1, 'informe sin titulo', '', 'sintitulo')
+    check('W15 un informe sin title se guarda y REPORT-015 lo dice; con title no sale',
+          mc.abre(r, 'SN_REPORT_OK_FMT') and mc.es(r, 'SN_REPORT_SIN_TITULO')
+          and len(md(mc.buzon(REPORTS, 'sintitulo', WS1))) == 1 and not mc.es(r2, 'SN_REPORT_SIN_TITULO'), r[:300])
+
+    # W16 (P11 de la 1.29.1): delphi_workspace dice el nombre de agente, el de su carpeta de informes y mensajes
+    w = json.loads(c1.call('delphi_workspace', {}))
+    check('W16 delphi_workspace dice "agent", el nombre de su carpeta en delphi_messages y delphi_report',
+          w.get('agent') == 'hermes' and os.path.isdir(mc.buzon(REPORTS, w.get('agent', '?'), WS1)), str(w)[:300])
 finally:
     mc.borra(union)  # la union como union: lo de detras no se toca
     proc.kill()

@@ -2012,7 +2012,7 @@ begin
     // el global de la cuenta del servidor). Se negaba con GIT-033 y no habia
     // forma de saber con que identidad se iba a firmar (1.21.1)
     if Params.Message.Trim = '' then
-      GitArgs := 'config --get ' + SinMayusculas(Params.Name.Trim)
+      GitArgs := 'config --show-scope --get ' + SinMayusculas(Params.Name.Trim)
     else
       GitArgs := 'config ' + SinMayusculas(Params.Name.Trim) + ' ' + EnComillas(Params.Message);
   end
@@ -2460,6 +2460,12 @@ begin
   if (ExitCode = 1) and (Output.Trim = '') and (Cmd = 'config') and (Params.Message.Trim = '') then
     Result := GitExito(MsgFmt(SN_GIT_CONFIG_SIN_VALOR_FMT,
       [SinMayusculas(Params.Name.Trim), SinMayusculas(Params.Name.Trim)]), 1);
+  // la que esta dice de donde viene: git contesta "<ambito>TAB<valor>"
+  // (--show-scope) y el agente leia el tabulador sin saber si era del repo o
+  // de la cuenta del servidor (P8 de la 1.29.1)
+  if (ExitCode = 0) and (Cmd = 'config') and (Params.Message.Trim = '') and Output.Trim.Contains(#9) then
+    Result := GitExito(MsgFmt(SN_GIT_CONFIG_VALOR_FMT, [SinMayusculas(Params.Name.Trim),
+      Output.Trim.Substring(Output.Trim.IndexOf(#9) + 1), Output.Trim.Substring(0, Output.Trim.IndexOf(#9))]), 0);
   // Una respuesta que es solo "exit=0" no se distingue de una que se ha roto
   // por el camino, y lo primero que hace quien la recibe es repetirla. El
   // silencio de git SIGNIFICA cosas distintas segun la orden, asi que se
@@ -2482,6 +2488,9 @@ begin
     else
       Result := GitExito(MsgFmt(SN_GIT_SILENT_OK_FMT, [Cmd]), 0);
   end;
+  // fijar la identidad la escribe en el config de ESTE repo: se dice
+  if (ExitCode = 0) and (Cmd = 'config') and (Params.Message.Trim <> '') then
+    Result := GitExito(MsgFmt(SN_GIT_CONFIG_FIJADO_FMT, [SinMayusculas(Params.Name.Trim)]), 0);
   // Un worktree nuevo es de quien lo pidio: se lo dice, con como quitarlo.
   if (ExitCode = 0) and (Cmd = 'worktree') and SameText(Params.Action.Trim, 'add') then
     Result := Result + #10 + MsgFmt(SN_GIT_WORKTREE_ADDED_FMT, [Destino]);

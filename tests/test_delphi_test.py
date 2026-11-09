@@ -185,6 +185,13 @@ check('discover NO cuenta un proyecto normal', 'NormalApp.dpr' not in names, nam
 check('discover dice el framework y el porque', mc.ficheros(j, 'projects') and all(p.get('framework') and p.get('why') for p in mc.ficheros(j, 'projects')), str(j)[:250])
 j = J(A.call('delphi_test', {'command': 'discover', 'path': os.path.join(BASE, 'NormalApp')}))
 check('carpeta sin tests: total 0 con explicacion', j.get('total') == 0 and mc.es(j.get('note') or '', 'SN_TEST_NONE'), str(j)[:250])
+check('...con una carpeta, sin pathNote', 'pathNote' not in j, str(j)[:250])
+# P13 de la 1.29.1: con un FICHERO se busca en su carpeta, y ahora se dice cual
+j = J(A.call('delphi_test', {'command': 'discover', 'path': os.path.join(BASE, 'NormalApp', 'NormalApp.dpr')}))
+check('discover con un fichero: TEST-021 y TEST-038 dice que se busco en su carpeta',
+      j.get('total') == 0 and mc.es(j.get('note') or '', 'SN_TEST_NONE')
+      and mc.es(j.get('pathNote') or '', 'SN_TEST_DISCOVER_FICHERO_FMT') and 'NormalApp' in (j.get('pathNote') or ''),
+      str(j)[:300])
 
 # ---- el interruptor ----
 r = A.call('delphi_test', {'command': 'run', 'project': VERDE})

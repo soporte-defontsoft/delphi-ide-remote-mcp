@@ -72,6 +72,13 @@ try:
     G = escribe('mover\\b.txt', 'hola\n')
     r = srv.call('delphi_move', {'path': G, 'dest': os.path.join(JAIL, 'mover', 'sinext')})
     check('T5 V158 MOVE-025 dice que las carpetas padre se crean', mc.es(r, 'SN_MOVE_DESTINO_SIN_EXTENSION_FMT') and 'parent folders' in r, r[:400])
+    check('T5 ...y la carpeta de dest ya existia: sin MOVE-027', not mc.es(r, 'SN_MOVE_CARPETA_CREADA_FMT'), r[:400])
+    # P6 de la 1.29.1: la carpeta que dest necesita y no existe se crea, y ahora se dice
+    H = escribe('mover\\c.txt', 'hola\n')
+    r = srv.call('delphi_move', {'path': H, 'dest': os.path.join(JAIL, 'mover', 'nueva', 'sub', 'c.txt')})
+    check('T5b una carpeta de dest que no existia: se crea y MOVE-027 la nombra',
+          mc.es(r, 'SN_MOVE_CARPETA_CREADA_FMT') and 'sub' in r and
+          os.path.isfile(os.path.join(JAIL, 'mover', 'nueva', 'sub', 'c.txt')), r[:400])
 
     # ---- T2 y T3: un .style de verdad
     ESTILO = ("object TStyleContainer\n  object TLayout\n    StyleName = 'cardstyle'\n  end\n"

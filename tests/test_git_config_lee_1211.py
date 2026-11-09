@@ -9,6 +9,8 @@ GIT-033 y un agente no tenia forma de saber con que identidad iba a firmar
   C3 con message escribe, como siempre; leerlo despues lo devuelve
   C4 en una raiz de SOLO LECTURA: leer va (es una consulta); escribir, no
   C5 una clave que no es de identidad sigue negada aunque sea para leer (GIT-024)
+  C1c/C3a/C6 (P8 de la 1.29.1): la lectura dice de donde viene el valor, como lo dice git
+     (--show-scope: local o global, GIT-088), y la escritura que va al config del repo (GIT-089)
 
 El global y el del sistema de git se apartan (GIT_CONFIG_GLOBAL a un fichero
 vacio, GIT_CONFIG_NOSYSTEM=1, para el servidor y para el git de la bateria):
@@ -64,6 +66,8 @@ try:
     r, err = g(command='config', name='user.name')
     check('C1 config sin message LEE user.name', not err and 'Bateria Lee' in r, r[:300])
     check('C1b ...y no escribe nada', lee(CFG) == antes)
+    check('C1c ...y dice de donde viene: el config del repo (local, GIT-088)',
+          mc.es(r, 'SN_GIT_CONFIG_VALOR_FMT') and 'from the local' in r and '\t' not in r, r[:300])
 
     r, err = g(command='config', name='user.email')
     check('C2 sin fijar en ningun config: GIT-079 y no es un error',
@@ -73,6 +77,7 @@ try:
     r, err = g(command='config', name='user.email', message='lee@example.com')
     check('C3 con message escribe, como siempre',
           not err and git('config', '--get', 'user.email').strip() == 'lee@example.com', r[:300])
+    check('C3a ...y dice que lo fijo en el config de ESTE repo (GIT-089)', mc.es(r, 'SN_GIT_CONFIG_FIJADO_FMT'), r[:300])
     r, err = g(command='config', name='User.Email')
     check('C3b leerlo despues lo devuelve (el nombre en cualquier caja)',
           not err and 'lee@example.com' in r, r[:300])
@@ -86,6 +91,13 @@ try:
     r, err = g(command='config', name='core.editor')
     check('C5 otra clave sigue negada aunque sea para leer (GIT-024)',
           err and mc.es(r, 'SR_GIT_CONFIG_ONLY_ACCEPTS_USER'), r[:300])
+
+    # un valor que SOLO esta en el global (el fichero apartado de la bateria): lo dice
+    git('config', '--global', 'user.email', 'global@example.com')
+    r, err = g(repo=REPO_RO, command='config', name='user.email')
+    check('C6 un valor que solo esta en el global: GIT-088 dice global',
+          not err and mc.es(r, 'SN_GIT_CONFIG_VALOR_FMT') and 'global@example.com' in r and 'from the global' in r,
+          r[:300])
 finally:
     s.cierra()
 
