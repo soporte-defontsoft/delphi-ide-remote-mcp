@@ -1,0 +1,26 @@
+{
+  "api-connections": {
+    "projects": {
+      "my-app": {
+        "apis": {
+          "orders": {
+            "baseUrl": "https://api.example.com/v2",
+            "methods": ["GET", "POST"],
+            "auth": { "type": "bearer", "token": "change-me" },
+            "headers": { "Accept": "application/json" },
+            "timeout": 30
+          },
+          "legacy": {
+            "baseUrl": "https://legacy.example.com/rest",
+            "methods": ["GET"],
+            "auth": [
+              { "type": "basic", "user": "legacy_reader", "password": "change-me" },
+              { "type": "header", "name": "X-Api-Key", "value": "change-me-too" }
+            ],
+            "pin": "sha256/AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA="
+          }
+        }
+      }
+    }
+  }
+}

@@ -478,6 +478,15 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   `tools/list` (`DB-002`, `API-002`). The agent addresses each one as `project/alias`.
   Writes (`insert`, `update`, `delete`) happen only where the database says
   `"readonly": false`; the files are read at every call, so a change needs no restart.
+  `update` and `delete` change at most 100 rows unless the call raises `max` (with more,
+  nothing is changed and `DB-028` says how many it would have been). Creating tables and
+  views (`create-table`, `create-view`) takes `"allowCreate": true` in that database's
+  entry (optional, false when absent; never on a read-only one). The zip carries both
+  files as examples, with their real shape and invented values -
+  `connections\databases\db-connections.example.json` and
+  `connections\apis\api-connections.example.json`: copy one to the same folder without
+  `.example` and fill it in. **Pending tests:** an API that needs a login call first, and
+  then the session token it returns on every request; `auth` holds fixed credentials only.
   A driver that loads a client library loads it from `drivers\<DriverID>\` of the server
   and from nowhere else: PostgreSQL needs `drivers\PG\lib\libpq.dll` **16 or later** with
   the DLLs it depends on (an older one refuses to open: the server asks it not to use the

@@ -76,24 +76,34 @@ Status page as of 2026-11-09 (current release v1.29.0; 44 tools).
 
 - The close of the open list: `delphi_desktop` on KDE Plasma (the desktop portal's hands, KWin's overview, the scale measured where the desktop does not say it) and `drag`, which moves and resizes windows; creating a unit is `delphi_create`'s alone; `delphi_adb` and `delphi_desktop` announced only where the workspace declares somewhere for them to go, and the `instructions` opening with a map of the tools; a form the IDE's parser would stop reading never written by an edit (`DSGN-124`); a rename that asks each project's engine about a namesake; a long written block echoed head and tail; and what a review of the landscape of the whole source found failing, fixed (1.28.0)
 
+- Databases and HTTP APIs by name (`delphi_db`, `delphi_api`): the operator defines them in two files of the server's own house and opens them per workspace; the agent asks for operations - tables, fields, rows, a summary, writes of at most `max` rows, tables and views where the operator allows them, a request to an API - and never sees a server, an address or a credential. And the designer: events bound by `set` (judged by the event's signature), several controls in one `insert` (`items`), `preview` at another display scale (`scale=`), the service's way of painting compared pixel by pixel with the desktop's on the 355 forms of the samples, `lint styles=`; `delphi_config save-as`; `delphi_create kind=project-library` and `autocreate=no`; the help of Delphi 13.2 read as 13.1's (1.29.0)
+
 ## Next
 
-Nothing beyond the database and API access below: the list that was open closed with 1.28, each item done, measured, declared or parked by the operator.
+Nothing: 1.29 closed the list, each item done, measured, declared or parked by the operator. What follows are patches.
 
 ## Open
 
-- Database and API access by name (`delphi_db`, `delphi_api`): connections the operator defines (the IDE's FireDAC definitions, an API in `settings.ini`) and grants by name, which an agent uses without seeing inside - to be agreed with the operator
+- `delphi_api` against an API that needs a login call first, and then the session token it returns on every request: pending tests (the operator's credential is static, and the agent cannot make that login without the password travelling from it)
 
 ## Parked (the operator keeps them on the list, not now)
 
-- The designer measured where it is not yet: `preview` at other DPIs (it takes a machine at another scale) and from the tray (the operator starts the tray from his desktop)
 - The protections that need a privilege, measured in the suite: this machine creates symbolic links now and the Python batteries plant them; what is left are the unit tests run from the repository's own build output, where Windows refuses them, and an elevated console
-- The designer beyond `insert` / `set` / `delete` (events, collections, non-visual components), and the defaults a component's constructor sets, read from its source (`preview` already draws them - it builds the real control - and since 1.27 `layout` judges the box the renderer measured; only without the renderer does it list such a control under `sizeNotWritten`)
+- The defaults a component's constructor sets, read from its source (`preview` already draws them - it builds the real control - and since 1.27 `layout` judges the box the renderer measured; only without the renderer does it list such a control under `sizeNotWritten`)
+
+## Declared limits
+
+- `delphi_designer insert` of a `TTabSheet` neither makes it the `ActivePage` nor gives it an `ImageIndex`, as the IDE's New Page does: at run time the first page shows (measured with `preview`)
+- From a Windows service, `preview` paints control by control (`WM_PRINT`): some controls keep Windows' native look instead of the IDE designer's - an edit's border, the weight of a group box's caption -, never their size or place. Measured in a desktop session on the 355 forms of the samples, 257 identical pixel by pixel
+- An SDK folder the IDE declares through `$(USERPROFILE)` in `BDSPLATFORMSDKSDIR`: not measured, no machine here has one
+- Git LFS against GitHub (an upload, an `href` to another host, redirects): not measured, it needs a real LFS repository and the network to reach it
 
 ## Declined by the operator (do not re-propose)
 
 - Interpreters: running arbitrary interpreters on the server (`delphi_run` itself was retired on 2026-09-23)
 - `[URGENTE]`-style priority messages in the mailbox
+- macOS as a target: not measured; the operator does not use it
+- Non-visual components and collections through `delphi_designer insert` / `set` (events are bound by `set` since 1.29): they are written as text
 - GetIt / package installation from the MCP
 - GUI control of Linux from the MCP outside the PAServer node
 - Several Delphi versions on one machine: one server serves one Delphi (`[Server] DelphiVersion`). To work with several versions, run one server per version - for example one virtual machine per Delphi, each with its own MCP server - and let the agent choose which one it talks to

@@ -185,6 +185,13 @@ CONTENT = [
     (os.path.join(REPO, 'src', 'Render', 'Win32', 'Release', 'DelphiFormRenderVcl.exe'), 'DelphiFormRenderVcl.exe'),
     (os.path.join(REPO, 'src', 'Render', 'Win32', 'Release', 'DelphiFormRenderFmx.exe'), 'DelphiFormRenderFmx.exe'),
     (os.path.join(REPO, 'settings.example.ini'), 'settings.example.ini'),
+    # 1.29: los ejemplos de los ficheros de conexiones de delphi_db y delphi_api, donde el servidor busca
+    # los de verdad (el operador copia uno a su lado sin ".example"); test_ejemplos_conexiones_129 los
+    # pasa por el lector
+    (os.path.join(REPO, 'connections', 'databases', 'db-connections.example.json'),
+     'connections/databases/db-connections.example.json'),
+    (os.path.join(REPO, 'connections', 'apis', 'api-connections.example.json'),
+     'connections/apis/api-connections.example.json'),
     (os.path.join(REPO, 'QUICKSTART.md'), 'QUICKSTART.md'),  # en la raiz del repo y del zip (David, 25-sep)
     # runner/mcp-runner.py salio del zip en v0.98: el destino ya no necesita
     # NADA instalado (PAServer ejecuta por flag 5). En su lugar viaja el

@@ -310,7 +310,7 @@ running it as a service and configuring it are in [docs/CONFIGURATION.md](docs/C
 **No Delphi installed, or don't want to compile?** Download the ready-made
 Windows binary from **[Releases](https://github.com/soporte-defontsoft/delphi-ide-remote-mcp/releases/latest)** —
 the zip carries `DelphiLspMcp.exe`, the style converter, the two form renderers
-(`DelphiFormRenderVcl.exe`, `DelphiFormRenderFmx.exe`), `settings.example.ini`,
+(`DelphiFormRenderVcl.exe`, `DelphiFormRenderFmx.exe`), `settings.example.ini`, the examples of the database and API connections files (`connections\`),
 the desktop node and the run-job launcher in both flavours (`node/`) and the docs, plus a SHA-256 to verify the download (`certutil -hashfile
 DelphiLspMcp-*.zip SHA256` on Windows, `sha256sum` elsewhere). Note the
 *server* machine still needs its own licensed RAD Studio at runtime — the

@@ -1,0 +1,30 @@
+{
+  "db-connections": {
+    "projects": {
+      "my-app": {
+        "databases": {
+          "sales": {
+            "engine": "MSSQL",
+            "provider": "FIREDAC",
+            "server": "db01.example.internal\\SQLEXPRESS",
+            "database": "SalesHistory",
+            "user": "mcp_reader",
+            "password": "change-me",
+            "readonly": true
+          },
+          "staging": {
+            "engine": "PG",
+            "provider": "FIREDAC",
+            "server": "db02.example.internal",
+            "port": 5432,
+            "database": "sales_staging",
+            "user": "mcp_writer",
+            "password": "change-me-too",
+            "readonly": false,
+            "allowCreate": true
+          }
+        }
+      }
+    }
+  }
+}
