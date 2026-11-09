@@ -396,8 +396,7 @@ begin
           rectangulo salia 25 px mas grande por cada lado (medido el
           5-nov-2026 en el Fedora con GNOME). GTK dice cuanto mide en
           _GTK_FRAME_EXTENTS (izquierda, derecha, arriba, abajo), el juez:
-          se resta para dar el rectangulo VISIBLE. Sin ella (un marco del
-          escritorio, como en Plasma), el de siempre. }
+          se resta para dar el rectangulo VISIBLE. }
         var Marco := Cardinales(P^, '_GTK_FRAME_EXTENTS', 4);
         if Length(Marco) = 4 then
         begin
@@ -405,6 +404,25 @@ begin
           Inc(V.Y, Marco[2]);
           Dec(V.Ancho, Marco[0] + Marco[1]);
           Dec(V.Alto, Marco[2] + Marco[3]);
+        end
+        { ...y la que NO se lo dibuja lleva el marco del gestor de ventanas
+          por FUERA: KWin en Plasma Wayland no reparenta, y la barra de titulo
+          no es de la ventana X11 - el rectangulo salia 35 px mas bajo (medido
+          el 9-nov-2026 en el Fedora 45 con Plasma, P15 de la 1.29.1). El
+          gestor lo declara en _NET_FRAME_EXTENTS de la propia ventana
+          (izquierda, derecha, arriba, abajo), el juez de EWMH: se suma. En
+          GNOME la ventana de primer nivel es el marco de Mutter, que no la
+          lleva: nada que sumar, y una con CSD ya salio arriba. }
+        else
+        begin
+          var Borde := Cardinales(P^, '_NET_FRAME_EXTENTS', 4);
+          if Length(Borde) = 4 then
+          begin
+            Dec(V.X, Borde[0]);
+            Dec(V.Y, Borde[2]);
+            Inc(V.Ancho, Borde[0] + Borde[1]);
+            Inc(V.Alto, Borde[2] + Borde[3]);
+          end;
         end;
         { Una ventana TRANSPARENTE del todo no se ve aunque X11 la de por
           visible: el puente de video de Xwayland en Plasma

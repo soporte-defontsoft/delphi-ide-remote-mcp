@@ -108,6 +108,11 @@ the MCP `initialize` response (`serverInfo.version`).
   `delphi_test discover` with a file searches the folder that holds it and now says which
   (`TEST-038`); and the preview of a `delphi_changeset` create says the line ending it
   will write (`eol`).
+- `delphi_desktop` on KDE Plasma (Wayland): the rectangle of a window in `windows`, and
+  the crop of `screenshot window=`, left out its title bar (35 px short at the top,
+  measured on Fedora 45). KWin draws that bar outside the X11 window and declares it in
+  `_NET_FRAME_EXTENTS`, which the node now adds; on GNOME, where the window draws its
+  own frame or Mutter's frame is the top-level window, nothing changes.
 
 ## [1.29.0] - 2026-11-09
 
