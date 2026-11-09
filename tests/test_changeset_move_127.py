@@ -31,7 +31,8 @@ os.makedirs(JAIL)
 # La OTRA unidad, el sandbox de pruebas en vivo de la casa. Sin el, o en el mismo volumen que la jaula, no hay
 # nada que medir y se DICE (sin_checks): era un assert y una ruta que se daba por supuesta; y el makedirs y
 # el servidor iban antes del try, sin el finally que quita OTRA (revisor de baterias de la 1.27)
-SANDBOX = r'D:\SandBox-lsp\testsserver'
+# dentro de test-mcp-server: la carpeta de las pruebas, que se vacia entera al limpiar (David, 9-nov-2026)
+SANDBOX = r'D:\SandBox-lsp\testsserver\test-mcp-server'
 OTRA = os.path.join(SANDBOX, 'changeset-move-127-%d' % os.getpid())
 SIN = None
 if not os.path.isdir(SANDBOX):

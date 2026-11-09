@@ -22,7 +22,8 @@ Variante atributos ilegibles (E6-E9): una junction denegada cuya carpeta tampoco
 se puede listar hace fallar GetFileAttributes (err 5) y no se sabe si es un
 enlace; Windows la atraviesa igual. En %TEMP% no pasa (ACE de capacidad
 heredadas), asi que se mide en DELPHI_MCP_TEST_ACLDIR o, por defecto, en el
-sandbox D:/SandBox-lsp/testsserver si existe.
+sandbox D:/SandBox-lsp/testsserver/test-mcp-server si existe (la carpeta de las pruebas, que se vacia
+entera al limpiar: David, 9-nov-2026).
 
   E6 crear a traves de la junction: GUARD-001 (ROJO contra r1222al)
   E7 leer a traves de ella: GUARD-001, sin el contenido de fuera (ROJO contra r1222al)
@@ -149,10 +150,11 @@ if not temp_planta:
           'DELPHI_MCP_TEST_ACLDIR')
 
 ACLDIR = os.environ.get('DELPHI_MCP_TEST_ACLDIR', '').strip() or (
-    os.path.normpath('D:/SandBox-lsp/testsserver') if os.path.isdir('D:/SandBox-lsp/testsserver') else '')
+    os.path.normpath('D:/SandBox-lsp/testsserver/test-mcp-server')
+    if os.path.isdir('D:/SandBox-lsp/testsserver/test-mcp-server') else '')
 if not ACLDIR:
     print('NOTA: no se mide la variante atributos ilegibles: ni DELPHI_MCP_TEST_ACLDIR '
-          'ni el sandbox D:/SandBox-lsp/testsserver (hace falta un volumen donde '
+          'ni el sandbox D:/SandBox-lsp/testsserver/test-mcp-server (hace falta un volumen donde '
           'GetFileAttributes de una junction denegada falle con ACCESS_DENIED)')
 else:
     AB = os.path.join(ACLDIR, 'test_enlace_ilegible_1230')   # SOLO nuestro subarbol
