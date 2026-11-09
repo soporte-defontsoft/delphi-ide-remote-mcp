@@ -105,14 +105,14 @@ the MCP `initialize` response (`serverInfo.version`).
   (`REPORT-015`); `delphi_workspace` says the agent's name, its folder in
   `delphi_messages` and `delphi_report` (`agent`); `delphi_signature` says the position is
   the index of the `(` or `,` plus one (measured: on the `(` itself the engine has none);
-  `delphi_test discover` with a file searches the folder that holds it and now says which
-  (`TEST-038`); and the preview of a `delphi_changeset` create says the line ending it
-  will write (`eol`).
+  `delphi_test discover` with a file searches the folder that holds it and, finding no test
+  project there, now says which folder that was (`TEST-038`); and the preview of a
+  `delphi_changeset` create says the line ending it will write (`eol`).
 - `delphi_desktop` on KDE Plasma (Wayland): the rectangle of a window in `windows`, and
   the crop of `screenshot window=`, left out its title bar (35 px short at the top,
   measured on Fedora 45). KWin draws that bar outside the X11 window and declares it in
-  `_NET_FRAME_EXTENTS`, which the node now adds; on GNOME, where the window draws its
-  own frame or Mutter's frame is the top-level window, nothing changes.
+  `_NET_FRAME_EXTENTS`, which the node now adds; on GNOME, where an FMX window draws its
+  own frame, nothing changes (both measured with an FMX application).
 
 ## [1.29.0] - 2026-11-09
 
