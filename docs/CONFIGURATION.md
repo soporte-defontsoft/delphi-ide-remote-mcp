@@ -228,6 +228,8 @@ SessionTimeoutMinutes=720
 EngineIdleMinutes=30
 ; at most this many LSP engines alive; past it, the least recently used one stops (0 = no cap)
 MaxEngines=0
+; a call still running sends its client a progress notification this often (0 = none)
+ProgressSeconds=15
 ; the ONE RAD Studio this server uses; absent = the newest with DelphiLSP,
 ; which the server then writes here at its first start
 DelphiVersion=37.0
@@ -656,6 +658,15 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   rather than throwing an answer away - and the log says which one and why. Its project's
   next request starts it again (a few seconds). Default 0: no cap, only `EngineIdleMinutes`
   stops engines. Worth setting on a machine with little memory or many projects at once.
+- **`[Server] ProgressSeconds`** (or `DELPHI_MCP_PROGRESS_SECONDS`; 1.29.1): a call still
+  running sends its client a `notifications/progress` every this many seconds (default 15;
+  0 = none), when the client asked for one with a `progressToken`, saying which tool and
+  how long (`SYS-040`). Measured: Claude Code (the app and the CLI) gives up on a call
+  after 300 s with no news and opencode after 60, and a progress notification starts
+  their count again; Hermes' client stops at 300 s whatever it receives. By stdio it is one
+  more line; over HTTP, to a client that accepts `text/event-stream`, the first one opens
+  the answer as a stream (sent in chunks) and the answer comes as its last event. A call
+  that ends before the first one is answered as before.
 - **`[CORS]` and `[SSL]`** — the HTTP transport. `[CORS] Enabled` (on by default) checks a browser's `Origin` against `AllowedOrigins`; `[SSL] Enabled` (off by default) serves HTTPS with `CertFile`, `KeyFile` and, when the chain needs it, `RootCertFile`. A value of either `Enabled` that is neither yes nor no is taken as on, the closed side. `[Server] Endpoint` (`/mcp`) is the path of the MCP endpoint, and `[Server] Host` (`localhost`) only the name in the URL the server shows: where it listens is `BindIP`.
 - **`[Log]`** — the server's log on disk, the **same in every mode** (service, terminal and
   tray), in `logs\` next to the exe. `logs\actual.log` is the live tail, appended every half

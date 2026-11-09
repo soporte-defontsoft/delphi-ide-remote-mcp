@@ -170,7 +170,8 @@ uses
   Mcp.Tools.Db in 'Mcp.Tools.Db.pas',
   Lsp.ClienteHttp in 'Lsp.ClienteHttp.pas',
   Mcp.Tools.Api in 'Mcp.Tools.Api.pas',
-  Lsp.ConPlazo in 'Lsp.ConPlazo.pas';
+  Lsp.ConPlazo in 'Lsp.ConPlazo.pas',
+  Lsp.Progreso in 'Lsp.Progreso.pas';
 
 {$R *.res}
 

@@ -26,6 +26,7 @@ implementation
 
 uses
   Lsp.Identidad, // [local change] el nombre de una peticion moderna
+  Lsp.Progreso, // [local change 1.29.1] el latido de una llamada larga (F8)
   Lsp.Texts; // [local change 2026-09-28] MsgExcepcion
 
 { TMCPStdioTransport }
@@ -60,6 +61,21 @@ begin
   SetTextCodePage(Input, CP_UTF8);
   SetTextCodePage(Output, CP_UTF8);
   InputLine := '';
+  // [local change 1.29.1, F8] el latido de una llamada larga sale como una
+  // linea mas de stdout (Lsp.Progreso). Lo escribe el hilo del latido mientras
+  // este espera a la tool: nunca a la vez que la respuesta de abajo
+  PonSumideroDelHilo(
+    function(const AMensaje: string): Boolean
+    begin
+      try
+        Writeln(Output, AMensaje);
+        Flush(Output);
+        TLogger.Info('Sent: ' + AMensaje);
+        Result := True;
+      except
+        Result := False;
+      end;
+    end);
   while not Eof(Input) do
   begin
     try
@@ -102,6 +118,7 @@ begin
     end;
   end;
 
+  QuitaSumideroDelHilo;
   TLogger.Info('STDIO transport stopped - EOF reached');
 end;
 

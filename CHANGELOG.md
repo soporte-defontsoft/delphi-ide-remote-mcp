@@ -8,6 +8,20 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- A call still running tells its client so: every `[Server] ProgressSeconds` (15 by default;
+  0 = none) it sends a `notifications/progress` with the `progressToken` the client sent,
+  the seconds it has been running and `SYS-040` naming the tool. Measured: Claude Code (the
+  app and the CLI) gave up on a call after 300 s with no news and opencode after 60, and a
+  progress notification starts their count again; until now the server sent none, so a
+  long copy, delete or build was taken for lost although it finished, and an agent ran it
+  again on top. One heartbeat for every tool and both transports (`Lsp.Progreso`): by
+  stdio it is one more line; over HTTP, to a client that accepts `text/event-stream`, the
+  first one opens the answer as a stream sent in chunks and the answer comes as its last
+  event. A call that ends before the first one is answered byte for byte as before. The
+  log line of a request without a session now carries its `Accept` header.
+
 ### Security
 
 - The DLLs the server loads come from its own folder, `System32` and the folders it adds -

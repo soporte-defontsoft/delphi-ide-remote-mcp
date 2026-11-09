@@ -1,0 +1,206 @@
+# -*- coding: utf-8 -*-
+"""El latido de una llamada larga: notifications/progress mientras dura (F8 de la 1.29.1).
+
+Medido el 9-nov-2026 (P1 de plan-1-29-1): Claude Code (app y CLI) abandona una llamada tras 300 s sin
+noticias y opencode tras 60, y un notifications/progress con el progressToken de la llamada les reinicia la
+cuenta. Hasta la 1.29 el servidor no mandaba ninguno. Ahora, una llamada que pidio progreso y sigue en
+marcha manda uno cada ProgressSeconds (Lsp.Progreso), por stdio como una linea mas y por HTTP abriendo el
+stream de la respuesta (text/event-stream, chunked) cuando hay el primero; la que acaba antes sale como
+siempre.
+
+La llamada larga: delphi_db contra 192.0.2.1 (TEST-NET, no existe), que tarda los 12 s del plazo de
+conexion y contesta DB-007; con DELPHI_MCP_PROGRESS_SECONDS=2 caben varios latidos. Necesita las DLL de
+PostgreSQL de produccion (sin ellas, la bateria termina sin checks y lo dice).
+
+  L1 stdio con progressToken: latidos antes de la respuesta, con SU token, progreso creciente, SYS-040 y
+     el nombre de la tool; luego la respuesta (DB-007)
+  L2 stdio sin progressToken: ningun latido
+  L3 stdio, una llamada rapida con token: ningun latido
+  L4 stdio con ProgressSeconds=0: ningun latido
+  H1 HTTP moderno aceptando un stream: text/event-stream en trozos, latidos con su token y la respuesta como
+     ultimo evento
+  H2 HTTP moderno aceptando solo JSON: la respuesta JSON de siempre, sin latidos
+  H3 HTTP con sesion (SSE): latidos y la respuesta en el mismo stream
+  H4 HTTP moderno, una llamada rapida con token: application/json como antes (no se abre el stream)
+  H5 un cliente que se va a mitad del stream: el servidor sigue contestando a la siguiente
+
+Uso:  python tests/test_progreso_1291.py [ruta-a-DelphiLspMcp.exe]
+"""
+import http.client
+import io
+import json
+import os
+import shutil
+import mcp_cliente as mc
+from mcp_cliente import check
+
+PROD_LIB = r'C:\Delphi-mcp-Server\drivers\PG\lib'
+TITULO = 'el latido de una llamada larga (1.29.1)'
+if not os.path.isfile(os.path.join(PROD_LIB, 'libpq.dll')):
+    print('NOTA: sin %s no hay llamada larga inofensiva: no se mide nada' % PROD_LIB)
+    mc.fin(TITULO, sin_checks='sin las DLL de PostgreSQL de produccion en esta maquina')
+    raise SystemExit(0)
+
+BASE = mc.carpeta('progreso_1291')
+JAIL = os.path.join(BASE, 'jail')
+os.makedirs(JAIL)
+SRV = os.path.join(BASE, 'srv')
+EXE = mc.copia_exe(SRV)
+shutil.copytree(PROD_LIB, os.path.join(SRV, 'drivers', 'PG', 'lib'))
+d = os.path.join(SRV, 'connections', 'databases')
+os.makedirs(d)
+io.open(os.path.join(d, 'db-connections.json'), 'w', encoding='utf-8').write(json.dumps(
+    {'db-connections': {'projects': {'p': {'databases': {'pg': {
+        'server': '192.0.2.1', 'database': 'inventada', 'user': 'nadie', 'password': 'x1',
+        'engine': 'PG', 'provider': 'FIREDAC', 'readonly': True}}}}}}))
+LARGA = {'name': 'delphi_db', 'arguments': {'command': 'tables', 'db': 'p/pg'}}
+RAPIDA = {'name': 'delphi_workspace', 'arguments': {}}
+
+
+TOKEN = 'progreso-1291-0123456789abcdef'
+
+
+def entorno(segundos='2'):
+    return mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'DELPHI_MCP_DB_PROJECTS': 'p', 'DELPHI_MCP_TOKEN': TOKEN,
+                       'DELPHI_MCP_PROGRESS_SECONDS': segundos})
+
+
+def negativa_de_siempre(t):
+    """La de una base que no contesta: DB-007 (el plazo del servidor) o DB-009 (el de libpq, que vence antes)."""
+    return mc.es(t, 'SR_DB_NO_RESPONDE_FMT') or mc.es(t, 'SR_DB_NO_ABRE_FMT')
+
+
+def con_token(params, token):
+    p = json.loads(json.dumps(params))
+    if token is not None:
+        p.setdefault('_meta', {})['progressToken'] = token
+    return p
+
+
+def por_stdio(srv, rid, params, t=60):
+    """Manda un tools/call y recoge, en orden, lo que llega hasta su respuesta: (latidos, respuesta)."""
+    srv.send({'jsonrpc': '2.0', 'id': rid, 'method': 'tools/call', 'params': params})
+    latidos, resp = [], None
+    import time
+    hasta = time.time() + t
+    while time.time() < hasta and resp is None:
+        try:
+            linea = srv.q.get(timeout=1)
+        except Exception:
+            continue
+        try:
+            m = json.loads(linea)
+        except Exception:
+            continue
+        if m.get('method') == 'notifications/progress':
+            latidos.append(m)
+        elif m.get('id') == rid:
+            resp = m
+    return latidos, resp
+
+
+def bien_formados(latidos, token):
+    """Todos con SU token, progreso estrictamente creciente, SYS-040 y el nombre de la tool."""
+    prog = [l['params'].get('progress') for l in latidos]
+    return (all(l['params'].get('progressToken') == token for l in latidos)
+            and all(isinstance(p, (int, float)) for p in prog)
+            and all(b > a for a, b in zip(prog, prog[1:]))
+            and all(mc.es(l['params'].get('message', ''), 'SN_SYS_SIGUE_EN_MARCHA_FMT')
+                    and 'delphi_db' in l['params'].get('message', '') for l in latidos))
+
+
+def texto_de(resp):
+    return mc.texto(resp) if resp else ''
+
+
+try:
+    # ---- stdio
+    srv = mc.Stdio(EXE, entorno(), nombre='progreso', t=90)
+    try:
+        lat, resp = por_stdio(srv, 901, con_token(LARGA, 'tok-s'))
+        check('L1 stdio con token: latidos (>= 3) antes de la respuesta', len(lat) >= 3 and resp is not None,
+              (len(lat), str(resp)[:200]))
+        check('L1 ...con su token, progreso creciente, SYS-040 y el nombre de la tool', lat and bien_formados(lat, 'tok-s'),
+              [l['params'] for l in lat][:3])
+        check('L1 ...y la respuesta es la de siempre (DB-007 o DB-009)', negativa_de_siempre(texto_de(resp)),
+              texto_de(resp)[:300])
+        lat, resp = por_stdio(srv, 902, LARGA)
+        check('L2 stdio sin progressToken: ningun latido', not lat and resp is not None, (len(lat), str(resp)[:200]))
+        lat, resp = por_stdio(srv, 903, con_token(RAPIDA, 7))
+        check('L3 stdio, una llamada rapida con token: ningun latido', not lat and resp is not None,
+              (len(lat), str(resp)[:200]))
+    finally:
+        srv.cierra()
+    srv = mc.Stdio(EXE, entorno('0'), nombre='progreso', t=90)
+    try:
+        lat, resp = por_stdio(srv, 904, con_token(LARGA, 'tok-0'))
+        check('L4 stdio con ProgressSeconds=0: ningun latido', not lat and resp is not None,
+              (len(lat), str(resp)[:200]))
+    finally:
+        srv.cierra()
+
+    # ---- HTTP: un workspace con su token, como las demas baterias HTTP
+    io.open(os.path.join(SRV, 'settings.ini'), 'w', encoding='utf-8').write(
+        '[Workspace.P]\nToken=%s\nRoots=%s\nDbAllowedProjects=p\n' % (TOKEN, JAIL))
+    puerto = mc.puerto_libre()
+    proc = mc.lanza_http(EXE, puerto, env=mc.entorno({'DELPHI_MCP_BIND_IP': '127.0.0.1',
+                                                    'DELPHI_MCP_PROGRESS_SECONDS': '2'}))
+    try:
+        cli = mc.Http(puerto, token=TOKEN, t=90)
+        url = cli.url
+        cab = {'MCP-Protocol-Version': mc.PROTOCOLO_MODERNO, 'Mcp-Method': 'tools/call'}
+
+        def moderna(params, token, accept, rid):
+            p = con_token(mc.params_modernos(params, 'progreso'), None)
+            if token is not None:
+                p['_meta']['progressToken'] = token
+            h = dict(cab, **{'Mcp-Name': params['name']})
+            return mc.post(url, {'jsonrpc': '2.0', 'id': rid, 'method': 'tools/call', 'params': p}, TOKEN, None,
+                           accept, 90, h)
+
+        st, hs, raw = moderna(LARGA, 'tok-h', mc.ACCEPT_STREAMABLE, 911)
+        msgs = mc.Http.mensajes(raw)
+        lat = [m for m in msgs if m.get('method') == 'notifications/progress']
+        fin = [m for m in msgs if m.get('id') == 911]
+        check('H1 HTTP moderno con stream: text/event-stream en trozos',
+              st == 200 and 'text/event-stream' in (hs.get('Content-Type') or '')
+              and (hs.get('Transfer-Encoding') or '').lower() == 'chunked', (st, dict(hs or {})))
+        check('H1 ...latidos (>= 3) bien formados y la respuesta como ULTIMO evento',
+              len(lat) >= 3 and bien_formados(lat, 'tok-h') and fin and msgs[-1] is fin[0]
+              and negativa_de_siempre(texto_de(fin[0])), (len(lat), raw[-300:]))
+        st, hs, raw = moderna(LARGA, 'tok-j', 'application/json', 912)
+        msgs = mc.Http.mensajes(raw)
+        check('H2 HTTP moderno aceptando solo JSON: la respuesta JSON de siempre, sin latidos',
+              st == 200 and 'application/json' in (hs.get('Content-Type') or '')
+              and not any(m.get('method') == 'notifications/progress' for m in msgs)
+              and any(m.get('id') == 912 for m in msgs), (st, raw[:300]))
+        st, hs, raw = moderna(RAPIDA, 'tok-r', mc.ACCEPT_STREAMABLE, 913)
+        check('H4 HTTP moderno, una llamada rapida con token: application/json como antes',
+              st == 200 and 'application/json' in (hs.get('Content-Type') or '') and '"id":913' in raw.replace(' ', ''),
+              (st, dict(hs or {}), raw[:200]))
+        # H3: con sesion, por la ruta SSE
+        cli.session('progreso')
+        st, hs, raw = cli.post({'jsonrpc': '2.0', 'id': 914, 'method': 'tools/call', 'params': con_token(LARGA, 'tok-ss')})
+        msgs = mc.Http.mensajes(raw)
+        lat = [m for m in msgs if m.get('method') == 'notifications/progress']
+        check('H3 HTTP con sesion: latidos y la respuesta en el mismo stream',
+              st == 200 and len(lat) >= 3 and bien_formados(lat, 'tok-ss') and msgs and msgs[-1].get('id') == 914,
+              (st, len(lat), raw[-300:]))
+        # H5: el cliente se va tras el primer latido
+        c = http.client.HTTPConnection('127.0.0.1', puerto, timeout=60)
+        p = mc.params_modernos(LARGA, 'progreso')
+        p['_meta']['progressToken'] = 'tok-x'
+        c.request('POST', '/mcp', json.dumps({'jsonrpc': '2.0', 'id': 915, 'method': 'tools/call', 'params': p}),
+                  dict(cab, **{'Mcp-Name': 'delphi_db', 'Content-Type': 'application/json',
+                               'Accept': mc.ACCEPT_STREAMABLE, 'Authorization': 'Bearer ' + TOKEN}))
+        r = c.getresponse()
+        primero = r.fp.readline()
+        c.close()
+        st, hs, raw = moderna(RAPIDA, None, mc.ACCEPT_STREAMABLE, 916)
+        check('H5 un cliente que se va a mitad del stream: el servidor contesta a la siguiente',
+              r.status == 200 and primero and st == 200 and '"id":916' in raw.replace(' ', ''), (r.status, primero, st, raw[:200]))
+    finally:
+        proc.kill()
+finally:
+    mc.borra(BASE)
+mc.fin(TITULO)

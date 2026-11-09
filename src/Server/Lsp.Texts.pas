@@ -9545,6 +9545,10 @@ const
   SR_SIN_RAD_STUDIO =
     '[SYS-039 INTERNAL] No RAD Studio installation was found on this server, and this ' +
     'needs one: the profiles, SDKs and settings it reads are the IDE''s. Nothing was done.';
+  { El latido de una llamada larga (Lsp.Progreso, F8 de la 1.29.1): el message
+    de cada notifications/progress. %s = la tool, %s = los segundos que lleva }
+  SN_SYS_SIGUE_EN_MARCHA_FMT =
+    '[SYS-040] %s is still running (%s s); its answer comes when it ends.';
 
   SN_COMPONENTS_NONE_FMT =
     '[COMP-005] Neither a registered package nor a folder of the Library ' +

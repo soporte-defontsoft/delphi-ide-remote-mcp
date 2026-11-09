@@ -88,11 +88,14 @@ type
     function VerifyAndSetCORSHeaders(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo): Boolean;
     procedure HandleOptionsRequest(ResponseInfo: TIdHTTPResponseInfo);
     procedure HandleGetRequest(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo);
-    procedure HandlePostRequest(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo);
-    procedure HandlePostRequestSSE(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const SessionID: string);
+    procedure HandlePostRequest(Context: TIdContext; RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo);
+    procedure HandlePostRequestSSE(Context: TIdContext; RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const SessionID: string);
     procedure HandlePostRequestJSON(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const SessionID: string);
-    procedure HandlePostRequestModerno(RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const APeticion: TPeticionModerna);
+    procedure HandlePostRequestModerno(Context: TIdContext; RequestInfo: TIdHTTPRequestInfo; ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const APeticion: TPeticionModerna);
     function GetNextEventID: string;
+    // [local change 1.29.1] UN evento SSE (id, event, data) de un mensaje
+    // JSON-RPC: la respuesta de un POST y cada latido (Lsp.Progreso)
+    function EventoSse(const AJson: string): string;
     function AcceptsSSE(const AcceptHeader: string): Boolean;
   public
     constructor Create(Owner: TComponent); override;
@@ -138,6 +141,7 @@ uses
   Lsp.Identidad, // [local change] per-session agent identity and the session registry
   Lsp.Texts, // [local change] the 404 texts of a dead session
   Lsp.Settings, // [local change] tokens, BindIP and the session timeout (settings.ini)
+  Lsp.Progreso, // [local change 1.29.1] el latido de una llamada larga, por el stream (F8)
   Winapi.Windows, // [local change 2026-10-25] WaitForSingleObject: the stop with a time limit
   MCPServer.Logger;
 
@@ -646,7 +650,7 @@ begin
     else if RequestInfo.CommandType = hcGET then
       HandleGetRequest(RequestInfo, ResponseInfo)
     else if RequestInfo.CommandType = hcPOST then
-      HandlePostRequest(RequestInfo, ResponseInfo)
+      HandlePostRequest(Context, RequestInfo, ResponseInfo)
     else
     begin
       ResponseInfo.ResponseNo := HTTP_METHOD_NOT_ALLOWED;
@@ -748,7 +752,7 @@ begin
   end;
 end;
 
-procedure TMCPIdHTTPServer.HandlePostRequest(RequestInfo: TIdHTTPRequestInfo;
+procedure TMCPIdHTTPServer.HandlePostRequest(Context: TIdContext; RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo);
 var
   AcceptHeader: string;
@@ -810,7 +814,7 @@ begin
 
     if SinSesion then
     begin
-      HandlePostRequestModerno(RequestInfo, ResponseInfo, RequestBody, Moderna);
+      HandlePostRequestModerno(Context, RequestInfo, ResponseInfo, RequestBody, Moderna);
       Exit;
     end;
 
@@ -820,7 +824,7 @@ begin
     SetThreadIdentityBySession(SessionID);
     try
       if AcceptsSSE(AcceptHeader) then
-        HandlePostRequestSSE(RequestInfo, ResponseInfo, RequestBody, SessionID)
+        HandlePostRequestSSE(Context, RequestInfo, ResponseInfo, RequestBody, SessionID)
       else
         HandlePostRequestJSON(RequestInfo, ResponseInfo, RequestBody, SessionID);
     finally
@@ -886,8 +890,15 @@ end;
 
 function TMCPIdHTTPServer.GetNextEventID: string;
 begin
-  Inc(FEventIDCounter);
-  Result := IntToStr(FEventIDCounter);
+  // [local change 1.29.1] atomico: lo piden a la vez los hilos de Indy y los
+  // de los latidos
+  Result := IntToStr(AtomicIncrement(FEventIDCounter));
+end;
+
+function TMCPIdHTTPServer.EventoSse(const AJson: string): string;
+begin
+  Result := SSE_ID_PREFIX + GetNextEventID + #10 + SSE_EVENT_PREFIX + 'message' + #10 +
+    SSE_DATA_PREFIX + AJson + SSE_MESSAGE_TERMINATOR;
 end;
 
 function TMCPIdHTTPServer.AcceptsSSE(const AcceptHeader: string): Boolean;
@@ -895,41 +906,162 @@ begin
   Result := Pos('text/event-stream', AcceptHeader) > 0;
 end;
 
+type
+  { [local change 1.29.1, F8] La respuesta de un POST que se abre como stream
+    cuando hay algo que mandar antes de ella (el latido de Lsp.Progreso): el
+    primer evento escribe las cabeceras (text/event-stream, el cuerpo en trozos
+    chunked: su largo no se sabe hasta que la tool acaba), cada mensaje va como
+    un evento y Termina manda la respuesta como el ultimo y cierra el cuerpo.
+    Sin ningun latido no se abre y la respuesta sale como siempre. Escribe el
+    hilo del latido mientras el de la peticion espera a la tool; Termina, el de
+    la peticion, cuando el latido ya acabo. Indy, al volver el manejador, no
+    anade nada: las cabeceras ya estan escritas y no queda ContentText. }
+  TStreamSse = class
+  private
+    FContext: TIdContext;
+    FResponseInfo: TIdHTTPResponseInfo;
+    FServidor: TMCPIdHTTPServer;
+    FAntesDeAbrir: TProc;
+    FAbierto: Boolean;
+    procedure Trozo(const ATexto: string);
+  public
+    constructor Create(AContext: TIdContext; AResponseInfo: TIdHTTPResponseInfo;
+      AServidor: TMCPIdHTTPServer; const AAntesDeAbrir: TProc);
+    function Evento(const AJson: string): Boolean;
+    function Termina(const AJson: string): Boolean;
+    property Abierto: Boolean read FAbierto;
+  end;
+
+constructor TStreamSse.Create(AContext: TIdContext; AResponseInfo: TIdHTTPResponseInfo;
+  AServidor: TMCPIdHTTPServer; const AAntesDeAbrir: TProc);
+begin
+  inherited Create;
+  FContext := AContext;
+  FResponseInfo := AResponseInfo;
+  FServidor := AServidor;
+  FAntesDeAbrir := AAntesDeAbrir;
+end;
+
+{ Un trozo chunked: su largo en hexadecimal, CRLF, sus bytes UTF-8, CRLF. }
+procedure TStreamSse.Trozo(const ATexto: string);
+var
+  B: TIdBytes;
+begin
+  B := IndyTextEncoding_UTF8.GetBytes(ATexto);
+  FContext.Connection.IOHandler.Write(IntToHex(Length(B), 1) + #13#10);
+  FContext.Connection.IOHandler.Write(B);
+  FContext.Connection.IOHandler.Write(#13#10);
+end;
+
+function TStreamSse.Evento(const AJson: string): Boolean;
+begin
+  try
+    if not FAbierto then
+    begin
+      // antes de escribir: si las cabeceras fallan a medias, la respuesta
+      // tampoco va por el camino de siempre (Indy ya las da por escritas)
+      FAbierto := True;
+      FResponseInfo.ResponseNo := HTTP_OK;
+      FResponseInfo.ContentType := 'text/event-stream';
+      FResponseInfo.CharSet := 'utf-8';
+      FResponseInfo.CustomHeaders.Values['Cache-Control'] := 'no-cache';
+      FResponseInfo.CustomHeaders.Values['X-Accel-Buffering'] := 'no';
+      FResponseInfo.TransferEncoding := 'chunked';
+      if Assigned(FAntesDeAbrir) then
+        FAntesDeAbrir();
+      FResponseInfo.WriteHeader;
+    end;
+    Trozo(FServidor.EventoSse(AJson));
+    Result := True;
+  except
+    on E: Exception do
+    begin
+      TLogger.Info('SSE stream lost: ' + E.Message);
+      Result := False;
+    end;
+  end;
+end;
+
+function TStreamSse.Termina(const AJson: string): Boolean;
+begin
+  Result := True;
+  try
+    if AJson <> '' then
+      Trozo(FServidor.EventoSse(AJson));
+    // el trozo vacio: el fin del cuerpo
+    FContext.Connection.IOHandler.Write('0'#13#10#13#10);
+  except
+    on E: Exception do
+    begin
+      TLogger.Info('SSE stream lost before its answer: ' + E.Message);
+      Result := False;
+    end;
+  end;
+  FResponseInfo.ContentText := '';
+end;
+
 { [local change] Una peticion de la revision 2026-07-28: quien es lo dice ella, nada se
   recuerda ni se anuncia, y la respuesta es un JSON (un cliente los acepta los dos, y
-  sin flujo que reanudar el SSE de una sola respuesta no aporta nada). }
-procedure TMCPIdHTTPServer.HandlePostRequestModerno(RequestInfo: TIdHTTPRequestInfo;
+  sin flujo que reanudar el SSE de una sola respuesta no aporta nada). Salvo que haya
+  algo que mandar antes de ella (1.29.1, F8): a quien acepta text/event-stream, el
+  latido de una llamada larga abre el stream (TStreamSse) y la respuesta va al final. }
+procedure TMCPIdHTTPServer.HandlePostRequestModerno(Context: TIdContext; RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const APeticion: TPeticionModerna);
 var
   Cuerpo, Fallo: string;
+  Stream: TStreamSse;
 begin
-  TLogger.Info('Handling POST request without a session (protocol ' + MCP_PROTOCOLO_MODERNO + ')');
-  Fallo := CabecerasModernasDicen(RequestInfo, APeticion);
-  if Fallo <> '' then
-    Cuerpo := TMCPJsonRpcProcessor.ErrorParaElCuerpo(RequestBody, JSONRPC_HEADER_MISMATCH, Fallo)
-  else
-  begin
-    SetThreadIdentityByRequest(APeticion.Cliente);
-    try
-      Cuerpo := FJsonRpcProcessor.ProcessRequest(RequestBody, '');
-    finally
-      ClearThreadIdentity;
+  // el Accept, al log: si el cliente puede recibir el latido (medido el 9-nov-2026:
+  // el log no lo decia y no se sabia que mandan Claude Code y opencode)
+  TLogger.Info('Handling POST request without a session (protocol ' + MCP_PROTOCOLO_MODERNO +
+    ', Accept: ' + RequestInfo.RawHeaders.Values['Accept'] + ')');
+  Stream := nil;
+  try
+    Fallo := CabecerasModernasDicen(RequestInfo, APeticion);
+    if Fallo <> '' then
+      Cuerpo := TMCPJsonRpcProcessor.ErrorParaElCuerpo(RequestBody, JSONRPC_HEADER_MISMATCH, Fallo)
+    else
+    begin
+      if AcceptsSSE(RequestInfo.RawHeaders.Values['Accept']) then
+      begin
+        Stream := TStreamSse.Create(Context, ResponseInfo, Self, nil);
+        var S := Stream;
+        PonSumideroDelHilo(
+          function(const AMensaje: string): Boolean
+          begin
+            Result := S.Evento(AMensaje);
+          end);
+      end;
+      SetThreadIdentityByRequest(APeticion.Cliente);
+      try
+        Cuerpo := FJsonRpcProcessor.ProcessRequest(RequestBody, '');
+      finally
+        QuitaSumideroDelHilo;
+        ClearThreadIdentity;
+      end;
     end;
+    if Assigned(Stream) and Stream.Abierto then
+    begin
+      Stream.Termina(Cuerpo);
+      TLogger.Info('Response (the last event of its stream): ' + Cuerpo);
+      Exit;
+    end;
+    ResponseInfo.ContentType := 'application/json';
+    ResponseInfo.CustomHeaders.Values['Connection'] := 'keep-alive';
+    ResponseInfo.ContentStream := TStringStream.Create(Cuerpo, TEncoding.UTF8);
+    ResponseInfo.FreeContentStream := True;
+    ResponseInfo.ResponseNo := EstadoHttpModerno(APeticion, Cuerpo);
+    TLogger.Info('Response: ' + Cuerpo);
+  finally
+    Stream.Free;
   end;
-  ResponseInfo.ContentType := 'application/json';
-  ResponseInfo.CustomHeaders.Values['Connection'] := 'keep-alive';
-  ResponseInfo.ContentStream := TStringStream.Create(Cuerpo, TEncoding.UTF8);
-  ResponseInfo.FreeContentStream := True;
-  ResponseInfo.ResponseNo := EstadoHttpModerno(APeticion, Cuerpo);
-  TLogger.Info('Response: ' + Cuerpo);
 end;
 
-procedure TMCPIdHTTPServer.HandlePostRequestSSE(RequestInfo: TIdHTTPRequestInfo;
+procedure TMCPIdHTTPServer.HandlePostRequestSSE(Context: TIdContext; RequestInfo: TIdHTTPRequestInfo;
   ResponseInfo: TIdHTTPResponseInfo; const RequestBody: string; const SessionID: string);
 var
-  EventID: string;
   JSONResponse: string;
-  SSEMessage: string;
+  Stream: TStreamSse;
 begin
   TLogger.Info('Handling POST request with SSE stream');
 
@@ -939,7 +1071,33 @@ begin
   ResponseInfo.CustomHeaders.Values['Connection'] := 'keep-alive';
   ResponseInfo.CustomHeaders.Values['X-Accel-Buffering'] := 'no';
 
-  JSONResponse := FJsonRpcProcessor.ProcessRequest(RequestBody, SessionID);
+  // [local change 1.29.1, F8] el latido de una llamada larga abre el stream antes
+  // de la respuesta (TStreamSse), con la cabecera de la sesion en curso
+  Stream := TStreamSse.Create(Context, ResponseInfo, Self,
+    procedure
+    begin
+      AnunciaSesion(ResponseInfo, RequestBody, '', SessionID);
+    end);
+  try
+    PonSumideroDelHilo(
+      function(const AMensaje: string): Boolean
+      begin
+        Result := Stream.Evento(AMensaje);
+      end);
+    try
+      JSONResponse := FJsonRpcProcessor.ProcessRequest(RequestBody, SessionID);
+    finally
+      QuitaSumideroDelHilo;
+    end;
+    if Stream.Abierto then
+    begin
+      Stream.Termina(JSONResponse);
+      TLogger.Info('Response (the last event of its stream): ' + JSONResponse);
+      Exit;
+    end;
+  finally
+    Stream.Free;
+  end;
 
   // [local change] initialize over SSE must ALSO announce the session in the
   // Mcp-Session-Id header: a client strict with the streamable-HTTP spec never
@@ -949,17 +1107,8 @@ begin
 
   if JSONResponse <> '' then
   begin
-    EventID := GetNextEventID;
-    SSEMessage := '';
-
-    if EventID <> '' then
-      SSEMessage := SSEMessage + SSE_ID_PREFIX + EventID + #10;
-
-    SSEMessage := SSEMessage + SSE_EVENT_PREFIX + 'message' + #10;
-    SSEMessage := SSEMessage + SSE_DATA_PREFIX + JSONResponse + SSE_MESSAGE_TERMINATOR;
-
-    ResponseInfo.ContentText := SSEMessage;
-    TLogger.Info('SSE response prepared with event ID: ' + EventID);
+    ResponseInfo.ContentText := EventoSse(JSONResponse);
+    TLogger.Info('SSE response prepared');
   end
   else
     SinCuerpo(ResponseInfo);

@@ -256,6 +256,14 @@ function EngineIdleMinutes: Double;
   Lsp.Session). 0 (el defecto) = sin tope: los para solo el barrendero de
   EngineIdleMinutes. Fontaneria, como la de arriba. }
 function MaxEngines: Integer;
+{ [Server] ProgressSeconds en settings.ini o DELPHI_MCP_PROGRESS_SECONDS en el
+  entorno (que gana): cada cuantos segundos una llamada que sigue en marcha
+  manda un notifications/progress a un cliente que lo pidio (progressToken),
+  Lsp.Progreso. 15 por defecto; 0 = ninguno. Medido el 9-nov-2026 (P1 de la
+  1.29.1): Claude Code abandona una llamada tras 300 s sin noticias y opencode
+  tras 60, y el progreso les reinicia la cuenta. Decimales admitidos, como en
+  las de arriba. Fontaneria. }
+function ProgressSeconds: Double;
 { Host names git may talk to when an agent writes an explicit URL, comma
   separated; '' (the default) means none - see GitRemoteDenied. }
 function GitRemoteHosts: string;   // DELPHI_MCP_GIT_REMOTES / GitRemotes=
@@ -485,6 +493,8 @@ var
   GEngineIdleMin: Double = -1;     // -1 = sin leer todavia
   GIniMaxEngines: string;          // [Server] MaxEngines, sin parsear
   GMaxEngines: Integer = -1;       // -1 = sin leer todavia
+  GIniProgress: string;            // [Server] ProgressSeconds, sin parsear
+  GProgressSec: Double = -1;       // -1 = sin leer todavia
   GIniLogLines: Integer = LOG_LINEAS_POR_DEFECTO;    // [Log] LinesPerFile
   GIniLogMaxFiles: Integer = LOG_BLOQUES_POR_DEFECTO;   // [Log] MaxFiles
 
@@ -1463,6 +1473,7 @@ begin
       GIniSessionTimeout := Ini.ReadString('Server', 'SessionTimeoutMinutes', '').Trim;
       GIniEngineIdle := Ini.ReadString('Server', 'EngineIdleMinutes', '').Trim;
       GIniMaxEngines := Ini.ReadString('Server', 'MaxEngines', '').Trim;
+      GIniProgress := Ini.ReadString('Server', 'ProgressSeconds', '').Trim;
       // de aqui y de ningun otro sitio: sin variable de entorno (David)
       GDelphiVersion := Ini.ReadString('Server', 'DelphiVersion', '').Trim;
       // el update lo declara el operador (13.2); otra forma se avisa y se
@@ -1760,6 +1771,17 @@ begin
   LoadSecurity;
   Result := Trunc(NumeroDeClave('DELPHI_MCP_MAX_ENGINES', GIniMaxEngines, 0));
   GMaxEngines := Result;
+end;
+
+function ProgressSeconds: Double;
+const
+  PROGRESS_DEFAULT_SEC = 15;
+begin
+  if GProgressSec >= 0 then
+    Exit(GProgressSec);
+  LoadSecurity;
+  Result := NumeroDeClave('DELPHI_MCP_PROGRESS_SECONDS', GIniProgress, PROGRESS_DEFAULT_SEC);
+  GProgressSec := Result;
 end;
 
 function GitRemoteHosts: string;

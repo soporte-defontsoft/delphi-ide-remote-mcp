@@ -74,7 +74,23 @@ implementation
 
 uses
   MCPServer.CoreManager, // [local change] el serverInfo de cada resultado moderno
-  Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
+  Lsp.Texts, // [local change 2026-09-27] los textos, del catalogo
+  Lsp.Progreso; // [local change 1.29.1] el latido de un tools/call largo (F8)
+
+{ [local change 1.29.1] El progressToken de un tools/call (su _meta), como JSON
+  tal cual (un numero o un texto entre comillas); '' si no lo pidio. }
+function TokenDeProgreso(AParams: TJSONObject): string;
+var
+  Meta, Token: TJSONValue;
+begin
+  Result := '';
+  Meta := AParams.GetValue('_meta');
+  if not (Meta is TJSONObject) then
+    Exit;
+  Token := TJSONObject(Meta).GetValue('progressToken');
+  if (Token is TJSONString) or (Token is TJSONNumber) then
+    Result := Token.ToJSON;
+end;
 
 { TMCPJsonRpcProcessor }
 
@@ -402,7 +418,22 @@ begin
       if Assigned(ParamsValue) and (ParamsValue is TJSONObject) then
         Params := ParamsValue as TJSONObject;
 
-      ExecuteResult := ExecuteMethodCall(FManagerRegistry, MethodName, Params);
+      // [local change 1.29.1, F8] un tools/call que pidio progreso (su
+      // _meta.progressToken) late mientras dura, por el sumidero que puso el
+      // transporte (Lsp.Progreso); sin sumidero o sin token, como siempre
+      if (MethodName = 'tools/call') and Assigned(Params) then
+      begin
+        var Registro := FManagerRegistry;
+        var Resultado: TValue;
+        ConLatido(TokenDeProgreso(Params), CampoDeTexto(Params, 'name'),
+          procedure
+          begin
+            Resultado := ExecuteMethodCall(Registro, MethodName, Params);
+          end);
+        ExecuteResult := Resultado;
+      end
+      else
+        ExecuteResult := ExecuteMethodCall(FManagerRegistry, MethodName, Params);
 
       if not ExecuteResult.IsEmpty then
       begin

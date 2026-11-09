@@ -273,6 +273,7 @@
         <DCCReference Include="Lsp.ClienteHttp.pas"/>
         <DCCReference Include="Mcp.Tools.Api.pas"/>
         <DCCReference Include="Lsp.ConPlazo.pas"/>
+        <DCCReference Include="Lsp.Progreso.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
