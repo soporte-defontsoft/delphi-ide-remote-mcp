@@ -97,16 +97,19 @@ function CrearNucleo(const Params: TDelphiCreateParams): string;
 const
   // lo que lee cada kind, ademas de kind y name: los kinds de verdad, que la
   // negativa nombra con los que SI lo llevan (decia "goes with: form", un
-  // kind que no existe: Opus en Hermes, 1.22.2)
+  // kind que no existe: Opus en Hermes, 1.22.2). name, el de todos, en la
+  // lista de cada uno: pegado delante de la lista compuesta, un kind sin otros
+  // diria "takes name no parameters" (el delete del changeset lo decia: Hermes,
+  // dirigido 1.29b)
   KINDS: array [0 .. 25] of string = (
-    'project-console', 'dir', 'project-vcl', 'dir', 'project-fmx', 'dir',
-    'project-package', 'dir', 'project-test', 'dir', 'project-library', 'dir',
-    'form-vcl', 'project formname dir ancestor autocreate',
-    'form-fmx', 'project formname dir ancestor autocreate',
-    'frame-vcl', 'project formname dir ancestor', 'frame-fmx', 'project formname dir ancestor',
-    'datamodule', 'project formname dir autocreate',
-    'unit', 'project content dir eol',
-    'include', 'project content dir eol');
+    'project-console', 'name dir', 'project-vcl', 'name dir', 'project-fmx', 'name dir',
+    'project-package', 'name dir', 'project-test', 'name dir', 'project-library', 'name dir',
+    'form-vcl', 'name project formname dir ancestor autocreate',
+    'form-fmx', 'name project formname dir ancestor autocreate',
+    'frame-vcl', 'name project formname dir ancestor', 'frame-fmx', 'name project formname dir ancestor',
+    'datamodule', 'name project formname dir autocreate',
+    'unit', 'name project content dir eol',
+    'include', 'name project content dir eol');
 var
   K, Suyos, Sobra, VaCon: string;
   AutoCrea: Boolean;
@@ -124,7 +127,7 @@ begin
      'autocreate', Params.AutoCreate, ''], Suyos, VaCon);
   if Sobra <> '' then
     Exit(MsgFmt(SR_CREATE_NO_VA_CON_KIND_FMT, [Sobra, Params.Kind.Trim,
-      Params.Kind.Trim, 'name ' + Suyos]) + VaCon);
+      Params.Kind.Trim, Suyos]) + VaCon);
   // sin decirlo, como el IDE: el proyecto lo crea al arrancar
   AutoCrea := True;
   if (Params.AutoCreate.Trim <> '') and not LeeSiNo(Params.AutoCreate, AutoCrea) then

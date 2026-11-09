@@ -307,6 +307,10 @@ cs({'command': 'rollback', 'id': cid})
 check('E1 eol=mac se niega (la regla de los que crean) y eol con kind=delete no va (CHSET no-es-de-kind)',
       mc.es(r4, 'SR_TEXT_EOL_FMT') and mc.abre(r5, 'SR_CHANGESET_NO_ES_DE_KIND_FMT') and os.path.exists(_lf),
       (r4[:200], r5[:200]))
+# ...y lo que toma ese kind, dicho bien: el delete toma path y nada mas. Decia "kind=delete takes path no
+# parameters" (Hermes, dirigido 1.29b): path se pegaba delante de la lista ya compuesta. ROJO contra 7e01b8d4
+check('E1 ...y dice lo que toma el delete: "kind=delete takes path."',
+      'kind=delete takes path.' in r5 and 'no parameters' not in r5, r5[:300])
 
 srv.mata()
 mc.borra(BASE)  # no se quedaba en la maquina (revisor de baterias de la 1.27)

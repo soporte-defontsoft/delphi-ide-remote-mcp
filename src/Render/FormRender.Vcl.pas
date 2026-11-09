@@ -156,7 +156,11 @@ end;
 { Sesion 0: la ventana nunca "es visible" (IsWindowVisible False con
   WS_VISIBLE puesto) y el EDIT y el COMBOBOX nativos callan su texto en
   WM_PRINTCLIENT. El impresor lo dibuja con la fuente del control en el
-  rectangulo donde lo pintaria Windows. }
+  rectangulo donde lo pintaria Windows. Vacio, su texto de ayuda (TextHint),
+  en gris, como Windows: callaba tambien y el preview del servicio ensenaba
+  en blanco el edit y el combo que el IDE ensena con su pista (C9 de la 1.29,
+  medido en el servicio). Un memo no: Windows no pone pista a un edit de
+  varias lineas (y TMemo no la publica). }
 procedure DibujaTextoCallado(AControl: TWinControl; DC: HDC);
 var
   R: TRect;
@@ -166,12 +170,17 @@ var
   Viejo: HGDIOBJ;
   Margen: Integer;
   Flags: UINT;
+  Pista: string;
+  Color: TColor;
 begin
+  Pista := '';
   if IsWindowVisible(AControl.Handle) then
     Exit;
   if AControl is TCustomEdit then
   begin
     Texto := TCustomEdit(AControl).Text;
+    if not (AControl is TCustomMemo) then
+      Pista := TCustomEdit(AControl).TextHint;
     GetClientRect(AControl.Handle, R);
     OffsetRect(R, (AControl.Width - R.Width) div 2, (AControl.Height - R.Height) div 2);
     Margen := LoWord(SendMessage(AControl.Handle, EM_GETMARGINS, 0, 0));
@@ -184,6 +193,7 @@ begin
   else if AControl is TCustomComboBox then
   begin
     Texto := TCrackCombo(AControl).Text;
+    Pista := TCustomComboBox(AControl).TextHint;
     FillChar(Info, SizeOf(Info), 0);
     Info.cbSize := SizeOf(Info);
     if not GetComboBoxInfo(AControl.Handle, Info) then
@@ -195,6 +205,12 @@ begin
   end
   else
     Exit;
+  Color := clWindowText;
+  if Texto = '' then
+  begin
+    Texto := Pista;
+    Color := clGrayText;
+  end;
   if Texto = '' then
     Exit;
   HF := HFONT(SendMessage(AControl.Handle, WM_GETFONT, 0, 0));
@@ -202,7 +218,7 @@ begin
   if HF <> 0 then
     Viejo := SelectObject(DC, HF);
   SetBkMode(DC, TRANSPARENT);
-  SetTextColor(DC, ColorToRGB(clWindowText));
+  SetTextColor(DC, ColorToRGB(Color));
   DrawText(DC, PChar(Texto), Length(Texto), R, Flags);
   if Viejo <> 0 then
     SelectObject(DC, Viejo);
@@ -279,10 +295,14 @@ begin
   RedrawWindow(AForm.Handle, nil, 0, RDW_INVALIDATE or RDW_ERASE or RDW_UPDATENOW or RDW_ALLCHILDREN);
 end;
 
+{ La ventana, a mano, como Muestra la ensena; la VCL no: no esconde un hijo
+  MDI sin padre (TCustomForm.VisibleChanging lanza 'Cannot hide an MDI Child
+  Form' sin mirar csDesigning; ni su BeforeDestruction lo intenta), y el render
+  entero fallaba con la imagen ya hecha - DSGN-061 tambien por el servidor (C9
+  de la 1.29: los hijos MDI de los Samples). }
 procedure Esconde(AForm: TForm);
 begin
   ShowWindow(AForm.Handle, SW_HIDE);
-  AForm.Visible := False;
 end;
 
 { El bitmap del cliente de la form con uno de los dos captores. Devuelve el

@@ -5,7 +5,9 @@ not a server bug, but it paints the project wrong. This battery makes that
 drift a test failure.
 
 Checks:
-  - every "N tools" / "N core tools" / "the other N" figure in README.md;
+  - every "N tools" figure in EVERY versioned .md that describes the server as it is
+    (README, QUICKSTART, the READMEs of src, ROADMAP...; the history is declared below),
+    and every "N core tools" / "the other N" figure in README.md;
   - every tool has its "### `name`" section in docs/TOOLS.md, and none extra;
   - docs/CAPABILITIES.json (the generated manifest) matches tools/list.
 
@@ -51,12 +53,28 @@ fuera = [t for t in TOOLS if not re.search(r'\b%s\b' % re.escape(t), TAREAS)]
 check('delphi_help tasks nombra TODAS las tools de tools/list',
       mc.abre(TAREAS, 'SN_HELP_TASKS') and not fuera, fuera or TAREAS[:200])
 
+# ---- "N tools" en todos los .md de hoy -------------------------------------
+# Solo se miraba el README: con delphi_db y delphi_api (1.29) el README decia 44
+# y src/README.md, src/Server/README.md y ROADMAP.md seguian en 42 (David lo vio,
+# 9-nov-2026). Ahora todo .md versionado, salvo la HISTORIA, declarada aqui y que
+# solo encoge: lo que cuenta lo que habia en una version pasada no se reescribe.
+HISTORIA = ('CHANGELOG.md', 'docs/changelog/',
+            'docs/REVIEW-2026-08.md',      # foto de la 0.56.0-beta, guardada como historia
+            'docs/TOOL-DESCRIPTIONS.md')   # tablas medidas de cada pasada, con su version
+import subprocess
+VIGENTES = [f for f in subprocess.run(['git', '-C', REPO, 'ls-files', '*.md'], capture_output=True,
+                                      text=True).stdout.split('\n')
+            if f and not f.startswith(HISTORIA)]
+check('hay .md vigentes que mirar (git ls-files)', 'README.md' in VIGENTES and len(VIGENTES) > 5, VIGENTES[:8])
+for doc in VIGENTES:
+    texto = open(os.path.join(REPO, doc), encoding='utf-8').read()
+    for m in re.finditer(r'\b(\d+) tools\b', texto):
+        n = int(m.group(1))
+        check('%s "%d tools" == %d reales' % (doc, n, TOTAL), n == TOTAL,
+              texto[max(0, m.start() - 60):m.end() + 20])
+
 # ---- README ------------------------------------------------------------
 readme = open(os.path.join(REPO, 'README.md'), encoding='utf-8').read()
-for m in re.finditer(r'\b(\d+) tools\b', readme):
-    n = int(m.group(1))
-    check('README "%d tools" == %d reales' % (n, TOTAL), n == TOTAL,
-          readme[max(0, m.start() - 60):m.end() + 20])
 for m in re.finditer(r'\b(\d+) core tools\b', readme):
     n = int(m.group(1))
     check('README "%d core tools" == %d' % (n, CORE), n == CORE,

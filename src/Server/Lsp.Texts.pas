@@ -9408,9 +9408,11 @@ const
     '[CHSET-022] Changeset discarded. No file had been touched.';
 
   SN_CHANGESET_PREVIEW_OK =
-    '[CHSET-023] Clean preview: every anchor resolves. commit applies ' +
-    'all or nothing; if a file changes before the commit, the whole ' +
-    'commit is refused.';
+    '[CHSET-023] Clean preview: every anchor resolves and each operation ' +
+    'was rehearsed on its own. commit applies all or nothing: it also ' +
+    'judges each file as the whole batch leaves it (a unit that keeps its ' +
+    'final end., a form the IDE can read), and if one fails, or a file ' +
+    'changes before the commit, nothing is written.';
 
   { El resumen culpaba siempre al ancla, y una entrada sin resolver tiene
     mas causas: un delete de un fichero de Delphi (es de delphi_delete, y se
