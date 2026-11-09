@@ -23,7 +23,11 @@ files, which are not read without it), `settings.example.ini`, `connections\`
 `delphi_api`), `node\` (the desktop node and the launcher, used later for Linux
 and Windows targets) and `docs\`. Keep the helpers next to the exe, all from the same zip: each one
 states its protocol, and one of another version is refused (`DSGN-184`,
-`STYLE-066`).
+`STYLE-066`). The zip carries no database client: for PostgreSQL in `delphi_db`, copy
+`libpq.dll` (16 or later, 64-bit) and the five DLLs it loads (`libssl*`, `libcrypto*`,
+`libintl*`, `libiconv*`, `libwinpthread*`) from the `bin\` of a PostgreSQL for Windows
+x64 into `drivers\PG\lib\`, all six; SQL Server goes through
+Microsoft's ODBC Driver 17 or 18 ([CONFIGURATION.md](docs/CONFIGURATION.md)).
 
 ## 2. A five-line `settings.ini`
 

@@ -8,6 +8,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- Docs: what an operator puts next to the server for `delphi_db`, which the zip does not
+  carry. `docs/CONFIGURATION.md` named only `drivers\PG\lib\libpq.dll` "with the DLLs it
+  depends on" and `QUICKSTART.md` nothing; both now name the five (`libssl-3-x64`, `libcrypto-3-x64`,
+  `libintl-9`, `libiconv-2`, `libwinpthread-1` with the 18.3 x64 build), say all six are
+  64-bit and where to take them from, and that one left out is not an error: Windows takes
+  it from the `PATH` (measured: the OpenSSL of Git for Windows). For SQL Server, the order
+  in which FireDAC picks the system's ODBC driver (ODBC Driver 18, 17, Native Client
+  11.0...; measured here: Native Client 11.0).
+
 ## [1.29.0] - 2026-11-09
 
 A minor version that closes the project's list: what follows are patches. Two new tools give

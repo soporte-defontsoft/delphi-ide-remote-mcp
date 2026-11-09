@@ -487,12 +487,31 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   `connections\apis\api-connections.example.json`: copy one to the same folder without
   `.example` and fill it in. **Pending tests:** an API that needs a login call first, and
   then the session token it returns on every request; `auth` holds fixed credentials only.
-  A driver that loads a client library loads it from `drivers\<DriverID>\` of the server
-  and from nowhere else: PostgreSQL needs `drivers\PG\lib\libpq.dll` **16 or later** with
-  the DLLs it depends on (an older one refuses to open: the server asks it not to use the
-  account's client certificate, Kerberos or Windows identity); SQL Server uses the system's
-  ODBC driver. The server removes every `PG*` variable from its own environment when it
-  starts, so libpq takes from the file and nothing else.
+  A driver that loads a client library loads it from `drivers\<DriverID>\` next to the
+  server's exe and from nowhere else. The zip does not carry them: the operator puts them
+  there.
+  - **PostgreSQL** (`engine: "PG"`): `drivers\PG\lib\` holds `libpq.dll`, **16 or later**
+    (an older one refuses to open: the server asks it not to use the account's client
+    certificate, Kerberos or Windows identity), and the five DLLs it loads, all **64-bit**
+    like the server. Measured with the 18.3 x64 build: `libpq.dll`, `libssl-3-x64.dll`,
+    `libcrypto-3-x64.dll`, `libintl-9.dll`, `libiconv-2.dll` and `libwinpthread-1.dll`;
+    copy them from the `bin\` of a PostgreSQL for Windows x64 (another build may name its
+    `libssl*`, `libcrypto*`, `libintl*`, `libiconv*` and `libwinpthread*` differently:
+    take the ones next to its `libpq.dll`). With the six there, all six load from that
+    folder (measured). **Copy all of them**: a missing companion is not an error, Windows
+    looks for it in the folders of the `PATH` and takes whatever it finds there (measured:
+    the OpenSSL of Git for Windows). Without `libpq.dll`, a call answers `DB-009` with
+    FireDAC's "Cannot load vendor library"; its hint to look in the `PATH` or the exe's
+    folder does not apply here: only `drivers\PG\lib\` is looked at.
+  - **SQL Server** (`engine: "MSSQL"`): nothing in `drivers\`; it goes through the
+    system's 64-bit ODBC, and FireDAC takes the first one installed of: ODBC Driver 18 for
+    SQL Server, ODBC Driver 17, SQL Server Native Client 11.0, ODBC Driver 13, ODBC Driver
+    11, SQL Server Native Client 10.0, SQL Native Client and, last, the `SQL Server` driver
+    that comes with Windows (FireDAC's own order, `FireDAC.Phys.MSSQL`). Microsoft no
+    longer supports the Native Clients: install its ODBC Driver 17 or 18.
+
+  The server removes every `PG*` variable from its own environment when it starts, so
+  libpq takes from the file and nothing else.
 - **Reach lists (per workspace)**: `GitRemotes` limits which hosts git may reach - the URL
   written in a call and the network addresses of the repository's own remotes alike
   (clone/fetch/pull/push/ls-remote; a remote used by its name whose address is not listed gets `GIT-063`, naming the host), and the LFS endpoint of a tree a command materializes
