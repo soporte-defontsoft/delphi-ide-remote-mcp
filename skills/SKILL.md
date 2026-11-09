@@ -19,6 +19,7 @@ sessions list use it. Set it to your agent id (e.g. `hermes`). If your client
 cannot set it (it says `mcp` or a generic name), pass `agent=<your id>` in
 `delphi_report` and `delphi_messages` on EVERY call: `agent=` wins over
 it. With no name, each request of that protocol is a stranger to the one before.
+`delphi_workspace` says the name the server took for you (`agent`).
 
 1. `delphi_workspace` - your allowed roots, your access level, WHICH
    Delphi you are working with (`activeDelphiName` "RAD Studio 13",
@@ -271,6 +272,12 @@ it. With no name, each request of that protocol is a stranger to the one before.
   answered a report of yours or changed the plan. Messages are delivered
   once; act on them and, when an answer is due, reply with
   `delphi_report`.
+- If your client gave up on a call (its own timeout), look in that
+  mailbox: when the client hung up, the server finished the call and left
+  its answer there (`SYS-041`). Do not run it again blind: while it still
+  runs, the same call is refused (`SYS-042`), a write where it works is
+  refused (`SYS-043`) and a read there says what it shows may be half
+  done (`SYS-044`).
 
 ## The operator's databases and HTTP APIs (`delphi_db`, `delphi_api`)
 
@@ -292,7 +299,9 @@ masked (`<project/alias>`).
   follow your `order` and then the primary key, so `offset` neither
   repeats nor skips a row (`summary` pages too); `fields` also lists the
   table's foreign keys and indexes, to join without guessing; a very long
-  text comes as `{text, length, truncated}`.
+  text comes as `{text, length, truncated}`. `insert` returns the new row
+  as the database left it (`row`: the key it gave it, its defaults and
+  what a trigger wrote), so you do not look for it.
 - `delphi_api`: `request` with a method the API allows, a path RELATIVE to
   the API (no host, no `..`, no `?` - `query` is its own list), your own
   `headers` (never the operator's, the credential, Host, or one that
