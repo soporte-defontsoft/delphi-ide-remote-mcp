@@ -8,6 +8,19 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.29.1] - 2026-11-10
+
+A patch of the closing line. A long call keeps its client informed and what it did is not
+lost: it sends `notifications/progress` while it runs, and an answer its client did not get -
+it hung up or said it gave up - goes to that agent's mailbox (`SYS-041`), over HTTP and
+stdio. While a long operation writes, the other calls say so instead of answering that a
+folder does not exist (`SYS-042`, `SYS-043`, `SYS-044`). `delphi_db insert` returns the row
+the database wrote, and `delphi_paserver remote-run` and `output` keep all of a program's
+output in a file (`out=`). The server loads its DLLs only from its own folder and
+`System32`, never from the `PATH`. For operators: the database connections file takes one
+key, `access`, instead of `readonly` and `allowCreate`, and PostgreSQL's DLLs need the
+Visual C++ runtime in `System32`.
+
 ### Added
 
 - A call still running tells its client so: every `[Server] ProgressSeconds` (15 by default;
@@ -39,7 +52,13 @@ the MCP `initialize` response (`serverInfo.version`).
   read with the rest, and a cut answer read that night still said "PENDING MESSAGES: 1"
   about the one delivered with it. Writing a new document in the server's house without
   overwriting one is now one helper (`EscribeDocumentoNuevo`), used by `delphi_report` too,
-  and a message whose text is still being written is not delivered empty.
+  and a message whose text is still being written is not delivered empty. The mailbox is
+  the one of the name the client gave at the handshake (`agent` in `delphi_workspace`), so
+  the "mail is waiting" line now names the call that reads it (`delphi_messages
+  command=read agent=<name>`), and `delphi_messages` reading any other mailbox carries
+  that line too: an agent that passes its own `agent=`, as Hermes did in its full test of
+  1.29.1, read another mailbox and got "No messages" while its answer waited (measured
+  with a probe).
 - A long operation that writes (`delphi_move`, `delphi_delete`, `delphi_build`,
   `delphi_package`, `delphi_test`, `delphi_git`, `delphi_paserver`) tells the other calls
   while it runs. Measured on 7-nov: while a `delphi_move` copy still ran, `delphi_list` of
@@ -158,6 +177,16 @@ the MCP `initialize` response (`serverInfo.version`).
   measured on Fedora 45). KWin draws that bar outside the X11 window and declares it in
   `_NET_FRAME_EXTENTS`, which the node now adds; on GNOME, where an FMX window draws its
   own frame, nothing changes (both measured with an FMX application).
+- `delphi_db create-table` refuses a decimal column (`dtFmtBCD`, `dtBCD`) without its
+  `precision` and `scale` (`DB-014`, which says why and gives 18 and 2 as an example).
+  Without them FireDAC writes `DECIMAL(64)`: PostgreSQL created it with scale 0 and stored
+  12.34 as 12 without a word, and SQL Server refused it (its maximum is 38); with only the
+  precision both made a column with no decimals, and with only the scale SQL Server refused
+  it again (measured on both engines; found by Hermes' full test of 1.29.1).
+- `delphi_textedit` gives the path of the copy it keeps of a file before its first change
+  of the day (`backup=`), as `delphi_edit` does, and says on the next changes that it
+  already existed; it said "backup in `__delphi-patch\`", without the file or the day
+  (Hermes' full test of 1.29.1).
 
 ## [1.29.0] - 2026-11-09
 

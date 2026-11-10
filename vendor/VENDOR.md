@@ -34,7 +34,9 @@ Local changes (each marked "[local change]" in the code, most with its date):
   except on failure; jail answers are always DENIED); malformed or non-object
   "arguments" refused naming what arrived; a caller's EArgumentException
   returned as a refusal, other exceptions wrapped keeping their own outcome;
-  messages from the catalog.
+  messages from the catalog; CallEnded, run when every tools/call ends
+  whatever happens to it (1.29.1: the host empties its registry of
+  operations in course, Lsp.EnCurso).
 - src/Protocol/MCPServer.JsonRpcProcessor.pas: error codes chosen by the
   exception's class (EMetodoNoExiste -32601, ERecursoNoExiste -32002), never
   by its text; ErrorParaElCuerpo (the error for a raw body, with its own id)
@@ -44,7 +46,12 @@ Local changes (each marked "[local change]" in the code, most with its date):
   request whose method returns nothing gets "result": {}; messages from the
   catalog; protocol 2026-07-28: LeeModerna (one reader of the _meta), version
   and required fields judged for both transports, and AnotaModerno (resultType,
-  serverInfo and the cache hints of each result).
+  serverInfo and the cache hints of each result); 1.29.1: every tools/call
+  runs through the host's Lsp.Progreso.ConLatido (in flight with its id,
+  session and declared agent; a heartbeat when it carries a
+  _meta.progressToken), its answer goes to the agent's
+  mailbox when its client stopped waiting, and a notifications/cancelled is
+  handed to the host (AtiendeCancelaciones).
 - src/Protocol/MCPServer.Schema.Generator.pas: GetPropertyJsonName (trailing
   underscores stripped: ClassName_ publishes as classname) and
   IsRequiredProperty public, and a property is required only with
@@ -80,12 +87,19 @@ Local changes (each marked "[local change]" in the code, most with its date):
   stream gets 405; request bodies logged masked; the thread runs as the
   session's identity; a request of protocol 2026-07-28 skips the session
   gate, has its headers judged (Mcp-Name in Base64 too), runs as the name it
-  carries and gets a JSON answer with the status the revision names. It uses
-  the host units Lsp.Base64, Lsp.Identidad, Lsp.Texts and
-  Lsp.Settings.
+  carries and gets a JSON answer with the status the revision names. 1.29.1:
+  to a client that accepts text/event-stream, a long call's first heartbeat
+  opens its answer as a chunked SSE stream with the answer as its last event
+  (TStreamSse, one SSE event composer); an answer it cannot write goes to the
+  agent's mailbox, once; a notifications/cancelled is handed to the host in
+  the 202 branch. It uses the host units Lsp.Base64, Lsp.Identidad,
+  Lsp.Texts, Lsp.Settings and Lsp.Progreso.
 - src/Server/MCPServer.StdioTransport.pas: stdin and stdout set to UTF-8
   (accents arrived as mojibake); lines logged masked; error responses with
-  the request's id and a labelled message.
+  the request's id and a labelled message; 1.29.1: a long call's heartbeat
+  is one more line of stdout, and stdin is read by a thread of its own - a
+  notifications/cancelled is handed to the host as it arrives, everything
+  else is queued in order for the transport.
 - src/Tools/MCPServer.Tool.Base.pas (marked "LOCAL PATCH"): IMCPToolParams
   (ParamsClass), so the host's gate reads the attributes of a tool's
   parameter class.

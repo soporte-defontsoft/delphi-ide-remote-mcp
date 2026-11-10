@@ -1476,6 +1476,13 @@ begin
           end;
         end;
       end;
+      { un decimal sin su precision y su escala: el generador escribe
+        DECIMAL(64) (o DECIMAL(p), escala 0), y PostgreSQL guarda 12.34 como 12
+        en silencio y SQL Server niega el 64 (medido el 10-nov-2026, el test
+        completo de Hermes). Ningun juez dice que tipo las pide: politica de la
+        casa, los dos BCD de FireDAC (dtCurrency es MONEY, de escala fija) }
+      if (C.Tipo in [dtBCD, dtFmtBCD]) and ((C.Precision < 0) or (C.Escala < 0)) then
+        Exit(Entrada(I, MsgFmt(SF_DB_COLUMNA_DECIMAL_FMT, [TJSONString(Tipo).Value.Trim])));
       AColumnas[I] := C;
     end;
   finally

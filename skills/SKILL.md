@@ -19,7 +19,8 @@ sessions list use it. Set it to your agent id (e.g. `hermes`). If your client
 cannot set it (it says `mcp` or a generic name), pass `agent=<your id>` in
 `delphi_report` and `delphi_messages` on EVERY call: `agent=` wins over
 it. With no name, each request of that protocol is a stranger to the one before.
-`delphi_workspace` says the name the server took for you (`agent`).
+`delphi_workspace` says the name the server took for you (`agent`); the
+answers your client did not get go to THAT name's mailbox.
 
 1. `delphi_workspace` - your allowed roots, your access level, WHICH
    Delphi you are working with (`activeDelphiName` "RAD Studio 13",
@@ -266,12 +267,12 @@ it. With no name, each request of that protocol is a stranger to the one before.
 
 ## Mail from the operator
 
-- Any tool answer may end with `PENDING MESSAGES: N`. When it does, call
-  `delphi_messages command=read` before going on (with `agent=<your id>`
-  if your client cannot set its name - see First contact): the operator
-  answered a report of yours or changed the plan. Messages are delivered
-  once; act on them and, when an answer is due, reply with
-  `delphi_report`.
+- Any tool answer may end with `PENDING MESSAGES: N`. When it does, make
+  the `delphi_messages command=read agent=...` call that line names before
+  going on, with THAT `agent=` even if you pass your own elsewhere: the
+  operator answered a report of yours or changed the plan, or an answer
+  your client did not get waits there. Messages are delivered once; act on
+  them and, when an answer is due, reply with `delphi_report`.
 - If your client gave up on a call (its own timeout), look in that
   mailbox: when the client hung up or said it gave up (its
   `notifications/cancelled`), the server finished the call and left its
@@ -302,7 +303,8 @@ masked (`<project/alias>`).
   table's foreign keys and indexes, to join without guessing; a very long
   text comes as `{text, length, truncated}`. `insert` returns the new row
   as the database left it (`row`: the key it gave it, its defaults and
-  what a trigger wrote), so you do not look for it.
+  what a trigger wrote), so you do not look for it; in a table without a
+  primary key it is written but cannot be read back (`rowNote`, `DB-031`).
 - `delphi_api`: `request` with a method the API allows, a path RELATIVE to
   the API (no host, no `..`, no `?` - `query` is its own list), your own
   `headers` (never the operator's, the credential, Host, or one that
@@ -332,7 +334,10 @@ masked (`<project/alias>`).
 - Nothing has to be installed on the target: PAServer itself runs
   what this server sends. If the program has not finished when the timeout
   expires it is NOT killed - you get `stillRunning: true` and its partial
-  output; a GUI app stays up, ready to be driven with delphi_desktop. If a
+  output (one that ended says `stillRunning: false`); a GUI app stays up,
+  ready to be driven with delphi_desktop. With `out=`, a program still
+  running writes nothing yet (`RUN-030`): `output` with that `job` and
+  `out=` writes what it has, and all of it once it ends. If a
   job is stuck or no longer wanted, the same answer's `killNote` gives the
   call: `delphi_paserver command=kill profile= project= job=<jobId>` - it
   stops only that job, on that machine.
@@ -614,4 +619,4 @@ not even in `tools/list` (`delphi_help` says which key opens them). A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (one of its settings - its roots, a protection - did not load): the operator's side, not yours.
 
-<!-- contract reviewed: v1.29.0 -->
+<!-- contract reviewed: v1.29.1 -->

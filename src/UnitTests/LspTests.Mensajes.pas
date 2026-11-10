@@ -302,7 +302,7 @@ begin
   F := MsgText(SN_MESSAGES_PENDING_FMT);
   Inicio := Copy(F, 1, Pos('%', F) - 1);
   Final := F.Substring(F.LastIndexOf('%s') + 2);
-  Nota := MsgFmt(SN_MESSAGES_PENDING_FMT, [2, 'hermes-agent']);
+  Nota := MsgFmt(SN_MESSAGES_PENDING_FMT, [2, 'hermes-agent', 'hermes-agent']);
   Assert.AreEqual('hola', SinNota(ConNota('hola', 'mailbox', Nota, ''), 'mailbox', Inicio, Final),
     'prosa: la nota del final se va');
   Assert.AreEqual('{"a":1}', SinNota(ConNota('{"a":1}', 'mailbox', Nota, ''), 'mailbox', Inicio, Final),

@@ -18,7 +18,8 @@ them. What each is for, whether it ships, and when it runs:
 Three things ship that are **not** projects: `settings.example.ini` (the
 configuration template), `connections/` (examples of the database and API
 connections files) and `docs/`. The Python batteries in `tests/` are the
-harness, not a client, and the vendored MCP plumbing in `vendor/` is frozen.
+harness, not a client, and the vendored MCP plumbing in `vendor/` is frozen against its
+upstream: its local changes are listed in `vendor/VENDOR.md`.
 
 ## Building
 

@@ -194,9 +194,13 @@ function TextoDeDesigner(const APath: string; out ATexto, AEncName: string): str
   +R que pregunta el escritor) sin copiar ni escribir; lanza lo que lanzaria.
   El preview de un changeset lo pide en vez de copiar las reglas del commit
   (decima revision). ANuevo: el texto es un fichero nuevo, y lo que haya en
-  el disco no cuenta (el ensayo de un create tras un delete del mismo lote). }
-procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False;
-  ANuevo: Boolean = False);
+  el disco no cuenta (el ensayo de un create tras un delete del mismo lote).
+  Devuelve la nota de la copia diaria (la de BackupFile: su ruta si es nueva,
+  que ya existia si no; '' sin copia), para quien la ensena: delphi_textedit
+  decia "backup in __delphi-patch\" sin el fichero (test completo de Hermes,
+  10-nov-2026). }
+function PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False;
+  ANuevo: Boolean = False): string;
 { LA REGLA DE IDA Y VUELTA de todo el que lee un fichero para reescribirlo
   (David, 9-oct-2026): '' si los bytes B de APath vuelven iguales al leerlos
   y escribirlos en su codificacion (K, la que dice EL detector); si no, la
@@ -1420,14 +1424,15 @@ begin
   ATexto := PatchLoadText(APath, AEncName);
 end;
 
-procedure PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False;
-  ANuevo: Boolean = False);
+function PatchSaveText(const APath, AText, AEncName: string; AEnsayo: Boolean = False;
+  ANuevo: Boolean = False): string;
 var
   K: TEncKind;
   B, Antes: TBytes;
   Existe: Boolean;
   TextoAntes: string;
 begin
+  Result := '';
   K := EncKindOf(AEncName);
   // LA puerta del escritor ANTES de mirar nada: la ida y vuelta leia los bytes
   // de una ruta sin juzgar (un llamador que escribe un fichero que encontro en
@@ -1485,7 +1490,7 @@ begin
     Exit;
   end;
   if TFile.Exists(APath) then
-    BackupFile(APath); // new files have nothing to back up
+    Result := BackupFile(APath); // new files have nothing to back up
   AtomicWrite(APath, B);
 end;
 

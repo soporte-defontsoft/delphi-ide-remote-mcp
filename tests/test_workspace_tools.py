@@ -3,7 +3,7 @@
 Usage:  python tests/test_workspace_tools.py [path-to-DelphiLspMcp.exe]
 Exit code 0 = all green. Uses an independent repository as the git fixture.
 """
-import json, os, base64, hashlib, shutil, subprocess
+import json, os, re, base64, hashlib, shutil, subprocess
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -627,6 +627,16 @@ try:
     check('textedit: contenido correcto en disco',
           'linea EDITADA por MCP' in body and '# Titulo' in body and 'fin' in body, body[:120])
     check('textedit: CRLF preservado', '\r\n' in body, repr(body[:40]))
+    # la copia diaria, con SU ruta, como delphi_edit (backup=...): decia "backup in __delphi-patch\" sin el
+    # fichero (test completo de Hermes, 10-nov-2026). ROJO contra c11bcc4e
+    m = re.search(r'backup=[^\n]*\\' + re.escape(mc.PAPELERA) + r'\\(\d{8})\\README\.md$', out, re.M)
+    copia = os.path.join(tmptxt, mc.PAPELERA, m.group(1), 'README.md') if m else ''
+    check('textedit: dice la ruta de su copia diaria (backup=...), y esa copia es el original',
+          m is not None and os.path.isfile(copia) and b'gestoria admision' in open(copia, 'rb').read(), out[:200])
+    out = call('delphi_textedit', {"path": md, "old": "linea EDITADA por MCP", "new": "linea EDITADA por MCP, otra vez"})
+    check('textedit: la segunda del dia dice que la copia ya existia (se queda la primera), como delphi_edit',
+          mc.abre(out, 'SK_TEXT_OK_LINEA_FMT') and ('backup=' + mc.catalogo()['SF_EDIT_COPIA_YA_EXISTIA']) in out,
+          out[:200])
     # --- varias ediciones en UNA llamada, y todo o nada ---
     # Sin esto, cambiar tres lineas eran tres llamadas y tres oportunidades de
     # dejar el fichero a medias (medido el 2026-09-20 usando el servidor como

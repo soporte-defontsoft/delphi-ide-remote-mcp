@@ -61,7 +61,6 @@ uses
   Lsp.Guard,
   Lsp.Texts,
   Lsp.Patch,
-  Lsp.Casa,
   Lsp.Codificacion, // IsAscii
   Lsp.Mascara,
   Lsp.Styles,       // IgnoradoPorFmx: lo que FMX hace con un .style escrito
@@ -232,8 +231,11 @@ begin
   if Text = Antes then
     Exit(MsgFmt(SN_EDIT_SIN_CAMBIOS_FMT, [Target + 1, TPath.GetFileName(A.Path)]));
 
+  // la nota de la copia diaria, la de delphi_edit (su ruta, o que ya existia):
+  // se decia "backup in __delphi-patch\" sin el fichero (Hermes, 10-nov-2026)
+  var Copia: string;
   try
-    PatchSaveText(A.Path, Text, EncNm, A.Ensayo); // backup + atomic + same encoding (o el ensayo)
+    Copia := PatchSaveText(A.Path, Text, EncNm, A.Ensayo); // backup + atomic + same encoding (o el ensayo)
   except
     on E: Exception do
       Exit(MsgEnvuelve(SR_TEXT_AL_CODIFICAR_FMT, E.Message));
@@ -251,20 +253,20 @@ begin
     Exit(MsgFmt(SK_TEXT_RANGO_VERIFICACION_FMT,
       [Format(IfThen(A.DeleteLine, MsgText(SN_RANGE_DELETED_FMT), MsgText(SN_RANGE_REPLACED_FMT)),
          [Cuantas, Target + 1, Target + Cuantas, TPath.GetFileName(A.Path)]),
-       Etiqueta, TrashFolderName,
+       Etiqueta, Copia,
        EcoDeLoEscrito(A.Path, Target, Target + Length(NewLines) + 1)]));
   if A.DeleteLine then
     Exit(MsgFmt(SK_TEXT_OK_BORRADA_LINEA_FMT,
-      [Target + 1, TPath.GetFileName(A.Path), Etiqueta, TrashFolderName,
+      [Target + 1, TPath.GetFileName(A.Path), Etiqueta, Copia,
        EcoNumerado(A.Path, Target, Target + 2)]));
   // old sin new deja la linea en blanco: se dice, como delphi_edit (EDIT-089);
   // contestaba "OK line N" (decima revision)
   if (Length(NewLines) = 1) and (NewLines[0] = '') then
     Exit(MsgFmt(SK_TEXT_BLANQUEADA_LINEA_FMT,
-      [Target + 1, TPath.GetFileName(A.Path), Etiqueta, TrashFolderName,
+      [Target + 1, TPath.GetFileName(A.Path), Etiqueta, Copia,
        EcoDeLoEscrito(A.Path, Target, Target + Length(NewLines) + 1)]));
   Result := MsgFmt(SK_TEXT_OK_LINEA_FMT,
-    [Target + 1, TPath.GetFileName(A.Path), Etiqueta, TrashFolderName,
+    [Target + 1, TPath.GetFileName(A.Path), Etiqueta, Copia,
      EcoDeLoEscrito(A.Path, Target, Target + Length(NewLines) + 1)]);
 end;
 

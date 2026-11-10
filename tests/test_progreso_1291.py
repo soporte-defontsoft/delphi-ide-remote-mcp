@@ -27,6 +27,9 @@ PostgreSQL de produccion (sin ellas, la bateria termina sin checks y lo dice).
   R2 ...la siguiente respuesta de ese agente avisa de que hay correo (MESSAGES_PENDING)
   R3 ...y delphi_messages la entrega: SYS-041, la tool y su respuesta tal como habria llegado
   R4 las llamadas cuyo cliente se quedo (H1, H3) no dejan nada en el buzon
+  R5 (test completo de Hermes, 10-nov) la nota de R2 lleva la llamada que lo lee CON su agent=, y delphi_messages
+     con OTRO agent= (el suyo propio, como el de Hermes) dice su buzon vacio Y la nota del correo del saludo; el
+     correo sigue alli (decia "No messages" con el correo en el otro buzon)
   C1 (A22, medido con Hermes el 9-nov: corta a los 300 s, manda notifications/cancelled con el id y NO
      cuelga) un cliente con stream manda su cancelled por otra peticion y sigue leyendo: su respuesta le
      llega igual Y queda en su buzon, una vez (hasta esto se perdia: el latido seguia llegando)
@@ -267,6 +270,15 @@ try:
         st, hs, raw = moderna(RAPIDA, None, mc.ACCEPT_STREAMABLE, 917)
         check('R2 la siguiente respuesta de ese agente avisa de que hay correo', mc.es(raw, 'SN_MESSAGES_PENDING_FMT'),
               raw[-300:])
+        check('R5 ...con la llamada exacta que lo lee, su agent= incluido (decia command=read a secas). ROJO contra '
+              'c11bcc4e', 'delphi_messages command=read agent=progreso' in raw, raw[-300:])
+        st, hs, raw = moderna({'name': 'delphi_messages', 'arguments': {'command': 'read', 'agent': 'otro-nombre'}},
+                              None, mc.ACCEPT_STREAMABLE, 919)
+        otro = texto_de(next((m for m in mc.Http.mensajes(raw) if m.get('id') == 919), None))
+        check('R5 delphi_messages con OTRO agent=: su buzon vacio Y la nota del correo del saludo con su llamada, y '
+              'el correo sigue alli. ROJO contra c11bcc4e',
+              mc.es(otro, 'SN_MESSAGES_NONE_FMT') and mc.es(otro, 'SN_MESSAGES_PENDING_FMT')
+              and 'agent=progreso' in otro and len(en_el_buzon()) == 1, (otro[-400:], en_el_buzon()))
         st, hs, raw = moderna({'name': 'delphi_messages', 'arguments': {'command': 'read'}}, None,
                               mc.ACCEPT_STREAMABLE, 918)
         leido = texto_de(next((m for m in mc.Http.mensajes(raw) if m.get('id') == 918), None))

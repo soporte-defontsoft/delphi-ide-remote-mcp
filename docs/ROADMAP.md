@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-11-09 (current release v1.29.0; 44 tools).
+Status page as of 2026-11-10 (current release v1.29.1; 44 tools).
 
 ## Delivered
 
@@ -78,6 +78,8 @@ Status page as of 2026-11-09 (current release v1.29.0; 44 tools).
 
 - Databases and HTTP APIs by name (`delphi_db`, `delphi_api`): the operator defines them in two files of the server's own house and opens them per workspace; the agent asks for operations - tables, fields, rows, a summary, writes of at most `max` rows, tables and views where the operator allows them, a request to an API - and never sees a server, an address or a credential. And the designer: events bound by `set` (judged by the event's signature), several controls in one `insert` (`items`), `preview` at another display scale (`scale=`), the service's way of painting compared pixel by pixel with the desktop's on the 355 forms of the samples, `lint styles=`; `delphi_config save-as`; `delphi_create kind=project-library` and `autocreate=no`; the help of Delphi 13.2 read as 13.1's (1.29.0)
 
+- A long call that tells its client it is still running (`notifications/progress`), and its answer kept in the agent's mailbox when the client gave up on it (`SYS-041`, also after a `notifications/cancelled`); the other calls told while a long operation writes (`SYS-042`, `SYS-043`, `SYS-044`); the row an insert wrote, from `delphi_db`; all of a program's output into a file (`delphi_paserver out=`); the server's DLLs only from its house and `System32`; one `access` key per database (1.29.1)
+
 ## Next
 
 Nothing: 1.29 closed the list, each item done, measured, declared or parked by the operator. What follows are patches.
@@ -108,7 +110,7 @@ Nothing: 1.29 closed the list, each item done, measured, declared or parked by t
 - GUI control of Linux from the MCP outside the PAServer node
 - Several Delphi versions on one machine: one server serves one Delphi (`[Server] DelphiVersion`). To work with several versions, run one server per version - for example one virtual machine per Delphi, each with its own MCP server - and let the agent choose which one it talks to
 - Several servers federated behind one endpoint: the same reason - each Delphi has its own server, and the agent chooses
-- Progress notifications and cancellation for long builds, and a `POST /files` upload: a build or a test answers when it ends, within its time limit, and files travel through `delphi_upload` and `delphi_fetch`
+- Stopping a call on its client's `notifications/cancelled`, and an asynchronous mode (a job id to ask for later): a call runs to its end, sends its progress meanwhile, and an answer its client gave up on goes to the agent's mailbox (`SYS-041`, 1.29.1); and a `POST /files` upload: files travel through `delphi_upload` and `delphi_fetch`
 - LSIF as a references backend (measured feasible, see [DELPHILSP-NOTES.md](DELPHILSP-NOTES.md)): the references come from the DelphiLSP engine with each project's own settings
 - A more restricted token (LPAC) for the resource compiler of `delphi_styles build`: measured on 2026-10-24 that it would not lift the styles-folder rule of 1.21.0 (`STYLE-052`), since `C:\Windows` and `Program Files` grant read to restricted application packages as well; the `.rc` it compiles is composed by the server from a whitelist
 - Attaching a style to a StyleBook as the IDE does (an embedded style): styles are worked on as text `.style` files and built with `delphi_styles build`

@@ -126,7 +126,9 @@ VM).
 - **stdio**: spawn `DelphiLspMcp.exe`; JSON-RPC 2.0, one message per line,
   MCP protocols `2026-07-28` and `2025-06-18`. Logs go to stderr, protocol to stdout.
 - **HTTP**: POST JSON-RPC to `http://HOST:PORT/mcp` with
-  `Authorization: Bearer <token>` and `Accept: application/json`.
+  `Authorization: Bearer <token>` and `Accept: application/json, text/event-stream`;
+  a `_meta.progressToken` in a `tools/call` gets a `notifications/progress` every
+  `[Server] ProgressSeconds` while it runs, as the first events of its answer's stream.
   `initialize` → `notifications/initialized` → `tools/list` / `tools/call`, with the
   session it gives you. Or, in `2026-07-28`, no handshake: each request carries
   `io.modelcontextprotocol/protocolVersion` and `clientCapabilities` in `_meta`, your
@@ -134,7 +136,9 @@ VM).
   `Mcp-Method` and, on what names a tool or resource, `Mcp-Name`.
 
 Three things a client may expect and this server does not do: closing the response
-stream of a call does not cancel the tool - it runs to its end; there are no resource
+stream of a call, or a `notifications/cancelled` for it, does not stop the tool - it runs
+to its end, and an answer its client did not get goes to that agent's mailbox
+(`SYS-041`, read with `delphi_messages`); there are no resource
 subscriptions; and the `sessions` that `delphi_workspace` reports count only the clients
 that used `initialize` (a `2026-07-28` request has no session).
 

@@ -130,7 +130,7 @@ begin
     Exit;
   N := Length(PendingIn(BuzonDeMensajes(Agent)));
   if N > 0 then
-    Result := MsgFmt(SN_MESSAGES_PENDING_FMT, [N, Agent]);
+    Result := MsgFmt(SN_MESSAGES_PENDING_FMT, [N, Agent, Agent]);
 end;
 
 function SinNotaDelBuzon(const AText: string): string;
@@ -185,42 +185,23 @@ begin
   end;
 end;
 
-{ TDelphiMessagesTool }
-
-constructor TDelphiMessagesTool.Create;
-begin
-  inherited;
-  FName := 'delphi_messages';
-  FDescription := SD_MESSAGES;
-end;
-
-function TDelphiMessagesTool.ExecuteWithParams(const Params: TDelphiMessagesParams): string;
+{ check o read del buzon de AAgent: la lista de lo que espera, o todo entregado
+  y borrado. }
+function LeeElBuzon(const ACmd, AAgent: string): string;
 var
-  Cmd, Agent, F: string;
+  F: string;
   Files: TArray<string>;
   Sb: TStringBuilder;
   N: Integer;
 begin
-  Cmd := SinMayusculas(Params.Command.Trim);
-  if Cmd = '' then
-    Cmd := 'read';
-  if not MatchText(Cmd, ['read', 'check']) then
-    Exit(MsgText(SR_MSGS_COMMAND_READ_CHECK));
-  // Your id, without typing it: the handshake bound clientInfo.name to this
-  // session, so the box knows who is asking. An explicit agent= still wins
-  // (an operator reading a specific box, an agent whose name differs from its
-  // id), but the common case - "read my mail" - needs no argument now.
-  Agent := AgenteDeLaLlamada(Params.Agent);
-  if Agent = '' then
-    Exit(MsgText(SN_MESSAGES_NONE_NO_AGENT));
   // UN buzon por agente y ninguno "para todos" (David, 25-sep-2026): un aviso
   // general se deja en la carpeta de cada uno.
-  Files := PendingIn(BuzonDeMensajes(Agent));
+  Files := PendingIn(BuzonDeMensajes(AAgent));
   if Length(Files) = 0 then
-    Exit(MsgFmt(SN_MESSAGES_NONE_FMT, [Agent]));
+    Exit(MsgFmt(SN_MESSAGES_NONE_FMT, [AAgent]));
   Sb := TStringBuilder.Create;
   try
-    if Cmd = 'check' then
+    if ACmd = 'check' then
     begin
       Sb.AppendLine(MsgFmt(SN_MESSAGES_CHECK_FMT, [Length(Files)]));
       for F in Files do
@@ -268,6 +249,41 @@ begin
   finally
     Sb.Free;
   end;
+end;
+
+{ TDelphiMessagesTool }
+
+constructor TDelphiMessagesTool.Create;
+begin
+  inherited;
+  FName := 'delphi_messages';
+  FDescription := SD_MESSAGES;
+end;
+
+function TDelphiMessagesTool.ExecuteWithParams(const Params: TDelphiMessagesParams): string;
+var
+  Cmd, Agent: string;
+begin
+  Cmd := SinMayusculas(Params.Command.Trim);
+  if Cmd = '' then
+    Cmd := 'read';
+  if not MatchText(Cmd, ['read', 'check']) then
+    Exit(MsgText(SR_MSGS_COMMAND_READ_CHECK));
+  // Your id, without typing it: the handshake bound clientInfo.name to this
+  // session, so the box knows who is asking. An explicit agent= still wins
+  // (an operator reading a specific box, an agent whose name differs from its
+  // id), but the common case - "read my mail" - needs no argument now.
+  Agent := AgenteDeLaLlamada(Params.Agent);
+  if Agent = '' then
+    Exit(MsgText(SN_MESSAGES_NONE_NO_AGENT));
+  Result := LeeElBuzon(Cmd, Agent);
+  // Otro buzon que el del saludo: el correo de ESTE agente espera alli (las
+  // respuestas que su cliente no recibio van al del saludo, SYS-041), y su
+  // nota, la de todas las demas tools, se dice tambien aqui. Quien pasaba su
+  // propio agent= leia "No messages" con el correo en el otro (sonda del
+  // 10-nov-2026, test completo de Hermes de la 1.29.1)
+  if not SameText(Agent, AgenteDeLaLlamada('')) then
+    Result := ConNota(Result, CLAVE_NOTA_DEL_BUZON, PendingMessagesNote, '');
 end;
 
 initialization

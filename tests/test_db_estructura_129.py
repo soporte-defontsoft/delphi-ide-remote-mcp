@@ -16,7 +16,9 @@ DROP ni ALTER: un nombre que ya existe se niega.
   S4  un tipo que el motor no tiene (MSSQL: dtTimeIntervalFull; PG: dtCursorRef): DB-010 con el -353 de FireDAC y
       la tabla no existe (tampoco su otra columna)
   S5  la forma, antes de abrir la base: nombres que no son identificadores (DB-025), un tipo que FireDAC no tiene,
-      una clave de entrada desconocida, numeros y si/no de otro tipo, una columna repetida (DB-014), la lista (DB-015)
+      una clave de entrada desconocida, numeros y si/no de otro tipo, una columna repetida (DB-014), la lista (DB-015),
+      un decimal (dtFmtBCD, dtBCD) sin precision o sin escala (DB-014: el generador escribia DECIMAL(64), PG lo
+      guardaba sin decimales y MSSQL lo negaba - test completo de Hermes, 10-nov-2026). ROJO contra c11bcc4e
   S6  create-view con fields y sin ellos (todas): rows por la vista lee la fila; filters no va con create-view (DB-020)
   S7  mayusculas: la tabla y la vista nuevas siguen LA regla del generador (PG: en minusculas, como sin comillas;
       MSSQL: tal cual)
@@ -36,6 +38,8 @@ VISTA_TODA = 'v_db129c_toda'
 RARA = 't_db129c_rara'
 MIXTA = 'TDb129Mixta'
 VISTA_MIXTA = 'VDb129Mixta'
+# la de S5: no se crea nunca (un build sin la negativa del decimal la creaba, y la limpieza la quita)
+FORMA = 't_db129c_f'
 TITULO = 'delphi_db 1.29 (create-table y create-view, MSSQL y PG)'
 BASE, JAIL, SRV, EXE, MS, PG = arnes.prepara('db_estructura_129', TITULO)
 SECRETOS = arnes.secretos(MS, PG)
@@ -49,9 +53,9 @@ arnes.escribe_conexiones(SRV, {
     'mala': arnes.entrada(MS, access='si')})
 LIMPIA_MS = ''.join("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP VIEW dbo.%s; " % (v, v)
                     for v in (VISTA, VISTA_TODA, VISTA_MIXTA)) + \
-    ''.join("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; " % (t, t) for t in (TABLA, RARA, MIXTA))
-LIMPIA_PG = 'DROP VIEW IF EXISTS %s, %s, %s; DROP TABLE IF EXISTS %s, %s, %s;' % (
-    VISTA, VISTA_TODA, VISTA_MIXTA.lower(), TABLA, RARA, MIXTA.lower())
+    ''.join("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; " % (t, t) for t in (TABLA, RARA, MIXTA, FORMA))
+LIMPIA_PG = 'DROP VIEW IF EXISTS %s, %s, %s; DROP TABLE IF EXISTS %s, %s, %s, %s;' % (
+    VISTA, VISTA_TODA, VISTA_MIXTA.lower(), TABLA, RARA, MIXTA.lower(), FORMA)
 COLUMNAS = [{'name': 'id', 'type': 'dtInt32', 'key': True, 'autoinc': True},
             {'name': 'nombre', 'type': 'dtWideString', 'size': 60, 'required': True},
             {'name': 'importe', 'type': 'dtFmtBCD', 'precision': 10, 'scale': 2},
@@ -198,6 +202,12 @@ try:
         ({'table': 't_db129c_f', 'columns': [{'name': 'id', 'type': 'dtInt32'}, {'name': 'ID', 'type': 'dtInt64'}]},
          'SR_DB_ENTRADA_FMT', 'ID'),
         ({'table': 't_db129c_f', 'columns': [{'type': 'dtInt32'}]}, 'SR_DB_ENTRADA_FMT', ''),
+        ({'table': 't_db129c_f', 'columns': [{'name': 'importe', 'type': 'dtFmtBCD'}]}, 'SR_DB_ENTRADA_FMT',
+         cat['SF_DB_COLUMNA_DECIMAL_FMT'] % 'dtFmtBCD'),
+        ({'table': 't_db129c_f', 'columns': [{'name': 'importe', 'type': 'dtBCD', 'precision': 10}]},
+         'SR_DB_ENTRADA_FMT', cat['SF_DB_COLUMNA_DECIMAL_FMT'] % 'dtBCD'),
+        ({'table': 't_db129c_f', 'columns': [{'name': 'importe', 'type': 'dtFmtBCD', 'scale': 2}]},
+         'SR_DB_ENTRADA_FMT', cat['SF_DB_COLUMNA_DECIMAL_FMT'] % 'dtFmtBCD'),
         ({'table': 't_db129c_f', 'columns': []}, 'SR_DB_LISTA_FMT', ''),
         ({'table': 't_db129c_f', 'columns': 'no es una lista'}, 'SR_DB_LISTA_FMT', ''),
         ({'table': 't_db129c_f'}, 'SR_DB_FALTA_FMT', ''),

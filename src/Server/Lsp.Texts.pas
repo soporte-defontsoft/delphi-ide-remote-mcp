@@ -56,7 +56,7 @@ const
     constante para los dos lados: al traducir cambia en un sitio. }
   SL_MARCA_AVISO =
     'WARNING';
-  SERVER_VERSION = '1.29.0';
+  SERVER_VERSION = '1.29.1';
 
   // ---------------------------------------------------------------------
   // Virtual drive units (the path contract with the client)
@@ -4680,10 +4680,14 @@ const
     'noticeboard: read YOUR id, not other people''s, and send nothing ' +
     'secret.';
 
+  { %d = cuantos; %s = el agente del saludo, dos veces: su buzon y la llamada
+    que lo lee CON su agent=. Decia "command=read" a secas, y quien pasa su
+    propio agent= (Hermes, test completo de la 1.29.1) leia otro buzon y no
+    veia el correo (medido con una sonda el 10-nov-2026) }
   SN_MESSAGES_PENDING_FMT =
     #10#10 +
     '[MSGS-001] PENDING MESSAGES: %d in your mailbox (%s). Read them ' +
-    'with delphi_messages command=read.';
+    'with delphi_messages command=read agent=%s, or with no agent.';
 
   SN_MESSAGES_NONE_FMT =
     '[MSGS-002] No messages for "%s".';
@@ -4928,6 +4932,11 @@ const
   SF_DB_COLUMNA_TEXTO_FMT = '%s takes text';
   // %s = el nombre
   SF_DB_COLUMNA_REPETIDA_FMT = 'column "%s" is already in the list';
+  // %s = el tipo (dtFmtBCD, dtBCD)
+  SF_DB_COLUMNA_DECIMAL_FMT =
+    '%s takes precision and scale (18 and 2 = 18 digits, 2 after the point; ' +
+    'scale 0 = none): without them FireDAC writes DECIMAL(64), which ' +
+    'PostgreSQL stores without decimals and SQL Server refuses';
   SN_DB_CREADO =
     '[DB-026] Created with the SQL FireDAC writes for this engine (sql), in ' +
     'one transaction. command=fields shows it as the database names it.';
@@ -4978,7 +4987,7 @@ const
     'create-view: its columns (default: all).';
   SP_DB_COLUMNS =
     'create-table: a list of {"name", "type"; optional "size", "precision", ' +
-    '"scale", "required", "key" (primary), "autoinc"}; type as ' +
+    '"scale" (dtFmtBCD needs both), "required", "key" (primary), "autoinc"}; type as ' +
     'FireDAC names it (dtInt32, dtWideString, dtFmtBCD, dtDateTime...).';
   SP_DB_VIEW =
     'create-view: the NEW view''s name; it selects fields of table, no filters.';
@@ -11591,17 +11600,17 @@ const
     'default) or lf.';
 
   SK_TEXT_RANGO_VERIFICACION_FMT =
-    '[TEXT-011] %s  encoding=%s  (backup in %s\)'#10 +
+    '[TEXT-011] %s  encoding=%s  backup=%s'#10 +
     'Verification (re-read from disk):'#10 +
     '%s';
 
   SK_TEXT_OK_BORRADA_LINEA_FMT =
-    '[TEXT-012] OK deleted line %d of %s  encoding=%s  (backup in %s\)'#10 +
+    '[TEXT-012] OK deleted line %d of %s  encoding=%s  backup=%s'#10 +
     'Verification (re-read from disk):'#10 +
     '%s';
 
   SK_TEXT_OK_LINEA_FMT =
-    '[TEXT-013] OK line %d of %s  encoding=%s  (backup in %s\)'#10 +
+    '[TEXT-013] OK line %d of %s  encoding=%s  backup=%s'#10 +
     'Verification (re-read from disk):'#10 +
     '%s';
 
@@ -11609,7 +11618,7 @@ const
     (EDIT-089); contestaba "OK line" (decima revision). }
   SK_TEXT_BLANQUEADA_LINEA_FMT =
     '[TEXT-016] BLANKED line %d of %s (it still exists, empty; to remove ' +
-    'it completely use delete:true)  encoding=%s  (backup in %s\)'#10 +
+    'it completely use delete:true)  encoding=%s  backup=%s'#10 +
     'Verification (re-read from disk):'#10 +
     '%s';
 
