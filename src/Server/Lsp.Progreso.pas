@@ -87,6 +87,7 @@ uses
   Lsp.Casa, // BuzonDeMensajes, Slug
   Lsp.Identidad, // AgenteDeLaLlamada
   Lsp.Puertas, // EscribeDocumentoNuevo
+  Mcp.Tools.Messages, // SinNotaDelBuzon
   MCPServer.Logger,
   Lsp.Texts;
 
@@ -207,7 +208,9 @@ begin
     Ahora := Now;
     Ruta := EscribeDocumentoNuevo(ABuzon, SelloDeDocumento(Ahora) + '-' +
       Slug('answer ' + ATool), MsgFmt(SN_SYS_RESPUESTA_PERDIDA_FMT, [ATool, ATool,
-      FormatDateTime('yyyy-mm-dd hh:nn:ss', Ahora), TextoDeLaRespuesta(ARespuestaJson)]), Motivo);
+      FormatDateTime('yyyy-mm-dd hh:nn:ss', Ahora),
+      // sin la nota del buzon: quien lea esta la lee con todo lo que espera
+      SinNotaDelBuzon(TextoDeLaRespuesta(ARespuestaJson))]), Motivo);
     if Ruta <> '' then
       TLogger.Info('The answer of ' + ATool + ' did not reach its client: left in its mailbox, ' +
         ExtractFileName(Ruta))

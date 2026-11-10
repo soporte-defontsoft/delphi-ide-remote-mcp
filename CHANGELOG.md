@@ -30,8 +30,11 @@ the MCP `initialize` response (`serverInfo.version`).
   again, blind, what was already done (measured on 7-nov: a `remote-run` cut by its client
   ran twice on the target). The cancel is what Hermes sends: measured on 9-nov, its client
   cuts a call at 300 s, says so and keeps the connection open, so the heartbeat still got
-  through and in its three test rounds the answer of a cut call never reached its mailbox.
-  Writing a new document in the server's house without
+  through and in its three test rounds the answer of a cut call never reached its mailbox;
+  with this build, in three more rounds on 10-nov, all three reached it. An answer left in
+  the mailbox goes without the "mail is waiting" note it carried when the call ended: it is
+  read with the rest, and a cut answer read that night still said "PENDING MESSAGES: 1"
+  about the one delivered with it. Writing a new document in the server's house without
   overwriting one is now one helper (`EscribeDocumentoNuevo`), used by `delphi_report` too,
   and a message whose text is still being written is not delivered empty.
 - A long operation that writes (`delphi_move`, `delphi_delete`, `delphi_build`,

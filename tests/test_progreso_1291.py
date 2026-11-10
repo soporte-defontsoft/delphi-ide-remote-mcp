@@ -34,6 +34,10 @@ PostgreSQL de produccion (sin ellas, la bateria termina sin checks y lo dice).
   C3 un cancelled con un id que no esta en vuelo no deja nada
   C4 cancelled y luego cuelga: en el buzon UNA vez (el procesador la dejo; el transporte, que tampoco puede
      escribirla, no la deja otra vez)
+  C5 (medido con Hermes en la VM el 10-nov) con otro mensaje ya esperando, la respuesta que se deja en el
+     buzon no lleva la nota PENDING MESSAGES: quien la lee la recibe con el otro, y la cuenta ya no es
+     verdad. En prosa (la negativa de la base), la linea de detras
+  C6 ...y en JSON (un delphi_test cortado, como el de Hermes), el campo mailbox
 
 Uso:  python tests/test_progreso_1291.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -152,7 +156,7 @@ try:
 
     # ---- HTTP: un workspace con su token, como las demas baterias HTTP
     io.open(os.path.join(SRV, 'settings.ini'), 'w', encoding='utf-8').write(
-        '[Workspace.P]\nToken=%s\nRoots=%s\nDbAllowedProjects=p\n' % (TOKEN, JAIL))
+        '[Workspace.P]\nToken=%s\nRoots=%s\nDbAllowedProjects=p\nAllowTests=1\n' % (TOKEN, JAIL))  # C6: un delphi_test
     puerto = mc.puerto_libre()
     proc = mc.lanza_http(EXE, puerto, env=mc.entorno({'DELPHI_MCP_BIND_IP': '127.0.0.1',
                                                     'DELPHI_MCP_PROGRESS_SECONDS': '2'}))
@@ -288,6 +292,47 @@ try:
         time.sleep(3)
         check('C4 cancelled y luego cuelga: en el buzon UNA vez', primero and stc == 202 and len(en_el_buzon()) == 1,
               (primero, stc, en_el_buzon()))
+        vacia_el_buzon()
+
+        # C5 y C6: con un mensaje del operador ya esperando en el buzon
+        os.makedirs(buzon, exist_ok=True)
+        io.open(os.path.join(buzon, '20261110-000000-del-operador.md'), 'w', encoding='utf-8').write('hola\n')
+
+        def cortada(params, rid, espera):
+            """Una llamada JSON cancelada a los espera s: (el texto de lo que dejo en el buzon, '' si nada; lo que
+            le llego al cliente)."""
+            antes = set(en_el_buzon())
+            res = {}
+            hilo = threading.Thread(target=lambda: res.setdefault('r', moderna(params, None, 'application/json', rid)))
+            hilo.start()
+            time.sleep(espera)
+            cancela(rid)
+            hilo.join(240)
+            time.sleep(1)
+            nuevos = sorted(set(en_el_buzon()) - antes)
+            return (io.open(os.path.join(buzon, nuevos[0]), encoding='utf-8-sig').read() if nuevos else '',
+                    res.get('r', (None, None, ''))[2])
+
+        dejado, _ = cortada(LARGA, 925, 4)
+        check('C5 con otro mensaje esperando, la respuesta (prosa) que se deja en el buzon no lleva PENDING MESSAGES',
+              mc.es(dejado, 'SN_SYS_RESPUESTA_PERDIDA_FMT') and negativa_de_siempre(dejado)
+              and not mc.es(dejado, 'SN_MESSAGES_PENDING_FMT'),
+              dejado[-400:])
+        proy = os.path.join(JAIL, 'C6')
+        st, hs, raw = moderna({'name': 'delphi_create', 'arguments': {'kind': 'project-test', 'name': 'C6', 'dir': proy}},
+                              None, 'application/json', 926)
+        # que el test dure 8 s (el esqueleto acaba en menos de 3 con su build): el corte llega con el en marcha
+        unidad = os.path.join(proy, 'UC6.pas')
+        u = io.open(unidad, encoding='utf-8-sig', newline='').read()
+        u = u.replace('  DUnitX.TestFramework;', '  DUnitX.TestFramework, System.SysUtils;', 1).replace(
+            '  Assert.AreEqual(', '  Sleep(8000);\r\n  Assert.AreEqual(', 1)
+        io.open(unidad, 'w', encoding='utf-8-sig', newline='').write(u)
+        dejado, llego = cortada({'name': 'delphi_test', 'arguments': {'command': 'run',
+                                                                      'project': os.path.join(proy, 'C6.dproj')}}, 927, 4)
+        cuerpo = dejado[dejado.find('{'):] if '{' in dejado else ''
+        check('C6 ...y en JSON (un delphi_test cortado): sin el campo mailbox',
+              mc.es(dejado, 'SN_SYS_RESPUESTA_PERDIDA_FMT') and '"verdictFrom"' in cuerpo and '"mailbox"' not in dejado
+              and not mc.es(dejado, 'SN_MESSAGES_PENDING_FMT'), ('buzon: ' + dejado[-300:], 'cliente: ' + llego[-300:]))
         vacia_el_buzon()
     finally:
         proc.kill()

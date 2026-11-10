@@ -54,6 +54,20 @@ type
   different: it can read it, and reading it turns the line off. }
 function PendingMessagesNote: string;
 
+const
+  { La clave de la nota del buzon en una respuesta JSON: la pone
+    Lsp.Host.WithMailboxNote y la quita SinNotaDelBuzon. }
+  CLAVE_NOTA_DEL_BUZON = 'mailbox';
+
+{ La inversa de WithMailboxNote (Lsp.Host) con PendingMessagesNote: el texto
+  de una respuesta sin la nota del buzon, sea un campo de su JSON o la linea
+  de detras de una prosa. Para la respuesta que se deja EN el buzon
+  (Lsp.Progreso.DejaLaRespuestaEnElBuzon): quien la lee recibe de una vez
+  todo lo que espera, y la cuenta de cuando acabo la llamada ya no es verdad
+  (medido el 10-nov en la VM: la respuesta de un delphi_test cortado decia
+  "PENDING MESSAGES: 1", la de otro cortado antes, entregada con ella). }
+function SinNotaDelBuzon(const AText: string): string;
+
 { How many messages wait in NAMED agent boxes of the caller's workspace.
   For delphi_workspace only: it is server state, not a message for the
   caller. }
@@ -66,7 +80,9 @@ uses
   System.IOUtils,
   System.StrUtils,
   System.Generics.Collections,
+  System.JSON,
   MCPServer.Registration,
+  Lsp.Json, // ObjetoJson: EL lector de un objeto JSON
   Lsp.Puertas, // LeeTexto: la puerta de leer, con la casa como lugar
   Lsp.Casa,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
@@ -116,6 +132,39 @@ begin
   N := Length(PendingIn(BuzonDeMensajes(Agent)));
   if N > 0 then
     Result := MsgFmt(SN_MESSAGES_PENDING_FMT, [N, Agent]);
+end;
+
+function SinNotaDelBuzon(const AText: string): string;
+var
+  O: TJSONObject;
+  T, Inicio: string;
+  P: Integer;
+begin
+  Result := AText;
+  T := AText.TrimRight;
+  // en un objeto va como un campo mas (ConNota)
+  if T.StartsWith('{') and T.EndsWith('}') then
+  begin
+    O := ObjetoJson(T);
+    if O <> nil then
+      try
+        if O.GetValue(CLAVE_NOTA_DEL_BUZON) <> nil then
+        begin
+          O.RemovePair(CLAVE_NOTA_DEL_BUZON).Free;
+          Result := O.ToJSON;
+        end;
+        Exit;
+      finally
+        O.Free;
+      end;
+  end;
+  // en prosa va detras, tal cual: desde su comienzo, el del mismo mensaje
+  // del catalogo que la compone (hasta su primer argumento)
+  Inicio := MsgText(SN_MESSAGES_PENDING_FMT);
+  Inicio := Copy(Inicio, 1, Pos('%', Inicio) - 1);
+  P := AText.LastIndexOf(Inicio);
+  if (Inicio <> '') and (P >= 0) then
+    Result := AText.Substring(0, P);
 end;
 
 function DirectedMessagesPending: Integer;

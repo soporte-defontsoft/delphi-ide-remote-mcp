@@ -165,7 +165,7 @@ end;
 function WithMailboxNote(const AText, ANote: string): string;
 begin
   // EL helper de Lsp.Guard; la nota del buzon ya trae su propio salto
-  Result := ConNota(AText, 'mailbox', ANote, '');
+  Result := ConNota(AText, CLAVE_NOTA_DEL_BUZON, ANote, '');
 end;
 
 procedure TMcpHost.Wire;
