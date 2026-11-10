@@ -572,7 +572,7 @@ The bridge for building and running on OTHER platforms (Linux, macOS) through PA
 | `sdk` | string | optional | get-sdk optional: the NAME of the SDK folder to write. Default: the target distro from its /etc/os-release (zorin18, fedora44, ubuntu2404). Pass one to keep "the one this shop builds with". reseat-sdk: the SDK whose IDE seat is rewritten (none = all). remove-sdk: the SDK to remove, by name (command=profiles lists them). |
 | `active` | string | optional | get-sdk optional: "yes" makes it the ACTIVE SDK of the platform (the bold entry of the IDE SDK Manager, used by projects that declare none). Default: nothing is touched - what a project builds with belongs to the project (delphi_config set-sdk) or to you. |
 | `timeoutms` | integer | optional | remote-run: max milliseconds to wait for the program (default 30000, max 300000) |
-| `out` | string | optional | remote-run, output: a .txt/.log FILE on this server for ALL the program wrote, as it wrote it, instead of its last lines. |
+| `out` | string | optional | remote-run, output: a .txt/.log FILE for ALL the program wrote, instead of its last lines. A file already there is replaced. |
 <!-- /contract -->
 
 `profiles` lists the profiles by NAME, with the SDKs; it does not show the host of each one - a run or a deploy that uses a profile names the host it reaches (`RUN-020`).
@@ -614,7 +614,7 @@ Android devices for remote development: phones/tablets hang off THIS server (USB
 | `device` | string | optional | Device serial, ip:port or name, as command=devices lists it. REQUIRED for every command that touches a device, and it must be in the workspace's AdbAllowedDevices: the device is named, never implied, even when only one is attached. |
 | `apk` | string | optional | Path of the .apk to install (inside the workspace) |
 | `app` | string | optional | run, stop: its package name (com.embarcadero.MyApp: the build and install results state it) |
-| `out` | string | optional | screenshot, optional: where the capture lands: a FOLDER (existing, or ending in \ - the server names the file) or a FILE with the capture's real extension, on THIS server and jailed. Empty = it travels as "inline" says. logcat: an optional .txt/.log FILE to dump into instead of answering inline - read it in ranges with delphi_read. |
+| `out` | string | optional | screenshot, optional: where the capture lands: a FOLDER (existing, or ending in \ - the server names the file) or a FILE with the capture's real extension, on THIS server and jailed. Empty = it travels as "inline" says. logcat: an optional .txt/.log FILE to dump into instead of answering inline. A file already there is replaced. |
 | `x` | string | optional | tap: X measured on a screenshot; pass its frame and the server converts to display pixels. Without frame, X is display pixels (multiply by tapScale.x when the answer carried it). |
 | `y` | string | optional | tap: Y measured on a screenshot; pass its frame and the server converts to display pixels. Without frame, Y is display pixels (multiply by tapScale.y when the answer carried it). |
 | `key` | string | optional | key: back \| home \| enter \| appswitch \| wakeup \| up \| down \| left \| right \| tab |
@@ -973,7 +973,7 @@ The databases the operator gave this workspace, by NAME and through operations: 
 | `table` | string | optional | All but connections and tables: a table or view as tables lists it; create-table: the NEW table's name. |
 | `fields` | array | optional | rows: the fields to return (default: all but binary ones); create-view: its columns (default: all). |
 | `filters` | array | optional | rows, summary, update, delete: a list of {"field", "op", "value"}; all must hold. op: equals, not_equals, greater, less, greater_or_equal, less_or_equal, contains, starts_with, words (every word, any order), empty (value true/false). A date as yyyy-mm-dd or yyyy-mm-ddThh:mm:ss. |
-| `order` | string | optional | "field" or "field desc", comma separated; summary: also n, or a value as op_field (sum_total). rows are then ordered by the primary key, and summary's groups by their fields. |
+| `order` | string | optional | "field" or "field desc", comma separated; summary: also n, or a value as op_field (sum_total); none = its first value (or n), largest first. Ties go by the primary key (rows) or the groups (summary). |
 | `limit` | integer | optional | rows (default 100) and summary (default 50); at most 500. |
 | `offset` | integer | optional | rows and summary: how many to skip, for the next page. |
 | `max` | integer | optional | update, delete: most rows to change (default 100); more, and nothing changes. |

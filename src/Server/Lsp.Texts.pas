@@ -2213,9 +2213,22 @@ const
     'kill / output: the "jobId" a remote-run answer gave you; with profile ' +
     'and project (the same .dproj path) - only a job of THAT project on ' +
     'THAT machine.';
+  { Los dos out= que vuelcan texto a un fichero del agente (el logcat de
+    delphi_adb y remote-run/output de delphi_paserver), dicho UNA vez: que
+    pasa con uno que ya estaba (Lsp.Puertas.Coloca, FrenteAlDestino; R10 del
+    revisor del paisaje del 10-nov-2026: ninguno de los dos lo decia; su copia
+    en la papelera es la regla de la casa, y decirlo aqui pasaba tools/list de
+    su presupuesto, test_docs_tokens T1) y como
+    se lee lo escrito (lo repetian SN_REMOTERUN_LOGFILE y SN_ADB_LOGFILE, R8) }
+  OUT_DE_UN_VOLCADO_QUE_YA_ESTA =
+    ' A file already there is replaced.';
+  COMO_SE_LEE_UN_VOLCADO =
+    'Read it in ranges with delphi_read (400 lines per call), search it ' +
+    'with delphi_search, or download it to your machine with delphi_fetch.';
   SP_PASERVER_OUT =
-    'remote-run, output: a .txt/.log FILE on this server for ALL the program ' +
-    'wrote, as it wrote it, instead of its last lines.';
+    'remote-run, output: a .txt/.log FILE for ALL the program wrote, ' +
+    'instead of its last lines.' +
+    OUT_DE_UN_VOLCADO_QUE_YA_ESTA;
   SR_PASERVER_OUT_LOG =
     '[PAS-077 INVALID_PARAM] The "out" of remote-run and output must end ' +
     'in .txt or .log.';
@@ -2268,12 +2281,10 @@ const
   { out= de remote-run y output (RUN-023 de Hermes, 9-nov: su veredicto iba
     en la CABEZA de 412 lineas y la cola se lo llevaba, sin vuelta atras: la
     salida leida se borra del destino). Lo que escribio el programa, entero y
-    con sus bytes, en un fichero del agente (Lsp.RemoteRun.LoDelPrograma) }
+    con sus bytes, en un fichero del agente (Lsp.RemoteRun.GuardaLoDelPrograma) }
   SN_REMOTERUN_LOGFILE =
     '[RUN-028] Everything the program wrote is in "logfile" ON THE SERVER, ' +
-    'as it wrote it (without the launcher''s lines). Read it in ranges with ' +
-    'delphi_read (400 lines per call), search it with delphi_search, or ' +
-    'download it with delphi_fetch.';
+    'as it wrote it (without the launcher''s lines). ' + COMO_SE_LEE_UN_VOLCADO;
   SN_REMOTERUN_LOGFILE_VIVO =
     '[RUN-029] It is still running: the file holds what it has written so ' +
     'far. output with this job and out= again writes it all, up to its end.';
@@ -2281,12 +2292,20 @@ const
     '[RUN-030] It is still running, so nothing was written to out yet: ' +
     'output with this job and out=<file.txt> writes what it has written by ' +
     'then, and all of it once it ends.';
-  { %d = los bytes de la salida, mas de los que caben en un fichero de una
-    vez. Una nota: la llamada fue bien, lo que no se hizo es el fichero }
-  SN_REMOTERUN_OUT_ENORME_FMT =
-    '[RUN-031] Its output on the target is %d bytes, too big to ' +
-    'write as one file: nothing was written to out; the answer carries its ' +
-    'last lines.';
+  { Un fallo del LANZADOR (el programa no esta, no es nativo: el "error" de la
+    respuesta): del programa no hay nada que escribir. Se escribia el texto
+    del lanzador en el out=, y RUN-028 dice "sin las lineas del lanzador" (R5
+    del revisor del paisaje del 10-nov-2026). RUN-031 decia "demasiado grande
+    para un fichero", que no llego a publicarse: out= ya no tiene tope (R1, R3) }
+  SN_REMOTERUN_OUT_SIN_PROGRAMA =
+    '[RUN-031] The program did not run (see "error"), so nothing was written ' +
+    'to out.';
+  { La copia del servidor de la salida traida no se pudo leer: su motivo no
+    sale, nombraria la casa del servidor (R4 del revisor del 10-nov-2026). Va
+    con RUN-032: la salida se queda en el destino }
+  SN_REMOTERUN_OUT_ILEGIBLE =
+    '[RUN-033] The output brought from the target could not be read on the ' +
+    'server, so nothing was written to out.';
   SN_REMOTERUN_OUT_SE_QUEDA =
     '[RUN-032] Its output stays on the target: output with this job reads it ' +
     'again (with a valid out=, into a file).';
@@ -3154,7 +3173,7 @@ const
     'screenshot, optional: where the capture lands' +
     SP_CAPTURE_OUT_RULE +
     ' logcat: an optional .txt/.log FILE to dump into instead of answering ' +
-    'inline - read it in ranges with delphi_read.';
+    'inline.' + OUT_DE_UN_VOLCADO_QUE_YA_ESTA;
   SP_ADB_INLINE =
     'screenshot, default true: the capture' + SP_CAPTURE_INLINE_RULE;
   SP_ADB_MAXWIDTH =
@@ -3319,9 +3338,7 @@ const
     '[ADB-008 INVALID_PARAM] The logcat "out" must end in .txt or .log.';
 
   SN_ADB_LOGFILE =
-    '[ADB-009] The dump is in this file ON THE SERVER. Read it in ranges ' +
-    'with delphi_read (400 lines per call), search it with ' +
-    'delphi_search, or download it to your machine with delphi_fetch.';
+    '[ADB-009] The dump is in this file ON THE SERVER. ' + COMO_SE_LEE_UN_VOLCADO;
 
   SN_ADB_TAIL_FMT =
     '[ADB-010] (logcat: %d lines captured; here are the %d MOST RECENT. ' +
@@ -4999,8 +5016,8 @@ const
     'true/false). A date as yyyy-mm-dd or yyyy-mm-ddThh:mm:ss.';
   SP_DB_ORDER =
     '"field" or "field desc", comma separated; summary: also n, or a value ' +
-    'as op_field (sum_total). rows are then ordered by the primary key, and ' +
-    'summary''s groups by their fields.';
+    'as op_field (sum_total); none = its first value (or n), largest first. ' +
+    'Ties go by the primary key (rows) or the groups (summary).';
   { las paginas de rows y summary, por defecto y su tope, UNA vez, como las
     PAGINA_* de mas abajo (B1): aqui, antes de su texto. Estaban en el texto
     y en tres constantes del codigo (F1-8 de la 1.29) }
@@ -9138,9 +9155,18 @@ const
     '[GIT-075 INVALID_PARAM] %s="%s" starts with "-": a value of this tool ' +
     'is never a git option. Nothing was done.';
 
-  { lo que toma tag cuando se le da otra cosa sin nombre (GIT-038) }
-  SF_GIT_TAG_SUYOS =
-    'name (and, with it, ref and message)';
+  { tag sin name con ref o message: lo que FALTA es el nombre. GIT-038 decia
+    que el message "no va con tag", y Hermes probo sin el (10-nov-2026) }
+  SR_GIT_TAG_SIN_NOMBRE_FMT =
+    '[GIT-091 INVALID_PARAM] "%s" needs "name": tag without a name only ' +
+    'LISTS the tags. A new one is tag name=<tag> (ref=<what it marks>, ' +
+    'message=<text> makes it annotated). Nothing was done.';
+  { %s = el format. context es del PARCHE: con un resumen git lo trae entero
+    (su -U implica --patch; Hermes, 10-nov-2026, format=shortstat context=3) }
+  SR_GIT_CONTEXTO_SIN_PARCHE_FMT =
+    '[GIT-090 INVALID_PARAM] context does not go with format=%s: it is the ' +
+    'patch''s, and with it git prints the whole patch too. Leave context out, ' +
+    'or ask for the patch (no format, or format=words). Nothing was done.';
 
   { Si git no contesta a lo que se le pregunta para JUZGAR el remoto (sus
     remotos, la direccion de uno, su configuracion), el remoto no se usa: un

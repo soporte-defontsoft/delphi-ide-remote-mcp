@@ -156,17 +156,6 @@ begin
   inherited;
 end;
 
-{ Attach the mailbox notice WITHOUT breaking the answer. Half the tools reply
-  with a JSON object, and gluing a line of prose behind it made that JSON
-  unparseable for as long as a message sat waiting - a client doing the
-  obvious json.loads() got a syntax error out of nowhere, and only while
-  there was mail (measured 2026-08-25). Inside the object it goes, as one
-  more field; only a prose answer gets it appended. }
-function WithMailboxNote(const AText, ANote: string): string;
-begin
-  // EL helper de Lsp.Guard; la nota del buzon ya trae su propio salto
-  Result := ConNota(AText, CLAVE_NOTA_DEL_BUZON, ANote, '');
-end;
 
 procedure TMcpHost.Wire;
 var
@@ -284,7 +273,7 @@ begin
       // the operator's mailbox: there is no push in MCP clients, so every
       // tool answer carries the notice while a message waits.
       if ToolName <> 'delphi_messages' then
-        Result := WithMailboxNote(Result, PendingMessagesNote);
+        Result := ConNotaDelBuzon(Result); // EL escritor de la nota (Mcp.Tools.Messages)
     end;
   // ...y lo que una tool adjunto (una captura, Lsp.InlineImages): viaja EN
   // la misma respuesta. Un punto para todas las tools, junto al filtro.

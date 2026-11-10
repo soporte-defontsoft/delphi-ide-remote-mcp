@@ -732,6 +732,8 @@ begin
       Exit(P);
 end;
 
+// la regla de esos dos sobre unos bytes enteros (la de TraeSalida, que la
+// aplica al fichero a trozos; la vigila LspTests.Rutas)
 function LoDelPrograma(const ABytes: TArray<Byte>; ATerminado: Boolean): TArray<Byte>;
 begin
   var Desde := InicioDelPrograma(ABytes);
@@ -740,36 +742,39 @@ end;
 
 type
   { lo que un out= dejo: escrito (con sus lineas, como las cuenta
-    delphi_read, y sus bytes) o por que no }
+    delphi_read, y sus bytes), por que no, o que del programa no habia nada
+    (SinPrograma: fallo su lanzador, R5 del revisor del 10-nov-2026) }
   TVolcado = record
-    Hecho: Boolean;
-    Lineas: Integer;
+    Hecho, SinPrograma: Boolean;
+    Lineas: Int64;
     Bytes: Int64;
     Error: string;
   end;
 
-{ Lo que escribio el programa, del fichero traido (AFichero, ATamano bytes),
-  al out= del agente por EL escritor (ColocaContenido: su puerta en el momento
-  de escribir). Nunca lanza: lo que falle va en Error. }
-function GuardaLoDelPrograma(const AFichero: string; ATamano: Int64;
-  ATerminado: Boolean; const ADestino: string): TVolcado;
-var
-  B: TArray<Byte>;
-  Tam: Int64;
-  Enc: string;
+{ Lo que escribio el programa - el tramo de ACuantos bytes desde ADesde del
+  fichero traido AFichero, sin las lineas del lanzador - al out= del agente,
+  por EL escritor de un tramo (ColocaTramo: a trozos, con su puerta en el
+  momento de escribir), y sus lineas como las cuenta delphi_read, tambien a
+  trozos: se leia entero, se copiaba y se pasaba a UTF-16 - 200 MB de salida
+  eran mas de 1 GB en el servicio - y no cabia de MaxInt para arriba (R1 y R3
+  del revisor del paisaje del 10-nov-2026). Nunca lanza: lo que falle va en
+  Error. }
+function GuardaLoDelPrograma(const AFichero: string; ADesde, ACuantos: Int64;
+  const ADestino: string): TVolcado;
 begin
   Result := Default(TVolcado);
-  if ATamano > MaxInt then
-  begin
-    Result.Error := MsgFmt(SN_REMOTERUN_OUT_ENORME_FMT, [ATamano]);
+  // antes de colocarlo: ColocaTramo se lleva el fichero. Lo que falle al leer
+  // NUESTRA copia no dice su motivo, que nombraria la casa del servidor (R4)
+  try
+    Result.Lineas := LineasDeUnTramo(AFichero, [ltTemporal], ADesde, ACuantos);
+  except
+    Result.Error := MsgText(SN_REMOTERUN_OUT_ILEGIBLE);
     Exit;
   end;
   try
-    B := LoDelPrograma(LeeTrozoDeBytes(AFichero, [ltTemporal], 0, Integer(ATamano), Tam), ATerminado);
-    ColocaContenido(ADestino, B);
+    ColocaTramo(AFichero, ADesde, ACuantos, ADestino);
     Result.Hecho := True;
-    Result.Bytes := Length(B);
-    Result.Lineas := Length(LineasDelTexto(TextoDeBytes(B, False, Enc)));
+    Result.Bytes := ACuantos;
   except
     on E: Exception do
       Result.Error := MsgExcepcion(E.ClassName, E.Message);
@@ -785,12 +790,12 @@ procedure PonVolcado(AObj: TJSONObject; const AVolcado: TVolcado; const ADestino
 begin
   if AVolcado.Hecho then
   begin
-    AObj.AddPair('logfile', ADestino);
-    AObj.AddPair('lines', TJSONNumber.Create(AVolcado.Lineas));
-    AObj.AddPair('size', TJSONNumber.Create(AVolcado.Bytes));
+    PonElVolcado(AObj, ADestino, AVolcado.Lineas, AVolcado.Bytes);
     AObj.AddPair('logfileNote', MsgText(SN_REMOTERUN_LOGFILE) +
       IfThen(ATerminado, '', ' ' + MsgText(SN_REMOTERUN_LOGFILE_VIVO)));
   end
+  else if AVolcado.SinPrograma then
+    AObj.AddPair('logfileNote', MsgText(SN_REMOTERUN_OUT_SIN_PROGRAMA))
   else if AVolcado.Error <> '' then
     // una nota y no el "error" de la respuesta: el programa corrio, lo que
     // no se hizo es el fichero (C8 de test_catalogo)
@@ -816,25 +821,30 @@ function TraeSalida(const APc, AProfile, ADeployRel, AJobId, ATmpDir: string;
   var ATerminado: Boolean; var ATamano, ABytes: Int64;
   const AGuardaEn: string; AGuardaSiempre: Boolean; var AVolcado: TVolcado): Boolean;
 var
-  OutFile, Ops, Output, Enc, SinCodigo: string;
+  Bajada, OutFile, Ops, Output, Enc, SinCodigo: string;
   Cabeza, Final: TArray<Byte>;
   P, Codigo: Integer;
+  Desde, Hasta: Int64;
 begin
   Result := False;
-  OutFile := TPath.Combine(ATmpDir, NombreDeLaSalida(AJobId));
-  if TFile.Exists(OutFile) then
-    BorraFichero(OutFile, ltTemporal); // por la puerta de borrar, con su lugar
-  Ops := PaclientGet(ADeployRel + '/' + NombreDeLaSalida(AJobId), ATmpDir);
-  if (Paclient(APc, Ops, AProfile, Output) <> 0) or not TFile.Exists(OutFile) then
-    Exit;
-  // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
-  // leida en estricto un solo byte suelto mataba el run entero. Por la
-  // puerta de leer, con el temporal como lugar, y EL detector. Y sin
-  // traerla entera (V80 de la 1.23.1: 64 MB de salida subian 1,2 GB el
-  // pico del servidor): si pasa de lo que llena una cola, su primera linea
-  // -la del entorno, que escribe el lanzador- y su final, con '...' donde
-  // empieza lo leido
+  // una carpeta de bajada de ESTA llamada (EL nombrador, que el borrador
+  // reconoce): dos output del mismo trabajo a la vez compartian
+  // <temporal>\<job>.out, y uno borraba o volvia a bajar la copia que el otro
+  // estaba leyendo (R4 del revisor del paisaje del 10-nov-2026)
+  Bajada := NuevaCarpetaDescarga(ATmpDir);
   try
+    CrearCarpeta(Bajada);
+    OutFile := TPath.Combine(Bajada, NombreDeLaSalida(AJobId));
+    Ops := PaclientGet(ADeployRel + '/' + NombreDeLaSalida(AJobId), Bajada);
+    if (Paclient(APc, Ops, AProfile, Output) <> 0) or not TFile.Exists(OutFile) then
+      Exit;
+    // La salida de un programa AJENO: nadie garantiza que sea UTF-8, y
+    // leida en estricto un solo byte suelto mataba el run entero. Por la
+    // puerta de leer, con el temporal como lugar, y EL detector. Y sin
+    // traerla entera (V80 de la 1.23.1: 64 MB de salida subian 1,2 GB el
+    // pico del servidor): si pasa de lo que llena una cola, su primera linea
+    // -la del entorno, que escribe el lanzador- y su final, con '...' donde
+    // empieza lo leido
     Cabeza := LeeTrozoDeBytes(OutFile, [ltTemporal], 0, BYTES_DE_COLA, ATamano);
     if ATamano > BYTES_DE_COLA then
     begin
@@ -859,21 +869,35 @@ begin
       ATexto := TextoDeBytes(Cabeza, False, Enc);
     // termino lo dice la ultima linea, como abajo
     var Fin := PartirSalida(ATexto, SinCodigo, Codigo);
-    // los bytes del programa: lo leido menos la linea del entorno (la cabeza
-    // de un fichero grande es solo esa) y la del codigo (en la cola)
+    // lo del programa en el fichero: tras la linea del entorno (la cabeza de
+    // un fichero grande es solo esa) y hasta la del codigo (en la cola). Sus
+    // bytes son los de RUN-023 y los que deja out=
     if ATamano > BYTES_DE_COLA then
-      ABytes := ATamano - Length(Cabeza) - (Length(Final) - FinDelPrograma(Final, Fin, 0))
+    begin
+      Desde := Length(Cabeza);
+      Hasta := ATamano - (Length(Final) - FinDelPrograma(Final, Fin, 0));
+    end
     else
     begin
-      var Desde := InicioDelPrograma(Cabeza);
-      ABytes := FinDelPrograma(Cabeza, Fin, Desde) - Desde;
+      Desde := InicioDelPrograma(Cabeza);
+      Hasta := FinDelPrograma(Cabeza, Fin, Desde);
     end;
-    // el out=: del fichero ENTERO, que se borra ahora (la cola es lo de la
-    // respuesta)
+    ABytes := Hasta - Desde;
+    // el out=: ese tramo del fichero ENTERO, a trozos (R1). Un LANZADOR que
+    // fallo (el programa no esta, no es nativo) no deja nada del programa:
+    // su texto es el "error" de la respuesta y no va al fichero, que dice
+    // "sin las lineas del lanzador" (R5)
     if (AGuardaEn <> '') and (Fin or AGuardaSiempre) then
-      AVolcado := GuardaLoDelPrograma(OutFile, ATamano, Fin, AGuardaEn);
+    begin
+      var SinEntorno := SinCodigo;
+      PartirEntorno(SinEntorno);
+      if Fin and (Codigo <> 0) and EsFallo(SinEntorno) then
+        AVolcado.SinPrograma := True
+      else
+        AVolcado := GuardaLoDelPrograma(OutFile, Desde, ABytes, AGuardaEn);
+    end;
   finally
-    BorraFichero(OutFile, ltTemporal);
+    BorraArbol(Bajada); // la bajada de ESTA llamada, sin cruzar enlaces
   end;
   AEntorno := PartirEntorno(ATexto);
   ATerminado := PartirSalida(ATexto, ASalida, ACodigo);
@@ -1145,7 +1169,8 @@ begin
   // perdia (2026-09-26: el AV de una app real solo se veia en el journal de
   // Zorin). Un nombre que no exista no es un error que importe. Y la de un
   // out= que no se pudo escribir tambien se queda: borrarla la perdia entera
-  if (Terminado and ((AGuardaEn = '') or Volcado.Hecho)) or not AGuardaSiSigue then
+  if (Terminado and ((AGuardaEn = '') or Volcado.Hecho or Volcado.SinPrograma)) or
+     not AGuardaSiSigue then
     Ops := PaclientRemove([DeployRel + '/' + NombreDeLaSalida(JobId), DeployRel + '/' + RemotoLanzador,
       DeployRel + '/' + MascaraDeLosVigias])
   else
@@ -1175,6 +1200,10 @@ begin
   end;
   Result := RemoteRun(AProfile, ADprojPath, VERBO_MATAR, [AJobId], 20000); // Lsp.NombresDeTrabajo (V196)
   Result.RemovePair('remoteExe').Free;
+  // el stillRunning de RemoteRun es el del AYUDANTE que mata, no el del
+  // programa: un kill que no pudo matar decia stillRunning:false con el
+  // programa vivo (R2 del revisor del paisaje del 10-nov-2026). killed lo dice
+  Result.RemovePair('stillRunning').Free;
   Result.AddPair('job', AJobId);
   Rc := -1;
   if Result.GetValue('exitCode') <> nil then
@@ -1255,7 +1284,7 @@ begin
     // leida = borrada, como el buzon y las capturas: en el target no se
     // acumula nada que alguien ya tiene. Salvo un out= que no se escribio:
     // borrarla la perdia entera (RUN-032)
-    if (AGuardaEn = '') or Volcado.Hecho then
+    if (AGuardaEn = '') or Volcado.Hecho or Volcado.SinPrograma then
     begin
       Ops := PaclientRemove([DeployRel + '/' + NombreDeLaSalida(AJobId)]);
       Paclient(Pc, Ops, AProfile, Output);

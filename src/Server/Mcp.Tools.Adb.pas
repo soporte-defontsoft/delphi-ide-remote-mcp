@@ -531,10 +531,10 @@ begin
       end;
       Return := TJSONObject.Create;
       try
-        Return.AddPair('logfile', Params.Out.Trim);
-        Return.AddPair('lines', // como delphi_read cuenta el fichero
-          TJSONNumber.Create(Length(LineasDelTexto(Txt))));
-        Return.AddPair('size', TJSONNumber.Create(TFile.GetSize(Params.Out.Trim)));
+        // su ruta, sus lineas como delphi_read cuenta el fichero y sus bytes,
+        // por EL que lo dice (el de remote-run, R8 del 10-nov-2026)
+        PonElVolcado(Return, Params.Out.Trim, Length(LineasDelTexto(Txt)),
+          TFile.GetSize(Params.Out.Trim));
         Return.AddPair('note', MsgText(SN_ADB_LOGFILE));
         if Incompleto <> '' then
           Return.AddPair('incompleteNote', Incompleto);

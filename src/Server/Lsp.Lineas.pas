@@ -36,6 +36,25 @@ function SangraComoLaLinea(const ALinea, AAncla: string;
 function LineasDelTexto(const AText: string): TArray<string>;
 function CuantasLineasReales(const ALines: TArray<string>): Integer;
 
+type
+  { ...y la misma regla sobre un texto que se lee a TROZOS de bytes, sin
+    tenerlo entero (el out= de remote-run, que podia ser de gigas, lo leia
+    entero y en UTF-16: R1 del revisor del paisaje del 10-nov-2026). Empieza
+    dice cuantos bytes tiene una unidad de codigo (1 en UTF-8 y ANSI, 2 en
+    UTF-16, 4 en UTF-32) y si van al reves (BE); Suma cada trozo, en unidades
+    enteras y sin el BOM; Lineas da lo que LineasDelTexto daria del texto
+    entero (LspTests.Encodings lo compara con ella). }
+  TCuentaDeLineas = record
+  private
+    FSaltos: Int64;
+    FAncho: Integer;
+    FAlReves, FTrasCr, FAcabaEnSalto, FHayTexto: Boolean;
+  public
+    procedure Empieza(AAncho: Integer = 1; AAlReves: Boolean = False);
+    procedure Suma(const ABytes: TArray<Byte>; ACuantos: Integer);
+    function Lineas: Int64;
+  end;
+
 { El salto de linea DOMINANTE de un texto (CRLF, LF o CR suelto: el que mas
   aparece; CRLF si no hay ninguno, el de Windows), para quien vuelve a unir
   lineas. UNO: estaba en Lsp.TextEdit (DominantEol) y escrito a mano en otros
@@ -199,6 +218,68 @@ begin
   Result := Length(ALines);
   if (Result > 0) and (ALines[Result - 1] = '') then
     Dec(Result); // la fantasma que deja el salto final
+end;
+
+procedure TCuentaDeLineas.Empieza(AAncho: Integer; AAlReves: Boolean);
+begin
+  FSaltos := 0;
+  FAncho := AAncho;
+  if (FAncho <> 2) and (FAncho <> 4) then
+    FAncho := 1;
+  FAlReves := AAlReves;
+  FTrasCr := False;
+  FAcabaEnSalto := False;
+  FHayTexto := False;
+end;
+
+procedure TCuentaDeLineas.Suma(const ABytes: TArray<Byte>; ACuantos: Integer);
+var
+  I: Integer;
+  U: Cardinal;
+begin
+  if ACuantos > Length(ABytes) then
+    ACuantos := Length(ABytes);
+  I := 0;
+  while I + FAncho <= ACuantos do
+  begin
+    // la unidad de codigo; un salto es UNA en cualquier codificacion de la casa
+    if FAncho = 2 then
+    begin
+      if FAlReves then
+        U := (Cardinal(ABytes[I]) shl 8) or ABytes[I + 1]
+      else
+        U := ABytes[I] or (Cardinal(ABytes[I + 1]) shl 8);
+    end
+    else if FAncho = 4 then
+    begin
+      if FAlReves then
+        U := (Cardinal(ABytes[I]) shl 24) or (Cardinal(ABytes[I + 1]) shl 16) or
+          (Cardinal(ABytes[I + 2]) shl 8) or ABytes[I + 3]
+      else
+        U := ABytes[I] or (Cardinal(ABytes[I + 1]) shl 8) or
+          (Cardinal(ABytes[I + 2]) shl 16) or (Cardinal(ABytes[I + 3]) shl 24);
+    end
+    else
+      U := ABytes[I];
+    FHayTexto := True;
+    // los tres saltos son uno (los de ConSalto): un CR cuenta, y el LF que
+    // le sigue es el mismo salto
+    if (U = 13) or ((U = 10) and not FTrasCr) then
+      Inc(FSaltos);
+    FTrasCr := U = 13;
+    FAcabaEnSalto := (U = 10) or (U = 13);
+    Inc(I, FAncho);
+  end;
+end;
+
+function TCuentaDeLineas.Lineas: Int64;
+begin
+  // "" son 0; el salto final cierra la ultima linea, no abre otra
+  if not FHayTexto then
+    Exit(0);
+  Result := FSaltos;
+  if not FAcabaEnSalto then
+    Inc(Result);
 end;
 
 function SplitToLines(const T: string): TArray<string>;

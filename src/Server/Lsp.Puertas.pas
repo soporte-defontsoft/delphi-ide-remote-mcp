@@ -12,6 +12,7 @@ interface
 
 uses
   System.Classes, // TStream: lo que AbreParaLeer entrega
+  System.JSON,    // PonElVolcado: lo que se dice de un volcado escrito
   Lsp.Codificacion;
 
 type
@@ -106,6 +107,13 @@ function LeeTrozoDeBytes(const APath: string; ALugares: TLugaresDeTexto;
   y abierto como TFile.ReadAllBytes (quien escribe no puede, quien lee si). Lo
   libera quien lo pide. }
 function AbreParaLeer(const APath: string; ALugares: TLugaresDeTexto): TStream;
+{ ...y las LINEAS de un tramo (ACuantos bytes desde ADesde; ACuantos < 0, hasta
+  el final), como las cuenta delphi_read, leidas a trozos por esa puerta: lo
+  que puede ser de gigas no se sube entero (el out= de remote-run lo leia
+  entero y en UTF-16: R1 del revisor del paisaje del 10-nov-2026). La
+  codificacion, por EL lector de un BOM; su BOM no es texto. }
+function LineasDeUnTramo(const APath: string; ALugares: TLugaresDeTexto;
+  ADesde, ACuantos: Int64): Int64;
 
 { LA PUERTA DE ESCRIBIR, su pregunta: '' si APath se puede escribir en el
   lugar ALugar; si no, su negativa. La jaula, lo que pregunta su escritor
@@ -338,6 +346,11 @@ procedure ColocaProducto(const ALocal, ADestino: string; ALugar: TLugarDeTexto =
 // y un CONTENIDO (el texto de un logcat, un recorte), con las mismas reglas
 procedure ColocaContenido(const ADestino: string; const ABytes: TArray<Byte>;
   ALugar: TLugarDeTexto = ltJaula);
+// ...y un TRAMO de un producto nuestro (ACuantos bytes desde ADesde de ALocal),
+// copiado a trozos: lo que escribio un programa, sin las lineas de su lanzador
+// (R1 del revisor del paisaje del 10-nov-2026: se leia entero en memoria)
+procedure ColocaTramo(const ALocal: string; ADesde, ACuantos: Int64;
+  const ADestino: string; ALugar: TLugarDeTexto = ltJaula);
 { LA pregunta de esos dos escritores, para quien la tiene que hacer ANTES de
   lo que tarda o de lanzar a otro: '' = se colocaria en ADestino; si no, la
   negativa que daria al colocar, y una CARPETA donde va el fichero (el
@@ -352,6 +365,11 @@ function ColocacionDenegada(const ADestino: string; ALugar: TLugarDeTexto = ltJa
   no, AExtension, el mensaje de la tool que lo pide. Estaba escrita a mano en
   delphi_adb y remote-run iba a ser la segunda (RUN-023, 1.29.1). }
 function VolcadoDenegado(const ADestino, AExtension: string): string;
+{ ...y lo que se dice de un volcado ya escrito en ese out=: logfile (su ruta),
+  lines (como las cuenta delphi_read) y size (sus bytes), en AObj; la nota,
+  cada tool la suya. Lo componian a mano el logcat de delphi_adb y
+  remote-run/output (R8 del revisor del paisaje del 10-nov-2026). }
+procedure PonElVolcado(AObj: TJSONObject; const ARuta: string; ALineas, ABytes: Int64);
 { EL nombre del temporal de una sustitucion junto a APath
   ('.<nombre>.<8 hex>.delphi-patch-tmp'): el de AtomicWrite, el de
   ColocaProducto y el del zip en proceso de package, que tenia uno propio
@@ -802,38 +820,103 @@ begin
     Result := AExtension;
 end;
 
+procedure PonElVolcado(AObj: TJSONObject; const ARuta: string; ALineas, ABytes: Int64);
+begin
+  AObj.AddPair('logfile', ARuta);
+  AObj.AddPair('lines', TJSONNumber.Create(ALineas));
+  AObj.AddPair('size', TJSONNumber.Create(ABytes));
+end;
+
 function EnLugarDeTexto(const APath: string; ALugar: TLugarDeTexto;
   AParaEscribir: Boolean): Boolean; forward;
-function MismosBytes(const APath: string; const ABytes: TArray<Byte>;
-  ALugar: TLugarDeTexto): Boolean; forward;
+type
+  { Lo que el destino ya dice frente a lo que se va a colocar en el }
+  TFrenteAlDestino = (fdDistinto, fdIgual, fdCrece);
 
-{ El destino ya dice EXACTAMENTE lo que se iba a colocar: el producto ALocal
-  (por su tamano primero: si no cuadra no se lee nada) o los bytes ABytes. Lo
-  que no se puede leer no es igual. }
-function MismoContenido(const ADestino, ALocal: string; const ABytes: TBytes;
-  ALugar: TLugarDeTexto): Boolean;
+{ El destino frente a lo que se va a colocar: el producto ALocal (ACuantos < 0:
+  entero; si no, su tramo de ACuantos bytes desde ADesde) o los bytes ABytes.
+  fdIgual: ya dice EXACTAMENTE eso, y ni se reescribe ni se copia (A4 de la
+  1.18.4, I5 de la 1.28). fdCrece: es su PRINCIPIO y lo nuevo solo anade:
+  sustituirlo no pierde nada (un output con out= sobre un programa vivo sellaba
+  en la papelera una copia entera de lo anterior en CADA llamada: R7 del
+  revisor del paisaje del 10-nov-2026). A trozos, sin subir ninguno entero (se
+  leian los dos enteros: R1). Lo que no se puede leer es distinto. }
+function FrenteAlDestino(const ADestino, ALocal: string; ADesde, ACuantos: Int64;
+  const ABytes: TBytes; ALugar: TLugarDeTexto): TFrenteAlDestino;
+const
+  TROZO = 1 shl 20;
+var
+  D, L: TStream;
+  BD, BL: TBytes;
+  TamD, TamNuevo, Hecho: Int64;
+  N: Integer;
 begin
-  Result := False;
+  Result := fdDistinto;
   if not TFile.Exists(ADestino) then
     Exit;
-  if ALocal = '' then
-    Exit(MismosBytes(ADestino, ABytes, ALugar));
+  D := nil;
+  L := nil;
   try
-    if TFile.GetSize(ALocal) <> TFile.GetSize(ADestino) then
-      Exit;
-    Result := MismosBytes(ADestino, LeeBytes(ALocal, [ltTemporal, ALugar]), ALugar);
-  except
-    Result := False;
+    try
+      D := AbreParaLeer(ADestino, [ALugar]);
+      if ALocal = '' then
+      begin
+        L := TBytesStream.Create(ABytes);
+        ADesde := 0;
+        TamNuevo := Length(ABytes);
+      end
+      else
+      begin
+        L := AbreParaLeer(ALocal, [ltTemporal, ALugar]);
+        if ADesde < 0 then
+          ADesde := 0;
+        if ADesde > L.Size then
+          ADesde := L.Size;
+        TamNuevo := L.Size - ADesde;
+        if (ACuantos >= 0) and (ACuantos < TamNuevo) then
+          TamNuevo := ACuantos;
+      end;
+      TamD := D.Size;
+      // mas largo que lo nuevo: ni igual ni su principio (y no se lee nada)
+      if TamD > TamNuevo then
+        Exit;
+      L.Position := ADesde;
+      SetLength(BD, TROZO);
+      SetLength(BL, TROZO);
+      Hecho := 0;
+      while Hecho < TamD do
+      begin
+        N := TROZO;
+        if TamD - Hecho < N then
+          N := TamD - Hecho;
+        D.ReadBuffer(BD[0], N);
+        L.ReadBuffer(BL[0], N);
+        if not CompareMem(@BD[0], @BL[0], N) then
+          Exit;
+        Inc(Hecho, N);
+      end;
+      if TamD = TamNuevo then
+        Result := fdIgual
+      else
+        Result := fdCrece;
+    except
+      Result := fdDistinto;
+    end;
+  finally
+    L.Free;
+    D.Free;
   end;
 end;
 
-{ El nucleo de ColocaProducto y ColocaContenido: ALocal <> '' mueve ese
-  fichero; si no, escribe ABytes. }
-procedure Coloca(const ADestino, ALocal: string; const ABytes: TBytes;
-  ALugar: TLugarDeTexto);
+{ El nucleo de ColocaProducto, ColocaContenido y ColocaTramo: ALocal <> '' y
+  ACuantos < 0 mueve ese fichero; ALocal <> '' y ACuantos >= 0 copia su tramo
+  (ACuantos bytes desde ADesde) a trozos; si no, escribe ABytes. }
+procedure Coloca(const ADestino, ALocal: string; ADesde, ACuantos: Int64;
+  const ABytes: TBytes; ALugar: TLugarDeTexto);
 var
   Motivo, Dir, DirLocal, Tmp, Copia, Ancestro: string;
   Nuestro, Colocado: Boolean;
+  Frente: TFrenteAlDestino;
 begin
   Dir := TPath.GetDirectoryName(ADestino);
   // sin ALocal (ColocaContenido) no hay carpeta de origen: GetDirectoryName('')
@@ -870,7 +953,8 @@ begin
     // Un styles build repetido sellaba en la papelera una copia IDENTICA de
     // cada .bin.style en CADA llamada (medido el 6-nov, mismo SHA-256: I5 del
     // cierre de la 1.28). El producto se borra igual (el finally)
-    if MismoContenido(ADestino, ALocal, ABytes, ALugar) then
+    Frente := FrenteAlDestino(ADestino, ALocal, ADesde, ACuantos, ABytes, ALugar);
+    if Frente = fdIgual then
     begin
       Colocado := True;
       Exit;
@@ -878,13 +962,32 @@ begin
     // lo que se cree para colocarlo se quita si al final no se coloca
     Ancestro := PrimerAncestroQueExiste(Dir);
     CrearCarpeta(Dir);
-    if SameFileName(DirLocal, Dir) then
+    if SameFileName(DirLocal, Dir) and (ACuantos < 0) then
       Tmp := ALocal // ya junto al destino (el zip en proceso): un solo rename, con sus reintentos
     else
     begin
       Tmp := TemporalDeSustitucion(ADestino);
       if ALocal = '' then
         TFile.WriteAllBytes(Tmp, ABytes)
+      // un tramo, a trozos: lo que escribio un programa puede ser de gigas y
+      // se subia entero en memoria (R1 del revisor del paisaje del 10-nov)
+      else if ACuantos >= 0 then
+      begin
+        var Origen := AbreParaLeer(ALocal, [ltTemporal, ALugar]);
+        try
+          var Escrito := TFileStream.Create(Tmp, fmCreate);
+          try
+            Origen.Position := ADesde;
+            // CopyFrom con 0 copia el flujo ENTERO: un tramo vacio no copia nada
+            if ACuantos > 0 then
+              Escrito.CopyFrom(Origen, ACuantos);
+          finally
+            Escrito.Free;
+          end;
+        finally
+          Origen.Free;
+        end;
+      end
       // de la temporal: puede ser otro volumen, tambien con la misma letra
       // (un punto de montaje); MoveFileEx copia cuando hace falta y no lo
       // decide por el TEXTO de la raiz, como TFile.Move
@@ -893,8 +996,11 @@ begin
     end;
     // la copia sellada de lo que habia y el rename, sin que otro escritor se
     // cuele entre los dos (dos empaquetados al mismo out= sellaban la misma
-    // copia y el zip de en medio se perdia: sexta revision)
-    Copia := GuardaContenidoActual(ADestino);
+    // copia y el zip de en medio se perdia: sexta revision). Lo que solo
+    // CRECE no pierde nada y no se copia (FrenteAlDestino, R7)
+    Copia := '';
+    if Frente <> fdCrece then
+      Copia := GuardaContenidoActual(ADestino);
     try
       SustituyePorRenombre(Tmp, ADestino); // si falla, borra el temporal
     except
@@ -934,13 +1040,21 @@ end;
 
 procedure ColocaProducto(const ALocal, ADestino: string; ALugar: TLugarDeTexto);
 begin
-  Coloca(ADestino, ALocal, nil, ALugar);
+  Coloca(ADestino, ALocal, 0, -1, nil, ALugar);
+end;
+
+procedure ColocaTramo(const ALocal: string; ADesde, ACuantos: Int64;
+  const ADestino: string; ALugar: TLugarDeTexto);
+begin
+  if ACuantos < 0 then
+    ACuantos := 0; // un tramo dice cuanto: nunca "todo" (eso es ColocaProducto)
+  Coloca(ADestino, ALocal, ADesde, ACuantos, nil, ALugar);
 end;
 
 procedure ColocaContenido(const ADestino: string; const ABytes: TBytes;
   ALugar: TLugarDeTexto);
 begin
-  Coloca(ADestino, '', ABytes, ALugar);
+  Coloca(ADestino, '', 0, -1, ABytes, ALugar);
 end;
 
 function ReescrituraDenegada(const APath: string; const B: TArray<Byte>;
@@ -1233,6 +1347,67 @@ begin
     F.Position := ADesde;
     if N > 0 then
       F.ReadBuffer(Result[0], N);
+  finally
+    F.Free;
+  end;
+end;
+
+function LineasDeUnTramo(const APath: string; ALugares: TLugaresDeTexto;
+  ADesde, ACuantos: Int64): Int64;
+const
+  TROZO = 1 shl 20; // multiplo de 4: un trozo no parte una unidad de UTF-32
+var
+  F: TStream;
+  B: TArray<Byte>;
+  K: TEncKind;
+  Cuenta: TCuentaDeLineas;
+  Bom, N: Integer;
+begin
+  F := AbreParaLeer(APath, ALugares);
+  try
+    if ADesde < 0 then
+      ADesde := 0;
+    if ADesde > F.Size then
+      ADesde := F.Size;
+    if (ACuantos < 0) or (ACuantos > F.Size - ADesde) then
+      ACuantos := F.Size - ADesde;
+    F.Position := ADesde;
+    // su codificacion, por EL lector de un BOM: el ancho de una unidad y si
+    // va al reves; el BOM no es texto (sin el, un byte: UTF-8 o ANSI)
+    SetLength(B, 4);
+    N := 4;
+    if ACuantos < N then
+      N := ACuantos;
+    N := F.Read(B[0], N);
+    SetLength(B, N);
+    Bom := 0;
+    if KindDeBom(B, K) then
+      Bom := PreambleLen(K)
+    else
+      K := ekUtf8;
+    case K of
+      ekUtf16LE: Cuenta.Empieza(2, False);
+      ekUtf16BE: Cuenta.Empieza(2, True);
+      ekUtf32LE: Cuenta.Empieza(4, False);
+      ekUtf32BE: Cuenta.Empieza(4, True);
+    else
+      Cuenta.Empieza(1, False);
+    end;
+    F.Position := ADesde + Bom;
+    Dec(ACuantos, Bom);
+    SetLength(B, TROZO);
+    while ACuantos > 0 do
+    begin
+      N := TROZO;
+      if ACuantos < N then
+        N := ACuantos;
+      N := F.Read(B[0], N);
+      if N <= 0 then
+        Break;
+      Cuenta.Suma(B, N);
+      Dec(ACuantos, N);
+    end;
+    Result := Cuenta.Lineas;
   finally
     F.Free;
   end;

@@ -1843,6 +1843,11 @@ begin
     else
       Exit(MsgFmt(SR_GIT_FORMATO_FMT, [Params.Format.Trim, 'diff', 'stat, shortstat, name-only, words']));
     end;
+    // context es el del PARCHE: con un resumen, git lo trae entero (su -U
+    // implica --patch; Hermes, 10-nov-2026: format=shortstat context=3 le dio
+    // el resumen y el diff). Lo que no va se dice, no se ignora (GIT-090)
+    if (Params.Context > 0) and MatchText(Params.Format.Trim, ['stat', 'shortstat', 'name-only']) then
+      Exit(MsgFmt(SR_GIT_CONTEXTO_SIN_PARCHE_FMT, [Params.Format.Trim]));
     GitArgs := 'diff' + IfThen(Params.Staged, ' --staged') + Forma;
     if Params.Context > 0 then
       GitArgs := GitArgs + ' -U' + IntToStr(Params.Context);
@@ -2141,10 +2146,10 @@ begin
   begin
     if Params.Name.Trim = '' then
     begin
-      // sin nombre, lista: ref y message van con un nombre
+      // sin nombre, lista: ref y message van con un nombre, y es el NOMBRE lo
+      // que falta (GIT-038 senalaba al message; Hermes, 10-nov-2026)
       if (Desde <> '') or (Params.Message.Trim <> '') then
-        Exit(MsgFmt(SR_GIT_NO_VA_CON_COMANDO_FMT, [IfThen(Desde <> '', 'ref', 'message'),
-          Cmd, Cmd, MsgText(SF_GIT_TAG_SUYOS)]));
+        Exit(MsgFmt(SR_GIT_TAG_SIN_NOMBRE_FMT, [IfThen(Desde <> '', 'ref', 'message')]));
       GitArgs := 'tag';
     end
     else

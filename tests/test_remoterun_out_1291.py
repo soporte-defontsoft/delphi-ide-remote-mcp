@@ -22,6 +22,23 @@ carpeta local que hace de destino).
   O8  (Hermes, 10-nov) RUN-023 cuenta los bytes del PROGRAMA, los mismos que el size del fichero de O1
       (contaba el fichero del destino, con las dos lineas del lanzador: 12527 frente a 12508)
 
+Y lo que encontro el revisor del paisaje del 10-nov en este codigo (R1-R11 de cierre-final-1-29-1):
+  O10 (R1, R3) 64 MB de salida con out=: el pico de memoria privada del servidor sube menos de 32 MB (ROJO: la
+      leia entera, la copiaba y la pasaba a UTF-16), el fichero las trae todas (el camino GRANDE: la cabeza
+      es solo la linea del entorno) y lines/size cuadran con el fichero
+  O5b (R11) out= que se LEE pero no se escribe (DELPHI_MCP_READONLY_PATHS): lo niega la puerta de ESCRIBIR
+      antes de lanzar (O5 lo negaba el suelo, la puerta de leer, y quitar VolcadoDenegado no lo ponia rojo)
+  O11 (R2) kill no dice stillRunning: el de RemoteRun era el del AYUDANTE que mata, tambien si no pudo
+  O12 (R5) un lanzador que falla (el binario no es nativo): nada al out= (RUN-031), el "error" lo dice y la
+      salida no se queda en el destino (ROJO: escribia el texto del lanzador en el fichero)
+  O13 (R7) los output con out= de O3 sobre un programa vivo no dejan copias en la papelera: lo nuevo solo
+      anade a lo que habia (ROJO: una copia entera por llamada)
+  O14 (R11) RUN-032 de verdad: el out= pasa a ser una CARPETA mientras corre; no se escribe, la salida se queda
+      en el destino y output con un out= valido la recupera entera
+  O15 (R4) dos output del mismo trabajo a la vez (HTTP): ningun fichero a medias ni RUN-033; cada uno entero,
+      RUN-018 (el otro ya la leyo) o SYS-043 (el otro escribe en ese proyecto: la operacion en curso de R3 ya
+      para la carrera; la bajada por llamada es la segunda barrera)
+
 Uso:  python tests/test_remoterun_out_1291.py [ruta-a-DelphiLspMcp.exe]
 """
 import os, shutil, sys, time
@@ -57,7 +74,19 @@ GUIONES = {
     'pocas.py': 'print("uno")\nprint("dos")\nprint("tres")\n',
     'tarde.py': 'import time\nprint("antes del plazo", flush=True)\ntime.sleep(6)\n'
                 'for i in range(1, 5001):\n    print("tarde %05d" % i)\n',
+    # el de C3 de test_cola_salida_1231: 64 MB y la ultima linea
+    'enorme.py': 'import sys\nfor i in range(64):\n    sys.stdout.write(("x" * 1023 + "\\n") * 1024)\n'
+                 'print("ULTIMA-LINEA")\n',
+    'dormido.py': 'import time\ntime.sleep(4)\nprint("desperte")\n',
+    'largo.py': 'import time\nprint("empiezo", flush=True)\ntime.sleep(60)\n',
 }
+# un proyecto cuyo binario NO es nativo: el lanzador lo dice y no corre nada (O12). Proyecto propio: exe= solo
+# toma el binario del proyecto o lo que su .deployproj lista (PAS-063)
+DEPLOY_ROTO = os.path.join(SCRATCH, 'Roto'); os.makedirs(DEPLOY_ROTO)
+open(os.path.join(DEPLOY_ROTO, 'Roto.exe'), 'w', encoding='ascii').write('esto no es un ejecutable\n')
+DPROJ_ROTO = os.path.join(PRJDIR, 'Roto.dproj')
+open(DPROJ_ROTO, 'w', encoding='utf-8').write('<Project/>')
+SOLO_LECTURA = os.path.join(BASE, 'solo_lectura'); os.makedirs(SOLO_LECTURA)
 for nombre, texto in GUIONES.items():
     open(os.path.join(DEPLOY, nombre), 'w', encoding='utf-8').write(texto)
 
@@ -67,14 +96,15 @@ env['DELPHI_MCP_PACLIENT'] = STUB
 env['MCP_STUB_SCRATCH'] = SCRATCH
 env['MCP_STUB_RUNJOB_EXE'] = RUNJOB_EXE
 env['DELPHI_MCP_ALLOW_REMOTE_RUN'] = '1'
-env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = DPROJ
+env['DELPHI_MCP_REMOTE_RUN_PROJECTS'] = DPROJ + ';' + DPROJ_ROTO
+env['DELPHI_MCP_READONLY_PATHS'] = SOLO_LECTURA
 _ad, _host = mc.appdata_perfil(BASE, PROFILE, '127.0.0.1')
 env['APPDATA'] = _ad
 env['DELPHI_MCP_REMOTE_HOSTS'] = _host
 
 
-def corre(srv, guion, out=None, timeoutms=60000):
-    a = {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': PROJNAME + '.exe', 'args': guion,
+def corre(srv, guion, out=None, timeoutms=60000, exe=PROJNAME + '.exe', project=DPROJ):
+    a = {'command': 'remote-run', 'name': PROFILE, 'project': project, 'exe': exe, 'args': guion,
          'timeoutms': timeoutms}
     if out is not None:
         a['out'] = out
@@ -82,8 +112,8 @@ def corre(srv, guion, out=None, timeoutms=60000):
     return r, mc.como_json(r)
 
 
-def salida(srv, job, out=None):
-    a = {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': job}
+def salida(srv, job, out=None, project=DPROJ):
+    a = {'command': 'output', 'name': PROFILE, 'project': project, 'job': job}
     if out is not None:
         a['out'] = out
     r = srv.call('delphi_paserver', a, t=120)
@@ -96,6 +126,31 @@ def sin_salida(j):
 
 def lee(path):
     return open(path, 'rb').read() if os.path.isfile(path) else None
+
+
+def lineas_de(b):
+    """Las lineas de unos bytes como las cuenta delphi_read: el salto final cierra la ultima."""
+    if not b:
+        return 0
+    return b.count(b'\n') + (0 if b.endswith(b'\n') else 1)
+
+
+def lineas_de_fichero(path):
+    """lineas_de() de un fichero grande, a trozos."""
+    n, ultimo = 0, b''
+    with open(path, 'rb') as fh:
+        while True:
+            c = fh.read(1 << 20)
+            if not c:
+                break
+            n += c.count(b'\n')
+            ultimo = c[-1:]
+    return n + (0 if ultimo in (b'', b'\n') else 1)
+
+
+def copias_en_la_papelera(nombre):
+    pap = os.path.join(SALIDAS, mc.PAPELERA)
+    return [os.path.join(d, f) for d, _, fs in os.walk(pap) for f in fs if f.startswith(nombre)]
 
 
 def bytes_de_la_nota(j):
@@ -185,6 +240,134 @@ try:
           and 'out=' in (j.get('outputTruncatedNote') or '') and 'logfile' not in j, sin_salida(j))
     check('O8 RUN-023 cuenta los bytes del programa: los del fichero de O1 (ROJO: contaba las lineas del lanzador)',
           isinstance(size1, int) and bytes_de_la_nota(j) == size1, (bytes_de_la_nota(j), size1))
+
+    # O13 (R7): lo de O3, mirado en la papelera
+    copias = copias_en_la_papelera('tarde.txt')
+    check('O13 output con out= sobre un programa vivo: ninguna copia en la papelera, lo nuevo solo anadia '
+          '(ROJO: una copia entera por llamada)', copias == [], copias)
+
+    # O5b (R11)
+    f5 = os.path.join(SOLO_LECTURA, 'nota.txt')
+    r, j = corre(srv, 'pocas.py', f5)
+    check('O5b out= que se LEE pero no se escribe: lo niega la puerta de ESCRIBIR (solo lectura), sin lanzar y '
+          'sin fichero', mc.es(r, 'SR_READONLY_PATH_FMT') and 'jobId' not in j and not os.path.exists(f5), r[:300])
+
+    # O11 (R2)
+    r, j = corre(srv, 'largo.py', timeoutms=1500)
+    jl = j.get('jobId') or ''
+    r = srv.call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': jl}, t=60)
+    jk = mc.como_json(r)
+    check('O11 kill no dice stillRunning (el suyo era el del AYUDANTE que mata), y killed si',
+          jl and 'stillRunning' not in jk and jk.get('killed') is True, jk)
+
+    # O12 (R5)
+    f12 = os.path.join(SALIDAS, 'roto.txt')
+    r, j = corre(srv, 'pocas.py', f12, exe='Roto.exe', project=DPROJ_ROTO)
+    job12 = j.get('jobId') or ''
+    check('O12 un lanzador que falla: nada al out= (RUN-031) y el error lo dice (ROJO: escribia el texto del '
+          'lanzador)', job12 and not os.path.exists(f12) and j.get('error') and
+          mc.es(j.get('logfileNote'), 'SN_REMOTERUN_OUT_SIN_PROGRAMA'), sin_salida(j) or r[:400])
+    r, jd = salida(srv, job12, project=DPROJ_ROTO)
+    check('O12 ...y su salida no se queda en el destino (RUN-018)', mc.es(r, 'SR_REMOTERUN_NO_OUTPUT_FMT'), r[:300])
+
+    # O14 (R11): el out= se vuelve una carpeta mientras corre
+    f14 = os.path.join(SALIDAS, 'carpeta.txt')
+    import threading
+    t14 = threading.Timer(1.5, lambda: os.makedirs(f14))
+    t14.start()
+    r, j = corre(srv, 'dormido.py', f14)
+    t14.join()
+    job14 = j.get('jobId') or ''
+    check('O14 el out= que paso a ser una carpeta: no se escribe y la salida se queda en el destino (RUN-032)',
+          job14 and os.path.isdir(f14) and 'logfile' not in j and
+          mc.es(j.get('logfileNote'), 'SN_REMOTERUN_OUT_SE_QUEDA'), sin_salida(j))
+    f14b = os.path.join(SALIDAS, 'recuperada.txt')
+    r, jo = salida(srv, job14, f14b)
+    check('O14 ...y output con un out= valido la recupera entera (RUN-028)',
+          lee(f14b) in (b'desperte\r\n', b'desperte\n') and mc.es(jo.get('logfileNote'), 'SN_REMOTERUN_LOGFILE'),
+          (sin_salida(jo), lee(f14b)))
+
+    # O10 (R1, R3): en un servidor propio, para que su pico sea solo de esto (como C3 de la cola)
+    srv10 = mc.Stdio(EXE, env, nombre='out1291-enorme')
+    try:
+        corre(srv10, 'pocas.py')   # lo que cuesta arrancar remote-run, fuera de la medida
+        antes = mc.memoria_pico(srv10.p.pid)
+        f10 = os.path.join(SALIDAS, 'enorme.txt')
+        r, j10 = corre(srv10, 'enorme.py', f10, timeoutms=180000)
+        despues = mc.memoria_pico(srv10.p.pid)
+    finally:
+        srv10.mata()
+    sube = (despues - antes) // (1024 * 1024)
+    check('O10 64 MB de salida con out=: el pico de memoria privada del servidor sube menos de 32 MB (ROJO: la '
+          'leia entera, la copiaba y la pasaba a UTF-16)', sube < 32,
+          '%d MB (antes %d MB, despues %d MB)' % (sube, antes // 2 ** 20, despues // 2 ** 20))
+    tam10 = os.path.getsize(f10) if os.path.isfile(f10) else -1
+    ls10 = lineas_de_fichero(f10) if tam10 >= 0 else -1
+    with open(f10, 'rb') if tam10 >= 0 else open(os.devnull, 'rb') as fh:
+        fh.seek(max(0, tam10 - 32))
+        cola10 = fh.read()
+    check('O10 ...el fichero las trae TODAS (65537 lineas, la ULTIMA tambien: el camino grande) y lines/size '
+          'cuadran con el', ls10 == 65537 and cola10.rstrip(b'\r\n').endswith(b'ULTIMA-LINEA') and
+          j10.get('size') == tam10 and j10.get('lines') == ls10 and mc.es(j10.get('logfileNote'), 'SN_REMOTERUN_LOGFILE'),
+          (ls10, tam10, sin_salida(j10)))
+
+    # O15 (R4): dos output del mismo trabajo a la vez, por HTTP (por stdio van en fila)
+    import threading
+    # por HTTP el token es el de un [Workspace] de su settings.ini: un servidor propio, junto a su exe
+    TOKEN15 = 'out1291-dos-a-la-vez-0123456789abcdef'
+    SERVER15 = os.path.join(BASE, 'server15'); os.makedirs(os.path.join(SERVER15, 'node'))
+    EXE15 = mc.copia_exe(SERVER15)
+    for f in ('McpRunJob', 'McpRunJob.exe'):
+        shutil.copy(os.path.join(REPO, 'node', f), os.path.join(SERVER15, 'node', f))
+    open(os.path.join(SERVER15, 'settings.ini'), 'w', encoding='utf-8').write(
+        '[Workspace.P]\nToken=%s\nRoots=%s\nAllowRemoteRun=1\nRemoteRunProjects=%s\nRemoteHosts=%s\n'
+        % (TOKEN15, BASE, DPROJ, _host))
+    env15 = {k: v for k, v in env.items() if k != 'DELPHI_MCP_ROOTS'}
+    env15['DELPHI_MCP_BIND_IP'] = '127.0.0.1'
+    puerto15 = mc.puerto_libre()
+    p15 = mc.lanza_http(EXE15, puerto15, env=env15)
+    res15 = {}
+    try:
+        h15 = mc.Http(puerto15, token=TOKEN15, t=180)
+        h15.session('out1291-dos')
+        # como O3: con _espera el stub deja el programa corriendo y remote-run vuelve con stillRunning
+        open(ESPERA, 'w').write('1')
+        j15 = mc.como_json(h15.call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ,
+                                                        'exe': PROJNAME + '.exe', 'args': 'tarde.py',
+                                                        'timeoutms': 1500}))
+        os.remove(ESPERA)
+        job15 = j15.get('jobId') or ''
+        time.sleep(10)   # tarde.py: 6 s dormido y sus 5000 lineas; ya acabo
+
+        def una(k):
+            fk = os.path.join(SALIDAS, 'dos_%s.txt' % k)
+            res15[k] = (h15.call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ,
+                                                     'job': job15, 'out': fk}), fk)
+        hilos = [threading.Thread(target=una, args=(k,)) for k in 'ab']
+        for x in hilos:
+            x.start()
+        for x in hilos:
+            x.join(180)
+    finally:
+        p15.kill()
+    enteros15, malos15 = 0, []
+    for k, (rk, fk) in sorted(res15.items()):
+        jk = mc.como_json(rk)
+        bk = lee(fk)
+        if bk is not None:
+            lk = bk.decode('ascii', 'replace').splitlines()
+            if len(lk) == 5001 and lk[0] == 'antes del plazo' and lk[-1] == 'tarde 05000' and \
+                    mc.es(jk.get('logfileNote'), 'SN_REMOTERUN_LOGFILE'):
+                enteros15 += 1
+            else:
+                malos15.append((k, len(lk), sin_salida(jk)))
+        # el otro ya la leyo (RUN-018), o la niega la operacion en curso: el otro ESCRIBE en ese proyecto
+        # (SYS-043, medido el 10-nov: la carrera la para R3; la bajada por llamada es la segunda barrera)
+        elif not (mc.es(rk, 'SR_REMOTERUN_NO_OUTPUT_FMT') or mc.abre(rk, 'SR_SYS_OPERACION_EN_CURSO_FMT')):
+            malos15.append((k, rk[:300]))
+    check('O15 dos output del mismo trabajo a la vez: cada fichero ENTERO, RUN-018 o SYS-043 (el otro escribe), '
+          'ninguno a medias ni RUN-033', job15 and len(res15) == 2 and enteros15 >= 1 and not malos15 and
+          not any(mc.es(rk, 'SN_REMOTERUN_OUT_ILEGIBLE') for rk, _ in res15.values()), (job15, enteros15, malos15))
 finally:
     srv.mata()
     if os.path.exists(FUERA):

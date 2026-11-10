@@ -56,10 +56,19 @@ function PendingMessagesNote: string;
 
 const
   { La clave de la nota del buzon en una respuesta JSON: la pone
-    Lsp.Host.WithMailboxNote y la quita SinNotaDelBuzon. }
+    ConNotaDelBuzon y la quita SinNotaDelBuzon. }
   CLAVE_NOTA_DEL_BUZON = 'mailbox';
 
-{ La inversa de WithMailboxNote (Lsp.Host) con PendingMessagesNote: el texto
+{ AText con la nota del buzon de quien llama (PendingMessagesNote) SIN romper
+  la respuesta: media tool contesta con un objeto JSON, y una linea de prosa
+  pegada detras lo dejaba sin parsear mientras habia correo (un json.loads()
+  fallaba de la nada, medido el 25-ago-2026); en un JSON va como un campo mas
+  y solo una prosa la lleva detras. EL escritor de la nota, junto a su
+  inversa: estaba en Lsp.Host (WithMailboxNote) y delphi_messages la componia
+  a mano con ConNota (R9 del revisor del paisaje del 10-nov-2026). }
+function ConNotaDelBuzon(const AText: string): string;
+
+{ La inversa de ConNotaDelBuzon: el texto
   de una respuesta sin la nota del buzon, sea un campo de su JSON o la linea
   de detras de una prosa. Para la respuesta que se deja EN el buzon
   (Lsp.Progreso.DejaLaRespuestaEnElBuzon): quien la lee recibe de una vez
@@ -131,6 +140,12 @@ begin
   N := Length(PendingIn(BuzonDeMensajes(Agent)));
   if N > 0 then
     Result := MsgFmt(SN_MESSAGES_PENDING_FMT, [N, Agent, Agent]);
+end;
+
+function ConNotaDelBuzon(const AText: string): string;
+begin
+  // EL helper de Lsp.Guard; la nota del buzon ya trae su propio salto
+  Result := ConNota(AText, CLAVE_NOTA_DEL_BUZON, PendingMessagesNote, '');
 end;
 
 function SinNotaDelBuzon(const AText: string): string;
@@ -283,7 +298,7 @@ begin
   // propio agent= leia "No messages" con el correo en el otro (sonda del
   // 10-nov-2026, test completo de Hermes de la 1.29.1)
   if not SameText(Agent, AgenteDeLaLlamada('')) then
-    Result := ConNota(Result, CLAVE_NOTA_DEL_BUZON, PendingMessagesNote, '');
+    Result := ConNotaDelBuzon(Result);
 end;
 
 initialization

@@ -14,7 +14,10 @@ encuentra, un nombre que admite, un remoto del repo, una ruta del repo.
   O8  merge de una rama (ff); merge action=otra: GIT-007
   O9  stash con paths devuelve SOLO ese fichero a HEAD; pop lo trae
   O10 restore paths saca del indice y no toca el fichero
-  O11 tag con nombre y mensaje (anotado); tag lista; tag sin nombre con ref: GIT-038
+  O11 tag con nombre y mensaje (anotado); tag lista; tag sin nombre con ref o message: GIT-091 (falta name;
+      GIT-038 decia que message "no va con tag", Hermes 10-nov-2026)
+  O15 diff con context y un format de resumen (stat, shortstat, name-only): GIT-090, sin parche (git lo
+      traia entero: su -U implica --patch; Hermes, 10-nov-2026); con format=words, si
   O12 show patch=true trae el diff; sin el, el stat
   O13 log search encuentra el commit; sin resultado, GIT-058
   O14 un campo que no va con el comando: GIT-038
@@ -127,9 +130,21 @@ try:
     r = g(command='tag', name='v0.1', message='la primera')
     r2 = g(command='tag')
     r3 = g(command='tag', ref='HEAD')
-    check('O11 tag anotado; tag lista; tag sin nombre con ref: GIT-038',
-          'exit=0' in r and 'v0.1' in r2 and git('cat-file', '-t', 'v0.1').strip() == 'tag' and mc.es(r3, 'SR_GIT_NO_VA_CON_COMANDO_FMT'),
-          (r[:150], r2[:150], r3[:200]))
+    r4 = g(command='tag', message='sin nombre')
+    check('O11 tag anotado; tag lista; tag sin nombre con ref o message: GIT-091, falta name',
+          'exit=0' in r and 'v0.1' in r2 and git('cat-file', '-t', 'v0.1').strip() == 'tag' and
+          mc.abre(r3, 'SR_GIT_TAG_SIN_NOMBRE_FMT') and mc.abre(r4, 'SR_GIT_TAG_SIN_NOMBRE_FMT') and
+          'name=' in r4, (r[:150], r2[:150], r3[:200], r4[:200]))
+
+    # O15: context con un format de resumen
+    open(os.path.join(REPO, 'a.txt'), 'a').write('otra linea\n')
+    malos = [(f, r[:160]) for f in ('stat', 'shortstat', 'name-only')
+             for r in [g(command='diff', format=f, context=3)] if not mc.abre(r, 'SR_GIT_CONTEXTO_SIN_PARCHE_FMT')]
+    r5 = g(command='diff', format='words', context=3)
+    r6 = g(command='diff', format='shortstat')
+    check('O15 diff con context y un format de resumen: GIT-090 sin parche; con words si; shortstat solo el resumen',
+          not malos and 'exit=0' in r5 and 'exit=0' in r6 and '@@' not in r6, (malos, r5[:160], r6[:200]))
+    git('checkout', '--', 'a.txt')
 
     r = g(command='show', ref='HEAD~1', patch=True)
     r2 = g(command='show', ref='HEAD~1')

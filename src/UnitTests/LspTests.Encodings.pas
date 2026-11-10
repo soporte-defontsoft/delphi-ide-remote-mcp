@@ -77,6 +77,7 @@ type
     [Test] procedure SelloYSuInversaTambienEncadenados;
     [Test] procedure MarcaDeDuenoYSuInversa;
     [Test] procedure LineasComoDelphiRead;
+    [Test] procedure LineasATrozosComoLineasDelTexto;
     [Test] procedure SaltoDominantePorClase;
     [Test] procedure ParametroQueNoVaConSuDefecto;
     [Test] procedure TroceadorConSaltoYSuInversa;
@@ -716,6 +717,48 @@ begin
   Assert.AreEqual<Integer>(2, Length(LineasDelTexto('a'#13'b')), 'un CR suelto es salto');
   Assert.AreEqual<Integer>(2, Length(LineasDelTexto('a'#13#10#13#10)), 'una linea vacia REAL cuenta');
   Assert.AreEqual<Integer>(0, Length(LineasDelTexto('')), 'vacio: ninguna');
+end;
+
+{ TCuentaDeLineas (el out= de remote-run, a trozos: R1 del revisor del paisaje
+  del 10-nov-2026) cuenta lo mismo que LineasDelTexto del texto entero: en
+  UTF-8, UTF-16 (LE y BE) y UTF-32, sin el BOM, y con trozos de UNA unidad -
+  un CRLF partido entre dos trozos -, de tres y de todo. }
+procedure TNombradorTests.LineasATrozosComoLineasDelTexto;
+const
+  TEXTOS: array[0..12] of string = ('', 'a', 'a'#10, 'a'#10'b', 'a'#13#10'b'#13#10,
+    'a'#13'b', 'a'#13, #13#10, #10#10, 'x'#13#10#13#10, #13#13#10#10,
+    #$E1#13#10#$F1, 'sin salto al final'#13#10'ultima');
+  CLASES: array[0..4] of TEncKind = (ekUtf8, ekUtf16LE, ekUtf16BE, ekUtf32LE, ekUtf32BE);
+  ANCHOS: array[0..4] of Integer = (1, 2, 2, 4, 4);
+var
+  T, Paso, I, N: Integer;
+  Bytes, Trozo: TArray<Byte>;
+  Cuenta: TCuentaDeLineas;
+begin
+  for var C := 0 to High(CLASES) do
+    for T := 0 to High(TEXTOS) do
+    begin
+      // el texto en esa clase, sin su BOM (no es texto: no se le pasa)
+      Bytes := EncodeText(TEXTOS[T], CLASES[C], False);
+      Bytes := Copy(Bytes, PreambleLen(CLASES[C]), MaxInt);
+      var Pasos: TArray<Integer> := [ANCHOS[C], 3 * ANCHOS[C], Length(Bytes) + ANCHOS[C]];
+      for Paso in Pasos do
+      begin
+        Cuenta.Empieza(ANCHOS[C], CLASES[C] in [ekUtf16BE, ekUtf32BE]);
+        I := 0;
+        while I < Length(Bytes) do
+        begin
+          N := Paso;
+          if I + N > Length(Bytes) then
+            N := Length(Bytes) - I;
+          Trozo := Copy(Bytes, I, N);
+          Cuenta.Suma(Trozo, N);
+          Inc(I, N);
+        end;
+        Assert.AreEqual<Int64>(Length(LineasDelTexto(TEXTOS[T])), Cuenta.Lineas,
+          Format('texto %d en %s, trozos de %d bytes', [T, EncName(CLASES[C]), Paso]));
+      end;
+    end;
 end;
 
 procedure TNombradorTests.SaltoDominantePorClase;
