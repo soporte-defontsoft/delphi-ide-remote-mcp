@@ -72,6 +72,9 @@ const
   SK_NODE_CLIC_EN_PIXEL_FMT =
     '  [NODE-014] CLICK at pixel (%d,%d) of the screenshot';
 
+  SK_NODE_DOBLE_CLIC_EN_PIXEL_FMT =
+    '  [NODE-051] DOUBLE CLICK at pixel (%d,%d) of the screenshot';
+
   SR_NODE_NO_PUDE_PULSAR_FMT =
     '  [NODE-015 DENIED] Could not click: %s';
 

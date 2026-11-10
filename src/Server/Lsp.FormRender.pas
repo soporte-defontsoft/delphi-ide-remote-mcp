@@ -80,6 +80,10 @@ type
     // con Escribe, el que se acaba de soltar (insert, set parent=): el juez lo
     // deja como el disenador al soltarlo (FMX: el ultimo de su tabulador, V72)
     Soltado: string;
+    // con Escribe, el que acaba de crear su constructor (insert, no set parent=):
+    // en un .dfm a otro PPI, la VCL lo escala del de su constructor al del
+    // fichero, como al soltarlo en el disenador (A16 de cierre-final-1-29-1)
+    Nuevo: string;
     // con Escribe, Componente.Propiedad=Valor que el ayudante aplica sobre el form
     // YA cargado antes de escribirlo (--set), como el Inspector del IDE: lo que
     // puso el agente, que leido con el form no hacia lo que hace su clase
@@ -493,9 +497,10 @@ function ComoLoEscribeElIde(const APath, ATexto, AEnc: string; out AEscrito: str
   ComoLoEscribeElIde) y, del componente AComponente, el orden en que su
   escritor escribe sus propiedades (Orden). La respuesta entera, con lo que
   sustituyo, salto o no leyo; Fallo si no se pudo preguntar. ADesde, el de
-  ComoLoEscribeElIde. }
+  ComoLoEscribeElIde. ANuevo: AComponente lo acaba de crear su constructor
+  (insert): en un .dfm a otro PPI, escalado como al soltarlo (A16). }
 function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string;
-  ADesde: UInt64 = 0; const APuestas: TArray<string> = nil): TRespuestaRender;
+  ADesde: UInt64 = 0; const APuestas: TArray<string> = nil; ANuevo: Boolean = False): TRespuestaRender;
 
 { Los colores sin alfa del form FMX APath con el texto ATexto (en AEnc): los
   candidatos de la gramatica (Lsp.Styles.CandidatosSinAlfa) que no estaban
@@ -719,7 +724,7 @@ begin
   // juez de los nuestros (ValorDeLaCasaLlega); --dropped no estaba (A4 de la 1.27)
   for var V in TArray<string>.Create(APeticion.Path, APeticion.Salida,
     APeticion.Componente, APeticion.Estilo, APeticion.Bds, APeticion.RaizBds, APeticion.SufijoBpl,
-    APeticion.FicheroPaquetes, APeticion.Soltado) + APeticion.Estados + APeticion.Puestas do
+    APeticion.FicheroPaquetes, APeticion.Soltado, APeticion.Nuevo) + APeticion.Estados + APeticion.Puestas do
     if not ValorDeLaCasaLlega(V) then
       Exit(MsgFmt(SR_DESIGNER_VALOR_CON_COMILLAS_FMT, [V, CaracterQueNoLlega(V)])); // y CUAL, como TEST-037 (B7)
   AOrden := ComillasSinEscape(AExe) + Arg(FR_ARG_PATH, APeticion.Path);
@@ -756,6 +761,8 @@ begin
     AOrden := AOrden + Arg(FR_ARG_COMPONENT, APeticion.Componente);
   if APeticion.Escribe and (APeticion.Soltado <> '') then
     AOrden := AOrden + Arg(FR_ARG_DROPPED, APeticion.Soltado);
+  if APeticion.Escribe and (APeticion.Nuevo <> '') then
+    AOrden := AOrden + Arg(FR_ARG_NEW, APeticion.Nuevo);
   if APeticion.Escribe then
     for var P in APeticion.Puestas do
       if P <> '' then
@@ -2561,7 +2568,8 @@ end;
   otros 75 (R4 del revisor del paisaje de la 1.27, medido). }
 function JuezDelIde(const APath, ATexto, AEnc: string; const AComponente: string = '';
   const ASoltado: string = ''; const AUnidad: string = ''; ADesde: UInt64 = 0;
-  AYaEscrito: Boolean = False; const APuestas: TArray<string> = nil): TRespuestaRender;
+  AYaEscrito: Boolean = False; const APuestas: TArray<string> = nil;
+  const ANuevo: string = ''): TRespuestaRender;
 var
   Pet: TPeticionRender;
   Dir, Cand: string;
@@ -2616,6 +2624,7 @@ begin
     Pet.Escribe := True;
     Pet.Componente := AComponente; // con el, tambien su orden (ORDER=)
     Pet.Soltado := ASoltado;
+    Pet.Nuevo := ANuevo;
     Pet.Puestas := APuestas;
     Pet.PlazoMs := Plazo;
     if AUnidad <> '' then
@@ -2673,9 +2682,10 @@ begin
 end;
 
 function PropiedadesComoLasEscribeElIde(const APath, ATexto, AEnc, AComponente: string;
-  ADesde: UInt64; const APuestas: TArray<string>): TRespuestaRender;
+  ADesde: UInt64; const APuestas: TArray<string>; ANuevo: Boolean): TRespuestaRender;
 begin
-  Result := JuezDelIde(APath, ATexto, AEnc, AComponente, '', '', ADesde, False, APuestas);
+  Result := JuezDelIde(APath, ATexto, AEnc, AComponente, '', '', ADesde, False, APuestas,
+    (if ANuevo then AComponente else ''));
 end;
 
 function ColoresSinAlfaDeForm(const APath, ATexto, AEnc, AAntes: string;

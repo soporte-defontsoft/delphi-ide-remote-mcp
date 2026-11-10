@@ -2833,7 +2833,8 @@ const
     'set by the operator: a refusal names what is missing.';
   SP_ADBLINUX_COMMAND =
     'screenshot (default: the whole desktop as a PNG) | tap (press at x,y ' +
-    'measured on that screenshot) | drag (press at x,y, move to tox,toy and ' +
+    'measured on that screenshot) | double-tap (a double click there) | drag ' +
+    '(press at x,y, move to tox,toy and ' +
     'release: a window''s title bar moves it; to resize, press 3 px past ' +
     'its right/bottom edge in "windows" (corner: x+w+3, y+h+3) - ' +
     'inside, the press goes to the app) | type (write "text"; with x,y it ' +
@@ -2842,9 +2843,9 @@ const
     'where the focus was, so read the screenshot each answer brings) | key ' +
     '(one key: Linux code on a Linux target, key NAME on a Windows one) | ' +
     'overview (when one window covers another - Linux: the desktop''s overview ' +
-    'brings every window into view; Windows: only a fresh capture with the ' +
+    'brings every window into view; Windows: a fresh capture with the ' +
     'windows list) | ' +
-    'status (is the desktop reachable, and what to ask for if not)';
+    'status (is it reachable, and what to ask for if not)';
   SP_ADBLINUX_PROFILE =
     'PAServer profile of the target machine - Linux, Windows, or this ' +
     'server in its user session (delphi_paserver command=profiles lists ' +
@@ -2855,10 +2856,10 @@ const
     'when you develop the node itself (deployed with delphi_build ' +
     'target=Deploy).';
   SP_ADBLINUX_X =
-    'tap/type/drag: horizontal pixel measured on the screenshot this tool ' +
+    'every gesture: horizontal pixel measured on the screenshot this tool ' +
     'returned (pass its frame too and the server converts)';
   SP_ADBLINUX_Y =
-    'tap/type/drag: vertical pixel, measured as x';
+    'vertical pixel, measured as x';
   SP_DESKTOP_TOX =
     'drag: horizontal pixel where it releases, on the same screenshot (and ' +
     'frame) as x';
@@ -3101,8 +3102,8 @@ const
     'the key NAME: ' + TECLAS_DE_WINDOWS + '.';
 
   SR_ADBLINUX_CMD =
-    '[DESK-011 INVALID_PARAM] command must be screenshot, tap, drag, type, ' +
-    'key, overview or status.';
+    '[DESK-011 INVALID_PARAM] command must be screenshot, tap, double-tap, ' +
+    'drag, type, key, overview or status.';
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa), como en
     delphi_adb: aqui se ignoraba en silencio, y sin command la llamada es una
     captura - siete key/tap/type de un agente con command FUERA de sus

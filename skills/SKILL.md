@@ -361,7 +361,9 @@ installed by hand.
 image with a `frame` token. Measure x,y ON THAT IMAGE and call `tap` (or
 `type`, which presses there first: one trip) with those x,y and
 `frame=<the token, copied as it is>`: the server converts scale and crop
-origin for you - never divide by a scale or add an origin yourself. `drag`
+origin for you - never divide by a scale or add an origin yourself.
+`double-tap` is the double click there (a row or an icon that opens on it):
+two `tap` calls are two runs of the node, never one double click. `drag`
 presses at x,y and releases at `tox,toy`, both on the same screenshot: a
 title bar moves a window, and pressed just past the right or bottom edge of
 its `windows` rectangle it resizes it. Every

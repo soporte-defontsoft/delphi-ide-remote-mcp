@@ -35,6 +35,7 @@
   NODO_ORDEN_TECLA = 'tecla';          // tecla [modificadores] <tecla>
   NODO_ORDEN_ALTAB = 'altab';          // Alt+Tab (desde la consola del nodo)
   NODO_ORDEN_ARRASTRA = 'arrastra';    // arrastra x1 y1 x2 y2: pulsa, se mueve y suelta
+  NODO_ORDEN_DOBLE = 'doble';          // doble x y: dos pulsaciones seguidas, el doble clic (C1 de la 1.29.1)
   { Las teclas por su codigo evdev (linux/input-event-codes.h: una POSICION del
     teclado, la misma en toda distribucion) que nombran los dos lados en Linux:
     los modificadores que manda la tool en "tecla" y las que el nodo pulsa por

@@ -219,6 +219,8 @@ section is completely inert.
 ; BindIP - the server refuses to start and says so (a comment line first is fine).
 ; UTF-16 little endian is read too; UTF-16 big endian or UTF-32 stops the server at
 ; startup, and a file that exists but cannot be read puts nothing in force (said at startup).
+; A section or a key the server does not read - a misspelled name, or one this version does
+; not have - does nothing, and the startup log names it (1.29.1).
 [Server]
 ; HTTP port for --http and the tray (-gui)
 Port=3000

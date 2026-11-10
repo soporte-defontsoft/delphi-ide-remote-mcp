@@ -313,7 +313,7 @@ var
   end;
 begin
   Cmd := ComandoDeEscritorio(Params.Command);
-  if not MatchStr(Cmd, ['screenshot', 'tap', 'drag', 'type', 'key', 'overview', 'status']) then
+  if not MatchStr(Cmd, ['screenshot', 'tap', 'double-tap', 'drag', 'type', 'key', 'overview', 'status']) then
     Exit(MsgText(SR_ADBLINUX_CMD));
 
   { "out" es una ruta LOCAL que elige QUIEN LLAMA -donde baja la captura del
@@ -363,10 +363,14 @@ begin
     (hasta el 2026-09-22 el texto viajaba por un /bin/sh y un "hola; lo que
     sea" ejecutaba la segunda mitad; el lanzador lo entrega tal cual). }
   Args := [NODE_KEY];
-  if Cmd = 'tap' then
+  // double-tap: el doble clic del escritorio, en el nodo (dos tap seguidos no lo son:
+  // cada uno es una ejecucion del nodo, de 1 a 2 s; C1 de la 1.29.1)
+  if (Cmd = 'tap') or (Cmd = 'double-tap') then
   begin
     if (Params.X.Trim = '') or (Params.Y.Trim = '') then
       Exit(MsgText(SR_ADBLINUX_NEEDXY));
+    if Cmd = 'double-tap' then
+      Args := Args + [NODO_ORDEN_DOBLE];
     // Con frame, x,y son de la imagen que el agente miro y el servidor los
     // pasa a pixeles de captura (Lsp.InlineImages.FramePoint).
     var FP := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
@@ -806,6 +810,7 @@ begin
   var Sobra := ParametroQueNoVa(Cmd, [
       'screenshot', 'out region window inline maxwidth',
       'tap', 'x y frame out inline maxwidth',
+      'double-tap', 'x y frame out inline maxwidth',
       'drag', 'x y tox toy frame out inline maxwidth',
       'type', 'text x y frame out inline maxwidth',
       'key', 'code modifiers out inline maxwidth',

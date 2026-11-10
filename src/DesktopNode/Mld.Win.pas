@@ -50,7 +50,7 @@ type
     { Captura el escritorio virtual completo en ARuta (PNG). }
     function Capturar(const ARuta: string): Boolean;
     { Pulsa en el pixel (AX, AY) DE LA CAPTURA. }
-    function Pulsar(AX, AY: Integer): Boolean;
+    function Pulsar(AX, AY: Integer; AVeces: Integer = 1): Boolean;
     { Arrastra como una mano: pulsa en (AX1,AY1) DE LA CAPTURA, se mueve en
       pasos hasta (AX2,AY2) y suelta alli. El destino se mira ANTES de
       pulsar, y el boton se suelta siempre. }
@@ -573,23 +573,29 @@ begin
   end;
 end;
 
-function TEscritorioWin.Pulsar(AX, AY: Integer): Boolean;
+{ AVeces: 2 es el doble clic - las dos pulsaciones en la MISMA entrada, y Windows lo
+  reconoce por su intervalo (GetDoubleClickTime) y su sitio }
+function TEscritorioWin.Pulsar(AX, AY: Integer; AVeces: Integer = 1): Boolean;
 var
-  E: array[0..2] of TInput;
+  E: TArray<TInput>;
   I: Integer;
   AbsX, AbsY: Integer;
 begin
   FError := '';
   if not Absolutas(AX, AY, AbsX, AbsY) then
     Exit(False);
-  FillChar(E, SizeOf(E), 0);
+  SetLength(E, 1 + 2 * AVeces);
+  FillChar(E[0], Length(E) * SizeOf(TInput), 0);
   for I := 0 to High(E) do
     E[I].Itype := INPUT_MOUSE;
   E[0].mi.dx := AbsX;
   E[0].mi.dy := AbsY;
   E[0].mi.dwFlags := MOVER_ABS;
-  E[1].mi.dwFlags := MOUSEEVENTF_LEFTDOWN;
-  E[2].mi.dwFlags := MOUSEEVENTF_LEFTUP;
+  for I := 0 to AVeces - 1 do
+  begin
+    E[1 + 2 * I].mi.dwFlags := MOUSEEVENTF_LEFTDOWN;
+    E[2 + 2 * I].mi.dwFlags := MOUSEEVENTF_LEFTUP;
+  end;
   Result := EnviarEntradas(E);
 end;
 

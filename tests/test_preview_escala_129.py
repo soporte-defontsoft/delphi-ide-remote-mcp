@@ -24,6 +24,13 @@ respuesta decia "1 pixel = 1 unidad" (medido en produccion: OKBtn 300,8,75,25 en
   E11 la respuesta: scale y scaleNote (DSGN-191), con lo de los dibujos nativos solo en la VCL
   E12 scale fuera de 100..500: DSGN-190 sin lanzar nada (uno negativo lo niega antes el esquema, SYS-016); scale
       con layout: DSGN-047
+  E13 (A16 de cierre-final-1-29-1, la B de David) insert en un .dfm a 120 PPI: el tamano y los margenes de su
+      constructor escalados al del FICHERO, como los deja el disenador al soltarlo (SetParent -> ScaleForPPI) y
+      como guardo el IDE los de ese form (94x31, Margins 4), en 10,10. ROJO contra 2c790b84 (75x25, sin Margins).
+      E13b control: a 96, 75x25 y sin Margins, como siempre. E13c control: set de otra propiedad en un control
+      que ya estaba no lo vuelve a escalar. E13d: lo que el agente da en el insert (props Width=200) esta en
+      unidades del fichero y gana tal cual - escalado, salia 250 (revision propia del diff, 11-nov) -; lo demas,
+      escalado
 
 Uso:  python tests/test_preview_escala_129.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -318,6 +325,33 @@ try:
           mc.abre(r, 'SR_SYS_PARAM_VALUE_FMT') and 'scale' in r, r[:200])
     r = call('delphi_designer', {'command': 'layout', 'path': F96, 'scale': 150})
     check('E12 ...y scale con layout: DSGN-047', mc.abre(r, 'SR_DESIGNER_NO_VA_CON_COMANDO_FMT'), r[:300])
+    # ------------------------------------------------------------------ E13 (al final: escribe en los forms)
+    def bloque(ruta, nombre):
+        t = open(ruta, encoding='ascii').read()
+        m = re.search(r'\n  object %s: \w+\r?\n(.*?)\n  end' % nombre, t, re.S)
+        return dict(re.findall(r'^\s+([\w.]+) = (.*?)\r?$', m.group(1), re.M)) if m else {}
+    r = call('delphi_designer', {'command': 'insert', 'path': F120, 'classname': 'TButton'}, t=180)
+    b = bloque(F120, 'Button1')
+    check('E13 insert en un .dfm a 120 PPI: 94x31 y Margins 4 (los del constructor, escalados como al soltarlo), '
+          'en 10,10. ROJO contra 2c790b84',
+          b.get('Width') == '94' and b.get('Height') == '31' and b.get('Left') == '10' and b.get('Top') == '10'
+          and all(b.get('Margins.' + l) == '4' for l in ('Left', 'Top', 'Right', 'Bottom')), (b, r[:300]))
+    r = call('delphi_designer', {'command': 'insert', 'path': F96, 'classname': 'TButton'}, t=180)
+    b = bloque(F96, 'Button1')
+    check('E13b control: a 96, 75x25 y sin Margins, como siempre',
+          b.get('Width') == '75' and b.get('Height') == '25' and not any(k.startswith('Margins') for k in b),
+          (b, r[:300]))
+    r = call('delphi_designer', {'command': 'set', 'path': F120, 'component': 'OKBtn', 'prop': 'Caption',
+                                 'value': "'Vale'"}, t=180)
+    b = bloque(F120, 'OKBtn')
+    check('E13c control: set de otra propiedad en uno que ya estaba no lo vuelve a escalar (94x31, sin Margins)',
+          b.get('Caption') == "'Vale'" and b.get('Width') == '94' and b.get('Height') == '31'
+          and not any(k.startswith('Margins') for k in b), (b, r[:300]))
+    r = call('delphi_designer', {'command': 'insert', 'path': F120, 'classname': 'TButton', 'props': 'Width=200'}, t=180)
+    b = bloque(F120, 'Button2')
+    check('E13d insert con props Width=200 a 120 PPI: el Width del agente tal cual (200, no 250); alto y margenes '
+          'escalados (31, 4)',
+          b.get('Width') == '200' and b.get('Height') == '31' and b.get('Margins.Left') == '4', (b, r[:300]))
 finally:
     srv.cierra()
     mc.borra(BASE)

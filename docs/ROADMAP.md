@@ -78,20 +78,13 @@ Status page as of 2026-11-10 (current release v1.29.1; 44 tools).
 
 - Databases and HTTP APIs by name (`delphi_db`, `delphi_api`): the operator defines them in two files of the server's own house and opens them per workspace; the agent asks for operations - tables, fields, rows, a summary, writes of at most `max` rows, tables and views where the operator allows them, a request to an API - and never sees a server, an address or a credential. And the designer: events bound by `set` (judged by the event's signature), several controls in one `insert` (`items`), `preview` at another display scale (`scale=`), the service's way of painting compared pixel by pixel with the desktop's on the 355 forms of the samples, `lint styles=`; `delphi_config save-as`; `delphi_create kind=project-library` and `autocreate=no`; the help of Delphi 13.2 read as 13.1's (1.29.0)
 
-- A long call that tells its client it is still running (`notifications/progress`), and its answer kept in the agent's mailbox when the client gave up on it (`SYS-041`, also after a `notifications/cancelled`); the other calls told while a long operation writes (`SYS-042`, `SYS-043`, `SYS-044`); the row an insert wrote, from `delphi_db`; all of a program's output into a file (`delphi_paserver out=`); the server's DLLs only from its house and `System32`; one `access` key per database (1.29.1)
+- A long call that tells its client it is still running (`notifications/progress`), and its answer kept in the agent's mailbox when the client gave up on it (`SYS-041`, also after a `notifications/cancelled`); the other calls told while a long operation writes (`SYS-042`, `SYS-043`, `SYS-044`); the row an insert wrote, from `delphi_db`; all of a program's output into a file (`delphi_paserver out=`); the server's DLLs only from its house and `System32`; one `access` key per database. And the close of the last list: the Job Object of foreign code capped in memory and CPU, sums and averages that SQL Server overflowed or truncated, the `settings.ini` keys nobody reads said at start, a control inserted in a form at another `PixelsPerInch` scaled as the IDE drops it, the trash copies a call made named in its answer (1.29.1)
+
+- The protections that need a privilege, measured in the suite: the Python batteries plant symbolic links, and the unit tests run from a folder next to the repository's build output, where Windows does not refuse them (1.29)
 
 ## Next
 
-Nothing: 1.29 closed the list, each item done, measured, declared or parked by the operator. What follows are patches.
-
-## Open
-
-- `delphi_api` against an API that needs a login call first, and then the session token it returns on every request: pending tests (the operator's credential is static, and the agent cannot make that login without the password travelling from it)
-
-## Parked (the operator keeps them on the list, not now)
-
-- The protections that need a privilege, measured in the suite: this machine creates symbolic links now and the Python batteries plant them; what is left are the unit tests run from the repository's own build output, where Windows refuses them, and an elevated console
-- The defaults a component's constructor sets, read from its source (`preview` already draws them - it builds the real control - and since 1.27 `layout` judges the box the renderer measured; only without the renderer does it list such a control under `sizeNotWritten`)
+Nothing: 1.29.1 closed the last list, each item done, measured, declared or declined. The project is in maintenance: what follows are patches, and a declared item reopens only with a case from the field.
 
 ## Declared limits
 
@@ -117,3 +110,6 @@ Nothing: 1.29 closed the list, each item done, measured, declared or parked by t
 - Watching a running application from inside (accessibility trees): what runs is seen through the captures of the desktop node and `delphi_adb`
 - Renaming a unit as one operation: a move touches only what it names, and `delphi_config fix-references` re-points the projects
 - Dead code by symbol as an operation of the server: no agent asked for one (measured in 1.28 over some 41,000 calls of the test agents), and the compiler's own hints already come through `delphi_diagnostics` and `delphi_build`
+- `delphi_api` against an API that needs a login call first, and then the session token it returns on every request: the operator's credential is static, and the agent cannot make that login without the password travelling from it (declined at the close of 1.29.1: maintenance)
+- The defaults a component's constructor sets, read from its source: `preview` draws them - it builds the real control -, `insert` writes the size the constructor gives as the IDE stores it, and `layout` judges the box the renderer measured; beyond `insert`/`set`/`delete`, the designer binds events (1.29)
+- Remote debugging from the agent (breakpoints through the IDE's remote debugger): not on the list of any version, and a build plus `delphi_test` or `remote-run` with its output covers what the agents asked for

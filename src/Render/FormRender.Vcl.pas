@@ -60,6 +60,7 @@ type
   end;
 
   TCrackCombo = class(TCustomComboBox);
+  TCrackControl = class(TControl);
 
   TCargadorVcl = class(TCargador)
   protected
@@ -599,8 +600,31 @@ begin
       // el juez de lo que guarda el IDE (3.11): escrito por TWriter, sin pintar
       if GPeticion.Escribe then
       begin
+        // el NUEVO (--new: insert) en un form a otro PPI que 96: lo que el texto no trae
+        // (su tamano, sus margenes) lo dio su constructor a 96, y el disenador lo escala
+        // al soltarlo (TControl.SetParent -> ScaleForPPI). El PPI, el del FICHERO (B de
+        // David, 21-oct: medido el 10-nov, el IDE guardo 94x31 y Margins 4 en uno a 120 y
+        // el insert 75x25), por la VCL (ChangeScale) y no por una cuenta nuestra. Escalado
+        // en 0,0, donde lo deja su constructor al soltarlo, y luego a su sitio: ChangeScale
+        // escala los bordes, y en 10,10 el ancho salia 93 y no 94 (106-13; medido). Su sitio
+        // se queda donde lo puso el insert. Un frame no: lo suyo viene de su .dfm
+        if (GPeticion.Nuevo <> '') and
+           (TFormOculta(F).PpiDeLasUnidades <> Screen.DefaultPixelsPerInch) then
+        begin
+          var Nuevo := ComponenteDeRuta(Raiz, GPeticion.Nuevo);
+          if (Nuevo is TControl) and not (Nuevo is TCustomFrame) then
+          begin
+            var Sitio := TControl(Nuevo).BoundsRect.TopLeft;
+            TControl(Nuevo).SetBounds(0, 0, TControl(Nuevo).Width, TControl(Nuevo).Height);
+            TCrackControl(Nuevo).ChangeScale(TFormOculta(F).PpiDeLasUnidades,
+              Screen.DefaultPixelsPerInch, True);
+            TControl(Nuevo).SetBounds(Sitio.X, Sitio.Y, TControl(Nuevo).Width, TControl(Nuevo).Height);
+          end;
+        end;
         // lo que puso el agente, sobre el form YA cargado, como el Inspector del
-        // IDE: su clase hace lo suyo fuera de la lectura (B2 de la 1.28, como FMX)
+        // IDE: su clase hace lo suyo fuera de la lectura (B2 de la 1.28, como FMX).
+        // DESPUES del escalado del nuevo: su Width esta en unidades del fichero y gana
+        // tal cual, como en el IDE, que lo pone en el control ya soltado
         for var S in GPeticion.Puestas do
           AplicaEstado(Cargador, Raiz, S);
         // el SOLTADO, el ultimo del tabulador de su padre, lo que hace soltarlo en el

@@ -242,6 +242,17 @@ begin
       else
         Writeln(MsgFmt(SR_NODE_NO_ENVIAR_ALT_TAB_FMT, [Escritorio.Error]));
     end
+    else if (Orden = NODO_ORDEN_DOBLE) and (Args >= 3) then
+    begin
+      { el doble clic: dos pulsaciones en el mismo punto, dentro de su intervalo }
+      ObjX := StrToIntDef(Arg(2), -1);
+      ObjY := StrToIntDef(Arg(3), -1);
+      Hizo := (ObjX >= 0) and (ObjY >= 0) and Escritorio.Pulsar(ObjX, ObjY, 2);
+      if Hizo then
+        Writeln(MsgFmt(SK_NODE_DOBLE_CLIC_EN_PIXEL_FMT, [ObjX, ObjY]))
+      else
+        Writeln(MsgFmt(SR_NODE_NO_PUDE_PULSAR_FMT, [Escritorio.Error]));
+    end
     else if Args >= 2 then
     begin
       ObjX := StrToIntDef(Arg(1), -1);
@@ -647,6 +658,18 @@ begin
               Writeln(MsgText(SK_NODE_ALT_TAB_ENVIADO))
             else
               Writeln(MsgFmt(SR_NODE_NO_ENVIAR_ALT_TAB_FMT, [Manos.Error]));
+          end
+          else if (Orden = NODO_ORDEN_DOBLE) and (Args >= 3) then
+          begin
+            { el doble clic: dos pulsaciones en el mismo punto, dentro de su
+              intervalo (C1 de la 1.29.1: un agente no podia abrir una fila) }
+            ObjX := StrToIntDef(Arg(2), -1);
+            ObjY := StrToIntDef(Arg(3), -1);
+            Hizo := (ObjX >= 0) and (ObjY >= 0) and Manos.Pulsar(ObjX, ObjY, 2);
+            if Hizo then
+              Writeln(MsgFmt(SK_NODE_DOBLE_CLIC_EN_PIXEL_FMT, [ObjX, ObjY]))
+            else
+              Writeln(MsgFmt(SR_NODE_NO_PUDE_PULSAR_FMT, [Manos.Error]));
           end
           else if Args >= 2 then
           begin

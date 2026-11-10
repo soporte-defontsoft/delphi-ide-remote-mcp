@@ -1911,10 +1911,13 @@ end;
   pone el valor en el componente ya cargado; y una propiedad que su clase
   declara stored False (UNSTORED=: en FMX, Width y Height van en Size) va en
   AOtras con EnOtras y lo que el escritor escribe por ella (DSGN-167), no en
-  ANoGuarda (completo de Opus de la 1.22.1). }
+  ANoGuarda (completo de Opus de la 1.22.1). ANuevo: ANomObj lo acaba de crear
+  su constructor (insert): en un .dfm a otro PPI que 96, su tamano y sus margenes
+  escalados al del fichero, como los deja el disenador al soltarlo (A16). }
 function ConLasPropiedadesDelIde(var F: TFormEnEdicion; const ALineas: TArray<string>;
   const ANomObj: string; const APuestas: TArray<string>; out ANota: string;
-  out ANoGuarda: TArray<string>; out AOtras: TArray<TGuardadaComo>): TArray<string>;
+  out ANoGuarda: TArray<string>; out AOtras: TArray<TGuardadaComo>;
+  ANuevo: Boolean = False): TArray<string>;
 
   // el valor de AProp en el nivel propio de AObj, por EL lector de ADoc: de
   // un literal, su texto (cada escritor parte una cadena larga por su sitio)
@@ -2083,15 +2086,20 @@ begin
       var AlJuez := AlObjetoCargado(Doc, O, Sueltas);
       if Length(Sueltas) > 0 then
       begin
-        R := PropiedadesComoLasEscribeElIde(F.Dfm, AlJuez, F.Doc.Encoding, ANomObj, F.JuzgandoDesde, Sueltas);
+        R := PropiedadesComoLasEscribeElIde(F.Dfm, AlJuez, F.Doc.Encoding, ANomObj, F.JuzgandoDesde, Sueltas,
+          ANuevo);
         // una que su ayudante no pudo poner sobre el objeto cargado (un evento, una
         // referencia de otro modulo): el juicio de siempre, leida con el form. Sin
         // tiempo, JuezDelIde contesta sin lanzar nada
         if R.Error <> '' then
-          R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj, F.JuzgandoDesde);
+          // (aqui lo puesto viaja en el texto y se leeria antes del escalado: escalado
+          // con el, un Width del agente saldria x1,25; sin --new, el tamano a 96)
+          R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj, F.JuzgandoDesde, nil,
+            ANuevo and (Length(APuestas) = 0));
       end
       else
-        R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj, F.JuzgandoDesde);
+        R := PropiedadesComoLasEscribeElIde(F.Dfm, Texto, F.Doc.Encoding, ANomObj, F.JuzgandoDesde, nil,
+          ANuevo);
       // lo que leyo, para mirarlo otra vez antes de escribir (B5 rev6)
       F.LeidoPorElJuez := F.LeidoPorElJuez + R.Leidos;
       if R.Fallo <> '' then
@@ -2541,7 +2549,7 @@ begin
   var NotaIde: string;
   var NoGuarda: TArray<string>;
   var Otras: TArray<TGuardadaComo>;
-  DfmLineas := ConLasPropiedadesDelIde(F, DfmLineas, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras);
+  DfmLineas := ConLasPropiedadesDelIde(F, DfmLineas, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras, True);
   for var I := 0 to High(Infos) do
     MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
   // el form y la unidad como quedarian: de ellos sale la escritura, y sobre

@@ -60,7 +60,9 @@ type
     function Mover(AX, AY: Double): Boolean;
     { Pulsa en un punto medido sobre la captura del escritorio. El boton
       izquierdo es BTN_LEFT=272, codigo de Linux: el 1 de X11 no vale. }
-    function Pulsar(AX, AY: Double; ABoton: Cardinal = 272): Boolean;
+    { AVeces: 2 es el doble clic, dos pulsaciones seguidas en el mismo punto, dentro
+      del intervalo del escritorio (400 ms en GNOME de fabrica; aqui ~240 ms) }
+    function Pulsar(AX, AY: Double; AVeces: Integer = 1; ABoton: Cardinal = 272): Boolean;
     { Arrastra como una mano: pulsa en (AX1,AY1), se mueve en pasos hasta
       (AX2,AY2) y suelta alli; los dos puntos, medidos sobre la captura. La
       barra de titulo de una ventana la mueve, su borde o su esquina la
@@ -401,15 +403,20 @@ begin
   Bombear;
 end;
 
-function TManos.Pulsar(AX, AY: Double; ABoton: Cardinal = 272): Boolean;
+function TManos.Pulsar(AX, AY: Double; AVeces: Integer = 1; ABoton: Cardinal = 272): Boolean;
 begin
   Result := False;
   if not Mover(AX, AY) then
     Exit;
   Sleep(120);
-  Boton(ABoton, True);
-  Sleep(80);
-  Boton(ABoton, False);
+  for var I := 1 to AVeces do
+  begin
+    if I > 1 then
+      Sleep(80);
+    Boton(ABoton, True);
+    Sleep(80);
+    Boton(ABoton, False);
+  end;
   Result := True;
 end;
 

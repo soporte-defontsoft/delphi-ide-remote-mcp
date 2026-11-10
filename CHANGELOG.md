@@ -19,7 +19,12 @@ the database wrote, and `delphi_paserver remote-run` and `output` keep all of a 
 output in a file (`out=`). The server loads its DLLs only from its own folder and
 `System32`, never from the `PATH`. For operators: the database connections file takes one
 key, `access`, instead of `readonly` and `allowCreate`, and PostgreSQL's DLLs need the
-Visual C++ runtime in `System32`.
+Visual C++ runtime in `System32`. And it closes the project's last list: foreign code runs in
+a Job Object capped in memory and CPU, `delphi_desktop` gets a double click and types what
+the desktop composes, `delphi_db summary` adds and averages integers on SQL Server without
+overflowing or truncating, an insert in a form at another `PixelsPerInch` is scaled as the
+IDE drops it, and the start says which `settings.ini` keys nobody reads. After it, the
+project is in maintenance: patches only.
 
 ### Added
 
@@ -119,6 +124,15 @@ Visual C++ runtime in `System32`.
   `settings.ini` of the machine this server is built on still had
   `[Server] MessagesRetentionDays`, gone in 1.3. A misspelled workspace section keeps its
   own warning, which says how it is written.
+- `delphi_desktop command=double-tap`: the double click, at `x`,`y` like `tap`. Two `tap`
+  calls never made one - each is a run of the node, a second or two apart, and a desktop
+  takes two presses as a double click only within its interval (400 ms in GNOME) - so a
+  row that opens on a double click could not be opened: Hermes spent some 30 calls on a
+  grid in three days and asked its operator to try it on a tablet. The node presses twice
+  at the same point (libei on Linux; on Windows one `SendInput` with both, judged by the
+  system's double-click time). Measured on Fedora 44 with GNOME: a word double-clicked in
+  the text editor is selected, and one `tap` there only moves the cursor. A gesture like
+  the others: a host the workspace only lets see refuses it.
 
 ### Changed
 
@@ -170,6 +184,24 @@ Visual C++ runtime in `System32`.
   FireDAC's `CONVERT` escape, which writes each engine's form, and the counts use
   `COUNT_BIG` there (`COUNT` is an `int` too). Measured on both engines with the same
   rows: 4000000000 and 1.5.
+- `delphi_designer insert` in a `.dfm` saved at another `PixelsPerInch` than 96 wrote the
+  size its constructor gives at 96 (a button 75x25 in a form at 120, where the IDE had saved
+  its buttons at 94x31 and their margins at 4): loaded on a screen at 96, the new one came
+  out smaller than its neighbours. The IDE scales a control it drops to the designer's PPI
+  (`TControl.SetParent`); the form's own file says that PPI here, and the VCL scales it
+  (`ChangeScale`, in the renderer, before it writes): 94x31 and margins 4, still at 10,10. A
+  `.fmx` has no `PixelsPerInch`; what the agent gives in the insert (`props: Width=200`) is in
+  the file's units and stays as given; a `set` or `set parent=` of a control already there is
+  not scaled again.
+- `delphi_desktop type` on a Linux desktop composes a character the way that desktop
+  does, asking its compose table (libxkbcommon's, for the session's locale) what each dead
+  key gives with a space and with every other key. On a Spanish keyboard "^" and "`" exist
+  only as a dead key and a space, and `type` refused them (`NODE-009`, Hermes on 9-nov);
+  and the table, not Unicode, says what comes out: measured on Fedora with GNOME, a dead
+  key and a space give "^" and "`" with the circumflex and the grave, but "'" and "\""
+  with the acute and the diaeresis. `a^b`c` and the accented letters are typed as a person
+  types them there (measured). Where the table cannot be read, the node composes from
+  Unicode as before.
 - `x`, `y`, `tox`, `toy` of `delphi_desktop` and `x`, `y`, `lines` of `delphi_adb` are
   numbers in the schema: a client that checks the arguments against it refused `152`
   ("is not of type 'string'", nine times in Hermes' sessions). Text still works.

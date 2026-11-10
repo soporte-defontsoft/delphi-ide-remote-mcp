@@ -54,6 +54,9 @@ type
     // juez lo deja como lo deja el disenador al soltarlo (FMX: el ultimo de
     // la lista de tabulacion de su padre, V72)
     Soltado: string;
+    // --new <Nombre>: el que acaba de crear su constructor (insert): la VCL lo
+    // escala del PPI del constructor al del fichero, como SetParent al soltarlo
+    Nuevo: string;
     // --set Comp.Prop=Valor (repetible), con --writeback: lo que puso el agente,
     // aplicado sobre el form YA CARGADO (AplicaEstado), como el IDE lo pone desde
     // el Inspector. Leido con el form, el componente estaba en csReading y su
@@ -623,6 +626,7 @@ begin
         GPeticion.Escribe := (V = FR_ARG_SI) or (V = 'true') or (V = '1');
       end
       else if P = FR_ARG_DROPPED then GPeticion.Soltado := Valor
+      else if P = FR_ARG_NEW then GPeticion.Nuevo := Valor
       else if P = FR_ARG_SET then GPeticion.Puestas := GPeticion.Puestas + [Valor]
       else if P = FR_ARG_CONVERT then GPeticion.Convierte := Entre(Valor, [FR_CONVIERTE_TEXTO, FR_CONVIERTE_BINARIO])
       else if P = FR_ARG_UNREADABLE_CLASSES then GPeticion.ClasesSinLeer := True
