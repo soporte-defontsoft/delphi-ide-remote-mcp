@@ -82,7 +82,9 @@ the MCP `initialize` response (`serverInfo.version`).
   from the target, so there was no way back. A program still running when `remote-run`
   returns writes nothing yet (`RUN-030`); `output` with `out=` writes what it has so far
   (`RUN-029`) and, once it ended, all of it. If the file cannot be written, the output
-  stays on the target (`RUN-032`). `RUN-023` says how to keep all of it. The check that
+  stays on the target (`RUN-032`). `RUN-023` says how to keep all of it, and counts the
+  program's bytes, the same as the file's `size` (it counted the launcher's two lines too:
+  Hermes saw 12527 against 12508 for one output, 10-nov). The check that
   such a file ends in `.txt`/`.log` is now one, shared with `delphi_adb logcat out=`.
 
 ### Changed

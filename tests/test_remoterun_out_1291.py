@@ -17,6 +17,8 @@ carpeta local que hace de destino).
   O5  out= fuera de la jaula: negado y nada escrito fuera
   O6  out= con kill: no va con el comando
   O7  control: sin out=, la cola de siempre (RUN-023, que ahora dice como quedarse con todo)
+  O8  (Hermes, 10-nov) RUN-023 cuenta los bytes del PROGRAMA, los mismos que el size del fichero de O1
+      (contaba el fichero del destino, con las dos lineas del lanzador: 12527 frente a 12508)
 
 Uso:  python tests/test_remoterun_out_1291.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -94,6 +96,12 @@ def lee(path):
     return open(path, 'rb').read() if os.path.isfile(path) else None
 
 
+def bytes_de_la_nota(j):
+    import re
+    m = re.search(r'(\d+) bytes', j.get('outputTruncatedNote') or '')
+    return int(m.group(1)) if m else -1
+
+
 srv = mc.Stdio(EXE, env, nombre='out1291')
 try:
     # O1 / O2
@@ -109,6 +117,7 @@ try:
           and j.get('exitCode') == 0, sin_salida(j))
     check('O2 ...sin las lineas del lanzador (___ENV, ___RC)', b is not None and b'___ENV' not in b and b'___RC' not in b,
           (b or b'')[:80])
+    size1 = j.get('size')
     f2 = os.path.join(SALIDAS, 'pocas.log')
     r, j = corre(srv, 'pocas.py', f2)
     b2 = lee(f2)
@@ -170,6 +179,8 @@ try:
     check('O7 control: sin out=, la cola de siempre (RUN-023), que dice como quedarse con todo',
           0 < len(lc) <= 400 and mc.es(j.get('outputTruncatedNote'), 'SN_REMOTERUN_COLA_FMT')
           and 'out=' in (j.get('outputTruncatedNote') or '') and 'logfile' not in j, sin_salida(j))
+    check('O8 RUN-023 cuenta los bytes del programa: los del fichero de O1 (ROJO: contaba las lineas del lanzador)',
+          isinstance(size1, int) and bytes_de_la_nota(j) == size1, (bytes_de_la_nota(j), size1))
 finally:
     srv.mata()
     if os.path.exists(FUERA):

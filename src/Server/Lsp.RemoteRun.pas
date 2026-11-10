@@ -697,34 +697,45 @@ begin
     Result := '';
 end;
 
-function LoDelPrograma(const ABytes: TArray<Byte>; ATerminado: Boolean): TArray<Byte>;
+{ Donde empieza lo del programa en ABytes: tras la linea del entorno
+  (McpRunJob.LineaEnv), con su salto; 0 si no la trae. }
+function InicioDelPrograma(const ABytes: TArray<Byte>): Integer;
 var
-  Desde, Hasta, P: Integer;
   Marca: TArray<Byte>;
 begin
-  Desde := 0;
+  Result := 0;
   Marca := TEncoding.ASCII.GetBytes(JOB_ENV);
   if (Length(ABytes) >= Length(Marca)) and CompareMem(@ABytes[0], @Marca[0], Length(Marca)) then
   begin
-    while (Desde < Length(ABytes)) and (ABytes[Desde] <> 10) do
-      Inc(Desde);
-    if Desde < Length(ABytes) then
-      Inc(Desde); // su salto
+    while (Result < Length(ABytes)) and (ABytes[Result] <> 10) do
+      Inc(Result);
+    if Result < Length(ABytes) then
+      Inc(Result); // su salto
   end;
-  Hasta := Length(ABytes);
-  if ATerminado then
-  begin
-    // la ULTIMA #10___RC= es la del lanzador: un programa que escribe la
-    // marca la deja antes (PartirSalida ya dijo que la ultima linea es suya)
-    Marca := TEncoding.ASCII.GetBytes(#10 + JOB_RC);
-    for P := Length(ABytes) - Length(Marca) downto Desde do
-      if CompareMem(@ABytes[P], @Marca[0], Length(Marca)) then
-      begin
-        Hasta := P;
-        Break;
-      end;
-  end;
-  Result := Copy(ABytes, Desde, Hasta - Desde);
+end;
+
+{ ...y donde acaba (exclusivo): si ATerminado, donde empieza la linea del
+  codigo (McpRunJob.LineaRC, con el salto que la abre); si no, el final.
+  ADesde: no se busca antes. }
+function FinDelPrograma(const ABytes: TArray<Byte>; ATerminado: Boolean; ADesde: Integer): Integer;
+var
+  Marca: TArray<Byte>;
+begin
+  Result := Length(ABytes);
+  if not ATerminado then
+    Exit;
+  // la ULTIMA #10___RC= es la del lanzador: un programa que escribe la
+  // marca la deja antes (PartirSalida ya dijo que la ultima linea es suya)
+  Marca := TEncoding.ASCII.GetBytes(#10 + JOB_RC);
+  for var P := Length(ABytes) - Length(Marca) downto ADesde do
+    if CompareMem(@ABytes[P], @Marca[0], Length(Marca)) then
+      Exit(P);
+end;
+
+function LoDelPrograma(const ABytes: TArray<Byte>; ATerminado: Boolean): TArray<Byte>;
+begin
+  var Desde := InicioDelPrograma(ABytes);
+  Result := Copy(ABytes, Desde, FinDelPrograma(ABytes, ATerminado, Desde) - Desde);
 end;
 
 type
@@ -793,13 +804,16 @@ end;
   fichero: remote-run mientras espera y output despues. False si no se
   pudo traer (no esta, o paclient fallo); los var solo cambian si se
   trajo. La copia local se borra al leerla. ATamano: los bytes del fichero
-  traido, que no se lee entero si pasa de lo que llena una cola. AGuardaEn:
+  traido, que no se lee entero si pasa de lo que llena una cola; ABytes, los
+  que escribio el PROGRAMA, sin las dos lineas del lanzador (los que dice
+  RUN-023 y deja out=: contaba el fichero, y Hermes vio 12527 frente a 12508
+  de la misma salida, 10-nov). AGuardaEn:
   el out= del agente; lo que escribio el programa va ENTERO a el antes de
   borrar la copia, si termino o si AGuardaSiempre (output), y AVolcado dice
   como fue. }
 function TraeSalida(const APc, AProfile, ADeployRel, AJobId, ATmpDir: string;
   var ATexto, AEntorno, ASalida: string; var ACodigo: Integer;
-  var ATerminado: Boolean; var ATamano: Int64;
+  var ATerminado: Boolean; var ATamano, ABytes: Int64;
   const AGuardaEn: string; AGuardaSiempre: Boolean; var AVolcado: TVolcado): Boolean;
 var
   OutFile, Ops, Output, Enc, SinCodigo: string;
@@ -843,14 +857,21 @@ begin
     end
     else
       ATexto := TextoDeBytes(Cabeza, False, Enc);
-    // el out=: del fichero ENTERO, que se borra ahora (la cola es lo de la
-    // respuesta); termino lo dice la ultima linea, como abajo
-    if AGuardaEn <> '' then
+    // termino lo dice la ultima linea, como abajo
+    var Fin := PartirSalida(ATexto, SinCodigo, Codigo);
+    // los bytes del programa: lo leido menos la linea del entorno (la cabeza
+    // de un fichero grande es solo esa) y la del codigo (en la cola)
+    if ATamano > BYTES_DE_COLA then
+      ABytes := ATamano - Length(Cabeza) - (Length(Final) - FinDelPrograma(Final, Fin, 0))
+    else
     begin
-      var Fin := PartirSalida(ATexto, SinCodigo, Codigo);
-      if Fin or AGuardaSiempre then
-        AVolcado := GuardaLoDelPrograma(OutFile, ATamano, Fin, AGuardaEn);
+      var Desde := InicioDelPrograma(Cabeza);
+      ABytes := FinDelPrograma(Cabeza, Fin, Desde) - Desde;
     end;
+    // el out=: del fichero ENTERO, que se borra ahora (la cola es lo de la
+    // respuesta)
+    if (AGuardaEn <> '') and (Fin or AGuardaSiempre) then
+      AVolcado := GuardaLoDelPrograma(OutFile, ATamano, Fin, AGuardaEn);
   finally
     BorraFichero(OutFile, ltTemporal);
   end;
@@ -862,16 +883,17 @@ end;
 { La salida de un trabajo en la respuesta, por EL recorte de la casa
   (ColaDeSalida, V80 de la 1.23.1): sus ultimas lineas, todas las que
   escribio el programa, vacias tambien; si no va entera, outputTruncated y
-  RUN-023 con los bytes de su fichero (ATamano: lo que no se leyo tampoco
-  va). La ponen remote-run y output, que la devolvian entera. }
-procedure PonSalida(AObj: TJSONObject; const ASalida: string; ATamano: Int64);
+  RUN-023 con los bytes del programa (ABytes; ATamano, los del fichero: lo
+  que no se leyo tampoco va). La ponen remote-run y output, que la
+  devolvian entera. }
+procedure PonSalida(AObj: TJSONObject; const ASalida: string; ATamano, ABytes: Int64);
 begin
   var Cola := ColaDeSalida(ASalida, LineasDeSalida);
   AObj.AddPair('output', Cola.Texto);
   if Cola.Cortada or (ATamano > BYTES_DE_COLA) then
   begin
     AObj.AddPair('outputTruncated', TJSONBool.Create(True));
-    AObj.AddPair('outputTruncatedNote', MsgFmt(SN_REMOTERUN_COLA_FMT, [ATamano, Cola.Mostradas]));
+    AObj.AddPair('outputTruncatedNote', MsgFmt(SN_REMOTERUN_COLA_FMT, [ABytes, Cola.Mostradas]));
   end;
 end;
 
@@ -880,10 +902,10 @@ function RemoteRun(const AProfile, ADprojPath, AExeName: string;
   AGuardaSiSigue, ACola, ADelServidor: Boolean; const AGuardaEn: string): TJSONObject;
 
   // la salida: recortada para el agente, entera para quien la lee dentro
-  procedure Pon(AObj: TJSONObject; const ATexto: string; ATamano: Int64);
+  procedure Pon(AObj: TJSONObject; const ATexto: string; ATamano, ABytes: Int64);
   begin
     if ACola then
-      PonSalida(AObj, ATexto, ATamano)
+      PonSalida(AObj, ATexto, ATamano, ABytes)
     else
       AObj.AddPair('output', ATexto);
   end;
@@ -895,7 +917,7 @@ var
   Rc, Codigo, Espera: Integer;
   Sw: TStopwatch;
   Terminado: Boolean;
-  Tamano: Int64;
+  Tamano, Bytes: Int64;
   Volcado: TVolcado;
 begin
   Result := TJSONObject.Create;
@@ -1051,6 +1073,7 @@ begin
   Texto := '';
   Terminado := False;
   Tamano := 0;
+  Bytes := 0;
   Codigo := -1;
   Salida := '';
   EntornoNota := '';
@@ -1069,7 +1092,7 @@ begin
     if Espera > POLL_MS then
       Espera := POLL_MS;
     TraeSalida(Pc, AProfile, DeployRel, JobId, TmpDir, Texto, EntornoNota,
-      Salida, Codigo, Terminado, Tamano, AGuardaEn, False, Volcado);
+      Salida, Codigo, Terminado, Tamano, Bytes, AGuardaEn, False, Volcado);
   until Terminado or (Sw.ElapsedMilliseconds > ATimeoutMs);
 
   Result.AddPair('jobId', JobId);
@@ -1087,7 +1110,7 @@ begin
     if AGuardaEn <> '' then
       PonVolcado(Result, Volcado, AGuardaEn, True);
     if not Volcado.Hecho then
-      Pon(Result, Salida, Tamano);
+      Pon(Result, Salida, Tamano, Bytes);
     PonFalloDelLanzador(Result, Salida, Codigo);
   end
   else
@@ -1106,7 +1129,7 @@ begin
     if AGuardaEn <> '' then
       PonVolcado(Result, Volcado, AGuardaEn, False);
     if Texto <> '' then
-      Pon(Result, Texto, Tamano);
+      Pon(Result, Texto, Tamano, Bytes);
   end;
 
   // Limpieza remota: el lanzador de este trabajo (en Linux flag 3 lo deja;
@@ -1164,7 +1187,7 @@ var
   Pc, DeployRel, TmpDir, Texto, Entorno, Salida, Ops, Output: string;
   Codigo: Integer;
   Terminado: Boolean;
-  Tamano: Int64;
+  Tamano, Bytes: Int64;
   Volcado: TVolcado;
 begin
   Result := TJSONObject.Create;
@@ -1204,9 +1227,10 @@ begin
   Result.AddPair('profile', AProfile);
   Result.AddPair('project', DeployRel);
   Tamano := 0;
+  Bytes := 0;
   Volcado := Default(TVolcado);
   if not TraeSalida(Pc, AProfile, DeployRel, AJobId, TmpDir, Texto, Entorno,
-    Salida, Codigo, Terminado, Tamano, AGuardaEn, True, Volcado) then
+    Salida, Codigo, Terminado, Tamano, Bytes, AGuardaEn, True, Volcado) then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('error', MsgFmt(SR_REMOTERUN_NO_OUTPUT_FMT, [AJobId]));
@@ -1222,7 +1246,7 @@ begin
     if AGuardaEn <> '' then
       PonVolcado(Result, Volcado, AGuardaEn, True);
     if not Volcado.Hecho then
-      PonSalida(Result, Salida, Tamano);
+      PonSalida(Result, Salida, Tamano, Bytes);
     PonFalloDelLanzador(Result, Salida, Codigo);
     // leida = borrada, como el buzon y las capturas: en el target no se
     // acumula nada que alguien ya tiene. Salvo un out= que no se escribio:
@@ -1241,7 +1265,7 @@ begin
     if AGuardaEn <> '' then
       PonVolcado(Result, Volcado, AGuardaEn, False);
     if not Volcado.Hecho then
-      PonSalida(Result, Texto, Tamano);
+      PonSalida(Result, Texto, Tamano, Bytes);
     Result.AddPair('note', MsgFmt(SN_REMOTERUN_OUTPUT_ALIVE_FMT, [AProfile, AJobId]));
   end;
   except
