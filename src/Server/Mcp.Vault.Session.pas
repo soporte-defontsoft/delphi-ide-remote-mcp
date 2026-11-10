@@ -168,7 +168,10 @@ begin
     begin
       Arr := TJSONArray.Create;
       Res.AddPair('prompts', Arr);
-      if VaultConfigured then
+      // lo DECLARADO, como tools/list (6-oct): preguntar por la carpeta de un
+      // vault en una unidad de red que no contesta tarda 21 s, en CADA
+      // prompts/list (medido el 10-nov-2026, A4 de cierre-final-1-29-1)
+      if VaultPath <> '' then
       begin
         Prompt := TJSONObject.Create;
         Arr.AddElement(Prompt);
@@ -188,8 +191,12 @@ begin
       // lo trae) es NOT_FOUND; salia -32603 sin etiqueta (tercera revision)
       if Name = '' then
         raise EArgumentException.Create(MsgFmt(SR_SYS_MISSING_METHOD_PARAM_FMT, ['name']));
-      if not SameText(Name, 'vault') or not VaultConfigured then
+      if not SameText(Name, 'vault') or (VaultPath = '') then
         raise EArgumentException.Create(MsgFmt(SR_VAULT_PROMPT_NO_EXISTE_FMT, [Name]));
+      // el que se anuncia y no se alcanza lo dice, como sus tools (VAULT-043)
+      var NoDisponible := VaultNoDisponible;
+      if NoDisponible <> '' then
+        raise EArgumentException.Create(NoDisponible);
       Res.AddPair('description', SD_VAULT_PROMPT);
       Arr := TJSONArray.Create;
       Res.AddPair('messages', Arr);

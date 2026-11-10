@@ -29,6 +29,10 @@ junto a la copia del exe, y nunca se imprimen. La tabla t_db129 la crea y la bor
   L15 PG no toma del ENTORNO del servidor lo que el json no dice (PGSSLMODE, PGSERVICE, PGHOSTADDR,
       PGOPTIONS): CH3 de la 1.29, medido el 7-nov-2026
 
+  L20 summary de una columna ENTERA: la suma que pasa de 2^31-1 y el promedio de 1 y 2, iguales en los dos
+      motores (4000000000 y 1.5). SQL Server suma y promedia un int en int: negaba la consulta entera (DB-010)
+      y daba 1 (B5 de cierre-final-1-29-1, medido el 10-nov-2026). ROJO en MSSQL contra 2c790b84
+
 Uso:  python tests/test_db_lecturas_129.py [ruta-a-DelphiLspMcp.exe]
 """
 import io
@@ -111,20 +115,27 @@ MS_HIJA = ("CREATE TABLE dbo.%s (id int PRIMARY KEY, padre int NULL REFERENCES d
 PG_HIJA = ("CREATE TABLE %s (id int PRIMARY KEY, padre int REFERENCES %s(id), nota text); CREATE INDEX "
            "ix_%s_padre ON %s(padre); INSERT INTO %s (id, padre, nota) VALUES (1, 2, repeat('x', %d));"
            % (HIJA, TABLA, HIJA, HIJA, HIJA, LARGO))
+# la de las sumas (L20): una columna entera cuya suma no cabe en un int
+SUMAS = 't_db129s'
+FILAS_SUMAS = '(1, 1, 2000000000), (2, 1, 2000000000), (3, 2, 1), (4, 2, 2)'
+MS_SUMAS = ("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; CREATE TABLE dbo.%s (id int PRIMARY KEY, g int, "
+            "v int); INSERT INTO dbo.%s (id, g, v) VALUES %s;" % (SUMAS, SUMAS, SUMAS, SUMAS, FILAS_SUMAS))
+PG_SUMAS = ('DROP TABLE IF EXISTS %s; CREATE TABLE %s (id int PRIMARY KEY, g int, v int); INSERT INTO %s (id, g, v) '
+            'VALUES %s;' % (SUMAS, SUMAS, SUMAS, FILAS_SUMAS))
 MS_DDL = ("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; " % (HIJA, HIJA) +
           "IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; CREATE TABLE dbo.%s (id int PRIMARY KEY, nombre "
           "nvarchar(60) NULL, alta datetime2 NULL, importe decimal(10,2) NULL, activo bit NULL, foto varbinary(100) "
           "NULL); INSERT INTO dbo.%s (id, nombre, alta, importe, activo) VALUES %s; UPDATE dbo.%s SET foto = "
           "0x010203 WHERE id = 1;" % (TABLA, TABLA, TABLA, TABLA,
                                      filas_sql("'%d-%02d-01'", lambda b: '1' if b else '0', 'N'), TABLA)
-          + ' ' + MS_HIJA)
+          + ' ' + MS_HIJA + ' ' + MS_SUMAS)
 PG_DDL = ("DROP TABLE IF EXISTS %s; " % HIJA +
           "DROP TABLE IF EXISTS %s; CREATE TABLE %s (id int PRIMARY KEY, nombre varchar(60), alta timestamp, importe "
           "numeric(10,2), activo boolean, foto bytea); INSERT INTO %s (id, nombre, alta, importe, activo) VALUES %s; "
           "UPDATE %s SET foto = '\\x010203' WHERE id = 1;" % (TABLA, TABLA, TABLA,
                                                              filas_sql("'%d-%02d-01'", lambda b: 'true' if b else
                                                                        'false', ''), TABLA)
-          + ' ' + PG_HIJA)
+          + ' ' + PG_HIJA + ' ' + PG_SUMAS)
 
 srv = None
 respuestas = []
@@ -266,6 +277,11 @@ try:
         check('L8 %s summary sin grupo: una fila con los totales (total 1)' % motor,
               mc.como_json(r).get('groups') == [{'max_importe': 9.0, 'n': 3}] and mc.como_json(r).get('total') == 1,
               r[:300])
+        r = db({'command': 'summary', 'db': D, 'table': SUMAS, 'group': ['g'], 'order': 'g',
+                'values': [{'field': 'v', 'op': 'sum'}, {'field': 'v', 'op': 'avg'}, {'field': 'v', 'op': 'count'}]})
+        check('L20 %s summary de un int: la suma que no cabe en un int (4000000000) y el promedio de 1 y 2 (1.5)' % motor,
+              mc.como_json(r).get('groups') == [{'g': 1, 'sum_v': 4000000000, 'avg_v': 2000000000, 'count_v': 2, 'n': 2},
+                                                {'g': 2, 'sum_v': 3, 'avg_v': 1.5, 'count_v': 2, 'n': 2}], r[:400])
         negativas = [
             ({'command': 'rows', 'db': D, 'table': 'no_existe_129'}, 'SR_DB_TABLA_FMT'),
             ({'command': 'rows', 'db': D, 'table': TABLA, 'fields': ['no_existe']}, 'SR_DB_CAMPO_FMT'),
@@ -330,8 +346,8 @@ finally:
         srv.cierra()
     try:
         sql_mssql("IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s; IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE "
-                  "dbo.%s;" % (HIJA, HIJA, TABLA, TABLA))
-        sql_pg('DROP TABLE IF EXISTS %s; DROP TABLE IF EXISTS %s;' % (HIJA, TABLA))
+                  "dbo.%s; IF OBJECT_ID('dbo.%s') IS NOT NULL DROP TABLE dbo.%s;" % (HIJA, HIJA, TABLA, TABLA, SUMAS, SUMAS))
+        sql_pg('DROP TABLE IF EXISTS %s; DROP TABLE IF EXISTS %s; DROP TABLE IF EXISTS %s;' % (HIJA, TABLA, SUMAS))
     finally:
         mc.borra(BASE)
 mc.fin('delphi_db 1.29 (lecturas, MSSQL y PG)')

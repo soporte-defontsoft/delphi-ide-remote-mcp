@@ -78,6 +78,20 @@ try:
     check('D7 con los dos: las dos anunciadas, y tasks no dice que falte ninguna',
           'delphi_adb' in a and 'delphi_desktop' in a and cat['SF_HELP_SIN_DESTINO_ADB'] not in t
           and cat['SF_HELP_SIN_DESTINO_DESKTOP'] not in t, (sorted(a), t[-300:]))
+    # C3 de cierre-final-1-29-1: las coordenadas y la cuenta de lineas, NUMEROS por contrato, se publican como
+    # number ([NumeroComoTexto]): como string, un cliente que valida negaba 152 antes de llamar (Hermes, 9 veces);
+    # code sigue siendo texto (en Windows es el NOMBRE de una tecla)
+    tl = {x['name']: x['inputSchema']['properties'] for x in (srv.request('tools/list') or {})['result']['tools']}
+    tipos = {(t, p): tl[t][p].get('type') for t, ps in (('delphi_desktop', ('x', 'y', 'tox', 'toy', 'code')),
+                                                        ('delphi_adb', ('x', 'y', 'lines'))) for p in ps}
+    check('D8 x, y, tox, toy y lines se publican como number, code como texto (ROJO: todos string)',
+          all(v == 'number' for (t, p), v in tipos.items() if p != 'code') and
+          tipos[('delphi_desktop', 'code')] == 'string', tipos)
+    r = srv.call('delphi_adb', {'command': 'tap', 'device': 'no-declarado', 'x': 152, 'y': 10})
+    r2 = srv.call('delphi_adb', {'command': 'tap', 'device': 'no-declarado', 'x': '152', 'y': '10'})
+    check('D8 ...y el servidor toma el numero y su texto igual: los dos llegan a juzgar el dispositivo (ADB-005)',
+          mc.abre(r, 'SR_ADB_ALLOWLIST_FMT') and mc.abre(r2, 'SR_ADB_ALLOWLIST_FMT'),
+          (r[:200], r2[:200]))
 finally:
     srv.cierra()
 

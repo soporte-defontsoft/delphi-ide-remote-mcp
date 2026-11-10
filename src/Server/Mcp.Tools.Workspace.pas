@@ -486,7 +486,7 @@ begin
           var Motivo := SkipReason(RelToRoot(F, Params.Root), False);
           if Motivo <> '' then
           begin
-            Ocultos.Add(Motivo);
+            Ocultos.Add(Motivo, F); // con su ruta: LIST-003 nombra la carpeta (A10)
             Continue;
           end;
         end;
@@ -804,7 +804,7 @@ begin
           Reason := SkipReason(RelToRoot(F, Root), Params.IncludeTrash);
         if Reason <> '' then
         begin
-          Ocultos.Add(Reason);
+          Ocultos.Add(Reason, F); // con su ruta: LIST-003 nombra la carpeta (A10)
           Continue;
         end;
         var Entra := Pag.Entra;

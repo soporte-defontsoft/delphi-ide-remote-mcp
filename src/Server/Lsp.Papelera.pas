@@ -93,6 +93,20 @@ function TrashPathFor(const APath, ACajon: string): string;
 function GuardaContenidoActual(const APath: string;
   const ACajon: string = CAJON_SUSTITUIDOS): string;
 
+{ Las COPIAS que la llamada en curso HIZO (la diaria de BackupFile, la
+  sellada de GuardaContenidoActual), para que su respuesta las NOMBRE: UNA
+  nota para todas las tools que escriben, que pone el filtro de salida
+  (Lsp.Host). Unas 30 respuestas decian "Backup in __delphi-patch." sin el
+  fichero, solo delphi_edit y delphi_textedit daban su ruta, y Hermes fue a
+  la papelera unas 520 veces en tres semanas (R6 del revisor del paisaje del
+  10-nov-2026). Por hilo, como los origenes de Lsp.Puertas: OlvidaOrigenes las
+  vacia al empezar y al acabar la llamada. }
+procedure OlvidaCopiasDeLaLlamada(AEnLlamada: Boolean);
+{ ...y la nota: las copias que siguen en el disco y que ATexto no nombra ya
+  (el backup= de delphi_edit), enmascaradas como toda ruta que se ensena; ''
+  si no queda ninguna. }
+function NotaDeLasCopias(const ATexto: string): string;
+
 { Deja "<copia>.by" con el agente que la tiro; sin identidad, nada. }
 procedure WriteOwnerMarker(const ATrash: string);
 { El agente dueno de una copia, '' si no consta. }
@@ -118,6 +132,49 @@ uses
   Lsp.Identidad,    // CurrentAgent: el dueno de una copia
   Lsp.NetDrives,    // SinBarraFinal
   Lsp.Texts;
+
+threadvar
+  // por hilo, como los origenes de Lsp.Puertas: el servidor HTTP atiende
+  // varias llamadas a la vez, y fuera de una llamada no se apunta nada
+  GCopias: TArray<string>;
+  GCopiasEnLlamada: Boolean;
+
+procedure OlvidaCopiasDeLaLlamada(AEnLlamada: Boolean);
+begin
+  GCopias := nil;
+  GCopiasEnLlamada := AEnLlamada;
+end;
+
+procedure ApuntaCopia(const ACopia: string);
+begin
+  if not GCopiasEnLlamada or (ACopia = '') then
+    Exit;
+  for var C in GCopias do
+    if SameFileName(C, ACopia) then
+      Exit;
+  GCopias := GCopias + [ACopia];
+end;
+
+function NotaDeLasCopias(const ATexto: string): string;
+var
+  Nombradas: string;
+begin
+  Result := '';
+  Nombradas := '';
+  for var C in GCopias do
+  begin
+    var Vista := MaskDriveText('', C);
+    // la que ya nombra la respuesta (el backup= de delphi_edit y textedit) no
+    // se repite; la que una escritura que no acabo quito (Coloca) no se nombra
+    if ATexto.Contains(Vista) or ATexto.Contains(C) or not TFile.Exists(C) then
+      Continue;
+    if Nombradas <> '' then
+      Nombradas := Nombradas + ', ';
+    Nombradas := Nombradas + Vista;
+  end;
+  if Nombradas <> '' then
+    Result := MsgFmt(SN_COPIAS_DE_LA_LLAMADA_FMT, [Nombradas]);
+end;
 
 { La copia diaria de APath en la carpeta de un dia: EL nombre, el que escribe
   CopiaDiariaDe (hoy) y lee UltimaCopiaDiariaDe (el dia mas reciente). }
@@ -190,6 +247,8 @@ begin
     Motivo := EnlaceDuroIlegible(APath);
   if Motivo <> '' then
     raise Exception.Create(Motivo);
+  // la que ya existia la nombro la primera llamada del dia: no se repite
+  // (test_docs_tokens T6: la segunda dice "ya existia" sin la ruta)
   if TFile.Exists(Dest) then
     Exit(MsgText(SF_EDIT_COPIA_YA_EXISTIA));
   CrearCarpeta(DayDir);
@@ -208,6 +267,7 @@ begin
       else
         raise;
   end;
+  ApuntaCopia(Dest);
   PurgeOldBackups(Dir);
   Result := MaskDriveText('', Dest);
 end;
@@ -326,6 +386,7 @@ begin
   CrearCarpeta(TPath.GetDirectoryName(Result));
   TFile.Copy(APath, Result);
   WriteOwnerMarker(Result);
+  ApuntaCopia(Result); // la respuesta la nombra (R6)
 end;
 
 function TrashOriginalName(const AName: string): string;

@@ -135,6 +135,17 @@ type
 
   JsonComoTexto = JsonComoTextoAttribute;
 
+  { Marca un parametro de TEXTO que es un NUMERO por contrato (una coordenada,
+    una cuenta de lineas): el esquema lo publica como number y el
+    deserializador acepta el numero y el texto (medido el 10-nov-2026). Como
+    string, un cliente que valida contra el esquema negaba 152 antes de
+    llamar ("152 is not of type 'string'": Hermes, 9 veces; C3 de
+    cierre-final-1-29-1). UN lector: TMCPSchemaGenerator.PublicaComoNumero. }
+  NumeroComoTextoAttribute = class(TCustomAttribute)
+  end;
+
+  NumeroComoTexto = NumeroComoTextoAttribute;
+
   { Marca un parametro que lleva CONTENIDO. LA REGLA, escrita una vez: lo que
     se escribe DENTRO de un fichero (old/new/content/code de las tools que
     editan, el texto de una nota del vault, los valores del disenador y de

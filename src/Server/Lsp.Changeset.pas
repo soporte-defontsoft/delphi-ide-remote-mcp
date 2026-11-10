@@ -961,9 +961,11 @@ begin
           Obj.AddPair('path', Op.Path);
           // el salto con el que escribira un create: se aplico al apilarlo
           // (SaltoPedido) y el preview no lo decia (P14 de la 1.29.1). Se mide
-          // del contenido, con los nombres del parametro eol
+          // del contenido, con EL nombre de la casa (NombreDelSalto, el del
+          // eol= de delphi_read): en minusculas eran dos nombres para lo mismo
+          // (Hermes, 9-nov-2026), y el parametro eol los toma en cualquier caja
           if Op.Kind = opCreate then
-            Obj.AddPair('eol', LowerCase(NombreDelSalto(SaltoDominante(Op.Content))));
+            Obj.AddPair('eol', NombreDelSalto(SaltoDominante(Op.Content)));
           if Op.Kind in [opEdit, opDeleteLine] then
           begin
             // un fichero que un move ANTERIOR del lote trae de otro sitio se

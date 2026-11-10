@@ -213,6 +213,11 @@ try:
     check('L5 ...una mascara que solo casa con lo escondido: lo cuenta (LIST-003) y NO dice que no caso',
           jm.get('total') == 0 and jm.get('hiddenBuildArtifacts') == 1
           and not mc.es(jm.get('maskNote', ''), 'SN_LIST_MASK_NO_MATCH_FMT'), jm)
+    # A10 de cierre-final-1-29-1 (Hermes, 10-nov-2026): LIST-003 decia "pasa esa carpeta como root" sin decir
+    # cual; ahora la nombra, y esa es la que se lista
+    nota = jc.get('note', '')
+    check('L5 ...y LIST-003 nombra la carpeta que hay que pasar como root (ROJO: no decia cual)',
+          mc.es(nota, 'SN_HIDDEN_ARTIFACTS_FMT') and '__pycache__' in nota.split('(here:')[-1], nota)
     jp = mc.como_json(llama('delphi_list', {'root': PYC, 'pattern': '*'}))
     check('L5 ...nombrado como root, se lista',
           [e['name'] for e in mc.ficheros(jp)] == ['c.cpython-314.pyc'], jp)

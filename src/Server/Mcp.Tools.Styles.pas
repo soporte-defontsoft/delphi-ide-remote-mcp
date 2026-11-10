@@ -1159,6 +1159,10 @@ begin
     Ret.AddPair('stylesDir', MaskDriveText('', Dir));
     Ret.AddPair('projectDir', MaskDriveText('', ProjDir));
     Ret.AddPair('styleFiles', TJSONNumber.Create(Length(Files)));
+    // los de sus subcarpetas no entran: se dice cuantos (STYLE-070, A13)
+    var Debajo := EstilosEnSubcarpetas(Dir);
+    if Debajo > 0 then
+      Ret.AddPair('subfolderNote', MsgFmt(SN_STYLES_SUBCARPETAS_FMT, [Debajo]));
     Ret.AddPair('styleNames', TJSONNumber.Create(Names.Count));
     Ret.AddPair('lookupsUsed', TJSONNumber.Create(Used));
     Ret.AddPair('lookupsStandard', TJSONNumber.Create(Standard));
@@ -1470,6 +1474,10 @@ begin
     // lanzar antes (I14 de la depuracion de la 1.23, cerrado en la 1.29). El
     // orden de la respuesta es el mismo
     Ret.AddPair('stylesDir', MaskDriveText('', Dir));
+    // los de sus subcarpetas no se convierten: se dice cuantos (STYLE-070, A13)
+    var Debajo := EstilosEnSubcarpetas(Dir);
+    if Debajo > 0 then
+      Ret.AddPair('subfolderNote', MsgFmt(SN_STYLES_SUBCARPETAS_FMT, [Debajo]));
     Arr := TJSONArray.Create;
     Ret.AddPair('converted', Arr);
     CrearCarpeta(Tmp);

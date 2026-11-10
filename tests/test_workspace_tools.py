@@ -633,10 +633,16 @@ try:
     copia = os.path.join(tmptxt, mc.PAPELERA, m.group(1), 'README.md') if m else ''
     check('textedit: dice la ruta de su copia diaria (backup=...), y esa copia es el original',
           m is not None and os.path.isfile(copia) and b'gestoria admision' in open(copia, 'rb').read(), out[:200])
+    # SYS-045 (R6 del revisor del 10-nov-2026): el filtro de salida nombra las copias que dejo la llamada, y
+    # la que la respuesta ya nombra (este backup=) no se repite
+    check('textedit: la copia que ya nombra backup= no se repite en la nota SYS-045',
+          not mc.es(out, 'SN_COPIAS_DE_LA_LLAMADA_FMT'), out[-300:])
     out = call('delphi_textedit', {"path": md, "old": "linea EDITADA por MCP", "new": "linea EDITADA por MCP, otra vez"})
     check('textedit: la segunda del dia dice que la copia ya existia (se queda la primera), como delphi_edit',
           mc.abre(out, 'SK_TEXT_OK_LINEA_FMT') and ('backup=' + mc.catalogo()['SF_EDIT_COPIA_YA_EXISTIA']) in out,
           out[:200])
+    check('textedit: ...y la nota SYS-045 no la repite: la nombro la primera del dia (test_docs_tokens T6)',
+          not mc.es(out, 'SN_COPIAS_DE_LA_LLAMADA_FMT'), out[-300:])
     # --- varias ediciones en UNA llamada, y todo o nada ---
     # Sin esto, cambiar tres lineas eran tres llamadas y tres oportunidades de
     # dejar el fichero a medias (medido el 2026-09-20 usando el servidor como

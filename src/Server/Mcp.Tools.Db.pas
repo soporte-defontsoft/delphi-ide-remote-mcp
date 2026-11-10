@@ -171,10 +171,50 @@ begin
   Result := T in [ftBytes, ftVarBytes, ftBlob, ftGraphic, ftTypedBinary, ftOraBlob, ftStream];
 end;
 
+function EsEntero(T: TFieldType): Boolean;
+begin
+  Result := T in [ftSmallint, ftInteger, ftWord, ftLargeint, ftShortint, ftByte, ftLongWord, ftAutoInc];
+end;
+
 function EsNumero(T: TFieldType): Boolean;
 begin
-  Result := T in [ftSmallint, ftInteger, ftWord, ftLargeint, ftShortint, ftByte, ftLongWord,
-    ftAutoInc, ftFloat, ftSingle, ftExtended, ftCurrency, ftBCD, ftFMTBcd];
+  Result := EsEntero(T) or (T in [ftFloat, ftSingle, ftExtended, ftCurrency, ftBCD, ftFMTBcd]);
+end;
+
+{ COUNT, como lo pide la base para no quedarse corto: el de SQL Server da un
+  int (2^31-1 como mucho) y COUNT_BIG un bigint. El motor, por FireDAC
+  (RDBMSKind): no hay escape suyo que lo traduzca (B5 de cierre-final-1-29-1) }
+function CuentaDe(const S: TSesionDb): string;
+begin
+  if S.Conn.RDBMSKind = TFDRDBMSKinds.MSSQL then
+    Result := 'COUNT_BIG'
+  else
+    Result := 'COUNT';
+end;
+
+{ El agregado AOp (sum, avg, min, max, count) de la columna ACol, ya citada, de
+  tipo ATipo, sin que la base lo desborde ni lo trunque. SQL Server suma y
+  promedia una columna entera en su tipo: una suma pasada de 2^31-1 negaba la
+  consulta entera (DB-010) y el promedio de 1 y 2 daba 1; PG daba 4000000000 y
+  1.5 (medido el 10-nov-2026 en mcp_pruebas, B5 de cierre-final-1-29-1). Una
+  entera se suma en BIGINT y se promedia en FLOAT por el escape CONVERT de
+  FireDAC, que lo traduce a cada motor (CONVERT(tipo, x) en MSSQL, CAST(x AS
+  tipo) en PG) con el nombre del tipo TAL CUAL: DOUBLE no es un tipo en
+  ninguno de los dos, FLOAT (8 bytes) si, en los dos (medido). Y se cuenta con
+  CuentaDe. }
+function AgregadoDe(const S: TSesionDb; const AOp, ACol: string; ATipo: TFieldType): string;
+var
+  Col: string;
+begin
+  Col := ACol;
+  if EsEntero(ATipo) and SameText(AOp, 'sum') then
+    Col := '{fn CONVERT(' + ACol + ', BIGINT)}'
+  else if EsEntero(ATipo) and SameText(AOp, 'avg') then
+    Col := '{fn CONVERT(' + ACol + ', FLOAT)}';
+  if SameText(AOp, 'count') then
+    Result := CuentaDe(S) + '(' + Col + ')'
+  else
+    Result := UpperCase(AOp) + '(' + Col + ')';
 end;
 
 function EsFecha(T: TFieldType): Boolean;
@@ -909,7 +949,7 @@ begin
       else
         OrderBy := OrderBy + Desempate;
     Desde := ' FROM ' + CitaNombre(S.Conn, Tabla) + Where;
-    Q := NuevaConsulta(S, 'SELECT COUNT(*)' + Desde, Pars);
+    Q := NuevaConsulta(S, 'SELECT ' + CuentaDe(S) + '(*)' + Desde, Pars);
     try
       Q.Open;
       Total := Q.Fields[0].AsLargeInt;
@@ -932,7 +972,7 @@ begin
         // hasMore, nextOffset y la nota del tope): escribia offset, limit y
         // returned a su manera, sin decir si habia mas, y bajaba al tope en
         // silencio (F1-8 de la 1.29). Mas de High(Integer) filas no las cuenta
-        // ni el COUNT(*) de SQL Server
+        // el paginador (la base si: CuentaDe)
         Pag.Total := Min(Total, High(Integer));
         Pag.Mostrados := Filas.Count;
         Pag.Report(R);
@@ -1028,14 +1068,14 @@ begin
             Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['values', I + 1, MsgText(SF_DB_AGREGADO_FORMA)]));
           if MatchText(Op, ['sum', 'avg']) and not EsNumero(C.TipoDeCampo) then
             Exit(MsgFmt(SR_DB_ENTRADA_FMT, ['values', I + 1, MsgFmt(SF_DB_AGREGADO_NUMERO_FMT, [C.Nombre])]));
-          Sel := Sel + IfThen(Sel <> '', ', ') + UpperCase(Op) + '(' + CitaNombre(S.Conn, C.Nombre) + ')';
+          Sel := Sel + IfThen(Sel <> '', ', ') + AgregadoDe(S, Op, CitaNombre(S.Conn, C.Nombre), C.TipoDeCampo);
           Etiquetas := Etiquetas + [Op + '_' + C.Nombre];
         end;
       finally
         Valores.Free;
       end;
     end;
-    Sel := Sel + IfThen(Sel <> '', ', ') + 'COUNT(*)';
+    Sel := Sel + IfThen(Sel <> '', ', ') + CuentaDe(S) + '(*)';
     Etiquetas := Etiquetas + ['n'];
     // cada etiqueta UNA vez: son las claves de cada grupo en la respuesta y lo
     // que nombra order. Un campo agrupado llamado n, o uno sum_x junto a la suma
@@ -1072,7 +1112,7 @@ begin
     TotalDeGrupos := 1;
     if GroupBy <> '' then
     begin
-      Q := NuevaConsulta(S, 'SELECT COUNT(*) FROM (SELECT 1 AS k FROM ' + CitaNombre(S.Conn, Tabla) + Where +
+      Q := NuevaConsulta(S, 'SELECT ' + CuentaDe(S) + '(*) FROM (SELECT 1 AS k FROM ' + CitaNombre(S.Conn, Tabla) + Where +
         ' GROUP BY ' + GroupBy + ') g', Pars);
       try
         Q.Open;

@@ -253,6 +253,11 @@ function IsBinaryStyle(const APath: string): Boolean;
 
 { The text .style files of a folder (binary ones and *.bin.style excluded). }
 function TextStylesIn(const ADir: string): TArray<string>;
+{ ...y cuantos hay en sus SUBCARPETAS, que lint y build no miran: se dice, que
+  no lo decia nadie (Hermes, 10-nov-2026: 6 .style en origen\ y styleFiles 1;
+  A13 de cierre-final-1-29-1). Por EL recorredor de la casa: sin la papelera
+  y sin cruzar enlaces. }
+function EstilosEnSubcarpetas(const ADir: string): Integer;
 
 { EL nombre del conversor de estilos: el que se lanza (StyleConverterExe) y el
   que la caja de los contenedores copia (Lsp.FormRender.CajaDePaquetes), que lo
@@ -1261,6 +1266,18 @@ begin
   finally
     L.Free;
   end;
+end;
+
+function EstilosEnSubcarpetas(const ADir: string): Integer;
+begin
+  Result := 0;
+  if not TDirectory.Exists(ADir) then
+    Exit;
+  var Aqui := TPath.GetFullPath(ExcludeTrailingPathDelimiter(ADir));
+  for var F in WalkFiles(ADir, '*.style') do
+    if not SameFileName(TPath.GetFullPath(ExtractFileDir(F)), Aqui) and
+       not SinMayusculas(F).EndsWith(COLA_DE_ESTILO_BINARIO) and not IsBinaryStyle(F) then
+      Inc(Result);
 end;
 
 const

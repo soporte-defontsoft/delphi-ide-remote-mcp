@@ -395,8 +395,16 @@ end
 STY2 = os.path.join(BASE, 'Styles2')
 os.makedirs(STY2)
 open(os.path.join(STY2, 'Malo.style'), 'w', encoding='utf-8', newline='\n').write(MALO)
+# A13 de cierre-final-1-29-1 (Hermes, 10-nov-2026: 6 .style en origen\ y styleFiles 1, sin decir nada): los de
+# las subcarpetas no entran, y se dice cuantos (STYLE-070)
+os.makedirs(os.path.join(STY2, 'origen'))
+for _n in ('Uno.style', 'Dos.style'):
+    open(os.path.join(STY2, 'origen', _n), 'w', encoding='utf-8', newline='\n').write(MALO)
 out = call('delphi_styles', {"path": STY2, "command": "lint", "project": PRJ})
 d = json.loads(out)
+check('lint: los .style de las subcarpetas no entran y se dice cuantos (STYLE-070; ROJO: callaba)',
+      d.get('styleFiles') == 1 and mc.abre(d.get('subfolderNote', ''), 'SN_STYLES_SUBCARPETAS_FMT')
+      and '2 more' in d.get('subfolderNote', ''), {k: d.get(k) for k in ('styleFiles', 'subfolderNote')})
 _ign = [i for x in d.get('ignoredByFmx', []) for i in x['ignored']]
 check('lint: lo que FMX ignora, por fichero y con su mensaje (propiedad, valor, clase)',
       len(_ign) == 3 and any('TLayout.Fill.Color' in i for i in _ign) and

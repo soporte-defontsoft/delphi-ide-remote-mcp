@@ -127,7 +127,12 @@ type
     de baterias, 26-sep-2026). Se empieza con Default(THiddenCount). }
   THiddenCount = record
     Artifacts, Temp, Git, Trash, Folders, Vault: Integer;
-    procedure Add(const AReason: string);
+    { las carpetas de compilacion que escondio (tres como mucho), para que
+      LIST-003 las NOMBRE: decia "pasa esa carpeta como root" sin decir cual,
+      y Hermes probo dos que no eran antes de recompilar para verla (A10 de
+      cierre-final-1-29-1, 10-nov-2026). ARuta: lo que se escondio }
+    CarpetasDeArtefactos: TArray<string>;
+    procedure Add(const AReason: string; const ARuta: string = '');
     function Total: Integer;
     { hidden, un campo por cada motivo que no sea cero y la nota que dice
       que es cada cosa y como verla. Si no se escondio nada, nada. }
@@ -381,10 +386,20 @@ end;
 
 { THiddenCount }
 
-procedure THiddenCount.Add(const AReason: string);
+procedure THiddenCount.Add(const AReason, ARuta: string);
 begin
   if AReason = SKIP_ARTIFACTS then
-    Inc(Artifacts)
+  begin
+    Inc(Artifacts);
+    if (ARuta <> '') and (Length(CarpetasDeArtefactos) < 3) then
+    begin
+      var Dir := ExtractFileDir(ARuta);
+      for var C in CarpetasDeArtefactos do
+        if SameFileName(C, Dir) then
+          Exit;
+      CarpetasDeArtefactos := CarpetasDeArtefactos + [Dir];
+    end;
+  end
   else if AReason = SKIP_TEMP then
     Inc(Temp)
   else if AReason = SKIP_GIT then
@@ -423,6 +438,10 @@ begin
     Exit;
   AObj.AddPair('hidden', TJSONNumber.Create(Total));
   Motivo(Artifacts, 'hiddenBuildArtifacts', MsgText(SN_HIDDEN_ARTIFACTS_FMT));
+  // ...y cuales: la carpeta que hay que pasar como root, dicha (A10)
+  if (Artifacts > 0) and (Length(CarpetasDeArtefactos) > 0) then
+    Partes[High(Partes)] := Partes[High(Partes)] +
+      MsgFmt(SF_HIDDEN_ARTIFACTS_EN_FMT, [string.Join(', ', CarpetasDeArtefactos)]);
   Motivo(Temp, 'hiddenServerTemp', MsgText(SN_HIDDEN_TEMP_FMT));
   Motivo(Git, 'hiddenGitInternals', MsgText(SN_HIDDEN_GIT_FMT));
   Motivo(Trash, 'hiddenTrash', MsgText(SN_HIDDEN_TRASH_FMT));

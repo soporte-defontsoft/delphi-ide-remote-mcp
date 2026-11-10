@@ -597,8 +597,10 @@ var
   Expr: TExprDelAgente;
   F: string;
 begin
-  if not VaultConfigured then
-    Exit(MsgText(SR_VAULT_UNSET));
+  // EL juez: sin declarar (VAULT-035) o declarado e inalcanzable (VAULT-043)
+  Result := VaultNoDisponible;
+  if Result <> '' then
+    Exit;
   Pat := Params.Pattern.Trim;
   if Pat = '' then
     Exit(MsgText(SR_VAULT_FALTA_PATTERN));
@@ -730,8 +732,9 @@ var
   Full, Text, Rel: string;
   Total, LastLine, First: Integer;
 begin
-  if not VaultConfigured then
-    Exit(MsgText(SR_VAULT_UNSET));
+  Result := VaultNoDisponible; // EL juez (VAULT-035 / VAULT-043)
+  if Result <> '' then
+    Exit;
 
   // Bootstrap: no path = the vault's own rules + its index, in one call. The
   // names of these two files are a vault convention, not something a remote
@@ -799,8 +802,9 @@ end;
 function VaultEscrituraDenegada(const ARel: string; out AFull: string): string;
 begin
   AFull := '';
-  if not VaultConfigured then
-    Exit(MsgText(SR_VAULT_UNSET));
+  Result := VaultNoDisponible; // EL juez (VAULT-035 / VAULT-043)
+  if Result <> '' then
+    Exit;
   if not VaultWritable then
     Exit(MsgText(SR_VAULT_READONLY));
   Result := VaultResolve(ARel, AFull);

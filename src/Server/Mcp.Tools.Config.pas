@@ -405,6 +405,11 @@ begin
     end;
   end;
   Info := ReadDproj(ADproj);
+  // si declara alguna plataforma remota: las notas de SDK y destinos son de esas
+  var HayRemotas := False;
+  for P in Info.Platforms do
+    if not IsLocalPlatform(P.Name) then
+      HayRemotas := True;
   Return := TJSONObject.Create;
   try
     Return.AddPair('project', ADproj);
@@ -466,7 +471,10 @@ begin
         if not IsLocalPlatform(P.Name) then
           PonDestino(Obj, P.Name);
       end;
-      Return.AddPair('remoteTargetsNote', MsgText(SN_CONFIG_REMOTE_NOTE));
+      // la nota de los destinos remotos, solo si hay alguno (un VCL de Windows
+      // la llevaba sin ninguno: Hermes, 10-nov-2026)
+      if HayRemotas then
+        Return.AddPair('remoteTargetsNote', MsgText(SN_CONFIG_REMOTE_NOTE));
     end
     else if Sec = 'summary' then
     begin
@@ -493,7 +501,8 @@ begin
           Obj.AddPair('platform', P.Name);
           PonDestino(Obj, P.Name);
         end;
-      Return.AddPair('remoteTargetsNote', MsgText(SN_CONFIG_REMOTE_NOTE));
+      if Remotos.Count > 0 then
+        Return.AddPair('remoteTargetsNote', MsgText(SN_CONFIG_REMOTE_NOTE));
     end;
     if (Sec = 'all') or (Sec = 'searchpaths') then
       AddSearchPathsView(LeeTexto(ADproj, [ltJaula]), Return);
@@ -538,8 +547,12 @@ begin
       end;
       Return.AddPair('sections', MsgText(SN_CONFIG_SECTIONS));
     end;
+    // como se compila; lo del SDK y el perfil, solo si el proyecto declara una
+    // plataforma remota (CFG-073 hablaba de Linux, Android y macOS a un VCL de
+    // Windows: Hermes, 10-nov-2026)
     if (Sec = 'summary') or (Sec = 'all') or (Sec = 'platforms') then
-      Return.AddPair('note', MsgText(SN_CFG_BUILD_DELPHI_BUILD_PROJECT));
+      Return.AddPair('note', MsgText(SN_CFG_BUILD_DELPHI_BUILD_PROJECT) +
+        IfThen(HayRemotas, MsgText(SF_CFG_BUILD_REMOTAS)));
     Result := Return.ToJSON;
   finally
     Return.Free;

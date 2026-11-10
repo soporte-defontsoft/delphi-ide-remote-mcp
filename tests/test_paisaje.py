@@ -1404,7 +1404,9 @@ REGLAS = [
     ('leer sin la puerta',
      # (un TMemIniFile vacio que se llena con SetStrings no lee nada)
      r"TFile\.(?:ReadAllText|ReadAllLines|OpenText)\b|\.LoadFromFile\s*\(|TMemIniFile\.Create\s*\((?!\s*'')|"
-    r"TIniFile\.Create\s*\(|TStreamReader\.Create\s*\(|"
+    # (y TIniQueApunta, el TIniFile que apunta lo que lee el arranque, B10 de la 1.29.1: un
+    # TIniFile con otro nombre, que esta regla dejo de ver el dia que nacio)
+    r"TIniFile\.Create\s*\(|TIniQueApunta\.Create\s*\(|TStreamReader\.Create\s*\(|"
     # y los BYTES (P2 de la 1.18.0): un flujo que no se abre para escribir es para leer
     r"TFile\.(?:ReadAllBytes|OpenRead|Open)\b|\bTFileStream\.Create\s*\((?![^;]*\bfm(?:Create|OpenWrite|OpenReadWrite)\b)|"
     r"\bFileOpen\s*\(|\bCreateFile\w*\s*\([^;]*GENERIC_READ|"
@@ -1500,7 +1502,7 @@ REGLAS = [
      r"\bCreateFile\w*\s*\([^;]*(?:GENERIC_WRITE|GENERIC_ALL|FILE_WRITE_DATA|FILE_APPEND_DATA|"
      r"FILE_WRITE_ATTRIBUTES|CREATE_ALWAYS|CREATE_NEW|TRUNCATE_EXISTING|OPEN_ALWAYS)|"
      r"\bzm(?:Write|ReadWrite)\b|\.ExtractAll\s*\(|\bFileCreate\s*\(|\bRenameFile\s*\(|"
-    r"TIniFile\.Create\s*\(|TMemIniFile\.Create\s*\((?!\s*'')|\.UpdateFile\b|\bCopiaNuestra\s*\(|"
+    r"TIniFile\.Create\s*\(|TIniQueApunta\.Create\s*\(|TMemIniFile\.Create\s*\((?!\s*'')|\.UpdateFile\b|\bCopiaNuestra\s*\(|"
     r"TFile\.Open\s*\([^;]*\b(?:faWrite|faReadWrite|fmCreateNew|fmOpenOrCreate|fmTruncate|fmAppend)\b",
      [# LA puerta (EscribeBytes) y los escritores de la jaula que ya preguntan la suya:
       # el atomico, el de productos, la copia diaria y la sellada de la papelera

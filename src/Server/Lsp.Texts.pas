@@ -1488,6 +1488,10 @@ const
     '[LIST-003] %d are in build folders (Win32, Win64, Debug, Release, ' +
     'dcu, __history, __recovery, __pycache__): they exist on disk, pass that folder as root to ' +
     'see them or download the output with delphi_package + delphi_fetch';
+  { %s = hasta tres de esas carpetas: decia "pasa esa carpeta" sin decir cual
+    (A10 de cierre-final-1-29-1; Hermes, 10-nov-2026) }
+  SF_HIDDEN_ARTIFACTS_EN_FMT =
+    ' (here: %s)';
   SN_HIDDEN_TEMP_FMT =
     '[LIST-004] %d are server temporaries (__delphi-temp): they never ' +
     'show, not even with includetrash, because nothing is restored from ' +
@@ -1998,6 +2002,14 @@ const
     'These tools appearing here only means that SOME workspace of this ' +
     'server has a vault, not that it is yours. If you need it for your ' +
     'work, ask for it with delphi_report.';
+  { ...y uno que SI lo declara y cuya carpeta no se alcanza (no existe, o su
+    unidad de red no contesta): decia VAULT-035, "no declara vault" (A4 de
+    cierre-final-1-29-1, 10-nov-2026). Lsp.Settings.VaultNoDisponible }
+  SR_VAULT_INALCANZABLE =
+    '[VAULT-043 DENIED] Your workspace declares a knowledge vault, but its ' +
+    'folder cannot be reached now (it does not exist, or its drive does not ' +
+    'answer). Only the operator can bring it back: tell them with ' +
+    'delphi_report. Nothing was read.';
 
   SR_VAULT_PROMPT_NO_EXISTE_FMT =
     '[VAULT-041 NOT_FOUND] Prompt "%s" does not exist. Prompts come from the ' +
@@ -4532,6 +4544,11 @@ const
     '[STYLE-062] FMX''s own writer (the IDE''s) never stores %0:s by that ' +
     'name: with %0:s = %1:s it stores %2:s. Written that way, as the IDE ' +
     'would, and no %0:s line is kept.';
+  { %d = los .style de texto de las subcarpetas de la de estilos: lint y build
+    no bajan, y no lo decian (A13 de cierre-final-1-29-1; Hermes, 10-nov-2026) }
+  SN_STYLES_SUBCARPETAS_FMT =
+    '[STYLE-070] %d more text .style file(s) are in subfolders: lint and build ' +
+    'look at this folder only, not below it (pass a subfolder as path to look there).';
   { sin el conversor (o sin su respuesta) no hay a quien preguntar: lo de
     antes de V141, y dicho }
   SN_STYLES_SIN_ESCRITOR =
@@ -6172,6 +6189,16 @@ const
     'list stops at %d. Write fewer files, or print what matters to the ' +
     'output.';
 
+  { Un proceso del test choco con el tope de memoria de su job (lo avisa
+    Windows: Lsp.BuildRunner.TopeDeMemoriaAlcanzado); %d = el tope, en MB (B6
+    de cierre-final-1-29-1) }
+  SN_TEST_TOPE_MEMORIA_FMT =
+    '[TEST-039] A process of this test asked for memory past the cap of its ' +
+    'container, %d MB for all its processes together (a quarter of this ' +
+    'machine''s memory): Windows refused it, and that is the out-of-memory ' +
+    'error the test saw. Use less memory in the test, or free what it no ' +
+    'longer needs.';
+
   // Un contenedor que Windows no quiso borrar: lo barre el siguiente
   // arranque (PurgaContenedoresHuerfanos), y queda apuntado (revision de la
   // 1.11.0: se perdia sin rastro)
@@ -7565,7 +7592,7 @@ const
     'properties whose name contains it.';
 
   SN_DESIGNER_TREE_NOTE =
-    '[DSGN-019] Component tree of the TEXT designer. get shows one ' +
+    '[DSGN-019] Component tree of the designer. get shows one ' +
     'component; lint checks classes, properties and enum values against ' +
     'the framework tables.';
 
@@ -9674,6 +9701,13 @@ const
   SN_SYS_OPERACION_EN_CURSO_FMT =
     #10#10'[SYS-044] %s is in use by a %s still running, which writes there ' +
     '(since %s, %d s): what this answer shows of it may be half done.';
+  { %s = las copias de la papelera que dejo o encontro la llamada, separadas por
+    comas (Lsp.Papelera.NotaDeLasCopias, la pone el filtro de salida). Unas 30
+    respuestas decian "Backup in __delphi-patch." sin el fichero (R6 del
+    revisor del paisaje del 10-nov-2026) }
+  SN_COPIAS_DE_LA_LLAMADA_FMT =
+    #10#10'[SYS-045] In the trash, the copies of what this call changed or ' +
+    'replaced (delphi_move brings one back): %s';
 
   SN_COMPONENTS_NONE_FMT =
     '[COMP-005] Neither a registered package nor a folder of the Library ' +
@@ -10177,8 +10211,12 @@ const
 
   // Mensajes que estaban en linea en Mcp.Tools.Config.pas (paso 3c, 27-sep-2026)
   SN_CFG_BUILD_DELPHI_BUILD_PROJECT =
-    '[CFG-073] To build: delphi_build {project, platform, config}. ' +
-    'needsSDKForBuild=true: it links against an SDK, and builds locally - ' +
+    '[CFG-073] To build: delphi_build {project, platform, config}.';
+  { ...y lo del SDK y el perfil, solo cuando el proyecto declara una plataforma
+    remota (Mcp.Tools.Config: a un VCL de Windows se le hablaba de Linux,
+    Android y macOS; Hermes, 10-nov-2026) }
+  SF_CFG_BUILD_REMOTAS =
+    ' needsSDKForBuild=true: it links against an SDK, and builds locally - ' +
     'no profile involved (Linux64: pull it once with delphi_paserver ' +
     'get-sdk; Android, macOS and iOS: the IDE''s SDK Manager). ' +
     'needsProfileForDeploy=true: a PAServer profile is needed only for ' +
@@ -11038,6 +11076,19 @@ const
   SL_GUARD_CLAVE_RETIRADA_FMT =
     SL_MARCA_AVISO +
     ': [%s] %s= is no longer read (gone in %s): it does nothing - remove it.';
+
+  { Lo que el settings.ini trae y el servidor no lee, al arranque: el lector
+    apunta lo que pregunta (Lsp.Settings.TIniQueApunta, B10 de
+    cierre-final-1-29-1). %s la seccion, %d sus claves / %s la seccion, %s la
+    clave }
+  SL_GUARD_SECCION_NO_SE_LEE_FMT =
+    SL_MARCA_AVISO +
+    ': section [%s] (%d keys) is not read by this server: it does nothing - a ' +
+    'misspelled name, or one this version does not have (docs/CONFIGURATION.md).';
+  SL_GUARD_CLAVE_NO_SE_LEE_FMT =
+    SL_MARCA_AVISO +
+    ': [%s] %s= is not read by this server: it does nothing - a misspelled ' +
+    'name, or one this version does not have (docs/CONFIGURATION.md).';
 
   { un ajuste de si/no que no es de la gramatica (Lsp.Settings.LeeSiNo):
     %s la clave, %s lo escrito, %s el valor cerrado con que se lee (V110) }

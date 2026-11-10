@@ -34,6 +34,11 @@ of the new description is measured here by name:
       __delphi-temp (a small hyphen, U+FE63, for its hyphen) is copied with the
       rest: the copy compared the name with the user's locale, which takes the
       two for one (EsCarpetaDesechable, item 9 of the shape of 1.26)
+  K23 its Job Object carries the caps of foreign code (B6 of 1.29.1): the
+      memory of ALL its processes together (a quarter of the machine's RAM,
+      never more than one process's cap) and the CPU (every logical
+      processor but one, hard cap); what it asks for past the memory cap
+      Windows refuses, and the answer says why (TEST-039)
   K14 it does not see the server's configuration: not ONE DELPHI_MCP_* in
       its environment (the server's own unit tests passed only because they
       inherited its roots - measured the day this battery was born)
@@ -57,7 +62,7 @@ while the battery looks.
 
 Usage:  python tests/test_delphi_test_contenedor.py [path-to-DelphiLspMcp.exe]
 """
-import atexit, ctypes, hashlib, json, os, re, socket, subprocess, threading, time, uuid, winreg
+import atexit, ctypes, hashlib, json, mmap, os, re, socket, subprocess, threading, time, uuid, winreg
 import mcp_cliente as mc
 from mcp_cliente import check
 
@@ -705,6 +710,92 @@ vivo19 = pid19.isdigit() and int(pid19) > 0 and mc.pid_vivo(int(pid19))
 check('K19 un hijo persistente del test acaba muerto y su copia borrada (job + EsperaJobVacio)',
       j19.get('result') == 'pass' and not vivo19 and not copias(),
       'pid=%s vivo=%s copias=%s log=%s' % (pid19, vivo19, copias(), log_de_la_copia(srv)))
+
+# K23 (B6 de cierre-final-1-29-1): el job del contenedor lleva los topes del codigo ajeno. La memoria de TODOS sus
+# procesos juntos, una cuarta parte de la de la maquina (y nunca mas que la de un proceso), y la CPU de todos los
+# procesadores logicos menos uno, con tope duro. Los valores los dice Windows a los dos lados: el programa pregunta a
+# SU job (QueryInformationJobObject con 0), la bateria a la maquina (GlobalMemoryStatusEx, GetActiveProcessorCount).
+# Lo que el test pide de mas se lo niega Windows, que lo avisa por el puerto del job, y el servidor lo dice (TEST-039).
+# Mutante: el exe de antes (sin topes): el job sin el bit de la memoria total, la CPU sin tope, y sin la nota.
+PROG_TOPE = r'''program TopeTest;
+{$APPTYPE CONSOLE}
+uses Winapi.Windows, System.SysUtils;
+const BLOQUE = 64 * 1024 * 1024;
+var Ext: TJobObjectExtendedLimitInformation; Cpu: TJobObjectCPURateControlInformation; Len: DWORD;
+    Total: UInt64; P: Pointer; Bloques: TArray<Pointer>; I: Integer;
+begin
+  FillChar(Ext, SizeOf(Ext), 0);
+  if QueryInformationJobObject(0, JobObjectExtendedLimitInformation, @Ext, SizeOf(Ext), @Len) then
+    Writeln('SONDA JOB ', Ext.BasicLimitInformation.LimitFlags, ' ', UInt64(Ext.JobMemoryLimit))
+  else
+    Writeln('SONDA JOB ERR ', GetLastError);
+  FillChar(Cpu, SizeOf(Cpu), 0);
+  if QueryInformationJobObject(0, JobObjectCpuRateControlInformation, @Cpu, SizeOf(Cpu), @Len) then
+    Writeln('SONDA CPU ', Cpu.ControlFlags, ' ', Cpu.CpuRate)
+  else
+    Writeln('SONDA CPU ERR ', GetLastError);
+  Total := 0;
+  repeat
+    P := VirtualAlloc(nil, BLOQUE, MEM_COMMIT or MEM_RESERVE, PAGE_READWRITE);
+    if P <> nil then
+    begin
+      Bloques := Bloques + [P];
+      Inc(Total, BLOQUE);
+    end;
+  until (P = nil) or (Total >= UInt64(16) * 1024 * 1024 * 1024);
+  Writeln('SONDA RESERVA ', Total div (1024 * 1024));
+  for I := 0 to High(Bloques) do
+    VirtualFree(Bloques[I], 0, MEM_RELEASE);
+  Writeln('PASS tope');
+end.'''
+
+
+class _Memoria(ctypes.Structure):
+    _fields_ = [('dwLength', ctypes.c_ulong), ('dwMemoryLoad', ctypes.c_ulong)] + \
+               [(_n, ctypes.c_ulonglong) for _n in ('ullTotalPhys', 'ullAvailPhys', 'ullTotalPageFile',
+                                                     'ullAvailPageFile', 'ullTotalVirtual', 'ullAvailVirtual',
+                                                     'ullAvailExtendedVirtual')]
+
+
+_mem = _Memoria()
+_mem.dwLength = ctypes.sizeof(_Memoria)
+ctypes.windll.kernel32.GlobalMemoryStatusEx(ctypes.byref(_mem))
+# el tope de un proceso, de SU fuente (una constante hexadecimal: entero_del_fuente lee decimales)
+with open(os.path.join(mc.REPO, 'src', 'Server', 'Lsp.BuildRunner.pas'), encoding='utf-8-sig') as _fh:
+    _tope_proceso = int(re.search(r'^\s*TOPE_MEMORIA_POR_PROCESO\s*=\s*\$([0-9A-Fa-f]+)\s*;', _fh.read(), re.M).group(1), 16)
+TOPE_JOB = min(_tope_proceso, _mem.ullTotalPhys // 4)
+TOPE_JOB_MB = TOPE_JOB // (1024 * 1024)
+# ...y Windows lo guarda redondeado a SU pagina, hacia abajo (medido el 10-nov-2026: 2147193856 -> 2147192832)
+TOPE_JOB_EN_PAGINAS = TOPE_JOB // mmap.PAGESIZE * mmap.PAGESIZE
+_cpus = ctypes.windll.kernel32.GetActiveProcessorCount(0)
+CPU_ESPERADA = '%d %d' % ((5, 10000 * (_cpus - 1) // _cpus) if _cpus > 1 else (0, 0))
+TOPE_DIR = os.path.join(JAIL, 'TopeTest')
+srv.call('delphi_create', {'kind': 'project-console', 'name': 'TopeTest', 'dir': TOPE_DIR})
+open(os.path.join(TOPE_DIR, 'TopeTest.dpr'), 'w', encoding='utf-8-sig', newline='\r\n').write(PROG_TOPE)
+out = srv.call('delphi_test', {'command': 'run', 'project': os.path.join(TOPE_DIR, 'TopeTest.dproj'),
+                               'platform': 'Win64'}, 300)
+j23 = J(out)
+sonda23 = {}
+for _l in (j23.get('outputTail') or '').splitlines():
+    _l = _l.strip().lstrip('.')
+    if _l.startswith('SONDA '):
+        _p = _l.split()
+        sonda23[_p[1]] = ' '.join(_p[2:])
+_job = sonda23.get('JOB', '').split()
+check('K23 el job del test lleva el tope de memoria de TODOS sus procesos: la cuarta parte de la RAM, como mucho '
+      'la de un proceso',
+      len(_job) == 2 and _job[0].isdigit() and int(_job[0]) & 0x200 and _job[1] == str(TOPE_JOB_EN_PAGINAS),
+      'esperado %d; sonda %r; %s' % (TOPE_JOB_EN_PAGINAS, sonda23, out[:400]))
+check('K23b ...y el de CPU: todos los procesadores logicos menos uno, tope duro (%d procesadores)' % _cpus,
+      sonda23.get('CPU') == CPU_ESPERADA, 'esperado %r; sonda %r' % (CPU_ESPERADA, sonda23.get('CPU')))
+_reservado = int(sonda23['RESERVA']) if sonda23.get('RESERVA', '').isdigit() else -1
+check('K23c lo que el test pudo comprometer se queda bajo ese tope, y cerca: lo nego el tope, no otra cosa',
+      TOPE_JOB_MB - 192 <= _reservado <= TOPE_JOB_MB, 'reservado %d MB; tope %d MB' % (_reservado, TOPE_JOB_MB))
+_nota23 = j23.get('memoryCapNote') or ''
+check('K23d ...y el servidor dice por que le falto memoria: TEST-039 con el tope en MB (lo avisa Windows)',
+      mc.es(_nota23, 'SN_TEST_TOPE_MEMORIA_FMT') and ('%d MB' % TOPE_JOB_MB) in _nota23, out[:700])
+check('K23e control: un test que no llega al tope no trae esa nota (K19, A1)',
+      'memoryCapNote' not in j19 and 'memoryCapNote' not in contrato_j)
 
 check('K12 no queda ningun contenedor', not (contenedores() - antes), str(contenedores() - antes))
 check('K12b ...ni copias en la temporal del servidor', not copias(),

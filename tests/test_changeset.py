@@ -293,13 +293,14 @@ r2 = cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': _crlf, 'conten
 r3 = cs({'command': 'stage', 'id': cid, 'kind': 'create', 'path': _plf, 'eol': 'lf',
          'content': 'unit UEolLf;\n\ninterface\n\nimplementation\n\nend.'})
 rp = cs({'command': 'preview', 'id': cid})
-# P14 de la 1.29.1: el preview de un create dice el eol con el que escribira (con los nombres del parametro)
+# P14 de la 1.29.1: el preview de un create dice el eol con el que escribira, con EL nombre de la casa, el del
+# eol= de delphi_read (en minusculas eran dos nombres para lo mismo: A5 de cierre-final-1-29-1)
 try:
     ops_p = json.loads(rp).get('operations') or []
 except ValueError:
     ops_p = []
-check('E1 el preview de cada create dice su eol: lf, crlf (sin eol) y lf',
-      [o.get('eol') for o in ops_p] == ['lf', 'crlf', 'lf'], rp[:400])
+check('E1 el preview de cada create dice su eol: LF, CRLF (sin eol) y LF, como delphi_read',
+      [o.get('eol') for o in ops_p] == ['LF', 'CRLF', 'LF'], rp[:400])
 r = cs({'command': 'commit', 'id': cid})
 check('E1 create con eol=lf escribe LF, sin eol CRLF (un .txt y un .pas)',
       mc.abre(r1, 'SN_CHANGESET_STAGED_FMT') and mc.abre(r3, 'SN_CHANGESET_STAGED_FMT')

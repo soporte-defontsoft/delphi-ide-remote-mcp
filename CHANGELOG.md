@@ -107,6 +107,18 @@ Visual C++ runtime in `System32`.
   ended says so (`stillRunning: false`), as `output` did: it was there only while it ran,
   and an `exitCode` with `durationMs` equal to the timeout did not say who ended it. The check that
   such a file ends in `.txt`/`.log` is now one, shared with `delphi_adb logcat out=`.
+- The answer of a call that changed or replaced files names the copies it left in the trash
+  for them (`SYS-045`, the path of each copy: `delphi_move` brings one back). About 25
+  answers said "Backup in `__delphi-patch`." without the file - a project setting, a unit
+  added to a `.dpr`, a style, the summary of a changeset; one note for all of them, only
+  for a copy the call made (the first change of the day), not for one that already existed.
+- At start, the server says which sections and keys of `settings.ini` it does not read: a
+  misspelled name, or one this version does not have, did nothing and nothing said so. The
+  reader itself is the catalogue - what the server asks is noted, and what the file holds
+  and nobody asked is said - so a key added tomorrow needs no list. Measured: the
+  `settings.ini` of the machine this server is built on still had
+  `[Server] MessagesRetentionDays`, gone in 1.3. A misspelled workspace section keeps its
+  own warning, which says how it is written.
 
 ### Changed
 
@@ -138,8 +150,40 @@ Visual C++ runtime in `System32`.
   `drivers\PG\lib\` holds the five companions of `libpq.dll` (if only `libpq.dll` was there)
   and the Visual C++ runtime they need is in `System32` (its redistributable), if it was
   found only in the `PATH`.
+- The Job Object that confines foreign code - a `delphi_test` run, a form render, the
+  `brcc32` of a style `.rc` - caps the memory of all its processes together at a quarter
+  of the machine's RAM (never more than the 3 GB a process already had) and its CPU at
+  every logical processor but one (a hard cap). Until now only each process had a cap
+  (3 GB, and 128 processes), so a test could take the machine - the IDE's, the server's
+  and the other agents' - for up to its timeout. Measured before choosing them: the
+  server's own unit suite peaks at 32 MB and a render with 110 packages at 170 MB, on a
+  machine of 8 GB and 4 processors (2047 MB and 75 %). What a test asks for past the cap
+  Windows refuses; Windows says so through the job, and `delphi_test` tells why the test
+  saw an out-of-memory error (`memoryCapNote`, `TEST-039`).
 
 ### Fixed
+
+- `delphi_db summary` on SQL Server: the sum of an integer column past 2^31-1 refused the
+  whole query (`DB-010`, arithmetic overflow) and the average of integers came truncated
+  (1 and 2 gave 1, where PostgreSQL gives 1.5): SQL Server adds and averages an `int` as an
+  `int`. An integer column is now added as `BIGINT` and averaged as `FLOAT` through
+  FireDAC's `CONVERT` escape, which writes each engine's form, and the counts use
+  `COUNT_BIG` there (`COUNT` is an `int` too). Measured on both engines with the same
+  rows: 4000000000 and 1.5.
+- `x`, `y`, `tox`, `toy` of `delphi_desktop` and `x`, `y`, `lines` of `delphi_adb` are
+  numbers in the schema: a client that checks the arguments against it refused `152`
+  ("is not of type 'string'", nine times in Hermes' sessions). Text still works.
+- A vault declared but unreachable (a network folder that does not answer) said
+  "no vault configured": it now says it is declared and cannot be reached (`VAULT-043`),
+  and `prompts/list` no longer asks the disk on every request for it (the first look at a
+  server that does not answer took 21 s, measured).
+- Small texts an agent met, each where it happens: the preview of a `delphi_changeset`
+  create writes the line ending as the files say it (`LF`, `CRLF`); `delphi_designer` reading a
+  binary `.dfm` no longer calls its tree the TEXT designer's (`DSGN-019`);
+  `delphi_config view` says what remote targets need only for a project that has one
+  (`CFG-073`); `LIST-003` names the build folders it left out; and `delphi_styles lint`
+  and `build` say when there are `.style` files in subfolders, which they do not walk
+  (`STYLE-070`).
 
 - `delphi_db` without its engine's client library said `DB-009` with FireDAC's text and its
   hint "check it is in the PATH or application EXE directories", which does not apply here;

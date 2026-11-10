@@ -594,11 +594,14 @@ end;
   contenedor, se le da la carpeta vacia, se copia la salida sin .dcu ni .rsm,
   se lanza, se recoge lo que el test haya dejado y se borra todo. False con
   el error ya en ARet si algo de eso no se pudo: falla cerrado, sin
-  contenedor no corre. ADuracionMs, lo que corrio el test: sin la copia. }
+  contenedor no corre. ADuracionMs, lo que corrio el test: sin la copia.
+  ATopeDeMemoria: el tope de memoria de su job, en bytes, si un proceso del
+  test choco con el; 0 si no. }
 function CorreEnContenedor(const AExe, AArgs: string; ATimeoutMs: Integer;
   ARet: TJSONObject; out AOutput: string; out AExitCode: Cardinal;
   out ATimedOut: Boolean; out AFicheros: TJSONArray;
-  out ARecortado: Boolean; out AFuera: Integer; out ADuracionMs: Int64): Boolean;
+  out ARecortado: Boolean; out AFuera: Integer; out ADuracionMs: Int64;
+  out ATopeDeMemoria: UInt64): Boolean;
 var
   AC: TContenedor;
   Etapa: string;
@@ -610,6 +613,7 @@ var
 begin
   Result := False;
   ADuracionMs := 0;
+  ATopeDeMemoria := 0;
   AFuera := 0;
   AOutput := '';
   AExitCode := 0;
@@ -675,7 +679,7 @@ begin
     Reloj := TStopwatch.StartNew;
     try
       AOutput := RunCapturedEnContenedor(ComillasSinEscape(TPath.Combine(Etapa, TPath.GetFileName(AExe))) + AArgs, Etapa, AC,
-        ATimeoutMs, AExitCode, ATimedOut, phAnsi); // un test de Delphi: su RTL escribe en la ANSI
+        ATimeoutMs, AExitCode, ATimedOut, phAnsi, '', @ATopeDeMemoria); // un test de Delphi: su RTL escribe en la ANSI
     except
       on E: ETestNoConfinado do
       begin
@@ -718,6 +722,7 @@ var
   Ficheros: TJSONArray;
   Fuera: Integer;
   DuracionMs: Int64;
+  TopeDeMemoria: UInt64;
   Cola: TColaDeSalida;
 begin
   Result := TJSONObject.Create;
@@ -907,7 +912,7 @@ begin
     // la tool (TEST-037)
     Args := ' ' + ComillasSinEscape('--run:' + AFilter); // DUnitX honours it; a plain runner ignores it
   if not CorreEnContenedor(Exe, Args, ATimeoutMs, Result, Output, ExitCode,
-    TimedOut, Ficheros, Recortado, Fuera, DuracionMs) then
+    TimedOut, Ficheros, Recortado, Fuera, DuracionMs, TopeDeMemoria) then
     Exit;
   Result.AddPair('durationMs', TJSONNumber.Create(DuracionMs));
   Result.AddPair('exitCode', TJSONNumber.Create(Integer(ExitCode)));
@@ -972,6 +977,12 @@ begin
         Result.AddPair('filterNote', MsgFmt(SN_TEST_FILTRO_SIN_TESTS_FMT, [AFilter]));
     end;
   end;
+  // un proceso del test pidio memoria mas alla del tope de su job: lo dijo
+  // Windows, y el "sin memoria" que vio el test tiene su causa (B6 de
+  // cierre-final-1-29-1)
+  if TopeDeMemoria > 0 then
+    Result.AddPair('memoryCapNote', MsgFmt(SN_TEST_TOPE_MEMORIA_FMT,
+      [Int64(TopeDeMemoria div (1024 * 1024))]));
   // la cola, por EL recorte de la casa (ColaDeSalida, V80 de la 1.23.1): las
   // 40 ultimas que dicen algo
   Cola := ColaDeSalida(Output, 40,

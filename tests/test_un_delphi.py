@@ -287,6 +287,31 @@ try:
           and CAT['SL_GUARD_CLAVE_RETIRADA_FMT'] % ('Workspace.Op', 'AllowRun', '1.1.1') in log, log[-12:])
     para(proc)
 
+    # ------------------------------------------------------------------ U2c
+    # B10 de cierre-final-1-29-1: lo que el ini trae y el servidor no lee no hacia nada y nadie lo decia (en
+    # produccion, [Server] MessagesRetentionDays, retirada en la 1.3, seguia alli el 10-nov-2026). El lector
+    # apunta lo que pregunta (TIniQueApunta) y el log avisa del resto: una seccion que no lee nadie, con sus
+    # claves, o una clave de una que si se lee. Lo que se lee no se avisa: Port, Token, Roots, AllowTests, las
+    # retiradas de U2b (con su aviso propio) ni una seccion de workspace mal escrita (tambien con el suyo).
+    # Mutante: el exe de antes, sin el aviso.
+    INI2C = ini_bytes(['MessagesRetentionDays=30', 'EngineIdleMinutes=30'],
+                      ['AllowRemoteRn=1', 'AllowTests=1', 'AllowRun=1', '', '[Servre]', 'Port=1', 'Host=x',
+                       '', '[WorkspaceX]', 'Token=y'])
+    d2c, exe2c = carpeta_servidor('ini-no-se-lee', INI2C)
+    proc, ruta, c = lanza(exe2c, 'ini-no-se-lee')
+    log = mensajes(ruta)
+    avisos = [l for p in ('SL_GUARD_CLAVE_NO_SE_LEE_FMT', 'SL_GUARD_SECCION_NO_SE_LEE_FMT')
+              for l in log if re.fullmatch(mc.patron_de_formato(p), l)]
+    esperados = [CAT['SL_GUARD_CLAVE_NO_SE_LEE_FMT'] % ('Server', 'MessagesRetentionDays'),
+                 CAT['SL_GUARD_CLAVE_NO_SE_LEE_FMT'] % ('Workspace.Op', 'AllowRemoteRn'),
+                 CAT['SL_GUARD_SECCION_NO_SE_LEE_FMT'] % ('Servre', 2)]
+    check('U2c lo que el servidor no lee lo avisa el log: una clave retirada de [Server], una mal escrita de un '
+          'workspace y una seccion entera con sus claves',
+          c is not None and all(e in log for e in esperados), log[-16:])
+    check('U2c ...y NADA de lo que si lee (ni las retiradas ni el workspace mal escrito, que tienen su aviso): '
+          'los avisos son esos tres', sorted(avisos) == sorted(esperados), avisos)
+    para(proc)
+
     # ------------------------------------------------------------------ U3
     proc, ruta, c = lanza(exe1, 'sin-clave-2')
     ws = llama(c, 'delphi_workspace', {}) if c else {}

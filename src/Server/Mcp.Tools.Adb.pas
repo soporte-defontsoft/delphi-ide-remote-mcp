@@ -60,15 +60,19 @@ type
     [SchemaDescription(SP_ADB_OUT)]
     [RutaDelServidor]
     property Out: string read FOut write FOut;
+    // numeros por contrato, publicados como number (C3 de cierre-final-1-29-1)
     [SchemaDescription(SP_ADB_X)]
+    [NumeroComoTexto]
     property X: string read FX write FX;
     [SchemaDescription(SP_ADB_Y)]
+    [NumeroComoTexto]
     property Y: string read FY write FY;
     [SchemaDescription(SP_ADB_KEY)]
     property Key: string read FKey write FKey;
     [SchemaDescription(SP_ADB_FILTER)]
     property Filter: string read FFilter write FFilter;
     [SchemaDescription(SP_ADB_LINES)]
+    [NumeroComoTexto]
     property Lines: string read FLines write FLines;
     [SchemaDescription(SP_ADB_INLINE)]
     property Inline_: Boolean read FInline write FInline;

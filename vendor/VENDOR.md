@@ -59,7 +59,10 @@ Local changes (each marked "[local change]" in the code, most with its date):
   emitted typed; integers published as "integer" with "minimum": 0, as the
   binder takes them; AceptaJsonComoTexto, the one reader of [JsonComoTexto]:
   such a string parameter is published as an array of objects (its text form
-  is still accepted).
+  is still accepted); PublicaComoNumero, the one reader of [NumeroComoTexto]:
+  a string parameter that is a number by contract (a coordinate, a count of
+  lines) is published as "number", and the binder takes the number or its
+  text (1.29.1: a client that validates refused 152 for a string).
 - src/Protocol/MCPServer.Serializer.pas: NormalizeKey, MotivoEntero and
   MotivoBooleano public (one integer and one boolean rule, also for values
   inside a parameter); an unknown parameter reported with the published

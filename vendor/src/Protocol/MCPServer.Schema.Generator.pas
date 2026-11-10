@@ -26,6 +26,9 @@ type
     // en ese texto - la misma pregunta para lo que se promete y lo que se hace
     class function AceptaJsonComoTexto(Prop: TRttiProperty): Boolean;
     class function ElementosDeJsonComoTexto(Prop: TRttiProperty): string;
+    // [local change 2026-11-10] el UNICO lector de [NumeroComoTexto]: un texto
+    // que es un numero por contrato se publica como number
+    class function PublicaComoNumero(Prop: TRttiProperty): Boolean;
     class function GenerateSchema(Cls: TClass): TJSONObject;
     class function GenerateSchemaFromInstance(Instance: TObject): TJSONObject;
   end;
@@ -83,6 +86,11 @@ begin
         var ArrayDeObjetos := (JsonType = 'string') and AceptaJsonComoTexto(RttiProp);
         if ArrayDeObjetos then
           JsonType := 'array';
+        // [local change 2026-11-10] ...y un texto que es un numero, como number:
+        // un cliente que valida negaba 152 en una coordenada (C3 de
+        // cierre-final-1-29-1); el deserializador acepta los dos
+        if (JsonType = 'string') and PublicaComoNumero(RttiProp) then
+          JsonType := 'number';
         PropSchema.AddPair('type', JsonType);
         // [local change 2026-09-28] el binder rechaza un entero negativo en
         // TODOS los parametros (MotivoEntero): el esquema lo dice (decima)
@@ -210,6 +218,16 @@ var
 begin
   for Attr in Prop.GetAttributes do
     if Attr is JsonComoTextoAttribute then
+      Exit(True);
+  Result := False;
+end;
+
+class function TMCPSchemaGenerator.PublicaComoNumero(Prop: TRttiProperty): Boolean;
+var
+  Attr: TCustomAttribute;
+begin
+  for Attr in Prop.GetAttributes do
+    if Attr is NumeroComoTextoAttribute then
       Exit(True);
   Result := False;
 end;

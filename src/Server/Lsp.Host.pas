@@ -97,6 +97,7 @@ uses
   Lsp.Files,
   Lsp.InlineImages, // ClearAttachedImages / WrapWithAttachedImages
   Lsp.Puertas,      // OlvidaOrigenes: los bytes de antes de la llamada
+  Lsp.Papelera,     // NotaDeLasCopias: las copias que dejo la llamada (SYS-045)
   Mcp.Tools.Messages,
   Mcp.Vault.Session,
   Mcp.Vault.Seed,
@@ -264,12 +265,17 @@ begin
   TMCPToolsManager.ResultFilter :=
     function(const ToolName, AText: string): string
     begin
+      // las copias que dejo la llamada en la papelera, con su ruta (SYS-045,
+      // Lsp.Papelera): antes de que OlvidaOrigenes las vacie. Una nota para
+      // todas las tools que escriben (R6 del revisor del paisaje del 10-nov)
+      var Copias := NotaDeLasCopias(AText);
       // la llamada acaba: sus bytes de antes no se quedan en el hilo
       OlvidaOrigenes(False);
       // ...y si lo que nombra lo esta cambiando otra llamada larga, lo dice
       // (SYS-044, Lsp.EnCurso): lo que ve puede estar a medias. Por ConNota,
       // como el buzon: pegada detras de un JSON lo dejaba sin parsear
-      Result := MaskDriveText(ToolName, ConNota(AText, 'inProgressNote', NotaDeLaLlamada));
+      Result := MaskDriveText(ToolName, ConNota(ConNota(AText, 'backups', Copias), 'inProgressNote',
+        NotaDeLaLlamada));
       // the operator's mailbox: there is no push in MCP clients, so every
       // tool answer carries the notice while a message waits.
       if ToolName <> 'delphi_messages' then

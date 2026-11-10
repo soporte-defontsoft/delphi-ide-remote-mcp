@@ -208,6 +208,14 @@ function IniSinLeer: string;
 function VaultPath: string;         // DELPHI_MCP_VAULT_PATH / VaultPath= del workspace
 function VaultConfigured: Boolean;  // VaultPath set AND the directory exists
 function VaultConfiguredAnywhere: Boolean; // algun workspace declara vault (registro)
+{ LA pregunta de quien va a USAR el vault (sus tools, prompts/get): '' si se
+  puede (VaultConfigured); si no, por que: el workspace no lo declara
+  (VAULT-035) o lo declara y su carpeta no se alcanza (VAULT-043). Las tres
+  tools decian "no declara vault" de uno declarado en una unidad caida (A4 de
+  cierre-final-1-29-1, 10-nov-2026). Lo que solo ANUNCIA (tools/list,
+  prompts/list) mira lo declarado, VaultPath: preguntar por la carpeta de un
+  servidor que no contesta tarda 21 s (medido ese dia). }
+function VaultNoDisponible: string;
 
 { Whether the vault WRITE tools (vault_append/create/patch) are enabled:
   el vault del workspace activo esta configurado Y su VaultReadOnly= es 0
@@ -1334,10 +1342,102 @@ const
     CorsAllowedOrigins: 'http://localhost,http://127.0.0.1,https://localhost,https://127.0.0.1';
     SslEnabled: False; SslCertFile: ''; SslKeyFile: ''; SslRootCertFile: '');
 
+type
+  { El lector del settings.ini que apunta lo que le pregunta el servidor: lo
+    que LoadSecurity lee ES el catalogo de sus claves, y no hay otro (B10 de
+    cierre-final-1-29-1). Una clave que el fichero trae y nadie pregunta no
+    hace nada - una letra cambiada, una que esta version no tiene - y el
+    arranque lo dice (AvisaDeLoQueNoSeLee): una lista escrita a mano se
+    quedaria atras con la primera clave nueva. ReadInteger y los demas leen
+    por ReadString. Sin mayusculas, como las lee Windows. }
+  TIniQueApunta = class(TIniFile)
+  private
+    FLeidas: TStringList; // 'seccion=clave' (una clave no lleva '=')
+  public
+    constructor Create(const AFileName: string);
+    destructor Destroy; override;
+    function ReadString(const Section, Ident, Default: string): string; override;
+    function ValueExists(const Section, Ident: string): Boolean; override;
+    function Leida(const ASection, AIdent: string): Boolean;
+    function SeccionLeida(const ASection: string): Boolean;
+  end;
+
+constructor TIniQueApunta.Create(const AFileName: string);
+begin
+  inherited Create(AFileName);
+  FLeidas := TStringList.Create;
+  FLeidas.Sorted := True;
+  FLeidas.Duplicates := dupIgnore;
+end;
+
+destructor TIniQueApunta.Destroy;
+begin
+  FLeidas.Free;
+  inherited;
+end;
+
+function TIniQueApunta.ReadString(const Section, Ident, Default: string): string;
+begin
+  FLeidas.Add(SinMayusculas(Section) + '=' + SinMayusculas(Ident));
+  Result := inherited ReadString(Section, Ident, Default);
+end;
+
+function TIniQueApunta.ValueExists(const Section, Ident: string): Boolean;
+begin
+  FLeidas.Add(SinMayusculas(Section) + '=' + SinMayusculas(Ident));
+  Result := inherited ValueExists(Section, Ident);
+end;
+
+function TIniQueApunta.Leida(const ASection, AIdent: string): Boolean;
+begin
+  Result := FLeidas.IndexOf(SinMayusculas(ASection) + '=' + SinMayusculas(AIdent)) >= 0;
+end;
+
+function TIniQueApunta.SeccionLeida(const ASection: string): Boolean;
+begin
+  var Prefijo := SinMayusculas(ASection) + '=';
+  for var L in FLeidas do
+    if L.StartsWith(Prefijo) then
+      Exit(True);
+  Result := False;
+end;
+
+{ Lo que el settings.ini trae y este servidor no lee, al arranque: una seccion
+  que no pregunta nadie (con cuantas claves), o una clave de una que si se
+  lee. Una seccion de workspace mal escrita ya tiene su aviso, que dice como
+  se escribe (SL_GUARD_WORKSPACE_*). }
+procedure AvisaDeLoQueNoSeLee(AIni: TIniQueApunta);
+var
+  Secs, Claves: TStringList;
+begin
+  Secs := TStringList.Create;
+  Claves := TStringList.Create;
+  try
+    AIni.ReadSections(Secs);
+    for var S in Secs do
+    begin
+      Claves.Clear;
+      AIni.ReadSection(S, Claves);
+      if not AIni.SeccionLeida(S) then
+      begin
+        if not SinMayusculas(S).StartsWith('work') then
+          GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(SL_GUARD_SECCION_NO_SE_LEE_FMT, [S, Claves.Count])];
+      end
+      else
+        for var K in Claves do
+          if not AIni.Leida(S, K) then
+            GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(SL_GUARD_CLAVE_NO_SE_LEE_FMT, [S, K])];
+    end;
+  finally
+    Claves.Free;
+    Secs.Free;
+  end;
+end;
+
 procedure LoadSecurity;
 var
   IniPath: string;
-  Ini: TIniFile;
+  Ini: TIniQueApunta;
   Fuera: TArray<string>;
   LineaBom: Integer;
   IniBytes: TArray<Byte>;
@@ -1433,16 +1533,20 @@ begin
   begin
     // (la fecha, arriba, ANTES de leerlo: si lo tocan mientras, se avisa de
     // mas, nunca de menos)
-    Ini := TIniFile.Create(IniPath);
+    Ini := TIniQueApunta.Create(IniPath);
     try
       // v0.98 (David): el ini NO tiene seccion generica - todo permiso
       // vive en un [Workspace.<nombre>]; el modo local de lanzamiento se
       // define SOLO por el entorno de quien arranca el proceso. Del ini,
       // fuera de los workspaces, solo queda fontaneria ([Server]/[Tools]).
+      // (leidas siempre, y el entorno gana: una clave que solo se leyera a
+      // veces saldria como que no se lee - AvisaDeLoQueNoSeLee)
+      var IniProfile := LowerCase(Ini.ReadString('Tools', 'Profile', 'full').Trim);
+      var IniOnly := EntradasDeLista(LowerCase(Ini.ReadString('Tools', 'Only', '')), True);
       if GToolsProfile = 'full' then
-        GToolsProfile := LowerCase(Ini.ReadString('Tools', 'Profile', 'full').Trim);
+        GToolsProfile := IniProfile;
       if Length(GToolsOnly) = 0 then
-        GToolsOnly := EntradasDeLista(LowerCase(Ini.ReadString('Tools', 'Only', '')), True);
+        GToolsOnly := IniOnly;
       // La fontaneria de [Server] y [Log], aqui con las demas: hasta el
       // 26-sep BindIP, SessionTimeoutMinutes y el [Log] de la bandeja
       // abrian el fichero cada uno por su cuenta (tres lectores mas).
@@ -1594,6 +1698,8 @@ begin
       finally
         Secs.Free;
       end;
+      // y lo que el fichero trae y nadie ha preguntado (B10)
+      AvisaDeLoQueNoSeLee(Ini);
     finally
       Ini.Free;
     end;
@@ -2048,6 +2154,16 @@ begin
     Result := ''
   else
     Result := VaultNormalizado(GVaultPath);
+end;
+
+function VaultNoDisponible: string;
+begin
+  if VaultPath = '' then
+    Result := MsgText(SR_VAULT_UNSET)
+  else if not VaultConfigured then
+    Result := MsgText(SR_VAULT_INALCANZABLE)
+  else
+    Result := '';
 end;
 
 function VaultConfigured: Boolean;

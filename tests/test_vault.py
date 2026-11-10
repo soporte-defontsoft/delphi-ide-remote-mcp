@@ -591,6 +591,30 @@ check('siembra: un vault YA existente no se vuelve a sembrar (no pisa MEMORY.md)
 s6.close()
 mc.borra(FRESH)
 
+# ...y un vault que DESAPARECE con el servidor en marcha (su unidad de red se cae): prompts/list sigue
+# anunciandolo por lo DECLARADO, como tools/list - preguntar por la carpeta de un servidor que no contesta
+# tarda 21 s en CADA prompts/list, medido el 10-nov-2026 -, y quien lo USA dice que no se alcanza
+# (VAULT-043), no que el workspace no lo declara (VAULT-035, lo que decia). A4 de cierre-final-1-29-1
+SEVA = os.path.join(mc.RAIZ, 'vault-que-se-va')  # sin mc.carpeta(): la siembra la crea
+mc.borra(SEVA)
+mc.borra(SEVA + '-fuera')
+s7 = Server(vault=SEVA)
+try:
+    os.rename(SEVA, SEVA + '-fuera')   # lo que deja una unidad caida: la carpeta no se alcanza
+    pl7 = s7.rpc('prompts/list').get('result', {}).get('prompts', [])
+    check('vault que se va: prompts/list lo sigue anunciando, por lo DECLARADO (ROJO: preguntaba por la carpeta '
+          'en cada peticion)', any(p.get('name') == 'vault' for p in pl7), pl7)
+    g7 = s7.rpc('prompts/get', {'name': 'vault'})
+    check('vault que se va: prompts/get dice que no se alcanza (VAULT-043)',
+          mc.es(json.dumps(g7.get('error', {})), 'SR_VAULT_INALCANZABLE'), g7)
+    out7 = s7.call('vault_read', {})
+    check('vault que se va: vault_read dice que no se alcanza (VAULT-043), no que el workspace no lo declara '
+          '(ROJO: VAULT-035)', mc.abre(out7, 'SR_VAULT_INALCANZABLE'), out7[:200])
+finally:
+    s7.close()
+    mc.borra(SEVA)
+    mc.borra(SEVA + '-fuera')
+
 # ...y una carpeta VACIA cuyo projects\ es una union a otra de fuera (vacia, para
 # que no cuente como vault con notas): la puerta para TODAS las notas antes de
 # crear nada - creaba example-project DETRAS de la union y la semilla quedaba a

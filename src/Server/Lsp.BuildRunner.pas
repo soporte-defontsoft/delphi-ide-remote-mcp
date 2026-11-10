@@ -134,11 +134,14 @@ function RunCapturedIn(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   solo lo avisaba sandboxed=false). ATimedOut dice si se le mato por tiempo:
   sin eso un proceso muerto era igual que uno que fallaba al instante, mismo
   exitCode 1 y salida vacia (medido 2026-08-25). AEntorno, si va, el bloque
-  entero del hijo (Lsp.Sandbox.EntornoSinConfiguracion). }
+  entero del hijo (Lsp.Sandbox.EntornoSinConfiguracion). El job del contenedor
+  lleva los topes del codigo ajeno (memoria de todos sus procesos juntos y
+  CPU); ATopeAlcanzado, si va: el de memoria, en bytes, si un proceso suyo
+  choco con el (lo dice Windows), 0 si no. }
 function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;
   const AC: TContenedor; ATimeoutMs: Integer; out AExitCode: Cardinal;
   out ATimedOut: Boolean; APagina: TPaginaDelHijo = phConsola;
-  const AEntorno: string = ''): string;
+  const AEntorno: string = ''; ATopeAlcanzado: PUInt64 = nil): string;
 
 implementation
 
@@ -256,33 +259,49 @@ const
   // el tope de procesos de un job (contra una bomba de procesos), y el tamano
   // de la lista de los suyos que se le pide (ProcesosDelJob)
   TOPE_PROCESOS_DEL_JOB = 128;
+  // el tope de memoria de UN proceso del job, el de siempre: 3 GB como
+  // constante hexadecimal (la forma aritmetica desbordaba dcc32: abajo)
+  TOPE_MEMORIA_POR_PROCESO = $C0000000;
 
-function CreateConfinedJob: THandle;
-type
-  TIoCounters = record
-    ReadOperationCount, WriteOperationCount, OtherOperationCount: UInt64;
-    ReadTransferCount, WriteTransferCount, OtherTransferCount: UInt64;
-  end;
-  TBasicLimit = record
-    PerProcessUserTimeLimit, PerJobUserTimeLimit: Int64;
-    LimitFlags: DWORD;
-    MinimumWorkingSetSize, MaximumWorkingSetSize: NativeUInt;
-    ActiveProcessLimit: DWORD;
-    Affinity: NativeUInt;
-    PriorityClass, SchedulingClass: DWORD;
-  end;
-  TExtLimit = record
-    BasicLimitInformation: TBasicLimit;
-    IoInfo: TIoCounters;
-    ProcessMemoryLimit, JobMemoryLimit: NativeUInt;
-    PeakProcessMemoryUsed, PeakJobMemoryUsed: NativeUInt;
-  end;
-  TUiRestrictions = record
-    UIRestrictionsClass: DWORD;
-  end;
+{ El tope de memoria de TODO el job del codigo ajeno (un test, un render, el
+  brcc32 de un .rc): la cuarta parte de la memoria fisica de esta maquina, la
+  que dice Windows, y nunca mas que el de un proceso. Hasta la 1.29.1 solo
+  estaba el de cada proceso (3 GB, con 128 procesos): un test podia llevarse
+  la maquina, que es la del IDE, la del servidor y la de los demas agentes (B6
+  de cierre-final-1-29-1). Medido el 10-nov-2026 en una de 8 GB: la suite
+  unitaria del servidor, 32 MB de pico; un render con 110 paquetes, 170 MB. }
+function TopeDeMemoriaDelJob: UInt64;
 var
-  Ext: TExtLimit;
-  Ui: TUiRestrictions;
+  M: TMemoryStatusEx;
+begin
+  Result := TOPE_MEMORIA_POR_PROCESO;
+  FillChar(M, SizeOf(M), 0);
+  M.dwLength := SizeOf(M);
+  if GlobalMemoryStatusEx(M) and (M.ullTotalPhys div 4 < Result) then
+    Result := M.ullTotalPhys div 4;
+end;
+
+{ La parte de la CPU que puede usar el job del codigo ajeno, en ciclos por
+  cada 10.000 (la unidad de Windows): toda menos la de un procesador logico,
+  para que el servidor, el IDE y los demas agentes sigan contestando mientras
+  un test gira en todos los nucleos. 0 = sin tope: con un solo procesador no
+  hay uno que dejar libre. }
+function CuotaDeCpuDelJob: DWORD;
+begin
+  if CPUCount <= 1 then
+    Exit(0);
+  Result := DWORD(10000 * (CPUCount - 1) div CPUCount);
+end;
+
+{ AAjeno: el job del codigo que no es nuestro ni del toolchain (el del
+  contenedor), con sus topes de memoria total y de CPU }
+function CreateConfinedJob(AAjeno: Boolean): THandle;
+var
+  // los registros de Windows, como los declara la RTL (Winapi.Windows): aqui
+  // habia copias propias, con un comentario que decia que no los declaraba
+  Ext: TJobObjectExtendedLimitInformation;
+  Ui: TJobObjectBasicUIRestrictions;
+  Cpu: TJobObjectCPURateControlInformation;
 begin
   Result := CreateJobObject(nil, nil);
   if Result = 0 then
@@ -298,36 +317,41 @@ begin
   // NativeUInt(3)*1024*1024*1024 overflowed dcc32's SIGNED 32-bit constant
   // evaluation (E2099) even though $C0000000 fits NativeUInt fine - the
   // first external user issue (GitHub #1, limelect, Delphi 13 Win32 Debug).
-  Ext.ProcessMemoryLimit := NativeUInt($C0000000);
+  Ext.ProcessMemoryLimit := NativeUInt(TOPE_MEMORIA_POR_PROCESO);
+  // el del codigo ajeno, ademas, para TODOS sus procesos juntos, y su CPU
+  FillChar(Cpu, SizeOf(Cpu), 0);
+  if AAjeno then
+  begin
+    Ext.BasicLimitInformation.LimitFlags := Ext.BasicLimitInformation.LimitFlags or
+      JOB_OBJECT_LIMIT_JOB_MEMORY;
+    Ext.JobMemoryLimit := NativeUInt(TopeDeMemoriaDelJob);
+    Cpu.CpuRate := CuotaDeCpuDelJob;
+    if Cpu.CpuRate > 0 then
+      Cpu.ControlFlags := JOB_OBJECT_CPU_RATE_CONTROL_ENABLE or JOB_OBJECT_CPU_RATE_CONTROL_HARD_CAP;
+  end;
   Ui.UIRestrictionsClass := JOB_OBJECT_UILIMIT_EXITWINDOWS or
     JOB_OBJECT_UILIMIT_SYSTEMPARAMETERS or JOB_OBJECT_UILIMIT_DISPLAYSETTINGS;
   // Un job sin sus limites no confina nada (ni kill-on-close, ni el tope de
-  // memoria, ni el de procesos): cuenta como un job que no se pudo crear. Un
+  // memoria, ni el de procesos, ni los del codigo ajeno: su memoria total y su
+  // CPU): cuenta como un job que no se pudo crear. Un
   // test no corre (fail-closed, ETestNoConfinado); build y git siguen sin job,
   // como cuando CreateJobObject falla. Se ignoraba lo que devolvia (1.5 de la
   // lista de medidas, V51 de la 1.23; el fallo no se puede provocar sin
   // inyectarlo: el tope de 3 GiB SI se midio, negado dentro y libre fuera)
   if not SetInformationJobObject(Result, JobObjectExtendedLimitInformation, @Ext, SizeOf(Ext)) or
-     not SetInformationJobObject(Result, JobObjectBasicUIRestrictions, @Ui, SizeOf(Ui)) then
+     not SetInformationJobObject(Result, JobObjectBasicUIRestrictions, @Ui, SizeOf(Ui)) or
+     ((Cpu.ControlFlags <> 0) and
+      not SetInformationJobObject(Result, JobObjectCpuRateControlInformation, @Cpu, SizeOf(Cpu))) then
   begin
     CloseHandle(Result);
     Result := 0;
   end;
 end;
 
-// APIs de Job que la RTL de este Delphi no declara (como las constantes que
-// CreateConfinedJob define a mano): con su nombre real en kernel32.
-function QueryInformationJobObject_(hJob: THandle; InfoClass: DWORD;
-  Info: Pointer; Len: DWORD; RetLen: PDWORD): BOOL; stdcall;
-  external kernel32 name 'QueryInformationJobObject';
-
-function TerminateJobObject_(hJob: THandle; ExitCode: UINT): BOOL; stdcall;
-  external kernel32 name 'TerminateJobObject';
-
-const
-  JobObjectBasicAccountingInformation_ = 1;
-
 type
+  // lo unico del job que la RTL no declara: su contabilidad basica
+  // (JOBOBJECT_BASIC_ACCOUNTING_INFORMATION). Las funciones si las declara
+  // (QueryInformationJobObject, TerminateJobObject): habia copias propias
   TJobAccounting_ = record
     TotalUserTime: Int64;
     TotalKernelTime: Int64;
@@ -348,7 +372,7 @@ var
   Fin: UInt64;
   RetLen: DWORD;
 begin
-  if not TerminateJobObject_(AJob, 1) then
+  if not TerminateJobObject(AJob, 1) then
   begin
     var ErrT := GetLastError; // antes de llamar al log, que lo cambiaria
     try TLogger.Warning(MsgFmt(SL_TEST_JOB_TERMINAR_FMT, [ErrT])); except end;
@@ -356,8 +380,8 @@ begin
   Fin := GetTickCount64 + APlazoMs;
   repeat
     FillChar(Info, SizeOf(Info), 0);
-    if not QueryInformationJobObject_(AJob,
-      JobObjectBasicAccountingInformation_, @Info, SizeOf(Info), @RetLen) then
+    if not QueryInformationJobObject(AJob,
+      JobObjectBasicAccountingInformation, @Info, SizeOf(Info), @RetLen) then
     begin
       var ErrQ := GetLastError;
       try TLogger.Warning(MsgFmt(SL_TEST_JOB_CONSULTAR_FMT, [ErrQ])); except end;
@@ -369,8 +393,40 @@ begin
   until GetTickCount64 >= Fin;
 end;
 
-const
-  JobObjectBasicProcessIdList_ = 3;
+{ El puerto por el que Windows avisa de lo que pasa en el job; aqui, solo de
+  que un proceso del codigo ajeno pidio memoria mas alla de su tope: el job se
+  la niega y el test ve un "sin memoria" que, sin esto, nadie le explicaba. 0
+  si no se pudo: el aviso es para el agente, no confina nada. }
+function PuertoDelJob(AJob: THandle): THandle;
+var
+  A: TJobObjectAssociateCompletionPort;
+begin
+  Result := CreateIoCompletionPort(INVALID_HANDLE_VALUE, 0, 0, 1);
+  if Result = 0 then
+    Exit;
+  A.CompletionKey := nil;
+  A.CompletionPort := Result;
+  if not SetInformationJobObject(AJob, JobObjectAssociateCompletionPortInformation, @A, SizeOf(A)) then
+  begin
+    CloseHandle(Result);
+    Result := 0;
+  end;
+end;
+
+{ Si Windows aviso por APuerto de que un proceso del job choco con un tope de
+  memoria (el del job o el de un proceso). Sin esperar: con el arbol del job
+  ya muerto, lo que dijo esta en la cola }
+function TopeDeMemoriaAlcanzado(APuerto: THandle): Boolean;
+var
+  Msg: DWORD;
+  Clave: ULONG_PTR;
+  Ov: POverlapped;
+begin
+  Result := False;
+  while GetQueuedCompletionStatus(APuerto, Msg, Clave, Ov, 0) do
+    if (Msg = JOB_OBJECT_MSG_JOB_MEMORY_LIMIT) or (Msg = JOB_OBJECT_MSG_PROCESS_MEMORY_LIMIT) then
+      Result := True;
+end;
 
 { Los pids que siguen vivos dentro del job: lo que matara al cerrarse }
 function ProcesosDelJob(AJob: THandle): TArray<DWORD>;
@@ -386,7 +442,7 @@ var
 begin
   Result := [];
   FillChar(L, SizeOf(L), 0);
-  if not QueryInformationJobObject_(AJob, JobObjectBasicProcessIdList_, @L, SizeOf(L), @RetLen) then
+  if not QueryInformationJobObject(AJob, JobObjectBasicProcessIdList, @L, SizeOf(L), @RetLen) then
     Exit;
   for var I := 0 to Integer(L.NumberOfProcessIdsInList) - 1 do
     Result := Result + [DWORD(L.ProcessIdList[I])];
@@ -516,7 +572,7 @@ end;
 function RunCore(const ACmdLine, AWorkDir: string; ATimeoutMs: Integer;
   AContenedor: PContenedor; out AExitCode: Cardinal;
   out ATimedOut: Boolean; const AEntorno: string = '';
-  APagina: TPaginaDelHijo = phConsola): string;
+  APagina: TPaginaDelHijo = phConsola; ATopeAlcanzado: PUInt64 = nil): string;
 const
   // lo que se espera a que el hijo acabe de salir una vez leida su salida, y a
   // su hilo principal (o a uno matado por su plazo): plazos de cierre, no de
@@ -535,6 +591,7 @@ var
   Deadline: UInt64;
   Launched: Boolean;
   Job: THandle; // declared here: it outlives the launch block below
+  Puerto: THandle; // el aviso del tope de memoria del codigo ajeno (PuertoDelJob)
   Matado: Boolean; // por plazo: sus atomos se limpian al cerrar sus handles
 
   // lo leido del tubo, al final de lo que lleva
@@ -547,6 +604,9 @@ var
 
 begin
   Matado := False;
+  Puerto := 0;
+  if ATopeAlcanzado <> nil then
+    ATopeAlcanzado^ := 0;
   // From the pipe to the closing of the child's end, nobody else launches:
   // another child would take this end with it (see Lsp.Sandbox, 2026-09-29).
   EnterSpawn;
@@ -574,7 +634,7 @@ begin
   // Create SUSPENDED so we can put the process into a confining Job Object
   // BEFORE it runs (otherwise a fast child could spawn a grandchild that
   // escapes the job). Then resume.
-  Job := CreateConfinedJob;
+  Job := CreateConfinedJob(AContenedor <> nil);
   // Con contenedor el job es OBLIGATORIO: sin el no se corre (fail-closed).
   // Para build/git es best-effort (es el toolchain de confianza).
   if (AContenedor <> nil) and (Job = 0) then
@@ -627,6 +687,9 @@ begin
       CloseHandle(WriteH);
       raise ETestNoConfinado.Create(MsgText(SR_TEST_SIN_JAULA));
     end;
+    // y por donde avisa Windows de su tope de memoria: antes de que corra
+    // (suspendido, aun no ha pedido nada)
+    Puerto := PuertoDelJob(Job);
   end
   else if Job <> 0 then
     AssignProcessToJobObject(Job, PI.hProcess);
@@ -771,6 +834,13 @@ begin
         // nada de un pid o un hilo que sigan vivos: si acabo solo, finalizo)
         BorraAtomosDeProceso(PI.dwProcessId, PI.dwThreadId);
       end;
+      // con el arbol ya muerto: si choco con su tope de memoria, el tope
+      if Puerto <> 0 then
+      begin
+        if (ATopeAlcanzado <> nil) and TopeDeMemoriaAlcanzado(Puerto) then
+          ATopeAlcanzado^ := TopeDeMemoriaDelJob;
+        CloseHandle(Puerto);
+      end;
       CloseHandle(Job);
       // (y lo que falle al limpiar no le quita al llamador lo que el hijo dijo)
       if Length(Nietos) > 0 then
@@ -815,13 +885,14 @@ end;
 
 function RunCapturedEnContenedor(const ACmdLine, AWorkDir: string;
   const AC: TContenedor; ATimeoutMs: Integer; out AExitCode: Cardinal;
-  out ATimedOut: Boolean; APagina: TPaginaDelHijo; const AEntorno: string): string;
+  out ATimedOut: Boolean; APagina: TPaginaDelHijo; const AEntorno: string;
+  ATopeAlcanzado: PUInt64): string;
 var
   Copia: TContenedor;
 begin
   Copia := AC; // RunCore lo quiere por puntero, y AC es const
   Result := RunCore(ACmdLine, AWorkDir, ATimeoutMs, @Copia, AExitCode,
-    ATimedOut, AEntorno, APagina);
+    ATimedOut, AEntorno, APagina, ATopeAlcanzado);
 end;
 
 { The Android staging map, measured against an IDE-written .deployproj

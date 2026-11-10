@@ -71,13 +71,18 @@ type
     [SchemaDescription(SP_ADBLINUX_PROJECT)]
     [RutaDelServidor]
     property Project: string read FProject write FProject;
+    // numeros por contrato, publicados como number (C3 de cierre-final-1-29-1)
     [SchemaDescription(SP_ADBLINUX_X)]
+    [NumeroComoTexto]
     property X: string read FX write FX;
     [SchemaDescription(SP_ADBLINUX_Y)]
+    [NumeroComoTexto]
     property Y: string read FY write FY;
     [SchemaDescription(SP_DESKTOP_TOX)]
+    [NumeroComoTexto]
     property ToX: string read FToX write FToX;
     [SchemaDescription(SP_DESKTOP_TOY)]
+    [NumeroComoTexto]
     property ToY: string read FToY write FToY;
     [SchemaDescription(SP_ADBLINUX_CODE)]
     property Code: string read FCode write FCode;

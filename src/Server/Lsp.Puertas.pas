@@ -457,6 +457,9 @@ procedure OlvidaOrigenes(AEnLlamada: Boolean);
 begin
   GOrigenes := nil;
   GEnLlamada := AEnLlamada;
+  // ...y las copias que hizo la llamada: empiezan y acaban con ella, por la
+  // misma puerta (R6 del revisor del paisaje del 10-nov-2026)
+  OlvidaCopiasDeLaLlamada(AEnLlamada);
 end;
 
 { La huella de un contenido para el origen: '' = el fichero no existe (uno
