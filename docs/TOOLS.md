@@ -979,7 +979,7 @@ The databases the operator gave this workspace, by NAME and through operations: 
 | `max` | integer | optional | update, delete: most rows to change (default 100); more, and nothing changes. |
 | `group` | array | optional | summary: the fields to group by; a date field also as field:year, field:month, field:day or field:hour. |
 | `values` | array | optional | summary: a list of {"field", "op"} - sum \| avg \| min \| max \| count; each group also carries n, its rows. insert, update: a list of {"field", "value"} to write (null writes NULL). |
-| `columns` | array | optional | create-table: a list of {"name", "type"; optional "size", "precision", "scale" (dtFmtBCD needs both), "required", "key" (primary), "autoinc"}; type as FireDAC names it (dtInt32, dtWideString, dtFmtBCD, dtDateTime...). |
+| `columns` | array | optional | create-table: a list of {"name", "type"; optional "size", "precision", "scale" (dtFmtBCD and dtBCD need both), "required", "key" (primary), "autoinc"}; type as FireDAC names it (dtInt32, dtWideString, dtFmtBCD, dtDateTime...). |
 | `view` | string | optional | create-view: the NEW view's name; it selects fields of table, no filters. |
 <!-- /contract -->
 

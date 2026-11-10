@@ -4987,7 +4987,7 @@ const
     'create-view: its columns (default: all).';
   SP_DB_COLUMNS =
     'create-table: a list of {"name", "type"; optional "size", "precision", ' +
-    '"scale" (dtFmtBCD needs both), "required", "key" (primary), "autoinc"}; type as ' +
+    '"scale" (dtFmtBCD and dtBCD need both), "required", "key" (primary), "autoinc"}; type as ' +
     'FireDAC names it (dtInt32, dtWideString, dtFmtBCD, dtDateTime...).';
   SP_DB_VIEW =
     'create-view: the NEW view''s name; it selects fields of table, no filters.';
