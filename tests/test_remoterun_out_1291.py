@@ -17,6 +17,8 @@ carpeta local que hace de destino).
   O5  out= fuera de la jaula: negado y nada escrito fuera
   O6  out= con kill: no va con el comando
   O7  control: sin out=, la cola de siempre (RUN-023, que ahora dice como quedarse con todo)
+  O9  (Hermes, 10-nov) un remote-run cuyo programa termino lo dice (stillRunning=false, como output): con
+      durationMs igual al plazo no se sabia si el plazo corto
   O8  (Hermes, 10-nov) RUN-023 cuenta los bytes del PROGRAMA, los mismos que el size del fichero de O1
       (contaba el fichero del destino, con las dos lineas del lanzador: 12527 frente a 12508)
 
@@ -118,6 +120,8 @@ try:
     check('O2 ...sin las lineas del lanzador (___ENV, ___RC)', b is not None and b'___ENV' not in b and b'___RC' not in b,
           (b or b'')[:80])
     size1 = j.get('size')
+    check('O9 un remote-run cuyo programa termino lo dice: stillRunning=false, como output (ROJO: solo si seguia)',
+          j.get('stillRunning') is False and j.get('exitCode') == 0, sin_salida(j))
     f2 = os.path.join(SALIDAS, 'pocas.log')
     r, j = corre(srv, 'pocas.py', f2)
     b2 = lee(f2)

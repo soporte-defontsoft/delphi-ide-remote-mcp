@@ -1106,6 +1106,10 @@ begin
   begin
     Result.AddPair('success', TJSONBool.Create(Codigo = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Codigo));
+    // termino ANTES del plazo: lo dice, como output (solo lo ponia si seguia,
+    // y un exitCode con durationMs = timeoutms no decia si el plazo corto:
+    // Hermes, 10-nov)
+    Result.AddPair('stillRunning', TJSONBool.Create(False));
     // con out=, el fichero en vez de su cola
     if AGuardaEn <> '' then
       PonVolcado(Result, Volcado, AGuardaEn, True);
