@@ -277,6 +277,9 @@ type
   public
     [Test] procedure ElCentinelaEsLaUltimaLineaEntera;
     [Test] procedure ElTextoDelNodoVaYVuelveSinComillas;
+    { el out= de remote-run (RUN-028): lo del programa, en bytes, sin las dos
+      lineas del lanzador (LineaEnv, LineaRC) }
+    [Test] procedure LoDelProgramaSinLasLineasDelLanzador;
   end;
 
   { El hilo que hace el trabajo de una llamada con plazo (Lsp.ConPlazo) la
@@ -1746,6 +1749,35 @@ begin
   Assert.IsFalse(PartirSalida('___RC=7'#10'mas salida'#10, Salida, Codigo), 'no es la ultima linea');
   Assert.IsFalse(PartirSalida('linea'#10'___RC='#10, Salida, Codigo), 'sin codigo');
   Assert.IsFalse(PartirSalida('', Salida, Codigo));
+end;
+
+procedure TFinalDeUnTrabajoTests.LoDelProgramaSinLasLineasDelLanzador;
+
+  function B(const S: string): TArray<Byte>;
+  begin
+    Result := TEncoding.ASCII.GetBytes(S);
+  end;
+
+  procedure Igual(const AEsperado, AVisto: TArray<Byte>; const ACaso: string);
+  begin
+    Assert.AreEqual(Length(AEsperado), Length(AVisto), ACaso + ': longitud');
+    if Length(AEsperado) > 0 then
+      Assert.IsTrue(CompareMem(@AEsperado[0], @AVisto[0], Length(AEsperado)), ACaso + ': bytes');
+  end;
+
+begin
+  Igual(B('hola'#13#10'adios'#13#10), LoDelPrograma(B('___ENV=1|'#10'hola'#13#10'adios'#13#10#10'___RC=0'#10), True),
+    'con sus CRLF y su ultimo salto');
+  Igual(B('sin salto'), LoDelPrograma(B('___ENV=0|'#10'sin salto'#10'___RC=2'#10), True),
+    'el salto de LineaRC no es del programa');
+  Igual(B('a'#10'___RC=9'#10'b'#10), LoDelPrograma(B('___ENV=1|'#10'a'#10'___RC=9'#10'b'#10#10'___RC=0'#10), True),
+    'la marca que escribe el programa se queda: la del lanzador es la ultima');
+  Igual(B('va'#10), LoDelPrograma(B('___ENV=1|'#10'va'#10), False), 'sigue: nada que quitar al final');
+  Igual(B('x'#10), LoDelPrograma(B('x'#10#10'___RC=1'#10), True), 'sin la linea del entorno (un guion viejo)');
+  Igual(nil, LoDelPrograma(B('___ENV=1|'#10#10'___RC=0'#10), True), 'un programa que no escribio nada');
+  Igual(TArray<Byte>.Create($C3, $A9, $FF), LoDelPrograma(B('___ENV=1|'#10) + TArray<Byte>.Create($C3, $A9, $FF) +
+    B(#10'___RC=0'#10), True), 'sus bytes tal cual, tambien uno que no es UTF-8');
+  Igual(nil, LoDelPrograma(nil, False), 'nada');
 end;
 
 { el texto de type viaja al nodo por su linea, que en Windows no puede llevar una

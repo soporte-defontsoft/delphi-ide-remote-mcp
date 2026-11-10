@@ -179,6 +179,10 @@ PROBAR = [
     # mediria eso en vez de la jaula.
     ('delphi_paserver', 'project', {'command': 'remote-run',
                                     'project': AJENO_DPROJ, 'name': 'x'}),
+    # 1.29.1: el FICHERO donde va entera la salida (RUN-028), con un proyecto de
+    # DENTRO: la negativa tiene que ser la de out, no la de project
+    ('delphi_paserver', 'out', {'command': 'remote-run', 'name': 'x',
+                                'project': os.path.join(JAIL, 'Propio.dpr'), 'out': AJENO_TXT}),
 ]
 
 # NO son rutas locales. Cada exclusion lleva SU MOTIVO: una exclusion sin

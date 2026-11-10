@@ -2118,9 +2118,8 @@ const
     'must be allowed in the workspace''s RemoteHosts: registering a profile ' +
     'IS declaring where this machine may connect. An existing name is ' +
     'refused, never overwritten; the profile shows in the IDE too) | ' +
-    'remove-profile (that profile, from the IDE too; profiles live outside the ' +
-    'workspace, so there is no trash: its file and seat are copied first and ' +
-    'the answer says where) | test-connection (with profile: full ' +
+    'remove-profile (that profile, from the IDE too; its file and seat are ' +
+    'copied first and the answer says where) | test-connection (with profile: full ' +
     'handshake; with host+port and no profile: raw TCP probe, same host rule) ' +
     '| get-sdk (pull the sysroot from the PAServer of "profile" into ' +
     'a folder of its own named after the target distro, registered for ' +
@@ -2131,15 +2130,14 @@ const
     'none = all) | remove-sdk (its .sdk file and IDE seat, copied first; the sysroot ' +
     'stays on disk and the answer says where) | remote-run (run what THAT ' +
     'project deployed on the target of "profile" - nothing else - and ' +
-    'return exit code and output (a long one as its last lines); nothing ' +
+    'return exit code and output (a long one as its last lines, or all of it ' +
+    'into out); nothing ' +
     'to install, PAServer runs it. On ' +
     'timeout it is NOT killed: a program with a window stays up, you get ' +
     'its partial output and stillRunning=true) | kill (stop a job a ' +
-    'remote-run left running: profile, project and its job id; only a job of ' +
-    'THAT project on THAT machine) | output (what a job has written, cut ' +
-    'as remote-run cuts it: so far while it lives; once it ended, with its ' +
-    'exit code, and then it is deleted on the target; same profile, ' +
-    'project and job as kill)';
+    'remote-run left running) | output (what a job has written, as ' +
+    'remote-run gives it: so far while it lives; once it ended, with its ' +
+    'exit code, and then it is deleted on the target)';
   SP_PASERVER_PROJECT =
     'remote-run, kill, output: the ABSOLUTE path of the .dproj (or its .dpr) whose ' +
     'DEPLOYED program it is (not its name); the server derives the path on ' +
@@ -2166,8 +2164,7 @@ const
     'max ' + TOPE_REMOTE_RUN + ')';
   SP_PASERVER_NAME =
     'The PAServer connection profile, by name (letters, digits, "_", "-") - ' +
-    'the same "profile" delphi_build and delphi_desktop take: add-profile ' +
-    'creates it; test-connection, get-sdk, remote-run, kill and output use it';
+    'the "profile" of delphi_build and delphi_desktop; add-profile creates it';
   SP_PASERVER_HOST =
     'Host or IP where the target PAServer listens (add-profile, or ' +
     'test-connection without profile for a raw TCP probe)';
@@ -2216,6 +2213,12 @@ const
     'kill / output: the "jobId" a remote-run answer gave you; with profile ' +
     'and project (the same .dproj path) - only a job of THAT project on ' +
     'THAT machine.';
+  SP_PASERVER_OUT =
+    'remote-run, output: a .txt/.log FILE on this server for ALL the program ' +
+    'wrote, as it wrote it, instead of its last lines.';
+  SR_PASERVER_OUT_LOG =
+    '[PAS-077 INVALID_PARAM] The "out" of remote-run and output must end ' +
+    'in .txt or .log.';
   SR_PASERVER_JOB_NEEDS_FMT =
     '[PAS-002 INVALID_PARAM] %s needs "profile", "project" (the ' +
     '.dproj of that remote-run) and "job" (the jobId it returned). Only ' +
@@ -2259,7 +2262,34 @@ const
     salida en el destino, %d = las lineas que van }
   SN_REMOTERUN_COLA_FMT =
     '[RUN-023] Its output on the target is %d bytes; this answer ' +
-    'carries its last %d lines.';
+    'carries its last %d lines. All of it goes to a file with ' +
+    'out=<file.txt> on the remote-run or output that reads it (once read ' +
+    'whole, it is deleted from the target).';
+  { out= de remote-run y output (RUN-023 de Hermes, 9-nov: su veredicto iba
+    en la CABEZA de 412 lineas y la cola se lo llevaba, sin vuelta atras: la
+    salida leida se borra del destino). Lo que escribio el programa, entero y
+    con sus bytes, en un fichero del agente (Lsp.RemoteRun.LoDelPrograma) }
+  SN_REMOTERUN_LOGFILE =
+    '[RUN-028] Everything the program wrote is in "logfile" ON THE SERVER, ' +
+    'as it wrote it (without the launcher''s lines). Read it in ranges with ' +
+    'delphi_read (400 lines per call), search it with delphi_search, or ' +
+    'download it with delphi_fetch.';
+  SN_REMOTERUN_LOGFILE_VIVO =
+    '[RUN-029] It is still running: the file holds what it has written so ' +
+    'far. output with this job and out= again writes it all, up to its end.';
+  SN_REMOTERUN_OUT_PENDIENTE =
+    '[RUN-030] It is still running, so nothing was written to out yet: ' +
+    'output with this job and out=<file.txt> writes what it has written by ' +
+    'then, and all of it once it ends.';
+  { %d = los bytes de la salida, mas de los que caben en un fichero de una
+    vez. Una nota: la llamada fue bien, lo que no se hizo es el fichero }
+  SN_REMOTERUN_OUT_ENORME_FMT =
+    '[RUN-031] Its output on the target is %d bytes, too big to ' +
+    'write as one file: nothing was written to out; the answer carries its ' +
+    'last lines.';
+  SN_REMOTERUN_OUT_SE_QUEDA =
+    '[RUN-032] Its output stays on the target: output with this job reads it ' +
+    'again (with a valid out=, into a file).';
   SR_REMOTERUN_NO_OUTPUT_FMT =
     '[RUN-018 NOT_FOUND] There is no output of job %s on the target: ' +
     'either it was already read (a finished output is deleted ' +

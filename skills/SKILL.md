@@ -318,7 +318,11 @@ masked (`<project/alias>`).
   `delphi_paserver command=remote-run profile=<profile> project=<the .dproj>
   args=... timeoutms=...`. It returns `exitCode` and the program's output (a
   long one as its last 400 lines, at most 64K characters, with
-  `outputTruncated` and `RUN-023`). On a Windows target an argument reaches
+  `outputTruncated` and `RUN-023`). When the head matters (a verdict printed
+  first), pass `out=srvd:\...\run.txt`: all of it goes to that file (`RUN-028`),
+  read it in ranges with `delphi_read` - a read output is deleted from the
+  target, so ask for the file on the call that reads it (`output` takes `out=`
+  too). On a Windows target an argument reaches
   the program as Delphi's `ParamStr` reads it: one with a double quote, or
   an empty one, is refused before anything runs (`RUN-025`); on any target,
   so is one with a line break or a NUL (`RUN-026`).

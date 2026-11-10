@@ -47,6 +47,7 @@ type
     FSdk: string;
     FActive: string;
     FTimeoutMs: Integer;
+    FOut: string;
   public
     [SchemaDescription(SP_PASERVER_COMMAND)]
     property Command: string read FCommand write FCommand;
@@ -81,6 +82,11 @@ type
     property Active: string read FActive write FActive;
     [SchemaDescription(SP_PASERVER_TIMEOUT)]
     property TimeoutMs: Integer read FTimeoutMs write FTimeoutMs;
+    // el fichero, en ESTE servidor, donde va entera la salida de remote-run y
+    // output (RUN-028): ruta NUESTRA, como el out del logcat de delphi_adb
+    [SchemaDescription(SP_PASERVER_OUT)]
+    [RutaDelServidor]
+    property Out: string read FOut write FOut;
   end;
 
   TDelphiPAServerTool = class(TMCPToolBase<TDelphiPAServerParams>)
@@ -1401,13 +1407,20 @@ begin
     if Denied <> '' then
       Exit(Denied);
   end;
+  // out= se juzga ANTES de lanzar nada: lo que el escritor negaria y .txt/.log
+  if Params.Out.Trim <> '' then
+  begin
+    Denied := VolcadoDenegado(Params.Out.Trim, MsgText(SR_PASERVER_OUT_LOG));
+    if Denied <> '' then
+      Exit(Denied);
+  end;
   // Sin lista negra de metacaracteres (A4 de la 1.27, decision de David): no hay
   // shell en ningun sitio -los argumentos van del fichero de trabajo al argv del
   // lanzador, que solo arranca un binario nativo (execv / CreateProcess)-, y el
   // programa es el del agente. Lo que el formato no lleva, RUN-026 (RemoteRun)
   // True: si el programa sigue vivo, su salida se queda para command=output
   Res := RemoteRun(Prof, Proj, ExeName, TrocearArgs(Params.Args.Trim),
-    Params.TimeoutMs, True);
+    Params.TimeoutMs, True, True, False, Params.Out.Trim);
   try
     Result := Res.ToJSON;
   finally
@@ -1447,7 +1460,14 @@ begin
     True, Prof, Proj);
   if Denied <> '' then
     Exit(Denied);
-  Res := RemoteOutput(Prof, Proj, Params.Job.Trim);
+  // out=, antes de traer nada (el mismo juez que remote-run)
+  if Params.Out.Trim <> '' then
+  begin
+    Denied := VolcadoDenegado(Params.Out.Trim, MsgText(SR_PASERVER_OUT_LOG));
+    if Denied <> '' then
+      Exit(Denied);
+  end;
+  Res := RemoteOutput(Prof, Proj, Params.Job.Trim, Params.Out.Trim);
   try
     Result := Res.ToJSON;
   finally
@@ -2137,9 +2157,9 @@ begin
       'add-profile', 'profile host port password platform',
       'remove-profile', 'profile',
       'test-connection', 'profile host port',
-      'remote-run', 'profile project exe args timeoutms',
+      'remote-run', 'profile project exe args timeoutms out',
       'kill', 'profile project job',
-      'output', 'profile project job',
+      'output', 'profile project job out',
       'get-sdk', 'profile sdk active',
       'reseat-sdk', 'sdk',
       'remove-sdk', 'sdk'],
@@ -2147,7 +2167,8 @@ begin
      'password', Params.Password, '', 'platform', Params.Platform, '',
      'project', Params.Project, '', 'exe', Params.Exe, '', 'args', Params.Args, '',
      'job', Params.Job, '', 'sdk', Params.Sdk, '', 'active', Params.Active, '',
-     'timeoutms', IfThen(Params.TimeoutMs <> 0, IntToStr(Params.TimeoutMs)), ''], Suyos, VaCon);
+     'timeoutms', IfThen(Params.TimeoutMs <> 0, IntToStr(Params.TimeoutMs)), '',
+     'out', Params.Out, ''], Suyos, VaCon);
   if Sobra <> '' then
   begin
     // la nota de "name" solo donde nombraba un SDK (reseat-sdk, remove-sdk):

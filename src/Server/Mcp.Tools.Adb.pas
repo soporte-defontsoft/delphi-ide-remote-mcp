@@ -436,13 +436,11 @@ begin
       // lectura incluida), las carpetas muertas, una CARPETA donde va el
       // fichero, el atributo de solo lectura, una ruta que con su temporal no
       // cabe (revisor de P4; 2s de la 1.18.2). Se componia aqui a mano y
-      // admitia la temporal vieja de una raiz (V6 de la 1.23)
-      Denied := ColocacionDenegada(Params.Out.Trim);
+      // admitia la temporal vieja de una raiz (V6 de la 1.23). Y .txt o .log:
+      // EL juez de un volcado, el mismo de remote-run (VolcadoDenegado)
+      Denied := VolcadoDenegado(Params.Out.Trim, MsgText(SR_ADB_OUT_LOG));
       if Denied <> '' then
         Exit(Denied);
-      // la extension como la compara el disco (TieneExtension; E12 de la 1.28)
-      if not TieneExtension(Params.Out.Trim, ['.txt', '.log']) then
-        Exit(MsgText(SR_ADB_OUT_LOG));
     end;
     // logcat on a missing device WAITS instead of erroring (measured:
     // "- waiting for device -" until the timeout); get-state answers the

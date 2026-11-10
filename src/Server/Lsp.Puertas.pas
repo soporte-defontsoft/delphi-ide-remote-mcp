@@ -342,6 +342,12 @@ procedure ColocaContenido(const ADestino: string; const ABytes: TArray<Byte>;
   delphi_styles build no la hacia: el conversor y brcc32 escribian el
   derivado ellos mismos (1.18.2, 2s). }
 function ColocacionDenegada(const ADestino: string; ALugar: TLugarDeTexto = ltJaula): string;
+{ ...y la de un VOLCADO de texto que el agente pide a un fichero suyo (el
+  out= del logcat de delphi_adb, el de remote-run y output de
+  delphi_paserver): la de ColocacionDenegada y que acabe en .txt o .log; si
+  no, AExtension, el mensaje de la tool que lo pide. Estaba escrita a mano en
+  delphi_adb y remote-run iba a ser la segunda (RUN-023, 1.29.1). }
+function VolcadoDenegado(const ADestino, AExtension: string): string;
 { EL nombre del temporal de una sustitucion junto a APath
   ('.<nombre>.<8 hex>.delphi-patch-tmp'): el de AtomicWrite, el de
   ColocaProducto y el del zip en proceso de package, que tenia uno propio
@@ -782,6 +788,14 @@ begin
   end
   else
     Result := LugarDeEscrituraDenegado(ADestino, ALugar);
+end;
+
+function VolcadoDenegado(const ADestino, AExtension: string): string;
+begin
+  Result := ColocacionDenegada(ADestino);
+  // la extension como la compara el disco (TieneExtension; E12 de la 1.28)
+  if (Result = '') and not TieneExtension(ADestino, ['.txt', '.log']) then
+    Result := AExtension;
 end;
 
 function EnLugarDeTexto(const APath: string; ALugar: TLugarDeTexto;

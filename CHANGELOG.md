@@ -71,6 +71,16 @@ the MCP `initialize` response (`serverInfo.version`).
   connection, which libpq waits for. With the harness fixed, a silent network is answered
   in time and the server still exits clean, and an insert waiting on a row another
   session holds is cancelled by its timeout and answered.
+- `delphi_paserver` `remote-run` and `output` take `out=`, a `.txt`/`.log` file of the
+  workspace that receives ALL the program wrote, with its own bytes and without the
+  launcher's two lines (`RUN-028`); the answer names it, with its lines and size, instead
+  of carrying the last 400 lines. Reported by Hermes on 9-nov: its measuring tool writes
+  its verdict at the head of ~412 lines, the tail lost it, and a read output is deleted
+  from the target, so there was no way back. A program still running when `remote-run`
+  returns writes nothing yet (`RUN-030`); `output` with `out=` writes what it has so far
+  (`RUN-029`) and, once it ended, all of it. If the file cannot be written, the output
+  stays on the target (`RUN-032`). `RUN-023` says how to keep all of it. The check that
+  such a file ends in `.txt`/`.log` is now one, shared with `delphi_adb logcat out=`.
 
 ### Changed
 

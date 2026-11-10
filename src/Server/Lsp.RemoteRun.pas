@@ -145,11 +145,13 @@ function PaclientConecta(const APaclient, AProfile: string; out AOutput: string)
   la 1.23.1). ADelServidor: lo corre el servidor para si (el nodo de
   delphi_desktop sin project): la carpeta del nodo es suya (PAS-074 es para
   lo que nombra el agente; con el, la 1.29 en desarrollo dejo sin escritorio
-  remoto a un agente, informe del 7-nov). }
+  remoto a un agente, informe del 7-nov). AGuardaEn: el out= del agente, un
+  fichero suyo YA juzgado (VolcadoDenegado) donde va ENTERO lo que escribio el
+  programa si termino en el plazo (RUN-028; si sigue, RUN-030). }
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
   const AArgv: TArray<string>; ATimeoutMs: Integer;
   AGuardaSiSigue: Boolean = False; ACola: Boolean = True;
-  ADelServidor: Boolean = False): TJSONObject;
+  ADelServidor: Boolean = False; const AGuardaEn: string = ''): TJSONObject;
 
 { Mata el programa que un remote-run anterior dejo corriendo en el target:
   el trabajo AJobId, de ESE proyecto, en ESE perfil. Viaja como un trabajo
@@ -162,8 +164,11 @@ function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
   todo y su codigo de salida, y entonces su salida se BORRA del target
   (leida entera, como el buzon). Es lo que se perdia: lo que un programa
   con ventana escribe despues del plazo -el error al cerrar tras un
-  login- solo se veia entrando en la maquina (2026-09-26). }
-function RemoteOutput(const AProfile, ADprojPath, AJobId: string): TJSONObject;
+  login- solo se veia entrando en la maquina (2026-09-26). AGuardaEn: el
+  out= del agente (ya juzgado): lo que lleve escrito, entero, a ese fichero;
+  si no se pudo escribir, la salida se queda en el target. }
+function RemoteOutput(const AProfile, ADprojPath, AJobId: string;
+  const AGuardaEn: string = ''): TJSONObject;
 
 { EL lector de una linea de la salida del nodo (NodeProtocolo.inc): si ALinea,
   sin sus blancos, empieza por AMarca, True y lo que la sigue en AValor, sin
@@ -220,6 +225,13 @@ function FetchFromTarget(const AProfile, ADprojPath, ARelPath, ADestDir: string;
   el trabajo sigue en marcha. }
 function PartirSalida(const ATexto: string; out ASalida: string;
   out ACodigo: Integer): Boolean;
+
+{ ...y lo mismo en BYTES, para el fichero que pide el agente (out=): lo que
+  escribio el programa, sin la primera linea del entorno (McpRunJob.LineaEnv)
+  ni, si ATerminado, la ultima del codigo (McpRunJob.LineaRC, que la abre con
+  su propio salto). Los bytes del programa no se tocan: ni su codificacion
+  ni sus saltos. }
+function LoDelPrograma(const ABytes: TArray<Byte>; ATerminado: Boolean): TArray<Byte>;
 
 implementation
 
@@ -685,19 +697,114 @@ begin
     Result := '';
 end;
 
+function LoDelPrograma(const ABytes: TArray<Byte>; ATerminado: Boolean): TArray<Byte>;
+var
+  Desde, Hasta, P: Integer;
+  Marca: TArray<Byte>;
+begin
+  Desde := 0;
+  Marca := TEncoding.ASCII.GetBytes(JOB_ENV);
+  if (Length(ABytes) >= Length(Marca)) and CompareMem(@ABytes[0], @Marca[0], Length(Marca)) then
+  begin
+    while (Desde < Length(ABytes)) and (ABytes[Desde] <> 10) do
+      Inc(Desde);
+    if Desde < Length(ABytes) then
+      Inc(Desde); // su salto
+  end;
+  Hasta := Length(ABytes);
+  if ATerminado then
+  begin
+    // la ULTIMA #10___RC= es la del lanzador: un programa que escribe la
+    // marca la deja antes (PartirSalida ya dijo que la ultima linea es suya)
+    Marca := TEncoding.ASCII.GetBytes(#10 + JOB_RC);
+    for P := Length(ABytes) - Length(Marca) downto Desde do
+      if CompareMem(@ABytes[P], @Marca[0], Length(Marca)) then
+      begin
+        Hasta := P;
+        Break;
+      end;
+  end;
+  Result := Copy(ABytes, Desde, Hasta - Desde);
+end;
+
+type
+  { lo que un out= dejo: escrito (con sus lineas, como las cuenta
+    delphi_read, y sus bytes) o por que no }
+  TVolcado = record
+    Hecho: Boolean;
+    Lineas: Integer;
+    Bytes: Int64;
+    Error: string;
+  end;
+
+{ Lo que escribio el programa, del fichero traido (AFichero, ATamano bytes),
+  al out= del agente por EL escritor (ColocaContenido: su puerta en el momento
+  de escribir). Nunca lanza: lo que falle va en Error. }
+function GuardaLoDelPrograma(const AFichero: string; ATamano: Int64;
+  ATerminado: Boolean; const ADestino: string): TVolcado;
+var
+  B: TArray<Byte>;
+  Tam: Int64;
+  Enc: string;
+begin
+  Result := Default(TVolcado);
+  if ATamano > MaxInt then
+  begin
+    Result.Error := MsgFmt(SN_REMOTERUN_OUT_ENORME_FMT, [ATamano]);
+    Exit;
+  end;
+  try
+    B := LoDelPrograma(LeeTrozoDeBytes(AFichero, [ltTemporal], 0, Integer(ATamano), Tam), ATerminado);
+    ColocaContenido(ADestino, B);
+    Result.Hecho := True;
+    Result.Bytes := Length(B);
+    Result.Lineas := Length(LineasDelTexto(TextoDeBytes(B, False, Enc)));
+  except
+    on E: Exception do
+      Result.Error := MsgExcepcion(E.ClassName, E.Message);
+  end;
+end;
+
+{ Lo que el out= dejo, en la respuesta: el fichero (RUN-028; RUN-029 si el
+  programa sigue), por que no (y que la salida sigue en el target, RUN-032),
+  o que aun no se escribio porque el programa sigue (RUN-030). Todo en
+  logfileNote. }
+procedure PonVolcado(AObj: TJSONObject; const AVolcado: TVolcado; const ADestino: string;
+  ATerminado: Boolean);
+begin
+  if AVolcado.Hecho then
+  begin
+    AObj.AddPair('logfile', ADestino);
+    AObj.AddPair('lines', TJSONNumber.Create(AVolcado.Lineas));
+    AObj.AddPair('size', TJSONNumber.Create(AVolcado.Bytes));
+    AObj.AddPair('logfileNote', MsgText(SN_REMOTERUN_LOGFILE) +
+      IfThen(ATerminado, '', ' ' + MsgText(SN_REMOTERUN_LOGFILE_VIVO)));
+  end
+  else if AVolcado.Error <> '' then
+    // una nota y no el "error" de la respuesta: el programa corrio, lo que
+    // no se hizo es el fichero (C8 de test_catalogo)
+    AObj.AddPair('logfileNote', AVolcado.Error + ' ' + MsgText(SN_REMOTERUN_OUT_SE_QUEDA))
+  else
+    AObj.AddPair('logfileNote', MsgText(SN_REMOTERUN_OUT_PENDIENTE));
+end;
+
 { Trae <ADeployRel>/<job>.out del target y lo parte: el entorno grafico,
   lo que escribio el programa y, si TERMINO, su codigo. EL lector de ese
   fichero: remote-run mientras espera y output despues. False si no se
   pudo traer (no esta, o paclient fallo); los var solo cambian si se
   trajo. La copia local se borra al leerla. ATamano: los bytes del fichero
-  traido, que no se lee entero si pasa de lo que llena una cola. }
+  traido, que no se lee entero si pasa de lo que llena una cola. AGuardaEn:
+  el out= del agente; lo que escribio el programa va ENTERO a el antes de
+  borrar la copia, si termino o si AGuardaSiempre (output), y AVolcado dice
+  como fue. }
 function TraeSalida(const APc, AProfile, ADeployRel, AJobId, ATmpDir: string;
   var ATexto, AEntorno, ASalida: string; var ACodigo: Integer;
-  var ATerminado: Boolean; var ATamano: Int64): Boolean;
+  var ATerminado: Boolean; var ATamano: Int64;
+  const AGuardaEn: string; AGuardaSiempre: Boolean; var AVolcado: TVolcado): Boolean;
 var
-  OutFile, Ops, Output, Enc: string;
+  OutFile, Ops, Output, Enc, SinCodigo: string;
   Cabeza, Final: TArray<Byte>;
-  P: Integer;
+  P, Codigo: Integer;
 begin
   Result := False;
   OutFile := TPath.Combine(ATmpDir, NombreDeLaSalida(AJobId));
@@ -736,6 +843,14 @@ begin
     end
     else
       ATexto := TextoDeBytes(Cabeza, False, Enc);
+    // el out=: del fichero ENTERO, que se borra ahora (la cola es lo de la
+    // respuesta); termino lo dice la ultima linea, como abajo
+    if AGuardaEn <> '' then
+    begin
+      var Fin := PartirSalida(ATexto, SinCodigo, Codigo);
+      if Fin or AGuardaSiempre then
+        AVolcado := GuardaLoDelPrograma(OutFile, ATamano, Fin, AGuardaEn);
+    end;
   finally
     BorraFichero(OutFile, ltTemporal);
   end;
@@ -762,7 +877,7 @@ end;
 
 function RemoteRun(const AProfile, ADprojPath, AExeName: string;
   const AArgv: TArray<string>; ATimeoutMs: Integer;
-  AGuardaSiSigue, ACola, ADelServidor: Boolean): TJSONObject;
+  AGuardaSiSigue, ACola, ADelServidor: Boolean; const AGuardaEn: string): TJSONObject;
 
   // la salida: recortada para el agente, entera para quien la lee dentro
   procedure Pon(AObj: TJSONObject; const ATexto: string; ATamano: Int64);
@@ -781,6 +896,7 @@ var
   Sw: TStopwatch;
   Terminado: Boolean;
   Tamano: Int64;
+  Volcado: TVolcado;
 begin
   Result := TJSONObject.Create;
   try
@@ -938,6 +1054,7 @@ begin
   Codigo := -1;
   Salida := '';
   EntornoNota := '';
+  Volcado := Default(TVolcado);
   Sw := TStopwatch.StartNew;
   // Espera PROGRESIVA, y no es un detalle: un gesto del nodo dura ~2 s, asi
   // que un primer sondeo a los 1,5 s (lo que heredaba del runner) se comia
@@ -952,7 +1069,7 @@ begin
     if Espera > POLL_MS then
       Espera := POLL_MS;
     TraeSalida(Pc, AProfile, DeployRel, JobId, TmpDir, Texto, EntornoNota,
-      Salida, Codigo, Terminado, Tamano);
+      Salida, Codigo, Terminado, Tamano, AGuardaEn, False, Volcado);
   until Terminado or (Sw.ElapsedMilliseconds > ATimeoutMs);
 
   Result.AddPair('jobId', JobId);
@@ -966,7 +1083,11 @@ begin
   begin
     Result.AddPair('success', TJSONBool.Create(Codigo = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Codigo));
-    Pon(Result, Salida, Tamano);
+    // con out=, el fichero en vez de su cola
+    if AGuardaEn <> '' then
+      PonVolcado(Result, Volcado, AGuardaEn, True);
+    if not Volcado.Hecho then
+      Pon(Result, Salida, Tamano);
     PonFalloDelLanzador(Result, Salida, Codigo);
   end
   else
@@ -982,6 +1103,8 @@ begin
     Result.AddPair('killNote', MsgFmt(SN_REMOTERUN_KILL_FMT, [AProfile, JobId]));
     if AGuardaSiSigue then
       Result.AddPair('outputNote', MsgFmt(SN_REMOTERUN_OUTPUT_FMT, [AProfile, JobId]));
+    if AGuardaEn <> '' then
+      PonVolcado(Result, Volcado, AGuardaEn, False);
     if Texto <> '' then
       Pon(Result, Texto, Tamano);
   end;
@@ -993,8 +1116,9 @@ begin
   // programa que sigue vivo se queda para output: lo que escriba despues
   // -un error al cerrar tras el login, su codigo- es justo lo que se
   // perdia (2026-09-26: el AV de una app real solo se veia en el journal de
-  // Zorin). Un nombre que no exista no es un error que importe.
-  if Terminado or not AGuardaSiSigue then
+  // Zorin). Un nombre que no exista no es un error que importe. Y la de un
+  // out= que no se pudo escribir tambien se queda: borrarla la perdia entera
+  if (Terminado and ((AGuardaEn = '') or Volcado.Hecho)) or not AGuardaSiSigue then
     Ops := PaclientRemove([DeployRel + '/' + NombreDeLaSalida(JobId), DeployRel + '/' + RemotoLanzador,
       DeployRel + '/' + MascaraDeLosVigias])
   else
@@ -1034,12 +1158,14 @@ begin
   Result.AddPair('note', MsgText(SN_REMOTERUN_KILL_NOTE));
 end;
 
-function RemoteOutput(const AProfile, ADprojPath, AJobId: string): TJSONObject;
+function RemoteOutput(const AProfile, ADprojPath, AJobId: string;
+  const AGuardaEn: string): TJSONObject;
 var
   Pc, DeployRel, TmpDir, Texto, Entorno, Salida, Ops, Output: string;
   Codigo: Integer;
   Terminado: Boolean;
   Tamano: Int64;
+  Volcado: TVolcado;
 begin
   Result := TJSONObject.Create;
   try
@@ -1078,8 +1204,9 @@ begin
   Result.AddPair('profile', AProfile);
   Result.AddPair('project', DeployRel);
   Tamano := 0;
+  Volcado := Default(TVolcado);
   if not TraeSalida(Pc, AProfile, DeployRel, AJobId, TmpDir, Texto, Entorno,
-    Salida, Codigo, Terminado, Tamano) then
+    Salida, Codigo, Terminado, Tamano, AGuardaEn, True, Volcado) then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('error', MsgFmt(SR_REMOTERUN_NO_OUTPUT_FMT, [AJobId]));
@@ -1092,19 +1219,29 @@ begin
   begin
     Result.AddPair('success', TJSONBool.Create(Codigo = 0));
     Result.AddPair('exitCode', TJSONNumber.Create(Codigo));
-    PonSalida(Result, Salida, Tamano);
+    if AGuardaEn <> '' then
+      PonVolcado(Result, Volcado, AGuardaEn, True);
+    if not Volcado.Hecho then
+      PonSalida(Result, Salida, Tamano);
     PonFalloDelLanzador(Result, Salida, Codigo);
     // leida = borrada, como el buzon y las capturas: en el target no se
-    // acumula nada que alguien ya tiene
-    Ops := PaclientRemove([DeployRel + '/' + NombreDeLaSalida(AJobId)]);
-    Paclient(Pc, Ops, AProfile, Output);
-    Result.AddPair('note', MsgText(SN_REMOTERUN_OUTPUT_DONE));
+    // acumula nada que alguien ya tiene. Salvo un out= que no se escribio:
+    // borrarla la perdia entera (RUN-032)
+    if (AGuardaEn = '') or Volcado.Hecho then
+    begin
+      Ops := PaclientRemove([DeployRel + '/' + NombreDeLaSalida(AJobId)]);
+      Paclient(Pc, Ops, AProfile, Output);
+      Result.AddPair('note', MsgText(SN_REMOTERUN_OUTPUT_DONE));
+    end;
   end
   else
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('exitCode', TJSONNumber.Create(-1));
-    PonSalida(Result, Texto, Tamano);
+    if AGuardaEn <> '' then
+      PonVolcado(Result, Volcado, AGuardaEn, False);
+    if not Volcado.Hecho then
+      PonSalida(Result, Texto, Tamano);
     Result.AddPair('note', MsgFmt(SN_REMOTERUN_OUTPUT_ALIVE_FMT, [AProfile, AJobId]));
   end;
   except
