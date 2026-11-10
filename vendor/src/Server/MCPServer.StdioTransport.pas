@@ -25,9 +25,16 @@ type
 implementation
 
 uses
+  System.Generics.Collections, // [local change 1.29.1] la cola del lector de stdin
   Lsp.Identidad, // [local change] el nombre de una peticion moderna
   Lsp.Progreso, // [local change 1.29.1] el latido de una llamada larga (F8)
+  Lsp.Json, // [local change 1.29.1] ObjetoJson, CampoDeTexto
   Lsp.Texts; // [local change 2026-09-28] MsgExcepcion
+
+const
+  // [local change 1.29.1] lo que el lector deja en la cola al acabar stdin:
+  // una linea de JSON-RPC no lleva un #0
+  FIN_DE_STDIN = #0'fin';
 
 { TMCPStdioTransport }
 
@@ -49,6 +56,8 @@ procedure TMCPStdioTransport.Run;
 var
   InputLine: string;
   Response: string;
+  Lineas: TThreadedQueue<string>;
+  Lector: TThread;
 begin
   TLogger.Info('STDIO transport started - reading from stdin, writing to stdout');
   TLogger.Info('Logging to stderr');
@@ -76,11 +85,50 @@ begin
         Result := False;
       end;
     end);
-  while not Eof(Input) do
+  // [local change 1.29.1, A22] stdin lo lee OTRO hilo: mientras una llamada
+  // corre, el notifications/cancelled de su cliente se atiende AL LLEGAR (su
+  // respuesta ira al buzon); antes se leia al acabar ella y ya no casaba con
+  // nada (revisor de la 1.29.1). Lo demas va a la cola, en su orden, y lo
+  // procesa este hilo como siempre
+  Lineas := TThreadedQueue<string>.Create(1024, INFINITE, INFINITE);
+  Lector := TThread.CreateAnonymousThread(
+    procedure
+    var
+      L: string;
+      V: TJSONObject;
+    begin
+      try
+        while not Eof(Input) do
+        begin
+          Readln(Input, L);
+          V := ObjetoJson(L); // EL lector de la casa (Lsp.Json); nil si no es un objeto
+          try
+            if (V <> nil) and TMCPJsonRpcProcessor.NoSeContesta(V) and
+               (CampoDeTexto(V, 'method') = 'notifications/cancelled') then
+            begin
+              TLogger.Info('Received: ' + MaskSecretValues(L));
+              AtiendeCancelaciones(V, '');
+              Continue;
+            end;
+          finally
+            V.Free;
+          end;
+          Lineas.PushItem(L);
+        end;
+      except
+        on E: Exception do
+          TLogger.Error('Error reading STDIO: ' + E.Message);
+      end;
+      Lineas.PushItem(FIN_DE_STDIN);
+    end);
+  Lector.FreeOnTerminate := False;
+  Lector.Start;
+  while True do
   begin
+    InputLine := Lineas.PopItem;
+    if InputLine = FIN_DE_STDIN then
+      Break;
     try
-      Readln(Input, InputLine);
-
       if InputLine.Trim = '' then
         Continue;
 
@@ -118,6 +166,9 @@ begin
     end;
   end;
 
+  Lector.WaitFor;
+  Lector.Free;
+  Lineas.Free;
   QuitaSumideroDelHilo;
   TLogger.Info('STDIO transport stopped - EOF reached');
 end;

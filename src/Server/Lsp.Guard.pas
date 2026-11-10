@@ -820,6 +820,12 @@ procedure CopiaNuestra(const AOrigen, ADestino: string);
   y Mcp.Tools.Designer.ConNotaBinario) y delphi_styles iba a ser la tercera. }
 function ConNota(const AText, AClave, ANota: string;
   const ASeparador: string = #10): string;
+{ ...y su inversa: AText sin la nota que le puso. En un objeto, su campo
+  AClave; en prosa, la nota del FINAL, que empieza por AInicio y acaba en
+  AFinal sin otro salto de linea en medio: solo una nota entera, y un texto
+  que la cite en medio se queda como esta (revisor de la 1.29.1: cortaba en
+  cualquier sitio, y vivia en otra unidad con la deteccion del JSON copiada). }
+function SinNota(const AText, AClave, AInicio, AFinal: string): string;
 
 { Una ruta que NO es absoluta (<letra>:\ o UNC, la regla de EsRutaAbsoluta):
   la negativa GUARD-021 (INVALID_PARAM); '' si es absoluta o esta vacia. La
@@ -1324,28 +1330,64 @@ begin
     Result := AMsgNoExiste;
 end;
 
+{ La respuesta como objeto JSON, si lo es (nil si no): la pregunta de ConNota
+  y de SinNota, una vez. }
+function ObjetoDeLaRespuesta(const AText: string): TJSONObject;
+var
+  T: string;
+begin
+  Result := nil;
+  T := AText.TrimRight;
+  if T.StartsWith('{') and T.EndsWith('}') then
+    Result := ObjetoJson(T); // EL lector (Lsp.Json): estaba su cuerpo aqui
+end;
+
 function ConNota(const AText, AClave, ANota: string;
   const ASeparador: string): string;
 var
   O: TJSONObject;
-  T: string;
 begin
   Result := AText;
   if ANota = '' then
     Exit;
-  T := AText.TrimRight;
-  if T.StartsWith('{') and T.EndsWith('}') then
-  begin
-    O := ObjetoJson(T); // EL lector (Lsp.Json): estaba su cuerpo aqui
-    if O <> nil then
-      try
-        O.AddPair(AClave, ANota.Trim);
-        Exit(O.ToJSON);
-      finally
-        O.Free;
-      end;
-  end;
+  O := ObjetoDeLaRespuesta(AText);
+  if O <> nil then
+    try
+      O.AddPair(AClave, ANota.Trim);
+      Exit(O.ToJSON);
+    finally
+      O.Free;
+    end;
   Result := AText + ASeparador + ANota;
+end;
+
+function SinNota(const AText, AClave, AInicio, AFinal: string): string;
+var
+  O: TJSONObject;
+  Resto: string;
+  P: Integer;
+begin
+  Result := AText;
+  O := ObjetoDeLaRespuesta(AText);
+  if O <> nil then
+    try
+      if O.GetValue(AClave) <> nil then
+      begin
+        O.RemovePair(AClave).Free;
+        Result := O.ToJSON;
+      end;
+      Exit;
+    finally
+      O.Free;
+    end;
+  if AInicio = '' then
+    Exit;
+  P := AText.LastIndexOf(AInicio);
+  if P < 0 then
+    Exit;
+  Resto := AText.Substring(P + Length(AInicio));
+  if Resto.EndsWith(AFinal) and not Resto.Contains(#10) and not Resto.Contains(#13) then
+    Result := AText.Substring(0, P);
 end;
 
 function SoloLecturaDenegado(const APath: string): string;

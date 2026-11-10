@@ -23,7 +23,10 @@ the MCP `initialize` response (`serverInfo.version`).
   log line of a request without a session now carries its `Accept` header.
 - The answer of a call whose client stopped waiting for it is not lost: when a heartbeat or
   the answer itself cannot be written (the client left), or when the client says it gave up
-  (`notifications/cancelled` with the call's id, from the same workspace), the server
+  (`notifications/cancelled` with the call's id, from the same workspace and session -
+  and, without a session, from the same agent when the cancel says who it is: two agents
+  of one token number their ids each; over stdio too, whose input is now read by a thread
+  of its own, so a cancel is seen while the call still runs - it was read after it), the server
   finishes the call and leaves its answer in that agent's mailbox, once (`SYS-041`, read
   with `delphi_messages`), and
   every answer of the agent says mail is waiting until it reads it - so it does not run

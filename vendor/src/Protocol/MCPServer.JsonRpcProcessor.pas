@@ -433,7 +433,10 @@ begin
         var IdJson := '';
         if Assigned(JSONRequest.GetValue('id')) then
           IdJson := JSONRequest.GetValue('id').ToJSON;
+        // ...y el agente que declara (sin sesion, dos agentes de un token
+        // numeran sus ids cada uno: su cancelled no marca la llamada del otro)
         var Perdido := ConLatido(TokenDeProgreso(Params), Herramienta, IdJson, SessionID,
+          LeeModerna(JSONRequest).Cliente,
           procedure
           begin
             Resultado := ExecuteMethodCall(Registro, MethodName, Params);

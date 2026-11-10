@@ -80,9 +80,8 @@ uses
   System.IOUtils,
   System.StrUtils,
   System.Generics.Collections,
-  System.JSON,
   MCPServer.Registration,
-  Lsp.Json, // ObjetoJson: EL lector de un objeto JSON
+  Lsp.Guard, // SinNota: la inversa de ConNota, junto a ella
   Lsp.Puertas, // LeeTexto: la puerta de leer, con la casa como lugar
   Lsp.Casa,
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
@@ -136,35 +135,13 @@ end;
 
 function SinNotaDelBuzon(const AText: string): string;
 var
-  O: TJSONObject;
-  T, Inicio: string;
-  P: Integer;
+  F: string;
 begin
-  Result := AText;
-  T := AText.TrimRight;
-  // en un objeto va como un campo mas (ConNota)
-  if T.StartsWith('{') and T.EndsWith('}') then
-  begin
-    O := ObjetoJson(T);
-    if O <> nil then
-      try
-        if O.GetValue(CLAVE_NOTA_DEL_BUZON) <> nil then
-        begin
-          O.RemovePair(CLAVE_NOTA_DEL_BUZON).Free;
-          Result := O.ToJSON;
-        end;
-        Exit;
-      finally
-        O.Free;
-      end;
-  end;
-  // en prosa va detras, tal cual: desde su comienzo, el del mismo mensaje
-  // del catalogo que la compone (hasta su primer argumento)
-  Inicio := MsgText(SN_MESSAGES_PENDING_FMT);
-  Inicio := Copy(Inicio, 1, Pos('%', Inicio) - 1);
-  P := AText.LastIndexOf(Inicio);
-  if (Inicio <> '') and (P >= 0) then
-    Result := AText.Substring(0, P);
+  // la nota entera, por el mismo mensaje del catalogo que la compone: su
+  // comienzo (hasta el primer argumento) y su final (tras el ultimo)
+  F := MsgText(SN_MESSAGES_PENDING_FMT);
+  Result := SinNota(AText, CLAVE_NOTA_DEL_BUZON, Copy(F, 1, Pos('%', F) - 1),
+    F.Substring(F.LastIndexOf('%s') + 2));
 end;
 
 function DirectedMessagesPending: Integer;

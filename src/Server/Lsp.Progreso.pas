@@ -45,17 +45,21 @@ procedure QuitaSumideroDelHilo;
   ProgressSeconds que siga en marcha manda un notifications/progress con los
   segundos que lleva y SYS-040 (ANombre: la tool); el ultimo latido acaba
   antes de que ConLatido vuelva. Mientras dura esta EN VUELO con su AId (el
-  JSON del id de la peticion) y ASesion ('' sin sesion), para
+  JSON del id de la peticion), ASesion ('' sin sesion) y AAgente (el nombre
+  que declara la peticion moderna en su _meta, '' si no), para
   AtiendeCancelaciones. True = el cliente dejo de esperar antes de la
   respuesta: un latido no llego o mando su cancelled (A22). Una excepcion de
   ALlamada sale tal cual. }
-function ConLatido(const AToken, ANombre, AId, ASesion: string; const ALlamada: TProc): Boolean;
+function ConLatido(const AToken, ANombre, AId, ASesion, AAgente: string;
+  const ALlamada: TProc): Boolean;
 
 { Los notifications/cancelled de AValor (uno, o los de un lote): la llamada
   EN VUELO con ese requestId, del mismo workspace y de la misma sesion
-  (ASesion, '' sin sesion), queda por perdida y su respuesta ira al buzon al
-  acabar. Lo demas no se toca. Lo llama quien recibe una notificacion: el
-  transporte HTTP (que no las pasa al procesador) y el procesador (stdio). }
+  (ASesion, '' sin sesion) - y del mismo agente cuando los dos lo declaran:
+  sin sesion, dos agentes de un token numeran sus ids cada uno (revisor de la
+  1.29.1) -, queda por perdida y su respuesta ira al buzon al acabar. Lo
+  demas no se toca. Lo llama quien recibe una notificacion: el transporte
+  HTTP (que no las pasa al procesador) y el lector de stdin de stdio. }
 procedure AtiendeCancelaciones(AValor: TJSONValue; const ASesion: string);
 
 { El notifications/progress de un latido, compuesto aqui y en ningun otro
@@ -88,6 +92,7 @@ uses
   Lsp.Identidad, // AgenteDeLaLlamada
   Lsp.Puertas, // EscribeDocumentoNuevo
   Mcp.Tools.Messages, // SinNotaDelBuzon
+  MCPServer.JsonRpcProcessor, // LeeModerna: EL lector del _meta moderno
   MCPServer.Logger,
   Lsp.Texts;
 
@@ -96,7 +101,7 @@ type
     workspace de su token, su sesion y su id. Perdido lo pone un latido que
     no llega o el cancelled que casa; ConLatido lo lee al acabar. }
   TEnVuelo = class
-    Workspace, Sesion, Id: string;
+    Workspace, Sesion, Id, Agente: string;
     Perdido: Boolean;
   end;
 
@@ -270,7 +275,8 @@ begin
   end;
 end;
 
-function ConLatido(const AToken, ANombre, AId, ASesion: string; const ALlamada: TProc): Boolean;
+function ConLatido(const AToken, ANombre, AId, ASesion, AAgente: string;
+  const ALlamada: TProc): Boolean;
 var
   Vuelo: TEnVuelo;
 begin
@@ -280,6 +286,7 @@ begin
     Vuelo.Workspace := CurrentWorkspaceName;
     Vuelo.Sesion := ASesion;
     Vuelo.Id := AId;
+    Vuelo.Agente := AAgente;
     if AId <> '' then
     begin
       GVuelosLock.Enter;
@@ -311,7 +318,7 @@ end;
 procedure AtiendeCancelaciones(AValor: TJSONValue; const ASesion: string);
 var
   Params, IdV: TJSONValue;
-  Id, Workspace: string;
+  Id, Workspace, Agente: string;
   N: Integer;
 begin
   if AValor is TJSONArray then
@@ -332,11 +339,15 @@ begin
   // del tools/call en vuelo
   Id := IdV.ToJSON;
   Workspace := CurrentWorkspaceName;
+  // quien lo manda, si lo dice (el _meta de una peticion moderna): el de
+  // opencode no trae _meta, y entonces casan el workspace, la sesion y el id
+  Agente := TMCPJsonRpcProcessor.LeeModerna(AValor).Cliente;
   N := 0;
   GVuelosLock.Enter;
   try
     for var V in GVuelos do
-      if (V.Id = Id) and SameText(V.Workspace, Workspace) and (V.Sesion = ASesion) then
+      if (V.Id = Id) and SameText(V.Workspace, Workspace) and (V.Sesion = ASesion) and
+         ((Agente = '') or (V.Agente = '') or SameText(V.Agente, Agente)) then
       begin
         V.Perdido := True;
         Inc(N);

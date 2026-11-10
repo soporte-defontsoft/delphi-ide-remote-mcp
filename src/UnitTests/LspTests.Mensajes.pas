@@ -40,10 +40,20 @@ type
     procedure LaLineaCitadaDiceQueSeCorta;
   end;
 
+  { La nota que se pega a una respuesta y su inversa (Lsp.Guard.ConNota y
+    SinNota): la del buzon sale de una respuesta que se deja EN el buzon, y
+    en prosa solo se quita una nota entera al final (revisor de la 1.29.1) }
+  [TestFixture]
+  TNotasTests = class
+  public
+    [Test] procedure SinNotaEsLaInversaDeConNota;
+  end;
+
 implementation
 
 uses
   System.SysUtils,
+  Lsp.Guard, // ConNota, SinNota
   Lsp.Listas,
   Lsp.Texts;
 
@@ -282,8 +292,36 @@ begin
     'a 120, y lo dice');
 end;
 
+{ TNotasTests }
+
+procedure TNotasTests.SinNotaEsLaInversaDeConNota;
+var
+  F, Inicio, Final, Nota: string;
+begin
+  // la nota del buzon de verdad, por su mensaje del catalogo
+  F := MsgText(SN_MESSAGES_PENDING_FMT);
+  Inicio := Copy(F, 1, Pos('%', F) - 1);
+  Final := F.Substring(F.LastIndexOf('%s') + 2);
+  Nota := MsgFmt(SN_MESSAGES_PENDING_FMT, [2, 'hermes-agent']);
+  Assert.AreEqual('hola', SinNota(ConNota('hola', 'mailbox', Nota, ''), 'mailbox', Inicio, Final),
+    'prosa: la nota del final se va');
+  Assert.AreEqual('{"a":1}', SinNota(ConNota('{"a":1}', 'mailbox', Nota, ''), 'mailbox', Inicio, Final),
+    'JSON: su campo se va');
+  Assert.AreEqual('{"a":1}', SinNota('{"a":1}', 'mailbox', Inicio, Final), 'JSON sin el campo: igual');
+  // un texto que CITA la nota en medio (un vault_read, un SYS-041 de antes) se queda entero
+  var Cita := 'antes' + Nota + #10'despues';
+  Assert.AreEqual(Cita, SinNota(Cita, 'mailbox', Inicio, Final), 'citada en medio: entera');
+  var Rota := 'antes' + Inicio + '3 in your';
+  Assert.AreEqual(Rota, SinNota(Rota, 'mailbox', Inicio, Final), 'una nota a medias: entera');
+  Assert.AreEqual('nada', SinNota('nada', 'mailbox', Inicio, Final), 'sin nota: igual');
+  // ...y con una nota citada antes y la de verdad al final, se va solo la del final
+  Assert.AreEqual(Cita, SinNota(ConNota(Cita, 'mailbox', Nota, ''), 'mailbox', Inicio, Final),
+    'la del final, no la citada');
+end;
+
 initialization
   TDUnitX.RegisterTestFixture(TEtiquetasTests);
   TDUnitX.RegisterTestFixture(TColaDeSalidaTests);
+  TDUnitX.RegisterTestFixture(TNotasTests);
 
 end.

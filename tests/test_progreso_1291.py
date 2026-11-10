@@ -38,6 +38,10 @@ PostgreSQL de produccion (sin ellas, la bateria termina sin checks y lo dice).
      buzon no lleva la nota PENDING MESSAGES: quien la lee la recibe con el otro, y la cuenta ya no es
      verdad. En prosa (la negativa de la base), la linea de detras
   C6 ...y en JSON (un delphi_test cortado, como el de Hermes), el campo mailbox
+  C7 (revisor de la 1.29.1) por STDIO, el cancelled que llega con la llamada en marcha la da por perdida
+     y su respuesta queda en el buzon (stdio leia la linea siguiente al acabar la llamada: no casaba)
+  C8 sin sesion, el cancelled de un agente no marca la llamada de otro agente con el mismo id (cada uno
+     numera los suyos): su buzon, vacio
 
 Uso:  python tests/test_progreso_1291.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -153,6 +157,38 @@ try:
               (len(lat), str(resp)[:200]))
     finally:
         srv.cierra()
+
+    # C7: por stdio, el cancelled a mitad de la llamada
+    import glob, time
+
+    def dejados_stdio():
+        return sorted(glob.glob(os.path.join(SRV, 'messages', '**', '*answer-delphi-db*.md'), recursive=True))
+    for f in dejados_stdio():
+        os.remove(f)
+    srv = mc.Stdio(EXE, entorno(), nombre='progreso', t=90)
+    try:
+        srv.send({'jsonrpc': '2.0', 'id': 931, 'method': 'tools/call', 'params': mc.params_modernos(LARGA, 'stdio-c7')})
+        time.sleep(4)
+        srv.send({'jsonrpc': '2.0', 'method': 'notifications/cancelled',
+                  'params': mc.params_modernos({'requestId': 931, 'reason': 'timed out'}, 'stdio-c7')})
+        resp = None
+        hasta = time.time() + 60
+        while time.time() < hasta and resp is None:
+            try:
+                m = json.loads(srv.q.get(timeout=1))
+            except Exception:
+                continue
+            if m.get('id') == 931:
+                resp = m
+        time.sleep(1)
+        d7 = dejados_stdio()
+        check('C7 stdio: el cancelled con la llamada en marcha deja su respuesta en el buzon, una vez '
+              '(ROJO: stdio lo leia al acabar)',
+              resp is not None and len(d7) == 1 and 'stdio-c7' in d7[0], (str(resp)[:200], d7))
+    finally:
+        srv.cierra()
+    for f in dejados_stdio():
+        os.remove(f)
 
     # ---- HTTP: un workspace con su token, como las demas baterias HTTP
     io.open(os.path.join(SRV, 'settings.ini'), 'w', encoding='utf-8').write(
@@ -275,7 +311,11 @@ try:
         time.sleep(1)
         check('C3 un cancelled con un id que no esta en vuelo no deja nada', stc == 202 and not en_el_buzon(),
               (stc, en_el_buzon()))
-        # C4: cancelled tras el primer latido, y cuelga
+        # C4: cancelled tras el primer latido, y cuelga. Con RST (SO_LINGER 0): tras un cierre normal la
+        # primera escritura a ese socket suele entrar, el transporte no fallaba y la guarda de "una vez"
+        # (GDejada) no se ejercitaba - el revisor de la 1.29.1: C4 pasaba tambien sin ella
+        LOG = os.path.join(SRV, 'logs', 'actual.log')
+        log_antes = os.path.getsize(LOG) if os.path.isfile(LOG) else 0
         c = http.client.HTTPConnection('127.0.0.1', puerto, timeout=60)
         p = mc.params_modernos(LARGA, 'progreso')
         p['_meta']['progressToken'] = 'tok-c4'
@@ -285,11 +325,20 @@ try:
         r = c.getresponse()
         primero = r.fp.readline()
         stc, _, _ = cancela(924)
+        import socket, struct
+        c.sock.setsockopt(socket.SOL_SOCKET, socket.SO_LINGER, struct.pack('ii', 1, 0))
+        r.close()
         c.close()
         hasta = time.time() + 40
-        while time.time() < hasta and not en_el_buzon():
+        nuevo_log = ''
+        while time.time() < hasta and 'SSE stream lost before its answer' not in nuevo_log:
             time.sleep(1)
+            with open(LOG, encoding='utf-8', errors='replace') as fl:
+                fl.seek(log_antes)
+                nuevo_log = fl.read()
         time.sleep(3)
+        check('C4 (preparacion) el transporte tampoco pudo escribirla: la segunda vez que se intenta dejar',
+              'SSE stream lost before its answer' in nuevo_log, nuevo_log[-400:])
         check('C4 cancelled y luego cuelga: en el buzon UNA vez', primero and stc == 202 and len(en_el_buzon()) == 1,
               (primero, stc, en_el_buzon()))
         vacia_el_buzon()
@@ -310,8 +359,9 @@ try:
             hilo.join(240)
             time.sleep(1)
             nuevos = sorted(set(en_el_buzon()) - antes)
-            return (io.open(os.path.join(buzon, nuevos[0]), encoding='utf-8-sig').read() if nuevos else '',
-                    res.get('r', (None, None, ''))[2])
+            # UNA: dos serian la misma respuesta dejada dos veces (revisor de la 1.29.1)
+            return (io.open(os.path.join(buzon, nuevos[0]), encoding='utf-8-sig').read() if len(nuevos) == 1
+                    else 'DEJADOS: %d' % len(nuevos), res.get('r', (None, None, ''))[2])
 
         dejado, _ = cortada(LARGA, 925, 4)
         check('C5 con otro mensaje esperando, la respuesta (prosa) que se deja en el buzon no lleva PENDING MESSAGES',
@@ -334,6 +384,31 @@ try:
               mc.es(dejado, 'SN_SYS_RESPUESTA_PERDIDA_FMT') and '"verdictFrom"' in cuerpo and '"mailbox"' not in dejado
               and not mc.es(dejado, 'SN_MESSAGES_PENDING_FMT'), ('buzon: ' + dejado[-300:], 'cliente: ' + llego[-300:]))
         vacia_el_buzon()
+
+        # C8: sin sesion, dos agentes con el mismo token y el MISMO id; el cancelled de uno
+        def buzon_de(n):
+            d = os.path.join(SRV, 'messages', 'Workspace.P', n)
+            return sorted(f for f in os.listdir(d) if f.endswith('.md')) if os.path.isdir(d) else []
+
+        def llamada_de(nombre, rid, res):
+            res[nombre] = mc.post(url, {'jsonrpc': '2.0', 'id': rid, 'method': 'tools/call',
+                                        'params': mc.params_modernos(LARGA, nombre)}, TOKEN, None,
+                                  'application/json', 90, dict(cab, **{'Mcp-Name': 'delphi_db'}))
+        res8 = {}
+        hilos = [threading.Thread(target=llamada_de, args=(n, 941, res8)) for n in ('agente-c8a', 'agente-c8b')]
+        for h in hilos:
+            h.start()
+        time.sleep(4)
+        st8, _, _ = mc.post(url, {'jsonrpc': '2.0', 'method': 'notifications/cancelled',
+                                  'params': mc.params_modernos({'requestId': 941, 'reason': 'timed out'}, 'agente-c8a')},
+                            TOKEN, None, mc.ACCEPT_STREAMABLE, 30, dict(cab, **{'Mcp-Method': 'notifications/cancelled'}))
+        for h in hilos:
+            h.join(60)
+        time.sleep(1)
+        check('C8 sin sesion: el cancelled de un agente deja SU respuesta y no la del otro con el mismo id '
+              '(ROJO: la de los dos)',
+              st8 == 202 and len(buzon_de('agente-c8a')) == 1 and not buzon_de('agente-c8b'),
+              (st8, buzon_de('agente-c8a'), buzon_de('agente-c8b')))
     finally:
         proc.kill()
 finally:
