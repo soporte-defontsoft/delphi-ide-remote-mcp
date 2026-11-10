@@ -26,7 +26,9 @@ states its protocol, and one of another version is refused (`DSGN-184`,
 `STYLE-066`). The zip carries no database client: for PostgreSQL in `delphi_db`, copy
 `libpq.dll` (16 or later, 64-bit) and the five DLLs it loads (`libssl*`, `libcrypto*`,
 `libintl*`, `libiconv*`, `libwinpthread*`) from the `bin\` of a PostgreSQL for Windows
-x64 into `drivers\PG\lib\`, all six; SQL Server goes through
+x64 into `drivers\PG\lib\`, all six, and install Microsoft's *Visual C++ 2015-2022
+Redistributable (x64)* if the machine does not have it (they need its runtime, which
+Windows does not bring); SQL Server goes through
 Microsoft's ODBC Driver 17 or 18 ([CONFIGURATION.md](docs/CONFIGURATION.md)).
 
 ## 2. A five-line `settings.ini`

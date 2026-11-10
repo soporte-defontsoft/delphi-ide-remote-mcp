@@ -491,7 +491,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   `.example` and fill it in. **Pending tests:** an API that needs a login call first, and
   then the session token it returns on every request; `auth` holds fixed credentials only.
   A driver that loads a client library loads it from `drivers\<DriverID>\` next to the
-  server's exe and from nowhere else. The zip does not carry them: the operator puts them
+  server's exe, never from the `PATH`. The zip does not carry them: the operator puts them
   there.
   - **PostgreSQL** (`engine: "PG"`): `drivers\PG\lib\` holds `libpq.dll`, **16 or later**
     (an older one refuses to open: the server asks it not to use the account's client
@@ -505,7 +505,11 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
     in its own folder, in `System32` and in that one - never in the `PATH` (1.29.1; before
     it, a missing companion was taken from the `PATH`, measured with the OpenSSL of Git for
     Windows) - so with one missing, or `libpq.dll` itself, a call answers `DB-030`, which
-    says where they go.
+    says where they go. They also need Microsoft's Visual C++ runtime, which Windows does
+    not bring (`VCRUNTIME140.dll`: `libpq`, `libssl` and `libcrypto` import it; measured
+    with the 18.3 x64 build): it goes in `System32` with the *Visual C++ 2015-2022
+    Redistributable (x64)*. A new Windows without it answers `DB-030` too, with the six in
+    place (measured); once it is installed the next call opens, without a restart.
   - **SQL Server** (`engine: "MSSQL"`): nothing in `drivers\`; it goes through the
     system's 64-bit ODBC, and FireDAC takes the first one installed of: ODBC Driver 18 for
     SQL Server, ODBC Driver 17, SQL Server Native Client 11.0, ODBC Driver 13, ODBC Driver

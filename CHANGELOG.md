@@ -95,7 +95,10 @@ the MCP `initialize` response (`serverInfo.version`).
   places. It is not inherited: msbuild, the compiler, the engine and the form renderers
   (which load the IDE's packages through their `PATH`) are as they were. An operator who
   serves HTTPS (`[SSL] Enabled`) with OpenSSL libraries found in the `PATH` puts them next to
-  the server's exe.
+  the server's exe. On updating, PostgreSQL in `delphi_db` answers `DB-030` until
+  `drivers\PG\lib\` holds the five companions of `libpq.dll` (if only `libpq.dll` was there)
+  and the Visual C++ runtime they need is in `System32` (its redistributable), if it was
+  found only in the `PATH`.
 
 ### Fixed
 
@@ -103,12 +106,18 @@ the MCP `initialize` response (`serverInfo.version`).
   hint "check it is in the PATH or application EXE directories", which does not apply here;
   it is now `DB-030`, told apart by FireDAC's error code and not its text, and it names the
   file FireDAC looked for next to the server (`drivers\PG\lib\libpq.dll`), where it goes
-  with every DLL it loads, 64-bit.
+  with the DLLs it loads, 64-bit; that the server takes them from there, its own folder and
+  `System32`, so a runtime Windows does not bring goes in `System32` with its installer; and
+  that the next call tries again, without a restart. Measured on a new Windows with the six
+  in place and no Visual C++ runtime: `DB-030`, and with the redistributable installed the
+  next call opened (the first text said "nowhere else", which sent the operator to copy the
+  runtime into that folder).
 - Docs: what an operator puts next to the server for `delphi_db`, which the zip does not
   carry. `docs/CONFIGURATION.md` named only `drivers\PG\lib\libpq.dll` "with the DLLs it
   depends on" and `QUICKSTART.md` nothing; both now name the five (`libssl-3-x64`, `libcrypto-3-x64`,
   `libintl-9`, `libiconv-2`, `libwinpthread-1` with the 18.3 x64 build), say all six are
-  64-bit, where to take them from and that all six are needed. For SQL Server, the order
+  64-bit, where to take them from and that all six are needed, plus Microsoft's Visual C++
+  runtime they import (`VCRUNTIME140.dll`), which Windows does not bring. For SQL Server, the order
   in which FireDAC picks the system's ODBC driver (ODBC Driver 18, 17, Native Client
   11.0...; measured here: Native Client 11.0).
 - Small things an agent met in the 1.29 test rounds, each said where it happens:

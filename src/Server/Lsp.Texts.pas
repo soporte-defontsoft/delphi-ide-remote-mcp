@@ -4763,13 +4763,21 @@ const
   // que FireDAC no pudo cargar es la libreria cliente del motor
   // (er_FD_AccCantLoadLibrary): su pista ("check it is in the PATH or
   // application EXE directories") no vale aqui, donde el servidor solo la
-  // busca en su casa (P5 de la 1.29.1)
+  // busca en su casa (P5 de la 1.29.1). Su casa no es el UNICO sitio: las
+  // DLL salen de esa carpeta, la del exe y System32 (SetDefaultDllDirectories),
+  // y un runtime que Windows no trae va a System32 con su instalador. Medido
+  // en la VM el 10-nov: el libpq 18.3 importa VCRUNTIME140.dll, no estaba, y
+  // el texto de antes ("nowhere else") mandaba a copiarlo a mano a la carpeta;
+  // con el redistribuible instalado la llamada SIGUIENTE abrio, sin reiniciar
   SR_DB_SIN_LIBRERIA_FMT =
     '[DB-030 DENIED] The database "%s" could not be opened: this server ' +
     'could not load the client library of its engine. Only the operator ' +
     'can fix it: FireDAC looked for it next to the server, as %s; it goes ' +
-    'there with every DLL it loads, all 64-bit (the server looks for them ' +
-    'nowhere else, not in the PATH). Nothing was done.';
+    'there with the DLLs it loads, all 64-bit. The server takes them from ' +
+    'that folder, its own and System32, never from the PATH: a runtime ' +
+    'they need that Windows does not bring (such as Microsoft''s Visual ' +
+    'C++ one) goes in System32 with its installer. The next call tries ' +
+    'again, without a restart. Nothing was done.';
   SR_DB_RESPONDE_FMT =
     '[DB-010 DENIED] The database "%s" refused it: %s. Nothing was ' +
     'changed.';
