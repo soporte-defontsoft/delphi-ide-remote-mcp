@@ -173,10 +173,17 @@ project is in maintenance: patches only.
   server's own unit suite peaks at 32 MB and a render with 110 packages at 170 MB, on a
   machine of 8 GB and 4 processors (2047 MB and 75 %). What a test asks for past the cap
   Windows refuses; Windows says so through the job, and `delphi_test` tells why the test
-  saw an out-of-memory error (`memoryCapNote`, `TEST-039`).
+  saw an out-of-memory error (`memoryCapNote`, `TEST-039`). Its description names the cap
+  next to the timeout, so a test can be written for it.
 
 ### Fixed
 
+- `delphi_desktop` answered `"ran": false` and nothing else when the node on the target
+  ended with an error code or was still running at the end of its 60 s, even with the
+  capture taken and in the answer: the agent could not tell a failed node from a slow one,
+  or know whether the capture was good. It now says which: `exitCode` and `DESK-028`, or
+  `stillRunning` and `DESK-029`, and the capture stays. Found by Hermes's directed test of
+  this version, right after the Fedora target restarted.
 - The DUnitX runner of `delphi_create kind=project-test` ran only the fixtures registered
   with `TDUnitX.RegisterTestFixture`: a `[TestFixture]` class without that line never ran,
   and the run said `pass` with one test less. It now finds them by RTTI, as the runner of the

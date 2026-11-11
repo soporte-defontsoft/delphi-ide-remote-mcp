@@ -138,6 +138,10 @@ uses
   Lsp.PuertaDeLaLlamada, // ComandoQueLee: que comandos solo miran, la tabla de la puerta
   Lsp.Capturas;
 
+const
+  // lo que puede tardar el nodo en una llamada (el plazo de su remote-run, y lo que dice DESK-029)
+  PLAZO_DEL_NODO_MS = 60000;
+
 { "x,y,w,h" en pixeles del escritorio -> cuatro enteros; w y h > 0. }
 function ParseRegion(const ATexto: string; out X, Y, W, H: Integer): Boolean;
 var
@@ -533,7 +537,7 @@ begin
     habra sustituido antes de llegar aqui. }
   // la salida ENTERA: de ella se lee el protocolo del nodo (CAPTURE=, sus
   // ventanas, WINERR=); la cola es de lo que se da al agente (V99)
-  Res := RemoteRun(Params.Profile.Trim, Proj, '', Args, 60000, False, False, DelServidor);
+  Res := RemoteRun(Params.Profile.Trim, Proj, '', Args, PLAZO_DEL_NODO_MS, False, False, DelServidor);
   try
     Salida := '';
     if Res.GetValue('output') <> nil then
@@ -561,6 +565,22 @@ begin
       Return.AddPair('ran', TJSONBool.Create(Res.GetValue<Boolean>('success')));
     if Res.GetValue('error') <> nil then
       Return.AddPair('error', Res.GetValue<string>('error'));
+    { ran=false SIN error: el porque que ya trae RemoteRun - el nodo acabo con un codigo
+      distinto de 0, o seguia vivo al plazo -, con la captura hecha si la hubo. Salia
+      ran:false a secas y el agente no sabia por que (dirigido final de Hermes de la
+      1.29.1: una captura perfecta con ran:false justo tras reiniciar el Fedora) }
+    if (Res.GetValue('success') <> nil) and not Res.GetValue<Boolean>('success') and
+       (Return.GetValue('error') = nil) then
+      if (Res.GetValue('stillRunning') <> nil) and Res.GetValue<Boolean>('stillRunning') then
+      begin
+        Return.AddPair('stillRunning', TJSONBool.Create(True));
+        Return.AddPair('ranNote', MsgFmt(SN_DESKTOP_NODO_SIGUE_FMT, [PLAZO_DEL_NODO_MS div 1000]));
+      end
+      else if Res.GetValue('exitCode') <> nil then
+      begin
+        Return.AddPair('exitCode', TJSONNumber.Create(Res.GetValue<Integer>('exitCode')));
+        Return.AddPair('ranNote', MsgFmt(SN_DESKTOP_NODO_CODIGO_FMT, [Res.GetValue<Integer>('exitCode')]));
+      end;
     // en que sesion/entorno grafico corrio el nodo: lo cuenta remote-run y
     // aqui es lo primero que explica una captura negra o denegada
     if Res.GetValue('graphicalEnv') <> nil then

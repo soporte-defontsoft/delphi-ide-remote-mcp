@@ -3097,6 +3097,16 @@ const
     'Windows allows neither looking nor touching from here. It is the ' +
     'twin of the "no DISPLAY" of Linux. Ask the operator to unlock the ' +
     'session.';
+  { ran=false SIN error: el nodo acabo con un codigo distinto de 0, o seguia vivo al
+    plazo de su llamada; lo que hizo antes (la captura) viaja igual. Salia ran:false a
+    secas (dirigido final de Hermes de la 1.29.1, tras reiniciar el Fedora) }
+  SN_DESKTOP_NODO_CODIGO_FMT =
+    '[DESK-028] The node on the target ended with code %d: what it did ' +
+    'before that - the capture included - is in this answer.';
+  SN_DESKTOP_NODO_SIGUE_FMT =
+    '[DESK-029] The node on the target was still running after %d s: what it ' +
+    'did before that - the capture included - is in this answer. Look at the ' +
+    'capture for something waiting on that screen (a dialog), and call again.';
   SR_DESKTOP_NEEDCODE =
     '[DESK-010 INVALID_PARAM] The target is Windows and key needs "code" with ' +
     'the key NAME: ' + TECLAS_DE_WINDOWS + '.';
@@ -5862,14 +5872,14 @@ const
     'that raised; it fails the run too), the failures, exitCode and ' +
     'duration - read from the DUnitX summary or the ' +
     'PASS/FAIL + ExitCode convention of a hand-written runner; verdictFrom ' +
-    '(counts or exitCode) says where the verdict comes from, never ' +
-    'invented, and a runner that exits with an error fails the run even ' +
-    'when its counts are green. Running tests has its own switch, AllowTests in ' +
-    'the workspace (without it, discover works and run is refused). The binary runs in a Windows ' +
+    '(counts or exitCode) says where the verdict comes from, ' +
+    'and a runner that exits with an error fails the run even ' +
+    'when its counts are green. Running needs AllowTests in ' +
+    'the workspace (without it, only discover works). The binary runs in a Windows ' +
     'container of its own, on a COPY of its output folder: it reads and ' +
     'writes that copy and only what Windows gives every container (its own ' +
     'temp folder, deleted with it, and the system files) - no other file, ' +
-    'no network, no network drive - and it is cut off at the timeout. So a ' +
+    'no network, no network drive - and it is cut off at the timeout and at a quarter of the RAM (3 GB at most). So a ' +
     'test here is for LOGIC: what it reads has to travel in its output ' +
     'folder, and a project built with runtime packages (UsePackages) is ' +
     'refused before building: build it whole. What it writes in that ' +
@@ -6196,8 +6206,8 @@ const
   SN_TEST_TOPE_MEMORIA_FMT =
     '[TEST-039] A process of this test asked for memory past the cap of its ' +
     'container, %d MB for all its processes together (a quarter of this ' +
-    'machine''s memory): Windows refused it, and that is the out-of-memory ' +
-    'error the test saw. Use less memory in the test, or free what it no ' +
+    'machine''s memory, 3 GB at most), and Windows refused it: an out-of-memory error in ' +
+    'the test comes from that cap. Use less memory in the test, or free what it no ' +
     'longer needs.';
 
   // Un contenedor que Windows no quiso borrar: lo barre el siguiente
@@ -7158,7 +7168,7 @@ const
   // medido: en VCL guarda el tamano del constructor, en FMX no lo guarda)
   SN_DESIGNER_INSERT_FMT =
     '[DSGN-100] Inserted as the IDE''s writer stores it: position, the size ' +
-    'its constructor gives when the IDE stores it (VCL does, FMX keeps the ' +
+    'its constructor gives when the IDE stores it (VCL does, scaled to the form''s PixelsPerInch; FMX keeps the ' +
     'platform size unwritten), its Name as text when the class shows one, ' +
     'TabOrder.%s Change a property ' +
     'with command=set, move it with set parent=, see it with command=preview.';
