@@ -8537,8 +8537,9 @@ const
     'that passes. Run it with delphi_test command=run project=<this ' +
     '.dproj> (it needs AllowTests=1 in the workspace; discover ' +
     'recognizes it without that). Each new fixture: kind=unit with a ' +
-    '[TestFixture] class and TDUnitX.RegisterTestFixture in its ' +
-    'initialization; the units you test come in through the uses of the ' +
+    '[TestFixture] class; the runner finds it by RTTI, so ' +
+    'TDUnitX.RegisterTestFixture in its initialization (what the IDE ' +
+    'writes) is optional. The units you test come in through the uses of the ' +
     '.dpr (delphi_config add-unit) or through add-searchpath to their ' +
     'folder. It exits with ExitCode 1 if any test fails.';
 

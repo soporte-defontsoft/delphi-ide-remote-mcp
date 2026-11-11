@@ -267,6 +267,10 @@ check('...y DUnitX lo CORRE: 3 tests, 2 pasan (Bien e Insertado) y 1 lanza',
 RTTI = os.path.join(BASE, 'RttiTest')
 r = A.call('delphi_create', {'kind': 'project-test', 'name': 'RttiTest', 'dir': RTTI})
 check('RttiTest creado', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
+# ...y CREATE-012 no lo da por necesario (dirigido de Hermes, 11-nov-2026: "un lector de CREATE-012 podria asumir que
+# sin registrar NO cuenta")
+check('RttiTest: CREATE-012 dice que registrar un fixture es opcional (los encuentra por RTTI)',
+      mc.es(r, 'SN_CREATE_TEST_NOTE_FMT') and 'RTTI' in r and 'optional' in r, r[-500:])
 r = A.call('delphi_create', {'kind': 'unit', 'name': 'USuelto', 'project': os.path.join(RTTI, 'RttiTest.dpr')})
 check('RttiTest: USuelto entra en el proyecto', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT'), r[:200])
 open(os.path.join(RTTI, 'USuelto.pas'), 'w', encoding='utf-8-sig', newline='\r\n').write(
