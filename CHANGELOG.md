@@ -8,7 +8,7 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
-## [1.29.1] - 2026-11-10
+## [1.29.1] - 2026-11-11
 
 A patch of the closing line. A long call keeps its client informed and what it did is not
 lost: it sends `notifications/progress` while it runs, and an answer its client did not get -
@@ -23,8 +23,8 @@ Visual C++ runtime in `System32`. And it closes the project's last list: foreign
 a Job Object capped in memory and CPU, `delphi_desktop` gets a double click and types what
 the desktop composes, `delphi_db summary` adds and averages integers on SQL Server without
 overflowing or truncating, an insert in a form at another `PixelsPerInch` is scaled as the
-IDE drops it, and the start says which `settings.ini` keys nobody reads. After it, the
-project is in maintenance: patches only.
+IDE drops it, the start says which `settings.ini` keys nobody reads, and `delphi_git`
+deletes a local tag no remote has. After it, the project is in maintenance: patches only.
 
 ### Added
 

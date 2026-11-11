@@ -9734,10 +9734,13 @@ const
   { %s = las copias de la papelera que dejo o encontro la llamada, separadas por
     comas (Lsp.Papelera.NotaDeLasCopias, la pone el filtro de salida). Unas 30
     respuestas decian "Backup in __delphi-patch." sin el fichero (R6 del
-    revisor del paisaje del 10-nov-2026) }
+    revisor del paisaje del 10-nov-2026). Dice que la llamada las TOMO antes de
+    escribir, no que cambiara nada: el filtro la pone tambien en una respuesta
+    de fallo, y tras un ROLLBACK "lo que cambio" contradecia al "NOTHING was
+    applied" de encima (visto en vivo el 11-nov, delphi_textedit) }
   SN_COPIAS_DE_LA_LLAMADA_FMT =
-    #10#10'[SYS-045] In the trash, the copies of what this call changed or ' +
-    'replaced (delphi_move brings one back): %s';
+    #10#10'[SYS-045] In the trash, the copies this call took before writing ' +
+    '(delphi_move brings one back): %s';
 
   SN_COMPONENTS_NONE_FMT =
     '[COMP-005] Neither a registered package nor a folder of the Library ' +

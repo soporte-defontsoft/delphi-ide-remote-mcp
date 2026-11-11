@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-11-10 (current release v1.29.1; 44 tools).
+Status page as of 2026-11-11 (current release v1.29.1; 44 tools).
 
 ## Delivered
 
@@ -78,7 +78,7 @@ Status page as of 2026-11-10 (current release v1.29.1; 44 tools).
 
 - Databases and HTTP APIs by name (`delphi_db`, `delphi_api`): the operator defines them in two files of the server's own house and opens them per workspace; the agent asks for operations - tables, fields, rows, a summary, writes of at most `max` rows, tables and views where the operator allows them, a request to an API - and never sees a server, an address or a credential. And the designer: events bound by `set` (judged by the event's signature), several controls in one `insert` (`items`), `preview` at another display scale (`scale=`), the service's way of painting compared pixel by pixel with the desktop's on the 355 forms of the samples, `lint styles=`; `delphi_config save-as`; `delphi_create kind=project-library` and `autocreate=no`; the help of Delphi 13.2 read as 13.1's (1.29.0)
 
-- A long call that tells its client it is still running (`notifications/progress`), and its answer kept in the agent's mailbox when the client gave up on it (`SYS-041`, also after a `notifications/cancelled`); the other calls told while a long operation writes (`SYS-042`, `SYS-043`, `SYS-044`); the row an insert wrote, from `delphi_db`; all of a program's output into a file (`delphi_paserver out=`); the server's DLLs only from its house and `System32`; one `access` key per database. And the close of the last list: the Job Object of foreign code capped in memory and CPU, sums and averages that SQL Server overflowed or truncated, the `settings.ini` keys nobody reads said at start, a control inserted in a form at another `PixelsPerInch` scaled as the IDE drops it, the trash copies a call made named in its answer (1.29.1)
+- A long call that tells its client it is still running (`notifications/progress`), and its answer kept in the agent's mailbox when the client gave up on it (`SYS-041`, also after a `notifications/cancelled`); the other calls told while a long operation writes (`SYS-042`, `SYS-043`, `SYS-044`); the row an insert wrote, from `delphi_db`; all of a program's output into a file (`delphi_paserver out=`); the server's DLLs only from its house and `System32`; one `access` key per database. And the close of the last list: the Job Object of foreign code capped in memory and CPU, sums and averages that SQL Server overflowed or truncated, the `settings.ini` keys nobody reads said at start, a control inserted in a form at another `PixelsPerInch` scaled as the IDE drops it, the trash copies a call made named in its answer, a local tag no remote has deleted by `delphi_git` (1.29.1)
 
 - The protections that need a privilege, measured in the suite: the Python batteries plant symbolic links, and the unit tests run from a folder next to the repository's build output, where Windows does not refuse them (1.29)
 

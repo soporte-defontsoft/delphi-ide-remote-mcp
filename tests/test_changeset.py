@@ -90,6 +90,11 @@ check('commit falla en la operacion 7 y hace ROLLBACK COMPLETO',
 after = {p: sha(p) for p in files}
 check('CERO cambios netos tras el rollback (byte a byte)', before == after,
       [p for p in files if before[p] != after[p]])
+# la nota SYS-045 sale tambien en un fallo (las copias se tomaron antes de escribir y siguen):
+# no puede decir que la llamada cambio nada (decia "the copies of what this call changed", 11-nov)
+_nota = mc.parte_por_nota(r, 'SN_COPIAS_DE_LA_LLAMADA_FMT')[1]
+check('...y si nombra las copias de la papelera, no dice que algo cambio (ROJO: "what this call changed")',
+      _nota != '' and 'changed' not in _nota, r[-300:])
 
 # ---- 3. FILE_CHANGED entre preview y commit ----
 cid = begin()
