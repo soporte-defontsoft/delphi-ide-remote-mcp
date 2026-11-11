@@ -828,9 +828,15 @@ begin
       // falla: el veredicto de delphi_test no depende de leer la consola.
       // CheckCommandLine es lo que lee --run: sin el, el filter de
       // delphi_test corria TODOS los tests (quinta revision).
+      // STRONGLINKTYPES + UseRTTI, como el runner del asistente DUnitX del IDE
+      // (el juez, creado por David el 11-nov-2026): un [TestFixture] que nadie
+      // registra corre igual. Sin ellos no corria y el run decia pass con un
+      // test menos (A6 de la 1.29.1). Lo demas del suyo no: su except deja
+      // ExitCode 0, su XML de NUnit volveria en files y su consola es verbosa
       WriteNewFile(Dpr,
         'program ' + AName + ';' + CRLF + CRLF +
-        '{$APPTYPE CONSOLE}' + CRLF + CRLF +
+        '{$APPTYPE CONSOLE}' + CRLF +
+        '{$STRONGLINKTYPES ON}' + CRLF + CRLF +
         'uses' + CRLF +
         '  System.SysUtils,' + CRLF +
         '  DUnitX.TestFramework,' + CRLF +
@@ -845,6 +851,8 @@ begin
         '    // --run:<filter> (delphi_test''s filter) is read here' + CRLF +
         '    TDUnitX.CheckCommandLine;' + CRLF +
         '    Runner := TDUnitX.CreateRunner;' + CRLF +
+        '    // every [TestFixture] runs, registered or not' + CRLF +
+        '    Runner.UseRTTI := True;' + CRLF +
         '    Logger := TDUnitXConsoleLogger.Create(True);' + CRLF +
         '    Runner.AddLogger(Logger);' + CRLF +
         '    Results := Runner.Execute;' + CRLF +

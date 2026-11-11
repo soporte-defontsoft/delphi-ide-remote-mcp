@@ -177,6 +177,13 @@ project is in maintenance: patches only.
 
 ### Fixed
 
+- The DUnitX runner of `delphi_create kind=project-test` ran only the fixtures registered
+  with `TDUnitX.RegisterTestFixture`: a `[TestFixture]` class without that line never ran,
+  and the run said `pass` with one test less. It now finds them by RTTI, as the runner of the
+  IDE's DUnitX wizard does (`{$STRONGLINKTYPES ON}` and `UseRTTI`; measured on a project
+  created in the IDE: 2 tests there, 1 here). A registered one is not counted twice. The
+  rest of the wizard's runner stays out: on an exception its exit code is 0, and its NUnit
+  XML file would come back in `files` on every run.
 - `delphi_db summary` on SQL Server: the sum of an integer column past 2^31-1 refused the
   whole query (`DB-010`, arithmetic overflow) and the average of integers came truncated
   (1 and 2 gave 1, where PostgreSQL gives 1.5): SQL Server adds and averages an `int` as an

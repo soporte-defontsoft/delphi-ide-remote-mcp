@@ -259,6 +259,45 @@ j = J(B.call('delphi_test', {'command': 'run', 'project': LANZA}, t=900))
 check('...y DUnitX lo CORRE: 3 tests, 2 pasan (Bien e Insertado) y 1 lanza',
       j.get('total') == 3 and j.get('passed') == 2 and j.get('errored') == 1, str(j)[:400])
 
+# ---- un [TestFixture] que nadie registra (A6 de la 1.29.1) ----
+# El runner del asistente DUnitX del IDE (creado por David el 11-nov-2026) busca los fixtures por RTTI
+# ({$STRONGLINKTYPES ON} + UseRTTI): uno sin RegisterTestFixture corre igual. El de delphi_create solo
+# corria los registrados: el test del agente no se ejecutaba y el run decia pass con uno menos.
+# total == 2 tambien dice que el registrado no se cuenta dos veces
+RTTI = os.path.join(BASE, 'RttiTest')
+r = A.call('delphi_create', {'kind': 'project-test', 'name': 'RttiTest', 'dir': RTTI})
+check('RttiTest creado', mc.abre(r, 'SK_CREATE_CREADO_PROYECTO_FMT'), r[:200])
+r = A.call('delphi_create', {'kind': 'unit', 'name': 'USuelto', 'project': os.path.join(RTTI, 'RttiTest.dpr')})
+check('RttiTest: USuelto entra en el proyecto', mc.abre(r, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT'), r[:200])
+open(os.path.join(RTTI, 'USuelto.pas'), 'w', encoding='utf-8-sig', newline='\r\n').write(
+"""unit USuelto;
+
+interface
+
+uses
+  DUnitX.TestFramework;
+
+type
+  [TestFixture]
+  TSuelto = class
+  public
+    [Test]
+    procedure SinRegistrar;
+  end;
+
+implementation
+
+procedure TSuelto.SinRegistrar;
+begin
+  Assert.AreEqual(6, 2 * 3);
+end;
+
+end.
+""")
+j = J(B.call('delphi_test', {'command': 'run', 'project': os.path.join(RTTI, 'RttiTest.dproj')}, t=900))
+check('un [TestFixture] sin RegisterTestFixture CORRE, como en el runner del IDE: 2 tests (ROJO: 1 y pass)',
+      j.get('total') == 2 and j.get('passed') == 2 and j.get('result') == 'pass', str(j)[:400])
+
 # ---- contratos ----
 r = B.call('delphi_test', {'command': 'run', 'project': os.path.join(BASE, 'NormalApp', 'NormalApp.dpr')})
 check('un proyecto que no es test: rechazado y explicado', mc.es(r, 'SR_TEST_NOTATEST_FMT'), r[:300])
