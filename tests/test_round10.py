@@ -204,8 +204,13 @@ ops = pv.get('operations', [])
 check('D5 preview dice en que linea resolvio el ancla',
       any(o.get('atline') for o in ops if o.get('kind') == 'edit'), str(pv)[:300])
 r = A.call('delphi_changeset', {'command': 'commit', 'id': CID2})
+# el delta se cuenta SIN la nota SYS-045 (1.29.1): esa nombra la copia de la papelera, y su
+# ruta repite 'Delta.txt'
+cuerpo, nota = mc.parte_por_nota(r, 'SN_COPIAS_DE_LA_LLAMADA_FMT')
 check('B6 el commit da el delta UNA vez por fichero',
-      r.count('Delta.txt') == 1, r[:400])
+      cuerpo.count('Delta.txt') == 1, r[:400])
+check('B6c ...y la nota SYS-045 nombra la copia de Delta.txt en la papelera (Nuevo.pas no tenia antes)',
+      ('\\%s\\' % mc.PAPELERA) in nota and 'Delta.txt' in nota and 'Nuevo.pas' not in nota, r[-300:])
 check('B6 ...y no le pone "+" a lo que quita',
       any('Delta.txt' in l and '(-1 lines in total)' in l for l in r.splitlines()), r[:400])
 raw = open(NUEVO, 'rb').read()

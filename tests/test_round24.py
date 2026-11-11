@@ -42,6 +42,8 @@ open(os.path.join(EXEDIR, 'settings.ini'), 'w').write('\n'.join([
     'Roots=%s' % JAIL, '',
     '[Workspace.SinToken]',               # tokenless: ignored with a warning
     'Roots=%s' % JAIL, '',
+    '[Inventada24]',                      # una seccion que nunca existio: la vara de A4b
+    'Clave=1', '',
 ]))
 
 PORT = mc.puerto_libre()
@@ -100,7 +102,12 @@ check('A3 el arranque AVISA del workspace sin token (IGNORADA, clave Token=)',
       any('[Workspace.SinToken]' in l and 'IGNORED' in l and 'Token=' in l for l in avisos), avisos)
 check('A4 el arranque LISTA los workspaces (sin ningun "default")',
       'Workspaces:' in out and 'Alias' in out and 'default' not in out, out[-500:])
-check('A4b el arranque NO menciona la seccion retirada para nada (v0.98)',
-      'Security' not in out, out[-600:])
+# v0.98: el servidor "no la lee, no avisa de ella ni sabe que existio". Desde la 1.29.1 (B10) avisa
+# de TODA seccion que no lee; lo que A4b vigila es que [Security] no tenga codigo propio: su aviso es
+# el MISMO que el de una seccion inventada, y no sale en ningun otro sitio
+_suyo = [l.split('WARNING:', 1)[-1] for l in avisos if '[Security]' in l]
+_vara = [l.split('WARNING:', 1)[-1].replace('[Inventada24]', '[Security]') for l in avisos if '[Inventada24]' in l]
+check('A4b la seccion retirada no la conoce nadie: su aviso es el de una seccion inventada (v0.98, B10)',
+      len(_suyo) == 1 and _suyo == _vara and out.count('Security') == 1, (_suyo, _vara, out[-600:]))
 
 mc.fin('round-24 battery')

@@ -2039,6 +2039,17 @@ def abre(t, nombre):
     return bool(m) and m.group(1) == id_de(nombre)
 
 
+def parte_por_nota(t, nombre):
+    """(antes, nota): la respuesta partida por la etiqueta de esa constante. Lo de
+    antes es lo que la llamada dijo; la nota, desde su etiqueta hasta el final ('' si
+    no la trae). Para medir el cuerpo sin la nota que el filtro de salida le pega
+    (SYS-045 nombra las copias de la papelera, y su ruta repite el nombre del
+    fichero: test_round10 B6 contaba dos 'Delta.txt' el 11-nov-2026)."""
+    t = t or ''
+    i = t.find('[%s]' % id_de(nombre))
+    return (t, '') if i < 0 else (t[:i], t[i:])
+
+
 def resultado(t):
     """El resultado de una respuesta como lo decide el servidor: el que
     declara la etiqueta que la abre; y si es un objeto JSON, el de su campo

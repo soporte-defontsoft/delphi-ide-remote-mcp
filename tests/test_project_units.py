@@ -54,8 +54,7 @@ out = call('delphi_create', {"kind": "unit", "name": "UUtil", "project": DPR})
 check('create unit: CREADA + registrada', mc.abre(out, 'SK_CREATE_CREADA_UNIT_LINEAS_FMT') and mc.es(out, 'SN_UNIT_ADDED_FMT'), out[:300])
 # SYS-045 (R6 del revisor del paisaje del 10-nov-2026): la respuesta NOMBRA las copias que dejo la llamada (la
 # primera del dia del .dpr y del .dproj); decia "Backup in __delphi-patch." sin el fichero
-_id = '[%s]' % mc.id_de('SN_COPIAS_DE_LA_LLAMADA_FMT')
-_nota = out[out.find(_id):] if _id in out else ''
+_nota = mc.parte_por_nota(out, 'SN_COPIAS_DE_LA_LLAMADA_FMT')[1]
 check('create unit: nombra las copias de la papelera que hizo, del .dpr y del .dproj (ROJO: sin el fichero)',
       mc.es(out, 'SN_COPIAS_DE_LA_LLAMADA_FMT') and ('\\%s\\' % mc.PAPELERA) in _nota
       and 'App.dpr' in _nota and 'App.dproj' in _nota, out[-400:])

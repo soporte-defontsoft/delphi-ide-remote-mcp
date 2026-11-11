@@ -252,8 +252,11 @@ try:
     check('O5b out= que se LEE pero no se escribe: lo niega la puerta de ESCRIBIR (solo lectura), sin lanzar y '
           'sin fichero', mc.es(r, 'SR_READONLY_PATH_FMT') and 'jobId' not in j and not os.path.exists(f5), r[:300])
 
-    # O11 (R2)
+    # O11 (R2). Con _espera, como O3: sin ella el stub esperaba sus 20 s a un largo.py de 60 (24 s de los 60
+    # de la bateria, medido el 11-nov-2026); el programa sigue vivo igual cuando llega el kill
+    open(ESPERA, 'w').write('1')
     r, j = corre(srv, 'largo.py', timeoutms=1500)
+    os.remove(ESPERA)
     jl = j.get('jobId') or ''
     r = srv.call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': jl}, t=60)
     jk = mc.como_json(r)

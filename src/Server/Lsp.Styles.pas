@@ -552,6 +552,7 @@ uses
   Lsp.ShaCache,     // DiskStamp y HuellaParaNombre: la huella del conversor, en el nombre de su cache
   MCPServer.Logger,
   Lsp.Listas,
+  Lsp.NetDrives, // SinBarraFinal: la raiz de una unidad conserva su barra
   Lsp.Lineas;
 
 { TStyleObj }
@@ -1273,7 +1274,9 @@ begin
   Result := 0;
   if not TDirectory.Exists(ADir) then
     Exit;
-  var Aqui := TPath.GetFullPath(ExcludeTrailingPathDelimiter(ADir));
+  // SinBarraFinal y no la de la RTL: de 'N:\' dejaba 'N:', y GetFullPath('N:') es la carpeta
+  // ACTUAL de esa unidad (test_raiz_unidad); los estilos de la raiz contaban como de debajo
+  var Aqui := TPath.GetFullPath(SinBarraFinal(ADir));
   for var F in WalkFiles(ADir, '*.style') do
     if not SameFileName(TPath.GetFullPath(ExtractFileDir(F)), Aqui) and
        not SinMayusculas(F).EndsWith(COLA_DE_ESTILO_BINARIO) and not IsBinaryStyle(F) then
