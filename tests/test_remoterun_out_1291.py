@@ -79,6 +79,9 @@ GUIONES = {
                  'print("ULTIMA-LINEA")\n',
     'dormido.py': 'import time\ntime.sleep(4)\nprint("desperte")\n',
     'largo.py': 'import time\nprint("empiezo", flush=True)\ntime.sleep(60)\n',
+    # O16: un programa que HABLA como el servidor (el nodo del escritorio por remote-run escribe [NODE-015 DENIED])
+    'etiqueta.py': 'import sys\nprint("[ABC-001 DENIED] un programa que habla como el servidor")\n'
+                   'print("segunda linea")\nsys.exit(3)\n',
 }
 # un proyecto cuyo binario NO es nativo: el lanzador lo dice y no corre nada (O12). Proyecto propio: exe= solo
 # toma el binario del proyecto o lo que su .deployproj lista (PAS-063)
@@ -313,6 +316,15 @@ try:
           'cuadran con el', ls10 == 65537 and cola10.rstrip(b'\r\n').endswith(b'ULTIMA-LINEA') and
           j10.get('size') == tam10 and j10.get('lines') == ls10 and mc.es(j10.get('logfileNote'), 'SN_REMOTERUN_LOGFILE'),
           (ls10, tam10, sin_salida(j10)))
+
+    # O16 (revisor del paisaje de la 1.29.1): una etiqueta de fallo en la salida del PROGRAMA, con exit 3, no es un
+    # fallo del LANZADOR (los suyos son de su area, JOB): su salida va al out= entera y no sale como "error"
+    f16 = os.path.join(SALIDAS, 'etiqueta.txt')
+    r, j16 = corre(srv, 'etiqueta.py', f16)
+    check('O16 un programa que escribe una etiqueta de fallo y sale con 3: su salida va al out= y no es "error" '
+          '(ROJO: se tomaba por el lanzador y se perdia)',
+          'error' not in j16 and j16.get('exitCode') == 3 and b'segunda linea' in (lee(f16) or b''),
+          (sin_salida(j16), lee(f16)))
 
     # O15 (R4): dos output del mismo trabajo a la vez, por HTTP (por stdio van en fila)
     import threading

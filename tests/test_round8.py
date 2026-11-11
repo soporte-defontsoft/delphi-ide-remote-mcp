@@ -98,6 +98,10 @@ j = J(A.call('delphi_upload', {'path': VICTIM,
 check('upload que sustituye lo DICE y dice donde esta la copia',
       j.get('replaced') is True and j.get('previousSize') == len(ORIG) and bool(j.get('backup')),
       str(j)[:300])
+# ...y la nota SYS-045 no la repite: su "backup" ya la nombra, en JSON con las barras dobladas, y el filtro la
+# buscaba en el texto sin escapar (salia dos veces; revisor del paisaje de la 1.29.1)
+check('...y la nota SYS-045 no repite la copia que ya nombra "backup" (ROJO: salia dos veces)',
+      'backups' not in j and not mc.es(json.dumps(j), 'SN_COPIAS_DE_LA_LLAMADA_FMT'), str(j)[:400])
 # la copia la NOMBRA la respuesta: el glob con la forma de antes era otro
 # nombrador escrito a mano (sexta revision: la copia va a su cajon)
 _copia = mc.real(j.get('backup', ''))

@@ -84,8 +84,11 @@ try:
     tl = {x['name']: x['inputSchema']['properties'] for x in (srv.request('tools/list') or {})['result']['tools']}
     tipos = {(t, p): tl[t][p].get('type') for t, ps in (('delphi_desktop', ('x', 'y', 'tox', 'toy', 'code')),
                                                         ('delphi_adb', ('x', 'y', 'lines'))) for p in ps}
-    check('D8 x, y, tox, toy y lines se publican como number, code como texto (ROJO: todos string)',
-          all(v == 'number' for (t, p), v in tipos.items() if p != 'code') and
+    # ...como INTEGER con minimum 0, lo que el binder acepta: "number" prometia 152.5 (revisor del paisaje de la 1.29.1)
+    minimos = {(t, p): tl[t][p].get('minimum') for (t, p) in tipos if p != 'code'}
+    check('D8 x, y, tox, toy y lines se publican como integer con minimum 0, code como texto (ROJO: number)',
+          all(v == 'integer' for (t, p), v in tipos.items() if p != 'code') and
+          all(m == 0 for m in minimos.values()) and
           tipos[('delphi_desktop', 'code')] == 'string', tipos)
     r = srv.call('delphi_adb', {'command': 'tap', 'device': 'no-declarado', 'x': 152, 'y': 10})
     r2 = srv.call('delphi_adb', {'command': 'tap', 'device': 'no-declarado', 'x': '152', 'y': '10'})

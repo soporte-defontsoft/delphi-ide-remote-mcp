@@ -209,6 +209,14 @@ try:
     check('L5 ...y el modo dirs lo cuenta en el MISMO cajon (y ensena la de al lado)',
           [e['name'] for e in mc.ficheros(jcd, hijos='dirs')] == ['sub'] and jcd.get('hiddenBuildArtifacts') == 1
           and 'hiddenToolFolders' not in jcd, jcd)
+    # ...y su LIST-003 nombra la carpeta escondida MISMA (A10 llego al modo ficheros y no a este; y nombrar por
+    # ExtractFileDir de una carpeta habria dado su padre, la raiz: revisor del paisaje de la 1.29.1)
+    notad = jcd.get('note', '')
+    # '(here:' tiene que ESTAR: el texto base de LIST-003 ya trae la lista de carpetas de compilacion (con
+    # __pycache__), y sin el split devolvia la nota entera y pasaba siempre (medido el 11-nov contra 383ad8a5)
+    check('L5 ...y en el modo dirs LIST-003 nombra la carpeta escondida, no su padre (ROJO: no decia cual)',
+          mc.es(notad, 'SN_HIDDEN_ARTIFACTS_FMT') and '(here:' in notad
+          and '__pycache__' in notad.split('(here:')[-1], notad)
     jm = mc.como_json(llama('delphi_list', {'root': C, 'pattern': '*.pyc'}))
     check('L5 ...una mascara que solo casa con lo escondido: lo cuenta (LIST-003) y NO dice que no caso',
           jm.get('total') == 0 and jm.get('hiddenBuildArtifacts') == 1
@@ -217,7 +225,8 @@ try:
     # cual; ahora la nombra, y esa es la que se lista
     nota = jc.get('note', '')
     check('L5 ...y LIST-003 nombra la carpeta que hay que pasar como root (ROJO: no decia cual)',
-          mc.es(nota, 'SN_HIDDEN_ARTIFACTS_FMT') and '__pycache__' in nota.split('(here:')[-1], nota)
+          mc.es(nota, 'SN_HIDDEN_ARTIFACTS_FMT') and '(here:' in nota
+          and '__pycache__' in nota.split('(here:')[-1], nota)
     jp = mc.como_json(llama('delphi_list', {'root': PYC, 'pattern': '*'}))
     check('L5 ...nombrado como root, se lista',
           [e['name'] for e in mc.ficheros(jp)] == ['c.cpython-314.pyc'], jp)

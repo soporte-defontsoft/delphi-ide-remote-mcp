@@ -207,7 +207,6 @@ function IniSinLeer: string;
   VaultConfigured is true. }
 function VaultPath: string;         // DELPHI_MCP_VAULT_PATH / VaultPath= del workspace
 function VaultConfigured: Boolean;  // VaultPath set AND the directory exists
-function VaultConfiguredAnywhere: Boolean; // algun workspace declara vault (registro)
 { LA pregunta de quien va a USAR el vault (sus tools, prompts/get): '' si se
   puede (VaultConfigured); si no, por que: el workspace no lo declara
   (VAULT-035) o lo declara y su carpeta no se alcanza (VAULT-043). Las tres
@@ -1402,6 +1401,15 @@ begin
   Result := False;
 end;
 
+{ Si una seccion PARECE un workspace mal escrito ([Workopenclaw], [WorkspaceX]...):
+  la que tiene su propio aviso (SL_GUARD_WORKSPACE_*) y la que el aviso de lo que
+  no se lee deja para el. Estaba dos veces y, si una cambiaba, salian dos avisos o
+  ninguno (revisor del paisaje de la 1.29.1) }
+function PareceWorkspaceMalEscrito(const ASeccion: string): Boolean;
+begin
+  Result := SinMayusculas(ASeccion).StartsWith('work');
+end;
+
 { Lo que el settings.ini trae y este servidor no lee, al arranque: una seccion
   que no pregunta nadie (con cuantas claves), o una clave de una que si se
   lee. Una seccion de workspace mal escrita ya tiene su aviso, que dice como
@@ -1420,7 +1428,7 @@ begin
       AIni.ReadSection(S, Claves);
       if not AIni.SeccionLeida(S) then
       begin
-        if not SinMayusculas(S).StartsWith('work') then
+        if not PareceWorkspaceMalEscrito(S) then
           GWorkspaceNotes := GWorkspaceNotes + [MsgFmt(SL_GUARD_SECCION_NO_SE_LEE_FMT, [S, Claves.Count])];
       end
       else
@@ -1689,7 +1697,7 @@ begin
             // anywhere saying why. It gets the loudest note of the three.
             GWorkspaceNotes := GWorkspaceNotes +
               [MsgText(SL_GUARD_WORKSPACE_SIN_PUNTO)]
-          else if SinMayusculas(S).StartsWith('work') then
+          else if PareceWorkspaceMalEscrito(S) then
             // [Workopenclaw], [WorkspaceX]... a workspace section spelled
             // wrong used to vanish silently and its token answered 401 with
             // no clue anywhere (measured 2026-09-10). Name the fix.
@@ -2197,20 +2205,6 @@ end;
 function HayVaults: Boolean;
 begin
   Result := Length(TodosLosVaults) > 0;
-end;
-
-{ Si HAY vault en alguna parte (workspace por defecto o cualquier seccion):
-  decide el REGISTRO de las tools vault_* al arrancar, cuando aun no hay
-  workspace activo en el hilo. El acceso real de cada peticion lo decide
-  VaultConfigured, que resuelve el del workspace ACTIVO. }
-function VaultConfiguredAnywhere: Boolean;
-var
-  P: string;
-begin
-  for P in TodosLosVaults do
-    if TDirectory.Exists(P) then
-      Exit(True);
-  Result := False;
 end;
 
 { El nombre mDNS de un dispositivo sin el " (N)" que adb le pone cuando lo ve

@@ -308,7 +308,8 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   into a write. **With NO workspace token configured at all, the server binds to
   `127.0.0.1` only** — an unconfigured server is never silently open to the network.
 - **BREAKING — migrating from ≤ v0.97**: the `[Security]` section is GONE and completely
-  inert — the server neither reads it, nor warns about it, nor knows it existed. Move every
+  inert — the server does not read it (since 1.29.1 the startup log names it, as any section
+  it does not read: `is not read by this server`). Move every
   key you had there into each `[Workspace.<name>]` that deserves it — same names, same
   values, one decision per workspace. The generic `[Workspace]` section, the anonymous
   mode (`AnonymousReadOnly`) and the global `[Vault]`/`[Adb]` sections fell the same day:
@@ -436,7 +437,10 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   the server's own temp: it reads and writes that copy and, besides it, only what Windows
   gives every container (its own temp folder, deleted with it, and the system files under
   Windows and Program Files) — no other file of the machine, no network, no network drive —
-  and it is cut off at its timeout. It is a
+  and it is cut off at its timeout. Its Job Object caps the memory of all its processes
+  together at a quarter of the machine's RAM (3 GB at most) and its CPU at every logical
+  processor but one; a test that runs out of memory there is told so (`memoryCapNote`,
+  `TEST-039`). The same caps hold for a form render and for the `brcc32` of a style `.rc`. It is a
   cage for tests of LOGIC: what a test reads must travel in its output folder, and a test
   project built with runtime packages is refused before building. Until 1.10 the run
   was confined by Windows' low-integrity label, which only holds on local disks: on a
@@ -457,7 +461,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   the same list.
   `delphi_desktop` runs the server's own desktop node on the target, and seeing and
   acting on a desktop is a permission of its own, by the host of the profile:
-  `DesktopAllowedHosts` sees and acts (`tap`, `type`, `key`, `overview`), `DesktopViewHosts`
+  `DesktopAllowedHosts` sees and acts (`tap`, `double-tap`, `drag`, `type`, `key`, `overview`), `DesktopViewHosts`
   only sees (`screenshot`, `status`), and `RemoteHosts` is still needed too (`RUN-020` when
   it is missing). Empty, no desktop - and `tools/list` does not announce `delphi_desktop`
   to that workspace (1.28; `delphi_help` says it is missing and which key opens it); `*` is any host. `McpDesktopNode` or `all` in
@@ -490,8 +494,9 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   files as examples, with their real shape and invented values -
   `connections\databases\db-connections.example.json` and
   `connections\apis\api-connections.example.json`: copy one to the same folder without
-  `.example` and fill it in. **Pending tests:** an API that needs a login call first, and
-  then the session token it returns on every request; `auth` holds fixed credentials only.
+  `.example` and fill it in. **Declined** ([ROADMAP](ROADMAP.md), maintenance): an API that
+  needs a login call first, and then the session token it returns on every request; `auth`
+  holds fixed credentials only.
   A driver that loads a client library loads it from `drivers\<DriverID>\` next to the
   server's exe, never from the `PATH`. The zip does not carry them: the operator puts them
   there.
@@ -523,7 +528,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   libpq takes from the file and nothing else.
 - **Reach lists (per workspace)**: `GitRemotes` limits which hosts git may reach - the URL
   written in a call and the network addresses of the repository's own remotes alike
-  (clone/fetch/pull/push/ls-remote; a remote used by its name whose address is not listed gets `GIT-063`, naming the host), and the LFS endpoint of a tree a command materializes
+  (clone/fetch/pull/push/ls-remote, and `tag action=delete`, which asks every remote of the repository first; a remote used by its name whose address is not listed gets `GIT-063`, naming the host), and the LFS endpoint of a tree a command materializes
   (`GIT-061`) — measured to close an SSRF/exfiltration primitive. The host is read from the
   address's authority alone, as every program reads it: an address that does not show its
   host plainly is refused (`GIT-062`), and `clone`'s address is judged whole, as git

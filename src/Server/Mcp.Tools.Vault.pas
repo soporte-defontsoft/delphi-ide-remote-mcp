@@ -973,7 +973,10 @@ initialization
   // VaultWritable resuelven el workspace activo y las de escritura se
   // rechazan por peticion cuando su vault es de solo lectura). tools/list
   // anuncia a cada workspace solo las que le sirven (ToolHiddenFromList).
-  if VaultConfiguredAnywhere then
+  // Por lo DECLARADO (HayVaults), como todo lo que anuncia (A4): miraba la carpeta, y
+  // con la unidad del vault caida al arrancar sus tools no existian en toda la vida del
+  // proceso y VAULT-043 no llegaba nunca (revisor del paisaje de la 1.29.1)
+  if HayVaults then
   begin
     TMCPRegistry.RegisterTool('vault_search',
       function: IMCPTool begin Result := TVaultSearchTool.Create; end);

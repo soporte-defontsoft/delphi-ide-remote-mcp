@@ -89,8 +89,11 @@ begin
         // [local change 2026-11-10] ...y un texto que es un numero, como number:
         // un cliente que valida negaba 152 en una coordenada (C3 de
         // cierre-final-1-29-1); el deserializador acepta los dos
+        // [local change 2026-11-11] ...como integer (y su minimum 0, el de abajo): el
+        // binder solo acepta enteros no negativos, y "number" prometia 152.5, que
+        // acababa en un "fuera de la imagen" que despistaba (revisor del paisaje de la 1.29.1)
         if (JsonType = 'string') and PublicaComoNumero(RttiProp) then
-          JsonType := 'number';
+          JsonType := 'integer';
         PropSchema.AddPair('type', JsonType);
         // [local change 2026-09-28] el binder rechaza un entero negativo en
         // TODOS los parametros (MotivoEntero): el esquema lo dice (decima)

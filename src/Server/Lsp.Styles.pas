@@ -1251,6 +1251,17 @@ begin
   Result := (DesignerShapeOf(B) <> dsText) or (TEncoding.ASCII.GetString(B) = 'FMX_STYLE');
 end;
 
+{ Si un .style es de TEXTO (lo que lint y build trabajan): ni el .bin.style que
+  escribe el conversor ni uno binario por su contenido. Estaba dos veces, en la lista
+  de una carpeta y en la cuenta de sus subcarpetas (revisor del paisaje de la 1.29.1) }
+function EsEstiloDeTexto(const AFichero: string): Boolean;
+begin
+  // la cola de una RUTA, por la clave de las rutas (ClaveDeRuta), no por el pliegue
+  // del idioma de lo que no es ruta (test_paisaje, V105)
+  Result := not ClaveDeRuta(AFichero).EndsWith(ClaveDeRuta(COLA_DE_ESTILO_BINARIO)) and
+    not IsBinaryStyle(AFichero);
+end;
+
 function TextStylesIn(const ADir: string): TArray<string>;
 var
   F: string;
@@ -1260,7 +1271,7 @@ begin
   try
     if TDirectory.Exists(ADir) then
       for F in TDirectory.GetFiles(ADir, '*.style') do
-        if not SinMayusculas(F).EndsWith(COLA_DE_ESTILO_BINARIO) and not IsBinaryStyle(F) then
+        if EsEstiloDeTexto(F) then
           L.Add(F);
     L.Sort;
     Result := L.ToArray;
@@ -1278,8 +1289,7 @@ begin
   // ACTUAL de esa unidad (test_raiz_unidad); los estilos de la raiz contaban como de debajo
   var Aqui := TPath.GetFullPath(SinBarraFinal(ADir));
   for var F in WalkFiles(ADir, '*.style') do
-    if not SameFileName(TPath.GetFullPath(ExtractFileDir(F)), Aqui) and
-       not SinMayusculas(F).EndsWith(COLA_DE_ESTILO_BINARIO) and not IsBinaryStyle(F) then
+    if not SameFileName(TPath.GetFullPath(ExtractFileDir(F)), Aqui) and EsEstiloDeTexto(F) then
       Inc(Result);
 end;
 

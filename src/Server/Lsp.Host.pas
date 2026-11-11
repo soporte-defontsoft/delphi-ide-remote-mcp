@@ -208,7 +208,8 @@ begin
       if Vault <> '' then
         Result := Result + #10#10 + Vault;
     end;
-  if VaultConfiguredAnywhere then
+  // por lo declarado, como el registro de las vault_* (A4)
+  if HayVaults then
   begin
     TMCPCoreManager.DeclarePrompts := True;
     FRegistry.RegisterManager(TMCPPromptsManager.Create);

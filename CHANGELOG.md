@@ -124,7 +124,8 @@ project is in maintenance: patches only.
   for them (`SYS-045`, the path of each copy: `delphi_move` brings one back). About 25
   answers said "Backup in `__delphi-patch`." without the file - a project setting, a unit
   added to a `.dpr`, a style, the summary of a changeset; one note for all of them, only
-  for a copy the call made (the first change of the day), not for one that already existed.
+  for a copy the call made (the first change of the day), not for one that already existed
+  nor for one the answer already names (its `backup`, also inside a JSON answer).
 - At start, the server says which sections and keys of `settings.ini` it does not read: a
   misspelled name, or one this version does not have, did nothing and nothing said so. The
   reader itself is the catalogue - what the server asks is noted, and what the file holds
@@ -225,12 +226,19 @@ project is in maintenance: patches only.
   types them there (measured). Where the table cannot be read, the node composes from
   Unicode as before.
 - `x`, `y`, `tox`, `toy` of `delphi_desktop` and `x`, `y`, `lines` of `delphi_adb` are
-  numbers in the schema: a client that checks the arguments against it refused `152`
+  integers from 0 in the schema: a client that checks the arguments against it refused `152`
   ("is not of type 'string'", nine times in Hermes' sessions). Text still works.
 - A vault declared but unreachable (a network folder that does not answer) said
   "no vault configured": it now says it is declared and cannot be reached (`VAULT-043`),
   and `prompts/list` no longer asks the disk on every request for it (the first look at a
-  server that does not answer took 21 s, measured).
+  server that does not answer took 21 s, measured). One unreachable when the server
+  started had no vault tools, prompt or instructions until a restart, so `VAULT-043`
+  never came: they now go by what is declared, as the rest of what the server announces.
+- `delphi_paserver remote-run` and `output` took a program that writes a line tagged like
+  one of this server's refusals (`[NODE-015 DENIED] ...`, the desktop node run by hand)
+  and exits with an error for the launcher refusing to run it: the answer came as a
+  failure with that line as its `error`, and `out=` was not written. Only the launcher's
+  own refusals (`JOB-`) are taken as its now.
 - Small texts an agent met, each where it happens: the preview of a `delphi_changeset`
   create writes the line ending as the files say it (`LF`, `CRLF`); `delphi_designer` reading a
   binary `.dfm` no longer calls its tree the TEXT designer's (`DSGN-019`);

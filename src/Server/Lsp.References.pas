@@ -130,9 +130,12 @@ type
     { las carpetas de compilacion que escondio (tres como mucho), para que
       LIST-003 las NOMBRE: decia "pasa esa carpeta como root" sin decir cual,
       y Hermes probo dos que no eran antes de recompilar para verla (A10 de
-      cierre-final-1-29-1, 10-nov-2026). ARuta: lo que se escondio }
+      cierre-final-1-29-1, 10-nov-2026). ACarpeta: LA carpeta que se nombra - la
+      de un fichero escondido, o la carpeta escondida misma (el modo dirs de
+      delphi_list: con ExtractFileDir aqui nombraba a su padre, la raiz; revisor
+      del paisaje de la 1.29.1) }
     CarpetasDeArtefactos: TArray<string>;
-    procedure Add(const AReason: string; const ARuta: string = '');
+    procedure Add(const AReason: string; const ACarpeta: string = '');
     function Total: Integer;
     { hidden, un campo por cada motivo que no sea cero y la nota que dice
       que es cada cosa y como verla. Si no se escondio nada, nada. }
@@ -386,14 +389,14 @@ end;
 
 { THiddenCount }
 
-procedure THiddenCount.Add(const AReason, ARuta: string);
+procedure THiddenCount.Add(const AReason, ACarpeta: string);
 begin
   if AReason = SKIP_ARTIFACTS then
   begin
     Inc(Artifacts);
-    if (ARuta <> '') and (Length(CarpetasDeArtefactos) < 3) then
+    if (ACarpeta <> '') and (Length(CarpetasDeArtefactos) < 3) then
     begin
-      var Dir := ExtractFileDir(ARuta);
+      var Dir := ACarpeta;
       for var C in CarpetasDeArtefactos do
         if SameFileName(C, Dir) then
           Exit;

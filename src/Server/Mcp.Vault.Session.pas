@@ -119,12 +119,15 @@ var
   Custom: string;
 begin
   Result := '';
-  if not VaultConfigured then
+  // lo que ANUNCIA mira lo declarado (A4): un vault declarado cuya carpeta no se
+  // alcanza se anuncia igual, con el protocolo generico, y sus tools dicen VAULT-043
+  // (se callaba y el agente creia que no habia vault; revisor del paisaje de la 1.29.1)
+  if VaultPath = '' then
     Exit;
   // The vault's own instructions win: this is where a particular vault says
   // what it contains, in which language to write, and which projects it covers.
   Custom := TPath.Combine(VaultPath, VAULT_INSTRUCCIONES);
-  if TFile.Exists(Custom) then
+  if VaultConfigured and TFile.Exists(Custom) then
   begin
     try
       Result := LeeTexto(Custom, [ltVault]).Trim;

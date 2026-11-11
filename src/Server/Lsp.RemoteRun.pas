@@ -641,15 +641,31 @@ begin
   ASalida := (if P >= 0 then Texto.Substring(0, P) else '').TrimRight;
 end;
 
-{ Un "no" del LANZADOR (el programa no esta, no es nativo...) llega como la
-  salida del trabajo, con exit<>0 y su etiqueta de fallo delante: eso no es
-  un programa que acabo mal, es una llamada que fallo - va en "error" y la
-  respuesta sale como fallo (salia ok:true; revision 27-sep-2026). Un
-  programa que corre y sale con 1 sigue siendo success=false sin error. }
+const
+  { el area de las etiquetas del LANZADOR (McpRunJob: sus SR_JOB_* de Mld.Textos,
+    [JOB-003 DENIED]...): lo que dice el es suyo y lo que dice el programa, no }
+  AREA_DEL_LANZADOR = 'JOB-';
+
+{ Si la salida de un trabajo es un "no" del LANZADOR (el programa no esta, no es
+  nativo...): exit<>0 y una etiqueta de fallo DE SU AREA delante. Con EsFallo a
+  secas valia la de cualquiera, y un programa que escribe una (el nodo del
+  escritorio corrido por remote-run: [NODE-015 DENIED]) y sale con error se tomaba
+  por el lanzador: desde R5 su out= no se escribia y su salida se perdia. Estaba
+  dos veces, aqui y en el out= (revisor del paisaje de la 1.29.1; O16). }
+function FalloDelLanzador(const ASalida: string; ACodigo: Integer): Boolean;
+begin
+  Result := (ACodigo <> 0) and EsFallo(ASalida) and
+    MsgTag(ASalida).StartsWith(AREA_DEL_LANZADOR);
+end;
+
+{ Un "no" del LANZADOR llega como la salida del trabajo: eso no es un programa
+  que acabo mal, es una llamada que fallo - va en "error" y la respuesta sale
+  como fallo (salia ok:true; revision 27-sep-2026). Un programa que corre y sale
+  con 1 sigue siendo success=false sin error. }
 procedure PonFalloDelLanzador(AObj: TJSONObject; const ASalida: string;
   ACodigo: Integer);
 begin
-  if (ACodigo <> 0) and EsFallo(ASalida) then
+  if FalloDelLanzador(ASalida, ACodigo) then
     AObj.AddPair('error', PrimerTrozo(ASalida.TrimLeft, [#10]).Trim);
 end;
 
@@ -891,7 +907,7 @@ begin
     begin
       var SinEntorno := SinCodigo;
       PartirEntorno(SinEntorno);
-      if Fin and (Codigo <> 0) and EsFallo(SinEntorno) then
+      if Fin and FalloDelLanzador(SinEntorno, Codigo) then
         AVolcado.SinPrograma := True
       else
         AVolcado := GuardaLoDelPrograma(OutFile, Desde, ABytes, AGuardaEn);

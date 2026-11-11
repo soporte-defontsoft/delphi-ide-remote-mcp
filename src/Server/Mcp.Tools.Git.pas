@@ -1606,6 +1606,11 @@ begin
     Exit;
   if not RemotosDelRepo(ARepo, AFijado, Remotos) then
     Exit(MsgFmt(SR_GIT_REMOTO_SIN_RESPUESTA_FMT, ['tag action=delete']));
+  // contacto de red como el de toda orden de red (SL_GIT_NETWORK_FMT): los NOMBRES de los
+  // remotos, nunca sus direcciones (pueden llevar usuario:clave@); revisor del paisaje 1.29.1
+  if Length(Remotos) > 0 then
+    TLogger.Warning(MsgFmt(SL_GIT_NETWORK_FMT, ['ls-remote (tag action=delete)', ARepo,
+      string.Join(',', Remotos)]));
   for R in Remotos do
   begin
     if not GitContesta(ARepo, AFijado, 'ls-remote --tags ' + EnComillas(R) + ' ' + EnComillas(Ref), Lineas) then

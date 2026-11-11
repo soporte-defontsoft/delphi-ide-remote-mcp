@@ -615,6 +615,23 @@ finally:
     mc.borra(SEVA)
     mc.borra(SEVA + '-fuera')
 
+# ...y uno que ya NO se alcanza al ARRANCAR (su unidad no esta: una letra libre, donde la siembra no puede
+# crear nada): el registro de las vault_* y de los prompts, y las instrucciones, miran lo DECLARADO como lo que
+# anuncia (A4). Miraban la carpeta: con la unidad del vault caida en un despliegue, el vault desaparecia toda la
+# vida del proceso sin decir nada y VAULT-043 no llegaba nunca (revisor del paisaje de la 1.29.1)
+s8 = Server(vault='%s:\\vault-sin-unidad' % mc.letras_libres(1)[0])
+try:
+    out8 = s8.call('vault_read', {})
+    check('vault sin su unidad al arrancar: vault_read esta registrada y dice VAULT-043 (ROJO: no existia)',
+          'vault_read' in s8.tools() and mc.abre(out8, 'SR_VAULT_INALCANZABLE'), (s8.tools()[-6:], out8[:200]))
+    pl8 = s8.rpc('prompts/list').get('result', {}).get('prompts', [])
+    check('...prompts/list anuncia el prompt vault', any(p.get('name') == 'vault' for p in pl8), pl8)
+    check('...y las instrucciones del initialize hablan del vault (el protocolo generico)',
+          mc.catalogo()['SD_VAULT_INSTRUCTIONS'][:60] in (s8.init.get('instructions') or ''),
+          (s8.init.get('instructions') or '')[-300:])
+finally:
+    s8.close()
+
 # ...y una carpeta VACIA cuyo projects\ es una union a otra de fuera (vacia, para
 # que no cuente como vault con notas): la puerta para TODAS las notas antes de
 # crear nada - creaba example-project DETRAS de la union y la semilla quedaba a

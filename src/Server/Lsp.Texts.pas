@@ -3206,9 +3206,7 @@ const
     'converts to display pixels. Without frame, X is display pixels ' +
     '(multiply by tapScale.x when the answer carried it).';
   SP_ADB_Y =
-    'tap: Y measured on a screenshot; pass its frame and the server ' +
-    'converts to display pixels. Without frame, Y is display pixels ' +
-    '(multiply by tapScale.y when the answer carried it).';
+    'tap: Y, measured as x (tapScale.y when there is no frame).';
   { las teclas de delphi_adb key por su nombre, UNA vez: sus dos textos y el
     codigo (Mcp.Tools.Adb las parte por SEPARADOR_DE_TECLAS_DE_ADB, en el
     orden de sus KEYCODE). Las lineas de un logcat, por defecto y su tope (se

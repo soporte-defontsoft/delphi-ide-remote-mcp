@@ -131,6 +131,7 @@ uses
   Lsp.Mascara,      // MaskDriveText: la copia que se ensena
   Lsp.Identidad,    // CurrentAgent: el dueno de una copia
   Lsp.NetDrives,    // SinBarraFinal
+  Lsp.Json,         // TextoEnJson: como viaja la copia en una respuesta JSON
   Lsp.Texts;
 
 threadvar
@@ -165,8 +166,11 @@ begin
   begin
     var Vista := MaskDriveText('', C);
     // la que ya nombra la respuesta (el backup= de delphi_edit y textedit) no
-    // se repite; la que una escritura que no acabo quito (Coloca) no se nombra
-    if ATexto.Contains(Vista) or ATexto.Contains(C) or not TFile.Exists(C) then
+    // se repite; la que una escritura que no acabo quito (Coloca) no se nombra.
+    // En una respuesta JSON (el "backup" de delphi_upload) va como la escribe el
+    // JSON, con las barras dobladas: salia dos veces (revisor del paisaje de la 1.29.1)
+    if ATexto.Contains(Vista) or ATexto.Contains(TextoEnJson(Vista)) or
+       ATexto.Contains(C) or not TFile.Exists(C) then
       Continue;
     if Nombradas <> '' then
       Nombradas := Nombradas + ', ';

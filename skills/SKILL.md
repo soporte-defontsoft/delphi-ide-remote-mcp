@@ -131,7 +131,9 @@ answers your client did not get go to THAT name's mailbox.
   it `discover` works and `run` says so - that is a switch, not a bug.
 - The test runs in a Windows container on a COPY of its output folder (what this session can read of it): it
   sees that folder and, besides it, only what Windows gives every container
-  (its own temp, the system files), and has no network. Write tests of
+  (its own temp, the system files), and has no network; its processes together get at
+  most a quarter of the RAM (3 GB at most) and every processor but one, and running out of
+  that memory is said in the answer (`memoryCapNote`, `TEST-039`). Write tests of
   LOGIC; a data file a test reads goes in the output folder, a project
   built with runtime packages is refused (build it whole), and what the test
   writes there comes back in `files`. A test that needs a database or the
@@ -191,7 +193,8 @@ answers your client did not get go to THAT name's mailbox.
   property your own base class publishes is judged by the type it
   declares), `delete` removes one
   with its empty handlers. The properties go in as the IDE's own writer
-  stores them - its order, the size a control's constructor gives, the
+  stores them - its order, the size a control's constructor gives (in a `.dfm`
+  saved at another `PixelsPerInch`, scaled to it as the IDE drops it), the
   companions it adds (`Size.PlatformDefault`, `ParentFont`) - and the answer
   says when that is not the value you gave: `notStored` (the class already
   gives it), `storedAs` (the component turns it into another when it loads)

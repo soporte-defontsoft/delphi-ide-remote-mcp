@@ -486,7 +486,7 @@ begin
           var Motivo := SkipReason(RelToRoot(F, Params.Root), False);
           if Motivo <> '' then
           begin
-            Ocultos.Add(Motivo, F); // con su ruta: LIST-003 nombra la carpeta (A10)
+            Ocultos.Add(Motivo, ExtractFileDir(F)); // su carpeta: LIST-003 la nombra (A10)
             Continue;
           end;
         end;
@@ -739,7 +739,7 @@ begin
           Reason := SKIP_FOLDERS;
         if Reason <> '' then
         begin
-          Ocultos.Add(Reason);
+          Ocultos.Add(Reason, F); // la carpeta escondida misma: LIST-003 la nombra (A10)
           Continue;
         end;
         if PagDirs.Entra then
@@ -804,7 +804,7 @@ begin
           Reason := SkipReason(RelToRoot(F, Root), Params.IncludeTrash);
         if Reason <> '' then
         begin
-          Ocultos.Add(Reason, F); // con su ruta: LIST-003 nombra la carpeta (A10)
+          Ocultos.Add(Reason, ExtractFileDir(F)); // su carpeta: LIST-003 la nombra (A10)
           Continue;
         end;
         var Entra := Pag.Entra;
