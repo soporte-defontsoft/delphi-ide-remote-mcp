@@ -9200,6 +9200,26 @@ const
     '[GIT-091 INVALID_PARAM] "%s" needs "name": tag without a name only ' +
     'LISTS the tags. A new one is tag name=<tag> (ref=<what it marks>, ' +
     'message=<text> makes it annotated). Nothing was done.';
+  { tag action=delete (B1 de cierre-final-1-29-1): un tag LOCAL que ningun remoto
+    tiene. El ritual del 10-nov tuvo que borrar el suyo por consola }
+  SR_GIT_TAG_ACCION_FMT =
+    '[GIT-092 INVALID_PARAM] tag takes action=delete, or no action (with name ' +
+    'it creates, without it lists) - not "%s". Nothing was done.';
+  SR_GIT_TAG_NO_ESTA_FMT =
+    '[GIT-093 NOT_FOUND] There is no local tag "%s": command=tag without name ' +
+    'lists them. Nothing was done.';
+  SR_GIT_TAG_EN_REMOTO_FMT =
+    '[GIT-094 DENIED] The tag "%s" is on the remote "%s": deleting it here ' +
+    'would not delete it there, and a fetch would bring it back. This tool ' +
+    'deletes only a tag that no remote has, and never on a remote. Nothing was done.';
+  SR_GIT_TAG_REMOTO_NO_CONTESTA_FMT =
+    '[GIT-095 DENIED] The remote "%s" did not answer whether it has the tag ' +
+    '"%s": a tag is deleted only when every remote says it does not. Nothing ' +
+    'was done.';
+  { %0:s = los remotos preguntados; %1:s = el tag }
+  SN_GIT_TAG_BORRADO_FMT =
+    '[GIT-096] Deleted here only: no remote had it (asked: %0:s). To put it ' +
+    'back: command=tag name=%1:s ref=<the id after "was" above>.';
   { %s = el format. context es del PARCHE: con un resumen git lo trae entero
     (su -U implica --patch; Hermes, 10-nov-2026, format=shortstat context=3) }
   SR_GIT_CONTEXTO_SIN_PARCHE_FMT =
@@ -12611,7 +12631,7 @@ const
   SP_GIT_ACTION =
     'stash: push (default) | pop | list. worktree: add | list | remove. ' +
     'merge: abort. add: update. commit: amend (not of what a remote has). ' +
-    'fetch: prune.';
+    'fetch: prune. tag: delete (the local tag in name, if no remote has it).';
 
   SP_GIT_NAME =
     'tag: the new tag (none = list them). config: user.name | user.email ' +
@@ -12758,9 +12778,8 @@ const
     'without touching anybody''s working tree (yours to clean up). ' +
     'Commit/tag messages, config values and the clone URL travel in ' +
     '"message"; push/pull use the credentials and remotes stored on the ' +
-    'server. The repository - root folder and .git - has to be inside your ' +
-    'roots: git works on the whole repository it finds from "repo" ' +
-    'upwards, so one that starts above your roots is refused (GIT-041). No arbitrary ' +
+    'server. git goes up from "repo" to its repository: one that starts ' +
+    'above your roots is refused (GIT-041). No arbitrary ' +
     'git commands, no shell.';
 
   SD_WS_INSTALLS =

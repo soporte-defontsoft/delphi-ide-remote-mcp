@@ -28,6 +28,14 @@ project is in maintenance: patches only.
 
 ### Added
 
+- `delphi_git command=tag action=delete name=<tag>` deletes a LOCAL tag that no remote has:
+  `ls-remote` asks every remote of the repository first, through the same gate as an
+  agent's own `ls-remote`. A tag a remote has is refused (`GIT-094`, naming the remote):
+  deleted here it would come back with the next fetch, and this tool never deletes on a
+  remote (push only adds). A remote that does not answer refuses it too (`GIT-095`): it
+  cannot be known. The answer says which remotes were asked and how to put the tag back
+  (`GIT-096`: `command=tag name=<tag> ref=<the id git printed>`). Until now a mistaken
+  local tag needed a console - the release of this version had to do it that way.
 - A call still running tells its client so: every `[Server] ProgressSeconds` (15 by default;
   0 = none) it sends a `notifications/progress` with the `progressToken` the client sent,
   the seconds it has been running and `SYS-040` naming the tool. Measured: Claude Code (the

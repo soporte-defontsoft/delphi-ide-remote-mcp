@@ -1581,9 +1581,47 @@ begin
     Result := MsgFmt(SR_GIT_REESCRIBE_PROTEGIDO_FMT, [ACmd, string.Join(', ', Malos)]);
 end;
 
+{ Por que NO se borra un tag LOCAL (tag action=delete, B1 de cierre-final-1-29-1); '' si
+  se puede, y en ARemotos los que se preguntaron. Que este aqui lo dice git (for-each-ref,
+  que sale con 0 aunque no haya ninguno: una pregunta que falla no es un "no esta"). Que
+  NINGUN remoto lo tenga, ls-remote de cada uno, despues de la misma puerta del remoto que
+  el ls-remote del agente (RemotoDenegado); uno que no contesta tambien lo impide: no se
+  sabe. Uno que un remoto tiene volveria con el siguiente fetch, y borrar en un remoto no
+  lo hace esta tool (push solo anade). }
+function TagQueNoSeBorra(const ARepo, AFijado, ABase, ANombre: string;
+  out ARemotos: string): string;
+var
+  Lineas, Remotos: TArray<string>;
+  Ref, R, L: string;
+begin
+  ARemotos := '';
+  Ref := 'refs/tags/' + ANombre;
+  if not GitContesta(ARepo, AFijado, 'for-each-ref --format=%(refname) ' + EnComillas(Ref), Lineas) or
+     (IndexStr(Ref, Lineas) < 0) then
+    Exit(MsgFmt(SR_GIT_TAG_NO_ESTA_FMT, [ANombre]));
+  // la puerta de LEER un remoto (solo push es la de escribir), y sus negativas dicen lo que
+  // pidio el agente (con 'ls-remote' decian "the remote of this ls-remote")
+  Result := RemotoDenegado('tag action=delete', ARepo, AFijado, ABase, '');
+  if Result <> '' then
+    Exit;
+  if not RemotosDelRepo(ARepo, AFijado, Remotos) then
+    Exit(MsgFmt(SR_GIT_REMOTO_SIN_RESPUESTA_FMT, ['tag action=delete']));
+  for R in Remotos do
+  begin
+    if not GitContesta(ARepo, AFijado, 'ls-remote --tags ' + EnComillas(R) + ' ' + EnComillas(Ref), Lineas) then
+      Exit(MsgFmt(SR_GIT_TAG_REMOTO_NO_CONTESTA_FMT, [R, ANombre]));
+    // "<id>TAB<ref>", y la de un tag anotado otra vez con ^{}: el de ESE nombre, entero
+    for L in Lineas do
+      if L.EndsWith(#9 + Ref) or L.EndsWith(#9 + Ref + '^{}') then
+        Exit(MsgFmt(SR_GIT_TAG_EN_REMOTO_FMT, [ANombre, R]));
+  end;
+  ARemotos := ONinguno(string.Join(', ', Remotos));
+end;
+
 function TDelphiGitTool.ExecuteWithParams(const Params: TDelphiGitParams): string;
 var
   Cmd, GitArgs, Repo, Output, MsgFile: string;
+  NotaDelTag: string; // tag action=delete: lo que se pregunto y como volver a ponerlo
   ExitCode: Cardinal;
   Destino, Enlace: string; // worktree
   GitDir, Comun, Raiz: string; // donde vive el repo (DondeViveElRepo)
@@ -1672,7 +1710,9 @@ begin
       ModoGit := 'stash ' + LowerCase(Params.Action.Trim);
   end
   else if Cmd = 'worktree' then
-    ModoGit := 'worktree ' + LowerCase(Params.Action.Trim);
+    ModoGit := 'worktree ' + LowerCase(Params.Action.Trim)
+  else if (Cmd = 'tag') and (Params.Action.Trim <> '') then
+    ModoGit := 'tag ' + LowerCase(Params.Action.Trim);
   var SuyosGit, VaConGit: string;
   var SobraGit := ParametroQueNoVa(ModoGit, [
       'status', 'paths offset',
@@ -1684,7 +1724,7 @@ begin
       'pull', 'remote branch', 'fetch', 'remote action', 'push', 'remote ref',
       'ls-remote', 'remote offset', 'init', '', 'clone', 'message branch',
       'config', 'name message', 'merge', 'branch action', 'switch', 'branch create',
-      'tag', 'name ref message offset',
+      'tag', 'name ref message offset', 'tag delete', 'action name',
       'stash push', 'action paths message', 'stash pop', 'action',
       'stash list', 'action offset',
       'worktree add', 'action path ref', 'worktree list', 'action offset',
@@ -2144,7 +2184,26 @@ begin
   end
   else if Cmd = 'tag' then
   begin
-    if Params.Name.Trim = '' then
+    NotaDelTag := '';
+    if Params.Action.Trim <> '' then
+    begin
+      // borrar uno LOCAL que ningun remoto tiene (B1 de cierre-final-1-29-1); se pregunta
+      // aqui, antes del cerrojo de los escritores: ls-remote tarda lo que tarde la red
+      if not SameText(Params.Action.Trim, 'delete') then
+        Exit(MsgFmt(SR_GIT_TAG_ACCION_FMT, [Params.Action.Trim]));
+      if Params.Name.Trim = '' then
+        Exit(MsgFmt(SR_GIT_TAG_SIN_NOMBRE_FMT, ['action=delete']));
+      Result := NombreDenegado(Repo, Fijado, 'name', Params.Name);
+      if Result <> '' then
+        Exit;
+      var Preguntados: string;
+      Result := TagQueNoSeBorra(Repo, Fijado, IfThen(Raiz <> '', Raiz, Repo), Params.Name.Trim, Preguntados);
+      if Result <> '' then
+        Exit;
+      NotaDelTag := MsgFmt(SN_GIT_TAG_BORRADO_FMT, [Preguntados, Params.Name.Trim]);
+      GitArgs := 'tag -d ' + EnComillas(Params.Name.Trim);
+    end
+    else if Params.Name.Trim = '' then
     begin
       // sin nombre, lista: ref y message van con un nombre, y es el NOMBRE lo
       // que falta (GIT-038 senalaba al message; Hermes, 10-nov-2026)
@@ -2496,6 +2555,9 @@ begin
   // fijar la identidad la escribe en el config de ESTE repo: se dice
   if (ExitCode = 0) and (Cmd = 'config') and (Params.Message.Trim <> '') then
     Result := GitExito(MsgFmt(SN_GIT_CONFIG_FIJADO_FMT, [SinMayusculas(Params.Name.Trim)]), 0);
+  // un tag borrado: solo aqui, a quien se pregunto y como volver a ponerlo
+  if (ExitCode = 0) and (Cmd = 'tag') and (NotaDelTag <> '') then
+    Result := Result + #10 + NotaDelTag;
   // Un worktree nuevo es de quien lo pidio: se lo dice, con como quitarlo.
   if (ExitCode = 0) and (Cmd = 'worktree') and SameText(Params.Action.Trim, 'add') then
     Result := Result + #10 + MsgFmt(SN_GIT_WORKTREE_ADDED_FMT, [Destino]);

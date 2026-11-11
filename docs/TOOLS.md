@@ -926,7 +926,7 @@ A text form (`.dfm`/`.fmx`) is judged as `delphi_edit` judges what it writes - t
 
 <!-- contract: generated from tools/list by scripts/tools_md.py - change the server, not this block -->
 
-Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work - the rules of each are in "command". clone is the fast way to get a whole repo onto the server (far better than recreating files one by one). worktree puts ANOTHER version of the repo next to it to build and compare, without touching anybody's working tree (yours to clean up). Commit/tag messages, config values and the clone URL travel in "message"; push/pull use the credentials and remotes stored on the server. The repository - root folder and .git - has to be inside your roots: git works on the whole repository it finds from "repo" upwards, so one that starts above your roots is refused (GIT-041). No arbitrary git commands, no shell.
+Whitelisted git operations on a repository of this machine, so a remote agent can bring in code and version its work - the rules of each are in "command". clone is the fast way to get a whole repo onto the server (far better than recreating files one by one). worktree puts ANOTHER version of the repo next to it to build and compare, without touching anybody's working tree (yours to clean up). Commit/tag messages, config values and the clone URL travel in "message"; push/pull use the credentials and remotes stored on the server. git goes up from "repo" to its repository: one that starts above your roots is refused (GIT-041). No arbitrary git commands, no shell.
 
 *Access: mixed (`command` status / diff / log / show / ls-remote / branch read-only; tag only without name or message (then it lists); worktree only with action=list; stash only with action=list; config only without message (then it reads the value); every other command read-write, refused to a read-only credential).*
 
@@ -945,7 +945,7 @@ Whitelisted git operations on a repository of this machine, so a remote agent ca
 | `patch` | boolean | optional | show: the whole diff, not only the stat. |
 | `branch` | string | optional | switch (create=true: a new name), merge, pull, clone. |
 | `remote` | string | optional | The name of a remote of this repo: pull, fetch, push, ls-remote. |
-| `action` | string | optional | stash: push (default) \| pop \| list. worktree: add \| list \| remove. merge: abort. add: update. commit: amend (not of what a remote has). fetch: prune. |
+| `action` | string | optional | stash: push (default) \| pop \| list. worktree: add \| list \| remove. merge: abort. add: update. commit: amend (not of what a remote has). fetch: prune. tag: delete (the local tag in name, if no remote has it). |
 | `name` | string | optional | tag: the new tag (none = list them). config: user.name \| user.email (no message = read the value a commit would use). |
 | `create` | boolean | optional | switch: true = create the branch and move to it (git switch -c). Refused with any other command (GIT-038). |
 | `message` | string | optional | commit: the message. tag: makes it annotated. stash push: its label. config: the value (none = read the current one). clone: the repository URL. |
