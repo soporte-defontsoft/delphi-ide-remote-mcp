@@ -1,0 +1,1 @@
+TermsBox.pas(6): error F2613: Unit 'FMX.CheckBox' not found.

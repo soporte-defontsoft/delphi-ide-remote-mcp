@@ -1,0 +1,4 @@
+NameOrder.pas(15): error E2003: Undeclared identifier: 'TComparer'
+NameOrder.pas(15): error E2029: '(' expected but '>' found
+NameOrder.pas(20): error E2003: Undeclared identifier: 'CompareStr'
+NameOrder.pas(21): error E2089: Invalid typecast

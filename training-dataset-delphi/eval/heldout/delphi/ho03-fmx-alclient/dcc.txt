@@ -1,0 +1,1 @@
+PanelFill.pas(15): error E2003: Undeclared identifier: 'alClient'

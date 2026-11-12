@@ -92,25 +92,12 @@ uses
   PageText in '..\examples\delphi\x09-rtl-html-encode\answer\PageText.pas',
   ValueBands in '..\examples\delphi\x10-rtl-floor\ValueBands.pas',
   CustomerQueries in '..\examples\delphi\x11-sql-parameters\answer\CustomerQueries.pas',
-  BackupFiles in '..\examples\delphi\e08-second-writer-file-name\answer\BackupFiles.pas';
+  BackupFiles in '..\examples\delphi\e08-second-writer-file-name\answer\BackupFiles.pas',
+  SpecChecks in 'SpecChecks.pas';
 
 // The judge of the dataset's Delphi examples: every answer unit is in the
 // uses clause above (so it compiles) and every check below runs it.
 // PASS/FAIL lines + ExitCode = number of failures (delphi_test reads both).
-
-var
-  Failures: Integer = 0;
-
-procedure Check(const AName: string; const AOk: Boolean);
-begin
-  if AOk then
-    Writeln('PASS ', AName)
-  else
-  begin
-    Writeln('FAIL ', AName);
-    Inc(Failures);
-  end;
-end;
 
 function Raises(const AProc: TProc): Boolean;
 begin
@@ -636,15 +623,5 @@ begin
 end;
 
 begin
-  try
-    RunChecks;
-  except
-    on E: Exception do
-    begin
-      Writeln('FAIL unexpected ', E.ClassName, ': ', E.Message);
-      Inc(Failures);
-    end;
-  end;
-  Writeln(Failures, ' failure(s)');
-  ExitCode := Failures;
+  ExitCode := RunJudge([RunChecks]);
 end.

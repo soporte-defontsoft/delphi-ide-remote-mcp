@@ -1,0 +1,2 @@
+HitCounter.pas(19): error E2003: Undeclared identifier: 'TInterlocked'
+HitCounter.pas(19): error E2066: Missing operator or semicolon

@@ -91,3 +91,23 @@ x10-rtl-floor	passed		passed 3/3
 x11-sql-parameters	passed (a TFDQuery with ParamByName)		passed 0/3 (compile): CustomerQueries.pas(21): error E2003: Undeclared identifier: 'ExecSQLScalar'
 p11-csv-module	passed		passed 3/3
 p12-second-writer-file-name	failed: two writers kept, and the reader taught both shapes		passed 0/3 (failed): AssertionError
+ho01-fmx-spinbox-field			passed 2/3 (compile): QuantityField.pas(9): error E2003: Undeclared identifier: 'TFmxObject'
+ho02-fmx-checkbox-invented-unit			passed 0/3 (compile): TermsBox.pas(15): error E2003: Undeclared identifier: 'Caption'
+ho03-fmx-alclient			passed 3/3
+ho04-fmx-swatch-rectangle			passed 0/3 (compile): ColorSwatch.pas(10): error E2003: Undeclared identifier: 'TAlphaColor'; ColorSwatch.pas(22): error E2003: Undeclared identifier: 'TBrushKind'; ColorSwatch.pas(7): error F2613: Unit 'FMX.Shapes' not found.
+ho05-fmx-badge-takes-click			passed 1/3 (compile): AvatarBadge.pas(19): error E2003: Undeclared identifier: 'HitClick'
+ho10-interlocked-needs-syncobjs			passed 2/3 (compile): HitCounter.pas(22): error E2003: Undeclared identifier: 'TInterlocked'
+ho11-tcomparer-needs-defaults			passed 0/3 (compile): NameOrder.pas(16): error E2003: Undeclared identifier: 'TArray'; NameOrder.pas(25): error E2003: Undeclared identifier: 'TArray'
+ho20-lap-time-format			passed 0/3 (compile, failed): FAIL ho20 LapText; FAIL ho20 LapText over the whole hour, every 997 ms; LapTimes.pas(16): error E2003: Undeclared identifier: 'Format'
+ho21-last-four-digits			passed 3/3
+ho22-weekday-number			passed 3/3
+ho23-round-half-up			passed 3/3
+ho30-rtl-iso-week			passed 0/3 (partial)
+ho31-rtl-add-months			passed 2/3 (partial)
+ho32-rtl-change-extension			passed 1/3 (partial)
+ho40-reuse-phone-normalizer			passed 3/3
+ho45-free-shipping-rule			passed 0/3 (partial)
+ho46-second-writer-lot-code			passed 0/3 (failed): FAIL ho46 both writers agree; FAIL ho46 the reader stays strict
+ho60-record-operators			passed 3/3
+ho42-py-reuse-slug			passed 3/3
+ho48-py-second-writer-thumb-key			passed 0/3 (failed): AssertionError

@@ -38,38 +38,12 @@ uses
   SettingRow in '..\examples\delphi\u10-fmx-setting-row\SettingRow.pas',
   TabPages in '..\examples\delphi\u11-fmx-tab-page\TabPages.pas',
   FMX.TabControl,
-  Winapi.Windows;
+  SpecChecks in 'SpecChecks.pas',
+  FmxSpecChecks in 'FmxSpecChecks.pas';
 
 // The judge of the dataset's FireMonkey examples: it builds control trees in memory (no form, no
 // window) and asks FireMonkey itself which control gets a click (TControl.ObjectAtPoint).
 // PASS/FAIL lines + ExitCode = number of failures (delphi_test reads both).
-
-var
-  Failures: Integer = 0;
-
-procedure Check(const AName: string; const AOk: Boolean);
-begin
-  if AOk then
-    Writeln('PASS ', AName)
-  else
-  begin
-    Writeln('FAIL ', AName);
-    Inc(Failures);
-  end;
-end;
-
-// Which object gets a click at (X, Y), asked of FireMonkey
-function Hit(const ARoot: TControl; const X, Y: Single): TFmxObject;
-var
-  C: IControl;
-begin
-  // ObjectAtPoint is protected in TControl and public through IControl, as the form uses it
-  C := (ARoot as IControl).ObjectAtPoint(PointF(X, Y));
-  if C = nil then
-    Result := nil
-  else
-    Result := C.GetObject;
-end;
 
 procedure RunFacts;
 var
@@ -388,23 +362,6 @@ begin
 end;
 
 begin
-  try
-    RunFacts;
-    RunExamples;
-  except
-    on E: Exception do
-    begin
-      Writeln('FAIL unexpected ', E.ClassName, ': ', E.Message);
-      Inc(Failures);
-    end;
-  end;
-  Writeln(Failures, ' failure(s)');
-  // The verdict is complete here. The controls above live without an application, a form or a
-  // window, and FireMonkey's own unit finalization then ends now and then in an access violation
-  // inside ntdll (Runtime error 217). Measured 12-nov, out of the examples' code (after the last
-  // check): 0 of 8 runs with the v5 controls, up to 2 of 4 with TToolBar, TComboBox, TSwitch and
-  // TTabControl as well; FMX.Forms in the uses does not change it; the cause is NOT measured.
-  // So the judge leaves here, after flushing its output, without running that finalization.
-  Flush(Output);
-  ExitProcess(Cardinal(Failures));
+  // LeaveJudge says why a FireMonkey judge leaves without the unit finalization
+  LeaveJudge(RunJudge([RunFacts, RunExamples]));
 end.

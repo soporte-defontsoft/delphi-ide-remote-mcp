@@ -107,6 +107,8 @@
         <DCCReference Include="..\examples\delphi\r22-fmx-tcombobox-unit\fixed\SizePicker.pas"/>
         <DCCReference Include="..\examples\delphi\u10-fmx-setting-row\SettingRow.pas"/>
         <DCCReference Include="..\examples\delphi\u11-fmx-tab-page\TabPages.pas"/>
+        <DCCReference Include="SpecChecks.pas"/>
+        <DCCReference Include="FmxSpecChecks.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

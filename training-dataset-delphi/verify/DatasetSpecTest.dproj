@@ -151,6 +151,7 @@
         <DCCReference Include="..\examples\delphi\x10-rtl-floor\ValueBands.pas"/>
         <DCCReference Include="..\examples\delphi\x11-sql-parameters\answer\CustomerQueries.pas"/>
         <DCCReference Include="..\examples\delphi\e08-second-writer-file-name\answer\BackupFiles.pas"/>
+        <DCCReference Include="SpecChecks.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

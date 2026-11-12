@@ -1,4 +1,5 @@
-"""Compose the dataset (data/delphi-fine-tuning.jsonl) from examples/<language>/<id>/example.md.
+"""Compose the dataset (data/delphi-fine-tuning.jsonl) from examples/<language>/<id>/example.md, and the held-out
+questions (eval/delphi-heldout.jsonl) from eval/heldout/<language>/<id>/example.md - the same format, NEVER trained on.
 
 This script is the ONE writer of the dataset format; any chat-format loader is its reader.
 
@@ -6,7 +7,8 @@ This script is the ONE writer of the dataset format; any chat-format loader is i
     python -I tools/build_dataset.py --python  also run the check.py of every Python example
 
 example.md = a front matter (id, family, language, framework, teaches, judge, and optionally
-must_contain / once) and the sections "## system" (optional), "## user", "## assistant".
+must_contain / once; a held-out question also varies) and the sections "## system" (optional), "## user",
+"## assistant".
 In a section, {{code:<file>}} inserts that file as a fenced block (delphi or python by its
 extension) and {{text:<file>}} as a plain fenced block - the code in the dataset is ALWAYS the
 file that the judges compiled and ran, never a copy pasted by hand.
@@ -14,7 +16,8 @@ file that the judges compiled and ran, never a copy pasted by hand.
 The Delphi judges are the projects in verify/ (they need RAD Studio, so they are not run here):
 DatasetSpecTest (compiles every RTL answer unit and runs its checks), DatasetFmxSpecTest (the same for
 the FireMonkey answers; hit-testing is asked of FireMonkey itself), DatasetPinTest (DUnitX, for the
-examples written with DUnitX) and DatasetBrokenProbe (gives the compiler messages of the repair examples).
+examples written with DUnitX) and DatasetBrokenProbe (gives the compiler messages of the repair examples);
+HeldoutSpecTest and HeldoutFmxSpecTest judge the held-out questions.
 """
 import json
 import os
@@ -26,13 +29,17 @@ TOOLS = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(TOOLS)
 EXAMPLES = os.path.join(ROOT, "examples")
 OUT = os.path.join(ROOT, "data", "delphi-fine-tuning.jsonl")
+# the held-out questions: the patterns of the examples in new code, never trained on, so that a model trained on the
+# examples is measured on what it did not see (README, "Held-out questions") - a tree and a file of their own
+HELDOUT = os.path.join(ROOT, "eval", "heldout")
+OUT_HELDOUT = os.path.join(ROOT, "eval", "delphi-heldout.jsonl")
 
 FENCE = {".pas": "delphi", ".dpr": "delphi", ".inc": "delphi", ".py": "python"}
 FAMILIES = {"task", "repair", "landscape", "every-place"}
 LANGUAGES = {"delphi", "python"}
 FRAMEWORKS = {"delphi": {"rtl", "vcl", "fmx"}, "python": {"none"}}
 REQUIRED = ("id", "family", "language", "framework", "teaches", "judge")
-# how a small model did on each question, one pass (see the README): the one file that holds it
+# how a small model did on each question, training or held-out (see the README): the one file that holds it
 STUDENT = os.path.join(ROOT, "eval", "student-baseline.tsv")
 PLACEHOLDER = re.compile(r"\{\{(code|text):([^}]+)\}\}")
 SECTION = re.compile(r"^## (system|user|assistant)\s*$")
@@ -86,9 +93,11 @@ def expand(text, folder, where):
     return PLACEHOLDER.sub(repl, text)
 
 
-def example_dirs():
-    for language in sorted(os.listdir(EXAMPLES)):
-        base = os.path.join(EXAMPLES, language)
+def example_dirs(tree=EXAMPLES):
+    if not os.path.isdir(tree):
+        return
+    for language in sorted(os.listdir(tree)):
+        base = os.path.join(tree, language)
         if os.path.isdir(base):
             for name in sorted(os.listdir(base)):
                 folder = os.path.join(base, name)
@@ -110,10 +119,12 @@ def student_results():
     return results
 
 
-def build(run_python):
-    lines, seen, counts = [], set(), {}
-    student = student_results()
-    for language, name, folder in example_dirs():
+def compose(tree, student, seen, run_python, training=None):
+    """The JSONL lines of one tree, and its counts per language and family. training = the ids of the training
+    examples when the tree is the held-out one: a held-out question names in varies the examples whose pattern it
+    varies, or none (a control: something no example teaches)."""
+    lines, counts = [], {}
+    for language, name, folder in example_dirs(tree):
         where = os.path.relpath(os.path.join(folder, "example.md"), ROOT)
         meta, sections = parse(os.path.join(folder, "example.md"))
         for key in REQUIRED:
@@ -132,6 +143,16 @@ def build(run_python):
             fail(where, f"framework must be one of {sorted(FRAMEWORKS[language])}")
         if "user" not in sections or "assistant" not in sections:
             fail(where, "needs a ## user and a ## assistant section")
+        extra = {}
+        if training is not None:
+            varies = meta.get("varies", "").split()
+            if not varies:
+                fail(where, "a held-out question needs varies: the examples whose pattern it varies, or none")
+            if varies != ["none"] and not set(varies) <= training:
+                fail(where, f"varies names what is no training example: {sorted(set(varies) - training)}")
+            extra["varies"] = varies
+        elif "varies" in meta:
+            fail(where, "varies belongs to the held-out questions (eval/heldout), not to a training example")
 
         messages = []
         for role in ("system", "user", "assistant"):
@@ -160,25 +181,36 @@ def build(run_python):
 
         lines.append(json.dumps({
             "messages": messages,
-            "meta": dict({k: meta[k] for k in REQUIRED},
+            "meta": dict({k: meta[k] for k in REQUIRED}, **extra,
                          **({"student": student[meta["id"]]} if student.get(meta["id"]) else {})),
         }, ensure_ascii=False))
         key = (language, meta["family"])
         counts[key] = counts.get(key, 0) + 1
+    return lines, counts
 
-    unknown = sorted(set(student) - seen)
-    if unknown:
-        fail(STUDENT, f"ids that are no example: {unknown}")
 
-    os.makedirs(os.path.dirname(OUT), exist_ok=True)
-    with open(OUT, "w", encoding="utf-8", newline="\n") as f:
+def write(out, lines, counts, what):
+    os.makedirs(os.path.dirname(out), exist_ok=True)
+    with open(out, "w", encoding="utf-8", newline="\n") as f:
         f.write("\n".join(lines) + "\n")
     total = len(lines)
-    print(f"{total} examples -> {os.path.relpath(OUT, ROOT)}")
+    print(f"{total} {what} -> {os.path.relpath(out, ROOT)}")
     for (language, family), n in sorted(counts.items()):
         print(f"  {language:7} {family:12} {n}")
     other = sum(n for (language, _), n in counts.items() if language != "delphi")
     print(f"  not Delphi: {other} of {total} ({100 * other // max(total, 1)} %)")
+
+
+def build(run_python):
+    student, seen = student_results(), set()
+    training = compose(EXAMPLES, student, seen, run_python)
+    heldout = compose(HELDOUT, student, seen, run_python, training=set(seen))
+    unknown = sorted(set(student) - seen)
+    if unknown:
+        fail(STUDENT, f"ids that are no example: {unknown}")
+    write(OUT, *training, "examples")
+    if heldout[0]:
+        write(OUT_HELDOUT, *heldout, "held-out questions")
 
 
 if __name__ == "__main__":

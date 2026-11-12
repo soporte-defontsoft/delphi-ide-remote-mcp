@@ -13,7 +13,8 @@ the mistakes, and the dataset teaches the model to make fewer of them.
 > failure that repeats becomes several examples with variations (other units, other domains, RTL and FireMonkey,
 > Delphi and Python), so that the adapter learns the rule and not the phrase. v6 follows the failures of v5: more
 > FireMonkey names, escaping by hand (HTML, SQL, CSV), Floor against Trunc, and the second writer again. It grows from
-> here.
+> here. Apart from it, 20 [held-out questions](#held-out-questions-never-trained-on) vary the same patterns in new
+> code, to measure whether a model trained on the examples learned the rule or the example.
 >
 > **No model has been trained with it yet.** We are building it as an extra; training a model with it and measuring
 > the result is on the [roadmap](../docs/ROADMAP.md#next), for later.
@@ -93,7 +94,8 @@ The landscape and every-place families also come in other languages (see below).
 format that common LoRA tools load directly (Unsloth, Axolotl, LLaMA-Factory), plus a `meta` object with `id`,
 `family`, `language`, `framework`, `teaches` (what the example is for), `judge` (what verified it) and `student`
 (how a small model did on the question: `bare` and `agent`, one pass judged by hand; `base3`, the three passes of the
-baseline - see below. Weight the examples it failed higher).
+baseline - see below. Weight the examples it failed higher). The held-out questions,
+[`eval/delphi-heldout.jsonl`](eval/delphi-heldout.jsonl), come in the same format with one more field, `varies`.
 
 ## Layout, and how to rebuild it
 
@@ -115,13 +117,21 @@ verify/                the Delphi judges (RAD Studio 13)
   DatasetPinTest       DUnitX: the tests of the examples that are written with DUnitX
   DatasetBrokenProbe   takes one broken unit at a time, to read the compiler's messages - from a short path:
                        dcc cuts the "file(line)" prefix of a message at 128 characters, line number included
-eval/student-baseline.tsv  how a small model answered each question (one pass by hand, and the three passes of the
-                       baseline), read into meta.student
-tools/build_dataset.py the ONE writer of the JSONL: it composes it from examples/ and checks every example
+  HeldoutSpecTest      the judges of the held-out questions, RTL and FireMonkey
+  HeldoutFmxSpecTest
+  SpecChecks.pas       what every judge shares: one PASS/FAIL line per check and the verdict as the exit code;
+  FmxSpecChecks.pas    FireMonkey's own hit test, and how a FireMonkey judge leaves
+eval/heldout/<language>/<id>/  the held-out questions, in the same layout - NEVER trained on
+eval/delphi-heldout.jsonl  the held-out questions composed: the same format, plus meta.varies
+eval/student-baseline.tsv  how a small model answered each question, training or held-out (one pass by hand, and
+                       the three passes of the baseline), read into meta.student
+tools/build_dataset.py the ONE writer of both JSONL files: it composes them from examples/ and eval/heldout/, and
+                       checks every example
 ```
 
 To rebuild the JSONL and run the Python judges: `python -I tools/build_dataset.py --python`. The Delphi judges need
-RAD Studio: build and run `verify/DatasetSpecTest`, `verify/DatasetFmxSpecTest` and `verify/DatasetPinTest`.
+RAD Studio: build and run `verify/DatasetSpecTest`, `verify/DatasetFmxSpecTest` and `verify/DatasetPinTest` (and
+`verify/HeldoutSpecTest` and `verify/HeldoutFmxSpecTest` for the held-out questions).
 
 ## What a small model gets wrong (measured)
 
@@ -177,6 +187,52 @@ Per question: right in all three passes 34, in none 35, sometimes 23. Right, by 
 had been asked once with the hint in the header (41 right), gave 32, 36 and 42 right here. Each example carries its
 three verdicts in `meta.student.base3`.
 
+## Held-out questions (never trained on)
+
+[`eval/delphi-heldout.jsonl`](eval/delphi-heldout.jsonl) holds 20 questions in the same format, **never to be
+trained on**. After training, the dataset's own questions say what the adapter took from its examples; these say
+whether it learned the rules. Each one varies the pattern of some examples in new code (another unit, another type,
+another domain) and names those examples in `meta.varies`:
+
+- an invented FireMonkey unit (`FMX.CheckBox`), `alClient` in a FireMonkey unit, `TSpinBox` and its unit, a
+  rectangle with no border, a badge that takes the button's clicks;
+- `TInterlocked` without `System.SyncObjs`, `TComparer` without `System.Generics.Defaults`;
+- `mm` in a lap time, `Copy` from the end of a string, `case` on a string, `Round` on a half;
+- the ISO week, a month added at the end of a month, an extension changed (`TPath.ChangeExtension` does not exist in
+  Delphi: measured);
+- a normalizer the unit already has, a rule copied three times, a second writer of a lot code, in Delphi and in
+  Python.
+
+One of them (`varies: none`) is a control: something no example teaches (operators on a record), to see whether an
+adapter takes away what the model already knew. They live in a tree of their own (`eval/heldout/`), judged by
+`verify/HeldoutSpecTest` and `verify/HeldoutFmxSpecTest`, and the same writer composes them into a file of their own,
+so a training run that loads `data/` never sees them.
+
+Their baseline is the same three passes as above, with the same model, sampling and verdicts:
+
+| Pass | Right | Partial | Wrong | Does not compile |
+|---|---|---|---|---|
+| 1 | 8 | 3 | 2 | 7 |
+| 2 | 11 | 2 | 3 | 4 |
+| 3 | 10 | 4 | 2 | 4 |
+
+Per question: right in all three passes 7, in none 8, sometimes 5. That is the level of the dataset's own questions
+(40-55 % right here, 47-53 % there). By framework, FireMonkey 40 %, Python 50 % and RTL 51 %; by family, task 62 %,
+landscape 60 %, repair 41 % and every-place 0 of 9. What failed is what the examples teach:
+
+- invented FireMonkey names (a unit `FMX.Shapes`, a property `HitClick`, `Caption` on a check box);
+- types without their unit (`TAlphaColor`, `TBrushKind`, `TFmxObject`, `TArray`, `TInterlocked`);
+- the ISO week, an extension and a month added by hand;
+- the copied rule fixed in one copy only, three passes out of three;
+- the second writers kept, with the reader taught both shapes, in Delphi and in Python.
+
+The control was right every time. After training, a gain here is what the dataset is for, and a drop on the control is
+what it must not do. Each question carries its three verdicts in `meta.student.base3`.
+
+A judge of these questions runs from a short path: dcc cuts the "file(line)" prefix of its messages at 128
+characters, and a message cut that way can get lost. A student's compile error would then read as a name the judge
+could not call - measured on the first count of this baseline, which put nine compile errors there.
+
 ## Training and measuring
 
 - Train it as a **separable adapter**: load it when working on Delphi; without it, the base model is untouched
@@ -186,7 +242,8 @@ three verdicts in `meta.student.base3`.
   neutral headers, the same sampling, the same judges - show what the adapter took from its own examples. That is a
   ceiling, not the result: it trained on them. A gain smaller than the spread between passes (about six questions) is
   noise.
-- **Measure before and after**, with the same judges, on questions that are never trained on, several passes each:
+- **Measure before and after**, with the same judges, on questions that are never trained on (the
+  [held-out questions](#held-out-questions-never-trained-on)), several passes each:
   - compiles on the first attempt, and how many rounds of compiler errors it takes to get there;
   - invented units and APIs (unknown-unit and undeclared-identifier errors on names that do not exist);
   - the existing primitive found or a twin written (the `must_contain` / `once` checks of the landscape and
