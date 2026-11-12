@@ -7,6 +7,9 @@ the mistakes, and the dataset teaches the model to make fewer of them.
 
 > **Status: v1, 26 examples** (21 Delphi, 5 Python), every one verified by its judge. Small on purpose: it fixes the
 > format and the method. It grows from here, with the server.
+>
+> **No model has been trained with it yet.** We are building it as an extra; training a model with it and measuring
+> the result is on the [roadmap](../docs/ROADMAP.md#next), for later.
 
 ## Why
 

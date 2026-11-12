@@ -84,7 +84,9 @@ Status page as of 2026-11-11 (current release v1.29.1; 44 tools).
 
 ## Next
 
-Nothing: 1.29.1 closed the last list, each item done, measured, declared or declined. The project is in maintenance: what follows are patches, and a declared item reopens only with a case from the field.
+For the server, nothing: 1.29.1 closed the last list, each item done, measured, declared or declined. The project is in maintenance: what follows are patches, and a declared item reopens only with a case from the field.
+
+Beside it, for later: a model trained with the [Delphi fine-tuning dataset](../training-dataset-delphi/README.md) and measured before and after, on examples it never trained on - Delphi that compiles at the first attempt, invented APIs, twins written, and another language that must not drop. The dataset is being built as an extra, example by example; no model has been trained with it yet.
 
 ## Declared limits
 

@@ -380,6 +380,16 @@ Each one is told with its measurements and its history in [docs/ARCHITECTURE.md]
 - A **licensed installation of RAD Studio / Delphi 11+** (`DelphiLSP.exe` ships with it and is **not redistributable** — this project does not include or replace it)
 - **git** on that machine, in the `PATH` of the server process — only for `delphi_git`. Without it everything else works, and `delphi_git` says what is missing (`GIT-050`)
 
+## Extra: a Delphi fine-tuning dataset (in progress)
+
+[`training-dataset-delphi/`](training-dataset-delphi/README.md) is a cousin of the server. The server catches the
+mistakes of an agent working on Delphi; the dataset is meant to make the model itself make fewer of them: examples to
+fine-tune a model (a LoRA, for instance) so that it writes correct Delphi and programs well. Every example is new and
+verified by a real judge - the compiler, tests that run it - and it teaches Delphi, not how to use this server.
+
+**No model has been trained with it yet.** It is an extra we are building alongside the server, example by example;
+training a model with it and measuring the result is on the [roadmap](docs/ROADMAP.md#next), for later.
+
 ## About this project
 
 This server was born from a need of our own - working in Delphi from wherever we are, with the
