@@ -1,1 +1,1 @@
-PayButton.pas: error E2003: Undeclared identifier: 'Caption'
+PayButton.pas(14): error E2003: Undeclared identifier: 'Caption'

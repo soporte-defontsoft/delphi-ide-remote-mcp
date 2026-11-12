@@ -1,0 +1,1 @@
+ChangeWatch.pas(22): error E2009: Incompatible types: 'method pointer and regular procedure'

@@ -4,7 +4,7 @@ family: repair
 language: delphi
 framework: fmx
 teaches: a FireMonkey TButton has no Caption; its text is Text
-judge: dcc64 37.0 Win64 - broken gives exactly dcc.txt (verify/DatasetBrokenProbe); fixed compiles (verify/DatasetCompileFmx)
+judge: dcc64 37.0 Win64 - broken gives exactly dcc.txt (verify/DatasetBrokenProbe); fixed compiles and runs (verify/DatasetFmxSpecTest: r03)
 ---
 
 ## user

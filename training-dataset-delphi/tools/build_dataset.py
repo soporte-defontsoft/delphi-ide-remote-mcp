@@ -12,8 +12,9 @@ extension) and {{text:<file>}} as a plain fenced block - the code in the dataset
 file that the judges compiled and ran, never a copy pasted by hand.
 
 The Delphi judges are the projects in verify/ (they need RAD Studio, so they are not run here):
-DatasetSpecTest (compiles every answer unit and runs its checks), DatasetCompileFmx (compiles the
-FireMonkey answers) and DatasetBrokenProbe (gives the compiler messages of the repair examples).
+DatasetSpecTest (compiles every RTL answer unit and runs its checks), DatasetFmxSpecTest (the same for
+the FireMonkey answers; hit-testing is asked of FireMonkey itself), DatasetPinTest (DUnitX, for the
+examples written with DUnitX) and DatasetBrokenProbe (gives the compiler messages of the repair examples).
 """
 import json
 import os

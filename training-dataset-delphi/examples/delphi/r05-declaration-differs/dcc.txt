@@ -1,3 +1,3 @@
-InvoiceMath.pas: error E2037: Declaration of 'Gross' differs from previous declaration
-InvoiceMath.pas: error E2003: Undeclared identifier: 'FBase'
-InvoiceMath.pas: error E2065: Unsatisfied forward or external declaration: 'TInvoice.Gross'
+InvoiceMath.pas(22): error E2037: Declaration of 'Gross' differs from previous declaration
+InvoiceMath.pas(24): error E2003: Undeclared identifier: 'FBase'
+InvoiceMath.pas(11): error E2065: Unsatisfied forward or external declaration: 'TInvoice.Gross'

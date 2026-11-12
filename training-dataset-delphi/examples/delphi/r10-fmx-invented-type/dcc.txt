@@ -1,0 +1,2 @@
+CardStyle.pas(14): error E2003: Undeclared identifier: 'TFillType'
+CardStyle.pas(15): error E2066: Missing operator or semicolon

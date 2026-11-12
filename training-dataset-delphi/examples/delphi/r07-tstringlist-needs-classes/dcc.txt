@@ -1,0 +1,8 @@
+WordList.pas(14): error E2003: Undeclared identifier: 'TStringList'
+WordList.pas(16): error E2066: Missing operator or semicolon
+WordList.pas(18): error E2066: Missing operator or semicolon
+WordList.pas(19): error E2066: Missing operator or semicolon
+WordList.pas(20): error E2066: Missing operator or semicolon
+WordList.pas(21): error E2066: Missing operator or semicolon
+WordList.pas(22): error E2066: Missing operator or semicolon
+WordList.pas(24): error E2066: Missing operator or semicolon

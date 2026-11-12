@@ -5,8 +5,10 @@ tools to work on Delphi code: read it, edit it, build it, test it, run it. This 
 itself** fail less at Delphi. Together they are one environment for programming in Delphi with AI: the server catches
 the mistakes, and the dataset teaches the model to make fewer of them.
 
-> **Status: v1, 26 examples** (21 Delphi, 5 Python), every one verified by its judge. Small on purpose: it fixes the
-> format and the method. It grows from here, with the server.
+> **Status: v3, 53 examples** (46 Delphi, 7 Python), every one verified by its judge. v1 fixed the format and the
+> method; v2 added FireMonkey hit-testing; v3 is driven by a measurement: a small model was asked every question
+> without the answer, its code went through the same judges, and what it got wrong became new examples (see
+> [What a small model gets wrong](#what-a-small-model-gets-wrong-measured)). It grows from here, with the server.
 >
 > **No model has been trained with it yet.** We are building it as an extra; training a model with it and measuring
 > the result is on the [roadmap](../docs/ROADMAP.md#next), for later.
@@ -96,14 +98,40 @@ examples/<language>/<id>/
   dcc.txt              repair examples: the compiler's own messages
   check.py             Python examples: the judge
 verify/                the Delphi judges (RAD Studio 13)
-  DatasetSpecTest      compiles every answer unit and runs its checks (PASS/FAIL lines, exit code = failures)
-  DatasetCompileFmx    compiles the FireMonkey answers
-  DatasetBrokenProbe   takes one broken unit at a time, to read the compiler's messages
+  DatasetSpecTest      compiles every RTL answer unit and runs its checks (PASS/FAIL lines, exit code = failures)
+  DatasetFmxSpecTest   the same for the FireMonkey answers: it builds control trees in memory and asks
+                       FireMonkey itself which control gets a click (IControl.ObjectAtPoint)
+  DatasetPinTest       DUnitX: the tests of the examples that are written with DUnitX
+  DatasetBrokenProbe   takes one broken unit at a time, to read the compiler's messages - from a short path:
+                       dcc cuts the "file(line)" prefix of a message at 128 characters, line number included
 tools/build_dataset.py the ONE writer of the JSONL: it composes it from examples/ and checks every example
 ```
 
 To rebuild the JSONL and run the Python judges: `python -I tools/build_dataset.py --python`. The Delphi judges need
-RAD Studio: build and run `verify/DatasetSpecTest`, build `verify/DatasetCompileFmx`.
+RAD Studio: build and run `verify/DatasetSpecTest`, `verify/DatasetFmxSpecTest` and `verify/DatasetPinTest`.
+
+## What a small model gets wrong (measured)
+
+Before v3, a small local model (a 3-bit quantized Qwen) was asked every question of v1 and v2 - the user message
+alone, without the answer and without tools - and its code went through the same judges. Two conditions: the bare
+model, and the same model inside an agent with a persistent memory. Of 32 questions, each got 21 or 22 right. What
+failed, by pattern:
+
+| Pattern | Seen |
+|---|---|
+| A type used without the unit it lives in (`TStringList` without System.Classes, `TComparer` without System.Generics.Defaults, `TLabel` without FMX.StdCtrls, `TNotifyEvent`, `TPointF`, `TCursor`...) | the most frequent, in both |
+| Invented names: units `FMX.Rect` and `FMX.Rectangle`, type `TFillType`, function `ChangeExt`, `System.SysUtils.WriteLn`, `TList<T>.Sort` given a function | in both |
+| A unit without `implementation` (and the first error misleads) | once |
+| Two writers of one format kept, with a reader tolerant of both | the bare model, twice |
+| No tests pinning the callers before changing a shared helper | both, every time |
+| FireMonkey's hit test re-implemented by hand instead of asked (`ObjectAtPoint`) - it crashed outside a form | both |
+| `DayOfWeek` (Sunday = 1) read with ISO numbers | once |
+
+What both already knew - `nn` and `mm`, character codes outside the quotes, `Copy` from 1, a signature in two
+places, reusing the helper in front of them - stays, at a lower priority. v3 adds 21 examples aimed at the failures.
+The repair examples reproduce the PATTERN of each failure in new code: no output of the model is in the dataset.
+One pass is noisy (an item failed in one condition and not in the other), so the baseline for a trained model has to
+be several passes.
 
 ## Training and measuring
 

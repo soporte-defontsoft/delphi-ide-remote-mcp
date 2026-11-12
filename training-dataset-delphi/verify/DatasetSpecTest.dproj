@@ -109,6 +109,21 @@
         <DCCReference Include="..\examples\delphi\l03-third-copy-makes-a-helper\answer\ReportLines.pas"/>
         <DCCReference Include="..\examples\delphi\e01-rule-in-one-place\answer\Percentages.pas"/>
         <DCCReference Include="..\examples\delphi\e02-one-writer-one-reader\answer\ExportNames.pas"/>
+        <DCCReference Include="..\examples\delphi\r07-tstringlist-needs-classes\fixed\WordList.pas"/>
+        <DCCReference Include="..\examples\delphi\r08-missing-implementation\fixed\ScoreBoard.pas"/>
+        <DCCReference Include="..\examples\delphi\r09-invented-rtl-function\fixed\FileStem.pas"/>
+        <DCCReference Include="..\examples\delphi\r11-writeln-is-system\fixed\ConsoleReport.pas"/>
+        <DCCReference Include="..\examples\delphi\r13-sort-needs-icomparer\fixed\TaskOrder.pas"/>
+        <DCCReference Include="..\examples\delphi\r14-event-needs-a-method\fixed\ChangeWatch.pas"/>
+        <DCCReference Include="..\examples\delphi\u01-dictionary-word-count\WordFrequency.pas"/>
+        <DCCReference Include="..\examples\delphi\u02-stopwatch-timing\Timing.pas"/>
+        <DCCReference Include="..\examples\delphi\u03-regex-email\EmailCheck.pas"/>
+        <DCCReference Include="..\examples\delphi\u04-json-object\PersonJson.pas"/>
+        <DCCReference Include="..\examples\delphi\u05-ioutils-files\TextFiles.pas"/>
+        <DCCReference Include="..\examples\delphi\x01-rtl-leap-year\LeapYears.pas"/>
+        <DCCReference Include="..\examples\delphi\x02-rtl-days-between\DayCount.pas"/>
+        <DCCReference Include="..\examples\delphi\x03-rtl-iso8601\IsoStamp.pas"/>
+        <DCCReference Include="..\examples\delphi\e03-day-key-one-writer\answer\DayKeys.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

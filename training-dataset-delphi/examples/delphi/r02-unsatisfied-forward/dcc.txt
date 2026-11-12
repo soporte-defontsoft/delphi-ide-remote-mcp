@@ -1,1 +1,1 @@
-Counters.pas: error E2065: Unsatisfied forward or external declaration: 'TCounter.Reset'
+Counters.pas(11): error E2065: Unsatisfied forward or external declaration: 'TCounter.Reset'

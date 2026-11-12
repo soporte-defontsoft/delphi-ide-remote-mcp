@@ -4,7 +4,7 @@ family: task
 language: delphi
 framework: fmx
 teaches: FireMonkey text controls show their text in the Text property
-judge: dcc64 37.0 Win64, compile only (verify/DatasetCompileFmx)
+judge: dcc64 37.0 Win64 + run (verify/DatasetFmxSpecTest: t02)
 ---
 
 ## user

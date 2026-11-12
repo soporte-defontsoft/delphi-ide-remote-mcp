@@ -1,0 +1,6 @@
+ScoreBoard.pas(15): error E2004: Identifier redeclared: 'TScoreBoard.Add'
+ScoreBoard.pas(16): error E2003: Undeclared identifier: 'APoints'
+ScoreBoard.pas(17): error E2003: Undeclared identifier: 'FTotal'
+ScoreBoard.pas(20): error E2029: 'IMPLEMENTATION' expected but '.' found
+ScoreBoard.pas(23): error E2029: Declaration expected but end of file found
+ScoreBoard.pas(10): error E2065: Unsatisfied forward or external declaration: 'TScoreBoard.Add'

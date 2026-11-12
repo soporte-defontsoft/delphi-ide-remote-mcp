@@ -1,0 +1,1 @@
+ConsoleReport.pas(14): error E2003: Undeclared identifier: 'WriteLn'
