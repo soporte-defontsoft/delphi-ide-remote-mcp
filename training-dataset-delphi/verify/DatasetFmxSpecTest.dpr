@@ -30,7 +30,15 @@ uses
   ClickProbe in '..\examples\delphi\h05-fmx-who-gets-the-click\ClickProbe.pas',
   CardStyle in '..\examples\delphi\r10-fmx-invented-type\fixed\CardStyle.pas',
   BadgeShape in '..\examples\delphi\r12-fmx-invented-unit\fixed\BadgeShape.pas',
-  CardBuilder in '..\examples\delphi\u06-fmx-card-in-code\CardBuilder.pas';
+  CardBuilder in '..\examples\delphi\u06-fmx-card-in-code\CardBuilder.pas',
+  MemoLog in '..\examples\delphi\r19-fmx-tmemo-unit\fixed\MemoLog.pas',
+  ScrollList in '..\examples\delphi\u09-fmx-scroll-list\ScrollList.pas',
+  ToolbarSetup in '..\examples\delphi\r21-fmx-talign\fixed\ToolbarSetup.pas',
+  SizePicker in '..\examples\delphi\r22-fmx-tcombobox-unit\fixed\SizePicker.pas',
+  SettingRow in '..\examples\delphi\u10-fmx-setting-row\SettingRow.pas',
+  TabPages in '..\examples\delphi\u11-fmx-tab-page\TabPages.pas',
+  FMX.TabControl,
+  Winapi.Windows;
 
 // The judge of the dataset's FireMonkey examples: it builds control trees in memory (no form, no
 // window) and asks FireMonkey itself which control gets a click (TControl.ObjectAtPoint).
@@ -153,7 +161,14 @@ var
   Btn: TButton;
   Edit: TEdit;
   Outline, Badge, Card2: TRectangle;
+  Memo: TMemo;
+  VBox: TVertScrollBox;
   Ctx: TRttiContext;
+  Bar: TToolBar;
+  Combo: TComboBox;
+  Switch: TSwitch;
+  Tabs: TTabControl;
+  Page: TTabItem;
 begin
   Sink := TClickSink.Create;
   try
@@ -293,6 +308,68 @@ begin
       (Ctx.GetType(TypeInfo(TAlignLayout)).QualifiedName = 'FMX.Types.TAlignLayout') and
       (TText.UnitName = 'FMX.Objects'));
 
+    // r19, u09
+    Memo := TMemo.Create(nil);
+    try
+      AddLogLine(Memo, 'first');
+      Check('r19 AddLogLine', (Memo.Lines.Count = 1) and (Memo.Lines[0] = 'first'));
+    finally
+      Memo.Free;
+    end;
+    VBox := TVertScrollBox.Create(nil);
+    try
+      FillList(VBox, ['a', 'b', 'c']);
+      Check('u09 FillList: three labels, handed to the box''s Content', (VBox.Content.ChildrenCount = 3) and
+        (VBox.Content.Children[0] is TLabel));
+    finally
+      VBox.Free;
+    end;
+    Check('r19 fact: TMemo lives in FMX.Memo, TVertScrollBox in FMX.Layouts',
+      (TMemo.UnitName = 'FMX.Memo') and (TVertScrollBox.UnitName = 'FMX.Layouts'));
+
+    // v6: r21, r22, u10, u11
+    Bar := TToolBar.Create(nil);
+    try
+      DockAtTop(Bar);
+      Check('r21 DockAtTop', Bar.Align = TAlignLayout.Top);
+    finally
+      Bar.Free;
+    end;
+    Combo := TComboBox.Create(nil);
+    try
+      FillSizes(Combo);
+      Check('r22 FillSizes', (Combo.Items.Count = 3) and (Combo.Items[1] = 'Medium'));
+    finally
+      Combo.Free;
+    end;
+    Probe := TLayout.Create(nil);
+    try
+      Switch := AddSettingRow(Probe, 'Dark mode');
+      Check('u10 AddSettingRow: one row in the parent, with the switch on the right and the caption',
+        (Probe.ChildrenCount = 1) and (Switch.Parent is TLayout) and (Switch.Parent.Parent = Probe) and
+        (Switch.Parent.ChildrenCount = 2) and (Switch.Align = TAlignLayout.Right) and not Switch.IsChecked and
+        (Switch.Parent.Children[1] is TLabel) and (TLabel(Switch.Parent.Children[1]).Text = 'Dark mode'));
+    finally
+      Probe.Free;
+    end;
+    Tabs := TTabControl.Create(nil);
+    try
+      Page := AddPage(Tabs, 'General');
+      Check('u11 AddPage', (Tabs.TabCount = 1) and (Tabs.Tabs[0] = Page) and (Page.Text = 'General'));
+      Check('u11 fact: the page Add creates is owned by the tab control (freed with it), and sits in its content',
+        (Page.Owner = Tabs) and (Page.Parent <> nil) and (Page.Parent.ClassName = 'TTabControlContent'));
+    finally
+      Tabs.Free;
+    end;
+    Check('fact: the unit of each FireMonkey class the v6 examples use',
+      (TToolBar.UnitName = 'FMX.StdCtrls') and (TSwitch.UnitName = 'FMX.StdCtrls') and
+      (TComboBox.UnitName = 'FMX.ListBox') and (TListBox.UnitName = 'FMX.ListBox') and
+      (TControl.UnitName = 'FMX.Controls') and (TTabControl.UnitName = 'FMX.TabControl') and
+      (TTabItem.UnitName = 'FMX.TabControl') and (TLayout.UnitName = 'FMX.Layouts') and
+      (TFmxObject.UnitName = 'FMX.Types') and (Ctx.GetType(TSwitch).GetProperty('IsChecked') <> nil) and
+      (Ctx.GetType(TSwitch).GetProperty('OnSwitch') <> nil) and
+      (Ctx.GetType(TypeInfo(TAlignLayout)).QualifiedName = 'FMX.Types.TAlignLayout'));
+
     // h05: ask FireMonkey which control gets the click
     Probe := TLayout.Create(nil);
     try
@@ -322,5 +399,12 @@ begin
     end;
   end;
   Writeln(Failures, ' failure(s)');
-  ExitCode := Failures;
+  // The verdict is complete here. The controls above live without an application, a form or a
+  // window, and FireMonkey's own unit finalization then ends now and then in an access violation
+  // inside ntdll (Runtime error 217). Measured 12-nov, out of the examples' code (after the last
+  // check): 0 of 8 runs with the v5 controls, up to 2 of 4 with TToolBar, TComboBox, TSwitch and
+  // TTabControl as well; FMX.Forms in the uses does not change it; the cause is NOT measured.
+  // So the judge leaves here, after flushing its output, without running that finalization.
+  Flush(Output);
+  ExitProcess(Cardinal(Failures));
 end.

@@ -1,0 +1,6 @@
+SizePicker.pas(8): error E2003: Undeclared identifier: 'TComboBox'
+SizePicker.pas(12): error E2005: 'TComboBox' is not a type identifier
+SizePicker.pas(14): error E2066: Missing operator or semicolon
+SizePicker.pas(15): error E2066: Missing operator or semicolon
+SizePicker.pas(16): error E2066: Missing operator or semicolon
+SizePicker.pas(17): error E2066: Missing operator or semicolon

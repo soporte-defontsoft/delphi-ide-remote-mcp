@@ -124,6 +124,33 @@
         <DCCReference Include="..\examples\delphi\x02-rtl-days-between\DayCount.pas"/>
         <DCCReference Include="..\examples\delphi\x03-rtl-iso8601\IsoStamp.pas"/>
         <DCCReference Include="..\examples\delphi\e03-day-key-one-writer\answer\DayKeys.pas"/>
+        <DCCReference Include="..\examples\delphi\r15-strtofloat-locale\fixed\DecimalText.pas"/>
+        <DCCReference Include="..\examples\delphi\r16-integer-division\fixed\DailyAverage.pas"/>
+        <DCCReference Include="..\examples\delphi\r17-fdmemtable-filter-quotes\fixed\NameFilter.pas"/>
+        <DCCReference Include="..\examples\delphi\t12-currency-for-money\Money.pas"/>
+        <DCCReference Include="..\examples\delphi\t13-dynamic-array-shares\ScoreCopy.pas"/>
+        <DCCReference Include="..\examples\delphi\t14-utf8-bytes\Utf8Size.pas"/>
+        <DCCReference Include="..\examples\delphi\t15-base64-one-line\Base64Text.pas"/>
+        <DCCReference Include="..\examples\delphi\t16-sha256-hex\Fingerprint.pas"/>
+        <DCCReference Include="..\examples\delphi\t17-queue-to-main-thread\BackgroundSum.pas"/>
+        <DCCReference Include="..\examples\delphi\t18-parallel-counter\ParallelCount.pas"/>
+        <DCCReference Include="..\examples\delphi\d01-fdmemtable-filter\PriceFilter.pas"/>
+        <DCCReference Include="..\examples\delphi\x04-rtl-path-combine\ConfigPath.pas"/>
+        <DCCReference Include="..\examples\delphi\g01-never-swallow-errors\answer\QuantityList.pas"/>
+        <DCCReference Include="..\examples\delphi\r18-stream-needs-classes\fixed\TextBlob.pas"/>
+        <DCCReference Include="..\examples\delphi\r20-field-types-need-data-db\fixed\ProductTable.pas"/>
+        <DCCReference Include="..\examples\delphi\u07-interface-uses\Geometry.pas"/>
+        <DCCReference Include="..\examples\delphi\u08-critical-section\SafeLog.pas"/>
+        <DCCReference Include="..\examples\delphi\e05-second-writer-bug-report\answer\OrderRefs.pas"/>
+        <DCCReference Include="..\examples\delphi\e06-third-writer-reuses\answer\InvoiceRefs.pas"/>
+        <DCCReference Include="..\examples\delphi\x05-json-by-hand\answer\CustomerJson.pas"/>
+        <DCCReference Include="..\examples\delphi\x06-rtl-url-encode\SearchUrl.pas"/>
+        <DCCReference Include="..\examples\delphi\x07-rtl-days-in-month\MonthDays.pas"/>
+        <DCCReference Include="..\examples\delphi\x08-rtl-file-extension\FileKinds.pas"/>
+        <DCCReference Include="..\examples\delphi\x09-rtl-html-encode\answer\PageText.pas"/>
+        <DCCReference Include="..\examples\delphi\x10-rtl-floor\ValueBands.pas"/>
+        <DCCReference Include="..\examples\delphi\x11-sql-parameters\answer\CustomerQueries.pas"/>
+        <DCCReference Include="..\examples\delphi\e08-second-writer-file-name\answer\BackupFiles.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

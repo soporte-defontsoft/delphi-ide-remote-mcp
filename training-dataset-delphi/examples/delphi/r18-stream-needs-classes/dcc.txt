@@ -1,0 +1,4 @@
+TextBlob.pas(14): error E2003: Undeclared identifier: 'TStringStream'
+TextBlob.pas(16): error E2066: Missing operator or semicolon
+TextBlob.pas(18): error E2066: Missing operator or semicolon
+TextBlob.pas(20): error E2066: Missing operator or semicolon

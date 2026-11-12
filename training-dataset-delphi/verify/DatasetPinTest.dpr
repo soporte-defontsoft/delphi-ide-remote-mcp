@@ -8,7 +8,9 @@ uses
   DUnitX.TestFramework,
   DUnitX.Loggers.Console,
   CodeRules in '..\examples\delphi\e04-pin-callers-before-change\answer\CodeRules.pas',
-  CodeRulesTests in '..\examples\delphi\e04-pin-callers-before-change\answer\CodeRulesTests.pas';
+  CodeRulesTests in '..\examples\delphi\e04-pin-callers-before-change\answer\CodeRulesTests.pas',
+  PriceRounding in '..\examples\delphi\e07-pin-callers-round-half-up\answer\PriceRounding.pas',
+  PriceRoundingTests in '..\examples\delphi\e07-pin-callers-round-half-up\answer\PriceRoundingTests.pas';
 
 var
   Runner: ITestRunner;

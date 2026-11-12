@@ -32,6 +32,8 @@ FAMILIES = {"task", "repair", "landscape", "every-place"}
 LANGUAGES = {"delphi", "python"}
 FRAMEWORKS = {"delphi": {"rtl", "vcl", "fmx"}, "python": {"none"}}
 REQUIRED = ("id", "family", "language", "framework", "teaches", "judge")
+# how a small model did on each question, one pass (see the README): the one file that holds it
+STUDENT = os.path.join(ROOT, "eval", "student-baseline.tsv")
 PLACEHOLDER = re.compile(r"\{\{(code|text):([^}]+)\}\}")
 SECTION = re.compile(r"^## (system|user|assistant)\s*$")
 
@@ -94,8 +96,23 @@ def example_dirs():
                     yield language, name, folder
 
 
+def student_results():
+    """id -> {condition: result} from eval/student-baseline.tsv (header: id, then one column per condition)."""
+    if not os.path.isfile(STUDENT):
+        return {}
+    rows = [r.split("\t") for r in read_text(STUDENT).split("\n") if r.strip()]
+    head, results = rows[0], {}
+    for row in rows[1:]:
+        row += [""] * (len(head) - len(row))
+        if row[0] in results:
+            fail(STUDENT, f"{row[0]} twice")
+        results[row[0]] = {h: v.strip() for h, v in zip(head[1:], row[1:]) if v.strip()}
+    return results
+
+
 def build(run_python):
     lines, seen, counts = [], set(), {}
+    student = student_results()
     for language, name, folder in example_dirs():
         where = os.path.relpath(os.path.join(folder, "example.md"), ROOT)
         meta, sections = parse(os.path.join(folder, "example.md"))
@@ -143,10 +160,15 @@ def build(run_python):
 
         lines.append(json.dumps({
             "messages": messages,
-            "meta": {k: meta[k] for k in REQUIRED},
+            "meta": dict({k: meta[k] for k in REQUIRED},
+                         **({"student": student[meta["id"]]} if student.get(meta["id"]) else {})),
         }, ensure_ascii=False))
         key = (language, meta["family"])
         counts[key] = counts.get(key, 0) + 1
+
+    unknown = sorted(set(student) - seen)
+    if unknown:
+        fail(STUDENT, f"ids that are no example: {unknown}")
 
     os.makedirs(os.path.dirname(OUT), exist_ok=True)
     with open(OUT, "w", encoding="utf-8", newline="\n") as f:

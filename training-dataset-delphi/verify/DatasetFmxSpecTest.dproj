@@ -101,6 +101,12 @@
         <DCCReference Include="..\examples\delphi\r10-fmx-invented-type\fixed\CardStyle.pas"/>
         <DCCReference Include="..\examples\delphi\r12-fmx-invented-unit\fixed\BadgeShape.pas"/>
         <DCCReference Include="..\examples\delphi\u06-fmx-card-in-code\CardBuilder.pas"/>
+        <DCCReference Include="..\examples\delphi\r19-fmx-tmemo-unit\fixed\MemoLog.pas"/>
+        <DCCReference Include="..\examples\delphi\u09-fmx-scroll-list\ScrollList.pas"/>
+        <DCCReference Include="..\examples\delphi\r21-fmx-talign\fixed\ToolbarSetup.pas"/>
+        <DCCReference Include="..\examples\delphi\r22-fmx-tcombobox-unit\fixed\SizePicker.pas"/>
+        <DCCReference Include="..\examples\delphi\u10-fmx-setting-row\SettingRow.pas"/>
+        <DCCReference Include="..\examples\delphi\u11-fmx-tab-page\TabPages.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>

@@ -1,0 +1,1 @@
+DailyAverage.pas(11): error E2010: Incompatible types: 'Integer' and 'Double'

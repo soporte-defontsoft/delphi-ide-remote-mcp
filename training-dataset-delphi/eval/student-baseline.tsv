@@ -1,0 +1,93 @@
+id	bare	agent	base3
+t01-minute-second	passed	passed	passed 2/3 (failed): FAIL unexpected ERangeError: Range check error
+t02-fmx-label-text	passed	passed	passed 3/3
+t03-char-code-outside-quotes	passed	passed	passed 2/3 (failed): FAIL t03 SentText
+t04-global-function-not-method	failed: DayOfWeek (Sunday = 1) read with ISO numbers	passed	passed 2/3 (compile): Shifts.pas(29): error E2007: Constant or type identifier expected
+t05-signature-in-both-places	passed	passed	passed 3/3
+t06-try-finally-free	passed	failed: TStringList without System.Classes	passed 1/3 (compile): TextLines.pas(11): error E2003: Undeclared identifier: 'TStringList'; TextLines.pas(23): error E2003: Undeclared identifier: 'Trim'
+t07-sort-generic-list	failed: TList<T>.Sort given a function (E2250)	failed: TComparer without System.Generics.Defaults	passed 0/3 (compile): PeopleSort.pas(21): error E2003: Undeclared identifier: 'TComparer'; PeopleSort.pas(23): error E2010: Incompatible types: 'Integer' and 'Boolean'; PeopleSort.pas(25): error E2250: There is no overloaded version of 'Sort' that can be called with these arguments
+t08-copy-is-one-based	passed	passed	passed 3/3
+t09-interface-reference-counting	failed: TStringDynArray without System.Types	failed: TStringList without System.Classes	passed 2/3 (compile): AppLogger.pas(14): error E2003: Undeclared identifier: 'TStringList'
+t10-forward-class-declaration	passed	failed: no implementation keyword	passed 3/3
+t11-case-needs-ordinal	passed	passed	passed 1/3 (compile): ColorCodes.pas(14): error E2001: Ordinal type required
+r01-missing-end	passed	passed	passed 3/3
+r02-unsatisfied-forward	passed	passed	passed 3/3
+r03-fmx-has-no-caption	passed	passed	passed 3/3
+r04-case-on-string	passed	passed	passed 2/3 (compile): SizeCodes.pas(11): error E2001: Ordinal type required
+r05-declaration-differs	passed	passed	passed 3/3
+l01-reuse-existing-helper	passed	passed	passed 3/3
+l02-reuse-normalizer	passed	passed	passed 3/3
+l03-third-copy-makes-a-helper	passed	passed	passed 0/3 (partial)
+e01-rule-in-one-place	passed	passed	passed 0/3 (partial)
+e02-one-writer-one-reader	failed: kept two writers, with a reader tolerant of both	failed: invented ChangeExt	passed 0/3 (compile, contract): DatasetSpecTest.dpr(279): error E2003: Undeclared identifier: 'TryParseExportFileName'; ExportNames.pas(35): error E2003: Undeclared identifier: 'PosEx'
+p01-reuse-existing-helper	passed	passed	passed 3/3
+p02-third-copy-makes-a-helper	passed	passed	passed 0/3 (partial)
+p03-one-writer-one-reader	failed: kept two writers	passed	passed 0/3 (failed): AssertionError
+p04-rule-in-one-place	passed	passed	passed 0/3 (partial)
+p05-measure-what-already-worked	passed: right change (one code block was asked, so tests could not show)	passed: right change (one code block was asked, so tests could not show)	passed 3/3
+h01-fmx-layout-click	failed: TNotifyEvent, TRectangle and TBrushKind without their units	failed: invented unit FMX.Rect	passed 1/3 (compile): CardSetup.pas(8): error E2003: Undeclared identifier: 'TNotifyEvent'
+h02-fmx-child-takes-click	failed: protected TFmxObject.GetChildren	failed: TLabel without FMX.StdCtrls	passed 2/3 (failed): FAIL h02 after: a click on the nested icon reaches the card
+h03-fmx-label-click	failed: TNotifyEvent and TCursor without their units	failed: invented type TFillType and missing units	passed 1/3 (compile): LinkLabel.pas(18): error E2003: Undeclared identifier: 'crHandPoint'; LinkLabel.pas(8): error E2003: Undeclared identifier: 'TLabel'
+h04-fmx-invisible-overlay	failed: invented unit FMX.Rectangle	failed: invented type TFillType	passed 2/3 (compile): BusyOverlay.pas(7): error F2613: Unit 'FMX.Shapes' not found.
+h05-fmx-who-gets-the-click	failed: TPointF without System.Types; hit test re-implemented by hand	failed: System.SysUtils.WriteLn; hit test re-implemented by hand (crashes outside a form)	passed 1/3 (compile): ClickProbe.pas(25): error E2034: Too many actual parameters; ClickProbe.pas(8): error E2003: Undeclared identifier: 'TPointF'
+r06-fmx-unit-of-tedit	passed	no answer	passed 3/3
+r07-tstringlist-needs-classes	passed		passed 3/3
+r08-missing-implementation	passed		passed 3/3
+r09-invented-rtl-function	passed		passed 3/3
+r10-fmx-invented-type	failed: TBrushKind without FMX.Graphics		passed 0/3 (compile): CardStyle.pas(14): error E2003: Undeclared identifier: 'TFillKind'; CardStyle.pas(15): error E2003: Undeclared identifier: 'TFillType'
+r11-writeln-is-system	passed		passed 3/3
+r12-fmx-invented-unit	failed: TComponent without System.Classes		passed 3/3
+r13-sort-needs-icomparer	failed: TComparer without System.Generics.Defaults		passed 0/3 (compile): TaskOrder.pas(20): error E2003: Undeclared identifier: 'TComparer'; TaskOrder.pas(24): error E2250: There is no overloaded version of 'Sort' that can be called with these arguments
+r14-event-needs-a-method	passed		passed 0/3 (compile, contract): ChangeWatch.pas(20): error E2010: Incompatible types: 'System.Classes.TNotifyEvent' and 'Procedure'; DatasetSpecTest.dpr(143): error E2003: Undeclared identifier: 'TListWatcher'
+u01-dictionary-word-count	passed		passed 0/3 (compile, failed): FAIL unexpected EListError: Item not found; WordFrequency.pas(26): error E2003: Undeclared identifier: 'TSplitOptions'
+u02-stopwatch-timing	failed: TProc in the interface without System.SysUtils		passed 2/3 (compile): Timing.pas(8): error E2003: Undeclared identifier: 'TProc'
+u03-regex-email	passed		passed 3/3
+u04-json-object	failed: JSON built by hand (no escaping), IntToStr without System.SysUtils		passed 0/3 (compile): PersonJson.pas(11): error E2003: Undeclared identifier: 'Format'; PersonJson.pas(11): error E2003: Undeclared identifier: 'IntToStr'
+u05-ioutils-files	failed: TopDirectoryOnly (a .NET name; Delphi's is TSearchOption.soTopDirectoryOnly)		passed 2/3 (compile): TextFiles.pas(14): error E2003: Undeclared identifier: 'TStringDynArray'
+u06-fmx-card-in-code	failed: TComponent, TBrushKind, TAlignment and TTextAlign without their units		passed 0/3 (compile): CardBuilder.pas(8): error E2003: Undeclared identifier: 'TComponent'; CardBuilder.pas(9): error E2003: Undeclared identifier: 'TComponent'
+x01-rtl-leap-year	partial: right result, the rule written by hand instead of IsLeapYear		passed 0/3 (partial)
+x02-rtl-days-between	partial: right for whole dates, written by hand instead of DaysBetween		passed 0/3 (partial): FAIL x02 fact: only whole 24-hour days count
+x03-rtl-iso8601	partial: right for the plain case, a hand-written parser that ignores fractions		passed 0/3 (compile, partial): FAIL x03 fact: fractions of a second; IsoStamp.pas(20): error E2003: Undeclared identifier: 'DateToDateTimeSeparator'; IsoStamp.pas(27): error E2003: Undeclared identifier: 'EncodeDateTime'
+e03-day-key-one-writer	failed: kept two writers		passed 0/3 (failed): FAIL e03 both callers agree; FAIL e03 both callers agree; FAIL unexpected ERangeError: Range check error
+e04-pin-callers-before-change	failed: the change dropped UpperCase - both callers broken (all three tests fail)		passed 2/3 (compile): CodeRules.pas(22): error E2250: There is no overloaded version of 'StringReplace' that can be called with these argument
+p06-pin-callers-before-change	passed		passed 3/3
+p07-day-key-one-writer	failed: kept two writers		passed 0/3 (failed): AssertionError
+r15-strtofloat-locale	passed		passed 3/3
+r16-integer-division	passed		passed 3/3
+r17-fdmemtable-filter-quotes	passed		passed 0/3 (compile, failed): FAIL unexpected EFDException: [FireDAC][Stan][Eval]-111. ')' or ',' expected but ['brien'] found; NameFilter.pas(14): error E2003: Undeclared identifier: 'QuotedStr'
+t12-currency-for-money	passed		passed 3/3
+t13-dynamic-array-shares	passed		passed 3/3
+t14-utf8-bytes	passed		passed 3/3
+t15-base64-one-line	failed: invented members of TBase64Encoding		passed 0/3 (compile, failed): Base64Text.pas(18): error E2010: Incompatible types: 'string' and 'TArray<Byte>'; FAIL t15 ToBase64 is one line and decodes back
+t16-sha256-hex	passed		passed 1/3 (compile): Fingerprint.pas(14): error E2003: Undeclared identifier: 'THashSHA256'; Fingerprint.pas(16): error E2003: Undeclared identifier: 'THashSHA256'
+t17-queue-to-main-thread	failed: TThread without System.Classes		passed 0/3 (compile): BackgroundSum.pas(27): error E2003: Undeclared identifier: 'TThread'; BackgroundSum.pas(8): error E2003: Undeclared identifier: 'TProc<>'
+t18-parallel-counter	passed		passed 1/3 (compile): ParallelCount.pas(21): error E2003: Undeclared identifier: 'ProcessorCount'; ParallelCount.pas(27): error E2003: Undeclared identifier: 'TInterlocked'
+d01-fdmemtable-filter	failed: invented unit Data.DBCtrls; the filter built with the user's locale		passed 0/3 (compile): PriceFilter.pas(32): error E2003: Undeclared identifier: 'ApplyFiltered'; PriceFilter.pas(6): error F2613: Unit 'Data.FireDAC' not found.; PriceFilter.pas(6): error F2613: Unit 'Data.Firedac.Client' not found.
+x04-rtl-path-combine	passed		passed 2/3 (partial)
+g01-never-swallow-errors	passed		passed 3/3
+p08-never-swallow-errors	passed		passed 3/3
+r18-stream-needs-classes	passed		passed 3/3
+r19-fmx-tmemo-unit	failed: FMX.Controls named for TMemo (it lives in FMX.Memo) - the same three errors as the broken unit		passed 0/3 (compile): MemoLog.pas(8): error E2003: Undeclared identifier: 'TMemo'; MemoLog.pas(9): error E2003: Undeclared identifier: 'TMemo'
+r20-field-types-need-data-db	passed		passed 3/3
+u07-interface-uses	partial: the unit in the interface uses, right; the centre computed by hand instead of TRectF.CenterPoint		passed 3/3
+u08-critical-section	passed		passed 1/3 (compile): SafeLog.pas(11): error E2003: Undeclared identifier: 'TStringList'
+u09-fmx-scroll-list	failed: FMX.ScrollBox named for TVertScrollBox (it lives in FMX.Layouts), and TAlign, which FireMonkey does not have (TAlignLayout)		passed 0/3 (compile): ScrollList.pas(16): error E2029: Identifier or number expected but ':' found; ScrollList.pas(22): error E2671: Record, object, class type, or type helper required; ScrollList.pas(9): error E2003: Undeclared identifier: 'TVertScrollBox'
+e05-second-writer-bug-report	partial: right behaviour and the reader kept strict, but the format copied into the second writer instead of calling the first		passed 0/3 (compile, failed): FAIL e05 the archive writer now writes what the reader reads; FAIL e05 both writers agree; OrderRefs.pas(35): error E2003: Undeclared identifier: 'PosEx'
+e06-third-writer-reuses	passed		passed 3/3
+e07-pin-callers-round-half-up	partial: the three tests pass, but the rounding written by hand (Trunc(x*100+0.5)) instead of SimpleRoundTo - its own test said -0.125 gives -0.13 and the code gives -0.12; the callers not pinned		passed 0/3 (partial)
+x05-json-by-hand	failed: JSON escaped by hand with a short list - a control character such as #1 left raw (RFC 8259 wants it escaped; Delphi's parser accepts it, so parsing alone does not show it)		passed 0/3 (failed, partial): FAIL x05 CustomerToJson escapes any other control character (#1): none raw in the output, and it reads back
+x06-rtl-url-encode	passed		passed 3/3
+x07-rtl-days-in-month	partial: right, but a table of month lengths and the leap-year rule written by hand instead of DaysInAMonth		passed 1/3 (partial)
+x08-rtl-file-extension	passed (TPath.GetExtension, also the RTL)		passed 2/3 (partial)
+p09-second-writer-bug-report	failed: two writers kept, and the reader taught both shapes		passed 0/3 (failed): AssertionError
+p10-third-writer-reuses	passed		passed 2/3 (partial)
+e08-second-writer-file-name	failed: two writers kept, and the reader taught both shapes		passed 0/3 (failed): FAIL e08 both writers agree; FAIL e08 the reader stays strict; FAIL e08 the nightly file name now reads back; FAIL e08 both writers agree
+r21-fmx-talign	failed: TAlign kept with the compiler's own message in front of it (only FMX.Types moved to the interface)		passed 0/3 (compile): ToolbarSetup.pas(14): error E2003: Undeclared identifier: 'TAlign'; ToolbarSetup.pas(15): error E2003: Undeclared identifier: 'TAlign'
+r22-fmx-tcombobox-unit	passed		passed 1/3 (compile): SizePicker.pas(8): error E2003: Undeclared identifier: 'TComboBox'
+u10-fmx-setting-row	failed: invented unit FMX.Switch (F2613; TSwitch lives in FMX.StdCtrls), and TAlign further down		passed 0/3 (compile): SettingRow.pas(16): error E2029: Identifier or number expected but ':' found; SettingRow.pas(31): error E2003: Undeclared identifier: 'IsOn'; SettingRow.pas(8): error E2003: Undeclared identifier: 'TSwitch'
+u11-fmx-tab-page	failed: invented unit FMX.Tabs (F2613; TTabControl lives in FMX.TabControl)		passed 0/3 (compile): TabPages.pas(14): error E2003: Undeclared identifier: 'AddTab'; TabPages.pas(14): error E2003: Undeclared identifier: 'AddTabItem'
+x09-rtl-html-encode	failed: the order fixed by hand (& first), the double quote left raw		passed 0/3 (failed): FAIL x09 HtmlText encodes a double quote
+x10-rtl-floor	passed		passed 3/3
+x11-sql-parameters	passed (a TFDQuery with ParamByName)		passed 0/3 (compile): CustomerQueries.pas(21): error E2003: Undeclared identifier: 'ExecSQLScalar'
+p11-csv-module	passed		passed 3/3
+p12-second-writer-file-name	failed: two writers kept, and the reader taught both shapes		passed 0/3 (failed): AssertionError

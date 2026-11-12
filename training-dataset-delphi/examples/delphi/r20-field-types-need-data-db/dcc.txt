@@ -1,0 +1,2 @@
+ProductTable.pas(15): error E2003: Undeclared identifier: 'ftString'
+ProductTable.pas(16): error E2003: Undeclared identifier: 'ftCurrency'

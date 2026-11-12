@@ -5,10 +5,15 @@ tools to work on Delphi code: read it, edit it, build it, test it, run it. This 
 itself** fail less at Delphi. Together they are one environment for programming in Delphi with AI: the server catches
 the mistakes, and the dataset teaches the model to make fewer of them.
 
-> **Status: v3, 53 examples** (46 Delphi, 7 Python), every one verified by its judge. v1 fixed the format and the
-> method; v2 added FireMonkey hit-testing; v3 is driven by a measurement: a small model was asked every question
-> without the answer, its code went through the same judges, and what it got wrong became new examples (see
-> [What a small model gets wrong](#what-a-small-model-gets-wrong-measured)). It grows from here, with the server.
+> **Status: v6, 92 examples** (80 Delphi, 12 Python), every one verified by its judge. v1 fixed the format and the
+> method; v2 added FireMonkey hit-testing; v3 and v4 are driven by a measurement: a small model was asked every
+> question without the answer, its code went through the same judges, and what it got wrong became new examples (see
+> [What a small model gets wrong](#what-a-small-model-gets-wrong-measured)). v4 adds locale-safe numbers, Currency,
+> dynamic arrays, encodings, threads, FireDAC memory tables and "never silence an error". v5 works by patterns: each
+> failure that repeats becomes several examples with variations (other units, other domains, RTL and FireMonkey,
+> Delphi and Python), so that the adapter learns the rule and not the phrase. v6 follows the failures of v5: more
+> FireMonkey names, escaping by hand (HTML, SQL, CSV), Floor against Trunc, and the second writer again. It grows from
+> here.
 >
 > **No model has been trained with it yet.** We are building it as an extra; training a model with it and measuring
 > the result is on the [roadmap](../docs/ROADMAP.md#next), for later.
@@ -86,7 +91,9 @@ The landscape and every-place families also come in other languages (see below).
 
 [`data/delphi-fine-tuning.jsonl`](data/delphi-fine-tuning.jsonl): one example per line, in the chat (`messages`)
 format that common LoRA tools load directly (Unsloth, Axolotl, LLaMA-Factory), plus a `meta` object with `id`,
-`family`, `language`, `framework`, `teaches` (what the example is for) and `judge` (what verified it).
+`family`, `language`, `framework`, `teaches` (what the example is for), `judge` (what verified it) and `student`
+(how a small model did on the question: `bare` and `agent`, one pass judged by hand; `base3`, the three passes of the
+baseline - see below. Weight the examples it failed higher).
 
 ## Layout, and how to rebuild it
 
@@ -98,12 +105,18 @@ examples/<language>/<id>/
   dcc.txt              repair examples: the compiler's own messages
   check.py             Python examples: the judge
 verify/                the Delphi judges (RAD Studio 13)
-  DatasetSpecTest      compiles every RTL answer unit and runs its checks (PASS/FAIL lines, exit code = failures)
+  DatasetSpecTest      compiles every RTL answer unit and runs its checks (PASS/FAIL lines, exit code = failures);
+                       the SQL example runs against SQLite in memory, through FireDAC
   DatasetFmxSpecTest   the same for the FireMonkey answers: it builds control trees in memory and asks
-                       FireMonkey itself which control gets a click (IControl.ObjectAtPoint)
+                       FireMonkey itself which control gets a click (IControl.ObjectAtPoint). It leaves with
+                       ExitProcess once its verdict is written: controls that live without an application end
+                       FireMonkey's own unit finalization, now and then, in an access violation (measured, cause
+                       not found) - after the checks, outside the examples' code
   DatasetPinTest       DUnitX: the tests of the examples that are written with DUnitX
   DatasetBrokenProbe   takes one broken unit at a time, to read the compiler's messages - from a short path:
                        dcc cuts the "file(line)" prefix of a message at 128 characters, line number included
+eval/student-baseline.tsv  how a small model answered each question (one pass by hand, and the three passes of the
+                       baseline), read into meta.student
 tools/build_dataset.py the ONE writer of the JSONL: it composes it from examples/ and checks every example
 ```
 
@@ -112,36 +125,80 @@ RAD Studio: build and run `verify/DatasetSpecTest`, `verify/DatasetFmxSpecTest` 
 
 ## What a small model gets wrong (measured)
 
-Before v3, a small local model (a 3-bit quantized Qwen) was asked every question of v1 and v2 - the user message
-alone, without the answer and without tools - and its code went through the same judges. Two conditions: the bare
-model, and the same model inside an agent with a persistent memory. Of 32 questions, each got 21 or 22 right. What
-failed, by pattern:
+A small local model (a 3-bit quantized Qwen) was asked every question - the user message alone, without the answer
+and without tools - and its code went through the same judges, one pass per version judged by hand (the baseline
+below repeats it three times, automatically). Of the 67 questions of v1-v4 the bare model got 41
+right, 3 partial (right result, but written by hand where the RTL already had it) and 23 wrong; of the 15 of v5, 7
+right, 4 partial and 4 wrong; of the 10 of v6, 4 right and 6 wrong. The questions of v1 and v2 were also asked to
+the same model inside an agent with a
+persistent memory: 21 of 32 right, like the bare model. Every example carries its result in `meta.student`
+(`eval/student-baseline.tsv`). What failed, by pattern:
 
 | Pattern | Seen |
 |---|---|
-| A type used without the unit it lives in (`TStringList` without System.Classes, `TComparer` without System.Generics.Defaults, `TLabel` without FMX.StdCtrls, `TNotifyEvent`, `TPointF`, `TCursor`...) | the most frequent, in both |
-| Invented names: units `FMX.Rect` and `FMX.Rectangle`, type `TFillType`, function `ChangeExt`, `System.SysUtils.WriteLn`, `TList<T>.Sort` given a function | in both |
+| A type used without the unit it lives in, or with the wrong one (`TStringList`, `TComponent`, `TNotifyEvent`, `TThread` without System.Classes; `TComparer` without System.Generics.Defaults; `TProc`, `IntToStr` without System.SysUtils; `TBrushKind` without FMX.Graphics; `TMemo` looked for in FMX.Controls, `TVertScrollBox` in FMX.ScrollBox; `TPointF`, `TCursor`, `TLabel`...) | by far the most frequent - every FireMonkey answer of v3 failed on it, both of v5, and three of the four of v6 |
+| Invented names: units `FMX.Rect`, `FMX.Rectangle`, `FMX.Switch`, `FMX.Tabs`, `Data.DBCtrls`; types `TFillType` and `TAlign` (FireMonkey's is `TAlignLayout` - kept even with the compiler's message in front of it); members of `TBase64Encoding`; function `ChangeExt`; the .NET name `TopDirectoryOnly`; `System.SysUtils.WriteLn`; `TList<T>.Sort` given a function | in both conditions |
+| Two writers of one format kept, with a reader tolerant of both | the bare model, 4 times out of 4 in v1-v4; when the bug report points at the READER, 3 times out of 3 in v5-v6 (Delphi and Python), and once more the format was copied into the second writer instead of calling the first. Asked to ADD a third use, it called the writer both times |
+| A shared helper changed without pinning its callers - the change broke them both | once (the tests caught it); in v5 the change kept them, but it pinned none of them |
+| Written by hand what the RTL already has: the leap-year rule, the days of a month, an ISO 8601 parser, rounding (`Trunc(x * 100 + 0.5)`), the centre of a rectangle, JSON by concatenation - with no escaping, or escaping a short list that leaves other control characters raw -, HTML escaped by hand (the order fixed, the double quote left), FireMonkey's hit test (it crashed outside a form) | repeatedly |
+| A test of its own that states what its code does not do (`-0.125` gives `-0.13`; the code gives `-0.12`) | once |
 | A unit without `implementation` (and the first error misleads) | once |
-| Two writers of one format kept, with a reader tolerant of both | the bare model, twice |
-| No tests pinning the callers before changing a shared helper | both, every time |
-| FireMonkey's hit test re-implemented by hand instead of asked (`ObjectAtPoint`) - it crashed outside a form | both |
 | `DayOfWeek` (Sunday = 1) read with ISO numbers | once |
 
-What both already knew - `nn` and `mm`, character codes outside the quotes, `Copy` from 1, a signature in two
-places, reusing the helper in front of them - stays, at a lower priority. v3 adds 21 examples aimed at the failures.
-The repair examples reproduce the PATTERN of each failure in new code: no output of the model is in the dataset.
-One pass is noisy (an item failed in one condition and not in the other), so the baseline for a trained model has to
-be several passes.
+What it already knew - `nn` and `mm`, character codes outside the quotes, `Copy` from 1, a signature in two places,
+`div`, `Currency` for money, the invariant format settings, copying a dynamic array, catching only the expected
+exception, reusing the helper in front of it, SQL parameters, `Floor` for negative values, the `csv` module - stays, at a lower priority. v3 and v4 were aimed at the failures. The
+repair examples reproduce the PATTERN of each failure in new code: no output of the model is in the dataset.
+Three cautions. One pass is noisy: the baseline below moves by up to six questions from one pass to the next. Up to
+v4 the questions asked for ONE code block, so a model could not show tests written next to the change - the "tests
+before the change" examples are judged on the change alone (in the baseline it may add its tests in a second block;
+the judge still runs ours). And up to v4 each question was headed by the example's id, which names the lesson
+(`r20-field-types-need-data-db`); from v5 the headers are neutral (`Q01`, `Q02`...). Measured with the baseline, that
+hint gave no visible advantage: the hinted pass falls inside the range of the neutral ones.
+
+### The baseline: three passes, before any training
+
+All 92 questions were asked three more times to the bare model, under neutral headers, in batches of 12, with fixed
+sampling (temperature 0.6, top_p 0.95, top_k 20). Every answer was judged automatically by the same judges, through
+this repository's own MCP server: the student's unit takes the place of ours in a copy of the dataset, `delphi_test`
+builds that judge and runs it in its container, and ours goes back; a Python answer runs the same `check.py`. The
+verdict is about behaviour. `partial` = right behaviour, but a declared check missed (`must_contain` / `once`: the RTL
+or the one writer not used). A `fact` check that calls the student's code and asks more than the question did (the
+hours of a day, fractions of a second) is not counted.
+
+| Pass | Right | Partial | Wrong | Does not compile | Names the judge could not call |
+|---|---|---|---|---|---|
+| 1 | 43 | 8 | 13 | 26 | 2 |
+| 2 | 46 | 8 | 11 | 27 | 0 |
+| 3 | 49 | 12 | 10 | 19 | 2 |
+
+Per question: right in all three passes 34, in none 35, sometimes 23. Right, by framework: FireMonkey 39 %, Python
+47 %, RTL 53 %; by family: repair 68 %, task 51 %, landscape 49 %, every-place 13 %. The 67 questions of v1-v4, which
+had been asked once with the hint in the header (41 right), gave 32, 36 and 42 right here. Each example carries its
+three verdicts in `meta.student.base3`.
 
 ## Training and measuring
 
 - Train it as a **separable adapter**: load it when working on Delphi; without it, the base model is untouched
   (llama.cpp, for example, takes it with `--lora`).
 - Train gently: a low rank and few epochs.
-- **Measure before and after**, on an evaluation set that is never trained on:
-  - Delphi: compiles on the first attempt, invented APIs, twins written;
+- **The baseline above is the "before" on the dataset's own questions**: after training, the same three passes -
+  neutral headers, the same sampling, the same judges - show what the adapter took from its own examples. That is a
+  ceiling, not the result: it trained on them. A gain smaller than the spread between passes (about six questions) is
+  noise.
+- **Measure before and after**, with the same judges, on questions that are never trained on, several passes each:
+  - compiles on the first attempt, and how many rounds of compiler errors it takes to get there;
+  - invented units and APIs (unknown-unit and undeclared-identifier errors on names that do not exist);
+  - the existing primitive found or a twin written (the `must_contain` / `once` checks of the landscape and
+    every-place families);
   - another language (a standard Python benchmark, for example): it must not drop. What already worked is measured
     too.
+- **For a model working as an agent**, the number that matters most: how many corrective tool calls a task needs
+  (calls refused, builds that fail) before and after the adapter. Compiling at the first attempt may rise a little
+  while those calls drop a lot - and that is the real gain.
+- **Grow it from real failures, not to a size.** The loop is: a small model answers the questions, a repeatable
+  failure becomes a pattern, the pattern becomes examples - with variations (other domains, other units, RTL and
+  FireMonkey), so that the adapter learns the rule and not the phrase - and every example passes a real judge.
 
 ## What is not in it
 

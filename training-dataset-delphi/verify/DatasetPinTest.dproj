@@ -90,6 +90,8 @@
         </DelphiCompile>
         <DCCReference Include="..\examples\delphi\e04-pin-callers-before-change\answer\CodeRules.pas"/>
         <DCCReference Include="..\examples\delphi\e04-pin-callers-before-change\answer\CodeRulesTests.pas"/>
+        <DCCReference Include="..\examples\delphi\e07-pin-callers-round-half-up\answer\PriceRounding.pas"/>
+        <DCCReference Include="..\examples\delphi\e07-pin-callers-round-half-up\answer\PriceRoundingTests.pas"/>
         <BuildConfiguration Include="Base">
             <Key>Base</Key>
         </BuildConfiguration>
