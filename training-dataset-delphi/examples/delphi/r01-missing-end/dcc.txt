@@ -1,0 +1,2 @@
+StockSum.pas(20): error E2029: ';' expected but '.' found
+StockSum.pas(22): error E2029: Declaration expected but end of file found

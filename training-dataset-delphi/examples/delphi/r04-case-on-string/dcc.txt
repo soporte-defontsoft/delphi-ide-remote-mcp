@@ -1,0 +1,4 @@
+SizeCodes.pas(11): error E2001: Ordinal type required
+SizeCodes.pas(12): error E2010: Incompatible types: 'Integer' and 'Char'
+SizeCodes.pas(13): error E2010: Incompatible types: 'Integer' and 'Char'
+SizeCodes.pas(14): error E2010: Incompatible types: 'Integer' and 'Char'
