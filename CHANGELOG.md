@@ -8,6 +8,16 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Changed
+
+- `delphi_docs` says that a page's title is its qualified name, so a search names the unit of a
+  type or routine; the skill turns that into a step: when the compiler does not find a name
+  (`E2003`, or an `F2613` on a unit that does not exist), search it - or the type wanted from
+  that unit - and add the unit the title names; an enumeration value has no page, its type
+  has. Measured on 13 November with a 27B model working through this server: it spent 18
+  minutes and 44 calls walking the FireMonkey sources for the unit of `TSpinBox`, which one
+  search answers (`FMX.SpinBox.TSpinBox`), and used `delphi_docs` in 10 of 383 calls.
+
 ### Fixed
 
 - `delphi_build` (and the build `delphi_test` runs first) lost a compiler message when its line

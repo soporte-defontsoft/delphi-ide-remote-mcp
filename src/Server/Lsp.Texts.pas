@@ -5416,7 +5416,8 @@ const
     'VCL, FMX, FireDAC, Indy...), the language, the IDE, code examples, ' +
     'and the help of installed components that register one. ' +
     'command=search query=<a concept or a class>: a short list of pages ' +
-    '(id + title), best first - a qualified name ' +
+    '(id + title: the qualified name, so it names the unit), best first - ' +
+    'a qualified name ' +
     '(System.SysUtils.FormatDateTime, FMX.StdCtrls.TButton) lands on the ' +
     'exact page, a bare one (TButton, TStringList.Sort) or a concept ' +
     '("class helpers") finds it too; framework=vcl|fmx puts that ' +

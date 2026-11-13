@@ -63,6 +63,14 @@ answers your client did not get go to THAT name's mailbox.
   the RAD Studio help installed on the server, in small pieces. Do not
   guess and do not read a whole RTL unit for it; for the exact signature,
   the installed sources win: `delphi_hover` / `delphi_definition`.
+- **A name the compiler does not find** (`E2003 Undeclared identifier: 'X'`:
+  search X; `F2613 Unit 'U' not found`: search the type you wanted from U):
+  `delphi_docs search query=<the name>` names its unit in ONE call - a
+  page's title is the qualified name
+  (`FMX.SpinBox.TSpinBox`, `System.DateUtils.DecodeDateTime`): add that unit
+  to the `uses`. An enumeration value (`alClient`) has no page of its own:
+  search its type (`TAlignLayout`). Do not walk the RTL/FMX sources for it -
+  measured: 44 calls and 18 minutes for what one search answers.
 - Big dumps (logcat, long outputs) have a file mode (`out=`): use it,
   then read the file in ranges or download it.
 - **Getting a file onto YOUR machine** (an installer, an .apk, a
