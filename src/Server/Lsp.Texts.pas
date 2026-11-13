@@ -7921,6 +7921,19 @@ const
     '(an E2009 brings seven E2250 that look like a threading problem). ' +
     'Fix it and compile again before touching anything else.';
 
+  { dcc corto el principio de %d mensajes (la ruta y la linea) y msbuild no los
+    clasifico: van como dcc los imprimio (C3 de la 1.29.2, medido el
+    13-nov-2026: un E2065 que solo dejaba el F2063 del .dpr) }
+  SN_BUILD_CUT_MESSAGES_FMT =
+    '[BUILD-074] dcc cut the start of %d of its messages - the file name and ' +
+    'the line number - and msbuild could not classify them, so they come in ' +
+    'errors, warnings and hints as dcc printed them ("Error: E2065 ...", ' +
+    '"Warning: W1036 ..."); an error comes before the F2063 or MSB6006 it ' +
+    'caused. The file is ' +
+    'the one whose path starts as the line does (an F2063 line names its ' +
+    'unit); the line number is lost. A shorter path to the project keeps them ' +
+    'whole.';
+
   { %s: el fichero; %d: cuantos objetos no se comprobaron. Va delante de las
     notas DSGN-039/055, en el lint y tras una edicion: no son avisos (iban
     bajo "the app CRASHES" y contaban como avisos; revision de la 1.12.0) }

@@ -645,6 +645,14 @@ REGLAS = [
     ('las plantillas de la wiki de la ayuda leidas a mano', r"\{\{#",
      [('Lsp.Docs.pas', 'SinPlantillasDeWiki')],
      'SinPlantillasDeWiki (Lsp.Docs): la llama DecodificaEntidades, la puerta del texto de la ayuda'),
+    # el codigo de un mensaje de dcc (E2003, F2613, W1036, H2164) en sus DOS formas, las dos del juez: la de
+    # msbuild ("error E2003:") y la de dcc cuando msbuild no la clasifico porque dcc corto el principio de
+    # la linea ("Error: E2003 "; C3 de la 1.29.2, medido el 13-nov-2026). Nadie las da ya separadas en
+    # campos, asi que es gramatica nuestra, UNA: sus lectores preguntan a PosicionDelCodigo
+    ('el codigo de un mensaje de dcc leido a mano', r"\[[EFHW]{1,4}\]\\d",
+     [('Lsp.BuildRunner.pas', 'PosicionDelCodigo')],
+     'PosicionDelCodigo (Lsp.BuildRunner): CodigoDelCompilador, CitaTrasElCodigo y EsMensajeSinClasificar '
+     'le preguntan a ella'),
     # que operaciones son LARGAS (las que se apuntan en el registro de las operaciones en curso): cuanto
     # tarda algo no lo dice nadie antes de hacerlo, asi que es gramatica nuestra, UNA (R3 de A22, 1.29.1)
     ('una lista de las operaciones largas', r"'delphi_move',\s*'delphi_delete'",
@@ -2316,6 +2324,7 @@ PLANTADO = {
     'quien recorta lo que pinta FMX': '  if P.ClipChildren or TControlCrack(P).SmallSizeControl then',
     # una segunda lectura de las plantillas que la ayuda de la 13.2 trae sin resolver (8-nov-2026)
     'las plantillas de la wiki de la ayuda leidas a mano': "  P := Pos('{{#multireplace:', S);",
+    'el codigo de un mensaje de dcc leido a mano': "  if TRegEx.IsMatch(L, '\\b([EW]\\d+):') then",
     # las de Lsp.DesignerForma y Lsp.ClausulaUses hasta el 7-nov-2026 (B5 de la 1.28)
     'un grupo de una regex juzgado a mano': '  if M.Success and (M.Groups.Count > 2) then X := 1;',
     # las siete de Lsp.DesignerEdit hasta el 7-nov-2026 (C1-2 de la 1.28)

@@ -311,6 +311,8 @@ type
   public
     [Test] procedure LeeLasDosFormasDelEnlazador;
     [Test] procedure LaCitaVaTrasElCodigoDeLaLinea;
+    [Test]
+    procedure LoQueMsBuildNoClasifico;
   end;
 
 implementation
@@ -2008,6 +2010,15 @@ begin
   Assert.AreEqual('Vcl.Forms', CitaTrasElCodigo(
     'C:\p\P.dpk(1): warning W1033: The unit ''Vcl.Forms'' has been implicitly imported into package ''P''', 'W1033'));
   Assert.AreEqual('', CitaTrasElCodigo('C:\p\U.pas(3): error F2613: sin cita', 'F2613'), 'sin cita, nada');
+  // C3 de la 1.29.2: la forma de dcc, la que msbuild deja sin convertir cuando dcc
+  // corta el principio de la linea (lineas medidas el 13-nov-2026)
+  Assert.AreEqual('FMX.Editors', CitaTrasElCodigo(
+    'D:\x\aaaa\cccccccccccFatal: F2613 Unit ''FMX.Editors'' not found.', 'F2613'), 'un F2613 cortado');
+  Assert.AreEqual('TCounter.Reset', CitaTrasElCodigo(
+    'D:\x\F2613Demo\cccError: E2065 Unsatisfied forward or external declaration: ''TCounter.Reset''', 'E2065'));
+  Assert.AreEqual('', CitaTrasElCodigo(
+    'D:\x\F2613Demo\cccError: E2065 Unsatisfied forward or external declaration: ''TCounter.Reset''', 'F2613'),
+    'una carpeta F2613Demo tampoco es un F2613 en la forma de dcc');
 end;
 
 procedure TEnlazadorTests.LeeLasDosFormasDelEnlazador;
@@ -2024,6 +2035,29 @@ begin
   Assert.AreEqual('z,gcc_s', string.Join(',', L), 'las dos formas, cada nombre una vez');
   Assert.AreEqual<NativeInt>(0, Length(LibreriasQueNoEncuentra('error F2588: Linker error code: 1 ($00000001)')),
     'sin un -l no hay nada que completar');
+end;
+
+procedure TEnlazadorTests.LoQueMsBuildNoClasifico;
+begin
+  // C3 de la 1.29.2: las lineas del log de minimal de una ruta honda, tal como
+  // salieron (13-nov-2026): dcc corto la ruta y el numero, y msbuild ya no las
+  // reconocio como error ni aviso
+  Assert.IsTrue(EsMensajeSinClasificar(
+    'D:\x\aaaa\cccccccccccError: E2065 Unsatisfied forward or external declaration: ''TCounter.Reset'''), 'E2065 cortado');
+  Assert.IsTrue(EsMensajeSinClasificar(
+    'D:\x\aaaa\cccccccccccFatal: F2613 Unit ''FMX.Editors'' not found.'), 'F2613 cortado');
+  Assert.IsTrue(EsMensajeSinClasificar(
+    'D:\x\aaaa\cccccccccccWarning: W1036 Variable ''Maybe'' might not have been initialized'), 'W1036 cortado');
+  Assert.IsTrue(EsMensajeSinClasificar(
+    'D:\x\aaaa\cccccccccccHint: H2164 Variable ''Unused'' is declared but never used in ''Twice'''), 'H2164 cortado');
+  // lo que msbuild SI clasifico, y lo que no es un mensaje de dcc, no
+  Assert.IsFalse(EsMensajeSinClasificar(
+    'D:\x\short\Counters.pas(11): error E2065: Unsatisfied forward or external declaration: ''TCounter.Reset'''),
+    'la forma de msbuild');
+  Assert.IsFalse(EsMensajeSinClasificar(
+    'P128.dpr(9): error F2063: Could not compile used unit ''Counters.pas'''), 'el F2063 del .dpr');
+  Assert.IsFalse(EsMensajeSinClasificar('Embarcadero Delphi for Win64 compiler version 37.0'), 'la cabecera');
+  Assert.IsFalse(EsMensajeSinClasificar('41 lines, 0.30 seconds, 189644 bytes code, 66640 bytes data.'), 'el resumen');
 end;
 
 initialization

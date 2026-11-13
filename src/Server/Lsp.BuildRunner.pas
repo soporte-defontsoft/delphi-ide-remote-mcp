@@ -90,6 +90,13 @@ function LibreriasQueNoEncuentra(const AOutput: string): TArray<string>;
   puntos opcionales y sin mayusculas: una carpeta F2613Demo en la ruta de un
   error daba una unidad que no faltaba (F1-1 de la 1.29). }
 function CitaTrasElCodigo(const ALinea, ACodigo: string): string;
+{ Si ALinea es un mensaje de dcc que msbuild NO clasifico: el codigo en la forma
+  de dcc ("Error: E2065 texto", sin dos puntos tras el codigo) y sin la de
+  msbuild ("error E2065: texto"). Pasa cuando dcc corta el principio de la linea
+  -la ruta y el numero- y la tarea de msbuild ya no la reconoce (C3 de la 1.29.2;
+  medido el 13-nov-2026: corte en el caracter 128). El lector de
+  MensajesSinClasificar, expuesto para sus tests. }
+function EsMensajeSinClasificar(const ALinea: string): Boolean;
 function SdkPorDefectoDelIde(const AVersion, APlat: string): string;
 { ...y el perfil que el IDE tiene para esa plataforma: UNO para todos sus
   proyectos (el IDE no guarda un perfil por proyecto) }
@@ -2530,23 +2537,58 @@ end;
 { El codigo de dcc de una linea de msbuild (F2039, W1054, H2077), o '': el primero
   de la linea. Antes de el solo va el fichero, y un nombre de fichero no lleva dos
   puntos: una carpeta F2039Demo no es un F2039. Por el codigo, porque un dcc
-  traducido no dice "Hint" ni "Could not". }
-function CodigoDelCompilador(const ALinea: string): string;
+  traducido no dice "Hint" ni "Could not".
+  Las dos formas son del juez: la de msbuild ("U.pas(3): error E2003: texto") y
+  la de dcc tal como la imprime ("U.pas(3) Error: E2003 texto"), que msbuild deja
+  sin convertir cuando dcc corta el principio de la linea (C3 de la 1.29.2:
+  MensajesSinClasificar). La de msbuild primero: es la de casi todas. Devuelve
+  donde empieza el codigo en la linea (0 = sin codigo), para leer lo que le sigue,
+  y en ADeDcc si vino en la forma de dcc. EL lector de las dos: nadie mas lleva
+  sus patrones (test_paisaje). }
+function PosicionDelCodigo(const ALinea: string; out ACodigo: string; out ADeDcc: Boolean): Integer;
 begin
   var M := TRegEx.Match(ALinea, '\b([EFHW]\d+):');
-  Result := (if M.Success then M.Groups[1].Value else '');
+  ADeDcc := not M.Success;
+  if ADeDcc then
+    M := TRegEx.Match(ALinea, ':\s([EFHW]\d+)\s');
+  if not M.Success then
+  begin
+    ACodigo := '';
+    ADeDcc := False;
+    Exit(0);
+  end;
+  ACodigo := M.Groups[1].Value;
+  Result := M.Groups[1].Index;
+end;
+
+function CodigoDelCompilador(const ALinea: string): string;
+var
+  DeDcc: Boolean;
+begin
+  PosicionDelCodigo(ALinea, Result, DeDcc);
+end;
+
+function EsMensajeSinClasificar(const ALinea: string): Boolean;
+var
+  Codigo: string;
+begin
+  PosicionDelCodigo(ALinea, Codigo, Result);
 end;
 
 function CitaTrasElCodigo(const ALinea, ACodigo: string): string;
 var
   P, Q: Integer;
+  Codigo: string;
 begin
   Result := '';
-  if CodigoDelCompilador(ALinea) <> ACodigo then
+  // el codigo y donde esta, en cualquiera de las dos formas (PosicionDelCodigo);
+  // la primera cita que le sigue (una ruta no lleva dos puntos tras el nombre de
+  // una carpeta: lo de antes del codigo no cuenta)
+  var DeDcc: Boolean;
+  var En := PosicionDelCodigo(ALinea, Codigo, DeDcc);
+  if (En = 0) or (Codigo <> ACodigo) then
     Exit;
-  // tras el codigo y sus dos puntos (una ruta no lleva dos puntos tras el nombre
-  // de una carpeta), la primera cita
-  P := Pos('''', ALinea, Pos(ACodigo + ':', ALinea));
+  P := Pos('''', ALinea, En + Length(Codigo));
   if P = 0 then
     Exit;
   Q := Pos('''', ALinea, P + 1);
@@ -2561,13 +2603,29 @@ begin
   Result := CodigoDelCompilador(ALinea).StartsWith('H');
 end;
 
-{ Si dcc dijo ACodigo en ese fichero de /flp }
-function LogDiceCodigo(const ARuta, ACodigo: string): Boolean;
+{ Si dcc dijo ACodigo en alguno de esos ficheros de /flp (el de errores y el de
+  mensajes: un F2039 con la ruta del .exe cortada solo esta en el segundo) }
+function LogDiceCodigo(const ARutas: array of string; const ACodigo: string): Boolean;
 begin
   Result := False;
+  for var Ruta in ARutas do
+    for var L in LineasDelLogDeMsBuild(Ruta) do
+      if SameText(CodigoDelCompilador(L), ACodigo) then
+        Exit(True);
+end;
+
+{ Los mensajes de dcc que msbuild NO clasifico, en su orden: no estan en
+  errors.log ni en warnings.log, y sin ellos el agente ve el F2063 del .dpr o el
+  MSB6006 sin la causa. Los guarda el log de /flp3 (minimal), con la forma de dcc;
+  con la ruta entera esa forma no sale en el (sale la de msbuild), asi que una
+  linea asi es exactamente uno de ellos (EsMensajeSinClasificar; C3 de la
+  1.29.2). Sin fichero, nada: el build no se cae por un log. }
+function MensajesSinClasificar(const ARuta: string): TArray<string>;
+begin
+  Result := [];
   for var L in LineasDelLogDeMsBuild(ARuta) do
-    if SameText(CodigoDelCompilador(L), ACodigo) then
-      Exit(True);
+    if EsMensajeSinClasificar(L) then
+      Result := Result + [L];
 end;
 
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
@@ -2850,6 +2908,8 @@ begin
   var LogsDelBuild := NuevaCarpetaDescarga(ServerTempDir(BUILD_LOGS_SUB));
   var LogDeErrores := TPath.Combine(LogsDelBuild, 'errors.log');
   var LogDeAvisos := TPath.Combine(LogsDelBuild, 'warnings.log');
+  // y lo que dcc dijo y msbuild no supo clasificar (MensajesSinClasificar)
+  var LogDeMensajes := TPath.Combine(LogsDelBuild, 'messages.log');
   var QueueSW := TStopwatch.StartNew;
   GBuildLock.Enter;
   var QueuedMs := QueueSW.ElapsedMilliseconds;
@@ -3019,7 +3079,12 @@ begin
   // nuestro, no algo que nombre el agente
   CrearCarpeta(LogsDelBuild);
   var LogsArg := ' ' + EnComillas('/flp1:errorsonly;encoding=UTF-8;logfile=' + LogDeErrores) +
-    ' ' + EnComillas('/flp2:warningsonly;encoding=UTF-8;logfile=' + LogDeAvisos);
+    ' ' + EnComillas('/flp2:warningsonly;encoding=UTF-8;logfile=' + LogDeAvisos) +
+    // un mensaje de dcc que msbuild no clasifico (dcc le corto el principio) no
+    // esta en ninguno de los dos: solo en un log que guarde los mensajes, y
+    // minimal lo guarda con cualquier verbosidad de la consola (medido el
+    // 13-nov-2026 con /v:quiet; C3 de la 1.29.2)
+    ' ' + EnComillas('/flp3:verbosity=minimal;encoding=UTF-8;logfile=' + LogDeMensajes);
   // Propiedades globales de msbuild ganan a las del .dproj: vaciar los
   // eventos aqui es no ejecutarlos, sin tocar el proyecto.
   var EventArg := '';
@@ -3063,7 +3128,7 @@ begin
   // machacar a msbuild ni quedarse esperando para siempre. Medido 2026-09-20:
   // con esperas fijas de 1,5 s un programa de 8 s agotaba los reintentos.
   var EsperaBloqueo := 1000;
-  while (ExitCode <> 0) and (ReintentosBloqueo < 4) and LogDiceCodigo(LogDeErrores, 'F2039') do
+  while (ExitCode <> 0) and (ReintentosBloqueo < 4) and LogDiceCodigo([LogDeErrores, LogDeMensajes], 'F2039') do
   begin
     Inc(ReintentosBloqueo);
     Sleep(EsperaBloqueo);
@@ -3107,13 +3172,35 @@ begin
   Lines := LineasDelTexto(Output);
   for var K := 0 to High(Lines) do
     Lines[K] := SinRutaDelProyecto(Lines[K]);
+  // Primero lo que dcc dijo y msbuild no clasifico: la CAUSA. El F2063 del .dpr o
+  // el MSB6006 que le siguen son su consecuencia, y sin ella no dicen por que
+  // (C3 de la 1.29.2: un E2065 en una ruta honda salia como un F2063 solo, un
+  // F2613 como un MSB6006 solo). Cuantos se ensenan, para la nota (BUILD-074)
+  var SinClasificar := MensajesSinClasificar(LogDeMensajes);
+  var Cortados := 0;
+  for Line in SinClasificar do
+    if CharInSet(CodigoDelCompilador(Line)[1], ['E', 'F']) then
+    begin
+      Errors.Add(Line);
+      YaDicho.Add(Line);
+      Inc(Cortados);
+    end;
   for Line in LineasDelLogDeMsBuild(LogDeErrores) do
   begin
     Errors.Add(Line);
     YaDicho.Add(Line);
   end;
   var AvisosDelLog := LineasDelLogDeMsBuild(LogDeAvisos);
-  var BloqueoDelLog := LogDiceCodigo(LogDeErrores, 'F2039');
+  // ...y los avisos y las pistas que tampoco clasifico van con los suyos: al
+  // reparto de warnings/hints y al lector de W1033 (en quiet no se piden)
+  for Line in SinClasificar do
+    if CharInSet(CodigoDelCompilador(Line)[1], ['W', 'H']) then
+    begin
+      AvisosDelLog := AvisosDelLog + [Line];
+      if not SameText(AVerbosity, 'quiet') then
+        Inc(Cortados);
+    end;
+  var BloqueoDelLog := LogDiceCodigo([LogDeErrores, LogDeMensajes], 'F2039');
   for Line in AvisosDelLog do
   begin
     YaDicho.Add(Line);
@@ -3228,6 +3315,8 @@ begin
     if SdkAviso <> '' then
       Result.AddPair('sdkWarning', SdkAviso);
     Result.AddPair('errors', Errors);
+    if Cortados > 0 then
+      Result.AddPair('cutMessagesNote', MsgFmt(SN_BUILD_CUT_MESSAGES_FMT, [Cortados]));
     // En quiet NO va un warnings:[] vacio: se leeria como "no hay warnings" y
     // seria mentira - es que no se han pedido. Y sin nota: lo dice la
     // descripcion de verbosity, una vez (no en cada build)

@@ -8,6 +8,22 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Fixed
+
+- `delphi_build` (and the build `delphi_test` runs first) lost a compiler message when its line
+  passed 128 characters. dcc cuts the start of such a line - the file name and the line number -
+  and msbuild then no longer recognises it as an error or a warning, so it reached neither
+  `errors` nor `warnings`: an error in a unit with a long path came back as the `.dpr`'s
+  `F2063 Could not compile used unit` alone, a missing unit as `MSB6006 "dcc" exited with code 1`
+  alone, with no `missingUnits`, and a warning or a hint not at all. The build now also reads
+  the messages msbuild could not classify (a third file log, `minimal`, which keeps them with
+  any `verbosity`) and puts each where its code says - `E`/`F` first in `errors`, ahead of the
+  `F2063` or `MSB6006` it caused (so `firstError` is the cause), `W` in `warnings`, `H` in
+  `hints` - as dcc printed them, and `cutMessagesNote` (`BUILD-074`) says the file name and the
+  line number were cut. `missingUnits` finds the unit of a cut `F2613`, and the retry on an
+  `F2039` (the `.exe` in use) reads them too. Measured on 12 and 13 November with the broken
+  examples of the fine-tuning dataset, whose paths are long; with a short path nothing changes.
+
 ## [1.29.1] - 2026-11-11
 
 A patch of the closing line. A long call keeps its client informed and what it did is not
