@@ -34,7 +34,11 @@ una ruta que existe entera.
   V11 Hent.Color en un TLabel VCL: ni "Did you mean Hint.Color?" (no existe)
   V12 control de V11: Fant.Size sigue proponiendo Font.Size (existe)
   V13 otra tool por la misma regla: delphi_textedit old/new con content:
-      '"content" goes with: create.'
+      '"content" goes with: create=true.' - el modo como se pide: "goes with:
+      create" se leyo como command=create, tres llamadas fallidas (C2 de la
+      1.29.2). ROJO contra cd54dce4
+  V14 su gemela en delphi_edit: old/new con confirm: '"confirm" goes with:
+      restore=true.' ROJO contra cd54dce4
 
 Uso:  python tests/test_con_quien_va_120.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -185,8 +189,12 @@ try:
     pt = os.path.join(JAIL, 't.txt')
     open(pt, 'wb').write(b'a\r\n')
     r = plano(srv.call('delphi_textedit', {'path': pt, 'old': 'a', 'new': 'b', 'content': 'x'}))
-    check('V13 la misma regla en otra tool: "content" va con create',
-          mc.es(r, 'SR_EDIT_NO_VA_CON_MODO_FMT') and va_con('content', 'create') in r, r[:400])
+    check('V13 la misma regla en otra tool: "content" va con create=true (el modo como se pide). ROJO contra cd54dce4',
+          mc.es(r, 'SR_EDIT_NO_VA_CON_MODO_FMT') and va_con('content', 'create=true') in r, r[:400])
+    r = plano(srv.call('delphi_edit', {'path': pu, 'old': '  FormF: TFormF;', 'new': '  FormF: TFormF;',
+                                       'confirm': True}))
+    check('V14 su gemela en delphi_edit: "confirm" va con restore=true. ROJO contra cd54dce4',
+          mc.es(r, 'SR_EDIT_NO_VA_CON_MODO_FMT') and va_con('confirm', 'restore=true') in r, r[:400])
 finally:
     srv.cierra()
 

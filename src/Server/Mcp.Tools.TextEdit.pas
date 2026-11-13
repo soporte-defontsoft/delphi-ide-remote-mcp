@@ -107,15 +107,17 @@ begin
     Exit;
   // lo que no es del modo de la llamada se dice (Lsp.Guard.ParametroQueNoVa):
   // content sin create (sexta revision), eol sin create, atline con edits
-  // (septima)
+  // (septima). Un modo que es un BOOLEANO se nombra como se pide (create=true,
+  // como dirs=true en LIST-015): "goes with: create" se leyo como command=create
+  // y fueron tres llamadas fallidas seguidas (C2 de la 1.29.2, Hermes 12-nov)
   var Modo: string;
   if Params.Edits.Trim <> '' then Modo := 'edits'
-  else if Params.Create_ then Modo := 'create'
+  else if Params.Create_ then Modo := 'create=true'
   else Modo := 'old/new';
   var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(Modo, [
       'edits', 'edits',
-      'create', 'create content eol',
+      'create=true', 'create content eol',
       'old/new', 'old new fragment delete atline toline'],
     ['atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
      'toline', IfThen(Params.ToLine <> 0, IntToStr(Params.ToLine)), '',

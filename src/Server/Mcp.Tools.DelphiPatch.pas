@@ -227,7 +227,9 @@ begin
   else if Params.AddUses.Trim <> '' then Modo := 'adduses'
   else if Params.RemoveUses.Trim <> '' then Modo := 'removeuses'
   else if Params.Insert.Trim <> '' then Modo := 'insert=' + SinMayusculas(Params.Insert.Trim)
-  else if Params.Restore then Modo := 'restore'
+  // un modo que es un BOOLEANO, como se pide (restore=true; C2 de la 1.29.2, la
+  // gemela de create=true en delphi_textedit)
+  else if Params.Restore then Modo := 'restore=true'
   else Modo := 'old/new';
   var Suyos, VaCon: string;
   var Sobra := ParametroQueNoVa(Modo, [
@@ -236,7 +238,7 @@ begin
       'removeuses', 'removeuses section',
       'insert=rutina-global', 'insert code visible',
       'insert=metodo', 'insert code inclass visibility',
-      'restore', 'restore confirm',
+      'restore=true', 'restore confirm',
       'old/new', 'old new fragment delete atline toline'],
     ['atline', IfThen(Params.AtLine <> 0, IntToStr(Params.AtLine)), '',
      'toline', IfThen(Params.ToLine <> 0, IntToStr(Params.ToLine)), '',

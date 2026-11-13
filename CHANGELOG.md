@@ -23,6 +23,11 @@ the MCP `initialize` response (`serverInfo.version`).
   line number were cut. `missingUnits` finds the unit of a cut `F2613`, and the retry on an
   `F2039` (the `.exe` in use) reads them too. Measured on 12 and 13 November with the broken
   examples of the fine-tuning dataset, whose paths are long; with a short path nothing changes.
+- `delphi_textedit` and `delphi_edit` name a mode that is a boolean the way it is asked: a parameter
+  that does not go with the call's mode now says `"content" goes with: create=true.` (and
+  `"confirm" goes with: restore=true.`), as `delphi_list` already said `dirs=true` (`LIST-015`).
+  It said `goes with: create`, and an agent read it as `command=create`: three failed calls in a
+  row, until its client warned of a loop (12 November).
 
 ## [1.29.1] - 2026-11-11
 
