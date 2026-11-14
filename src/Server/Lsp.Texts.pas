@@ -7932,7 +7932,7 @@ const
     '"Warning: W1036 ..."); an error comes before the F2063 or MSB6006 it ' +
     'caused. The file is ' +
     'the one whose path starts as the line does (an F2063 line names its ' +
-    'unit); the line number is lost. A shorter path to the project keeps them ' +
+    'unit); the line number is lost. A shorter path to the unit keeps them ' +
     'whole.';
 
   { %s: el fichero; %d: cuantos objetos no se comprobaron. Va delante de las
