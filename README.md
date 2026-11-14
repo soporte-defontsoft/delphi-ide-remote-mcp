@@ -383,8 +383,10 @@ Each one is told with its measurements and its history in [docs/ARCHITECTURE.md]
 ## Extra: a Delphi fine-tuning dataset (experimental)
 
 [`training-dataset-delphi/`](training-dataset-delphi/README.md) is an experimental dataset to fine-tune a model to
-write better Delphi. It is separate from the server - the server does not use it - and its README says what it is
-and what has been measured with it.
+write better Delphi, closed on our side. It is separate from the server - the server does not use it - and its
+README says what it is, what was measured with it and what we concluded: no adapter of Qwen3.8-27B beat its base
+model; what helped was the server's tools, the dataset's lessons as plain text in the context, and choosing another
+base model (Qwen3.8 Flash Next, untrained, nearly doubled the 27B on the held-out questions).
 
 ## About this project
 

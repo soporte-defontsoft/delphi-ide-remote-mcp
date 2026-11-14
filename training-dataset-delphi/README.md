@@ -5,7 +5,7 @@ tools to work on Delphi code: read it, edit it, build it, test it, run it. This 
 itself** fail less at Delphi. The server catches the mistakes; the dataset was an attempt to have the model make fewer
 of them, by fine-tuning it. It is experimental: read the box below before using it.
 
-> **Experimental, and parked.** The server does not use this dataset and does not need it. It was used to train
+> **Experimental, and closed on our side.** The server does not use this dataset and does not need it. It was used to train
 > Qwen3.8-27B with four LoRA adapters, and **none of them beat the base model** on the held-out questions; the ones
 > that changed how the model reasons made it worse. What did help, on the same questions, was giving the model a way
 > to check itself - this server's compiler, tests and the installed sources: 16 of 20 right in one pass, against 5 to
@@ -13,17 +13,17 @@ of them, by fine-tuning it. It is experimental: read the box below before using 
 > did what no adapter did: Qwen3.8 Flash Next at 3 bits got 36 of 60 on the same questions
 > ([measured](#without-training-another-base-model)). Everything that was tried, how, and with what numbers, is in
 > [What was tried with Qwen3.8-27B](#what-was-tried-with-qwen38-27b-measured). It stays here as judged material and a
-> baseline for anyone who knows more about training than we do; we are not working on it now.
+> baseline for anyone who knows more about training than we do; on our side it is closed, and we will not go on with it.
 
-> **Status: v6, 92 examples** (80 Delphi, 12 Python), every one verified by its judge. v1 fixed the format and the
+> **Status: v6, 92 examples, the last version** (80 Delphi, 12 Python), every one verified by its judge. v1 fixed the format and the
 > method; v2 added FireMonkey hit-testing; v3 and v4 are driven by a measurement: a small model was asked every
 > question without the answer, its code went through the same judges, and what it got wrong became new examples (see
 > [What a small model gets wrong](#what-a-small-model-gets-wrong-measured)). v4 adds locale-safe numbers, Currency,
 > dynamic arrays, encodings, threads, FireDAC memory tables and "never silence an error". v5 works by patterns: each
 > failure that repeats becomes several examples with variations (other units, other domains, RTL and FireMonkey,
 > Delphi and Python), so that the adapter learns the rule and not the phrase. v6 follows the failures of v5: more
-> FireMonkey names, escaping by hand (HTML, SQL, CSV), Floor against Trunc, and the second writer again. It grows from
-> here. Apart from it, 20 [held-out questions](#held-out-questions-never-trained-on) vary the same patterns in new
+> FireMonkey names, escaping by hand (HTML, SQL, CSV), Floor against Trunc, and the second writer again.
+> Apart from it, 20 [held-out questions](#held-out-questions-never-trained-on) vary the same patterns in new
 > code, to measure whether a model trained on the examples learned the rule or the example.
 
 ## Why
