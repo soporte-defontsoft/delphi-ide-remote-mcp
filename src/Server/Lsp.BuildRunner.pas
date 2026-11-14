@@ -3489,6 +3489,19 @@ begin
           IfThen(HayCualificadas, MsgText(SN_BUILD_MISSING_UNITS_QUALIFY), '') +
           IfThen(EsPaquete, MsgText(SN_BUILD_MISSING_UNITS_PACKAGE), ''));
       end;
+      // Un nombre que dcc no conoce (E2003): la tool que dice su unidad, con
+      // el primero que nombra; por el codigo y su cita (CitaTrasElCodigo, como
+      // missingUnits), no por la prosa de un dcc traducido (C7 de la 1.29.2)
+      for var I := 0 to Errors.Count - 1 do
+      begin
+        var NoDeclarado := CitaTrasElCodigo(Errors.Items[I].Value, 'E2003');
+        if NoDeclarado <> '' then
+        begin
+          Result.AddPair('undeclaredNote',
+            MsgFmt(SN_BUILD_UNDECLARED_FMT, [NoDeclarado, NoDeclarado]));
+          Break;
+        end;
+      end;
     end;
     // En quiet msbuild NI SIQUIERA imprime los warnings, asi que no se puede
     // dar un recuento: no va la clave (nunca un 0 inventado). Lo dice la

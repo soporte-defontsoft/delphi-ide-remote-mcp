@@ -5206,9 +5206,22 @@ const
     'Register the folder for this ' +
     'platform with delphi_config command=add-searchpath ' +
     'platform=<platform> path=<folder> and repeat the build. No ' +
-    'candidates: the component is not installed or ships no source for ' +
-    'this platform (delphi_components platform=<platform>, and if it is ' +
-    'missing, delphi_report).';
+    'candidates: the unit may not exist (a name from memory: ' +
+    'delphi_docs command=search query=<the type you wanted from it> ' +
+    'names its real unit), or the component is not installed or ships ' +
+    'no source for this platform (delphi_components platform=<platform>, ' +
+    'and if it is missing, delphi_report).';
+  { Un nombre que dcc no conoce (E2003): la tool que dice su unidad, con el
+    primero que nombra el compilador (C7 de la 1.29.2, medido el 14-nov-2026:
+    lo que va en la respuesta lo lee cualquier modelo; el SKILL, solo el que
+    lo abre - el 27B lo abrio en 4 de 20 preguntas) }
+  SN_BUILD_UNDECLARED_FMT =
+    '[BUILD-075] The compiler does not know ''%s'' (E2003). If it comes ' +
+    'from Delphi''s libraries or an installed component, delphi_docs ' +
+    'command=search query=%s names its unit (a page''s title is the ' +
+    'qualified name, FMX.SpinBox.TSpinBox): add that unit to the uses. An ' +
+    'enumeration value (alClient) has no page of its own: search its type ' +
+    '(TAlignLayout).';
   { Una unit sin fuente con su nombre pero si bajo un ambito (Hermes, punto 9
     de la 1.18.2: uses Dialogs en FMX; 1.21.1). }
   SN_BUILD_MISSING_UNITS_QUALIFY =
@@ -10890,8 +10903,13 @@ const
   SF_LSP_ENLACE_CON_LINEA_FMT = '%s (%s, line %s)';
   SF_LSP_ENLACE_FMT = '%s (%s)';
 
+  { Lo mismo que dice la descripcion (SD_LSP_HOVER): en una declaracion PUEDE
+    dar null. Decia "only answers on usages, not on declarations" y era falso:
+    sobre la declaracion de un tipo contesta (C8 de la 1.29.2, Hermes y medido
+    el 14-nov-2026) }
   SN_LSP_HINT_HOVER_USAGES =
-    ' [LSP-024] [hint: hover only answers on usages, not on declarations]';
+    ' [LSP-024] [hint: hover answers on usages; on a declaration it may ' +
+    'return null - ask at a usage]';
 
   // Mensajes que estaban en linea en Mcp.Tools.Designer.pas (paso 3c a mano, 27-sep-2026)
   // Mensajes que estaban en linea en Mcp.Tools.Styles.pas (paso 3c a mano, 27-sep-2026)

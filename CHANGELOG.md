@@ -17,6 +17,14 @@ the MCP `initialize` response (`serverInfo.version`).
   has. Measured on 13 November with a 27B model working through this server: it spent 18
   minutes and 44 calls walking the FireMonkey sources for the unit of `TSpinBox`, which one
   search answers (`FMX.SpinBox.TSpinBox`), and used `delphi_docs` in 10 of 383 calls.
+- The same step now comes in the answer, which any model reads, and not only in the skill, which
+  that 27B model opened in 4 of 20 tasks. A build that fails on a name the compiler does not know
+  (`E2003`) - `delphi_build`, and the build `delphi_test` runs first - adds `undeclaredNote`
+  (`BUILD-075`): the first such name and the `delphi_docs` search that gives its unit. And when a
+  unit the compiler cannot find has no candidate folder, `BUILD-042` now says first that the unit
+  may not exist - a name from memory - and how to find the real one, before "not installed". Both
+  measured on 14 November: a model checking this version spent two failed builds and four help
+  pages on two names, and read "not installed" for a unit that does not exist.
 
 ### Fixed
 
@@ -38,6 +46,10 @@ the MCP `initialize` response (`serverInfo.version`).
   `"confirm" goes with: restore=true.`), as `delphi_list` already said `dirs=true` (`LIST-015`).
   It said `goes with: create`, and an agent read it as `command=create`: three failed calls in a
   row, until its client warned of a loop (12 November).
+- `delphi_hover`'s note on an empty answer (`LSP-024`) said hover answers on usages, "not on
+  declarations", while the tool's description says a declaration "may" return null - and on a
+  type's declaration it does answer (measured on 14 November). The note now says what the
+  description says.
 
 ## [1.29.1] - 2026-11-11
 
