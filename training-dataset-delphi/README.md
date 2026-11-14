@@ -2,8 +2,17 @@
 
 An extra of this repository, and a cousin of the server. The **Delphi IDE Remote MCP** server gives an AI agent the
 tools to work on Delphi code: read it, edit it, build it, test it, run it. This dataset is meant to make the **model
-itself** fail less at Delphi. Together they are one environment for programming in Delphi with AI: the server catches
-the mistakes, and the dataset teaches the model to make fewer of them.
+itself** fail less at Delphi. The server catches the mistakes; the dataset was an attempt to have the model make fewer
+of them, by fine-tuning it. It is experimental: read the box below before using it.
+
+> **Experimental, and parked.** The server does not use this dataset and does not need it. It was used to train
+> Qwen3.8-27B with four LoRA adapters, and **none of them beat the base model** on the held-out questions; the ones
+> that changed how the model reasons made it worse. What did help, on the same questions, was giving the model a way
+> to check itself - this server's compiler, tests and the installed sources: 16 of 20 right in one pass, against 5 to
+> 8 - and the dataset's lessons as plain text in its context: 28 of 60 against 20. Everything that was tried, how,
+> and with what numbers, is in [What was tried with Qwen3.8-27B](#what-was-tried-with-qwen38-27b-measured). It stays
+> here as judged material and a baseline for anyone who knows more about training than we do; we are not working on
+> it now.
 
 > **Status: v6, 92 examples** (80 Delphi, 12 Python), every one verified by its judge. v1 fixed the format and the
 > method; v2 added FireMonkey hit-testing; v3 and v4 are driven by a measurement: a small model was asked every
@@ -15,9 +24,6 @@ the mistakes, and the dataset teaches the model to make fewer of them.
 > FireMonkey names, escaping by hand (HTML, SQL, CSV), Floor against Trunc, and the second writer again. It grows from
 > here. Apart from it, 20 [held-out questions](#held-out-questions-never-trained-on) vary the same patterns in new
 > code, to measure whether a model trained on the examples learned the rule or the example.
->
-> **No model has been trained with it yet.** We are building it as an extra; training a model with it and measuring
-> the result is on the [roadmap](../docs/ROADMAP.md#next), for later.
 
 ## Why
 
@@ -43,7 +49,10 @@ The dataset teaches both: Delphi that compiles **and** the habits of programming
 
 ## What it is for
 
-- Training a **LoRA** (or another fine-tune) so that a model writes correct Delphi and programs well.
+- Training a **LoRA** (or another fine-tune) so that a model writes correct Delphi and programs well. That is what it
+  was built for; with Qwen3.8-27B it did not work ([measured](#what-was-tried-with-qwen38-27b-measured)).
+- Its `teaches` lines (one per example), given to a model as plain text in its context: measured, they help with the
+  habits of programming well, not with Delphi's facts.
 - It is **tool-agnostic**. It teaches Delphi and programming, **not** how to use this server or any other tool. How to
   use a tool is learned at run time from the tool's own description, which changes from version to version; baked
   into a model's weights, it would go stale.
@@ -127,6 +136,9 @@ eval/student-baseline.tsv  how a small model answered each question, training or
                        the three passes of the baseline), read into meta.student
 tools/build_dataset.py the ONE writer of both JSONL files: it composes them from examples/ and eval/heldout/, and
                        checks every example
+tools/train_unsloth_reasoning.py   a LoRA with Unsloth for a model that reasons (Qwen3.8): the reasoning level
+                       chosen and checked, the whole text or only what the model writes. It needs a JSONL whose
+                       answers carry reasoning_content, which this folder does not ship (see below)
 ```
 
 To rebuild the JSONL and run the Python judges: `python -I tools/build_dataset.py --python`. The Delphi judges need
@@ -235,6 +247,8 @@ could not call - measured on the first count of this baseline, which put nine co
 
 ## Training and measuring
 
+Written before any training, and still the method. What it gave with one model is in the next section.
+
 - Train it as a **separable adapter**: load it when working on Delphi; without it, the base model is untouched
   (llama.cpp, for example, takes it with `--lora`).
 - Train gently: a low rank and few epochs.
@@ -256,6 +270,129 @@ could not call - measured on the first count of this baseline, which put nine co
 - **Grow it from real failures, not to a size.** The loop is: a small model answers the questions, a repeatable
   failure becomes a pattern, the pattern becomes examples - with variations (other domains, other units, RTL and
   FireMonkey), so that the adapter learns the rule and not the phrase - and every example passes a real judge.
+
+## What was tried with Qwen3.8-27B (measured)
+
+November 2026: one model, one machine, a few days. Read it as a set of measurements, not as a verdict on fine-tuning.
+
+### Setup
+
+- **Student:** Qwen3.8-27B, dense, with a reasoning level (`low`, `medium` or `xhigh`; `xhigh` when none is given).
+  Served by llama.cpp from a 4-bit GGUF (UD-Q4_K_XL); trained with Unsloth on its 4-bit bitsandbytes weights, on two
+  16 GB GPUs. Every measure below is at **medium** unless it says otherwise.
+- **Questions:** the dataset's 92 (a ceiling: they were trained on) and the 20 held-out ones (never trained on), **one
+  question per request** - the user message alone, as in training; the first code block of the reply is the answer.
+  Sampling fixed: temperature 0.6, top_p 0.95, top_k 20.
+- **Judges:** the dataset's own: the student's unit takes the place of ours, and the judge is built and run. Right =
+  the right behaviour and every declared check; partial = the right behaviour with a declared check missed.
+- **Noise:** with nothing changed, the base model gave 7, 5 and 8 right on the held-out questions in three passes, and
+  the control question (`ho60`) moved between 0 and 2 of 3. One pass of 20 moves by about 3.
+- llama.cpp loads an adapter and takes its strength per request (`"lora": [{"id": 0, "scale": S}]`): the base model
+  and the trained one answer from the same server, with nothing else changed.
+
+The base 27B, before anything: 33 of 92 right (one pass) and 20 of 60 on the held-out questions (three passes). What
+failed is what the dataset teaches: a type without its unit or a unit that does not exist (`E2003` was 82 of the 105
+compile errors in an earlier count), and Free Pascal habits (`operator` for `class operator`,
+`DefaultFormatSettings`).
+
+### The adapters
+
+All with the hyperparameters of Unsloth's Qwen3.8 guide: rank 16, alpha 16, dropout 0, batch 1 with 4 accumulated, 3
+epochs, warmup 0.1, weight decay 0.001, seed 3407; learning rate 1e-4 for the first, 2e-4 for the rest. The data: the
+92 examples. For the runs with reasoning, the explanation an example gives before its code became the reasoning
+(`reasoning_content`, about 400 characters) and the code became the answer.
+
+| Adapter | How it was trained | Trained questions | Held-out | Reasoning per answer |
+|---|---|---|---|---|
+| none | - | 33 of 92 | 7 of 20 (20 of 60) | about 4,200 characters |
+| 1 | Unsloth Studio, answers only (`train_on_completions`), no reasoning, 36 steps | 82 -> 96 of 240 (batches of 12, one batch left out) | 18 -> 18 of 60 | one batch, in three passes out of three, never closed its reasoning |
+| A | Studio, the whole text, with reasoning; 69 steps, final loss 0.38 | 34 | **4** (one with no answer) | 326 |
+| A, asked at `xhigh` | the level its text was rendered at | 40 | - | 318 |
+| A at half strength | scale 0.5 | 38 | 8 | 2,278 |
+| B | `tools/train_unsloth_reasoning.py`: learns only what the model writes (reasoning, answer, end of turn) | 101 -> 110 of 276 (batches of 12; 65 answers unreadable, counted wrong) | 18 -> 16 of 60 | 820 a batch, against 17,400 |
+| low | the same script, the whole text rendered at `low` | 34 (3 with no answer) | 5 | about 580 / 320 |
+
+What that taught us about training a model that reasons:
+
+1. **The level is a system line, and a trainer that does not pass one writes `xhigh`.** Qwen3.8's chat template
+   writes `xhigh` when no level is given ("Reasoning effort is set to xhigh. Please think carefully..."), `low` as a
+   line of its own, and `medium` as no line at all; with thinking off there is no line, and the answer starts with an
+   empty `<think></think>` block. Unsloth Studio (2026.11.4) has no option for the level when it trains: every example
+   of runs 1 and A was rendered at `xhigh`, for a model that is used at `medium`.
+2. **Studio's "train on completions" marker for Qwen3.8 is the EMPTY reasoning block.** Trained that way on answers
+   alone (run 1), the model never learned the `</think>` that closes a reasoning, and when it reasoned it ended turns
+   inside its reasoning. With reasoning in the examples that marker is in none of them, and Studio refuses ("masked
+   every label"). The script here marks the start of what the model writes when it thinks instead.
+3. **The adapter learns how much to reason from the CONTENT of the reasoning, not from the level line.** Trained on
+   explanations of about 400 characters, the model reasoned 300-600 characters at every level - `low`, `medium` and
+   `xhigh` alike: the level stopped controlling it - and lost answers it had right before, among them lessons it had
+   been trained on. The same data rendered at `low` (whose own line says "keep your thinking brief") did not leave
+   `medium` alone. At half strength it kept half its reasoning and part of the gain. The reasoning a model is trained
+   on has to look like its own.
+4. **Twelve questions per request measure format-following too.** An adapter trained on one question per example
+   dropped the headers, answered one question and stopped. Ask one question per request.
+5. **Against Unsloth's guides, what departs is the data, not the recipe:** 92 rows (the guides ask for at least 100,
+   better over 1,000), a reasoning that is a summary and not steps, and no general data mixed in (for Qwen3.8 they ask
+   for at least 75 % of rows with reasoning, to keep its thinking).
+6. **Practical:** the 4-bit 27B on two 16 GB GPUs only loaded with `--offload-layers auto` (both `device_map` choices
+   put part of it on the CPU, which 4-bit loading refuses); the GGUF converter needs the unquantized model's config
+   (`--gguf-base`); the script trains more modules than Studio (the linear-attention projections too: its GGUF is 228
+   MB against 156 MB); and llama.cpp keeps only the last of two `lora` lines in a model's settings, so adapters are
+   measured one at a time.
+
+**Not tried:** training on the model's OWN reasoning (self-distillation: ask the base model, keep the answers the
+judges pass, train on its reasoning and answer; for a lesson it never gets right, give it the dataset's answer as a
+hint and train without the hint). It is the obvious next step for a model that reasons, and it would be a training
+set per model, outside this dataset - no model's output goes into the dataset. Nor more rows per lesson, nor general
+data mixed in.
+
+### Without training: the same model, with other help
+
+Held-out questions, three passes unless it says otherwise:
+
+| What the model had | Right | Per pass | Added to the prompt |
+|---|---|---|---|
+| nothing | 20 of 60 | 7, 5, 8 | - |
+| the `teaches` lines of the examples each question varies (`meta.varies`), as a system message | 24 of 60 | 8, 7, 9 | about 110 tokens |
+| the `teaches` lines of all 92 examples | **28 of 60** | 10, 9, 9 | about 2,760 tokens |
+| six principles condensed from them: look before you write; the third use makes a helper; a rule lives in one place; one writer per format, and its reader is the strict inverse; pin the callers before changing a shared helper; never swallow errors | 22 of 60 | 8, 7, 7 | about 260 tokens |
+| an agent around it (Hermes Agent, with its memory, its skills and this server's tool descriptions), told not to call tools | 23 of 60 | 8, 7, 8 | about 18,600 tokens |
+| the same agent **with this server's tools** (build, test, read the installed sources and help) | **16 of 20** | one pass | - |
+| the same agent with the tools **and** the `teaches` lines of all 92 examples | **16 of 20** | one pass | about 2,760 tokens |
+
+Question by question:
+
+- **Facts** - the unit of a FireMonkey type (`TSpinBox`), a property (`IsChecked`), an enumeration value
+  (`TAlignLayout.Client`, `TBrushKind.Solid`), the unit of an RTL routine: 0 of 3 in every variant without tools,
+  the adapters included. A model does not learn a fact from one example in three epochs, and a lesson about one name
+  does not help with the next one. With the tools, all of them right: the agent builds, reads the compiler's error,
+  looks the name up in the installed sources and fixes it.
+- **Design** - a rule copied in three places, a second writer of a format (`ho45`, `ho46`, `ho48`): 0 of 3 bare; 3 of
+  3 each with the 92 concrete lessons; not with the six principles, though one of them says the same thing; and not
+  with the tools - the agent's own tests passed, and nothing it can run tells it that there are now two writers.
+  With the tools AND the lessons, all three right.
+- **Tools and lessons together** fixed both kinds - the facts and the design - and still totalled 16 of 20, like the
+  tools alone, because three other questions were lost: one hit the 40-minute limit, one was right on disk but the
+  agent's printed reply mangled a string literal (`'**** '` came out split over two lines; the judge reads the reply),
+  and one was simply wrong. One pass of 20 cannot tell those apart from noise. It took 4.3 hours (a median of 6.6
+  minutes a question) and 330 tool calls.
+- **The price of the tools:** that pass took 3.6 hours (a median of 8.5 minutes a question, from 75 seconds to the
+  40-minute limit) against about 20 minutes without them, with 383 tool calls. Finding the unit of `TSpinBox` took 18
+  minutes and 44 calls through the sources, where the installed help answers it in one. One question hit the limit:
+  the agent's client lost its connection to the server in the middle of a test run (cause not measured), and the
+  agent did not recover.
+
+### Where that leaves it
+
+- With this model and 92 examples, a LoRA bought nothing that showed on unseen questions, and the runs that changed
+  the model's reasoning made it worse.
+- Facts were fixed by a model that can check itself (a compiler) and look things up, not by training.
+- The habits of programming well were helped by the concrete lessons as plain text (about 2,800 tokens), not by the
+  abstract version of them, and not by the tools; with the tools AND the lessons, both kinds of question came out
+  right in one pass.
+- What is here for whoever goes on: the examples, the 20 held-out questions and their judges, the baselines above and
+  the training script. The number to beat is the base model's 20 of 60 on the held-out questions in three passes at
+  `medium` - by more than the noise - without losing the control question.
 
 ## What is not in it
 

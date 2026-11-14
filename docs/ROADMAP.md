@@ -86,8 +86,6 @@ Status page as of 2026-11-11 (current release v1.29.1; 44 tools).
 
 For the server, nothing: 1.29.1 closed the last list, each item done, measured, declared or declined. The project is in maintenance: what follows are patches, and a declared item reopens only with a case from the field.
 
-Beside it, for later: a model trained with the [Delphi fine-tuning dataset](../training-dataset-delphi/README.md) and measured before and after, on questions it never trained on (the dataset keeps a held-out set for that) - Delphi that compiles at the first attempt, invented APIs, twins written, and another language that must not drop. The dataset is being built as an extra, example by example; no model has been trained with it yet.
-
 ## Declared limits
 
 - `delphi_designer insert` of a `TTabSheet` neither makes it the `ActivePage` nor gives it an `ImageIndex`, as the IDE's New Page does: at run time the first page shows (measured with `preview`)
