@@ -9,10 +9,11 @@ of them, by fine-tuning it. It is experimental: read the box below before using 
 > Qwen3.8-27B with four LoRA adapters, and **none of them beat the base model** on the held-out questions; the ones
 > that changed how the model reasons made it worse. What did help, on the same questions, was giving the model a way
 > to check itself - this server's compiler, tests and the installed sources: 16 of 20 right in one pass, against 5 to
-> 8 - and the dataset's lessons as plain text in its context: 28 of 60 against 20. Everything that was tried, how,
-> and with what numbers, is in [What was tried with Qwen3.8-27B](#what-was-tried-with-qwen38-27b-measured). It stays
-> here as judged material and a baseline for anyone who knows more about training than we do; we are not working on
-> it now.
+> 8 - and the dataset's lessons as plain text in its context: 28 of 60 against 20. And another base model, untrained,
+> did what no adapter did: Qwen3.8 Flash Next at 3 bits got 36 of 60 on the same questions
+> ([measured](#without-training-another-base-model)). Everything that was tried, how, and with what numbers, is in
+> [What was tried with Qwen3.8-27B](#what-was-tried-with-qwen38-27b-measured). It stays here as judged material and a
+> baseline for anyone who knows more about training than we do; we are not working on it now.
 
 > **Status: v6, 92 examples** (80 Delphi, 12 Python), every one verified by its judge. v1 fixed the format and the
 > method; v2 added FireMonkey hit-testing; v3 and v4 are driven by a measurement: a small model was asked every
@@ -382,6 +383,31 @@ Question by question:
   the agent's client lost its connection to the server in the middle of a test run (cause not measured), and the
   agent did not recover.
 
+### Without training: another base model
+
+The same questions, judges and sampling, in batches of 12 as in
+[the baseline](#the-baseline-three-passes-before-any-training) - nothing else in the prompt, three passes - asked to
+Qwen3.8 Flash Next, the 3-bit model of [What a small model gets wrong](#what-a-small-model-gets-wrong-measured), at
+two quantizations, served by Strata on the same machine as the 27B. The 27B ran at `medium`; Flash Next was asked
+with no level.
+
+| Model, untrained | Held-out (of 60) | Per pass | Trained questions (of 276) | Seconds per batch |
+|---|---|---|---|---|
+| Qwen3.8-27B | 18 | 5, 6, 7 | 101 | 148 |
+| Qwen3.8 Flash Next, IQ3_XXS | 29 | 8, 11, 10 | 138 | - |
+| Qwen3.8 Flash Next, IQ3_S | **36** | 13, 12, 11 | 137 | 76 |
+
+Asked one question per request, the 27B gave 20 of 60; no adapter went above its base.
+
+- Where Flash Next wins, it is mostly facts of Delphi: the unit of `TSpinBox` (`ho01`) and `alClient` (`ho03`), the
+  weekday number (`ho22`), a month added at the end of a month (`ho31`) - 0 of 3 for the 27B, 2 or 3 for IQ3_S - and
+  the control question (`ho60`, operators on a record), 3 of 3 against 0.
+- What no model got bare, at any size or quantization: the three design questions (`ho45`, `ho46`, `ho48`: a rule
+  copied three times, a second writer), the invented unit `FMX.CheckBox` (`ho02`), the rectangle with no border
+  (`ho04`) and the ISO week (`ho30`). The design ones are what the lessons as plain text fixed for the 27B (above).
+- IQ3_S against IQ3_XXS: 5 held-out questions better and none worse; on the trained ones, level (137 against 138: 9
+  better, 9 worse, three FireMonkey hit-test questions among the worse).
+
 ### Where that leaves it
 
 - With this model and 92 examples, a LoRA bought nothing that showed on unseen questions, and the runs that changed
@@ -390,9 +416,14 @@ Question by question:
 - The habits of programming well were helped by the concrete lessons as plain text (about 2,800 tokens), not by the
   abstract version of them, and not by the tools; with the tools AND the lessons, both kinds of question came out
   right in one pass.
+- Another base model did what no adapter did. Untrained and bare, Qwen3.8 Flash Next at IQ3_S got 36 of 60 on the
+  held-out questions against the 27B's 18, in half the time per batch on the same machine: for a local model,
+  choosing the model bought more than training this one. It did not get the design questions either - those still
+  need the lessons in the context - and what it does not know, the tools check.
 - What is here for whoever goes on: the examples, the 20 held-out questions and their judges, the baselines above and
   the training script. The number to beat is the base model's 20 of 60 on the held-out questions in three passes at
-  `medium` - by more than the noise - without losing the control question.
+  `medium` - by more than the noise - without losing the control question; to train Flash Next IQ3_S instead, its
+  36 of 60.
 
 ## What is not in it
 
