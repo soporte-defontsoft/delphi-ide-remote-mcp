@@ -632,4 +632,4 @@ not even in `tools/list` (`delphi_help` says which key opens them). A `403` with
 `SYS-034` on the handshake means your token is right and its workspace is
 closed (one of its settings - its roots, a protection - did not load): the operator's side, not yours.
 
-<!-- contract reviewed: v1.29.1 -->
+<!-- contract reviewed: v1.29.2 -->

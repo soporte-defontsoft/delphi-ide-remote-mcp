@@ -8,6 +8,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.29.2] - 2026-11-14
+
+A patch from the field: what agents hit doing real work, and what a model checking the candidate
+found. A compiler message that dcc cut short - a unit with a long path - is no longer lost: it
+comes first in `errors`, as dcc printed it, and `cutMessagesNote` (`BUILD-074`) says so. A mode
+that is a boolean is named the way it is asked (`create=true`, `restore=true`). A name the compiler
+does not know leads to its unit: `delphi_docs` says a page's title is the qualified name, a build
+that fails with `E2003` names the search that gives it (`undeclaredNote`, `BUILD-075`), and
+`BUILD-042` says first that a unit with no candidate folder may not exist. And `delphi_hover`'s
+note on an empty answer says what its description says.
+
 ### Changed
 
 - `delphi_docs` says that a page's title is its qualified name, so a search names the unit of a
