@@ -11,7 +11,9 @@ of them, by fine-tuning it. It is experimental: read the box below before using 
 > to check itself - this server's compiler, tests and the installed sources: 16 of 20 right in one pass, against 5 to
 > 8 - and the dataset's lessons as plain text in its context: 28 of 60 against 20. And another base model, untrained,
 > did what no adapter did: Qwen3.8 Flash Next at 3 bits got 36 of 60 on the same questions
-> ([measured](#without-training-another-base-model)). Everything that was tried, how, and with what numbers, is in
+> ([measured](#without-training-another-base-model)); a Flash Next retrained by someone else, ahead of it on its own
+> benchmarks, got 12 ([measured](#a-flash-next-retrained-by-someone-else)). Everything that was tried, how, and with
+> what numbers, is in
 > [What was tried with Qwen3.8-27B](#what-was-tried-with-qwen38-27b-measured). It stays here as judged material and a
 > baseline for anyone who knows more about training than we do; on our side it is closed, and we will not go on with it.
 
@@ -388,7 +390,7 @@ Question by question:
 The same questions, judges and sampling, in batches of 12 as in
 [the baseline](#the-baseline-three-passes-before-any-training) - nothing else in the prompt, three passes - asked to
 Qwen3.8 Flash Next, the 3-bit model of [What a small model gets wrong](#what-a-small-model-gets-wrong-measured), at
-two quantizations, served by Strata on the same machine as the 27B. The 27B ran at `medium`; Flash Next was asked
+two quantizations, served by Strata on the same machine as the 27B ([the setup](LOCAL-MODEL.md)). The 27B ran at `medium`; Flash Next was asked
 with no level.
 
 | Model, untrained | Held-out (of 60) | Per pass | Trained questions (of 276) | Seconds per batch |
@@ -408,6 +410,31 @@ Asked one question per request, the 27B gave 20 of 60; no adapter went above its
 - IQ3_S against IQ3_XXS: 5 held-out questions better and none worse; on the trained ones, level (137 against 138: 9
   better, 9 worse, three FireMonkey hit-test questions among the worse).
 
+### A Flash Next retrained by someone else
+
+Edge0-145B ([Edge0 on Hugging Face](https://huggingface.co/Edge0), published on 2026-11-14) is Qwen3.8 Flash Next
+rebuilt as a latent mixture of experts and retrained. Its card puts it ahead of Flash Next on DeepSWE (64.6 against
+58.7) and Terminal-Bench (86.5 against 83.3). Measured on 2026-11-15: its NVFP4 build (D/U projections at Q4), served
+by Strata with the same 4,096-token reasoning budget as Flash Next IQ3_S, asked the same held-out questions with the
+same judges, sampling and batches of 12, three passes.
+
+| Model | Held-out (of 60) | Per pass | Seconds per held-out batch |
+|---|---|---|---|
+| Qwen3.8 Flash Next, IQ3_S | **36** | 13, 12, 11 | 93 |
+| Edge0-145B, NVFP4 | 12 | 3, 5, 4 | 158 |
+
+- Of the 20 questions, none better and 10 worse - the control question (`ho60`) among them, 3 of 3 against 0. Of the
+  10 the same, 3 both get right every time (`ho21`, `ho40`, `ho42`: a string, programming well, Python) and 7 neither
+  gets right.
+- 33 of its 60 answers do not compile (13 of Flash Next's), and what fails is knowing Delphi, not the format:
+  `uses System;`, a `case` on a string, operators on a record in a syntax Delphi does not have, `Format`, `IncMonth`
+  or `TInterlocked` without their unit, FireMonkey names that do not exist (`TAlignHorz`) and `Caption` on a
+  FireMonkey control.
+- Without a cap on its reasoning, it thought about four times as much: 19,875 tokens of output and 415 seconds for
+  the first batch, against Flash Next's 5,533 to 5,979 tokens and 95 to 101 seconds. Capped at 4,096, it thought
+  about as much as Flash Next. Two models are compared with the same budget.
+- Only this build was measured; its Q3_K build was not.
+
 ### Where that leaves it
 
 - With this model and 92 examples, a LoRA bought nothing that showed on unseen questions, and the runs that changed
@@ -424,6 +451,10 @@ Asked one question per request, the 27B gave 20 of 60; no adapter went above its
   the training script. The number to beat is the base model's 20 of 60 on the held-out questions in three passes at
   `medium` - by more than the noise - without losing the control question; to train Flash Next IQ3_S instead, its
   36 of 60.
+- A model card's benchmarks did not predict Delphi: a retrained Flash Next, ahead of it on its own card, got a third
+  of its score on these questions. Our adapters aimed at Delphi and did not improve it; that retraining aimed
+  elsewhere and lost it. A candidate model, trained here or anywhere else, is measured on the held-out questions
+  before anything changes.
 
 ## What is not in it
 
