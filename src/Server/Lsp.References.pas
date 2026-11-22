@@ -208,6 +208,7 @@ uses
   Lsp.ConfigFabricator, // MotorPuedeEnsenar: EL juez de "fuera" de lo que dice el motor
   Lsp.Settings,
   Lsp.Rutas,            // EsRutaAbsoluta: LA regla de ruta completa
+  Lsp.Mascara,          // MaskDriveText: las carpetas de la nota, con su unidad virtual
   Lsp.Herencia,         // LA cadena de ancestros por el motor (TCadenaPorElMotor)
   Lsp.Listas,
   Lsp.Casa,
@@ -441,10 +442,20 @@ begin
     Exit;
   AObj.AddPair('hidden', TJSONNumber.Create(Total));
   Motivo(Artifacts, 'hiddenBuildArtifacts', MsgText(SN_HIDDEN_ARTIFACTS_FMT));
-  // ...y cuales: la carpeta que hay que pasar como root, dicha (A10)
+  // ...y cuales: la carpeta que hay que pasar como root, dicha (A10). Con su
+  // unidad virtual AQUI, donde se compone: delphi_search es de TOOLS_ECO y el
+  // filtro de salida no la toca, y salia la letra REAL del disco (D6 de la
+  // 1.29.3, 16-nov). delphi_list pasa ademas por el filtro: enmascarar dos
+  // veces no cambia nada (srvd: lleva una letra delante de la d y el barrido
+  // no la toma por unidad)
   if (Artifacts > 0) and (Length(CarpetasDeArtefactos) > 0) then
+  begin
+    var Vistas: TArray<string> := nil;
+    for var C in CarpetasDeArtefactos do
+      Vistas := Vistas + [MaskDriveText('', C)];
     Partes[High(Partes)] := Partes[High(Partes)] +
-      MsgFmt(SF_HIDDEN_ARTIFACTS_EN_FMT, [string.Join(', ', CarpetasDeArtefactos)]);
+      MsgFmt(SF_HIDDEN_ARTIFACTS_EN_FMT, [string.Join(', ', Vistas)]);
+  end;
   Motivo(Temp, 'hiddenServerTemp', MsgText(SN_HIDDEN_TEMP_FMT));
   Motivo(Git, 'hiddenGitInternals', MsgText(SN_HIDDEN_GIT_FMT));
   Motivo(Trash, 'hiddenTrash', MsgText(SN_HIDDEN_TRASH_FMT));

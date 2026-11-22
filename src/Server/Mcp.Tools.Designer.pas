@@ -526,13 +526,43 @@ begin
   end;
 end;
 
+{ El componente ANombre del form APath (ADoc ya leido) para los comandos que
+  leen UNO: '' y AObj; si no, lo que se contesta en su lugar - el form vacio,
+  el que llega del ancestro sin bloque aqui (DSGN-172) o LA negativa de que no
+  esta (DSGN-078). Era de get, y tree component= (B de la 1.29.3) iba a ser su
+  segunda copia. }
+function ComponenteQueSeLee(ADoc: TStyleDoc; const APath, ANombre: string;
+  out AObj: TStyleObj): string;
+begin
+  AObj := nil;
+  if ADoc.Root = nil then
+    Exit(MsgText(SR_DESIGNER_EMPTY));
+  // en un form heredado, cuales de sus inherited son frames (A2 de la 1.29):
+  // Frame11.Edit1 decia DSGN-078 con su bloque ahi
+  MarcaFramesSegunElIde(ADoc, APath);
+  AObj := ADoc.ObjetoDeNombre(ANombre.Trim);
+  if AObj <> nil then
+    Exit('');
+  // uno que llega del ancestro sin bloque aqui: lo que es, como lo carga el
+  // IDE (decia que no estaba: A16-G1 de la 1.23)
+  Result := HeredadoParaGet(ADoc, APath, ANombre);
+  if Result = '' then
+    // LA negativa de los comandos que escriben, con los nombres del form
+    // (ComponenteQueNoEsta): get decia otra, DSGN-017 (A16 de la 1.23)
+    Result := ComponenteQueNoEsta(ADoc, ANombre, TPath.GetFileName(APath));
+end;
+
 { AMaxDepth: los niveles que se ensenan (1 = solo el form; 0 = todos); un
-  objeto del ultimo nivel dice cuantos hijos tiene en vez de ensenarlos }
-function TreeOf(const APath: string; AMaxDepth: Integer): string;
+  objeto del ultimo nivel dice cuantos hijos tiene en vez de ensenarlos.
+  AComponente: el subarbol de ese componente, con el en la raiz y los niveles
+  contados desde el (B de la 1.29.3: Hermes lo pidio asi cuatro veces el 17 y
+  el 18-nov, D29, y DSGN-047 lo mandaba a get) }
+function TreeOf(const APath: string; AMaxDepth: Integer; const AComponente: string = ''): string;
 var
   Doc: TStyleDoc;
   Ret: TJSONObject;
   Cortados: Integer;
+  Raiz: TStyleObj;
 
   function NodeJson(O: TStyleObj; ANivel: Integer): TJSONObject;
   var
@@ -569,8 +599,15 @@ begin
     try
       Ret.AddPair('file', APath);
       Cortados := 0;
-      if Doc.Root <> nil then
-        Ret.AddPair('root', NodeJson(Doc.Root, 1))
+      Raiz := Doc.Root;
+      if AComponente.Trim <> '' then
+      begin
+        Result := ComponenteQueSeLee(Doc, APath, AComponente, Raiz);
+        if Result <> '' then
+          Exit;
+      end;
+      if Raiz <> nil then
+        Ret.AddPair('root', NodeJson(Raiz, 1))
       else
         Ret.AddPair('root', TJSONNull.Create);
       Ret.AddPair('note', MsgText(SN_DESIGNER_TREE_NOTE));
@@ -598,23 +635,10 @@ begin
   if Result <> '' then
     Exit;
   try
-    if Doc.Root = nil then
-      Exit(MsgText(SR_DESIGNER_EMPTY));
-    // en un form heredado, cuales de sus inherited son frames (A2 de la 1.29):
-    // Frame11.Edit1 decia DSGN-078 con su bloque ahi
-    MarcaFramesSegunElIde(Doc, APath);
-    O := Doc.ObjetoDeNombre(AName.Trim);
-    if O = nil then
-    begin
-      // uno que llega del ancestro sin bloque aqui: lo que es, como lo carga
-      // el IDE (decia que no estaba: A16-G1 de la 1.23)
-      Result := HeredadoParaGet(Doc, APath, AName);
-      if Result <> '' then
-        Exit;
-      // LA negativa de los comandos que escriben, con los nombres del form
-      // (ComponenteQueNoEsta): get decia otra, DSGN-017 (A16 de la 1.23)
-      Exit(ComponenteQueNoEsta(Doc, AName, TPath.GetFileName(APath)));
-    end;
+    // EL buscador de los comandos que leen uno (ComponenteQueSeLee)
+    Result := ComponenteQueSeLee(Doc, APath, AName, O);
+    if Result <> '' then
+      Exit;
     // por su ruta si es de un frame en linea, la que se le dio (decia el Name
     // a secas: rondas de Opus de la 1.22.2)
     Result := MsgFmt(SF_DSGN_BLOQUE_LINEAS_FMT,
@@ -914,6 +938,51 @@ end;
   dicen); FMX, nil: su Align no nombra avisos y ANoRoom puede ser nil. AFicheros,
   donde se escribe cada caja. ACajaDe, el indice de AMedido (CajasPorClave): lo hace
   quien llama, que con el mismo nombra el padre de cada caja que lista. }
+{ ACaja o uno de los suyos hacia arriba no esta visible; AOculto, el primero (ella o
+  el padre mas cercano). Lo de dentro de un oculto no se juzga en layout a ninguna
+  profundidad, como desde el texto (ListaOculto), y FMX no lo dibuja en diseno. Era
+  EnUnOculto, dentro de JuzgaCajas; lo pregunta tambien preview (D7 de la 1.29.3) }
+function OcultoEn(const ACajas: TArray<TCajaDeRender>; ACajaDe: TDictionary<string, TCajaDeRender>;
+  const ACaja: TCajaDeRender; out AOculto: TCajaDeRender): Boolean;
+var
+  P: TCajaDeRender;
+  Clave: string;
+begin
+  AOculto := ACaja;
+  Result := not ACaja.Visible;
+  Clave := ACaja.Padre;
+  // tantos saltos como cajas: un padre que se nombrase a si mismo no da vueltas
+  for var Salto := 0 to High(ACajas) do
+  begin
+    if Result or (Clave = '') or not ACajaDe.TryGetValue(ClaveDeIdentificador(Clave), P) then
+      Exit;
+    AOculto := P;
+    Result := not P.Visible;
+    Clave := P.Padre;
+  end;
+end;
+
+{ La caja C (con su align AAlC) puede compartir area con un hermano: no si su padre
+  coloca a sus hijos (AColoca: paginas, celdas, flujo), no a lado cero, no alCustom,
+  no un adorno. El lado de C del solape de JuzgaCajas; lo pregunta tambien preview
+  (D7 de la 1.29.3) }
+function PuedeSolaparse(ATabla: TMetaTable; AFmx: Boolean; const C: TCajaDeRender; const AAlC: string;
+  AColoca: Boolean): Boolean;
+begin
+  Result := not (AColoca or (C.W = 0) or (C.H = 0) or SameText(AAlC, 'alCustom') or
+    EsDeFamilia(ATabla, C.Clase, fcAdorno, AFmx));
+end;
+
+{ O (con su align AAlO), un hermano visible de C, comparte area con ella: el lado del
+  otro del solape de JuzgaCajas, que lo mira en los que van DESPUES de C (en FMX, los
+  que se pintan encima); lo pregunta tambien preview (D7 de la 1.29.3) }
+function LoPisa(ATabla: TMetaTable; AFmx: Boolean; const C, O: TCajaDeRender; const AAlO: string): Boolean;
+begin
+  Result := O.Visible and MismoIdentificador(O.Padre, C.Padre) and (O.W > 0) and (O.H > 0) and
+    not SameText(AAlO, 'alCustom') and not EsDeFamilia(ATabla, O.Clase, fcAdorno, AFmx) and
+    (C.X < O.X + O.W) and (O.X < C.X + C.W) and (C.Y < O.Y + O.H) and (O.Y < C.Y + C.H);
+end;
+
 procedure JuzgaCajas(const AMedido: TRespuestaRender; ACajaDe: TDictionary<string, TCajaDeRender>;
   ATabla: TMetaTable; AFmx: Boolean; const ARaiz: string; AFicheros: TFicherosDelForm;
   ATexto: TDictionary<string, TJSONObject>; AZero, AOutside, AOverlap, ANoRoom: TJSONArray;
@@ -940,24 +1009,13 @@ procedure JuzgaCajas(const AMedido: TRespuestaRender; ACajaDe: TDictionary<strin
     Result := DondeDeCaja(Linea, Fichero);
   end;
 
-  // oculto el o alguno de los suyos hacia arriba: lo de dentro de un oculto no se juzga
-  // a ninguna profundidad, como desde el texto (ListaOculto). Se miraba solo el padre:
+  // oculto el o alguno de los suyos hacia arriba (OcultoEn): se miraba solo el padre, y
   // un nieto de un panel oculto se juzgaba con el renderizador y no sin el (C1-11)
   function EnUnOculto(const ACaja: TCajaDeRender): Boolean;
   var
-    P: TCajaDeRender;
-    Clave: string;
+    Oculto: TCajaDeRender;
   begin
-    Result := not ACaja.Visible;
-    Clave := ACaja.Padre;
-    // tantos saltos como cajas: un padre que se nombrase a si mismo no da vueltas
-    for var Salto := 0 to High(AMedido.Cajas) do
-    begin
-      if Result or (Clave = '') or not ACajaDe.TryGetValue(ClaveDeIdentificador(Clave), P) then
-        Exit;
-      Result := not P.Visible;
-      Clave := P.Padre;
-    end;
+    Result := OcultoEn(AMedido.Cajas, ACajaDe, ACaja, Oculto);
   end;
 
 begin
@@ -1012,16 +1070,13 @@ begin
       end;
     end;
     // dos hermanos que comparten area, salvo adorno, alCustom y lo que coloca su padre
-    if Coloca or (C.W = 0) or (C.H = 0) or SameText(Al, 'alCustom') or
-       EsDeFamilia(ATabla, C.Clase, fcAdorno, AFmx) then
+    if not PuedeSolaparse(ATabla, AFmx, C, Al, Coloca) then
       Continue;
     for var J := I + 1 to High(AMedido.Cajas) do
     begin
       var O := AMedido.Cajas[J];
       var AlO := AlignDe(O);
-      if O.Visible and MismoIdentificador(O.Padre, C.Padre) and (O.W > 0) and (O.H > 0) and
-         not SameText(AlO, 'alCustom') and not EsDeFamilia(ATabla, O.Clase, fcAdorno, AFmx) and
-         (C.X < O.X + O.W) and (O.X < C.X + C.W) and (C.Y < O.Y + O.H) and (O.Y < C.Y + C.H) then
+      if LoPisa(ATabla, AFmx, C, O, AlO) then
       begin
         if SameText(Al, 'alClient') and SameText(AlO, 'alClient') then
           AOverlap.Add(MsgFmt(SF_DSGN_AMBOS_ALCLIENT_FMT, [C.Ruta, Donde(C), O.Ruta, Donde(O), Padre.Ruta]))
@@ -1872,9 +1927,79 @@ end;
   el RECT= del componente, leido y escrito por las puertas de su casa de
   entregables); con out= se lleva despues a su sitio: el
   renderizador nunca escribe en la jaula por su cuenta. }
+{ La nota de preview component=X de un form FMX (D7 de la 1.29.3): el recorte NO es X
+  cuando X, o uno de los suyos hacia arriba, no esta visible - FMX no lo dibuja en
+  diseno, y el IDE tampoco (TControl.ShowInDesigner, FMX.Controls.pas:2127) - o cuando
+  un hermano que va DESPUES en el fichero comparte su area y se pinta encima. Medido
+  con un agente el 16-nov: el recorte de un panel con Visible = False era la rejilla
+  de debajo, y lo dio por bueno. Por las cajas del MISMO render (R.Cajas) y por los
+  jueces de layout (OcultoEn, PuedeSolaparse, LoPisa); las lineas, por LineaDeCaja.
+  '' si no hay nada que decir. }
+function NotaDelComponente(const R: TRespuestaRender; const ARuta, AComponente: string): string;
+var
+  CajaDe: TDictionary<string, TCajaDeRender>;
+  C, Oculto, Padre: TCajaDeRender;
+  DocN: TStyleDoc;
+  Ficheros: TFicherosDelForm;
+  Falta: TFaltaTabla;
+  PX, PY, PW, PH: Integer;
+  Encima, Primero: string;
+  Despues: Boolean;
+
+  function Donde(const ACaja: TCajaDeRender): string;
+  var
+    Fichero: string;
+  begin
+    Result := DondeDeCaja(LineaDeCaja(Ficheros, ACaja, Fichero), Fichero);
+  end;
+
+begin
+  Result := '';
+  if Length(R.Cajas) = 0 then
+    Exit;
+  DocN := nil;
+  try
+    if TStyleDoc.Lee(ARuta, DocN) <> '' then
+      DocN := nil;
+  except
+    DocN := nil; // sin documento: sin linea
+  end;
+  Ficheros := TFicherosDelForm.Create(DocN, ARuta);
+  CajaDe := CajasPorClave(R.Cajas);
+  try
+    if not CajaDe.TryGetValue(ClaveDeIdentificador(AComponente), C) then
+      Exit;
+    if OcultoEn(R.Cajas, CajaDe, C, Oculto) then
+      Exit(MsgFmt(SN_DSGN_PREVIEW_OCULTO_FMT, [C.Ruta, Oculto.Ruta, Donde(Oculto), Oculto.Ruta]));
+    var Tabla := MetaTable(True, Falta, 0);
+    PadreMedido(CajaDe, R, R.RaizNombre, C, Padre, PX, PY, PW, PH);
+    if not PuedeSolaparse(Tabla, True, C, DefaultAlign(Tabla, C.Clase),
+       (Padre.Clase <> '') and ColocaASusHijos(Tabla, Padre.Clase, True)) then
+      Exit;
+    Encima := '';
+    Primero := '';
+    Despues := False;
+    for var O in R.Cajas do
+      if not Despues then
+        Despues := MismoIdentificador(O.Ruta, C.Ruta)
+      else if LoPisa(Tabla, True, C, O, DefaultAlign(Tabla, O.Clase)) then
+      begin
+        Encima := Encima + IfThen(Encima <> '', ', ') + O.Ruta + ' (' + Donde(O) + ')';
+        if Primero = '' then
+          Primero := O.Ruta;
+      end;
+    if Encima <> '' then
+      Result := MsgFmt(SN_DSGN_PREVIEW_TAPADO_FMT, [C.Ruta, Encima, Primero]);
+  finally
+    CajaDe.Free;
+    Ficheros.Free;
+    DocN.Free;
+  end;
+end;
+
 function PreviewDeForm(const Params: TDelphiDesignerParams): string;
 var
-  Ruta, Fw, Estilo, Propia, Temporal, Fallo: string;
+  Ruta, Fw, Estilo, Propia, Temporal, Fallo, NotaComp: string;
   Peticion: TPeticionRender;
   R: TRespuestaRender;
   Return, Raiz, Ms: TJSONObject;
@@ -2002,6 +2127,10 @@ begin
   Peticion.Componente := Params.Component.Trim;
   Peticion.Estilo := Estilo;
   Peticion.NoVisuales := Params.NonVisual;
+  // las cajas del MISMO render, para decir si el recorte es de verdad el componente
+  // (NotaDelComponente, D7 de la 1.29.3); solo FMX: el disenador de la VCL dibuja los
+  // ocultos, y eso no esta medido aqui
+  Peticion.Cajas := (Fw = MARCO_FMX) and (Peticion.Componente <> '');
   Peticion.Estados := Estados;
   Peticion.Escala := Params.Scale;
   R := CorreRender(Peticion);
@@ -2016,6 +2145,7 @@ begin
   OX := 0;
   OY := 0;
   Recortada := False;
+  NotaComp := '';
   AnchoOrig := R.Ancho;
   AltoOrig := R.Alto;
   if Peticion.Componente <> '' then
@@ -2053,6 +2183,7 @@ begin
     OX := EnUnidadesDelFichero(R, RX);
     OY := EnUnidadesDelFichero(R, RY);
     Recortada := True;
+    NotaComp := NotaDelComponente(R, Ruta, Peticion.Componente);
   end;
 
   if Temporal <> Propia then
@@ -2080,6 +2211,9 @@ begin
     Raiz.AddPair('class', R.RaizClase);
     Raiz.AddPair('kind', R.RaizTipo);
     Return.AddPair('root', Raiz);
+    // el recorte no es el componente: oculto, o algo que va despues lo tapa (D7)
+    if NotaComp <> '' then
+      Return.AddPair('componentNote', NotaComp);
     Return.AddPair('fidelity', R.Fidelidad);
     if EsFidelidadDeImpresion(R.Fidelidad) then
       Return.AddPair('fidelityNote', MsgText(SN_DESIGNER_FIDELIDAD_PRINT));
@@ -2312,7 +2446,7 @@ begin
       // ensenaba con ese nombre (Hermes, 28-sep-2026, F2)
       'info', 'classname framework filter',
       'prop', 'classname framework prop',
-      'tree', 'path maxdepth', 'lint', 'path styles', 'layout', 'path',
+      'tree', 'path maxdepth component', 'lint', 'path styles', 'layout', 'path',
       'get', 'path component',
       'check-binding', 'path unit',
       'preview', 'path component framework state style nonvisual inline maxwidth scale out',
@@ -2362,7 +2496,7 @@ begin
       Result := LayoutOf(Params.Path, Fuera);
     end
     else if Cmd = 'tree' then
-      Result := TreeOf(Params.Path, Params.MaxDepth) // (un negativo lo niega la capa de parametros, SYS-016)
+      Result := TreeOf(Params.Path, Params.MaxDepth, Params.Component) // (un negativo lo niega la capa de parametros, SYS-016)
     else if Cmd = 'lint' then
     begin
       // un form que el IDE no carga, antes que nada - tras la puerta de leer:

@@ -728,11 +728,12 @@ var
   MotivoDefecto: string; // sin el estilo por defecto, por que (STYLE-017)
   Seen: TDictionary<string, Integer>;
   Ret, Issue: TJSONObject;
-  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas, NoCargan, ConStyleBookF, SinAlfa: TJSONArray;
+  Dups, Missing, Tokens, Rc, SinNombre, ComoEstilo, PorFmx, Formas, NoCargan, ConStyleBookF, SinAlfa,
+    Pisados: TJSONArray;
   Colores: TArray<TColorSinAlfa>;
   Ignorado: TArray<TIgnoradoPorFmx>;
   NoCarga: string;
-  CarganTodos, ConAlfaTodos: Boolean;
+  CarganTodos, ConAlfaTodos, SinPisados: Boolean;
   NIgnorados, NFormas: Integer;
   M: TMatch;
   Lines: TArray<string>;
@@ -792,6 +793,7 @@ begin
   NoCargan := TJSONArray.Create;
   Formas := TJSONArray.Create;
   SinAlfa := TJSONArray.Create;
+  Pisados := TJSONArray.Create;
   NIgnorados := 0;
   NFormas := 0;
   try
@@ -1121,8 +1123,15 @@ begin
     // ok:true (Hermes, completo de la 1.20.1)
     // Y lo que FMX ni siquiera puede cargar (su lector lanza): lint decia
     // clean y solo build lo negaba (Hermes, test completo de la 1.21.0)
+    // ...y en la MISMA pasada, los estilos que el indice de FMX no devuelve por
+    // su nombre: los pisa un objeto interno o un rol con el mismo StyleName, y
+    // el control sale vacio sin error. Lo dice FMX (FindStyleResource en el
+    // conversor), no una lista nuestra: tres casos el 17-nov con el lint en
+    // clean (opencode, D9 de la 1.29.3)
     for F in Files do
-      if IgnoradoPorFmx(F, Ignorado, NoCarga) and (NoCarga <> '') then
+    begin
+      var PisadosF: TArray<TPisadoPorFmx>;
+      if IgnoradoPorFmx(F, Ignorado, NoCarga, PisadosF) and (NoCarga <> '') then
       begin
         Issue := TJSONObject.Create;
         Issue.AddPair('file', TPath.GetFileName(F));
@@ -1140,6 +1149,16 @@ begin
         PorFmx.AddElement(Issue);
         Inc(NIgnorados, Length(Ignorado));
       end;
+      for var Pisado in PisadosF do
+      begin
+        Issue := TJSONObject.Create;
+        Issue.AddPair('file', TPath.GetFileName(F));
+        Issue.AddPair('style', Pisado.Nombre);
+        Issue.AddPair('returnedInstead', Pisado.Ruta);
+        Issue.AddPair('itsClass', Pisado.Clase);
+        Pisados.AddElement(Issue);
+      end;
+    end;
     // un color de menos de 8 cifras: FMX lo carga sin error, casi
     // transparente, y ni su lector ni lo de arriba lo veian; como lo carga, su
     // escritor (Lsp.Styles.ColoresSinAlfa, V152 de la 1.23.1)
@@ -1196,6 +1215,15 @@ begin
       Ret.AddPair('colorsWithoutAlpha', SinAlfa);
       Ret.AddPair('colorsWithoutAlphaNote', MsgFmt(SN_STYLES_COLORES_SIN_ALFA_FMT, [SinAlfa.Count]));
     end;
+    // sale solo si lo hay, como colorsWithoutAlpha (D9)
+    SinPisados := Pisados.Count = 0;
+    if SinPisados then
+      Pisados.Free
+    else
+    begin
+      Ret.AddPair('shadowedByInnerName', Pisados);
+      Ret.AddPair('shadowedByInnerNameNote', MsgFmt(SN_STYLES_PISADOS_FMT, [Pisados.Count]));
+    end;
     // los que no tienen la forma del IDE: salen solo si los hay
     if NFormas > 0 then
       Ret.AddPair('notInTheIdeShape', Formas)
@@ -1221,7 +1249,7 @@ begin
     // clean = sin hallazgos; ok es "la llamada fue bien" (novena revision)
     Ret.AddPair('clean', TJSONBool.Create((Dups.Count = 0) and (Missing.Count = 0) and
       (Tokens.Count = 0) and (Rc.Count = 0) and (SinNombre.Count = 0) and (PorFmx.Count = 0) and
-      CarganTodos and ConAlfaTodos and (NFormas = 0)));
+      CarganTodos and ConAlfaTodos and SinPisados and (NFormas = 0)));
     if Defaults.Count = 0 then
       Ret.AddPair('note', MsgFmt(SN_STYLES_NO_DEFAULTS_FMT, [MotivoDefecto]))
     else

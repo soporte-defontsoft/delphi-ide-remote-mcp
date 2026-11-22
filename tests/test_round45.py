@@ -139,6 +139,9 @@ PROBAR = [
     ('delphi_package', 'dir', {'dir': FUERA}),
     ('delphi_package', 'outfile', {'dir': JAIL, 'outfile': AJENO_ZIP}),
     ('delphi_build', 'project', {'project': AJENO_DPROJ}),
+    # 1.29.3 (B): el FICHERO del log entero, con un proyecto de DENTRO: la
+    # negativa tiene que ser la de out, no la de project
+    ('delphi_build', 'out', {'project': PROPIO_DPROJ, 'out': AJENO_TXT}),
     ('delphi_config', 'project', {'project': AJENO_DPROJ, 'command': 'view'}),
     # 1.21.4: una LISTA de carpetas; el suelo mira cada una, como paths de delphi_git
     ('delphi_config', 'paths', {'project': PROPIO_DPROJ, 'command': 'add-searchpath', 'paths': [FUERA]}),

@@ -11,11 +11,14 @@ fills its window early.
 
 ## The budget
 
-`tests/test_docs_tokens.py` (T1) keeps `tools/list` under **110,000
+`tests/test_docs_tokens.py` (T1) keeps `tools/list` under **115,000
 characters** (measured without a vault - the five `vault_*` tools come on top -
 and with every destination declared, so `delphi_adb`, `delphi_desktop` and
-`delphi_db` are in it). It was 105,000 until 1.29, which raised it for the new
-database and API tools.
+`delphi_db` are in it). It was 105,000 until 1.29, which raised it to 110,000
+for the new database and API tools, and 1.29.3 raised it again for three small
+capabilities agents kept asking for: the details of the descriptions are what a
+small model needs to get a call right the first time, so a capability that does
+not fit raises the budget rather than cutting them.
 Going over it is a decision, not an accident: the battery fails and names the
 size. The same battery watches the answers too (one audit line in a clean edit,
 the backup path once a day...), because what accumulates round after round is

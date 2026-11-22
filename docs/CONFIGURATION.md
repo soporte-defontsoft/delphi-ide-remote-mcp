@@ -461,7 +461,7 @@ Every key is documented in depth in [`settings.example.ini`](../settings.example
   the same list.
   `delphi_desktop` runs the server's own desktop node on the target, and seeing and
   acting on a desktop is a permission of its own, by the host of the profile:
-  `DesktopAllowedHosts` sees and acts (`tap`, `double-tap`, `drag`, `type`, `key`, `overview`), `DesktopViewHosts`
+  `DesktopAllowedHosts` sees and acts (`tap`, `double-tap`, `drag`, `scroll`, `hover`, `type`, `key`, `overview`), `DesktopViewHosts`
   only sees (`screenshot`, `status`), and `RemoteHosts` is still needed too (`RUN-020` when
   it is missing). Empty, no desktop - and `tools/list` does not announce `delphi_desktop`
   to that workspace (1.28; `delphi_help` says it is missing and which key opens it); `*` is any host. `McpDesktopNode` or `all` in

@@ -703,6 +703,15 @@ begin
     (ACodigo <= AUltimoCodigo);
 end;
 
+{ Si esta lo que se le pidio al ayudante, salvo la escritura (Escribe, que mira lo
+  escrito): las cajas solas (layout, sin salida) o la imagen. Con cajas Y salida
+  (preview component=, D7 de la 1.29.3) hace falta la imagen. Era la misma
+  condicion escrita dos veces en CorreRender, con "las cajas bastan" siempre }
+function HayLoQueSePidio(const APeticion: TPeticionRender): Boolean;
+begin
+  Result := (APeticion.Cajas and (APeticion.Salida = '')) or TFile.Exists(APeticion.Salida);
+end;
+
 function ComponeOrdenDeRender(const AExe: string; const APeticion: TPeticionRender;
   out AOrden: string): string;
 
@@ -736,10 +745,12 @@ begin
   // el juez no pinta: sin --out (3.11)
   else if APeticion.Escribe then
     AOrden := AOrden + ' ' + FR_ARG_WRITEBACK + ' ' + FR_ARG_SI
-  else if APeticion.Cajas then
+  else if APeticion.Cajas and (APeticion.Salida = '') then
     AOrden := AOrden + ' ' + FR_ARG_BOXES + ' ' + FR_ARG_NONVISUAL + ' ' + FR_ARG_NO
   else
-    AOrden := AOrden + Arg(FR_ARG_OUT, APeticion.Salida) +
+    // ...y con una salida, las cajas del MISMO render si se piden (preview component=,
+    // D7 de la 1.29.3: el ayudante desde el protocolo 16)
+    AOrden := AOrden + (if APeticion.Cajas then ' ' + FR_ARG_BOXES else '') + Arg(FR_ARG_OUT, APeticion.Salida) +
       ' ' + FR_ARG_NONVISUAL + ' ' + (if APeticion.NoVisuales then FR_ARG_SI else FR_ARG_NO);
   // el vigia y la fase de los paquetes, del plazo de ESTA peticion
   var Vigia := VigiaDelAyudante(PlazoDeRender(APeticion));
@@ -2321,8 +2332,7 @@ var
   function Salio(const AR: TRespuestaRender): Boolean;
   begin
     Result := (Codigo = FR_RC_OK) and (AR.Error = '') and not AR.NoCarga and
-      (if APeticion.Escribe then Length(AR.Escrito) > 0
-       else APeticion.Cajas or TFile.Exists(APeticion.Salida));
+      (if APeticion.Escribe then Length(AR.Escrito) > 0 else HayLoQueSePidio(APeticion));
   end;
 
   // el fallo del ayudante con su por que: no dibujo el form o, con --convert,
@@ -2414,8 +2424,7 @@ begin
   Result.Codigo := Codigo;
   Result.MsTotal := Reloj.ElapsedMilliseconds;
   if (Codigo = FR_RC_OK) and (Result.Error = '') and
-     (if APeticion.Escribe then Length(Result.Escrito) > 0
-      else APeticion.Cajas or TFile.Exists(APeticion.Salida)) then
+     (if APeticion.Escribe then Length(Result.Escrito) > 0 else HayLoQueSePidio(APeticion)) then
     Exit;
   // (no por Salio: un NOTLOADED con codigo bueno y sin imagen sale por su rama)
   // el LECTOR no cargo el form (NOTLOADED=): es el fichero, y se dice con lo

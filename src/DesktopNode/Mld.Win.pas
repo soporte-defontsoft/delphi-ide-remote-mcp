@@ -43,8 +43,9 @@ type
     { El pixel de la captura en el 0..65535 de SendInput, y si cae en ella
       (si no, el motivo en Error): lo miran Pulsar y Arrastrar. }
     function Absolutas(AX, AY: Integer; out AAbsX, AAbsY: Integer): Boolean;
-    { UNA entrada del raton: AFlags dice si mueve (MOVER_ABS), baja o sube. }
-    function Raton(AAbsX, AAbsY: Integer; AFlags: DWORD): Boolean;
+    { UNA entrada del raton: AFlags dice si mueve (MOVER_ABS), baja o sube;
+      ADatos, lo que gira la rueda (MOUSEEVENTF_WHEEL). }
+    function Raton(AAbsX, AAbsY: Integer; AFlags: DWORD; ADatos: Integer = 0): Boolean;
   public
     constructor Create;
     { Captura el escritorio virtual completo en ARuta (PNG). }
@@ -55,6 +56,13 @@ type
       pasos hasta (AX2,AY2) y suelta alli. El destino se mira ANTES de
       pulsar, y el boton se suelta siempre. }
     function Arrastrar(AX1, AY1, AX2, AY2: Integer): Boolean;
+    { Gira la rueda AClics muescas en el pixel (AX, AY) DE LA CAPTURA, positivo
+      hacia abajo: lleva el puntero alli antes, que la rueda va a lo que hay
+      debajo de el. }
+    function Rueda(AX, AY, AClics: Integer): Boolean;
+    { Lleva el puntero al pixel (AX, AY) DE LA CAPTURA, sin pulsar: la base del
+      hover (D20 de la 1.29.3) y de la rueda. }
+    function Mover(AX, AY: Integer): Boolean;
     { Escribe texto donde este el foco (Unicode, acentos incluidos). }
     function Escribir(const ATexto: string): Boolean;
     { Pulsa una combinacion: se mantienen pulsadas todas y se sueltan al
@@ -527,7 +535,7 @@ const
   { mover el raton a un punto absoluto del escritorio virtual }
   MOVER_ABS = MOUSEEVENTF_MOVE or MOUSEEVENTF_ABSOLUTE or MOUSEEVENTF_VIRTUALDESK;
 
-function TEscritorioWin.Raton(AAbsX, AAbsY: Integer; AFlags: DWORD): Boolean;
+function TEscritorioWin.Raton(AAbsX, AAbsY: Integer; AFlags: DWORD; ADatos: Integer): Boolean;
 var
   E: array[0..0] of TInput;
 begin
@@ -536,6 +544,7 @@ begin
   E[0].mi.dx := AAbsX;
   E[0].mi.dy := AAbsY;
   E[0].mi.dwFlags := AFlags;
+  E[0].mi.mouseData := DWORD(ADatos);
   Result := EnviarEntradas(E);
 end;
 
@@ -571,6 +580,32 @@ begin
     // se suelta SIEMPRE, donde este: un boton abajo dejaria el raton del operador arrastrando
     Raton(0, 0, MOUSEEVENTF_LEFTUP);
   end;
+end;
+
+function TEscritorioWin.Mover(AX, AY: Integer): Boolean;
+var
+  AbsX, AbsY: Integer;
+begin
+  FError := '';
+  Result := Absolutas(AX, AY, AbsX, AbsY) and Raton(AbsX, AbsY, MOVER_ABS);
+end;
+
+{ En Windows una muesca es WHEEL_DELTA y lo positivo ALEJA la rueda del usuario,
+  que sube; aqui positivo es bajar, como en el nodo Linux: va con el signo
+  cambiado. Una entrada por muesca, con su pausa, como una mano (y como en Linux). }
+function TEscritorioWin.Rueda(AX, AY, AClics: Integer): Boolean;
+begin
+  Result := False;
+  if not Mover(AX, AY) then
+    Exit;
+  Sleep(120);
+  for var I := 1 to Abs(AClics) do
+  begin
+    if not Raton(0, 0, MOUSEEVENTF_WHEEL, -Sign(AClics) * WHEEL_DELTA) then
+      Exit;
+    Sleep(40);
+  end;
+  Result := True;
 end;
 
 { AVeces: 2 es el doble clic - las dos pulsaciones en la MISMA entrada, y Windows lo

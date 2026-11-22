@@ -353,6 +353,15 @@ try:
     check('L10 ...search: el acierto de la viva y no el de las copias (contadas; la .~1~ no es Delphi)',
           [a['path'].lower().endswith('\\hist\\uvivo.pas') for a in mc.aciertos(jhs)] == [True]
           and jhs.get('hiddenBuildArtifacts') == 2, jhs)
+    # D6 de la 1.29.3 (16-nov): la LIST-003 de SEARCH nombraba la carpeta escondida con la letra REAL del disco:
+    # search es de TOOLS_ECO y el filtro de salida no toca lo que compone. La de list pasa por el filtro y ya salia
+    # bien; ahora se enmascara donde se compone, y list pasa dos veces: sin doble mascara
+    for etiqueta, jn in (('search', jhs), ('list', jh)):
+        cola = jn.get('note', '').split('(here:')[-1]
+        check('L10 ...la LIST-003 de %s nombra las copias con su unidad virtual, sin la letra REAL ni doble mascara'
+              ' (ROJO en search: D:\\...)' % etiqueta,
+              '(here:' in jn.get('note', '') and '__history' in cola and cola.lower().lstrip().startswith('srv')
+              and not mc.fuga_de_letra(jn.get('note', '')) and 'srvsrv' not in cola.lower(), jn.get('note'))
     rw = llama('delphi_textedit', {'path': os.path.join(HIST, '__recovery', 'nota.txt'),
                                    'create': True, 'content': 'x'})
     check('L10 ...y escribir dentro se niega (GUARD-005)',

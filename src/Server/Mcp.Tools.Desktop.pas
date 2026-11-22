@@ -45,6 +45,7 @@ type
     FY: string;
     FToX: string;
     FToY: string;
+    FClicks: string;
     FCode: string;
     FModifiers: string;
     FText: string;
@@ -84,6 +85,9 @@ type
     [SchemaDescription(SP_DESKTOP_TOY)]
     [NumeroComoTexto]
     property ToY: string read FToY write FToY;
+    [SchemaDescription(SP_DESKTOP_CLICKS)]
+    [NumeroComoTexto(CON_SIGNO)] // hacia los dos lados: sin minimum 0
+    property Clicks: string read FClicks write FClicks;
     [SchemaDescription(SP_ADBLINUX_CODE)]
     property Code: string read FCode write FCode;
     [SchemaDescription(SP_ADBLINUX_MODIFIERS)]
@@ -136,6 +140,9 @@ uses
   Lsp.TextoDelNodo,
   Lsp.Lineas,
   Lsp.PuertaDeLaLlamada, // ComandoQueLee: que comandos solo miran, la tabla de la puerta
+  Lsp.Png,       // TamanoPngBytes: el escritorio entero de una captura (D17)
+  Lsp.Settings,  // CurrentWorkspaceName: de quien es lo que el servidor recuerda (D17)
+  System.Math,   // Min/Max: el recuadro del hover (D20)
   Lsp.Capturas;
 
 const
@@ -150,6 +157,98 @@ begin
   P := ATexto.Replace(' ', '').Split([',']);
   Result := (Length(P) = 4) and TryStrToInt(P[0], X) and TryStrToInt(P[1], Y) and
     TryStrToInt(P[2], W) and TryStrToInt(P[3], H) and (W > 0) and (H > 0);
+end;
+
+{ El tamano de un escritorio como lo recuerda el servidor (FicheroDeEscritorioVisto):
+  'WxH', y su lector. Solo los usa NotaDeTamanoDelEscritorio. }
+function TamanoEnTexto(AW, AH: Integer): string;
+begin
+  Result := Format('%dx%d', [AW, AH]);
+end;
+
+function LeeTamanoEnTexto(const ATexto: string; out AW, AH: Integer): Boolean;
+var
+  P: TArray<string>;
+begin
+  P := ATexto.Trim.Split(['x']);
+  Result := (Length(P) = 2) and TryStrToInt(P[0], AW) and TryStrToInt(P[1], AH) and (AW > 0) and (AH > 0);
+end;
+
+{ EL escritorio de un perfil cambio de tamano (D17 de la 1.29.3): el de la captura
+  ENTERA ACaptura (la bajada, antes de recortarla) contra el de la ultima que ESTE
+  workspace vio por APerfil, que el servidor recuerda en su casa
+  (FicheroDeEscritorioVisto). Lo apunta, y devuelve la nota si cambio; '' la
+  primera vez, si es el mismo o si no se pudo leer (sin tamano no se dice nada).
+  AW y AH, el de esta captura (0 si no se leyo). Caso de campo, 17-nov: de
+  1920x1080 a 3440x1440 por un escritorio remoto, y un agente siguio con las
+  posiciones de antes y tardo veinte minutos en abrir un panel. }
+{ El tamano del escritorio que ESTE workspace vio por APerfil en su ultima captura,
+  si el servidor lo recuerda (FicheroDeEscritorioVisto); False si no hay o no se lee }
+function TamanoRecordado(const APerfil: string; out AW, AH: Integer): Boolean;
+var
+  Fichero: string;
+begin
+  Result := False;
+  AW := 0;
+  AH := 0;
+  Fichero := FicheroDeEscritorioVisto(CurrentWorkspaceName, APerfil);
+  try
+    Result := TFile.Exists(Fichero) and LeeTamanoEnTexto(LeeTexto(Fichero, [ltCasa]), AW, AH);
+  except
+    Result := False; // un recuerdo que no se lee es como no tenerlo
+  end;
+end;
+
+{ La negativa ANTES de pulsar (D17 de la 1.29.3, b): el frame del gesto lleva el
+  escritorio en que se midio (FrameOf, su '/<W>x<H>') y no es el de la ultima
+  captura que este workspace hizo por APerfil. Solo cuando se SABE: un frame sin
+  escritorio (de antes, de adb) o sin nada recordado, se pulsa como siempre ('') }
+function FrameDeOtroEscritorio(const APerfil, AFrame: string): string;
+var
+  FW, FH, RW, RH: Integer;
+begin
+  Result := '';
+  if EscritorioDelFrame(AFrame, FW, FH) and TamanoRecordado(APerfil, RW, RH) and
+     ((FW <> RW) or (FH <> RH)) then
+    Result := MsgFmt(SR_DESKTOP_FRAME_OTRO_ESCRITORIO_FMT, [FW, FH, RW, RH]);
+end;
+
+function NotaDeTamanoDelEscritorio(const APerfil, ACaptura: string; out AW, AH: Integer): string;
+var
+  Fichero, Ahora: string;
+  W0, H0: Integer;
+begin
+  Result := '';
+  AW := 0;
+  AH := 0;
+  try
+    // solo su cabecera: la imagen entera la leen despues el recorte y la entrega
+    var TamanoFichero: Int64;
+    if not TamanoPngBytes(LeeTrozoDeBytes(ACaptura, LUGARES_DE_UNA_CAPTURA, 0, BYTES_DE_CABECERA_PNG,
+       TamanoFichero), AW, AH) then
+    begin
+      AW := 0;
+      AH := 0;
+      Exit;
+    end;
+  except
+    AW := 0;
+    AH := 0;
+    Exit; // sin tamano no se dice nada
+  end;
+  var HabiaAntes := TamanoRecordado(APerfil, W0, H0);
+  if HabiaAntes and (W0 = AW) and (H0 = AH) then
+    Exit;
+  Ahora := TamanoEnTexto(AW, AH);
+  Fichero := FicheroDeEscritorioVisto(CurrentWorkspaceName, APerfil);
+  try
+    CrearCarpeta(TPath.GetDirectoryName(Fichero));
+    EscribeEnCasaDelServidor(Fichero, Ahora);
+  except
+    // no poder recordarlo no tumba la captura
+  end;
+  if HabiaAntes then
+    Result := MsgFmt(SN_DESKTOP_CAMBIO_DE_TAMANO_FMT, [W0, H0, AW, AH]);
 end;
 
 { Las lineas "VENTANA x y w h titulo" que el nodo Windows escribe con
@@ -198,6 +297,43 @@ begin
       H := VH;
     end;
   end;
+end;
+
+{ El recorte de un hover (D20 de la 1.29.3), en pixeles de la captura: un
+  recuadro fijo alrededor del puntero, con mas sitio abajo y a la derecha, que
+  es donde sale un tooltip, y ENTERA cada ventana de "windows" que lo toca y
+  cabe en el (el tooltip de FMX en Linux es una ventana propia, 165x59 junto al
+  puntero: medido en el Fedora el 17-nov). Regla de la casa, sin juez: que
+  ventana es un tooltip no lo dice nadie. RecortaPngBytes lo ajusta al lienzo. }
+procedure RecuadroDelPuntero(APX, APY: Integer; AVentanas: TJSONArray; out AX, AY, AW, AH: Integer);
+const
+  IZQUIERDA = 160;
+  ARRIBA = 80;
+  ANCHO = 640;
+  ALTO = 240;
+var
+  L, T, R, B, VX, VY, VW, VH: Integer;
+begin
+  L := APX - IZQUIERDA;
+  T := APY - ARRIBA;
+  R := L + ANCHO;
+  B := T + ALTO;
+  if AVentanas <> nil then
+    for var E in AVentanas do
+      if (E is TJSONObject) and TJSONObject(E).TryGetValue<Integer>('x', VX) and
+         TJSONObject(E).TryGetValue<Integer>('y', VY) and TJSONObject(E).TryGetValue<Integer>('w', VW) and
+         TJSONObject(E).TryGetValue<Integer>('h', VH) and (VW > 0) and (VH > 0) and
+         (VW <= ANCHO) and (VH <= ALTO) and (VX < R) and (VX + VW > L) and (VY < B) and (VY + VH > T) then
+      begin
+        L := Min(L, VX);
+        T := Min(T, VY);
+        R := Max(R, VX + VW);
+        B := Max(B, VY + VH);
+      end;
+  AX := L;
+  AY := T;
+  AW := R - L;
+  AH := B - T;
 end;
 
 constructor TDesktopLinuxParams.Create;
@@ -291,6 +427,7 @@ begin
     Result := 'overview';
 end;
 
+
 { El gesto; ExecuteWithParams lo envuelve en el cerrojo de SU maquina. }
 function GestoEnElTarget(const Params: TDesktopLinuxParams): string;
 var
@@ -299,7 +436,7 @@ var
   Bajada, Propia: string;
   Res: TJSONObject;
   Return: TJSONObject;
-  EsWin, HayVentana, ConRecorte: Boolean;
+  EsWin, HayVentana, ConRecorte, Apunta: Boolean;
   RX, RY, RW, RH, AnchoOrig, AltoOrig, PX, PY: Integer;
   Recorte: TArray<Byte>;
   Ventanas: TJSONArray;
@@ -315,9 +452,22 @@ var
     else
       Return.AddPair('screenshotError', AMotivo);
   end;
+
+  { El x,y de un gesto en pixeles de la captura: con frame, los de la imagen que
+    el agente miro (FramePoint). '' = valen. Estaba en tap, drag y type, y scroll
+    era la cuarta copia (D19 de la 1.29.3). Apunta lo recuerda: el frame de OTRO
+    escritorio se niega DESPUES de la puerta, una vez (D17, b), y DESK-032 sale
+    solo de un gesto que apunto (lo decia una lista de gestos escrita a mano, y
+    salia con un type sin x,y; revisor del paisaje de la 1.29.3) }
+  function PuntoDelGesto(const AX, AY: string; out APX, APY: Integer): string;
+  begin
+    Result := FramePoint(Params.Frame, AX, AY, APX, APY);
+    if Result = '' then
+      Apunta := True;
+  end;
 begin
   Cmd := ComandoDeEscritorio(Params.Command);
-  if not MatchStr(Cmd, ['screenshot', 'tap', 'double-tap', 'drag', 'type', 'key', 'overview', 'status']) then
+  if not MatchStr(Cmd, ['screenshot', 'tap', 'double-tap', 'drag', 'scroll', 'hover', 'type', 'key', 'overview', 'status']) then
     Exit(MsgText(SR_ADBLINUX_CMD));
 
   { "out" es una ruta LOCAL que elige QUIEN LLAMA -donde baja la captura del
@@ -346,6 +496,7 @@ begin
     peticion se diga sin un destino vivo. Lo que necesita el perfil -"key", que
     habla el idioma del destino- va DESPUES de la puerta. }
   ConRecorte := False;
+  Apunta := False;
   RX := 0; RY := 0; RW := 0; RH := 0;
   if (Params.Region.Trim <> '') and (Params.Window.Trim <> '') then
     Exit(MsgText(SR_ADBLINUX_REGION_OR_WINDOW));
@@ -369,15 +520,18 @@ begin
   Args := [NODE_KEY];
   // double-tap: el doble clic del escritorio, en el nodo (dos tap seguidos no lo son:
   // cada uno es una ejecucion del nodo, de 1 a 2 s; C1 de la 1.29.1)
-  if (Cmd = 'tap') or (Cmd = 'double-tap') then
+  // hover (D20 de la 1.29.3): el puntero alli SIN pulsar; su respuesta, un recorte (abajo)
+  if MatchStr(Cmd, ['tap', 'double-tap', 'hover']) then
   begin
     if (Params.X.Trim = '') or (Params.Y.Trim = '') then
-      Exit(MsgText(SR_ADBLINUX_NEEDXY));
+      Exit(MsgFmt(SR_DESKTOP_NEEDXY_FMT, [Cmd]));
     if Cmd = 'double-tap' then
-      Args := Args + [NODO_ORDEN_DOBLE];
+      Args := Args + [NODO_ORDEN_DOBLE]
+    else if Cmd = 'hover' then
+      Args := Args + [NODO_ORDEN_PASA];
     // Con frame, x,y son de la imagen que el agente miro y el servidor los
     // pasa a pixeles de captura (Lsp.InlineImages.FramePoint).
-    var FP := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
+    var FP := PuntoDelGesto(Params.X, Params.Y, PX, PY);
     if FP <> '' then
       Exit(FP);
     Args := Args + [IntToStr(PX), IntToStr(PY)];
@@ -388,12 +542,24 @@ begin
       Exit(MsgText(SR_DESKTOP_DRAG_NEEDXY));
     // los dos puntos, de la MISMA imagen: un frame convierte los dos
     var QX, QY: Integer;
-    var FD := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
+    var FD := PuntoDelGesto(Params.X, Params.Y, PX, PY);
     if FD = '' then
-      FD := FramePoint(Params.Frame, Params.ToX, Params.ToY, QX, QY);
+      FD := PuntoDelGesto(Params.ToX, Params.ToY, QX, QY);
     if FD <> '' then
       Exit(FD);
     Args := Args + [NODO_ORDEN_ARRASTRA, IntToStr(PX), IntToStr(PY), IntToStr(QX), IntToStr(QY)];
+  end
+  else if Cmd = 'scroll' then
+  begin
+    // la rueda (D19 de la 1.29.3): las muescas, con signo y dentro del tope que
+    // tambien mira el nodo (NodeProtocolo.inc)
+    var Clics := StrToIntDef(Params.Clicks.Trim, 0);
+    if (Params.X.Trim = '') or (Params.Y.Trim = '') or (Clics = 0) or (Abs(Clics) > NODO_RUEDA_MAX) then
+      Exit(MsgFmt(SR_DESKTOP_SCROLL_NEED_FMT, [NODO_RUEDA_MAX, NODO_RUEDA_MAX]));
+    var FS := PuntoDelGesto(Params.X, Params.Y, PX, PY);
+    if FS <> '' then
+      Exit(FS);
+    Args := Args + [NODO_ORDEN_RUEDA, IntToStr(PX), IntToStr(PY), IntToStr(Clics)];
   end
   else if Cmd = 'type' then
   begin
@@ -415,7 +581,7 @@ begin
     { Con coordenadas es UN solo viaje: pulsa para dar el foco y escribe. }
     if (Params.X.Trim <> '') and (Params.Y.Trim <> '') then
     begin
-      var FT := FramePoint(Params.Frame, Params.X, Params.Y, PX, PY);
+      var FT := PuntoDelGesto(Params.X, Params.Y, PX, PY);
       if FT <> '' then
         Exit(FT);
       Args := Args + [NODO_ORDEN_ESCRIBE, IntToStr(PX), IntToStr(PY), Texto];
@@ -446,6 +612,16 @@ begin
   Result := ProfileDesktopDenied(Params.Profile.Trim, (Proj <> '') or not ComandoQueLee('delphi_desktop', Cmd));
   if Result <> '' then
     Exit;
+  // el frame de OTRO escritorio, antes de pulsar y DESPUES de la puerta: lee lo que
+  // este workspace vio (la casa), y lo propio de la llamada se valida sin disco
+  // (arriba). Iba antes, y un perfil que el operador niega contestaba DESK-031 en vez
+  // de su negativa (revisor del paisaje de la 1.29.3)
+  if Apunta then
+  begin
+    Result := FrameDeOtroEscritorio(Params.Profile.Trim, Params.Frame);
+    if Result <> '' then
+      Exit;
+  end;
   { El destino dice que nodo y que teclas espera: lo lee el .profile, nunca el
     nombre del perfil (que no significa nada). "key" habla el idioma del destino
     (codigo evdev en Linux, nombre en Windows), por eso su validacion va DESPUES
@@ -580,6 +756,9 @@ begin
       begin
         Return.AddPair('exitCode', TJSONNumber.Create(Res.GetValue<Integer>('exitCode')));
         Return.AddPair('ranNote', MsgFmt(SN_DESKTOP_NODO_CODIGO_FMT, [Res.GetValue<Integer>('exitCode')]));
+        // el nodo muerto por una senal, como cualquier trabajo (RUN-036, D14 de la 1.29.3)
+        if Res.GetValue('signalNote') <> nil then
+          Return.AddPair('signalNote', Res.GetValue<string>('signalNote'));
       end;
     // en que sesion/entorno grafico corrio el nodo: lo cuenta remote-run y
     // aqui es lo primero que explica una captura negra o denegada
@@ -673,6 +852,12 @@ begin
       end;
       if Fallo = '' then
       begin
+        // el escritorio ENTERO de esta captura, antes de recortarla, contra el
+        // ultimo que este workspace vio por este perfil (D17 de la 1.29.3)
+        var EscW, EscH: Integer;
+        var NotaTam := NotaDeTamanoDelEscritorio(Params.Profile.Trim, Local, EscW, EscH);
+        if NotaTam <> '' then
+          Return.AddPair('desktopSizeNote', NotaTam);
         { La lista de ventanas viaja CON cada captura (David, 24-sep), en los
           dos sistemas y en pixeles de la imagen: titulo y rectangulo. En
           Linux son las X11/Xwayland (toda aplicacion FMX; las nativas
@@ -698,6 +883,14 @@ begin
         // 1.18.0). Lo que se coloca ya es el recorte, como en el designer: EN
         // MEMORIA, leido por la puerta y colocado desde ella - la bajada ya no
         // se reescribe en sitio, sin ninguna (1.18.2, 2b)
+        // el hover (D20 de la 1.29.3) viaja como un recorte 1:1 alrededor del puntero, con
+        // el tooltip si "windows" lo lista: la captura entera de un 3440 llenaba el contexto
+        // (Hermes compacto dos veces en 70 minutos, 17-nov)
+        if (Fallo = '') and (Cmd = 'hover') then
+        begin
+          RecuadroDelPuntero(PX, PY, Ventanas, RX, RY, RW, RH);
+          ConRecorte := True;
+        end;
         if (Fallo = '') and ConRecorte then
           try
             Fallo := RecortaPngBytes(LeeBytes(Local, LUGARES_DE_UNA_CAPTURA), RX, RY, RW, RH,
@@ -767,8 +960,20 @@ begin
             OX := RX;
             OY := RY;
           end;
+          // el frame lleva el escritorio ENTERO de la captura (D17, a): el de una con
+          // region= o window= no es su srcW x srcH
           var EnLinea := DeliverCapture('delphi_desktop', Local, Params.Inline_,
-            Params.MaxWidth, OX, OY, 1.0, 1.0, Return);
+            Params.MaxWidth, OX, OY, 1.0, 1.0, Return, '', '', EscW, EscH);
+          // ...y la de un gesto apuntado con el frame de OTRO escritorio: se dice, como
+          // hecho (D17, c: lo que (b) no pudo ver, un cambio sin captura en medio)
+          var FW, FH: Integer;
+          // donde quedo el puntero, en pixeles del recorte del hover (RecortaPngBytes ya ajusto el origen)
+          if Cmd = 'hover' then
+            Return.AddPair('hoverNote', MsgFmt(SN_DESKTOP_HOVER_FMT, [PX - OX, PY - OY]));
+          if Apunta and (EscW > 0) and
+             EscritorioDelFrame(Params.Frame, FW, FH) and ((FW <> EscW) or (FH <> EscH)) then
+            Return.AddPair('gestureFrameNote', MsgFmt(SN_DESKTOP_GESTO_OTRO_ESCRITORIO_FMT,
+              [EscW, EscH, FW, FH]));
           if ConRecorte then
             Return.AddPair('note', MsgFmt(SN_ADBLINUX_CROP_NOTE_FMT, [RX, RY]))
           // "mide sobre esta imagen": solo si el agente la va a tener (la de
@@ -832,11 +1037,14 @@ begin
       'tap', 'x y frame out inline maxwidth',
       'double-tap', 'x y frame out inline maxwidth',
       'drag', 'x y tox toy frame out inline maxwidth',
+      'scroll', 'x y clicks frame out inline maxwidth',
+      'hover', 'x y frame out inline maxwidth',
       'type', 'text x y frame out inline maxwidth',
       'key', 'code modifiers out inline maxwidth',
       'overview', 'out inline maxwidth',
       'status', ''],
     ['x', Params.X, '', 'y', Params.Y, '', 'tox', Params.ToX, '', 'toy', Params.ToY, '',
+     'clicks', Params.Clicks, '',
      'frame', Params.Frame, '',
      'code', Params.Code, '', 'modifiers', Params.Modifiers, '', 'text', Params.Text, '',
      'out', Params.Out_, '', 'inline', IfThen(Params.Inline_, 'true', 'false'), 'true',

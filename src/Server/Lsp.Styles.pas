@@ -285,6 +285,13 @@ type
   TIgnoradoPorFmx = record
     Clase, Propiedad, Texto: string;
   end;
+  { Un estilo de primer nivel que FMX NO devuelve por su nombre (SC_SHADOWED del
+    check): Nombre, el suyo; Clase y Ruta (padre.nombre), las del objeto que su
+    indice devuelve en su lugar. El control que lo pida sale vacio sin error
+    (D9 de la 1.29.3) }
+  TPisadoPorFmx = record
+    Nombre, Clase, Ruta: string;
+  end;
 
 { Lo que el cargador de estilos de FMX IGNORA de un .style de texto: su
   lector se traga cada error - una propiedad que la clase no publica, un valor
@@ -301,7 +308,11 @@ type
   mas fuerte y se tomaba por "no se sabe": set lo escribia, lint decia clean
   y solo build lo negaba (Hermes, test completo de la 1.21.0). }
 function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<TIgnoradoPorFmx>;
-  out ANoCarga: string): Boolean;
+  out ANoCarga: string): Boolean; overload;
+{ ...y en la MISMA pasada del conversor, los estilos que FMX no devuelve por su
+  nombre (APisados; el lint, D9 de la 1.29.3) }
+function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<TIgnoradoPorFmx>;
+  out ANoCarga: string; out APisados: TArray<TPisadoPorFmx>): Boolean; overload;
 { ...de un texto que aun no esta en disco (lo que set va a escribir), con la
   codificacion AEnc de su fichero: la copia que se pregunta va a la temporal
   del servidor, no a la jaula. }
@@ -1400,7 +1411,7 @@ end;
   conversor, o el error con el que no lo pudo cargar: IgnoradoPorFmx, para un
   fichero y para un texto }
 function IgnoradoDe(const AEntrada: TProc<string>; out AIgnorado: TArray<TIgnoradoPorFmx>;
-  out ANoCarga: string): Boolean;
+  out ANoCarga: string; out APisados: TArray<TPisadoPorFmx>): Boolean;
 var
   Code: Cardinal;
   Nada: TArray<Byte>;
@@ -1408,6 +1419,7 @@ var
 begin
   AIgnorado := [];
   ANoCarga := '';
+  APisados := [];
   var Salida := CorreStyleConvert(SC_CHECK, AEntrada, '', CONVERSOR_TIEMPO_MS, Nada, Code);
   if Code <> SC_RC_OK then
   begin
@@ -1431,6 +1443,19 @@ begin
         I.Propiedad := P.Propiedad;
         I.Texto := P.Texto;
         L.Add(I);
+      end
+      else if Linea.StartsWith(SC_SHADOWED) then
+      begin
+        // nombre, clase y ruta del que gana, por tabuladores (el protocolo)
+        var Partes := Linea.Substring(Length(SC_SHADOWED)).Split([SC_CAMPOS_SEP]);
+        if Length(Partes) >= 3 then
+        begin
+          var Pisado: TPisadoPorFmx;
+          Pisado.Nombre := Partes[0];
+          Pisado.Clase := Partes[1];
+          Pisado.Ruta := Partes[2];
+          APisados := APisados + [Pisado];
+        end;
       end;
     AIgnorado := L.ToArray;
   finally
@@ -1442,10 +1467,19 @@ end;
 function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<TIgnoradoPorFmx>;
   out ANoCarga: string): Boolean;
 var
+  Pisados: TArray<TPisadoPorFmx>;
+begin
+  Result := IgnoradoPorFmx(AFichero, AIgnorado, ANoCarga, Pisados);
+end;
+
+function IgnoradoPorFmx(const AFichero: string; out AIgnorado: TArray<TIgnoradoPorFmx>;
+  out ANoCarga: string; out APisados: TArray<TPisadoPorFmx>): Boolean;
+var
   Bytes: TArray<Byte>;
 begin
   AIgnorado := [];
   ANoCarga := '';
+  APisados := [];
   if StyleConverterExe = '' then
     Exit(False);
   try
@@ -1458,7 +1492,7 @@ begin
     procedure(ARuta: string)
     begin
       EscribeBytes(ARuta, Bytes, ltTemporal);
-    end, AIgnorado, ANoCarga);
+    end, AIgnorado, ANoCarga, APisados);
 end;
 
 { La copia de un texto que solo se le pregunta al conversor: en la codificacion
@@ -1481,7 +1515,8 @@ end;
 function IgnoradoPorFmxDeTexto(const ATexto, AEnc: string; out AIgnorado: TArray<TIgnoradoPorFmx>;
   out ANoCarga: string): Boolean;
 begin
-  Result := IgnoradoDe(EscribeLaCopia(ATexto, AEnc), AIgnorado, ANoCarga);
+  var Pisados: TArray<TPisadoPorFmx>;
+  Result := IgnoradoDe(EscribeLaCopia(ATexto, AEnc), AIgnorado, ANoCarga, Pisados);
 end;
 
 function IgnoradoDeLaPropiedad(const AIgnorado: TIgnoradoPorFmx; const AClase, AProp: string): Boolean;

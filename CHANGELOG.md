@@ -8,6 +8,221 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+### Added
+
+- `delphi_desktop command=scroll` turns the mouse wheel over x,y: `clicks` notches, positive down and
+  negative up (up to 50), with `frame` as in `tap`. A long list or a scroll box on a target desktop
+  could not be moved: dragging its content does nothing on a desktop, and in a scaled capture the
+  thumb of its scrollbar is a few pixels wide. The node moves the pointer there first and sends one
+  notch at a time (Windows: `SendInput`; Linux: libei, asking the desktop for the wheel only for this
+  gesture, so the other gestures open the input channel exactly as before). `clicks` is published as
+  a signed integer: every other number of the schema keeps its `minimum: 0`, and a client that
+  validates against the schema would not have sent -2.
+- `delphi_desktop command=hover` moves the pointer to x,y without pressing anything and waits for a
+  tooltip (on Windows as long as the system says a tooltip waits, the double-click time). The answer
+  is a 1:1 crop around the pointer, grown to take in whole any window of `windows` that touches it
+  and fits in it (on Linux an FMX tooltip is a window of its own), with its `frame`, the full
+  `windows` list and `hoverNote`, which says where the pointer is in the crop. A tooltip that says
+  which button is which could only be seen after pressing the button, and pressing the wrong
+  neighbour opened a modal dialog each time. It is also the way to see where a tap at that x,y would
+  land before pressing, and the tool's description says so. `DESK-013` now names the gesture that
+  lacks x and y: it said "tap" to a `double-tap` too.
+- `delphi_read limit=N` reads N lines from `fromline` (from the first line without it) instead of
+  naming the last one with `toline`, and `tail=N` reads the last N lines - the end of a log - on its
+  own: at most the 400 lines a call shows, and then the LAST 400, which `READ-014` says. `offset`
+  and `maxlines` are accepted as `fromline` and `limit`, as `vault_read` calls them. `limit` with
+  `toline` is refused (`READ-012`), and `tail` with any of the three (`READ-013`). Between 12 and 20
+  November an agent sent 13 reads that counted lines instead of naming the last one - `offset` and
+  `limit` 8 times, `maxlines` 4 - and 2 that asked for the end of a log; each cost a
+  refusal and another call. The notes of a dump written to a file (`logcat`, `remote-run` and
+  `output`, and `delphi_build`'s below) now say that `tail=N` reads its end.
+- `delphi_designer tree component=X` shows the subtree of X, with X at the root, and `maxdepth`
+  counts levels from it. A component the form does not have gets the refusal of `get` (`DSGN-078`),
+  and one that only comes from an ancestor, what `get` says of it. On 17 and 18 November an agent
+  asked for it four times, and each time it was refused (`DSGN-047`) and sent to `get`. The note of a tree cut at
+  `maxdepth` (`DSGN-059`) now points to `component=`.
+- `delphi_build out=<file.log>` writes the whole msbuild log of the build to a `.txt` or `.log`
+  file - msbuild's own file log at normal verbosity, detailed with `verbosity=verbose`, whatever the
+  answer shows - and the answer adds `logfile`, `lines`, `size` and `logfileNote` (`BUILD-078`), as
+  `remote-run out=` does. The file is judged before building: another extension is `BUILD-077`, and a
+  file outside the workspace, or behind a link that leads out of it, is refused. A file already there
+  is replaced, and one that cannot be written is a note: the build stands. Its paths read as in the
+  answer (`srvd:\...`, never the server's drive letters), and so do those of a `delphi_adb logcat out=`
+  file. Between 12 and 20 November an agent sent `out` to `delphi_build` 10 times, 5 of them with
+  `verbosity=quiet`: a short answer and the whole log in a file, the way it keeps the output of
+  `remote-run`. With `quiet` msbuild's console writes nothing on a clean build, which is why the file
+  is msbuild's file log and not the console.
+  The budget of `tools/list` rises to 115,000 characters with these three.
+
+### Changed
+
+- `delphi_desktop key` on a Linux target says what the code is on that desktop's keyboard:
+  `KEY 36 sent - on this desktop's keyboard that code is j (Spanish)`. A Linux `key` takes an evdev
+  code, a position on the keyboard; on 18 November an agent pressed 36 twice believing it was Enter
+  (36 is the X11 code of Return, evdev + 8; in evdev it is J) and typed two J's without noticing,
+  because the answer said only `KEY 36 sent`. The node reads the name from the keyboard map the
+  desktop hands over, the one `type` already reads, and says nothing more when the desktop gives no
+  map. Windows takes a key by its name and is unchanged.
+- `delphi_designer` (`set`, `insert`, and the lint) says how to go on when `StyleLookup` is set on an
+  FMX object that takes no part from a style - one that does not descend from `TStyledControl`, such
+  as `TRectangle` or `TLayout`: it draws itself with its own properties, `StyleName` only names an
+  object inside a style, and a part of the `.style` needs a class that has `StyleLookup`. The
+  refusal (`DSGN-087`) was right and said nothing more, and the closest property it offered was
+  `StyleName`, which is written and applies nothing: on 16 November an agent turned three window
+  parts into grey rectangles with a black border that way. The closest-name suggestion no longer
+  offers it.
+- `delphi_build` for a platform that runs through PAServer (Linux, macOS) without
+  `target=Deploy` adds `runNote` (`BUILD-076`): the program was built here, and the target still
+  runs what was last deployed. On 17 November an agent built for Linux64, ran it with
+  `remote-run`, and got a binary deployed ten days earlier with nothing saying so.
+- An entry of `edits` whose `old` is one line with its line break and whose `new` is empty
+  (`EDIT-013`) now says how to remove that line: `"delete": true`. It said to send the line as it
+  is, and an empty `new` only blanks it.
+- The task map of `delphi_help` says that `delphi_styles build` turns a text style into its binary
+  (`.bin.style` and the `.res`). An agent looking for "binary" wrote a program of its own to do it.
+- `delphi_designer preview component=X` of an FMX form says when the crop is not X (`componentNote`):
+  X, or one of its parents, has `Visible = False` - FMX does not draw a hidden control at design
+  time, nor does the IDE, so the crop shows what lies under it (`DSGN-200`, with the `state=` that
+  draws it) - or a sibling written after it in the file covers the same area and is painted on top
+  (`DSGN-201`, naming it with its line). The preview was faithful and said nothing: on 16 November
+  an agent took the crop of a hidden panel - the grid behind it - for the panel. The boxes come from
+  the same render as the image (the form renderers' protocol goes to 16: deploy them with the
+  server), judged as `layout` judges them. A VCL form is not concerned: the VCL designer draws hidden
+  controls.
+- `delphi_desktop` says when the desktop of a profile changes size. The server remembers, per
+  workspace and per profile and in its own folder (it survives a restart; the agent never sees it),
+  the size of the whole desktop at the last capture, and a capture - a screenshot, or the one every
+  gesture brings back - of another size adds `desktopSizeNote` (`DESK-030`): positions measured
+  before do not hold. The `frame` of a desktop capture now carries that whole desktop behind it
+  (`.../3440x1440`; with `region=` or `window=` the captured size is not the desktop's), and a frame
+  without it works as before. A gesture whose frame names another desktop than the last one captured
+  is refused before pressing (`DESK-031`), and a gesture whose own capture is of another size than
+  its frame says so (`gestureFrameNote`, `DESK-032`). On 17 November a desktop went from 1920x1080
+  to 3440x1440 through a remote session, and an agent kept the positions of the day before: its
+  first press landed beside the target, and opening one panel took twenty minutes.
+- `delphi_paserver output` says what is new since the last time the same workspace read that job
+  (`remote-run` counts as the first read): `lastReadAt`, `newSinceLastRead` with the lines written
+  since then, `newLines` and `RUN-034`, or `RUN-035` when nothing is new. `output` itself is
+  unchanged - it is the program's output, read or parsed as it is. The server keeps this in memory,
+  per workspace and per job. On 17 November an agent read, with everything its application had
+  written since it started, two lines it could not tie to any of its last three presses.
+- `delphi_paserver kill` and `output` with a job id this server did not give for that workspace,
+  project and profile (`RUN-021`), with one that is not a job id at all (`RUN-001`), or with no `job`
+  (`PAS-002`) now end with the jobs that do hold: the last five this server started for that
+  workspace, project and profile, newest last, or that it has started none since it last started.
+  The list comes only after
+  the remote-run gate of that project and profile, so a `kill` or `output` without `job` on a project
+  that may not run is answered by the gate first. On the night of 18 November an agent, after
+  compacting its context, read and then killed a job id it had made up; before that it had tried
+  `command=jobs` and `command=list` looking for that list.
+- An unknown parameter (`SYS-015`) now names every unknown parameter of the call at once: the first
+  as before, the others after it (`Unknown parameter "root" (and also "readtype", "tailchars")`). It
+  named only the first, and the next one cost another refusal: of 171 such answers an agent got
+  between 12 and 20 November, 39 carried two or more unknown parameters (the aliases the server
+  already accepts not counted). It does not guess which parameter was meant: measured on the same
+  answers, the closest valid name was usually none, and when there was one it was the wrong one.
+- A parameter sent twice under two names with different values (`GUARD-045`) now says what to send
+  instead, for the three cases agents actually hit: `delphi_search` with `path` set to a file and
+  `root` to its folder (send the file alone as `root`, which takes one file as well as a folder),
+  `delphi_build` with `command=build` and `target=Deploy` (it always builds; `target` alone says what
+  else it does) and `delphi_list` with a mask in `path` (it goes in `pattern`). The refusal itself is
+  unchanged. Between 12 and 20 November an agent got it 28 times from `delphi_search` and 12 from
+  `delphi_build`.
+- A path the agent names that does not exist is answered the same way by every tool: after its own
+  "does not exist" comes "Check the name and the folder: delphi_list root=<the folder it should be in>
+  shows what is really there, and delphi_search finds it by content." Only `delphi_read` said it
+  (`LSP-011`, then with `root=<folder>`);
+  about twenty other answers had their own sentence and no way on (`WS-008` of `delphi_search` and
+  `delphi_list`, `EDIT-027`, `TEXT-007`, `GIT-026`, `SYS-012`...). After a `WS-008`, an agent needed
+  two tries or more half of the time; after an `LSP-011`, it almost always found the file at the
+  next call. The texts that name something else than a path of this server (a profile, a vault
+  note, a path on the target), or that already say how to go on, keep their own.
+- `delphi_test run` with `filter` on a console runner (PASS/FAIL lines and an exit code, not
+  DUnitX) says that the filter went to the program as `--run:<filter>` and applies only if the
+  program reads its command line (`filterNote`, `TEST-040`); the counts of the answer say what ran.
+  It said nothing, and a filter on a suite of 99 ran the 99. The DUnitX note for a filter that
+  matched no test (`TEST-035`) is no longer given to a console runner.
+- `delphi_paserver remote-run` and `output` of a program that ended with a code from 129 to 192 on a
+  Linux target say what that code is (`signalNote`, `RUN-036`): the launcher reports a
+  program killed by a signal as 128 + the signal number, as the shell does - 139 is signal 11 -
+  unless the program returned that number itself. `delphi_desktop` passes it on when its node ends
+  that way. An agent got 139 and an output cut short, with nothing saying it was a signal.
+- `delphi_test discover` gives the format a console runner is counted by (`countsFormat`) once, at
+  the top of the answer, instead of inside every console project: it was the same text each time,
+  and over a folder with 62 of them it was 44 of the 63 KB of the answer, which went past what the
+  client accepts.
+
+### Fixed
+
+- `delphi_paserver remote-run` and `kill` and `delphi_desktop` with a macOS profile sent that
+  machine the Linux launcher and the Linux node: the binaries next to the server are built for
+  Linux and Windows, and a macOS executable has no extension either, so the Linux one was picked
+  (measured with a test OSX64 profile). They are refused now: `remote-run` and `kill` with
+  `RUN-037`, which says building and deploying for macOS do not need the launcher, and
+  `delphi_desktop` with its `DESK-021` (no node for that system; `project=` takes one of your own).
+  The description of `delphi_paserver` no longer promises running on macOS.
+- `delphi_paserver kill` gave, next to `job` (the one it killed), a `jobId`: the id of the
+  server's own helper that does the killing. The list of the jobs that are valid for `kill` and
+  `output` (`RUN-021`, `RUN-001`, `PAS-002`) had it too, as a job of that project: after a kill it
+  ended with the helper. Neither does now; nor does a `kill` that outlives its 20 seconds say to
+  kill or read the helper. A `remote-run` refused because there is no launcher no longer leaves a
+  job in that list either.
+- `EDIT-013` (an "old" of one line plus its line break) told how to remove the line - `"delete": true`
+  with the same "old" - and doing exactly that got the same refusal, in `edits` and in a single call
+  (which also turned `delete` into an empty `new`). Such an "old" with `delete` now removes that line.
+- `delphi_paserver output` of a job that has written more than 256 KB said what is new since the
+  last read (`newSinceLastRead`) wrongly, or that nothing was: it counted characters of the answer's
+  text, the end of the output, which moves as the program writes. It counts bytes of the output
+  file now; when more than that end was written between two reads, what is new is cut and says so.
+- `delphi_desktop` kept the desktop size it last saw per profile under a name that two profiles
+  could share (`choque_1293` and `choque-1293`, or two long names alike): one profile's capture
+  told the other that its desktop had changed, or refused a gesture measured right.
+- A number parameter that travels as text (`x`, `y`, `tox`, `toy`, `clicks` of `delphi_desktop`;
+  `x`, `y`, `lines` of `delphi_adb`) now goes through the integer rule of every other parameter:
+  `x=10.0` reached the desktop as -1, `clicks=2.0` was refused, and `x="-5"` was sent as it came.
+- `delphi_desktop` looked at what it remembered of a desktop before the operator's permission for
+  it: a profile it does not allow answered `DESK-031` instead of its refusal. And `DESK-032` (the
+  gesture's capture is of another desktop than its frame) no longer comes with a `type` that aimed
+  at nothing (no x,y).
+- `delphi_styles lint` listed two top-level styles with the same name in `shadowedByInnerName` too,
+  telling to rename an inner object that does not exist; they are in `duplicatedStyleNames`. The
+  style converter's protocol goes to 4: deploy it with the server.
+- `BUILD-076` (built here, not deployed) no longer suggests `remote-run` after a macOS or iOS build.
+- A `delphi_build target=Deploy` that could not reach PAServer (`E0003 Connection to ... failed`)
+  listed each of its errors twice and said, with `BUILD-074`, that the compiler had cut the start
+  of two of its messages. Those lines come from the deployment step, not from the compiler, and
+  MSBuild did classify them: they only looked like the compiler's cut messages. A line now counts
+  as cut only when MSBuild's own error and warning logs do not have it; the compiler's really cut
+  messages (1.29.2) still come first, with the note.
+- A `remote-run` job belongs to the workspace that started it, not only to its project and profile.
+  Another workspace with the same project in its roots and the same profile could read the job's
+  output with its id - and output read whole is deleted from the target - or kill it; it now gets
+  `RUN-021`, and the list of jobs above never shows it another workspace's jobs.
+- The notes and refusals about a capture's `frame` (`CAPT-003`, `CAPT-004`, `CAPT-005`, `DESK-031`,
+  `DESK-032`, and `maxwidth`) spoke of a tap or a press; they hold for any gesture with x,y.
+- `delphi_styles lint` said `clean` for a style that FMX does not return by its own name. FMX
+  indexes every object with a `StyleName` - parts inside other styles and palette roles too,
+  without case - and the last one wins: a control with that `StyleLookup` gets the other object,
+  or comes out empty, with no error. Three real cases on 17 November (an inner icon named like the
+  style 15 search buttons used, a palette role, an inner separator), all with the lint clean. The
+  lint now asks FMX itself - the style converter calls `FindStyleResource` for every top-level
+  style - and lists what it returns instead in `shadowedByInnerName` (`STYLE-071`), which takes
+  `clean` away. The converter's protocol goes to 3: deploy it together with the server.
+- The note of `delphi_search` on hidden build folders (`LIST-003`, its `(here: ...)` part, new in
+  1.29.1) named the folder with the server's real drive letter and path. `delphi_list` masked it;
+  `delphi_search` writes its own answer and did not. The note is now masked where it is composed.
+- `delphi_designer set` of a value the component already had wrote the file anyway. On 18 November
+  `HitTest=False` on a label and on a layout, which is already their class's value, rewrote a
+  `TabOrder` and the `Size.Height` of an aligned layout, and `DSGN-189` said that setting the
+  property did it; the agent undid both lines by hand. They come from loading the form: FMX
+  renumbers a `TabOrder` and realigns an aligned control, and the IDE writes them so whenever it
+  saves. Now a `set` (one property or several) that changes nothing it was asked for writes nothing
+  and says so (`DSGN-202`), with its `notStored` note as before. When a `set` does change something,
+  what loading the form rewrites anyway goes apart from what the property changed: `loadWritten` and
+  `loadRemoved`, with `DSGN-203`, while `alsoWritten` keeps only what setting the property did (the
+  `StyledSettings` of an FMX `TextSettings` value, for one). To tell them apart the IDE's writer is
+  asked once more, without the change, and only when there is something to tell.
+
 ## [1.29.2] - 2026-11-14
 
 A patch from the field: what agents hit doing real work, and what a model checking the candidate

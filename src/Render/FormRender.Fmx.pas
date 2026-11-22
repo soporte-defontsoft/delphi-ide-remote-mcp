@@ -576,9 +576,11 @@ begin
           RespondeRect(GPeticion.Componente, R.Left, R.Top, R.Width, R.Height)
         else
           Aviso(MsgFmt(SN_RENDER_SIN_COMPONENTE_FMT, [GPeticion.Componente, Raiz.Name]));
+      // las cajas y, si hay salida, la imagen del MISMO render: preview component= pide
+      // las dos para decir si el recorte es de verdad el componente (D7 de la 1.29.3)
       if GPeticion.Cajas then
-        RespondeCajas(F, Raiz, Cargador)
-      else
+        RespondeCajas(F, Raiz, Cargador);
+      if GPeticion.Salida <> '' then
         Bmp.SaveToFile(GPeticion.Salida);
       MsPintado := Reloj.ElapsedMilliseconds;
       RespondeElPintado(FR_FIDELIDAD_CANVAS + ' (' + Bmp.Canvas.ClassName + ')', Bmp.Width, Bmp.Height, MsCarga, MsPintado);

@@ -48,8 +48,10 @@ type
     // no pasan por el: "delete":"yes" dejaba la linea en blanco y
     // "toline":-1 se ignoraba, contestando OK). '' si vale; si no, el motivo
     // sin etiqueta: quien llama lo envuelve con el nombre del campo.
+    // AConSigno [local change 2026-11-21]: el de un numero que va hacia los dos
+    // lados ([NumeroComoTexto(CON_SIGNO)]), de -AMaximo a AMaximo.
     class function MotivoEntero(const JsonValue: TJSONValue; AMaximo: Int64;
-      out AValor: Int64): string;
+      out AValor: Int64; AConSigno: Boolean = False): string;
     class function MotivoBooleano(const JsonValue: TJSONValue;
       out AValor: Boolean): string;
 
@@ -66,7 +68,8 @@ implementation
 
 uses
   MCPServer.Schema.Generator, // los lectores de [Required] y de [JsonComoTexto]
-  Lsp.Texts; // [local change 2026-09-27] los textos, del catalogo
+  Lsp.Texts, // [local change 2026-09-27] los textos, del catalogo
+  System.StrUtils;
 
 { TMCPSerializer }
 
@@ -136,15 +139,26 @@ begin
         Publicados.Add(TMCPSchemaGenerator.GetPropertyJsonName(RttiProp, RttiType));
       end;
 
+    // [local change 2026-11-21] TODOS los desconocidos de la llamada, no solo el
+    // primero: de 171 SYS-015 de Hermes (12-20 nov), 39 llevaban dos o mas, y
+    // cada uno costaba otro rechazo (D3 de la 1.29.3). Uno solo se dice igual
+    // que antes; los demas, entre comillas, detras (SF_SYS_UNKNOWN_TAMBIEN_FMT)
+    var Desconocidos: TArray<string> := [];
     for Pair in Json do
     begin
       KeyName := Pair.JsonString.Value;
-      // una tool sin parametros decia "Valid parameters: ." (septima revision)
       if KnownNorms.IndexOf(NormalizeKey(KeyName)) < 0 then
-      begin
-        raise EArgumentException.Create(MsgFmt(SR_SYS_UNKNOWN_PARAM_FMT,
-          [KeyName, ONinguno(String.Join(', ', Publicados.ToStringArray))]));
-      end;
+        Desconocidos := Desconocidos + [KeyName];
+    end;
+    if Length(Desconocidos) > 0 then
+    begin
+      var Otros := '';
+      for var I := 1 to High(Desconocidos) do
+        Otros := Otros + IfThen(Otros <> '', ', ') + '"' + Desconocidos[I] + '"';
+      // una tool sin parametros decia "Valid parameters: ." (septima revision)
+      raise EArgumentException.Create(MsgFmt(SR_SYS_UNKNOWN_PARAM_FMT,
+        [Desconocidos[0], IfThen(Otros <> '', MsgFmt(SF_SYS_UNKNOWN_TAMBIEN_FMT, [Otros])),
+         ONinguno(String.Join(', ', Publicados.ToStringArray))]));
     end;
   finally
     KnownNorms.Free;
@@ -185,6 +199,27 @@ begin
       if not TMCPSchemaGenerator.AceptaJsonComoTexto(RttiProp) then
         raise EArgumentException.Create(MsgFmt(SR_SYS_PARAM_VALUE_FMT,
           [NombreJson, MsgText(SF_SYS_EXPECTED_TEXT)]));
+    end;
+
+    // [local change 2026-11-21] Un TEXTO que es un numero por contrato
+    // ([NumeroComoTexto]) pasa por LA regla del entero y se guarda en su forma
+    // canonica: cada tool lo leia con StrToIntDef, y 10.0 (un integer para JSON
+    // Schema y para esta misma regla) llegaba como -1 y el gesto iba a otro
+    // sitio; clicks=2.0 se negaba (revisor del paisaje de la 1.29.3, medido).
+    // Vacio = no dado, como antes.
+    var ConSigno: Boolean;
+    if (RttiProp.PropertyType.TypeKind in [tkString, tkLString, tkWString, tkUString]) and
+       not (JsonValue is TJSONNull) and (Trim(JsonValue.Value) <> '') and
+       TMCPSchemaGenerator.PublicaComoNumero(RttiProp, ConSigno) then
+    begin
+      var Entero: Int64;
+      var MotivoNum := MotivoEntero(JsonValue, High(Integer), Entero, ConSigno);
+      if MotivoNum <> '' then
+        raise EArgumentException.Create(MsgFmt(SR_SYS_PARAM_VALUE_FMT, [NombreJson, MotivoNum]));
+      {$WARN UNSAFE_CAST OFF}
+      RttiProp.SetValue(Instance, TValue.From<string>(IntToStr(Entero)));
+      {$WARN UNSAFE_CAST ON}
+      Continue;
     end;
 
     try
@@ -244,7 +279,7 @@ begin
 end;
 
 class function TMCPSerializer.MotivoEntero(const JsonValue: TJSONValue;
-  AMaximo: Int64; out AValor: Int64): string;
+  AMaximo: Int64; out AValor: Int64; AConSigno: Boolean): string;
 var
   Txt: string;
 begin
@@ -267,6 +302,12 @@ begin
   // ningun entero del contrato es negativo (lineas, desplazamientos,
   // maximos, tiempos): se aceptaba en silencio como el valor por defecto en
   // unas tools y se rechazaba en otras, con cinco copias a mano
+  if AConSigno then
+  begin
+    if (AValor < -AMaximo) or (AValor > AMaximo) then
+      Exit(MsgFmt(SF_SYS_OUT_OF_RANGE_FMT, [Txt, -AMaximo, AMaximo]));
+    Exit;
+  end;
   if AValor < 0 then
     Exit(MsgFmt(SF_SYS_NO_NEGATIVO_FMT, [Txt]));
   if AValor > AMaximo then

@@ -130,8 +130,10 @@ function NthBlockLine(const APath, AOld: string; AN: Integer): Integer;
   numeros de linea SE MUEVEN segun las entradas anteriores. }
 function NthOccurrenceLine(const APath, AAnchor: string; AN: Integer): Integer;
 
-{ Encoding-correct numbered read (also serves the remote file toolset). }
-function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
+{ Encoding-correct numbered read (also serves the remote file toolset).
+  ATail > 0: las ATail ultimas lineas (delphi_read tail, B de la 1.29.3), en
+  vez de AFrom..ATo; como mucho las de una llamada, y lo dice READ-014. }
+function ReadNumbered(const APath: string; AFrom, ATo: Integer; ATail: Integer = 0): string;
 
 { Una posicion a la que nadie podria apuntar: linea o columna negativa, linea
   mas alla del final, columna mas alla de la linea, o fichero que no esta.
@@ -829,8 +831,12 @@ begin
   Lines := SplitToLines(Text); // un CR suelto es salto (daba EDIT-098 en un
                                // fichero de solo CR; octava revision)
   OldLines := LineasDelAncla(AOld);
+  // ...y con un new vacio lo que se queria era QUITAR la linea: se dice como
+  // (D12 de la 1.29.3: opencode, 17-nov, lo leyo como "mandala tal cual" y
+  // un new vacio solo la deja en blanco)
   if Length(OldLines) < 2 then
-    Exit(MsgText(SR_PATCH_BLOCK_SHORT));
+    Exit(MsgText(SR_PATCH_BLOCK_SHORT) +
+      IfThen(ANew.Trim = '', MsgText(SF_PATCH_BLOCK_SHORT_QUITAR), ''));
   if AAtLine > 0 then
   begin
     // Linea YA resuelta por quien llama. Una tanda la resuelve contra el
@@ -1263,6 +1269,20 @@ begin
             end;
           end;
           Hasta[N] := EnteroDeEntrada(O2, 'toline');
+          // un "bloque" que se queda en UNA linea sin su salto final, con delete,
+          // es esa linea y se borra: lo que dice la pista de EDIT-013, que lo
+          // mandaba y volvia la misma negativa (revisor del paisaje de la 1.29.3,
+          // medido en edits y en la llamada suelta). Aqui, una vez: lo ven la
+          // pasada de las ocurrencias y la de aplicar
+          if BooleanoDeEntrada(O2, 'delete') then
+          begin
+            var Old0 := O2.GetValue<string>('old', '');
+            if TieneSalto(Old0) and (Length(LineasDelAncla(Old0)) = 1) then
+            begin
+              O2.RemovePair('old').Free;
+              O2.AddPair('old', LineasDelAncla(Old0)[0]);
+            end;
+          end;
           var Nth := EnteroDeEntrada(O2, 'occurrence');
           var Anc2 := O2.GetValue<string>('old', '');
           // occurrence cuenta el TEXTO de un ancla: una linea en blanco no lo
@@ -1754,7 +1774,7 @@ begin
   Result := Result + #10;
 end;
 
-function ReadNumbered(const APath: string; AFrom, ATo: Integer): string;
+function ReadNumbered(const APath: string; AFrom, ATo: Integer; ATail: Integer): string;
 var
   B: TBytes;
   K: TEncKind;
@@ -1764,7 +1784,7 @@ var
   Lines: TArray<string>;
   IniL, FinL, I: Integer;
   Sb: TStringBuilder;
-  Cut, NotaBin, NotaVuelta, NotaUtf8: string;
+  Cut, NotaBin, NotaVuelta, NotaUtf8, NotaCola: string;
 begin
   Denied := ReadPathDenied(APath); // reading may enter the library zone
   if Denied <> '' then
@@ -1811,6 +1831,17 @@ begin
   // El salto final CIERRA la ultima linea, no abre otra: "a\nb\n" son 2
   // lineas, y se ensenaba una tercera vacia que no existe (quinta revision)
   Lines := LineasDelTexto(Text);
+  // el final (tail): las ATail ultimas, como mucho las de una llamada - las
+  // ULTIMAS, no las primeras de ese tramo, que es lo que el recorte de abajo
+  // dejaria -, y READ-014 lo dice
+  NotaCola := '';
+  if ATail > 0 then
+  begin
+    AFrom := Max(1, Length(Lines) - Min(ATail, MAX_READ_LINES) + 1);
+    ATo := 0;
+    if (ATail > MAX_READ_LINES) and (Length(Lines) > MAX_READ_LINES) then
+      NotaCola := #10 + MsgFmt(SN_READ_TAIL_CORTADO_FMT, [ATail, MAX_READ_LINES]);
+  end;
   // lo que los escritores no reescribiran (ReescrituraDenegada) se dice al
   // leerlo, con la primera linea que no cuadra y su otra lectura (9-oct-2026)
   NotaVuelta := NotaDeIdaYVuelta(B, K, Lines);
@@ -1851,7 +1882,7 @@ begin
   end;
   Result := NotaBin + NotaVuelta + MsgFmt(SK_EDIT_LECTURA_NUMERADA_FMT,
     [TPath.GetFileName(APath), EtiquetaDeCodificacion(K, not HayByteAlto(B)), Eol, Auditoria(M), IniL, FinL,
-     Length(Lines), Body, Cut]);
+     Length(Lines), Body, Cut + NotaCola]);
 end;
 
 // -------------------------------------------------------------------------
@@ -2900,7 +2931,12 @@ begin
     var Entrada := TJSONObject.Create;
     Tanda.AddElement(Entrada);
     Entrada.AddPair('old', AOld);
-    Entrada.AddPair('new', IfThen(ADelete, '', ANew));
+    // el delete viaja: se cambiaba por un new vacio y la entrada no sabia que era
+    // un borrado (revisor del paisaje de la 1.29.3)
+    if ADelete then
+      Entrada.AddPair('delete', TJSONBool.Create(True))
+    else
+      Entrada.AddPair('new', ANew);
     if AAtLine > 0 then
       Entrada.AddPair('atline', TJSONNumber.Create(AAtLine));
     Result := Tanda.ToJSON;

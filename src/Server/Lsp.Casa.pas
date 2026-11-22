@@ -131,6 +131,13 @@ function BuzonDeInformes(const AAgente: string = ''): string;
   informes viejos de reports\hermes de todos (revisor de version de la
   1.18.0). }
 function CarpetaDeWorkspace(const AWorkspace: string): string;
+{ EL fichero en que el servidor recuerda el tamano del escritorio de la ultima
+  captura de delphi_desktop que AWorkspace hizo por el perfil APerfil (D17 de la
+  1.29.3): <cache>\desktops\<carpeta del workspace>\<perfil>.txt. Por workspace
+  porque dos agentes en el mismo escritorio tienen que enterarse cada uno; en la
+  casa y fuera de toda raiz: sobrevive a un reinicio y el agente ni lo ve ni lo
+  nombra. Lo compone esta y nadie mas. }
+function FicheroDeEscritorioVisto(const AWorkspace, APerfil: string): string;
 { LA casa del servidor como LUGAR de las puertas de leer y escribir texto
   (ltCasa, Lsp.Puertas): sus caches, el buzon y los informes. NO la carpeta del
   exe entera: ahi esta settings.ini, que tiene su propio lector (Lsp.Settings)
@@ -339,17 +346,34 @@ begin
   Result := ServerDir(TPath.Combine('drivers', ADriverID));
 end;
 
+{ Un nombre (sin mayusculas: lo son para el lector del ini y para los ficheros de
+  Windows) como trozo de un nombre de fichero, sin que dos distintos coincidan: su
+  Slug, y si el Slug no es el nombre tal cual, el MD5 del nombre detras (Slug corta,
+  pasa a minusculas y cambia lo que no es ASCII: "Ubuntu 24" y "Ubuntu-24", o dos
+  nombres no ASCII, que quedaban en ""). Era el cuerpo de CarpetaDeWorkspace, y el
+  fichero del escritorio visto se nombraba con el Slug a secas (revisor del paisaje
+  de la 1.29.3). }
+function NombreSinChoques(const ANombre: string): string;
+begin
+  Result := Slug(ANombre);
+  // el MD5 del nombre en minusculas: [Workspace.Claude] y [Workspace.claude]
+  // son la misma seccion para el lector del ini
+  if Result <> AnsiLowerCase(ANombre) then
+    Result := Result + IfThen(Result <> '', '-') + LowerCase(
+      THashMD5.GetHashString(AnsiLowerCase(ANombre))).Substring(0, 8);
+end;
+
+function FicheroDeEscritorioVisto(const AWorkspace, APerfil: string): string;
+begin
+  Result := ServerCacheDir(TPath.Combine(TPath.Combine('desktops', CarpetaDeWorkspace(AWorkspace)),
+    NombreSinChoques(APerfil) + '.txt'));
+end;
+
 function CarpetaDeWorkspace(const AWorkspace: string): string;
 begin
   if AWorkspace = '' then
     Exit(BUZON_SIN_WORKSPACE);
-  Result := Slug(AWorkspace);
-  // el MD5 del nombre en minusculas: [Workspace.Claude] y [Workspace.claude]
-  // son la misma seccion para el lector del ini
-  if Result <> AnsiLowerCase(AWorkspace) then
-    Result := Result + IfThen(Result <> '', '-') + LowerCase(
-      THashMD5.GetHashString(AnsiLowerCase(AWorkspace))).Substring(0, 8);
-  Result := BUZON_PREFIJO_WORKSPACE + Result;
+  Result := BUZON_PREFIJO_WORKSPACE + NombreSinChoques(AWorkspace);
 end;
 
 { <ARaiz>\<la carpeta del workspace de la sesion>[\<SlugDeAgente(AAgente)>] }

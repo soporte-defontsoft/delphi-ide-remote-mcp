@@ -213,6 +213,16 @@ check('suite verde: la respuesta declara sandboxed=true', j.get('sandboxed') is 
 # suite verde es un runner de consola; el recuadro de DUnitX lo mira
 # test_delphi_test_contenedor, que corre uno)
 check('suite verde: sin la nota fija TEST-024', 'note' not in j, str(j)[:500])
+check('suite verde sin filter: ninguna filterNote (control de A5)', 'filterNote' not in j, str(j)[:500])
+# W6 de la 1.29.2 (A5 de la 1.29.3): filter con un runner de CONSOLA le llega como --run:<filtro> y solo vale si el
+# programa lo lee; la respuesta no lo decia (filter=x06 corrio 99 de 99). Esta suite no lo lee: corre las 3, y lo
+# dice TEST-040; y no la nota TEST-035, que es de DUnitX
+j = J(B.call('delphi_test', {'command': 'run', 'project': VERDE, 'filter': 'Solo1'}, t=900))
+check('A5 suite de consola con filter: corre las 3 y filterNote TEST-040 dice que el filtro solo vale si el programa '
+      'lee su linea (ROJO sin A5: callaba)',
+      j.get('total') == 3 and mc.es(j.get('filterNote') or '', 'SN_TEST_FILTRO_CONSOLA_FMT')
+      and 'Solo1' in (j.get('filterNote') or '') and not mc.es(j.get('filterNote') or '', 'SN_TEST_FILTRO_SIN_TESTS_FMT'),
+      str(j)[:500])
 
 # ---- run rojo ----
 j = J(B.call('delphi_test', {'command': 'run', 'project': ROJO}, t=900))

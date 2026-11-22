@@ -18,6 +18,11 @@ const
   FIRMA_PNG: array[0..7] of Byte = ($89, $50, $4E, $47, $0D, $0A, $1A, $0A);
   { el tipo del primer trozo, el de la cabecera }
   TROZO_IHDR = 'IHDR';
+  { los bytes que lee TamanoPngBytes: la firma, la longitud y el tipo del trozo y
+    sus dos enteros. Quien solo quiere el tamano lee eso y no la imagen entera
+    (la nota de tamano de delphi_desktop leia el PNG entero; revisor del paisaje
+    de la 1.29.3) }
+  BYTES_DE_CABECERA_PNG = 24;
 
 { Los 13 bytes de datos del trozo IHDR de una imagen de AAncho x AAlto,
   color verdadero RGB de 8 bits por canal, sin entrelazar: lo que escribe el
@@ -57,7 +62,7 @@ begin
   Result := False;
   W := 0;
   H := 0;
-  if Length(ABytes) < 24 then
+  if Length(ABytes) < BYTES_DE_CABECERA_PNG then
     Exit;
   for I := 0 to High(FIRMA_PNG) do
     if ABytes[I] <> FIRMA_PNG[I] then

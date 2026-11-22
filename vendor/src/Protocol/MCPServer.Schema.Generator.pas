@@ -28,7 +28,7 @@ type
     class function ElementosDeJsonComoTexto(Prop: TRttiProperty): string;
     // [local change 2026-11-10] el UNICO lector de [NumeroComoTexto]: un texto
     // que es un numero por contrato se publica como number
-    class function PublicaComoNumero(Prop: TRttiProperty): Boolean;
+    class function PublicaComoNumero(Prop: TRttiProperty; out AConSigno: Boolean): Boolean;
     class function GenerateSchema(Cls: TClass): TJSONObject;
     class function GenerateSchemaFromInstance(Instance: TObject): TJSONObject;
   end;
@@ -92,12 +92,16 @@ begin
         // [local change 2026-11-11] ...como integer (y su minimum 0, el de abajo): el
         // binder solo acepta enteros no negativos, y "number" prometia 152.5, que
         // acababa en un "fuera de la imagen" que despistaba (revisor del paisaje de la 1.29.1)
-        if (JsonType = 'string') and PublicaComoNumero(RttiProp) then
+        var ConSigno := False;
+        if (JsonType = 'string') and PublicaComoNumero(RttiProp, ConSigno) then
           JsonType := 'integer';
         PropSchema.AddPair('type', JsonType);
         // [local change 2026-09-28] el binder rechaza un entero negativo en
         // TODOS los parametros (MotivoEntero): el esquema lo dice (decima)
-        if JsonType = 'integer' then
+        // [local change 2026-11-17] ...menos el texto marcado con signo, al que el
+        // binder no pasa por MotivoEntero: las muescas de la rueda de
+        // delphi_desktop van hacia los dos lados (D19 de la 1.29.3)
+        if (JsonType = 'integer') and not ConSigno then
           PropSchema.AddPair('minimum', TJSONNumber.Create(0));
 
         // [local change 2026-10-14] el tipo de sus elementos, el que diga la
@@ -225,13 +229,17 @@ begin
   Result := False;
 end;
 
-class function TMCPSchemaGenerator.PublicaComoNumero(Prop: TRttiProperty): Boolean;
+class function TMCPSchemaGenerator.PublicaComoNumero(Prop: TRttiProperty; out AConSigno: Boolean): Boolean;
 var
   Attr: TCustomAttribute;
 begin
+  AConSigno := False;
   for Attr in Prop.GetAttributes do
     if Attr is NumeroComoTextoAttribute then
+    begin
+      AConSigno := NumeroComoTextoAttribute(Attr).ConSigno;
       Exit(True);
+    end;
   Result := False;
 end;
 

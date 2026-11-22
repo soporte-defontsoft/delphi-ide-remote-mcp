@@ -370,6 +370,18 @@ function VolcadoDenegado(const ADestino, AExtension: string): string;
   cada tool la suya. Lo componian a mano el logcat de delphi_adb y
   remote-run/output (R8 del revisor del paisaje del 10-nov-2026). }
 procedure PonElVolcado(AObj: TJSONObject; const ARuta: string; ALineas, ABytes: Int64);
+{ ...y un volcado de TEXTO en ese out= (el logcat de un dispositivo, el log de
+  un build): como lo diria la respuesta en linea, por EL filtro de salida
+  (MaskDriveText: sin la casa del servidor y con las letras virtuales; la
+  respuesta pasa por el y este fichero no, y delphi_read lo devuelve tal cual:
+  el log de un build nombraba D:\ y C:\ donde su respuesta decia srvd: y
+  srvc:, medido en vivo el 21-nov-2026), en UTF-8 con su BOM por EL
+  codificador, laxo - medio caracter de lo que escribio otro no tumba el
+  volcado -, colocado por ColocaContenido.
+  Devuelve sus lineas como las cuenta delphi_read, para PonElVolcado. Lanza la
+  negativa. Lo hacian a mano el logcat de delphi_adb y delphi_build out= (B de
+  la 1.29.3; test_paisaje lo cazo). }
+function ColocaVolcado(const ADestino, ATexto: string): Int64;
 { EL nombre del temporal de una sustitucion junto a APath
   ('.<nombre>.<8 hex>.delphi-patch-tmp'): el de AtomicWrite, el de
   ColocaProducto y el del zip en proceso de package, que tenia uno propio
@@ -828,6 +840,13 @@ begin
   AObj.AddPair('logfile', ARuta);
   AObj.AddPair('lines', TJSONNumber.Create(ALineas));
   AObj.AddPair('size', TJSONNumber.Create(ABytes));
+end;
+
+function ColocaVolcado(const ADestino, ATexto: string): Int64;
+begin
+  var Texto := MaskDriveText('', ATexto);
+  ColocaContenido(ADestino, EncodeText(Texto, ekUtf8Bom, False));
+  Result := Length(LineasDelTexto(Texto));
 end;
 
 function EnLugarDeTexto(const APath: string; ALugar: TLugarDeTexto;

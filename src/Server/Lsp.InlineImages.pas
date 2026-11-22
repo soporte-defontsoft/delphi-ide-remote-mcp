@@ -56,7 +56,7 @@ function WrapWithAttachedImages(const AText: string): TJSONArray;
 function DeliverCapture(const AToolName, AFile: string; AInline: Boolean;
   AMaxWidth, AOriginX, AOriginY: Integer; ATapScaleX, ATapScaleY: Double;
   AReturn: TJSONObject; const ANotaEnLineaFmt: string = '';
-  const ANotaFrame: string = ''): Boolean;
+  const ANotaFrame: string = ''; AEscW: Integer = 0; AEscH: Integer = 0): Boolean;
 
 { '' si una captura pedida con AInline y AOut tiene por donde salir; si no,
   la negativa CAPT-012, para darla ANTES de capturar. Por stdio no hay enlace
@@ -74,7 +74,14 @@ function CapturaSinSalidaDenegada(AInline: Boolean; const AOut: string): string;
   a mano: dividir por la escala inline, sumar el origen de un recorte y
   multiplicar por el tapScale de Android (David, 25-sep-2026: 'arregla la
   fuga'; un modelo pequeno se salta la cuenta y pulsa donde no es). }
-function FrameOf(AImgW, AImgH, ASrcW, ASrcH, AOX, AOY: Integer): string;
+{ ...y con AEscW x AEscH > 0, el ESCRITORIO entero de la captura detras, '/<W>x<H>'
+  (D17 de la 1.29.3): el de una con region= o window= no es el srcW x srcH. Lo pone
+  quien lo sabe (delphi_desktop); sin el, el frame de siempre. }
+function FrameOf(AImgW, AImgH, ASrcW, ASrcH, AOX, AOY: Integer; AEscW: Integer = 0; AEscH: Integer = 0): string;
+{ El escritorio que lleva AFrame (su '/<W>x<H>'); False si no lo lleva - un frame
+  de antes, de adb, del disenador - o no es un frame. La inversa de FrameOf, con
+  EL mismo patron que FramePoint. }
+function EscritorioDelFrame(const AFrame: string; out AW, AH: Integer): Boolean;
 
 { x,y medidos sobre la imagen de AFrame -> pixeles del espacio de tap. Sin
   frame, AX/AY tal cual (pixeles de la captura, como siempre). '' = bien;
@@ -94,6 +101,7 @@ uses
   Lsp.Puertas,  // LeeBytes: la puerta de leer, con LUGARES_DE_UNA_CAPTURA
   Lsp.Capturas, // CapturaConsumible / IsAgentCapture / ConsumeAgentCapture
   Lsp.Files,    // DownloadLinkFor: el enlace, el mismo que da delphi_fetch
+  Lsp.Regex,    // GrupoDe: el grupo opcional del frame (EscritorioDelFrame)
   Lsp.Texts;
 
 const
@@ -156,9 +164,28 @@ begin
   end;
 end;
 
-function FrameOf(AImgW, AImgH, ASrcW, ASrcH, AOX, AOY: Integer): string;
+const
+  // EL patron de un frame, para sus dos lectores (FramePoint, EscritorioDelFrame): el
+  // de siempre y, opcional, el escritorio detras (D17 de la 1.29.3)
+  FRAME_PATRON = '^(\d{1,6})x(\d{1,6})@(\d{1,6})x(\d{1,6})\+(-?\d{1,6})\+(-?\d{1,6})(?:/(\d{1,6})x(\d{1,6}))?$';
+
+function FrameOf(AImgW, AImgH, ASrcW, ASrcH, AOX, AOY: Integer; AEscW: Integer; AEscH: Integer): string;
 begin
   Result := Format('%dx%d@%dx%d+%d+%d', [AImgW, AImgH, ASrcW, ASrcH, AOX, AOY]);
+  if (AEscW > 0) and (AEscH > 0) then
+    Result := Result + Format('/%dx%d', [AEscW, AEscH]);
+end;
+
+function EscritorioDelFrame(const AFrame: string; out AW, AH: Integer): Boolean;
+var
+  M: TMatch;
+begin
+  AW := 0;
+  AH := 0;
+  M := TRegEx.Match(AFrame.Trim, FRAME_PATRON);
+  // el grupo que no esta, por EL juez de la casa (GrupoDe: vacio si no esta)
+  Result := M.Success and TryStrToInt(GrupoDe(M, 7), AW) and TryStrToInt(GrupoDe(M, 8), AH) and
+    (AW > 0) and (AH > 0);
 end;
 
 function FramePoint(const AFrame, AX, AY: string; out AOutX, AOutY: Integer): string;
@@ -171,7 +198,7 @@ begin
   AOutY := StrToIntDef(AY.Trim, -1);
   if AFrame.Trim = '' then
     Exit; // sin frame: pixeles de la captura, el contrato de siempre
-  M := TRegEx.Match(AFrame.Trim, '^(\d{1,6})x(\d{1,6})@(\d{1,6})x(\d{1,6})\+(-?\d{1,6})\+(-?\d{1,6})$');
+  M := TRegEx.Match(AFrame.Trim, FRAME_PATRON);
   if not M.Success then
     Exit(MsgFmt(SR_CAPTURE_FRAME_BAD_FMT, [AFrame.Trim]));
   IW := StrToInt(M.Groups[1].Value);
@@ -193,7 +220,7 @@ end;
 function DeliverCapture(const AToolName, AFile: string; AInline: Boolean;
   AMaxWidth, AOriginX, AOriginY: Integer; ATapScaleX, ATapScaleY: Double;
   AReturn: TJSONObject; const ANotaEnLineaFmt: string;
-  const ANotaFrame: string): Boolean;
+  const ANotaFrame: string; AEscW: Integer; AEscH: Integer): Boolean;
 var
   Leidos, Bytes: TArray<Byte>;
   Escala: Double;
@@ -207,7 +234,7 @@ var
   begin
     if (IW <= 0) or (SrcW <= 0) then
       Exit;
-    AReturn.AddPair('frame', FrameOf(IW, IH, SrcW, SrcH, AOriginX, AOriginY));
+    AReturn.AddPair('frame', FrameOf(IW, IH, SrcW, SrcH, AOriginX, AOriginY, AEscW, AEscH));
     if ANotaFrame <> '' then
       AReturn.AddPair('frameNote', ANotaFrame)
     else

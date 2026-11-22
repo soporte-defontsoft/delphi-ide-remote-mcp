@@ -38,6 +38,7 @@ type
     FTeclas: TDictionary<Cardinal, TPulsacion>; // por punto de codigo Unicode
     FMuertas: TDictionary<Cardinal, TPulsacion>; // por keysym XKB de tecla MUERTA (dead_acute...)
     FSimboloDe: TDictionary<Cardinal, Cardinal>; // punto de codigo -> su keysym en el mapa
+    FNombreDe: TDictionary<Cardinal, string>; // codigo evdev -> lo que da SOLA (nivel 0), por su nombre XKB
     // lo que COMPONE el escritorio con una muerta y otra tecla, por punto de codigo: lo
     // dice su tabla de composicion (AprendeLoQueCompone); FConTabla, si se pudo leer
     FCompuestas: TDictionary<Cardinal, TArray<TPulsacion>>;
@@ -66,6 +67,12 @@ type
     function Secuencia(ACaracter: Cardinal; out APulsaciones: TArray<TPulsacion>): Boolean;
     function Cuantas: Integer;
     function CuantasMuertas: Integer;
+    { Lo que da la tecla del codigo evdev ACodigo SOLA en este escritorio, por su
+      nombre XKB (j, Return, comma, dead_acute...); '' si el mapa no la tiene. Para
+      decir que tecla fue la de un `key`: el 18-nov-2026 un agente pulso el 36
+      creyendo que era Enter (36 es el Return de X11, evdev + 8) y escribio dos J
+      (D22 de la 1.29.3). }
+    function NombreDe(ACodigo: Cardinal): string;
     property Distribucion: string read FDistribucion;
     property Error: string read FError;
   end;
@@ -91,6 +98,8 @@ type
     out ASimbolos: PCardinal): Integer; cdecl;
   TXkbAUnicode = function(ASimbolo: Cardinal): Cardinal; cdecl;
   TXkbNombreDistrib = function(AMapa: Pointer; AIdx: Cardinal): MarshaledAString; cdecl;
+  // xkb_keysym_get_name: el nombre de un keysym (ASCII: j, Return, ntilde); su largo o -1
+  TXkbNombreSimbolo = function(ASimbolo: Cardinal; ABuffer: Pointer; ATam: NativeUInt): Integer; cdecl;
   // el API de composicion de libxkbcommon (xkbcommon-compose.h, desde la 0.5)
   TXkbTablaDeLocale = function(ACtx: Pointer; ALocale: MarshaledAString; AFlags: Integer): Pointer; cdecl;
   TXkbTablaUnref = procedure(ATabla: Pointer); cdecl;
@@ -159,12 +168,14 @@ begin
   FTeclas := TDictionary<Cardinal, TPulsacion>.Create;
   FMuertas := TDictionary<Cardinal, TPulsacion>.Create;
   FSimboloDe := TDictionary<Cardinal, Cardinal>.Create;
+  FNombreDe := TDictionary<Cardinal, string>.Create;
   FCompuestas := TDictionary<Cardinal, TArray<TPulsacion>>.Create;
 end;
 
 destructor TMapaTeclado.Destroy;
 begin
   FCompuestas.Free;
+  FNombreDe.Free;
   FSimboloDe.Free;
   FMuertas.Free;
   FTeclas.Free;
@@ -219,6 +230,12 @@ end;
 function TMapaTeclado.Cuantas: Integer;
 begin
   Result := FTeclas.Count;
+end;
+
+function TMapaTeclado.NombreDe(ACodigo: Cardinal): string;
+begin
+  if not FNombreDe.TryGetValue(ACodigo, Result) then
+    Result := '';
 end;
 
 procedure TMapaTeclado.AprendeLoQueCompone(ACtx: Pointer; AUnicode: Pointer);
@@ -312,6 +329,7 @@ var
   Simbolos: TXkbSimbolos;
   AUnicode: TXkbAUnicode;
   NombreDistrib: TXkbNombreDistrib;
+  NombreSimbolo: TXkbNombreSimbolo;
   Ctx, Mapa, Dir: Pointer;
   Tecla, Nivel, Cuantos, Car: Cardinal;
   N: Integer;
@@ -323,11 +341,30 @@ var
     Result := FLib.SimboloOMotivo(ASimbolo, ADir, FError);
   end;
 
+  // el nombre XKB de un keysym, ASCII siempre (j, Return, ntilde, dead_acute);
+  // sin esa funcion, el caracter si es ASCII imprimible, si no su U+XXXX
+  function NombreDeSimbolo(ASimbolo: Cardinal): string;
+  var
+    Buf: array[0..63] of Byte;
+    C: Cardinal;
+  begin
+    FillChar(Buf, SizeOf(Buf), 0);
+    if Assigned(NombreSimbolo) and (NombreSimbolo(ASimbolo, @Buf[0], SizeOf(Buf) - 1) > 0) then
+      Exit(string(UTF8String(MarshaledAString(@Buf[0]))));
+    C := AUnicode(ASimbolo);
+    if (C > 32) and (C < 127) then
+      Exit(Char(C));
+    if C <> 0 then
+      Exit(Format('U+%.4X', [C]));
+    Result := '';
+  end;
+
 begin
   Result := False;
   FTeclas.Clear;
   FMuertas.Clear;
   FSimboloDe.Clear;
+  FNombreDe.Clear;
   FCompuestas.Clear;
   FConTabla := False;
   if ATexto = nil then
@@ -360,6 +397,10 @@ begin
   AUnicode := TXkbAUnicode(Dir);
   if not (Uno('xkb_keymap_layout_get_name', Dir)) then Exit;
   NombreDistrib := TXkbNombreDistrib(Dir);
+  // opcional: solo para decir que tecla es un codigo (NODE-044); sin ella, NombreDeSimbolo se apana
+  NombreSimbolo := nil;
+  if FLib.Simbolo('xkb_keysym_get_name', Dir) then
+    NombreSimbolo := TXkbNombreSimbolo(Dir);
 
   Ctx := CtxNuevo(0);
   if Ctx = nil then
@@ -392,6 +433,14 @@ begin
           N := Simbolos(Mapa, Tecla, 0, Nivel, Lista);
           if (N <> 1) or (Lista = nil) then
             Continue; // ninguno, o una tecla que emite varios simbolos
+          // lo que da SOLA, por su nombre, sea caracter o no (Return, Shift_L, dead_acute):
+          // para decir que tecla fue la de un `key` (NODE-044)
+          if (Nivel = 0) and not FNombreDe.ContainsKey(Tecla - 8) then
+          begin
+            var Nombre := NombreDeSimbolo(Lista^);
+            if Nombre <> '' then
+              FNombreDe.Add(Tecla - 8, Nombre);
+          end;
           // Una tecla MUERTA no da caracter (xkb_keysym_to_utf32 = 0): se
           // apunta por su keysym, para componer tildes con ella.
           if (Lista^ >= XKB_DEAD_MIN) and (Lista^ <= XKB_DEAD_MAX) then

@@ -30,8 +30,11 @@ BASE_ENV = {'DELPHI_MCP_ROOTS': RAIZ, 'APPDATA': AD, 'DELPHI_MCP_PACLIENT': STUB
             'DELPHI_MCP_REMOTE_HOSTS': '*'}
 # key con un NOMBRE de tecla: con code=1 pasaba la puerta y lo negaba DESK-010 despues, y "pasa la puerta"
 # salia verde sobre esa negativa (revisor de baterias de la 1.27, medido con el log del stub)
-# (double-tap, C1 de la 1.29.1: un gesto, del lado cerrado de la puerta como los demas: un host que solo mira lo niega)
-GESTOS = {'tap': {'x': '1', 'y': '1'}, 'double-tap': {'x': '1', 'y': '1'}, 'type': {'text': 'hola'},
+# (double-tap, C1 de la 1.29.1: un gesto, del lado cerrado de la puerta como los demas: un host que solo mira lo niega;
+# y la rueda, scroll, D19 de la 1.29.3; y hover, D20: mover el puntero de otro tambien es actuar)
+GESTOS = {'tap': {'x': '1', 'y': '1'}, 'double-tap': {'x': '1', 'y': '1'}, 'scroll': {'x': '1', 'y': '1', 'clicks': '1'},
+          'hover': {'x': '1', 'y': '1'},
+          'type': {'text': 'hola'},
           'key': {'code': 'enter'}, 'overview': {}}
 VER = {'status': {}, 'screenshot': {'out': os.path.join(RAIZ, 'c.png'), 'inline': False}}
 N = [0]

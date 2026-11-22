@@ -188,50 +188,57 @@ end;
 // '' = applied.
 function ApplyArgAliases(const AToolName: string; AArguments: TJSONObject): string;
 const
-  // tool, alias, real
-  Aliases: array [0 .. 27, 0 .. 2] of string = (
+  // tool, alias, real, y la pista de GUARD-045 cuando llegan con valores
+  // distintos ('' = ninguna): lo que el agente quiso, medido (A3/A4 de la
+  // 1.29.3); la pista vive con su alias y la siguiente es una celda
+  Aliases: array [0 .. 29, 0 .. 3] of string = (
     // "path" is what almost every other tool calls it; delphi_list calls it
     // "root" and delphi_projects too. Each spelling cost a wasted call
     // (measured 2026-08-25), and the fix is free: accept both.
-    ('delphi_list', 'path', 'root'),
-    ('delphi_list', 'dir', 'root'),
-    ('delphi_projects', 'path', 'root'),
+    ('delphi_list', 'path', 'root', SF_ALIAS_PISTA_LIST_ROOT),
+    ('delphi_list', 'dir', 'root', ''),
+    ('delphi_projects', 'path', 'root', ''),
     // add-unit/remove-unit take "path"; "unit" is what everybody types first.
-    ('delphi_config', 'unit', 'path'),
-    ('delphi_config', 'file', 'path'),
+    ('delphi_config', 'unit', 'path', ''),
+    ('delphi_config', 'file', 'path', ''),
     // Names that cost a call every time somebody guessed the obvious one.
-    ('delphi_read', 'from', 'fromline'),
-    ('delphi_read', 'to', 'toline'),
-    ('delphi_search', 'path', 'root'),
-    ('delphi_report', 'body', 'message'),
-    ('delphi_report', 'text', 'message'),
-    ('vault_search', 'query', 'pattern'),
-    ('vault_search', 'filter', 'pattern'),
-    ('delphi_list', 'filter', 'pattern'),
-    ('delphi_list', 'mask', 'pattern'),
-    ('delphi_components', 'pattern', 'filter'),
-    ('delphi_components', 'query', 'filter'),
-    ('delphi_read', 'startline', 'fromline'),
-    ('delphi_read', 'endline', 'toline'),
-    ('delphi_search', 'text', 'query'),
-    ('vault_read', 'linecount', 'limit'),
-    ('delphi_designer', 'class', 'classname'),
+    ('delphi_read', 'from', 'fromline', ''),
+    ('delphi_read', 'to', 'toline', ''),
+    ('delphi_search', 'path', 'root', SF_ALIAS_PISTA_SEARCH_ROOT),
+    ('delphi_report', 'body', 'message', ''),
+    ('delphi_report', 'text', 'message', ''),
+    ('vault_search', 'query', 'pattern', ''),
+    ('vault_search', 'filter', 'pattern', ''),
+    ('delphi_list', 'filter', 'pattern', ''),
+    ('delphi_list', 'mask', 'pattern', ''),
+    ('delphi_components', 'pattern', 'filter', ''),
+    ('delphi_components', 'query', 'filter', ''),
+    ('delphi_read', 'startline', 'fromline', ''),
+    ('delphi_read', 'endline', 'toline', ''),
+    // contar lineas en vez de dar la ultima, como vault_read (offset/limit):
+    // offset 8 veces y maxlines 4 en el state.db de Hermes desde el 12-nov
+    // (B de la 1.29.3); limit es de delphi_read desde entonces
+    ('delphi_read', 'offset', 'fromline', ''),
+    ('delphi_read', 'maxlines', 'limit', ''),
+    ('delphi_search', 'text', 'query', ''),
+    ('vault_read', 'linecount', 'limit', ''),
+    ('delphi_designer', 'class', 'classname', ''),
     // El rango de delphi_edit / delphi_textedit se llama "toline" porque asi
     // se llama ya en delphi_read: mismo concepto, mismo nombre. Y por lo
     // mismo se le aceptan los mismos dos apodos.
-    ('delphi_edit', 'to', 'toline'),
-    ('delphi_edit', 'endline', 'toline'),
-    ('delphi_textedit', 'to', 'toline'),
-    ('delphi_textedit', 'endline', 'toline'),
+    ('delphi_edit', 'to', 'toline', ''),
+    ('delphi_edit', 'endline', 'toline', ''),
+    ('delphi_textedit', 'to', 'toline', ''),
+    ('delphi_textedit', 'endline', 'toline', ''),
     // El perfil de PAServer es "profile" en delphi_build, delphi_desktop y
     // delphi_config, y era "name" en delphi_paserver: el mismo concepto con
     // dos nombres (Hermes, validacion de la 1.16.0, PAS-051). Se llama
     // "profile" en todas desde la 1.17.0; el nombre viejo sigue valiendo.
-    ('delphi_paserver', 'name', 'profile'),
+    ('delphi_paserver', 'name', 'profile', ''),
     // Lo que un agente manda a delphi_build sin mirar (Hermes, 22-oct-2026: dos
     // SYS-015 seguidos). No cuestan nada en el contrato: V46 de la 1.25.
-    ('delphi_build', 'configuration', 'config'),
-    ('delphi_build', 'command', 'target'));
+    ('delphi_build', 'configuration', 'config', ''),
+    ('delphi_build', 'command', 'target', SF_ALIAS_PISTA_BUILD_TARGET));
 var
   I: Integer;
   P: TJSONPair;
@@ -262,7 +269,7 @@ begin
       var DelAlias := ArgStr(AArguments, Aliases[I, 1]).Trim;
       if (DelAlias <> '') and (DelAlias <> ArgStr(AArguments, Aliases[I, 2]).Trim) then
         Exit(MsgFmt(SR_ARG_ALIAS_OTRO_VALOR_FMT, [P.JsonString.Value, Aliases[I, 2], AToolName,
-          Aliases[I, 2]]));
+          Aliases[I, 2]]) + MsgText(Aliases[I, 3]));
       AArguments.RemovePair(P.JsonString.Value).Free;
       Continue;
     end;

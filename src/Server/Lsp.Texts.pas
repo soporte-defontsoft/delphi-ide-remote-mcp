@@ -758,10 +758,18 @@ const
     'there. Repeat the request in a moment - at the new place if the ' +
     'folder was moved.';
 
+  { LA salida de una ruta que el agente nombra y no existe: la llevan todos los
+    "no existe" de una ruta (los concatenan aqui, en su constante). Solo la decia
+    LSP-011: desde la candidata, tras un WS-008 Hermes necesito dos intentos o
+    mas la mitad de las veces y tras un LSP-011 casi siempre acerto a la primera
+    (A2 de la 1.29.3; C4/W3 de la 1.29.2, ~25 textos con su frase). La regla y su
+    comprobacion, en test_ruta_no_existe_1293 }
+  SF_RUTA_NO_EXISTE_SALIDA =
+    ' Check the name and the folder: delphi_list root=<the folder it should be in> shows what is ' +
+    'really there, and delphi_search finds it by content.';
+
   SR_LSP_NO_FILE_FMT =
-    '[LSP-011 NOT_FOUND] %s does not exist. Check the name and the ' +
-    'folder: delphi_list root=<folder> shows what is really there, and ' +
-    'delphi_search finds it by content.';
+    '[LSP-011 NOT_FOUND] %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   { Un motor sin ajustes de proyecto NO publica diagnosticos: ni de una unidad
     valida ni de un error de sintaxis (medido 2026-10-06: 4,5 min y 80 s en
@@ -1330,6 +1338,10 @@ const
     '[EDIT-013 INVALID_PARAM] That multi-line "old" is left with a single line ' +
     'once its final line break is removed. A single line needs nothing ' +
     'special: send it as it is.';
+  { ...con un "new" vacio, lo que se queria era quitarla (D12 de la 1.29.3) }
+  SF_PATCH_BLOCK_SHORT_QUITAR =
+    ' To REMOVE that line (an empty "new" only blanks it): "delete": true in ' +
+    'that entry, with the same "old".';
 
   { Por que no casa un ancla de UNA linea (Lsp.Patch.AnclaPerdida, el
     texto de delphi_edit y de delphi_textedit). Decian cosas distintas de
@@ -1440,7 +1452,7 @@ const
     'with delete + create.';
 
   SR_PATCH_EDITS_NOFILE_FMT =
-    '[EDIT-027 NOT_FOUND] %s does not exist.';
+    '[EDIT-027 NOT_FOUND] %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   SR_PATCH_EDITS_ROLLED_FMT =
     '[EDIT-099 INVALID_PARAM] ROLLBACK: edit %d of %d failed and the file went ' +
@@ -1583,6 +1595,23 @@ const
     'they came with different values: one would be ignored. Send it once, as ' +
     '"%s" (the name tools/list declares). Nothing was done.';
 
+  { La pista de GUARD-045 para el alias que la pide (A3/A4 de la 1.29.3), en la
+    cuarta columna de la tabla de ApplyArgAliases (Lsp.PuertaDeLaLlamada). Medido
+    en el state.db de Hermes desde el 12-nov: delphi_search con path=<un fichero>
+    y root=<su carpeta> (28), delphi_build con command=build y target=Deploy (12)
+    y delphi_list con path=<una mascara> y root=<la carpeta>: el rechazo era
+    cierto y no decia que querian. Fragmentos sin etiqueta: van detras. }
+  SF_ALIAS_PISTA_SEARCH_ROOT =
+    ' To search inside ONE file, send that file alone as root (root takes a ' +
+    'folder or one file); to search some files of a folder, keep root and put ' +
+    'their mask in pattern.';
+  SF_ALIAS_PISTA_LIST_ROOT =
+    ' The folder to list goes in root; a mask (*.pas, Main*.fmx) goes in pattern.';
+  SF_ALIAS_PISTA_BUILD_TARGET =
+    ' delphi_build always builds, and "command" is read as its target - what it ' +
+    'does besides: target=Deploy builds and deploys. Send target alone; the ' +
+    'PAServer profile goes in profile.';
+
   // delphi_build composed a cmd.exe line (rsvars.bat && msbuild ...) until
   // 2an of 1.18.2 and platform/config/target travelled through it UNQUOTED:
   // a metacharacter there WAS a shell. msbuild runs with no shell now; this
@@ -1631,6 +1660,13 @@ const
     '%s does not: %s. Each configuration deploys its own list, as in the ' +
     'IDE''s Deployment Manager: delphi_config add-deployfile config=%s adds ' +
     'a file to this one.';
+
+  { Un Build de una plataforma que corre por PAServer: el destino sigue con lo
+    ultimo DESPLEGADO (D10 de la 1.29.3, opencode, 17-nov) }
+  SN_BUILD_SIN_DESPLEGAR_FMT =
+    '[BUILD-076] Built HERE for %s; the target still runs what was last ' +
+    'DEPLOYED there, not this build: delphi_build target=Deploy sends it ' +
+    'before delphi_paserver remote-run.';
 
   SN_BUILD_DEPLOYED_FMT =
     '[BUILD-006] Deployed through profile "%s" to %s-%s/%s/ in the target''s ' +
@@ -2109,9 +2145,9 @@ const
     otra vez (revisor de tokens, 4-oct-2026): queda el mapa y lo que solo
     decia este texto. }
   SD_PASERVER =
-    'The bridge for building and running on OTHER platforms (Linux, macOS) ' +
+    'The bridge for building on OTHER platforms (Linux, macOS) ' +
     'through PAServer: its installers, this server''s connection profiles ' +
-    'and SDKs, and running what a project deployed on the target (each ' +
+    'and SDKs, and running what a project deployed on Linux or Windows (each ' +
     'subcommand in "command"). The first time: packages (download the ' +
     'installer with delphi_fetch and run it on the target) -> add-profile ' +
     '(the password is stored encrypted) -> test-connection -> get-sdk (the ' +
@@ -2224,7 +2260,7 @@ const
   SP_PASERVER_JOB =
     'kill / output: the "jobId" a remote-run answer gave you; with profile ' +
     'and project (the same .dproj path) - only a job of THAT project on ' +
-    'THAT machine.';
+    'THAT machine, started from this workspace.';
   { Los dos out= que vuelcan texto a un fichero del agente (el logcat de
     delphi_adb y remote-run/output de delphi_paserver), dicho UNA vez: que
     pasa con uno que ya estaba (Lsp.Puertas.Coloca, FrenteAlDestino; R10 del
@@ -2235,8 +2271,9 @@ const
   OUT_DE_UN_VOLCADO_QUE_YA_ESTA =
     ' A file already there is replaced.';
   COMO_SE_LEE_UN_VOLCADO =
-    'Read it in ranges with delphi_read (400 lines per call), search it ' +
-    'with delphi_search, or download it to your machine with delphi_fetch.';
+    'Read it in ranges with delphi_read (400 lines per call; its end with ' +
+    'tail=N), search it with delphi_search, or download it to your machine ' +
+    'with delphi_fetch.';
   SP_PASERVER_OUT =
     'remote-run, output: a .txt/.log FILE for ALL the program wrote, ' +
     'instead of its last lines.' +
@@ -2244,22 +2281,62 @@ const
   SR_PASERVER_OUT_LOG =
     '[PAS-077 INVALID_PARAM] The "out" of remote-run and output must end ' +
     'in .txt or .log.';
+  { out= de delphi_build (B de la 1.29.3), el tercer volcado de la familia: medido
+    en el state.db de Hermes desde el 12-nov, los 10 SYS-015 de out querian el
+    log ENTERO del build en un .log suyo, como remote-run out=, y 5 iban con
+    verbosity=quiet: la respuesta corta y el log en el fichero. Por eso el log es
+    un log de fichero de msbuild con su verbosidad (normal; detailed con
+    verbose), no la consola, que en quiet no escribe nada en un build limpio. Lo
+    juzga y lo coloca lo de los otros dos (VolcadoDenegado, ColocaContenido,
+    PonElVolcado) }
+  SP_BUILD_OUT =
+    'A .txt/.log FILE on this server for the whole msbuild log, at normal ' +
+    'verbosity (detailed with verbose) whatever the answer shows.' + OUT_DE_UN_VOLCADO_QUE_YA_ESTA;
+  SR_BUILD_OUT_LOG =
+    '[BUILD-077 INVALID_PARAM] The "out" of delphi_build must end in .txt or ' +
+    '.log. Nothing was built.';
+  SN_BUILD_LOGFILE =
+    '[BUILD-078] The whole msbuild log of this build is in "logfile" ON THE ' +
+    'SERVER (normal verbosity; detailed with verbose). ' + COMO_SE_LEE_UN_VOLCADO;
   SR_PASERVER_JOB_NEEDS_FMT =
     '[PAS-002 INVALID_PARAM] %s needs "profile", "project" (the ' +
     '.dproj of that remote-run) and "job" (the jobId it returned). Only ' +
-    'a job this server started for that project on that machine is ' +
-    'touched.';
+    'a job this server started for that project on that machine, from ' +
+    'this workspace, is touched.';
   SR_REMOTERUN_BADJOB =
     '[RUN-001 INVALID_PARAM] "job" is not a job id of this server ' +
     '(date-time-fragment, as remote-run returns it).';
-  { kill/output de un trabajo que este proceso no arranco para ese perfil y
-    proyecto (1.22.2: valia cualquier id con el alfabeto bueno) }
+  { kill/output de un trabajo que este proceso no arranco para ese workspace,
+    perfil y proyecto (1.22.2: valia cualquier id con el alfabeto bueno; el
+    workspace, revisor del paisaje del diff de la 1.29.3) }
   SR_REMOTERUN_JOB_AJENO_FMT =
     '[RUN-021 NOT_FOUND] Job %s was not started by this server for this ' +
-    'project and profile: kill and output only touch a job remote-run ' +
-    'started here, with the same project and profile. A server knows only ' +
+    'workspace, project and profile: kill and output only touch a job ' +
+    'remote-run started here, from the same workspace, with the same ' +
+    'project and profile. A server knows only ' +
     'the jobs its own process started: after a restart, an older job can ' +
     'only be stopped on the target. Nothing was stopped or read.';
+  { Lo que sigue a RUN-021 y a RUN-001: los trabajos que SI son de ese perfil y
+    proyecto, el paso siguiente (D32 de la 1.29.3: tras compactar, Hermes
+    invento un id, lo repitio con kill, y antes probo command=jobs y
+    command=list buscando la lista). %s = los ultimos, del mas antiguo al mas
+    nuevo, separados por coma }
+  SF_REMOTERUN_TRABAJOS_FMT =
+    ' The jobs this server started for this workspace, project and ' +
+    'profile, newest last: %s.';
+  SF_REMOTERUN_NINGUN_TRABAJO =
+    ' Since it last started, this server has started no job for this ' +
+    'workspace, project and profile.';
+  { Un programa que una senal mato en un destino Linux: el lanzador
+    (McpRunJob, WTERMSIG) da 128 + su numero, como el shell, y el codigo solo
+    no lo decia (D14 de la 1.29.3: 139 con la salida cortada). [codigo, la base
+    (JOB_RC_SENAL_BASE, NodeProtocolo.inc), numero de la senal]; sin tabla de
+    nombres: el numero es lo que da el destino }
+  SN_REMOTERUN_SENAL_FMT =
+    '[RUN-036] exitCode %d on this target is how the launcher reports a ' +
+    'program killed by a signal: %d + the signal number, as the shell does - ' +
+    'here signal %d (unless the program returned that number itself). Its ' +
+    'output ends where the signal stopped it.';
   SN_REMOTERUN_KILL_FMT =
     '[RUN-002] If it hung or you no longer need it: delphi_paserver ' +
     'command=kill profile=%s project=<the same .dproj> job=%s. It kills ' +
@@ -2282,6 +2359,17 @@ const
     '[RUN-006] Finished: its output and its exit code. Once read, it ' +
     'has been deleted from the target (like a mailbox): asking ' +
     'for it again brings nothing.';
+  { Lo NUEVO de un trabajo desde la ultima vez que este workspace lo leyo
+    (Lsp.RemoteRun.PonLoNuevo, D18 de la 1.29.3): las lineas nuevas, la hora de
+    la lectura anterior y los segundos desde ella. Caso de campo, 17-nov: un
+    agente no supo a cual de sus toques correspondia lo que leia }
+  SN_REMOTERUN_LO_NUEVO_FMT =
+    '[RUN-034] newSinceLastRead: the %d line(s) this job wrote after your ' +
+    'last read of it, at %s (%d s ago). "output" still carries everything ' +
+    'since it started.';
+  SN_REMOTERUN_NADA_NUEVO_FMT =
+    '[RUN-035] Nothing new since your last read of this job, at %s (%d s ' +
+    'ago): "output" is what it had already written.';
   { La salida de un programa que no cabe en una respuesta: sus ultimas
     lineas (ColaDeSalida, V80 de la 1.23.1). %d = los bytes de su fichero de
     salida en el destino, %d = las lineas que van }
@@ -2384,9 +2472,9 @@ const
     'machine is run.';
 
   SR_PASERVER_RUN_NOPROJ_FMT =
-    '[PAS-005 NOT_FOUND] The project %s does not exist on this server. ' +
-    'remote-run runs what that .dproj has deployed (delphi_build ' +
-    'target=Deploy).';
+    '[PAS-005 NOT_FOUND] The project %s does not exist on this server.' +
+    SF_RUTA_NO_EXISTE_SALIDA + ' remote-run runs what that .dproj has ' +
+    'deployed (delphi_build target=Deploy).';
 
   SR_PASERVER_RUN_EXENAME =
     '[PAS-006 INVALID_PARAM] "exe" is optional and, if given, must be a file ' +
@@ -2455,6 +2543,16 @@ const
     'launcher is what reads the job and runs the program (it ships in ' +
     'the release, node folder: McpRunJob for a Linux, McpRunJob.exe for ' +
     'a Windows).';
+  { Un destino de un sistema para el que la distribucion no trae lanzador
+    (macOS): le llegaba el ELF de Linux, porque su ejecutable tampoco lleva
+    extension (medido con un perfil OSX64 de prueba, revisor del paisaje de la
+    1.29.3). Lleva [el perfil, su plataforma] }
+  SR_REMOTERUN_SIN_LANZADOR_FMT =
+    '[RUN-037 DENIED] remote-run and kill start this server''s launcher on ' +
+    'the target, and it is built for Linux and Windows only: profile %s is ' +
+    'a %s target. Building and deploying for it are the IDE''s own ' +
+    '(delphi_build target=Deploy) and do not need it; the program runs ' +
+    'there by hand.';
   SN_REMOTERUN_ENV_WIN_FMT =
     '[RUN-012] Windows: the program runs in interactive session %s of ' +
     'the PAServer user, with a desktop';
@@ -2821,8 +2919,8 @@ const
     'user session), like adb for Android: SEE it and ACT on it. A small ' +
     'node this server deploys and updates by itself does the work there ' +
     '(leave "project" empty). THE FLOW: command=screenshot brings the whole ' +
-    'desktop; measure the pixel you want on it and tap (or type, which ' +
-    'presses there first) at that x,y - the node handles the screen scale. ' +
+    'desktop; measure the pixel you want on it and tap at that x,y - the ' +
+    'node handles the screen scale. ' +
     'Every capture lists "windows" (title and rectangle in capture pixels; ' +
     'on Linux the X11/Xwayland ones, which is every FMX application - ' +
     'native Wayland windows show in the image but are not listed) and ' +
@@ -2837,9 +2935,9 @@ const
     '(press at x,y, move to tox,toy and ' +
     'release: a window''s title bar moves it; to resize, press 3 px past ' +
     'its right/bottom edge in "windows" (corner: x+w+3, y+h+3) - ' +
-    'inside, the press goes to the app) | type (write "text"; with x,y it ' +
-    'presses there first and pays the startup once (tap + type pays it ' +
-    'twice). Typed means the keys were SENT: nothing checks ' +
+    'inside, the press goes to the app) | scroll (wheel at x,y) | hover (the pointer to x,y, no press: a ' +
+    '1:1 crop around it, for tooltips and to see where a tap would land) | type (write "text"; with x,y it ' +
+    'presses there first in one trip (tap + type is two). Typed means the keys were SENT: nothing checks ' +
     'where the focus was, so read the screenshot each answer brings) | key ' +
     '(one key: Linux code on a Linux target, key NAME on a Windows one) | ' +
     'overview (when one window covers another - Linux: the desktop''s overview ' +
@@ -2857,7 +2955,7 @@ const
     'target=Deploy).';
   SP_ADBLINUX_X =
     'every gesture: horizontal pixel measured on the screenshot this tool ' +
-    'returned (pass its frame too and the server converts)';
+    'returned (pass its frame too)';
   SP_ADBLINUX_Y =
     'vertical pixel, measured as x';
   SP_DESKTOP_TOX =
@@ -2865,6 +2963,8 @@ const
     'frame) as x';
   SP_DESKTOP_TOY =
     'drag: vertical pixel where it releases, as tox';
+  SP_DESKTOP_CLICKS =
+    'scroll: >0 down, <0 up';
   { los modificadores de delphi_desktop key, UNA vez: su texto, su negativa y
     el codigo, que los parte por ', ' (WHEN SEEN de F1 de la 1.29) }
   MODIFICADORES = 'ctrl, shift, alt, super';
@@ -2893,7 +2993,7 @@ const
     'character it cannot compose (an emoji) is refused by name, and the ' +
     'answer says which keyboard was used. A line break (LF, CRLF or CR) presses ' +
     'Enter, once. Typed as ' +
-    'TEXT, never run. With x,y it presses there first to focus the field.';
+    'TEXT, never run.';
   SR_ADBLINUX_NEEDTEXT =
     '[DESK-002 INVALID_PARAM] type needs "text". If you also pass x and y, it ' +
     'presses there before writing: that is the real gesture, "write this ' +
@@ -2935,15 +3035,14 @@ const
     'kept. false = a one-use download link (no vision, or you want the ' +
     'bytes); over stdio there is none: use out=.';
   SP_ADBLINUX_INLINE =
-    'Default true: the capture (a screenshot, an overview, or the one each ' +
-    'gesture returns)' + SP_CAPTURE_INLINE_RULE;
+    'Default true: every capture (gestures too)' + SP_CAPTURE_INLINE_RULE;
 
   SP_CAPTURE_MAXWIDTH_RULE =
     'Inline only: the widest the image travels (0 = 1280); a wider capture ' +
     'is scaled down, a narrower one never enlarged. Divide what you measure ' +
     'on it by the answer''s inlineScale for capture pixels';
   SP_ADBLINUX_MAXWIDTH =
-    SP_CAPTURE_MAXWIDTH_RULE + ', or pass its frame to tap or type.';
+    SP_CAPTURE_MAXWIDTH_RULE + ', or pass its frame with x,y.';
 
   SN_CAPTURE_INLINE_NOTE_FMT =
     '[CAPT-001] The image is IN this answer (scaled %s of the capture). ' +
@@ -3018,27 +3117,28 @@ const
     'out= is only for saving it in a folder of YOURS in the project.';
 
   SP_CAPTURE_FRAME =
-    'tap (and type, drag on delphi_desktop): the "frame" of the screenshot you ' +
+    'tap (any gesture on delphi_desktop): the "frame" of the screenshot you ' +
     'measured on, verbatim; x,y are then pixels of THAT image and the ' +
     'server converts them (inline scale, crop origin, device display). ' +
     'Without it, capture pixels.';
 
   SN_CAPTURE_FRAME_NOTE =
-    '[CAPT-003] To press something you see in this image: tap (or type) ' +
-    'with x,y measured ON THIS IMAGE and frame=<the frame above>, copied ' +
+    '[CAPT-003] To act on something you see in this image: the gesture''s ' +
+    'x,y measured ON THIS IMAGE and frame=<the frame above>, copied ' +
     'as it is. The server converts scale, crop origin and display for ' +
     'you.';
 
   SR_CAPTURE_FRAME_BAD_FMT =
     '[CAPT-004 INVALID_PARAM] frame "%s" does not have the shape of the ' +
-    'captures (<width>x<height>@<width>x<height>+<x>+<y>). Copy it ' +
+    'captures (<width>x<height>@<width>x<height>+<x>+<y>, on delphi_desktop ' +
+    'with /<width>x<height> of the whole desktop behind it). Copy it ' +
     'EXACTLY from the answer of the capture you measured on; nothing was ' +
-    'pressed.';
+    'sent.';
 
   SR_CAPTURE_FRAME_OUT_FMT =
     '[CAPT-005 INVALID_PARAM] (%s,%s) falls outside the image of that frame ' +
     '(%dx%d). Measure on the image that frame came with, or ask for ' +
-    'another capture; nothing was pressed.';
+    'another capture; nothing was sent.';
 
   SP_ADBLINUX_WINDOW =
     'screenshot OPTIONAL: part of a window title; the capture is cropped ' +
@@ -3070,6 +3170,30 @@ const
   { Super ABRE la vista general, o la CIERRA si ya estaba abierta: el
     segundo overview la cerro y esto decia que estaba abierta (Opus sobre la
     1.22.2, u). Quien lo sabe es GNOME Shell (OverviewActive): eso, a la 1.24 }
+  { El escritorio de un perfil cambio de tamano desde la ultima captura que este
+    workspace hizo por el (Mcp.Tools.Desktop.NotaDeTamanoDelEscritorio, D17 de la
+    1.29.3): antes ancho x alto, ahora ancho x alto. Caso de campo, 17-nov: de
+    1920x1080 a 3440x1440 por un escritorio remoto, y un agente siguio con las
+    posiciones de antes. Un hecho, no un diagnostico }
+  SN_DESKTOP_CAMBIO_DE_TAMANO_FMT =
+    '[DESK-030] This desktop was %dx%d at your last capture through this ' +
+    'profile and is %dx%d now: positions, frames and regions measured before ' +
+    'do not hold. Measure again on this capture (for something small, region= ' +
+    'gives it at full size).';
+  { Un gesto con el frame de OTRO escritorio (D17 de la 1.29.3): el frame lleva el
+    escritorio en que se midio y el de la ultima captura de este workspace por ese
+    perfil es otro. ANTES de pulsar, y solo cuando se sabe (los dos). Frame, recordado }
+  SR_DESKTOP_FRAME_OTRO_ESCRITORIO_FMT =
+    '[DESK-031 INVALID_PARAM] That frame was measured on a %dx%d desktop, and ' +
+    'your last capture of this desktop through this profile was %dx%d: the ' +
+    'gesture would land somewhere else. Nothing was sent - take a capture and ' +
+    'measure on it.';
+  { ...y lo que (b) no ve: el escritorio cambio despues de la ultima captura y el
+    gesto ya se hizo; su propia captura lo dice. Un hecho. Ahora, el del frame }
+  SN_DESKTOP_GESTO_OTRO_ESCRITORIO_FMT =
+    '[DESK-032] The capture of this gesture is %dx%d and the frame it was aimed ' +
+    'with is of a %dx%d desktop: the gesture may have landed somewhere else. ' +
+    'Measure on this capture before the next one.';
   SN_DESKTOP_OVERVIEW_LINUX =
     '[DESK-008] This capture was taken 0.8 s after asking the desktop for ' +
     'its overview of all the windows (Super on GNOME; KWin''s Overview on ' +
@@ -3113,7 +3237,7 @@ const
 
   SR_ADBLINUX_CMD =
     '[DESK-011 INVALID_PARAM] command must be screenshot, tap, double-tap, ' +
-    'drag, type, key, overview or status.';
+    'drag, scroll, hover, type, key, overview or status.';
   { Un parametro que no es del comando (Lsp.Guard.ParametroQueNoVa), como en
     delphi_adb: aqui se ignoraba en silencio, y sin command la llamada es una
     captura - siete key/tap/type de un agente con command FUERA de sus
@@ -3124,18 +3248,31 @@ const
     'be ignored). Nothing was done: %s takes %s.%s%s';
   SF_DESKTOP_SIN_COMANDO =
     ' "command" did not arrive, and without it the call is a screenshot ' +
-    '(the default): send command=tap, drag, type, key or overview with the gesture.';
+    '(the default): send command=tap, drag, scroll, hover, type, key or overview with the gesture.';
   SR_ADBLINUX_NEEDPROFILE =
     '[DESK-012 INVALID_PARAM] "profile" is missing: the PAServer profile of the ' +
     'machine whose desktop you want (delphi_paserver command=profiles ' +
     'lists them).';
-  SR_ADBLINUX_NEEDXY =
-    '[DESK-013 INVALID_PARAM] tap needs x and y, measured on the screenshot ' +
+  { el %s es el gesto: decia "tap" tambien a un double-tap (y ahora a un hover) }
+  SR_DESKTOP_NEEDXY_FMT =
+    '[DESK-013 INVALID_PARAM] %s needs x and y, measured on the screenshot ' +
     'that command=screenshot returns.';
   SR_DESKTOP_DRAG_NEEDXY =
     '[DESK-026 INVALID_PARAM] drag needs x,y (where it presses) and tox,toy ' +
     '(where it releases), measured on the screenshot that command=screenshot ' +
     'returns.';
+  { el hover (D20 de la 1.29.3): donde quedo el puntero, en pixeles del recorte que viaja }
+  SN_DESKTOP_HOVER_FMT =
+    '[DESK-034] hover: the pointer is at (%d,%d) of this crop and nothing was pressed. A ' +
+    'tooltip, if the application shows one there, is in the image - it can take a moment: ' +
+    'hover again if it is not yet - and when it is a window of its own it is in "windows" ' +
+    'too. To press there, tap with this frame.';
+  { la rueda (D19 de la 1.29.3); el %d es el tope del protocolo del nodo, dos veces }
+  SR_DESKTOP_SCROLL_NEED_FMT =
+    '[DESK-033 INVALID_PARAM] scroll needs x,y (the wheel turns over what is ' +
+    'there, measured on the screenshot that command=screenshot returns) and ' +
+    'clicks, the notches: a whole number from 1 to %d to go down, -1 to -%d ' +
+    'to go up.';
   SR_ADBLINUX_NEEDCODE =
     '[DESK-014 INVALID_PARAM] key needs "code", the Linux code of the key ' +
     '(Escape 1, Tab 15, Enter 28).';
@@ -4002,8 +4139,9 @@ const
     'the MCP session (the server was updated).';
 
   SR_UNIT_PAS_MISSING_FMT =
-    '[CFG-035 NOT_FOUND] %s does not exist. To create a new unit use ' +
-    'delphi_create kind=unit (or form-vcl / form-fmx).';
+    '[CFG-035 NOT_FOUND] %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA +
+    ' To create a new unit use delphi_create kind=unit (or form-vcl / ' +
+    'form-fmx).';
 
   SR_UNIT_NOT_PAS_FMT =
     '[CFG-036 INVALID_PARAM] "%s" is not a .pas unit: path is the unit''s .pas ' +
@@ -4155,7 +4293,7 @@ const
     'implementation (implementation by default, which is where a new ' +
     'unit goes unless one of its types is used in the interface).';
   SR_ADDUSES_NO_FILE_FMT =
-    '[USES-006 NOT_FOUND] %s does not exist.';
+    '[USES-006 NOT_FOUND] %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
   SR_ADDUSES_NO_SECTION_FMT =
     '[USES-007 DENIED] I cannot find the %s section in %s (a unit has ' +
     'interface and implementation; if the file is not a unit, edit its ' +
@@ -4470,7 +4608,8 @@ const
 
   SR_STYLES_PROJECT_NO_EXISTE_FMT =
     '[STYLE-041 NOT_FOUND] project=%s does not exist: give the .dproj (or ' +
-    'its folder) whose .fmx/.pas the lint checks the StyleLookup of.';
+    'its folder) whose .fmx/.pas the lint checks the StyleLookup of.' +
+    SF_RUTA_NO_EXISTE_SALIDA;
 
   SR_STYLES_NO_CONVERTER =
     '[STYLE-009 INTERNAL] DelphiStyleConvert.exe (the text<->binary ' +
@@ -4675,6 +4814,16 @@ const
     'cannot read, a class it does not know - with everything inside it. The ' +
     'app does not see them and build leaves them out of the .bin.style: fix ' +
     'them in the text .style.';
+  { %d: cuantos. Los estilos que el indice de FMX (FindStyleResource) NO devuelve
+    por su nombre: otro objeto con el mismo StyleName, interno o un rol, va
+    despues y gana. Tres casos el 17-nov con el lint en clean (opencode, D9 de
+    la 1.29.3); lo dice el conversor, preguntandole a FMX }
+  SN_STYLES_PISADOS_FMT =
+    '[STYLE-071] shadowedByInnerName: %d style(s) that FMX does NOT return by ' +
+    'their own name - it indexes EVERY object with a StyleName, inner parts ' +
+    'and palette roles too, without case, and the last one wins. A control ' +
+    'with that StyleLookup gets returnedInstead, or comes out empty, with no ' +
+    'error. Rename that inner object or role.';
   { %d: cuantos. Los colores de un .style escritos con menos de 8 cifras: FMX
     los carga sin error y el alfa queda en 00 o casi. delphi_styles lint no
     lo veia: xFF7DFC6 por xFFF7DFC6 en un tema real, que solo enseno la vista
@@ -5689,7 +5838,10 @@ const
     '  see a form as the designer does .... delphi_designer preview'#10 +
     '  add a control, change, remove ...... delphi_designer insert / set ' +
     '/ delete'#10 +
-    '  FMX styles ......................... delphi_styles'#10#10 +
+    '  FMX styles: view, set, lint ........ delphi_styles'#10 +
+    // D5 de la 1.29.3 (Hermes, 15-nov): para regenerar el .bin.style escribio
+    // su propio programa; la palabra que buscaba era "binary"
+    '  binary style (.bin.style + .res) ... delphi_styles build'#10#10 +
     'TAKING IT AWAY AND DEPLOYING'#10 +
     '  download a file .................... delphi_fetch'#10 +
     '  package a folder ................... delphi_package'#10 +
@@ -6038,6 +6190,14 @@ const
     '[TEST-035] filter=%s ran no test. DUnitX takes a fixture by its full ' +
     'name or the start of it (Unit.TFixture) or a test by its full name ' +
     '(Unit.TFixture.Method), several separated by commas - no wildcards.';
+  { Un filter con un runner de CONSOLA: le llega como --run:<filtro> y solo vale
+    si el programa lee su linea; la respuesta no lo decia y filter=x06 corrio 99
+    de 99 (W6 de la 1.29.2). %s = el filtro, dos veces }
+  SN_TEST_FILTRO_CONSOLA_FMT =
+    '[TEST-040] filter=%s went to this runner as --run:%s on its command ' +
+    'line, but it is a console program (PASS/FAIL lines and exit code), not ' +
+    'DUnitX: the filter applies only if the program reads its command line ' +
+    'itself. The counts of this answer say what ran.';
 
   SN_TEST_CONSOLE_FORMAT =
     '[TEST-011] For me to count your tests, print ONE LINE PER CHECK ' +
@@ -6107,7 +6267,7 @@ const
     'the tests without it. Nothing was run.';
 
   SR_TEST_NOPATH_FMT =
-    '[TEST-017 NOT_FOUND] %s does not exist.';
+    '[TEST-017 NOT_FOUND] %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   SR_TEST_NOTATEST_FMT =
     '[TEST-018 INVALID_PARAM] %s does not look like a test project. What counts ' +
@@ -6373,7 +6533,7 @@ const
 
   SP_DESIGNER_COMPONENT =
     'get: the component Name as it appears in the form (object <Name>: ' +
-    '<Class>). preview: crop the image to that component (one inside an ' +
+    '<Class>). tree: only its subtree. preview: crop the image to that component (one inside an ' +
     'inline frame goes as Frame1.Name). set/delete: the component to change or ' +
     'delete. insert optional: the Name of the new control (an identifier ' +
     'free in the form and its class), its text too when the class shows ' +
@@ -6390,9 +6550,9 @@ const
   { tree con tope de niveles (nota de Hermes: un form grande daba un arbol
     enorme y no habia forma de pedir solo lo de arriba; 4-oct-2026) }
   SP_DESIGNER_MAXDEPTH =
-    'tree optional: how many levels to show (1 = only the form; 0 or empty ' +
-    '= all). An object on the last level shows childrenCount instead of its ' +
-    'children';
+    'tree optional: how many levels to show (1 = only the form, or only ' +
+    'the component= when given; 0 or empty = all). An object on the last ' +
+    'level shows childrenCount instead of its children';
 
   { preview (RenderForm, 1.17.0): el estado de vista, el estilo, los no
     visuales y donde cae el PNG. inline y maxwidth: la cabeza del disenador
@@ -6706,6 +6866,20 @@ const
     '[DSGN-065 INVALID_PARAM] "%s" carries %s, a double quote or a control ' +
     'character, which cannot travel to the renderer as one value. Nothing ' +
     'was drawn: write it without it.';
+
+  { preview component=X de un form FMX cuyo recorte NO es X (D7 de la 1.29.3;
+    Mcp.Tools.Designer.NotaDelComponente). Medido con un agente el 16-nov: el de un
+    panel oculto era la rejilla de debajo y lo dio por bueno. Oculto: X, el que
+    esta oculto (X o un padre), su linea, y ese otra vez para el state=. Tapado:
+    X, los que van despues con su linea, y el primero para el state= }
+  SN_DSGN_PREVIEW_OCULTO_FMT =
+    '[DSGN-200] %s is NOT drawn: %s (%s) has Visible = False, and FMX does not ' +
+    'draw a hidden control at design time - nor does the IDE. What this crop ' +
+    'shows is what lies under it; state=%s.Visible=True draws it.';
+  SN_DSGN_PREVIEW_TAPADO_FMT =
+    '[DSGN-201] %s is covered: %s come(s) after it in the file over the same ' +
+    'area, and FMX paints later siblings on top - what this crop shows of it ' +
+    'is theirs. state=%s.Visible=False draws it without the first one.';
 
   SR_DESIGNER_PREVIEW_SIN_COMPONENTE_FMT =
     '[DSGN-066 NOT_FOUND] There is no component %s drawn in %s, so there ' +
@@ -7265,6 +7439,33 @@ const
     'TextSettings value takes its flag out of StyledSettings, for one), so they are ' +
     'part of what the form says and loads with now.';
 
+  { Un set que no cambia ningun valor pedido no escribe el fichero (D28 de la
+    1.29.3): cada propiedad pedida dice tras el escritor del IDE lo mismo que
+    decia el form. Lo demas que el escritor reescribiria es de la CARGA (un
+    TabOrder renumerado, el Size de un control alineado) y el form carga igual.
+    Medido en campo el 18-nov-2026: dos set de HitTest=False, que ya lo era,
+    reescribieron TabOrder y Size.Height con DSGN-189, y el agente los deshizo
+    a mano. Lleva [nombre]. }
+  SN_DESIGNER_NADA_CAMBIA_FMT =
+    '[DSGN-202] Nothing was written: %s already loads with what was asked (the form ' +
+    'says it already, or it is the value its class gives it). Lines the IDE''s ' +
+    'writer would also rewrite in it come from loading the form (a TabOrder ' +
+    'renumbered, the Size of an aligned control), and the form loads the same ' +
+    'without them.';
+
+  { Lo que el escritor del IDE reescribio en el componente y la propiedad puesta
+    no cambio: la CARGA del form lo recalcula (un TabOrder renumerado, el Size de
+    un control alineado), y el escritor lo escribe igual sin lo puesto
+    (loadWritten / loadRemoved, Lsp.DesignerEdit.PonLoQueTambienEscribio; D28 de
+    la 1.29.3). Iba en alsoWritten con DSGN-189, que lo achacaba al setter
+    (medido: un set de Opacity reescribia el Size.Height viejo de un Client).
+    Lleva [nombre]. }
+  SN_DESIGNER_CARGA_TAMBIEN_ESCRIBE_FMT =
+    '[DSGN-203] loadWritten and loadRemoved are lines of %s that the property did ' +
+    'not change: loading the form recomputes them (a TabOrder renumbered, the Size ' +
+    'of an aligned control) and the IDE writes them that way whenever it saves the ' +
+    'form. The form loads the same with or without them: nothing to undo.';
+
   { Lo que el agente puso en una propiedad que su clase declara stored False:
     el IDE no la guarda nunca por su nombre y lo que el form guarda de ella va
     en otras (en FMX, Width y Height van en Size). Decia DSGN-165, "el valor de
@@ -7621,7 +7822,8 @@ const
 
   SN_DESIGNER_TREE_MAXDEPTH_FMT =
     '[DSGN-059] Cut at level %d: %d objects show only their childrenCount. ' +
-    'Raise maxdepth, or ask for one of them with command=get component=<name>.';
+    'Raise maxdepth, or ask for the subtree of one of them with ' +
+    'component=<name> (command=get gives its block).';
 
   SN_DESIGNER_LINT_OK_FMT =
     '[DSGN-020] LINT CLEAN: %s has no unknown classes, unpublished ' +
@@ -8112,7 +8314,7 @@ const
     'default, the one with the same name as the .dfm.';
 
   SR_DESIGNER_NO_FORM_FMT =
-    '[DSGN-022 NOT_FOUND] The form file %s does not exist.';
+    '[DSGN-022 NOT_FOUND] The form file %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   SR_DESIGNER_NO_UNIT_FMT =
     '[DSGN-023 NOT_FOUND] I cannot find the form''s unit (%s). If it has a ' +
@@ -10557,7 +10759,7 @@ const
     admitia ficheros: tres vueltas (17-oct-2026). }
   SR_WS_DIR_NOT_FOUND_FMT =
     '[WS-008 NOT_FOUND] %s does not exist: there is no folder and no file ' +
-    'with that path.';
+    'with that path.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   { Una raiz o referencia a la que el servidor no llega AHORA (informe de
     Hermes, 5-oct-2026: una referencia en una letra sin montar salia listada
@@ -10595,7 +10797,7 @@ const
     '[GIT-025 INVALID_PARAM] Missing repo';
 
   SR_GIT_DIR_NOT_FOUND_FMT =
-    '[GIT-026 NOT_FOUND] Directory not found: %s';
+    '[GIT-026 NOT_FOUND] Directory not found: %s.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   { init no crea la carpeta: solo clone crea su destino (Hermes, 1.18.0). }
   SN_GIT_INIT_NO_CREA =
@@ -10801,7 +11003,7 @@ const
     'environment variable).';
 
   SR_WS_NO_EXISTE_FMT =
-    '[WS-013 NOT_FOUND] %s does not exist';
+    '[WS-013 NOT_FOUND] %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   SR_WS_OFFSET_NEGATIVO =
     '[WS-014 INVALID_PARAM] Negative offset';
@@ -10978,7 +11180,7 @@ const
     'removing the previous %s';
 
   SR_CFG_NO_EXISTE_PROYECTO_FMT =
-    '[CFG-094 NOT_FOUND] The project %s does not exist';
+    '[CFG-094 NOT_FOUND] The project %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   // Mensajes que estaban en linea en Mcp.Tools.PAServer.pas (paso 3c a mano, 27-sep-2026)
   SN_PAS_LINUX_FETCH_TAR_FMT =
@@ -11052,7 +11254,7 @@ const
     '[ADB-025] (logcat empty: no lines)';
 
   SR_ADB_NO_EXISTE_APK_FMT =
-    '[ADB-023 NOT_FOUND] The .apk does not exist: %s';
+    '[ADB-023 NOT_FOUND] The .apk does not exist: %s.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   SK_ADB_TAP_EN_FMT =
     '[ADB-024] TAP at (%d,%d) %s';
@@ -11594,7 +11796,7 @@ const
   // UNA para las dos gemelas de delphi_create (form y unit): la de forms
   // tenia la suya, CREATE-025, con el mismo texto (retirada el 28-sep)
   SR_CREATE_NO_EXISTE_PROYECTO_FMT =
-    '[CREATE-030 NOT_FOUND] The project %s does not exist';
+    '[CREATE-030 NOT_FOUND] The project %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   SR_CREATE_UNIT_YA_EXISTE_ADD_UNIT_FMT =
     '[CREATE-031 DENIED] %s already exists. The scaffolder never ' +
@@ -11652,7 +11854,7 @@ const
     'the copies the tool makes. Move them to a normal folder.';
 
   SR_FILE_NO_EXISTE_ORIGEN_FMT =
-    '[FILE-024 NOT_FOUND] The source %s does not exist';
+    '[FILE-024 NOT_FOUND] The source %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
 
   { LA negativa de un choque (V19; David, 25-oct-2026: "renombrar no
     destruye"): con la lista de lo que ya esta y las salidas, antes de
@@ -11724,8 +11926,8 @@ const
     '[TEXT-006] CREATED %s  encoding=%s  eol=%s  bytes=%d';
 
   SR_TEXT_NO_EXISTE_CREARLO_FMT =
-    '[TEXT-007 NOT_FOUND] %s does not exist. To create it use ' +
-    'create=true.';
+    '[TEXT-007 NOT_FOUND] %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA +
+    ' To create it use create=true.';
 
   SR_TEXT_PARECE_BINARIO_FMT =
     '[TEXT-008 DENIED] %s looks BINARY (null bytes). This tool is for ' +
@@ -12148,6 +12350,28 @@ const
   SP_EDIT_TOLINE =
     'Last line to show, 1-based (0 = to the end; capped at 400 lines per ' +
     'call)';
+
+  { limit y tail de delphi_read (B de la 1.29.3), medido en el state.db de
+    Hermes desde el 12-nov: 13 SYS-015 contaban las lineas en vez de dar la
+    ultima (offset+limit, como vault_read, 8; maxlines con startline o fromline, 4; lines, 1:
+    offset y maxlines son alias, Lsp.PuertaDeLaLlamada) y 2 pedian el final de
+    un log (tail=40; readtype=tail). El final lo resuelve ReadNumbered, que
+    sabe cuantas lineas hay }
+  SP_EDIT_LIMIT =
+    'How many lines from fromline, instead of toline';
+  SP_EDIT_TAIL =
+    'The last N lines (the end of a log), instead of fromline/toline/limit';
+  SR_READ_LIMIT_Y_TOLINE =
+    '[READ-012 INVALID_PARAM] toline and limit both say where the read ends ' +
+    '(toline = the last line, limit = how many from fromline): send one of ' +
+    'them. Nothing was read.';
+  SR_READ_TAIL_SOLO =
+    '[READ-013 INVALID_PARAM] tail reads the last N lines on its own: send it ' +
+    'without fromline, toline or limit. Nothing was read.';
+  { %d = el tail pedido, %d = las que salen (el tope de una llamada) }
+  SN_READ_TAIL_CORTADO_FMT =
+    '[READ-014] tail=%d: these are the last %d lines, as many as one call ' +
+    'shows; the ones before them, with fromline/toline.';
 
   SP_EDIT_PATH_2 =
     'Absolute path of the Delphi file';
@@ -14123,6 +14347,16 @@ const
   SF_DSGN_EN_EL_OTRO_MARCO_FMT =
     '. "%s" is what the %s %s publishes; this form is %s';
 
+  { StyleLookup en un objeto FMX sin estilo (Lsp.DesignerMeta.PistaDeEstilo,
+    D8 de la 1.29.3): como seguir. Con el DSGN-087 a secas, Hermes probo
+    StyleName, que se escribe y no aplica nada (16-nov). Va en la misma
+    linea que la negativa de set, insert y el lint }
+  SF_DSGN_PISTA_ESTILO_FMT =
+    '. A %s takes no part from the style: it draws itself with its own ' +
+    'properties (Fill, Stroke...). StyleName only names an object inside a ' +
+    'style and applies none; for a part of the .style use a class that has ' +
+    'StyleLookup (TPanel, TLabel...)';
+
   SF_DSGN_NO_ES_VALOR_FMT =
     '"%s" is not a value of %s; valid: %s';
 
@@ -14257,7 +14491,7 @@ const
   SR_ERROR_FMT =
     '[SYS-011 INVALID_PARAM] %s';
   SR_NO_EXISTE_FMT =
-    '[SYS-012 NOT_FOUND] %s does not exist';
+    '[SYS-012 NOT_FOUND] %s does not exist.' + SF_RUTA_NO_EXISTE_SALIDA;
   { Los dos de ToolsManager antes de llegar a la tool: una peticion sin
     nombre de tool o sin argumentos legibles, y una tool que no existe.
     Salian como 'Error:', o sea INTERNAL: no se rompio nada, la llamada
@@ -14267,9 +14501,17 @@ const
   SR_SYS_TOOL_NOT_FOUND_FMT =
     '[SYS-014 NOT_FOUND] Tool not found: %s';
 
+  { [el primer desconocido, SF_SYS_UNKNOWN_TAMBIEN_FMT con los demas o '', los
+    validos]. Nombraba solo el primero: de 171 SYS-015 de Hermes (12-20 nov),
+    39 llevaban dos o mas desconocidos en la misma llamada (sin contar los
+    alias de ApplyArgAliases), y cada uno costaba otro rechazo (D3 de la
+    1.29.3) }
   SR_SYS_UNKNOWN_PARAM_FMT =
-    '[SYS-015 INVALID_PARAM] Unknown parameter "%s". Valid parameters: ' +
+    '[SYS-015 INVALID_PARAM] Unknown parameter "%s"%s. Valid parameters: ' +
     '%s.';
+  { %s = los otros desconocidos de la misma llamada, cada uno entre comillas }
+  SF_SYS_UNKNOWN_TAMBIEN_FMT =
+    ' (and also %s)';
 
   SR_SYS_MISSING_PARAM_FMT =
     '[SYS-019 INVALID_PARAM] Missing "%s": this tool requires it ' +

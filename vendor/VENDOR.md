@@ -66,10 +66,15 @@ Local changes (each marked "[local change]" in the code, most with its date):
 - src/Protocol/MCPServer.Serializer.pas: NormalizeKey, MotivoEntero and
   MotivoBooleano public (one integer and one boolean rule, also for values
   inside a parameter); an unknown parameter reported with the published
-  names; a missing or null [Required] parameter refused by its name; a JSON
+  names, and every unknown parameter of the call named at once (the first
+  one as before, the others after it); a missing or null [Required]
+  parameter refused by its name; a JSON
   object or array for a string parameter refused unless [JsonComoTexto];
   null means "not provided"; unparsable numbers and booleans refused
-  instead of turned into 0/False; messages from the catalog.
+  instead of turned into 0/False; a [NumeroComoTexto] text goes through the
+  same integer rule (signed for CON_SIGNO) and is stored in its canonical
+  form (1.29.3: 10.0 reached a tool as text and was read as -1); messages
+  from the catalog.
 - src/Protocol/MCPServer.Types.pas: RequiredAttribute (parameters are
   optional by default), SchemaDefaultAttribute, BearerToken, the one
   reader of a Bearer header (scheme case-insensitive), and the version and

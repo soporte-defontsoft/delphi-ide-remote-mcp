@@ -2939,8 +2939,10 @@ var
 begin
   Result := '';
   Segs := AProp.Split(['.']);
+  // ...ni StyleLookup en un objeto sin estilo: la parecida era StyleName, que
+  // no aplica ninguna pieza, y la pista del juez ya dice como seguir (D8)
   if (Length(Segs) = 0) or Publica(M, AClsId, Segs[0]) or
-     (PistaDelOtroMarco(M, AClsId, AProp) <> '') then
+     (PistaDelOtroMarco(M, AClsId, AProp) <> '') or (PistaDeEstilo(M, AClsId, AProp) <> '') then
     Exit;
   Nombres := [];
   for var Par in M.Props do
@@ -3349,49 +3351,197 @@ begin
   end;
 end;
 
+{ El valor de AClave en AEn (PropiedadesConItems); False si no esta. Lo
+  preguntan lo que el escritor cambio ademas (PonLoQueTambienEscribio) y lo
+  puesto que no cambia nada (NadaCambiaLoPuesto). }
+function ValorDeClave(const AEn: TArray<TPropiedadConClave>; const AClave: string;
+  out AValor: string): Boolean;
+begin
+  for var P in AEn do
+    if SameText(P.Clave, AClave) then
+    begin
+      AValor := P.Valor;
+      Exit(True);
+    end;
+  AValor := '';
+  Result := False;
+end;
+
+{ Las propiedades de ANombre en ALineas, de un documento leido de ese texto
+  (SetLines no relee el arbol de F.Doc); False si no esta. }
+function PropsDeEn(const F: TFormEnEdicion; const ALineas: TArray<string>; const ANombre: string;
+  out AProps: TArray<TPropiedadConClave>): Boolean;
+begin
+  AProps := [];
+  var Doc := TStyleDoc.DeTexto(F.Doc.TextoDe(ALineas));
+  try
+    var O := ObjetoPorNombre(Doc, ANombre);
+    Result := O <> nil;
+    if Result then
+      AProps := Doc.PropiedadesConItems(O);
+  finally
+    Doc.Free;
+  end;
+end;
+
+{ Las propiedades de ANombre como las escribe el escritor del IDE desde
+  ALineas, el form SIN lo puesto: lo que la carga sola reescribe, por el mismo
+  camino que lo puesto (ConLasPropiedadesDelIde, sin nada puesto). False si el
+  juez no contesto (su nota: sin tiempo, heredado, sin orden...). }
+function ComoLoCargaSinLoPuesto(var F: TFormEnEdicion; const ALineas: TArray<string>;
+  const ANombre: string; out AProps: TArray<TPropiedadConClave>): Boolean;
+var
+  Nota: string;
+  NoGuarda: TArray<string>;
+  Otras: TArray<TGuardadaComo>;
+begin
+  AProps := [];
+  var Lineas := ConLasPropiedadesDelIde(F, ALineas, ANombre, [], Nota, NoGuarda, Otras);
+  Result := (Nota = '') and PropsDeEn(F, Lineas, ANombre, AProps);
+end;
+
+type
+  { Las propiedades de un componente como las escribe el escritor del IDE desde
+    el form SIN lo puesto (ComoLoCargaSinLoPuesto); False si no se pudo
+    preguntar. }
+  TComoCargaSinLoPuesto = reference to function(out AProps: TArray<TPropiedadConClave>): Boolean;
+  PFormEnEdicion = ^TFormEnEdicion;
+
+{ ComoLoCargaSinLoPuesto preguntado UNA vez por set, la primera que haga falta:
+  la usan lo puesto que no cambia nada y lo que reescribe la carga (un juez mas
+  por set solo cuando alguno de los dos tiene algo que mirar). AF, el form del
+  llamador, que vive mientras el. }
+function SinLoPuestoUnaVez(AF: PFormEnEdicion; const ALineas: TArray<string>;
+  const ANombre: string): TComoCargaSinLoPuesto;
+var
+  Hecha, Hay: Boolean;
+  Carga: TArray<TPropiedadConClave>;
+begin
+  Hecha := False;
+  Hay := False;
+  Carga := [];
+  Result :=
+    function(out AProps: TArray<TPropiedadConClave>): Boolean
+    begin
+      if not Hecha then
+      begin
+        Hecha := True;
+        Hay := ComoLoCargaSinLoPuesto(AF^, ALineas, ANombre, Carga);
+      end;
+      AProps := Carga;
+      Result := Hay;
+    end;
+end;
+
+{ Las dos listas dicen lo mismo: las mismas claves con los mismos valores, en
+  cualquier orden. }
+function MismasPropiedades(const A, B: TArray<TPropiedadConClave>): Boolean;
+var
+  V: string;
+begin
+  if Length(A) <> Length(B) then
+    Exit(False);
+  for var P in A do
+    if not ValorDeClave(B, P.Clave, V) or (V <> P.Valor) then
+      Exit(False);
+  Result := True;
+end;
+
+{ Lo puesto no cambia nada (D28 de la 1.29.3): el componente, ya con las lineas
+  del escritor del IDE, dice lo mismo que dice ese escritor desde el form SIN lo
+  puesto (ASinLoPuesto). Entonces no se escribe: lo que cambiaria respecto al
+  fichero es de la CARGA (un TabOrder renumerado, el Size de un control
+  alineado) y el form carga igual sin ello. Medido en campo el 18-nov-2026: dos
+  set de HitTest=False, que ya lo era, reescribieron TabOrder y Size.Height, y
+  el agente los deshizo a mano (restore + stash). Antes, lo barato: si una
+  propiedad de APuestas -las pedidas y donde guarda el IDE una stored False-
+  cambio respecto al fichero (AAntes), cambia algo y no hace falta el juez. Que
+  la suya siga igual no basta: el valor puede ir a OTRA linea (un Left de un
+  control alineado: Left queda en lo que da su alineacion y el IDE guarda lo
+  pedido como ExplicitLeft; test_designer_ide_1221, S5). Sin juez, se escribe
+  como antes. }
+function NadaCambiaLoPuesto(const F: TFormEnEdicion; const AAntes: TArray<TPropiedadConClave>;
+  const ANombre: string; const APuestas: TArray<string>; const ASinLoPuesto: TComoCargaSinLoPuesto): Boolean;
+var
+  Despues, Carga: TArray<TPropiedadConClave>;
+  VA, VD: string;
+begin
+  if not PropsDeEn(F, F.Doc.Lines, ANombre, Despues) then
+    Exit(False);
+  for var Clave in APuestas do
+    if (ValorDeClave(AAntes, Clave, VA) <> ValorDeClave(Despues, Clave, VD)) or (VA <> VD) then
+      Exit(False);
+  Result := ASinLoPuesto(Carga) and MismasPropiedades(Despues, Carga);
+end;
+
 { Lo que el escritor del IDE cambio en el bloque de ANombre ADEMAS de lo
   puesto (APuestas: las propiedades que pidio el agente y donde guarda una
   stored False, que ya dicen sus campos): lo que esta despues y no estaba, o
   estaba con otro valor (alsoWritten, "Prop = valor"), y lo que estaba y se
   fue (alsoRemoved), con su nota. Lo preguntan set de una y set de varias. El
   StyledSettings que FMX quita al poner un TextSettings no salia en la
-  respuesta (dirigido de Hermes de la 1.28, dos rondas; I30 del cierre). }
+  respuesta (dirigido de Hermes de la 1.28, dos rondas; I30 del cierre). Y lo
+  que el escritor escribe IGUAL sin lo puesto (ASinLoPuesto, preguntado solo
+  si hay algo que contar) es de la CARGA, no del setter: va en loadWritten /
+  loadRemoved con su nota (DSGN-203). Iba en alsoWritten con DSGN-189, que lo
+  achacaba al setter (D28 de la 1.29.3: un set de Opacity reescribia el
+  Size.Height viejo de un Client). Sin respuesta de ASinLoPuesto, todo en
+  alsoWritten, como antes. }
 procedure PonLoQueTambienEscribio(AObj: TJSONObject; const ANombre: string;
-  const AAntes, ADespues: TArray<TPropiedadConClave>; const APuestas: TArray<string>);
+  const AAntes, ADespues: TArray<TPropiedadConClave>; const APuestas: TArray<string>;
+  const ASinLoPuesto: TComoCargaSinLoPuesto);
+var
+  Escritas, Quitadas, DeLaCarga, QuitadasPorLaCarga: TJSONArray;
+  Carga: TArray<TPropiedadConClave>;
+  Preguntada, HayCarga: Boolean;
+  V: string;
 
-  function ValorEn(const AEn: TArray<TPropiedadConClave>; const AClave: string;
-    out AValor: string): Boolean;
+  // AClave quedo como la deja la carga sola: el escritor sin lo puesto la
+  // escribe igual (APresente: con AValor; si no, tampoco la escribe)
+  function EsDeLaCarga(const AClave: string; APresente: Boolean; const AValor: string): Boolean;
+  var
+    VC: string;
   begin
-    for var P in AEn do
-      if SameText(P.Clave, AClave) then
-      begin
-        AValor := P.Valor;
-        Exit(True);
-      end;
-    AValor := '';
-    Result := False;
+    if not Preguntada then
+    begin
+      Preguntada := True;
+      HayCarga := Assigned(ASinLoPuesto) and ASinLoPuesto(Carga);
+    end;
+    if not HayCarga then
+      Exit(False);
+    Result := (ValorDeClave(Carga, AClave, VC) = APresente) and (VC = AValor);
   end;
 
-var
-  Escritas, Quitadas: TJSONArray;
-  V: string;
+  procedure Anade(var ALista: TJSONArray; const AValor: string);
+  begin
+    if ALista = nil then
+      ALista := TJSONArray.Create;
+    ALista.Add(AValor);
+  end;
+
 begin
   Escritas := nil;
   Quitadas := nil;
+  DeLaCarga := nil;
+  QuitadasPorLaCarga := nil;
+  Preguntada := False;
+  HayCarga := False;
   for var P in ADespues do
     if not MatchText(P.Clave, APuestas) and
-       (not ValorEn(AAntes, P.Clave, V) or (V <> P.Valor)) then
+       (not ValorDeClave(AAntes, P.Clave, V) or (V <> P.Valor)) then
     begin
-      if Escritas = nil then
-        Escritas := TJSONArray.Create;
-      Escritas.Add(ContenidoTalCual(P.Clave + ' = ' + P.Valor));
+      if EsDeLaCarga(P.Clave, True, P.Valor) then
+        Anade(DeLaCarga, ContenidoTalCual(P.Clave + ' = ' + P.Valor))
+      else
+        Anade(Escritas, ContenidoTalCual(P.Clave + ' = ' + P.Valor));
     end;
   for var P in AAntes do
-    if not MatchText(P.Clave, APuestas) and not ValorEn(ADespues, P.Clave, V) then
+    if not MatchText(P.Clave, APuestas) and not ValorDeClave(ADespues, P.Clave, V) then
     begin
-      if Quitadas = nil then
-        Quitadas := TJSONArray.Create;
-      Quitadas.Add(P.Clave);
+      if EsDeLaCarga(P.Clave, False, '') then
+        Anade(QuitadasPorLaCarga, P.Clave)
+      else
+        Anade(Quitadas, P.Clave);
     end;
   if Escritas <> nil then
     AObj.AddPair('alsoWritten', Escritas);
@@ -3399,6 +3549,12 @@ begin
     AObj.AddPair('alsoRemoved', Quitadas);
   if (Escritas <> nil) or (Quitadas <> nil) then
     AObj.AddPair('alsoNote', MsgFmt(SN_DESIGNER_IDE_TAMBIEN_ESCRIBE_FMT, [ANombre]));
+  if DeLaCarga <> nil then
+    AObj.AddPair('loadWritten', DeLaCarga);
+  if QuitadasPorLaCarga <> nil then
+    AObj.AddPair('loadRemoved', QuitadasPorLaCarga);
+  if (DeLaCarga <> nil) or (QuitadasPorLaCarga <> nil) then
+    AObj.AddPair('loadNote', MsgFmt(SN_DESIGNER_CARGA_TAMBIEN_ESCRIBE_FMT, [ANombre]));
 end;
 
 { Las propiedades que dicen los campos de lo puesto: las pedidas y donde
@@ -3443,6 +3599,8 @@ begin
     Nombre := NombreDe(Obj);
     // lo que decia el componente, para lo que el escritor cambie ademas
     var PropsAntes := F.Doc.PropiedadesConItems(Obj);
+    // ...y el form sin lo puesto, para lo que la carga sola reescribe (D28)
+    var LineasAntes := Copy(F.Doc.Lines);
     Result := PonEnMemoria(F, Nombre, AProp, AValor, Info);
     if Result <> '' then
       Exit;
@@ -3457,17 +3615,25 @@ begin
     var Otras: TArray<TGuardadaComo>;
     F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, [Info.Prop], NotaIde, NoGuarda, Otras));
     MarcaLoQueGuarda(Info, NoGuarda, Otras);
-    // con el cerrojo: el form es el que se juzgo
-    Result := EscribeLoJuzgado(F, Antes, AntesPas,
-      function: string
-      begin
-        Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
-      end);
-    if Result <> '' then
-      Exit;
-    // el arbol se releyo al guardar: su linea, la de ahora
+    // lo pedido no cambia nada: no se escribe (D28 de la 1.29.3)
+    var SinLoPuesto := SinLoPuestoUnaVez(@F, LineasAntes, Nombre);
+    var NadaCambia := NadaCambiaLoPuesto(F, PropsAntes, Nombre, PropsPuestas([Info]), SinLoPuesto);
+    if not NadaCambia then
+    begin
+      // con el cerrojo: el form es el que se juzgo
+      Result := EscribeLoJuzgado(F, Antes, AntesPas,
+        function: string
+        begin
+          Result := F.Doc.Guarda; // solo si el parser del IDE lee el resultado (9.B)
+        end);
+      if Result <> '' then
+        Exit;
+    end;
+    // el arbol se releyo al guardar: su linea, la de ahora (sin escribir, ninguna)
     LineaN := 0;
-    Obj := ObjetoPorNombre(F.Doc, Nombre);
+    Obj := nil;
+    if not NadaCambia then
+      Obj := ObjetoPorNombre(F.Doc, Nombre);
     if not Info.Quitada and (Obj <> nil) and F.Doc.PropLines(Obj, Info.Prop, Ini, Fin) then
       LineaN := Ini + 1
     // una stored False no tiene su linea: la de lo que el IDE escribe por ella
@@ -3486,10 +3652,15 @@ begin
         Ret.AddPair('readerNote', NotaLector);
       if NotaIde <> '' then
         Ret.AddPair('ideNote', NotaIde);
-      if Obj <> nil then
-        PonLoQueTambienEscribio(Ret, Nombre, PropsAntes, F.Doc.PropiedadesConItems(Obj),
-          PropsPuestas([Info]));
-      PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
+      if NadaCambia then
+        Ret.AddPair('note', MsgFmt(SN_DESIGNER_NADA_CAMBIA_FMT, [Nombre]))
+      else
+      begin
+        if Obj <> nil then
+          PonLoQueTambienEscribio(Ret, Nombre, PropsAntes, F.Doc.PropiedadesConItems(Obj),
+            PropsPuestas([Info]), SinLoPuesto);
+        PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
+      end;
       Result := Ret.ToJSON;
     finally
       Ret.Free;
@@ -3572,6 +3743,8 @@ begin
     Nombre := NombreDe(Obj);
     // lo que decia el componente, para lo que el escritor cambie ademas
     var PropsAntes := F.Doc.PropiedadesConItems(Obj);
+    // ...y el form sin lo puesto, para lo que la carga sola reescribe (D28)
+    var LineasAntes := Copy(F.Doc.Lines);
     SetLength(Infos, Length(Props));
     for var I := 0 to High(Props) do
     begin
@@ -3598,14 +3771,20 @@ begin
     F.Doc.SetLines(ConLasPropiedadesDelIde(F, F.Doc.Lines, Nombre, PropsDe(Infos), NotaIde, NoGuarda, Otras));
     for var I := 0 to High(Infos) do
       MarcaLoQueGuarda(Infos[I], NoGuarda, Otras);
-    // con el cerrojo: el form es el que se juzgo
-    Result := EscribeLoJuzgado(F, Antes, AntesPas,
-      function: string
-      begin
-        Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)
-      end);
-    if Result <> '' then
-      Exit;
+    // nada de lo pedido cambia: no se escribe, como set de una (D28 de la 1.29.3)
+    var SinLoPuesto := SinLoPuestoUnaVez(@F, LineasAntes, Nombre);
+    var NadaCambia := NadaCambiaLoPuesto(F, PropsAntes, Nombre, PropsPuestas(Infos), SinLoPuesto);
+    if not NadaCambia then
+    begin
+      // con el cerrojo: el form es el que se juzgo
+      Result := EscribeLoJuzgado(F, Antes, AntesPas,
+        function: string
+        begin
+          Result := F.Doc.Guarda; // una escritura, si el parser del IDE la lee (9.B)
+        end);
+      if Result <> '' then
+        Exit;
+    end;
     Ret := TJSONObject.Create;
     try
       Ret.AddPair('set', Nombre);
@@ -3625,12 +3804,17 @@ begin
         Ret.AddPair('readerNote', NotaLector);
       if NotaIde <> '' then
         Ret.AddPair('ideNote', NotaIde);
-      // el arbol se releyo al guardar: el componente, el de ahora
-      Obj := ObjetoPorNombre(F.Doc, Nombre);
-      if Obj <> nil then
-        PonLoQueTambienEscribio(Ret, Nombre, PropsAntes, F.Doc.PropiedadesConItems(Obj),
-          PropsPuestas(Infos));
-      PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
+      if NadaCambia then
+        Ret.AddPair('note', MsgFmt(SN_DESIGNER_NADA_CAMBIA_FMT, [Nombre]))
+      else
+      begin
+        // el arbol se releyo al guardar: el componente, el de ahora
+        Obj := ObjetoPorNombre(F.Doc, Nombre);
+        if Obj <> nil then
+          PonLoQueTambienEscribio(Ret, Nombre, PropsAntes, F.Doc.PropiedadesConItems(Obj),
+            PropsPuestas(Infos), SinLoPuesto);
+        PonLista(Ret, 'lint', AvisosDespues(F, F.Doc.TextoDe(F.Doc.Lines)));
+      end;
       Result := Ret.ToJSON;
     finally
       Ret.Free;

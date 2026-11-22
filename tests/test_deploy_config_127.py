@@ -22,6 +22,8 @@ va tambien con un Deploy que falla; el camino bueno se midio en vivo.
   D7 la salida de Debug con una Condition propia que no se sabe leer (Exists(...)) no es "de todas": el
      Deploy de Debug le pone la suya (ROJA sin ConfigIlegible en EnsurePlatformOutputEntries, que salia sin
      anadir nada; el arreglo no tenia un check que cayera sin el: revisor de baterias de la 1.27)
+  D8 (1.29.3, D36) el E0003 de la conexion que falla: cada error una vez en errors[] y sin BUILD-074 (ROJA: tiene la
+     forma de un mensaje de dcc y MensajesSinClasificar lo tomaba por uno cortado, aunque msbuild lo clasifico)
 
 Uso:  python tests/test_deploy_config_127.py [ruta-a-DelphiLspMcp.exe]
 """
@@ -99,6 +101,16 @@ try:
     # un `not in` sobre una negativa que no es JSON ({}) pasaria sin medir nada (revisor del paisaje de la 1.27)
     check('D3 fixture: el Deploy de Debug llega a msbuild', r.get('success') is False and bool(r.get('errors')), t[:600])
     check('D3 un Deploy de Debug no dice nada', 'deployNotThisConfig' not in r, r.get('deployNotThisConfig'))
+    # D8 (1.29.3, D36; Hermes con Gemma, 21-nov): el E0003 de la conexion (de CodeGear.Deployment.targets) tiene la
+    # forma de un mensaje de dcc ("Error: E0003 ...") pero msbuild SI lo clasifico (esta en errors.log): no es un
+    # mensaje cortado de dcc, y no va dos veces
+    errs = r.get('errors') or []
+    check('D8 fixture: el Deploy falla en la conexion con E0003 de CodeGear.Deployment.targets',
+          any('E0003' in e and 'Deployment.targets' in e for e in errs), errs[:4])
+    check('D8 cada error del Deploy una sola vez en errors[] (ROJO sin el arreglo: dos copias)',
+          len(errs) == len(set(errs)), errs[:6])
+    check('D8 sin BUILD-074: no son mensajes de dcc que msbuild no clasifico (ROJO sin el arreglo)',
+          'cutMessagesNote' not in r, r.get('cutMessagesNote'))
 
     t = srv.call('delphi_config', {'command': 'add-deployfile', 'platform': 'Linux64', 'path': 'datos.txt',
                                    'config': 'Release', 'project': P1})

@@ -51,8 +51,18 @@ const
   SK_NODE_ALT_TAB_ENVIADO =
     '  [NODE-012] ALT+TAB sent';
 
+  { Lleva [codigo, con modificadores, que tecla es (SF_NODE_TECLA_ES_FMT o '')] }
   SK_NODE_TECLA_ENVIADA_FMT =
-    '  [NODE-044] KEY %s%s sent';
+    '  [NODE-044] KEY %s%s sent%s';
+
+  { Lo que da ese codigo solo en el teclado del escritorio (TManos.NombreDeTecla):
+    el 18-nov-2026 un agente pulso el 36 creyendo que era Enter y escribio dos J,
+    y el eco decia solo "KEY 36 sent" (D22 de la 1.29.3). Lleva [nombre XKB,
+    SF_NODE_TECLA_DISTRIBUCION_FMT o ''] }
+  SF_NODE_TECLA_ES_FMT =
+    ' - on this desktop''s keyboard that code is %s%s';
+  SF_NODE_TECLA_DISTRIBUCION_FMT =
+    ' (%s)';
 
   SF_NODE_CON_MODIFICADORES_FMT =
     ' with %d modifier(s)';
@@ -84,6 +94,29 @@ const
 
   SR_NODE_NO_PUDE_ARRASTRAR_FMT =
     '  [NODE-049 DENIED] Could not drag: %s';
+
+  { la rueda (D19 de la 1.29.3): las muescas, hacia donde y el punto }
+  SK_NODE_RUEDA_FMT =
+    '  [NODE-052] WHEEL turned %d notch(es) %s at pixel (%d,%d) of the screenshot';
+
+  SF_NODE_RUEDA_ABAJO =
+    'down';
+
+  SF_NODE_RUEDA_ARRIBA =
+    'up';
+
+  SR_NODE_NO_PUDE_RODAR_FMT =
+    '  [NODE-053 DENIED] Could not turn the wheel: %s';
+
+  { el hover (D20 de la 1.29.3): solo se mueve, nada se pulsa }
+  SK_NODE_PASA_FMT =
+    '  [NODE-054] POINTER moved to pixel (%d,%d) of the screenshot (nothing pressed)';
+
+  SR_NODE_NO_PUDE_PASAR_FMT =
+    '  [NODE-055 DENIED] Could not move the pointer: %s';
+
+  SF_NODE_RUEDA_FUERA_FMT =
+    'the notches must be a whole number from -%d to %d, not 0 ("%s")';
 
   SR_NODE_EXCEPCION_FMT =
     '[NODE-046 INTERNAL] The node failed: %s: %s';
@@ -397,6 +430,9 @@ const
 
   SF_NODE_ESCRITORIO_NO_DIO_TECLADO =
     'the desktop provided no keyboard';
+
+  SF_NODE_ESCRITORIO_NO_DIO_RUEDA =
+    'the desktop provided no device with a wheel (scroll)';
 
   SF_NODE_TECLADO_SIN_TECLA_FMT =
     'the desktop keyboard (%s) has no key that gives the character "%s" ' +

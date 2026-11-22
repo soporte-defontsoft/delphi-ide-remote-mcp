@@ -96,10 +96,12 @@ for p in ('command', 'profile', 'project', 'x', 'y', 'code', 'text'):
     check('el esquema declara "%s"' % p, p in props, sorted(props))
 check('el parametro x dice que se mide SOBRE la captura',
       'SCREENSHOT' in props.get('x', {}).get('description', '').upper(), props.get('x'))
-check('el parametro text avisa de que con x,y pulsa antes',
-      'presses there first' in props.get('text', {}).get('description', ''), props.get('text'))
+# (D19 de la 1.29.3: lo de "pulsa antes" lo decian la descripcion, command y text; para que scroll cupiera en el
+# presupuesto de tools/list se quedo en las dos primeras, que es donde se mira)
+check('el contrato avisa de que type con x,y pulsa antes',
+      'presses there first' in desc, desc[:300])
 check('el command cuenta que type con x,y es UN solo viaje',
-      'pays the startup once' in desc, desc[:300])
+      'in one trip' in desc, desc[:300])
 
 check('el parametro code avisa de que son codigos Linux, no X11',
       'X11' in props.get('code', {}).get('description', ''), props.get('code'))
@@ -113,7 +115,7 @@ check('un command inventado se rechaza con la lista buena',
 
 r = call('delphi_desktop', {"command": "tap", "profile": "x", "project": PROJ})
 check('tap sin coordenadas se rechaza diciendo de donde salen',
-      mc.rechazado(r) and mc.es(r, 'SR_ADBLINUX_NEEDXY'), r[:160])
+      mc.rechazado(r) and mc.es(r, 'SR_DESKTOP_NEEDXY_FMT') and 'tap needs' in r, r[:160])
 
 r = call('delphi_desktop', {"command": "type", "profile": "x", "project": PROJ})
 check('type sin texto se rechaza y explica el gesto de un solo viaje',

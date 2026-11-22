@@ -195,6 +195,70 @@ try:
                                        'confirm': True}))
     check('V14 su gemela en delphi_edit: "confirm" va con restore=true. ROJO contra cd54dce4',
           mc.es(r, 'SR_EDIT_NO_VA_CON_MODO_FMT') and va_con('confirm', 'restore=true') in r, r[:400])
+
+    # D8 de la 1.29.3 (Hermes, 16-nov): StyleLookup en un objeto FMX sin estilo (TRectangle, TLayout). El DSGN-087
+    # era correcto pero no decia como seguir, y Hermes probo StyleName: se escribe y no aplica ninguna pieza (tres
+    # ventanas grises con borde negro). Ahora el juez (JuzgaRuta, de set, insert y el lint) lo dice, por la cadena de
+    # ancestros (TStyledControl), y la parecida no ofrece StyleName
+    def estilo(clase):
+        return mc.catalogo()['SF_DSGN_PISTA_ESTILO_FMT'] % clase
+
+    r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Layout1',
+                                           'prop': 'StyleLookup', 'value': 'franjaventana'}))
+    check('V15 set StyleLookup en un TLayout: DSGN-087 con la pista de como seguir, sin "Did you mean StyleName?"'
+          ' (ROJO: DSGN-087 a secas)',
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and estilo('TLayout') in r and QUIZAS not in r
+          and "StyleLookup = 'franjaventana'" not in open(pf, 'rb').read().decode('utf-8-sig'), r[:900])
+    r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'insert', 'classname': 'TRectangle',
+                                           'component': 'Franja1', 'props': 'StyleLookup=franjaventana;Height=3'}))
+    check('V16 insert de un TRectangle con StyleLookup: la misma pista, y no se inserta',
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and estilo('TRectangle') in r
+          and 'Franja1' not in open(pf, 'rb').read().decode('utf-8-sig'), r[:900])
+    r = plano(srv.call('delphi_designer', {'path': pf, 'command': 'set', 'component': 'Edit1',
+                                           'prop': 'StyleLookup', 'value': 'editstyle'}))
+    check('V17 control: en un TEdit (con estilo) StyleLookup se escribe como siempre, sin pista',
+          not mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and estilo('TEdit') not in r
+          and "StyleLookup = 'editstyle'" in open(pf, 'rb').read().decode('utf-8-sig'), r[:900])
+    p18 = fmx('UF18')
+    t18 = open(p18, 'rb').read().decode('utf-8-sig')
+    t18 = t18[:t18.rstrip().rfind('end')] + ("  object Rect1: TRectangle\r\n    Position.X = 10.000000000000000000\r\n"
+                                             "    Position.Y = 120.000000000000000000\r\n"
+                                             "    StyleLookup = 'franjaventana'\r\n  end\r\nend\r\n")
+    open(p18, 'wb').write(b'\xef\xbb\xbf' + t18.encode('utf-8'))
+    r = plano(srv.call('delphi_designer', {'path': p18, 'command': 'lint'}, t=240))
+    check('V18 lint de un FMX a mano con un TRectangle con StyleLookup: la pista en su aviso',
+          estilo('TRectangle') in r, r[:1200])
+    r = plano(srv.call('delphi_designer', {'path': pv, 'command': 'set', 'component': 'Label1',
+                                           'prop': 'StyleLookup', 'value': 'x'}))
+    check('V19 control: en la VCL no hay StyleLookup y no sale esta pista (si la del otro marco)',
+          mc.es(r, 'SR_DESIGNER_SET_INVALIDO_FMT') and estilo('TLabel') not in r and PISTA in r, r[:900])
+
+    # D12 de la 1.29.3 (opencode, 17-nov): una entrada de edits con UNA linea y su salto y "new" vacio, para
+    # quitarla: EDIT-013 decia "mandala tal cual" y un new vacio solo la deja en blanco. Ahora dice delete=true.
+    # Ninguna bateria miraba EDIT-013
+    QUITAR = mc.catalogo()['SF_PATCH_BLOCK_SHORT_QUITAR']
+    open(pt, 'wb').write(b'uno\r\ndos\r\ntres\r\n')
+    r = plano(srv.call('delphi_textedit', {'path': pt, 'edits': [{'old': 'dos\r\n', 'new': ''}]}))
+    check('V20 edits con una linea + su salto y new vacio: EDIT-013 dice como QUITARLA (delete=true), y nada'
+          ' cambia (ROJO: solo "mandala tal cual")',
+          mc.catalogo()['SR_PATCH_BLOCK_SHORT'] in r and QUITAR in r
+          and open(pt, 'rb').read() == b'uno\r\ndos\r\ntres\r\n', r[:500])
+    r = plano(srv.call('delphi_textedit', {'path': pt, 'edits': [{'old': 'dos\r\n', 'new': 'DOS'}]}))
+    check('V21 control: con un new de verdad, EDIT-013 sin la pista de quitar',
+          mc.catalogo()['SR_PATCH_BLOCK_SHORT'] in r and QUITAR not in r, r[:500])
+    # revisor del paisaje de la 1.29.3: la pista se SIGUE y quita la linea. Seguirla al pie de la letra devolvia
+    # la misma negativa, en edits y en la llamada suelta (que ademas cambiaba delete por un new vacio): medido
+    r = plano(srv.call('delphi_textedit', {'path': pt, 'edits': [{'old': 'dos\r\n', 'delete': True}]}))
+    check('V22 la pista de V20 al pie de la letra (edits, mismo old y delete=true): quita la linea (ROJO sin el '
+          'arreglo: la misma EDIT-013)', open(pt, 'rb').read() == b'uno\r\ntres\r\n', (r[:400], open(pt, 'rb').read()))
+    open(pt, 'wb').write(b'uno\r\ndos\r\ntres\r\n')
+    r = plano(srv.call('delphi_textedit', {'path': pt, 'old': 'dos\n', 'delete': True}))
+    check('V23 ...y en la llamada suelta, con un LF solo (ROJO sin el arreglo)',
+          open(pt, 'rb').read() == b'uno\r\ntres\r\n', (r[:400], open(pt, 'rb').read()))
+    open(pt, 'wb').write(b'uno\r\ndos\r\ntres\r\ncuatro\r\n')
+    r = plano(srv.call('delphi_textedit', {'path': pt, 'old': 'dos\r\ntres\r\n', 'delete': True}))
+    check('V24 control: un bloque de dos lineas con delete en la llamada suelta se va entero, como antes',
+          open(pt, 'rb').read() == b'uno\r\ncuatro\r\n', (r[:400], open(pt, 'rb').read()))
 finally:
     srv.cierra()
 

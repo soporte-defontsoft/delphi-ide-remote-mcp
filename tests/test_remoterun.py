@@ -358,6 +358,16 @@ check("kill: mata el trabajo vivo por su .pid", j.get('killed') is True and mc.e
 r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': job6}, t=180)
 j = json.loads(r) if r.startswith('{') else {}
 check('kill: repetido, ya no hay trabajo (killed=false, sin error)', j.get('killed') is False and mc.es(j.get('output'), 'SN_JOB_NINGUN_TRABAJO_VIVO_FMT'), r[:300])
+# revisor del paisaje de la 1.29.3: el ayudante que mata (@kill) es trabajo del SERVIDOR, nadie tiene su id
+# (AGuardaSiSigue=False). Su jobId salia en la respuesta de kill junto a job, y la lista de los que valen (D32) lo
+# daba como un trabajo de este proyecto: medido, tras un kill la lista acababa en el id del ayudante
+check('kill: la respuesta no da el id del ayudante que mata, solo job (el matado) (ROJO sin el arreglo)',
+      'jobId' not in j and 'killNote' not in j and 'outputNote' not in j and j.get('job') == job6, r[:400])
+r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ,
+                             'job': '20991231-235959999-deadbeef'}, t=120)
+_lista = _re.search(mc.patron_de_formato('SF_REMOTERUN_TRABAJOS_FMT'), mc.como_json(r).get('error', ''))
+check('kill: tras dos kill, la lista de los que valen acaba en el matado, sin los ayudantes (ROJO sin el arreglo)',
+      _lista is not None and _lista.group(1).split(', ')[-1] == job6, r[:600])
 # el vigia remata la salida del matado con su ___RC: output la lee entera y la borra
 dl = time.time() + 20
 while True:
@@ -545,6 +555,58 @@ for cmd in ('kill', 'output'):
                                  'job': '20991231-235959999-deadbeef'}, t=120)
     check('ID1 %s con un jobId que este servidor no emitio: RUN-021 (ROJO contra r1222m: valia el alfabeto)' % cmd,
           mc.es(r, 'SR_REMOTERUN_JOB_AJENO_FMT'), r[:300])
+# ---- D32 de la 1.29.3: RUN-021 y RUN-001 acaban con los trabajos que SI valen para ese perfil y proyecto, los
+# ultimos cinco del mas antiguo al mas nuevo (tras compactar, Hermes invento un id y lo repitio con kill; antes
+# probo command=jobs y command=list buscando la lista). ROJOS contra el build sin D32: la negativa acababa en
+# "Nothing was stopped or read." ----
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': PROJNAME + '.exe',
+                             'args': '"%s"' % SCRIPT.replace(chr(92), '/'), 'timeoutms': 30000}, t=180)
+D32_ULTIMO = (json.loads(r) if r.startswith('{') else {}).get('jobId') or ''
+check('D32 preparacion: un remote-run de este perfil y proyecto da su jobId', bool(D32_ULTIMO), r[:300])
+D32_LISTA = _re.compile(mc.patron_de_formato('SF_REMOTERUN_TRABAJOS_FMT'))
+D32_NINGUNO = mc.trozos_de_formato('SF_REMOTERUN_NINGUN_TRABAJO')[0].strip()
+
+
+def d32_ids(err):
+    m = D32_LISTA.search(err)
+    return m.group(1).split(', ') if m else []
+
+
+for cmd in ('kill', 'output'):
+    r = call('delphi_paserver', {'command': cmd, 'name': PROFILE, 'project': DPROJ,
+                                 'job': '20991231-235959999-deadbeef'}, t=120)
+    err = mc.como_json(r).get('error', '')
+    ids = d32_ids(err)
+    check('D32 %s con un id que no dio: RUN-021 y los que SI valen, como mucho cinco y el ultimo el mas nuevo' % cmd,
+          mc.es(err, 'SR_REMOTERUN_JOB_AJENO_FMT') and ids[-1:] == [D32_ULTIMO] and len(ids) <= 5
+          and ids == sorted(ids) and all(_re.match(r'^\d{8}-\d{9}-[0-9a-f]{8}$', i) for i in ids)
+          and '20991231-235959999-deadbeef' not in ids, err[:600])
+r = call('delphi_paserver', {'command': 'output', 'name': PROFILE, 'project': DPROJ, 'job': '..\\x'})
+err = mc.como_json(r).get('error', '')
+check('D32 output con un id mal formado: RUN-001 y la misma lista', mc.es(err, 'SR_REMOTERUN_BADJOB')
+      and d32_ids(err)[-1:] == [D32_ULTIMO], err[:600])
+# ...y kill/output SIN job (PAS-002): Hermes, 18-nov, output con out= y kill sin job (la lista la daba solo el
+# primer remote-run)
+for cmd in ('kill', 'output'):
+    r = call('delphi_paserver', {'command': cmd, 'name': PROFILE, 'project': DPROJ}, t=120)
+    check('D32 %s sin job: PAS-002 y la misma lista de los que SI valen' % cmd,
+          mc.es(r, 'SR_PASERVER_JOB_NEEDS_FMT') and d32_ids(r)[-1:] == [D32_ULTIMO], r[:600])
+# control: el id de ESTE perfil pedido con OTRO perfil del mismo proyecto sigue siendo RUN-021, y la lista de ese
+# otro perfil no lo trae (el mismo dueno que juzga TrabajoNuestro: perfil y proyecto)
+r = call('delphi_paserver', {'command': 'output', 'name': PERFIL_LINUX, 'project': DPROJ, 'job': D32_ULTIMO}, t=120)
+err = mc.como_json(r).get('error', '')
+check('D32 control: con otro perfil, RUN-021 y su lista sin el trabajo de este',
+      mc.es(err, 'SR_REMOTERUN_JOB_AJENO_FMT') and D32_ULTIMO not in d32_ids(err)
+      and (bool(d32_ids(err)) or D32_NINGUNO in err), err[:600])
+srv_d32 = mc.Stdio(EXE, dict(env), nombre='d32')
+try:
+    r = srv_d32.call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': DPROJ, 'job': D32_ULTIMO},
+                     t=120)
+    err = mc.como_json(r).get('error', '')
+    check('D32 un servidor recien arrancado: RUN-021 y que no ha arrancado ninguno (un servidor solo sabe los suyos)',
+          mc.es(err, 'SR_REMOTERUN_JOB_AJENO_FMT') and D32_NINGUNO in err and not d32_ids(err), err[:600])
+finally:
+    srv_d32.mata()
 OTRO = os.path.join(DEPLOY, 'otro.exe')
 shutil.copy(APP, OTRO)
 r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': 'otro.exe',
@@ -557,6 +619,11 @@ r = call('delphi_build', {'project': os.path.join(ODIR, 'Otro.dproj'), 'platform
                           'profile': PROFILE}, t=600)
 check('ID3 deploy de un proyecto que RemoteRunProjects no lista: RUN-007, sin compilar ni desplegar (ROJO: el '
       'deploy no miraba la lista)', mc.es(r, 'SR_REMOTERUN_PROJECT_DENIED_FMT') and 'Otro' in r, r[:300])
+# D32: la lista de trabajos va DETRAS de la puerta de ejecucion remota; kill sin job de un proyecto que no puede
+# ejecutar recibe la puerta (RUN-007) y ninguna lista (antes de D32, PAS-002: la falta del job iba antes)
+r = call('delphi_paserver', {'command': 'kill', 'name': PROFILE, 'project': os.path.join(ODIR, 'Otro.dproj')}, t=120)
+check('D32 control: kill sin job de un proyecto que no puede ejecutar: la puerta (RUN-007) y sin lista de trabajos',
+      mc.es(r, 'SR_REMOTERUN_PROJECT_DENIED_FMT') and not d32_ids(r) and D32_NINGUNO not in r, r[:400])
 
 # ---- ID4, la pieza de los nombres: las entradas de RemoteRunProjects son RUTAS. Un NOMBRE a secas casaba con
 # cualquier proyecto de ese nombre y un homonimo de otra carpeta desplegaba encima del permitido; ahora no autoriza
@@ -629,6 +696,27 @@ r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project'
                              'timeoutms': 30000}, t=180)
 check('A4 control: en Windows exe=%s es el mismo fichero que %s.exe (como lo compara NTFS): pasa y corre'
       % (PROJNAME.lower() + '.exe', PROJNAME), 'hola desde el target' in r, r[:300])
+
+# ---- D14 de la 1.29.3 (A6): en un destino Linux o macOS, un codigo de 129 a 192 es como el lanzador da un programa
+# muerto por una senal (128 + su numero, McpRunJob: Codigo := JOB_RC_SENAL_BASE + (Estado and $7F), NodeProtocolo.inc); el 139 solo no lo decia (Hermes,
+# 17-nov, con la salida cortada). Aqui el destino "Linux" es el gemelo Win64 del lanzador con un programa que SALE con
+# 139: la nota lo dice con su "a no ser que el programa lo devolviera el mismo" ----
+ECO = os.path.join(DEPLOY, 'Eco')
+if not os.path.exists(ECO):
+    shutil.copy(APP, ECO)
+SIG = os.path.join(DEPLOY, 'sale139.py')
+open(SIG, 'w', encoding='utf-8').write('import sys\nprint("antes de la senal", flush=True)\nsys.exit(139)\n')
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PERFIL_LINUX, 'project': DPROJ, 'exe': 'Eco',
+                             'args': '"%s"' % SIG.replace(chr(92), '/'), 'timeoutms': 20000}, t=180)
+j = mc.como_json(r)
+check('A6 destino Linux, exitCode 139: signalNote RUN-036 con la senal 11 (ROJO sin A6: el codigo solo)',
+      j.get('exitCode') == 139 and mc.es(j.get('signalNote') or '', 'SN_REMOTERUN_SENAL_FMT')
+      and 'signal 11' in (j.get('signalNote') or ''), r[:400])
+r = call('delphi_paserver', {'command': 'remote-run', 'name': PROFILE, 'project': DPROJ, 'exe': PROJNAME + '.exe',
+                             'args': '"%s"' % SIG.replace(chr(92), '/'), 'timeoutms': 30000}, t=180)
+j = mc.como_json(r)
+check('A6 control: el mismo 139 en un destino Windows no lleva signalNote (alli es el codigo del programa)',
+      j.get('exitCode') == 139 and 'signalNote' not in j, r[:400])
 
 srv.mata()
 mc.fin('remote-run')

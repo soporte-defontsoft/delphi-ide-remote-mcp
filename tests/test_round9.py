@@ -262,7 +262,11 @@ check('C3 discover dice EN QUE plataforma se ejecutara y donde puede escribir',
       any(p.get('platform') == 'Win64' for p in mc.ficheros(j, 'projects')) and
       mc.es(j.get('runsOn') or '', 'SN_TEST_RUNS_ON'), str(j)[:400])
 check('M4 ...y que formato de salida se cuenta',
-      any('PASS' in (p.get('countsFormat') or '') for p in mc.ficheros(j, 'projects')), str(j)[:400])
+      mc.es(j.get('countsFormat') or '', 'SN_TEST_CONSOLE_FORMAT'), str(j)[:400])
+# 1.29.3: UNA vez, en la raiz: en cada proyecto de consola era el mismo texto, y 62 de ellos llenaban 44 de los
+# 63 KB de un discover de test-mcp-server (paso del tope del cliente, 21-nov-2026)
+check('M4b ...una vez, no en cada proyecto',
+      not any('countsFormat' in p for p in mc.ficheros(j, 'projects')), str(j)[:400])
 j = J(A.call('delphi_test', {'command': 'run', 'project': os.path.join(TDIR, 'MiTest.dproj'),
                              'timeoutms': 3000}, t=900))
 check('B2 un test cortado por tiempo se DISTINGUE de uno que falla',

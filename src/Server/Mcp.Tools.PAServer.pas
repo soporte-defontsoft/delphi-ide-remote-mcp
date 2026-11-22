@@ -1343,10 +1343,15 @@ begin
   AProf := PerfilConSuNombre(DiscoverRadStudio.Version, Params.Profile);
   // un .dpr vale por su .dproj, como en delphi_build (DprojDe)
   AProj := DprojDe(Params.Project.Trim);
-  if AllowRemoteRun and ((AProf = '') or (AProj = '') or
-     (AConJob and (Params.Job.Trim = ''))) then
+  if AllowRemoteRun and ((AProf = '') or (AProj = '')) then
     Exit(ANecesita);
   Result := EjecucionRemotaDenegada(AProf, AProj, ANecesita);
+  // kill/output sin job, con su perfil y su proyecto ya pasados por la puerta:
+  // la negativa dice que trabajos SI valen (D32 de la 1.29.3; Hermes, 18-nov:
+  // output con out= y kill sin job, y antes command=jobs/list). Antes de la
+  // puerta no: un perfil o un proyecto que no puede ejecutar no ve los ids
+  if (Result = '') and AConJob and (Params.Job.Trim = '') then
+    Result := ANecesita + TrabajosQueValen(AProf, AProj);
 end;
 
 { El exe= de remote-run: el binario del proyecto, o un fichero que su

@@ -686,9 +686,11 @@ begin
           RespondeRect(GPeticion.Componente, R.Left, R.Top, R.Width, R.Height)
         else
           Aviso(MsgFmt(SN_RENDER_SIN_COMPONENTE_FMT, [GPeticion.Componente, Raiz.Name]));
+      // las cajas y, si hay salida, la imagen del MISMO render, como el de FMX (D7 de la
+      // 1.29.3; el servidor solo las pide juntas para FMX)
       if GPeticion.Cajas then
-        RespondeCajas(F, Raiz, Cargador)
-      else
+        RespondeCajas(F, Raiz, Cargador);
+      if GPeticion.Salida <> '' then
         GuardaPng(Bmp, GPeticion.Salida);
       MsPintado := Reloj.ElapsedMilliseconds;
       RespondeElPintado(Usado, Bmp.Width, Bmp.Height, MsCarga, MsPintado);

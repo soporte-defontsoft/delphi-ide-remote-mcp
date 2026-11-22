@@ -52,6 +52,23 @@ try:
         nacidos = glob.glob(os.path.join(SYSROOT, '**', 'libc10noexiste*'), recursive=True)
         check('E3 ...y en el sysroot (%s.sdk) no nacio ningun libc10noexiste*' % SDK,
               os.path.isdir(SYSROOT) and not nacidos, (SYSROOT, nacidos[:3]))
+        # D10 de la 1.29.3 (opencode, 17-nov): build Linux64 sin Deploy y remote-run corrio el binario del 7-nov sin
+        # que nada lo dijera. Un build que SALE bien de una plataforma por PAServer lo dice ahora (BUILD-076); uno de
+        # Windows, no
+        with open(DPR, 'w', encoding='utf-8-sig', newline='') as f:
+            f.write(texto.replace("Writeln('Falta running ', NoExiste(1));", "Writeln('Falta running');", 1)
+                    .replace("\n\nfunction NoExiste(X: Integer): Integer; cdecl; "
+                             "external 'libc10noexiste.so' name 'c10_no_existe';", '', 1))
+        r = srv.call('delphi_build', {'project': DPROJ, 'platform': 'Linux64', 'sdk': SDK}, 900)
+        j = mc.como_json(r) or {}
+        check('E4 un build Linux64 que sale bien, sin Deploy: runNote (BUILD-076) dice que el destino sigue con lo'
+              ' desplegado (ROJO: nada)',
+              j.get('success') is True and mc.abre(j.get('runNote', ''), 'SN_BUILD_SIN_DESPLEGAR_FMT')
+              and 'Linux64' in j.get('runNote', ''), r[:600])
+        r = srv.call('delphi_build', {'project': DPROJ, 'platform': 'Win64'}, 900)
+        j = mc.como_json(r) or {}
+        check('E5 control: un build Win64 (sin PAServer) no lleva esa nota',
+              j.get('success') is True and 'runNote' not in j, r[:600])
 finally:
     srv.cierra()
 mc.borra(BASE)

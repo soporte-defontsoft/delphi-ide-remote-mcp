@@ -55,6 +55,7 @@ type
     FDeviceId: string;
     FSdk: string;
     FVerbosity: string;
+    FOut: string;
   public
     [SchemaDescription(SP_BUILD_PROJECT)]
     [Required]
@@ -78,6 +79,11 @@ type
     property Verbosity: string read FVerbosity write FVerbosity;
     [SchemaDescription(SP_BUILD_DEVICEID)]
     property DeviceId: string read FDeviceId write FDeviceId;
+    // el fichero, en ESTE servidor, donde va entera la salida de msbuild: ruta
+    // NUESTRA, como el out de remote-run y el del logcat (B de la 1.29.3)
+    [SchemaDescription(SP_BUILD_OUT)]
+    [RutaDelServidor]
+    property Out: string read FOut write FOut;
   end;
 
   TDelphiDiagnosticsTool = class(TMCPToolBase<TDelphiDiagnosticsParams>)
@@ -283,7 +289,8 @@ begin
     // uno se lo come el contexto.
     R := RunMsBuild(Params.Project, Params.Platform, Params.Config, Params.Target,
       Params.Profile, Params.DeviceId, PLAZO_DEL_BUILD_MS, Params.Sdk,
-      IfThen(Params.Verbosity.Trim = '', BUILD_VERBOSIDAD_POR_DEFECTO, SinMayusculas(Params.Verbosity.Trim)));
+      IfThen(Params.Verbosity.Trim = '', BUILD_VERBOSIDAD_POR_DEFECTO, SinMayusculas(Params.Verbosity.Trim)),
+      Params.Out);
   except
     on E: Exception do
       // "error:" tambien, no solo "RECHAZADO": desde v1.0.4-beta el motor

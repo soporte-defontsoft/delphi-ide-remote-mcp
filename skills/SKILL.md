@@ -44,7 +44,8 @@ answers your client did not get go to THAT name's mailbox.
 
 ## Reading files and logs
 
-- `delphi_read` pages at 400 lines per call - read in RANGES.
+- `delphi_read` pages at 400 lines per call - read in RANGES: `fromline` with
+  `toline`, or with `limit` (how many lines); the end of a log is `tail=N`.
 - `delphi_search` / `delphi_list` to locate; never read whole trees.
   `delphi_search context=3` brings the lines around each hit in the same
   answer, so a hit does not need a read of its own.
@@ -71,8 +72,9 @@ answers your client did not get go to THAT name's mailbox.
   to the `uses`. An enumeration value (`alClient`) has no page of its own:
   search its type (`TAlignLayout`). Do not walk the RTL/FMX sources for it -
   measured: 44 calls and 18 minutes for what one search answers.
-- Big dumps (logcat, long outputs) have a file mode (`out=`): use it,
-  then read the file in ranges or download it.
+- Big dumps (logcat, a remote-run's output, a whole build log) have a file
+  mode (`out=`): use it, then read the file in ranges - its end with
+  `tail=N` - or download it.
 - **Getting a file onto YOUR machine** (an installer, an .apk, a
   screenshot PNG, a long unit to grep locally): call `delphi_fetch` once
   and use the `download` field it returns - a `GET /files?path=...` on
@@ -377,7 +379,13 @@ origin for you - never divide by a scale or add an origin yourself.
 two `tap` calls are two runs of the node, never one double click. `drag`
 presses at x,y and releases at `tox,toy`, both on the same screenshot: a
 title bar moves a window, and pressed just past the right or bottom edge of
-its `windows` rectangle it resizes it. Every
+its `windows` rectangle it resizes it. `scroll` turns the mouse wheel over
+x,y, `clicks` notches (positive down, negative up): a long list or a
+scroll box goes down that way, not by dragging its content. `hover` only
+moves the pointer to x,y - nothing is pressed - and answers with a 1:1 crop
+around it: the way to read a tooltip (which button is this?) BEFORE pressing
+something that may open a dialog, and to see where a tap at that x,y would
+land (`hoverNote` marks the pixel; a tap with that frame presses it). Every
 capture lists `windows` (title + rectangle); `overview` brings a covered
 one into view (Linux: the desktop's overview); `screenshot region="x,y,w,h"`
 or `window="<title>"` brings a piece at full resolution to read a small

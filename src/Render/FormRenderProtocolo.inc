@@ -7,14 +7,16 @@
   FR_PROTOCOL = 'PROTOCOL=';     // PROTOCOL=<FR_PROTOCOLO_VERSION>, lo primero que escribe: un ayudante y un servidor
                                  // de versiones distintas no se entienden, y sin decirlo se leerian mal (V25)
   // Se sube al cambiar una clave de aqui o un argumento del ayudante (test_paisaje lo vigila)
-  FR_PROTOCOLO_VERSION = 15; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+  FR_PROTOCOLO_VERSION = 16; // la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
                             // la 9: los VALORES de abajo como constantes (C2-3 de la 1.28; en el cable, los mismos);
                             // la 10: --scale y SCALE= (C2 de la 1.29); la 11: el estilo none y windows
                             // y la fidelidad canvas como constantes (DH4 de la 1.29; en el cable, los mismos);
                             // la 12: los separadores de NONVISUALS= como constantes (B-I18 de la 1.29; en el
                             // cable, los mismos); la 13: --bplsuffix (F1-2 de la 1.29); la 14: los separadores
                             // de los demas valores como constantes (WHEN SEEN de F1 de la 1.29; en el cable, los
-                            // mismos); la 15: --new (A16 de la 1.29.1)
+                            // mismos); la 15: --new (A16 de la 1.29.1); la 16: --boxes CON --out, las cajas y la
+                            // imagen del mismo render (preview component=, D7 de la 1.29.3): un ayudante de la 15
+                            // daria las cajas sin la imagen
   // Los interruptores del ayudante, aqui tambien: los compone el servidor
   // (Lsp.FormRender.ComponeOrdenDeRender) y los lee el ayudante
   // (FormRender.Comun.ParseaArgumentos). Se escribian a mano en los dos lados

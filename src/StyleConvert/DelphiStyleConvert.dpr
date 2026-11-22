@@ -11,7 +11,10 @@
     DelphiStyleConvert check   <in.style>    what FMX IGNORES when it loads
                                               that text style: one line
                                               IGNORED<tab>message each (the
-                                              RTL's, with class and property)
+                                              RTL's, with class and property),
+                                              and one SHADOWED<tab>... for each
+                                              top-level style FMX's own index
+                                              does not return by its name
 
   Exit codes: 0 ok, 1 error (message on stderr), 2 usage. The output format
   and the exit codes are StyleConvertProtocolo.inc, shared with the server. }
@@ -110,6 +113,51 @@ begin
   Result := True;
 end;
 
+{ La ruta por StyleName de AObj bajo ARaiz (editbuscar.lupa, Paleta.Clasico.rol):
+  los nombres de sus padres con nombre, del de arriba al suyo }
+function RutaPorNombre(AObj, ARaiz: TFmxObject): string;
+var
+  P: TFmxObject;
+begin
+  Result := AObj.StyleName;
+  P := AObj.Parent;
+  while (P <> nil) and (P <> ARaiz) do
+  begin
+    if P.StyleName <> '' then
+      Result := P.StyleName + '.' + Result;
+    P := P.Parent;
+  end;
+end;
+
+{ Los estilos de primer nivel que FMX NO devuelve por su nombre: se le pregunta
+  a el (FindStyleResource, el TStyleIndexer de FMX.Types: indexa TODOS los
+  objetos con StyleName, internos y roles, sin mayusculas, y el ultimo gana) y
+  si lo que devuelve no es el estilo, otro lo pisa y el control que lo pida
+  sale vacio sin error. Tres casos el 17-nov con el lint en clean (D9 de la
+  1.29.3): un TPath 'lupa' dentro de editbuscar, el rol carrilPestanas y un
+  'separador' dentro de rotulopizarra. }
+procedure Pisados(ARaiz: TFmxObject);
+var
+  I: Integer;
+  Hijo, Gana: TFmxObject;
+begin
+  if ARaiz.Children = nil then
+    Exit;
+  for I := 0 to ARaiz.Children.Count - 1 do
+  begin
+    Hijo := ARaiz.Children[I];
+    if Hijo.StyleName = '' then
+      Continue;
+    Gana := ARaiz.FindStyleResource(Hijo.StyleName);
+    // otro de PRIMER nivel con el mismo nombre es un duplicado, y el lint ya lo dice
+    // (duplicatedStyleNames): salia tambien aqui con "lo pisa uno interno" (revisor
+    // del paisaje de la 1.29.3, medido con dos 'boton')
+    if (Gana <> nil) and (Gana <> Hijo) and (Gana.Parent <> ARaiz) then
+      Writeln(SC_SHADOWED + string.Join(SC_CAMPOS_SEP, [Hijo.StyleName, Gana.ClassName,
+        RutaPorNombre(Gana, ARaiz)]));
+  end;
+end;
+
 { Lo que FMX ignora al cargar el .style de texto AIn: los mismos pasos que
   TStyleStreaming.LoadFromStream para un texto (el texto a binario con el
   parser del RTL - DesignerAFlujo, la casa de esa conversion - y ese binario
@@ -137,7 +185,12 @@ begin
       finally
         EndGlobalLoading;
       end;
-      Raiz.Free;
+      try
+        if Raiz is TFmxObject then
+          Pisados(TFmxObject(Raiz));
+      finally
+        Raiz.Free;
+      end;
       // en partes, por EL compositor de los renderizadores (LecturaEnPartes: el
       // formato del RTL de ESTE proceso); el servidor las lee con PartesDeLectura y
       // las reconstruia a mano (DH6 de la 1.29)

@@ -36,6 +36,16 @@
   NODO_ORDEN_ALTAB = 'altab';          // Alt+Tab (desde la consola del nodo)
   NODO_ORDEN_ARRASTRA = 'arrastra';    // arrastra x1 y1 x2 y2: pulsa, se mueve y suelta
   NODO_ORDEN_DOBLE = 'doble';          // doble x y: dos pulsaciones seguidas, el doble clic (C1 de la 1.29.1)
+  { rueda x y n: lleva el puntero alli y gira la rueda n muescas, positivo
+    hacia abajo y negativo hacia arriba (D19 de la 1.29.3: una lista larga no
+    se recorria sin arrastrar el pulgar de su barra). Con su tope, que miran
+    los dos lados: el servidor lo dice al negarse y el nodo no pasa de el. }
+  NODO_ORDEN_RUEDA = 'rueda';
+  NODO_RUEDA_MAX = 50;
+  { pasa x y: lleva el puntero alli SIN pulsar ni teclear y espera lo que tarda
+    un tooltip (D20 de la 1.29.3: el tooltip decia que boton era, y solo se
+    veia DESPUES de pulsarlo) }
+  NODO_ORDEN_PASA = 'pasa';
   { Las teclas por su codigo evdev (linux/input-event-codes.h: una POSICION del
     teclado, la misma en toda distribucion) que nombran los dos lados en Linux:
     los modificadores que manda la tool en "tecla" y las que el nodo pulsa por
@@ -63,3 +73,10 @@
     Lsp.RemoteRun con un Substring(4) a mano (forma 17 de la 1.26). }
   JOB_ENV_WIN = 'win:';
   JOB_RC = '___RC=';                   // la ultima: ___RC=<codigo de salida>
+  { ...y ese codigo cuando una SENAL mato al programa (Linux): la base mas su
+    numero, como el shell. La escribe McpRunJob (WTERMSIG) y la lee
+    Lsp.RemoteRun.PonSenal (RUN-036, A6 de la 1.29.3); las senales de Linux
+    van de 1 a 64 (SIGRTMAX). El 128 estaba a mano en los dos (revisor del
+    paisaje de la 1.29.3) }
+  JOB_RC_SENAL_BASE = 128;
+  JOB_RC_SENAL_MAX = 64;

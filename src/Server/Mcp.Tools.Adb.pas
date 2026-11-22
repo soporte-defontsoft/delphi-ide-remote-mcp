@@ -526,9 +526,11 @@ begin
       // UTF-8 con su BOM, como lo escribia TFile.WriteAllText, por EL
       // codificador de la casa (lo componia aqui a mano; punto 4 de la
       // 1.18.2): laxo, porque el texto es del DISPOSITIVO, no del agente, y
-      // medio caracter en su logcat no puede tumbar el volcado
+      // medio caracter en su logcat no puede tumbar el volcado. Todo eso es EL
+      // volcado de un texto (ColocaVolcado), el de delphi_build out= tambien
+      var LineasDelVolcado: Int64 := 0;
       try
-        ColocaContenido(Params.Out.Trim, EncodeText(Txt, ekUtf8Bom, False));
+        LineasDelVolcado := ColocaVolcado(Params.Out.Trim, Txt);
       except
         on E: Exception do
           Exit(MsgExcepcion(E.ClassName, E.Message));
@@ -537,8 +539,7 @@ begin
       try
         // su ruta, sus lineas como delphi_read cuenta el fichero y sus bytes,
         // por EL que lo dice (el de remote-run, R8 del 10-nov-2026)
-        PonElVolcado(Return, Params.Out.Trim, Length(LineasDelTexto(Txt)),
-          TFile.GetSize(Params.Out.Trim));
+        PonElVolcado(Return, Params.Out.Trim, LineasDelVolcado, TFile.GetSize(Params.Out.Trim));
         Return.AddPair('note', MsgText(SN_ADB_LOGFILE));
         if Incompleto <> '' then
           Return.AddPair('incompleteNote', Incompleto);

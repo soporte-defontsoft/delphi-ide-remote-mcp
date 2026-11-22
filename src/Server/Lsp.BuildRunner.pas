@@ -43,10 +43,14 @@ const
     de la 1.29) }
   PLAZO_DEL_BUILD_MS = 600000;
 
+{ AOut: el out= de delphi_build (B de la 1.29.3), un .txt/.log del agente donde
+  va el log ENTERO de msbuild - un log de fichero suyo, normal o detailed con
+  verbose, no la consola; el del ultimo intento -, por EL escritor de los
+  volcados (el de logcat y remote-run): juzgado antes de compilar. }
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile: string = ''; const ADeviceId: string = '';
   ATimeoutMs: Integer = PLAZO_DEL_BUILD_MS; const ASdk: string = '';
-  const AVerbosity: string = ''): TJSONObject;
+  const AVerbosity: string = ''; const AOut: string = ''): TJSONObject;
 
 { Runs a command line with stdout+stderr captured (no shell). }
 { Generates the deployment manifest (.deployproj + its import line in the
@@ -188,7 +192,8 @@ uses
   Lsp.Lineas,
   Lsp.Extensiones,
   Lsp.JuecesDeArgumentos,
-  Lsp.Pascal;
+  Lsp.Pascal,
+  Lsp.RemoteRun;
 
 var
   // Serializes every msbuild the server runs (see RunMsBuild).
@@ -2616,21 +2621,37 @@ end;
 
 { Los mensajes de dcc que msbuild NO clasifico, en su orden: no estan en
   errors.log ni en warnings.log, y sin ellos el agente ve el F2063 del .dpr o el
-  MSB6006 sin la causa. Los guarda el log de /flp3 (minimal), con la forma de dcc;
-  con la ruta entera esa forma no sale en el (sale la de msbuild), asi que una
-  linea asi es exactamente uno de ellos (EsMensajeSinClasificar; C3 de la
-  1.29.2). Sin fichero, nada: el build no se cae por un log. }
-function MensajesSinClasificar(const ARuta: string): TArray<string>;
+  MSB6006 sin la causa. Los guarda el log de /flp3 (minimal), con la forma de dcc
+  (EsMensajeSinClasificar; C3 de la 1.29.2). La forma sola no basta: lo que
+  msbuild SI clasifico lo dicen sus propios logs (AClasificados: errors.log y
+  warnings.log), y una linea que esta en ellos no es de las que se perdieron por
+  mucho que tenga esa forma - el "Error: E0003 ..." de CodeGear.Deployment.targets
+  cuando la conexion falla: BUILD-074 decia que dcc lo habia cortado y salia dos
+  veces en errors[] (Hermes, 21-nov-2026, D36 de la 1.29.3). Sin fichero, nada:
+  el build no se cae por un log. }
+function MensajesSinClasificar(const ARuta: string;
+  const AClasificados: array of string): TArray<string>;
 begin
   Result := [];
-  for var L in LineasDelLogDeMsBuild(ARuta) do
-    if EsMensajeSinClasificar(L) then
-      Result := Result + [L];
+  var YaClasificadas := TStringList.Create;
+  try
+    YaClasificadas.Sorted := True;
+    YaClasificadas.Duplicates := dupIgnore;
+    YaClasificadas.CaseSensitive := True;
+    for var Ruta in AClasificados do
+      for var L in LineasDelLogDeMsBuild(Ruta) do
+        YaClasificadas.Add(L);
+    for var L in LineasDelLogDeMsBuild(ARuta) do
+      if EsMensajeSinClasificar(L) and (YaClasificadas.IndexOf(L) < 0) then
+        Result := Result + [L];
+  finally
+    YaClasificadas.Free;
+  end;
 end;
 
 function RunMsBuild(ADprojPath: string; const APlatform, AConfig, ATarget: string;
   const AProfile, ADeviceId: string; ATimeoutMs: Integer;
-  const ASdk, AVerbosity: string): TJSONObject;
+  const ASdk, AVerbosity, AOut: string): TJSONObject;
 const
   TOPE_HINTS = 50; // cuantos van en hints[]; hintsTotal dice los demas
   BUILD_LOGS_SUB = 'build-logs';
@@ -2683,6 +2704,14 @@ begin
     raise Exception.Create(Denied);
   if (AVerbosity <> '') and not MatchText(AVerbosity, ['quiet', 'normal', 'verbose']) then
     raise Exception.Create(MsgFmt(SR_BUILD_VERBOSITY_FMT, [AVerbosity]));
+  // out=, ANTES de compilar (lo que tarda): lo que el escritor negaria al
+  // colocarlo y .txt/.log, por EL juez de un volcado (el de logcat y remote-run)
+  if AOut.Trim <> '' then
+  begin
+    Denied := VolcadoDenegado(AOut.Trim, MsgText(SR_BUILD_OUT_LOG));
+    if Denied <> '' then
+      raise Exception.Create(Denied);
+  end;
   // El escaneo compile-only (hazard, propiedad de IDE redefinida, directivas e
   // imports) se hace mas abajo, BAJO el cerrojo de escritura y pegado a msbuild
   // (EscaneoCompileOnly): se escanean y se compilan los MISMOS bytes del .dproj.
@@ -2910,6 +2939,9 @@ begin
   var LogDeAvisos := TPath.Combine(LogsDelBuild, 'warnings.log');
   // y lo que dcc dijo y msbuild no supo clasificar (MensajesSinClasificar)
   var LogDeMensajes := TPath.Combine(LogsDelBuild, 'messages.log');
+  // y, con out=, el log ENTERO para el agente (B de la 1.29.3)
+  var LogDelOut := TPath.Combine(LogsDelBuild, 'build.log');
+  var TextoDelOut := '';
   var QueueSW := TStopwatch.StartNew;
   GBuildLock.Enter;
   var QueuedMs := QueueSW.ElapsedMilliseconds;
@@ -3085,6 +3117,14 @@ begin
     // minimal lo guarda con cualquier verbosidad de la consola (medido el
     // 13-nov-2026 con /v:quiet; C3 de la 1.29.2)
     ' ' + EnComillas('/flp3:verbosity=minimal;encoding=UTF-8;logfile=' + LogDeMensajes);
+  // out=: un cuarto log de fichero, con SU verbosidad - normal, la de msbuild por
+  // defecto, y detailed con verbose -, no la de la consola: 5 de los 10 out que
+  // pidio Hermes iban con verbosity=quiet (la respuesta corta, el log entero en
+  // un fichero, como hace con remote-run), y quiet no escribe nada en un build
+  // limpio (medido: un fichero vacio)
+  if AOut.Trim <> '' then
+    LogsArg := LogsArg + ' ' + EnComillas('/flp4:verbosity=' +
+      IfThen(SameText(AVerbosity, 'verbose'), 'detailed', 'normal') + ';encoding=UTF-8;logfile=' + LogDelOut);
   // Propiedades globales de msbuild ganan a las del .dproj: vaciar los
   // eventos aqui es no ejecutarlos, sin tocar el proyecto.
   var EventArg := '';
@@ -3176,7 +3216,7 @@ begin
   // el MSB6006 que le siguen son su consecuencia, y sin ella no dicen por que
   // (C3 de la 1.29.2: un E2065 en una ruta honda salia como un F2063 solo, un
   // F2613 como un MSB6006 solo). Cuantos se ensenan, para la nota (BUILD-074)
-  var SinClasificar := MensajesSinClasificar(LogDeMensajes);
+  var SinClasificar := MensajesSinClasificar(LogDeMensajes, [LogDeErrores, LogDeAvisos]);
   var Cortados := 0;
   for Line in SinClasificar do
     if CharInSet(CodigoDelCompilador(Line)[1], ['E', 'F']) then
@@ -3215,6 +3255,18 @@ begin
     end
     else
       Warnings.Add(Line);
+  end;
+  // el log del out=, antes de que se vaya con su carpeta: el del ultimo intento
+  // (cada build lo reescribe); sin el, lo que dijo la consola
+  if AOut.Trim <> '' then
+  begin
+    TextoDelOut := Output;
+    try
+      if TFile.Exists(LogDelOut) then
+        TextoDelOut := LeeTexto(LogDelOut, [ltTemporal]);
+    except
+      // un log no tumba la respuesta del build (LineasDelLogDeMsBuild)
+    end;
   end;
   try
     BorraArbol(LogsDelBuild);
@@ -3509,6 +3561,22 @@ begin
     // (revisor de tokens, 4-oct-2026). La cola, solo si dice algo.
     if Cola <> '' then
       Result.AddPair('outputTail', Cola);
+    // out=: el log entero de msbuild de este build (el ultimo intento, el que
+    // dice esta respuesta), por EL escritor de un contenido, con su puerta en
+    // el momento de escribir; lo que no se pueda escribir va en una nota y no
+    // tumba el build, que corrio (como remote-run, C8 de test_catalogo)
+    // por EL volcado de un texto (ColocaVolcado: como lo diria la respuesta,
+    // por su filtro de salida - sin la casa y con srvd: en vez de D:\ -, que
+    // este fichero no pasa; el del logcat)
+    if AOut.Trim <> '' then
+      try
+        var LineasDelVolcado := ColocaVolcado(AOut.Trim, TextoDelOut);
+        PonElVolcado(Result, AOut.Trim, LineasDelVolcado, TFile.GetSize(AOut.Trim));
+        Result.AddPair('logfileNote', MsgText(SN_BUILD_LOGFILE));
+      except
+        on E: Exception do
+          Result.AddPair('logfileNote', MsgExcepcion(E.ClassName, E.Message));
+      end;
     // A stateless protocol means the agent only knows what each result tells
     // it: say WHERE the artifact landed, or it has to hunt the disk for it
     // (measured in the field: 20 calls chasing a fresh exe that delphi_list
@@ -3573,6 +3641,19 @@ begin
         if Note <> '' then
           Result.AddPair('outputNote', Note);
       end;
+      // Un Build (o Make) de una plataforma que corre por PAServer deja el
+      // programa AQUI; remote-run ejecuta lo DESPLEGADO. opencode, 17-nov
+      // (D10 de la 1.29.3): build Linux64 sin Deploy, remote-run, y corrio el
+      // binario del 7-nov sin que nada lo dijera. Los jueces, los de siempre:
+      // SistemaDelPAServer (el de las puertas del perfil de arriba) y
+      // IsLocalPlatform (Windows: tambien despliega por PAServer, pero se
+      // compila y se ejecuta aqui; lo cazo el control E5 de su bateria)
+      // ...y solo donde remote-run puede correr (HayEmpaquetadoPara, el juez de
+      // RUN-037): tras un build de macOS o iOS sugeria un paso que se niega
+      // (revisor del paisaje de la 1.29.3)
+      if not SinPAServer and not IsLocalPlatform(Plat) and not Target.Contains('Deploy') and
+         HayEmpaquetadoPara(Plat) then
+        Result.AddPair('runNote', MsgFmt(SN_BUILD_SIN_DESPLEGAR_FMT, [Plat]));
       // Same statelessness rule for a remote deploy: say where the files
       // landed ON THE TARGET, or the agent has to guess PAServer's layout.
       if (Perfil <> '') and Target.Contains('Deploy') then

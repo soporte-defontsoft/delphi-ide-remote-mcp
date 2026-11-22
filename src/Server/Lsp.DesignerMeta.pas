@@ -205,6 +205,8 @@ const
   ID_VCL_CONTROL = 'Vcl.Controls:TControl';
   ID_VCL_WINCONTROL = 'Vcl.Controls:TWinControl';
   ID_FMX_CONTROL = 'FMX.Controls:TControl';
+  // el que toma piezas del estilo por StyleLookup (PistaDeEstilo)
+  ID_FMX_STYLEDCONTROL = 'FMX.Controls:TStyledControl';
   // un frame en linea (inline) de un form: su clase es del proyecto, no de
   // la tabla, y es un TFrame (lo que set juzga de su tamano y su sitio)
   ID_VCL_FRAME = 'Vcl.Forms:TFrame';
@@ -272,6 +274,16 @@ function LlegaALaHoja(M: TMetaTable; const AClase, ARuta: string): Boolean;
   si no esta, nada. '' si no. La dice el juez (JuzgaPropiedad: set, insert,
   el lint) y la mira la parecida de set. }
 function PistaDelOtroMarco(M: TMetaTable; const AClase, ARuta: string): string;
+{ La pista de que StyleLookup no va en AClase (su identidad en M): un objeto
+  FMX que no desciende de TStyledControl (TRectangle, TLayout) se dibuja con
+  sus propiedades y no toma piezas del estilo. Medido en Hermes (D8 de la
+  1.29.3, 16-nov): con el DSGN-087 a secas probo StyleName, que se escribe
+  pero solo NOMBRA el objeto dentro de un estilo, y tres ventanas salieron
+  grises con borde negro. El juez es la cadena de ancestros de la tabla,
+  nunca una lista de clases. '' si no es eso (otra ruta, la VCL, una clase
+  con estilo o sin datos). La dicen JuzgaPropiedad (set, insert, el lint) y
+  la mira la parecida de set, para no ofrecer StyleName. }
+function PistaDeEstilo(M: TMetaTable; const AClase, ARuta: string): string;
 { EL sitio de un control FMX que AProp pide por Left o Top: Position.X o
   Position.Y; '' si no es eso (la VCL, otra propiedad, o una clase que no es
   un TControl FMX: en un no visual Left/Top son el sitio de su icono, que
@@ -1130,7 +1142,12 @@ var
   begin
     Result := '';
     if AConPista then
+    begin
       Result := PistaDelOtroMarco(M, Cur, string.Join('.', Segs, AIdx, Length(Segs) - AIdx));
+      // StyleLookup en un objeto sin estilo: se dice como seguir (D8)
+      if (Result = '') and (AIdx = 0) then
+        Result := PistaDeEstilo(M, Cur, ALhs);
+    end;
   end;
 
 begin
@@ -1255,6 +1272,17 @@ begin
      not LlegaALaHoja(Otra, Id, ARuta) then
     Exit;
   Result := MsgFmt(SF_DSGN_EN_EL_OTRO_MARCO_FMT, [ARuta, Otra.Marco, Nombre, M.Marco]);
+end;
+
+function PistaDeEstilo(M: TMetaTable; const AClase, ARuta: string): string;
+var
+  Nombre: string;
+begin
+  Result := '';
+  if (M = nil) or not SameText(M.Marco, MARCO_FMX) or not SameText(ARuta, 'StyleLookup') or
+     not M.Classes.TryGetValue(AClase, Nombre) or M.Desciende(AClase, ID_FMX_STYLEDCONTROL) then
+    Exit;
+  Result := MsgFmt(SF_DSGN_PISTA_ESTILO_FMT, [Nombre]);
 end;
 
 function RutaPorReferencia(M: TMetaTable; const AClase, ALhs: string;

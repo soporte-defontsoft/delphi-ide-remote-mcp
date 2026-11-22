@@ -67,6 +67,12 @@ function PuertoDePAServer: Integer;
   forma sin plataforma no la llamaba nadie: E12 de la 1.28.) }
 function BundledNodePath(const APlataforma: string): string;
 
+{ Si la distribucion trae lanzador y nodo para el sistema de APlataforma (Linux
+  y Windows; sin plataforma, Linux): EL juez de "remote-run puede correr alli".
+  Lo preguntan el nombrador de los empaquetados, la negativa RUN-037 y la nota
+  de un build que aun no se desplego (BUILD-076). }
+function HayEmpaquetadoPara(const APlataforma: string): Boolean;
+
 { Deja el nodo del target AL DIA sin compilar nada (peticion David
   2026-09-19): compara el sello node.ver del target (SHA-256 del binario)
   con el del nodo empaquetado y, si falta o difiere, sube binario nuevo
@@ -137,8 +143,9 @@ function PaclientConecta(const APaclient, AProfile: string; out AOutput: string)
   may not contain path separators. Returns the JSON the tool hands back.
   AGuardaSiSigue: True (remote-run, que devuelve el jobId al agente) deja
   en el target la salida de un programa que SIGUE vivo al volver, para
-  leer despues lo que escriba con RemoteOutput; False (un gesto del nodo,
-  el @kill: nadie tiene su id) la borra siempre. ACola: True (lo que se da
+  leer despues lo que escriba con RemoteOutput, y lo apunta entre los suyos
+  (TrabajoNuestro, la lista de D32); False (un gesto del nodo, el @kill:
+  nadie tiene su id) la borra siempre y no lo apunta. ACola: True (lo que se da
   al AGENTE) recorta la salida con la cola de la casa (PonSalida); False (el
   nodo de delphi_desktop, que lee de ella SU protocolo) la deja entera: con un
   escritorio de muchas ventanas la linea CAPTURE= se caia de la cola (V99 de
@@ -169,6 +176,19 @@ function RemoteKill(const AProfile, ADprojPath, AJobId: string): TJSONObject;
   si no se pudo escribir, la salida se queda en el target. }
 function RemoteOutput(const AProfile, ADprojPath, AJobId: string;
   const AGuardaEn: string = ''): TJSONObject;
+
+{ EL trozo que dice que trabajos se pueden NOMBRAR en kill y output de ese perfil y
+  proyecto (uno acabado y ya leido contesta que no queda nada: la lista no se purga,
+  y su texto dice "started", no "alive"): los ultimos que ESTE proceso arranco, del
+  mas antiguo al mas nuevo,
+  o que no arranco ninguno. Lo llevan todas las negativas de un trabajo: la de
+  un id que no es de aqui (RUN-021), la de uno que no tiene la forma (RUN-001)
+  y la de kill/output sin job (PAS-002, Mcp.Tools.PAServer); solo los del workspace
+  de la llamada (DuenoDeTrabajo) - D32 de la 1.29.3:
+  tras compactar, un agente invento un id, lo repitio con kill y antes probo
+  command=jobs y command=list buscando esta lista. Solo para una llamada que ya
+  paso la puerta de ejecucion remota de ese perfil y proyecto. }
+function TrabajosQueValen(const AProfile, ADprojPath: string): string;
 
 { EL lector de una linea de la salida del nodo (NodeProtocolo.inc): si ALinea,
   sin sus blancos, empieza por AMarca, True y lo que la sigue en AValor, sin
@@ -244,7 +264,9 @@ uses
   System.Diagnostics,
   System.SyncObjs,
   System.RegularExpressions,
-  Lsp.Settings,   // PaclientDeEntorno: el paclient que pone la bateria
+  System.Generics.Collections, // GLecturas (D18)
+  System.DateUtils,            // SecondsBetween (D18)
+  Lsp.Settings,   // PaclientDeEntorno: el paclient que pone la bateria; CurrentWorkspaceName (D18)
   Lsp.Guard,      // CrearCarpeta: crear la carpeta tolerando la carrera
   Lsp.BuildRunner,
   Lsp.Discovery,
@@ -262,7 +284,8 @@ uses
   Lsp.Pascal, // SinMayusculas: EL pliegue de lo que no es una ruta
   Lsp.ShaCache,
   Lsp.Lineas,
-  Lsp.JuecesDeArgumentos;
+  Lsp.JuecesDeArgumentos,
+  System.Math;
 
 var
   GNodoLock: TCriticalSection;
@@ -553,10 +576,23 @@ begin
   Result := ABase + ExtensionDeEjecutable(APlataforma);
 end;
 
+{ Si la distribucion trae binarios (lanzador y nodo) para el sistema de
+  APlataforma: los de node\ son ELF de Linux y .exe de Windows. Sin plataforma
+  conocida, Linux, como siempre (BundledNodePath). A un macOS le llegaba el ELF
+  de Linux, porque su ejecutable tampoco lleva extension (medido con un perfil
+  OSX64 de prueba, revisor del paisaje de la 1.29.3). EL juez: lo preguntan el
+  nombrador de abajo y la negativa de remote-run (RUN-037). }
+function HayEmpaquetadoPara(const APlataforma: string): Boolean;
+begin
+  Result := SistemaDePlataforma(APlataforma) in [spDesconocido, spWindows, spLinux];
+end;
+
 { Ese binario tal como viaja con el servidor (node\ junto al exe); '' si la
-  distribucion no lo trae. }
+  distribucion no lo trae, para ese sistema o en la carpeta. }
 function EmpaquetadoConElServidor(const ABase, APlataforma: string): string;
 begin
+  if not HayEmpaquetadoPara(APlataforma) then
+    Exit('');
   Result := TPath.Combine(ServerDir('node'), BinarioDelDestino(ABase, APlataforma));
   if not TFile.Exists(Result) then
     Result := '';
@@ -658,6 +694,19 @@ begin
     MsgTag(ASalida).StartsWith(AREA_DEL_LANZADOR);
 end;
 
+{ Un programa que una senal mato en un destino Linux: el lanzador da la base
+  + su numero, como el shell (JOB_RC_SENAL_BASE, NodeProtocolo.inc). El
+  codigo solo no lo decia: Hermes vio 139 y la salida cortada (D14 de la 1.29.3).
+  Windows no: alli un codigo alto es el del programa (o un NTSTATUS). macOS no
+  tiene lanzador (RUN-037). }
+procedure PonSenal(AObj: TJSONObject; ACodigo: Integer; const AProfile: string);
+begin
+  if (ACodigo > JOB_RC_SENAL_BASE) and (ACodigo <= JOB_RC_SENAL_BASE + JOB_RC_SENAL_MAX) and
+     (SistemaDePlataforma(PlataformaDelPerfil(AProfile)) = spLinux) then
+    AObj.AddPair('signalNote', MsgFmt(SN_REMOTERUN_SENAL_FMT,
+      [ACodigo, JOB_RC_SENAL_BASE, ACodigo - JOB_RC_SENAL_BASE]));
+end;
+
 { Un "no" del LANZADOR llega como la salida del trabajo: eso no es un programa
   que acabo mal, es una llamada que fallo - va en "error" y la respuesta sale
   como fallo (salia ok:true; revision 27-sep-2026). Un programa que corre y sale
@@ -669,12 +718,19 @@ begin
     AObj.AddPair('error', PrimerTrozo(ASalida.TrimLeft, [#10]).Trim);
 end;
 
-// el dueno de un trabajo: su perfil y la ruta larga de su proyecto
+// el dueno de un trabajo: el workspace de la llamada que lo arranco, su perfil y
+// la ruta larga de su proyecto. EL compositor de los tres que lo miran
+// (ApuntaTrabajo, TrabajoNuestro, TrabajosDe). Sin el workspace, otro con el
+// mismo proyecto en sus raices y el mismo perfil (en la VM, dos workspaces
+// comparten una raiz) leia con el id la salida de un trabajo ajeno -y leida se
+// borra del destino- o lo paraba, y desde D32 la lista le daba los ids
+// (revisor del paisaje del diff de la 1.29.3; David, 21-nov: "arreglar ya")
 function DuenoDeTrabajo(const AProfile, ADprojPath: string): string;
 begin
   // EL pliegue de lo que no es una ruta (Lsp.Pascal): era LowerCase (R9 del
   // revisor del paisaje de la 1.29; lo que crece sin purga va con A22)
-  Result := SinMayusculas(AProfile.Trim) + #9 + ClaveDeRuta(FormaLarga(ADprojPath));
+  Result := CurrentWorkspaceName + #9 + SinMayusculas(AProfile.Trim) + #9 +
+    ClaveDeRuta(FormaLarga(ADprojPath));
 end;
 
 procedure ApuntaTrabajo(const AJobId, AProfile, ADprojPath: string);
@@ -699,10 +755,36 @@ begin
   end;
 end;
 
+{ Los trabajos que ESTE proceso arranco para el workspace de la llamada, ese perfil
+  y ese proyecto (el mismo dueno que juzga TrabajoNuestro), los ultimos AMax del mas
+  antiguo al mas nuevo: GTrabajos va en el orden en que se apuntan. No ensena nada
+  que ese agente no pueda ya leer o parar (D32 de la 1.29.3): los de otro
+  workspace, ni los ve ni los toca. }
+function TrabajosDe(const AProfile, ADprojPath: string; AMax: Integer): TArray<string>;
+var
+  Dueno: string;
+  I: Integer;
+begin
+  Result := [];
+  Dueno := DuenoDeTrabajo(AProfile, ADprojPath);
+  GTrabajosLock.Enter;
+  try
+    for I := 0 to GTrabajos.Count - 1 do
+      if GTrabajos.ValueFromIndex[I] = Dueno then
+        Result := Result + [GTrabajos.Names[I]];
+  finally
+    GTrabajosLock.Leave;
+  end;
+  if Length(Result) > AMax then
+    Result := Copy(Result, Length(Result) - AMax, AMax);
+end;
+
 { La negativa de un id de trabajo que kill y output no aceptan: '' si tiene la
   forma de uno (EsIdDeTrabajo) y lo arranco ESTE proceso para ese perfil y ese
   proyecto (TrabajoNuestro); si no, cual de las dos. EL juez de los dos: cada
-  uno lo escribia con sus dos errores (E9 del revisor del paisaje de la 1.28). }
+  uno lo escribia con sus dos errores (E9 del revisor del paisaje de la 1.28).
+  Las dos negativas acaban con los trabajos que SI valen, el paso siguiente
+  (D32 de la 1.29.3: un id inventado tras compactar, repetido con kill). }
 function TrabajoDenegado(const AJobId, AProfile, ADprojPath: string): string;
 begin
   if not EsIdDeTrabajo(AJobId) then
@@ -710,7 +792,21 @@ begin
   else if not TrabajoNuestro(AJobId, AProfile, ADprojPath) then
     Result := MsgFmt(SR_REMOTERUN_JOB_AJENO_FMT, [AJobId])
   else
-    Result := '';
+    Exit('');
+  Result := Result + TrabajosQueValen(AProfile, ADprojPath);
+end;
+
+function TrabajosQueValen(const AProfile, ADprojPath: string): string;
+const
+  TRABAJOS_EN_LA_NEGATIVA = 5;
+var
+  Validos: TArray<string>;
+begin
+  Validos := TrabajosDe(AProfile, ADprojPath, TRABAJOS_EN_LA_NEGATIVA);
+  if Length(Validos) = 0 then
+    Result := MsgText(SF_REMOTERUN_NINGUN_TRABAJO)
+  else
+    Result := MsgFmt(SF_REMOTERUN_TRABAJOS_FMT, [string.Join(', ', Validos)]);
 end;
 
 { Donde empieza lo del programa en ABytes: tras la linea del entorno
@@ -820,6 +916,17 @@ begin
     AObj.AddPair('logfileNote', MsgText(SN_REMOTERUN_OUT_PENDIENTE));
 end;
 
+type
+  { Lo que se LEYO de lo que escribio el programa (todo, o su cola si el fichero
+    pasa de BYTES_DE_COLA) y donde empieza en el fichero: la coordenada estable de
+    lo nuevo (PonLoNuevo). El texto de la respuesta lleva '...' y se desliza con la
+    cola; los bytes del fichero no: lo nuevo se media en caracteres de ese texto y
+    con mas de una cola de salida fallaba (revisor del paisaje de la 1.29.3) }
+  TLeidoDelPrograma = record
+    Bytes: TArray<Byte>;
+    Inicio: Int64;
+  end;
+
 { Trae <ADeployRel>/<job>.out del target y lo parte: el entorno grafico,
   lo que escribio el programa y, si TERMINO, su codigo. EL lector de ese
   fichero: remote-run mientras espera y output despues. False si no se
@@ -831,11 +938,12 @@ end;
   de la misma salida, 10-nov). AGuardaEn:
   el out= del agente; lo que escribio el programa va ENTERO a el antes de
   borrar la copia, si termino o si AGuardaSiempre (output), y AVolcado dice
-  como fue. }
+  como fue. ALeido: los bytes del programa que se leyeron y donde empiezan. }
 function TraeSalida(const APc, AProfile, ADeployRel, AJobId, ATmpDir: string;
   var ATexto, AEntorno, ASalida: string; var ACodigo: Integer;
   var ATerminado: Boolean; var ATamano, ABytes: Int64;
-  const AGuardaEn: string; AGuardaSiempre: Boolean; var AVolcado: TVolcado): Boolean;
+  const AGuardaEn: string; AGuardaSiempre: Boolean; var AVolcado: TVolcado;
+  var ALeido: TLeidoDelPrograma): Boolean;
 var
   Bajada, OutFile, Ops, Output, Enc, SinCodigo: string;
   Cabeza, Final: TArray<Byte>;
@@ -892,11 +1000,16 @@ begin
     begin
       Desde := Length(Cabeza);
       Hasta := ATamano - (Length(Final) - FinDelPrograma(Final, Fin, 0));
+      // lo leido del programa: su cola, desde el primer caracter entero (P)
+      ALeido.Inicio := ATamano - Length(Final) + P;
+      ALeido.Bytes := Copy(Final, P, Max(0, FinDelPrograma(Final, Fin, 0) - P));
     end
     else
     begin
       Desde := InicioDelPrograma(Cabeza);
       Hasta := FinDelPrograma(Cabeza, Fin, Desde);
+      ALeido.Inicio := Desde;
+      ALeido.Bytes := Copy(Cabeza, Desde, Max(0, Hasta - Desde));
     end;
     ABytes := Hasta - Desde;
     // el out=: ese tramo del fichero ENTERO, a trozos (R1). Un LANZADOR que
@@ -918,6 +1031,100 @@ begin
   AEntorno := PartirEntorno(ATexto);
   ATerminado := PartirSalida(ATexto, ASalida, ACodigo);
   Result := True;
+end;
+
+type
+  { Lo que se le enseno a un workspace de la salida de un trabajo (D18 de la
+    1.29.3): hasta donde (el byte del fichero que sigue al ultimo salto del
+    programa: TLeidoDelPrograma) y cuando }
+  TLecturaDeTrabajo = record
+    Hasta: Int64;
+    Cuando: TDateTime;
+  end;
+
+var
+  // por workspace y jobId (ClaveDeLectura); en memoria: un trabajo es efimero, y tras
+  // reiniciar no hay "antes" y no se dice nada
+  GLecturas: TDictionary<string, TLecturaDeTrabajo>;
+  GLecturasLock: TCriticalSection;
+
+const
+  // lo leido hace mas de un dia no se recuerda: nadie sigue un trabajo tanto
+  LECTURA_CADUCA_DIAS = 1;
+
+function ClaveDeLectura(const AJobId: string): string;
+begin
+  Result := CurrentWorkspaceName + #0 + AJobId;
+end;
+
+{ Lo NUEVO de la salida del trabajo AJobId desde la ultima vez que ESTE workspace la
+  leyo (D18 de la 1.29.3), en campos aparte de "output", que sigue igual: es salida
+  del programa y se lee o se parsea tal cual. Solo si hubo lectura: lastReadAt, y
+  newSinceLastRead con su recorte (EL de la casa, ColaDeSalida), newLines y su nota;
+  o la nota de que no hay nada nuevo. ALeido, lo leido del programa en BYTES y donde
+  empieza en el fichero (no el texto de la respuesta: lo nuevo no se pierde por el
+  recorte, ni se mueve con la cola); ADice, si va a la respuesta (con out=
+  el agente se lleva el fichero: se apunta sin decir); AOlvida, la ultima lectura (el
+  trabajo acabo y su salida se borra). Caso de campo, 17-nov: un agente leyo a las
+  20:23 lo que su app escribia desde el arranque y no supo a cual de sus tres toques
+  correspondia lo que se lo habia escrito. }
+procedure PonLoNuevo(AObj: TJSONObject; const AJobId: string; const ALeido: TLeidoDelPrograma;
+  ADice, AOlvida: Boolean);
+var
+  Antes, Ahora: TLecturaDeTrabajo;
+  Habia, Cortado: Boolean;
+  Clave, Enc: string;
+  UltimoSalto: Integer;
+  Nuevos: TArray<Byte>;
+begin
+  if AJobId = '' then
+    Exit;
+  Clave := ClaveDeLectura(AJobId);
+  // hasta el ultimo salto: una linea a medias se ensena entera la vez siguiente
+  UltimoSalto := High(ALeido.Bytes);
+  while (UltimoSalto >= 0) and (ALeido.Bytes[UltimoSalto] <> 10) do
+    Dec(UltimoSalto);
+  Ahora.Hasta := ALeido.Inicio + UltimoSalto + 1;
+  Ahora.Cuando := Now;
+  GLecturasLock.Enter;
+  try
+    Habia := GLecturas.TryGetValue(Clave, Antes);
+    for var Vieja in GLecturas.ToArray do
+      if DaysBetween(Ahora.Cuando, Vieja.Value.Cuando) >= LECTURA_CADUCA_DIAS then
+        GLecturas.Remove(Vieja.Key);
+    if AOlvida then
+      GLecturas.Remove(Clave)
+    else
+      GLecturas.AddOrSetValue(Clave, Ahora);
+  finally
+    GLecturasLock.Leave;
+  end;
+  // sin lectura de antes, o un fichero mas corto que lo ya leido (no es el mismo): nada
+  if not ADice or (AObj = nil) or not Habia or (Antes.Hasta > ALeido.Inicio + Length(ALeido.Bytes)) then
+    Exit;
+  var Hora := FormatDateTime('hh:nn:ss', Antes.Cuando);
+  var Segundos := SecondsBetween(Ahora.Cuando, Antes.Cuando);
+  AObj.AddPair('lastReadAt', Hora);
+  // lo escrito desde la marca; si la marca quedo antes de lo que se leyo (entre las
+  // dos lecturas se escribio mas de una cola), lo que hay, y se dice cortado
+  Cortado := Antes.Hasta < ALeido.Inicio;
+  if Cortado then
+    Nuevos := ALeido.Bytes
+  else
+    Nuevos := Copy(ALeido.Bytes, Integer(Antes.Hasta - ALeido.Inicio), MaxInt);
+  var Nuevo := TextoDeBytes(Nuevos, False, Enc);
+  if Nuevo.Trim = '' then
+  begin
+    AObj.AddPair('newLines', TJSONNumber.Create(0));
+    AObj.AddPair('newSinceLastReadNote', MsgFmt(SN_REMOTERUN_NADA_NUEVO_FMT, [Hora, Segundos]));
+    Exit;
+  end;
+  var Cola := ColaDeSalida(Nuevo, LineasDeSalida);
+  AObj.AddPair('newSinceLastRead', Cola.Texto);
+  AObj.AddPair('newLines', TJSONNumber.Create(Cola.Total));
+  if Cola.Cortada or Cortado then
+    AObj.AddPair('newSinceLastReadTruncated', TJSONBool.Create(True));
+  AObj.AddPair('newSinceLastReadNote', MsgFmt(SN_REMOTERUN_LO_NUEVO_FMT, [Cola.Total, Hora, Segundos]));
 end;
 
 { La salida de un trabajo en la respuesta, por EL recorte de la casa
@@ -959,6 +1166,7 @@ var
   Terminado: Boolean;
   Tamano, Bytes: Int64;
   Volcado: TVolcado;
+  Leido: TLeidoDelPrograma;
 begin
   Result := TJSONObject.Create;
   try
@@ -1054,23 +1262,33 @@ begin
   // makes each operation's files unique while the prefix stays sortable.
   // Por EL nombrador (Lsp.Casa.SelloUnico): la nota del deploy bloqueado
   // lo busca con su patron.
-  JobId := SelloUnico;
-  ApuntaTrabajo(JobId, AProfile, ADprojPath);
-  // Temporal DEL SERVIDOR: este guion se manda al target y aqui no vuelve a
-  // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Casa).
-  TmpDir := ServerTempDir(REMOTERUN_SUB);
-  CrearCarpeta(TmpDir);
-  // El lanzador del sistema del destino, con el nombre del trabajo: PAServer
-  // arranca un ELF con flag 3 y un PE con flag 5 (y en Windows lo borra al
-  // terminar). Todo lo demas es igual en los dos.
+  // El lanzador del sistema del destino: PAServer arranca un ELF con flag 3 y
+  // un PE con flag 5 (y en Windows lo borra al terminar). Todo lo demas es
+  // igual en los dos. ANTES de apuntar el trabajo: uno rechazado aqui no corrio,
+  // y la lista de los que valen (RUN-021, D32) lo daba (revisor del paisaje de
+  // la 1.29.3)
   Lanzador := BundledRunJobPath(Plataforma);
   if Lanzador = '' then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
-    Result.AddPair('error', MsgFmt(SR_REMOTERUN_NO_RUNJOB_FMT,
-      [BinarioDelDestino(RUNJOB_PROJECT, Plataforma)]));
+    // un sistema sin lanzador (macOS) no es un lanzador que falta
+    if HayEmpaquetadoPara(Plataforma) then
+      Result.AddPair('error', MsgFmt(SR_REMOTERUN_NO_RUNJOB_FMT,
+        [BinarioDelDestino(RUNJOB_PROJECT, Plataforma)]))
+    else
+      Result.AddPair('error', MsgFmt(SR_REMOTERUN_SIN_LANZADOR_FMT, [AProfile, Plataforma]));
     Exit;
   end;
+  JobId := SelloUnico;
+  // solo el trabajo cuyo id se le da al agente: el ayudante del @kill salia en
+  // la lista de los que valen como uno de su proyecto (revisor del paisaje de la
+  // 1.29.3, medido)
+  if AGuardaSiSigue then
+    ApuntaTrabajo(JobId, AProfile, ADprojPath);
+  // Temporal DEL SERVIDOR: este guion se manda al target y aqui no vuelve a
+  // mirarlo nadie. Por el nombrador, no a mano (ver Lsp.Casa).
+  TmpDir := ServerTempDir(REMOTERUN_SUB);
+  CrearCarpeta(TmpDir);
   if SistemaDePlataforma(Plataforma) = spWindows then
   begin
     Flag := 5;
@@ -1118,6 +1336,7 @@ begin
   Salida := '';
   EntornoNota := '';
   Volcado := Default(TVolcado);
+  Leido := Default(TLeidoDelPrograma);
   Sw := TStopwatch.StartNew;
   // Espera PROGRESIVA, y no es un detalle: un gesto del nodo dura ~2 s, asi
   // que un primer sondeo a los 1,5 s (lo que heredaba del runner) se comia
@@ -1132,7 +1351,7 @@ begin
     if Espera > POLL_MS then
       Espera := POLL_MS;
     TraeSalida(Pc, AProfile, DeployRel, JobId, TmpDir, Texto, EntornoNota,
-      Salida, Codigo, Terminado, Tamano, Bytes, AGuardaEn, False, Volcado);
+      Salida, Codigo, Terminado, Tamano, Bytes, AGuardaEn, False, Volcado, Leido);
   until Terminado or (Sw.ElapsedMilliseconds > ATimeoutMs);
 
   Result.AddPair('jobId', JobId);
@@ -1155,7 +1374,13 @@ begin
       PonVolcado(Result, Volcado, AGuardaEn, True);
     if not Volcado.Hecho then
       Pon(Result, Salida, Tamano, Bytes);
+    // la primera lectura de este trabajo, para su output de despues (D18)
+    // ...solo la de un trabajo cuyo id tiene el agente: la del ayudante del @kill
+    // no la lee nadie (revisor del paisaje de la 1.29.3; la regla de ApuntaTrabajo)
+    if ACola and AGuardaSiSigue then
+      PonLoNuevo(Result, JobId, Leido, not Volcado.Hecho, False);
     PonFalloDelLanzador(Result, Salida, Codigo);
+    PonSenal(Result, Codigo, AProfile);
   end
   else
   begin
@@ -1174,6 +1399,9 @@ begin
       PonVolcado(Result, Volcado, AGuardaEn, False);
     if Texto <> '' then
       Pon(Result, Texto, Tamano, Bytes);
+    // la primera lectura de este trabajo, para su output de despues (D18)
+    if ACola and AGuardaSiSigue then
+      PonLoNuevo(Result, JobId, Leido, not Volcado.Hecho, False);
   end;
 
   // Limpieza remota: el lanzador de este trabajo (en Linux flag 3 lo deja;
@@ -1216,6 +1444,12 @@ begin
   end;
   Result := RemoteRun(AProfile, ADprojPath, VERBO_MATAR, [AJobId], 20000); // Lsp.NombresDeTrabajo (V196)
   Result.RemovePair('remoteExe').Free;
+  // lo que es del AYUDANTE que mata, no del trabajo: su id (salia junto a job y
+  // un agente podia tomarlo por el suyo), las notas que mandaban hacer kill u
+  // output de el si tardaba, y el entorno en que corrio (revisor del paisaje de
+  // la 1.29.3). RemovePair de uno que no esta devuelve nil
+  for var Suyo in ['jobId', 'killNote', 'outputNote', 'stillRunningNote', 'graphicalEnv'] do
+    Result.RemovePair(Suyo).Free;
   // el stillRunning de RemoteRun es el del AYUDANTE que mata, no el del
   // programa: un kill que no pudo matar decia stillRunning:false con el
   // programa vivo (R2 del revisor del paisaje del 10-nov-2026). killed lo dice
@@ -1238,6 +1472,7 @@ var
   Terminado: Boolean;
   Tamano, Bytes: Int64;
   Volcado: TVolcado;
+  Leido: TLeidoDelPrograma;
 begin
   Result := TJSONObject.Create;
   try
@@ -1278,8 +1513,9 @@ begin
   Tamano := 0;
   Bytes := 0;
   Volcado := Default(TVolcado);
+  Leido := Default(TLeidoDelPrograma);
   if not TraeSalida(Pc, AProfile, DeployRel, AJobId, TmpDir, Texto, Entorno,
-    Salida, Codigo, Terminado, Tamano, Bytes, AGuardaEn, True, Volcado) then
+    Salida, Codigo, Terminado, Tamano, Bytes, AGuardaEn, True, Volcado, Leido) then
   begin
     Result.AddPair('success', TJSONBool.Create(False));
     Result.AddPair('error', MsgFmt(SR_REMOTERUN_NO_OUTPUT_FMT, [AJobId]));
@@ -1296,7 +1532,12 @@ begin
       PonVolcado(Result, Volcado, AGuardaEn, True);
     if not Volcado.Hecho then
       PonSalida(Result, Salida, Tamano, Bytes);
+    // lo nuevo desde la lectura anterior; acabado y leido, su salida se borra abajo y
+    // se olvida (D18)
+    PonLoNuevo(Result, AJobId, Leido, not Volcado.Hecho,
+      (AGuardaEn = '') or Volcado.Hecho or Volcado.SinPrograma);
     PonFalloDelLanzador(Result, Salida, Codigo);
+    PonSenal(Result, Codigo, AProfile);
     // leida = borrada, como el buzon y las capturas: en el target no se
     // acumula nada que alguien ya tiene. Salvo un out= que no se escribio:
     // borrarla la perdia entera (RUN-032)
@@ -1315,6 +1556,7 @@ begin
       PonVolcado(Result, Volcado, AGuardaEn, False);
     if not Volcado.Hecho then
       PonSalida(Result, Texto, Tamano, Bytes);
+    PonLoNuevo(Result, AJobId, Leido, not Volcado.Hecho, False); // lo nuevo (D18)
     Result.AddPair('note', MsgFmt(SN_REMOTERUN_OUTPUT_ALIVE_FMT, [AProfile, AJobId]));
   end;
   except
@@ -1466,8 +1708,12 @@ initialization
   GNodoAlDia.CaseSensitive := True; // las claves ya van plegadas (SinMayusculas): exactas
   GTrabajosLock := TCriticalSection.Create;
   GTrabajos := TStringList.Create;
+  GLecturasLock := TCriticalSection.Create;
+  GLecturas := TDictionary<string, TLecturaDeTrabajo>.Create;
 
 finalization
+  GLecturas.Free;
+  GLecturasLock.Free;
   GTrabajos.Free;
   GTrabajosLock.Free;
   GNodoAlDia.Free;

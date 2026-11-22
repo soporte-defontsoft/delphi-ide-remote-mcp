@@ -162,6 +162,7 @@ var
   Obj: TJSONObject;
   K: TTestKind;
   N: Integer;
+  HayConsola: Boolean;
 begin
   Result := TJSONObject.Create;
   try
@@ -183,6 +184,7 @@ begin
   Arr := TJSONArray.Create;
   Result.AddPair('projects', Arr);
   N := 0;
+  HayConsola := False;
   // lo que no es codigo, DEBAJO de la carpeta (WalkBajoLaRaiz): por la ruta
   // absoluta, un antepasado llamado Release, Debug, Win32 o dcu escondia todos
   // los proyectos (V114 de la 1.23.1, medido)
@@ -213,8 +215,13 @@ begin
       Obj.AddPair('config', SuInfo.ConfigPorDefecto);
     end;
     if K = tkConsole then
-      Obj.AddPair('countsFormat', MsgText(SN_TEST_CONSOLE_FORMAT));
+      HayConsola := True;
   end;
+  // el formato que se cuenta, UNA vez: iba en cada proyecto de consola y era
+  // el mismo texto; 62 en test-mcp-server eran 44 de los 63 KB de la respuesta,
+  // que paso del tope del cliente (medido el 21-nov-2026, 1.29.3)
+  if HayConsola then
+    Result.AddPair('countsFormat', MsgText(SN_TEST_CONSOLE_FORMAT));
   // por carpeta (el organizador de las listas de ficheros, 1.15.0)
   AgrupaPorCarpeta(Result, 'projects');
   Result.AddPair('total', TJSONNumber.Create(N));
@@ -972,11 +979,16 @@ begin
       Result.AddPair('result', 'no-tests');
       Result.AddPair('noTestsNote', MsgText(SN_TEST_NO_COUNTS));
       // con un filter que no casa nada DUnitX corre cero tests y sale con 0:
-      // lo que casa, dicho (Hermes probo comodines, test completo de la 1.21.0)
-      if AFilter <> '' then
+      // lo que casa, dicho (Hermes probo comodines, test completo de la 1.21.0).
+      // Solo DUnitX: el de consola lleva su nota abajo (W6 de la 1.29.2)
+      if (AFilter <> '') and (K = tkDUnitX) then
         Result.AddPair('filterNote', MsgFmt(SN_TEST_FILTRO_SIN_TESTS_FMT, [AFilter]));
     end;
   end;
+  // un runner de CONSOLA con filter: le llega como --run:<filtro> y solo vale si
+  // lo lee; la respuesta no lo decia y filter=x06 corrio 99 de 99 (W6 de la 1.29.2)
+  if (K = tkConsole) and (AFilter <> '') then
+    Result.AddPair('filterNote', MsgFmt(SN_TEST_FILTRO_CONSOLA_FMT, [AFilter, AFilter]));
   // un proceso del test pidio memoria mas alla del tope de su job: lo dijo
   // Windows, y el "sin memoria" que vio el test tiene su causa (B6 de
   // cierre-final-1-29-1)

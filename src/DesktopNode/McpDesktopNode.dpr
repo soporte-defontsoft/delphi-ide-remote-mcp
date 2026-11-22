@@ -35,6 +35,10 @@ const
 {$I NodeProtocolo.inc}
   // donde deja el nodo su captura, junto a el: la que el servidor se trae
   NOMBRE_DE_LA_CAPTURA = 'captura.png';
+  { lo que el hover espera en Linux a que salga un tooltip, antes de la pausa de
+    todo gesto: FIJA y declarada, sin medir aun en FMX sobre Linux (en Windows
+    se pregunta: GetDoubleClickTime) }
+  ESPERA_DEL_TOOLTIP_LINUX = 600;
 
 { Los argumentos van DESPLAZADOS uno: el primero es la clave que prueba que
   llama el servidor MCP, y las ordenes empiezan detras. Todo el reparto de
@@ -69,6 +73,59 @@ begin
   for var C in S do
     if not CharInSet(C, ['0'..'9']) then
       Exit(False);
+end;
+
+{ Las muescas de la orden de la rueda, en los dos escritorios: un entero con
+  signo y sin prefijos (StrToIntDef acepta $ y x, R2 de la 1.29), distinto de
+  0 y dentro del tope del protocolo. '' = valen; si no, el motivo. }
+function MuescasDeLaRueda(const S: string; out AClics: Integer): string;
+var
+  Cifras: string;
+begin
+  AClics := 0;
+  Cifras := S;
+  if Cifras.StartsWith('-') then
+    Cifras := Cifras.Substring(1);
+  if SoloCifras(Cifras) and (Length(Cifras) <= 3) then
+    AClics := StrToInt(S);
+  if (AClics = 0) or (Abs(AClics) > NODO_RUEDA_MAX) then
+    Result := MsgFmt(SF_NODE_RUEDA_FUERA_FMT, [NODO_RUEDA_MAX, NODO_RUEDA_MAX, S])
+  else
+    Result := '';
+end;
+
+{ El hover en los dos escritorios (D20 de la 1.29.3): lleva el puntero a
+  (AX, AY) SIN pulsar, en cuatro movimientos entre el punto y su vecino y el
+  ultimo en el punto, como una mano. Uno solo podia no bastar: el tooltip
+  nativo de FMX en Windows mira el raton desde que se activa, y se activa al
+  ver el raton encima (FMX.Controls.Win, TWindowsHint con TTF_SUBCLASS; por
+  medir en vivo). AMueve es el Mover de cada escritorio. }
+function PasaComoUnaMano(const AMueve: TFunc<Integer, Integer, Boolean>; AX, AY: Integer): Boolean;
+var
+  VX: Integer;
+begin
+  // el vecino, dentro de la captura
+  if AX > 0 then
+    VX := AX - 1
+  else
+    VX := AX + 1;
+  Result := AMueve(VX, AY);
+  for var I := 1 to 3 do
+    if Result then
+    begin
+      Sleep(60);
+      if Odd(I) then
+        Result := AMueve(AX, AY)
+      else
+        Result := AMueve(VX, AY);
+    end;
+end;
+
+{ El eco de una rueda que giro, el mismo en los dos escritorios }
+function EcoDeLaRueda(AClics, AX, AY: Integer): string;
+begin
+  Result := MsgFmt(SK_NODE_RUEDA_FMT, [Abs(AClics),
+    IfThen(AClics > 0, MsgText(SF_NODE_RUEDA_ABAJO), MsgText(SF_NODE_RUEDA_ARRIBA)), AX, AY]);
 end;
 
 { El pestillo: sin la clave del servidor, el nodo no mira ni toca nada.
@@ -216,8 +273,9 @@ begin
       begin
         Hizo := Escritorio.Combinacion(Teclas);
         if Hizo then
+          // en Windows la tecla va por su NOMBRE: el eco ya dice cual es
           Writeln(MsgFmt(SK_NODE_TECLA_ENVIADA_FMT, [Arg(Args),
-            IfThen(Args > 2, MsgFmt(SF_NODE_CON_MODIFICADORES_FMT, [Args - 2]), '')]))
+            IfThen(Args > 2, MsgFmt(SF_NODE_CON_MODIFICADORES_FMT, [Args - 2]), ''), '']))
         else
           Writeln(MsgFmt(SR_NODE_NO_ENVIAR_TECLA_FMT, [Escritorio.Error]));
       end;
@@ -241,6 +299,35 @@ begin
         Writeln(MsgText(SK_NODE_ALT_TAB_ENVIADO))
       else
         Writeln(MsgFmt(SR_NODE_NO_ENVIAR_ALT_TAB_FMT, [Escritorio.Error]));
+    end
+    else if (Orden = NODO_ORDEN_PASA) and (Args >= 3) then
+    begin
+      { el hover: solo mueve el puntero, y espera lo que Windows dice que tarda
+        un tooltip (FMX no le pone otro: no manda TTM_SETDELAYTIME) }
+      ObjX := StrToIntDef(Arg(2), -1);
+      ObjY := StrToIntDef(Arg(3), -1);
+      Hizo := (ObjX >= 0) and (ObjY >= 0) and PasaComoUnaMano(
+        function(X, Y: Integer): Boolean begin Result := Escritorio.Mover(X, Y); end, ObjX, ObjY);
+      if Hizo then
+      begin
+        Sleep(GetDoubleClickTime);
+        Writeln(MsgFmt(SK_NODE_PASA_FMT, [ObjX, ObjY]));
+      end
+      else
+        Writeln(MsgFmt(SR_NODE_NO_PUDE_PASAR_FMT, [Escritorio.Error]));
+    end
+    else if (Orden = NODO_ORDEN_RUEDA) and (Args >= 4) then
+    begin
+      { la rueda: lleva el puntero alli y gira n muescas (D19 de la 1.29.3) }
+      var Clics: Integer;
+      ObjX := StrToIntDef(Arg(2), -1);
+      ObjY := StrToIntDef(Arg(3), -1);
+      var Motivo := MuescasDeLaRueda(Arg(4), Clics);
+      Hizo := (Motivo = '') and Escritorio.Rueda(ObjX, ObjY, Clics);
+      if Hizo then
+        Writeln(EcoDeLaRueda(Clics, ObjX, ObjY))
+      else
+        Writeln(MsgFmt(SR_NODE_NO_PUDE_RODAR_FMT, [IfThen(Motivo <> '', Motivo, Escritorio.Error)]));
     end
     else if (Orden = NODO_ORDEN_DOBLE) and (Args >= 3) then
     begin
@@ -540,6 +627,8 @@ begin
         Manos := TManos.Create;
         try
           Manos.Escala := Escala;
+          // la rueda se pide al abrir, y solo para su orden (Mld.Eis.TManos.ConRueda)
+          Manos.ConRueda := LowerCase(Arg(1)) = NODO_ORDEN_RUEDA;
           if not Manos.Abrir(Descriptor, 'mcp-linux-desktop', 6000) then
           begin
             Writeln(MsgFmt(SN_NODE_CANAL_NO_LISTO_FMT, [Manos.Error]));
@@ -633,8 +722,17 @@ begin
             else
               Hizo := Manos.Combinacion(Codigos);
             if Hizo then
+            begin
+              // que es ese codigo en el teclado del escritorio: un evdev es una POSICION y el
+              // 36 es la J, no el Enter de X11 (D22 de la 1.29.3)
+              var Distrib: string;
+              var Es := Manos.NombreDeTecla(Codigos[High(Codigos)], Distrib);
+              if Es <> '' then
+                Es := MsgFmt(SF_NODE_TECLA_ES_FMT, [Es,
+                  IfThen(Distrib <> '', MsgFmt(SF_NODE_TECLA_DISTRIBUCION_FMT, [Distrib]), '')]);
               Writeln(MsgFmt(SK_NODE_TECLA_ENVIADA_FMT, [Arg(Args),
-                IfThen(Args > 2, MsgFmt(SF_NODE_CON_MODIFICADORES_FMT, [Args - 2]), '')]))
+                IfThen(Args > 2, MsgFmt(SF_NODE_CON_MODIFICADORES_FMT, [Args - 2]), ''), Es]));
+            end
             else
               Writeln(MsgFmt(SR_NODE_NO_ENVIAR_TECLA_FMT, [Manos.Error]));
           end
@@ -658,6 +756,36 @@ begin
               Writeln(MsgText(SK_NODE_ALT_TAB_ENVIADO))
             else
               Writeln(MsgFmt(SR_NODE_NO_ENVIAR_ALT_TAB_FMT, [Manos.Error]));
+          end
+          else if (Orden = NODO_ORDEN_PASA) and (Args >= 3) then
+          begin
+            { el hover: solo mueve el puntero (libei, absoluto), y espera la
+              pausa fija del tooltip (D20 de la 1.29.3) }
+            ObjX := StrToIntDef(Arg(2), -1);
+            ObjY := StrToIntDef(Arg(3), -1);
+            Hizo := (ObjX >= 0) and (ObjY >= 0) and PasaComoUnaMano(
+              function(X, Y: Integer): Boolean begin Result := Manos.Mover(X, Y); end, ObjX, ObjY);
+            if Hizo then
+            begin
+              Sleep(ESPERA_DEL_TOOLTIP_LINUX);
+              Writeln(MsgFmt(SK_NODE_PASA_FMT, [ObjX, ObjY]));
+            end
+            else
+              Writeln(MsgFmt(SR_NODE_NO_PUDE_PASAR_FMT, [Manos.Error]));
+          end
+          else if (Orden = NODO_ORDEN_RUEDA) and (Args >= 4) then
+          begin
+            { la rueda: lleva el puntero alli y gira n muescas (D19 de la
+              1.29.3: una lista larga no se recorria sin arrastrar su barra) }
+            var Clics: Integer;
+            ObjX := StrToIntDef(Arg(2), -1);
+            ObjY := StrToIntDef(Arg(3), -1);
+            var Motivo := MuescasDeLaRueda(Arg(4), Clics);
+            Hizo := (Motivo = '') and Manos.Rueda(ObjX, ObjY, Clics);
+            if Hizo then
+              Writeln(EcoDeLaRueda(Clics, ObjX, ObjY))
+            else
+              Writeln(MsgFmt(SR_NODE_NO_PUDE_RODAR_FMT, [IfThen(Motivo <> '', Motivo, Manos.Error)]));
           end
           else if (Orden = NODO_ORDEN_DOBLE) and (Args >= 3) then
           begin

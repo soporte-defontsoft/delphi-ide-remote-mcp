@@ -20,6 +20,8 @@ type
     FPath: string;
     FFromLine: Integer;
     FToLine: Integer;
+    FLimit: Integer;
+    FTail: Integer;
   public
     [SchemaDescription(SP_EDIT_PATH)]
     [Required]
@@ -29,6 +31,10 @@ type
     property FromLine: Integer read FFromLine write FFromLine;
     [SchemaDescription(SP_EDIT_TOLINE)]
     property ToLine: Integer read FToLine write FToLine;
+    [SchemaDescription(SP_EDIT_LIMIT)]
+    property Limit: Integer read FLimit write FLimit;
+    [SchemaDescription(SP_EDIT_TAIL)]
+    property Tail: Integer read FTail write FTail;
   end;
 
   TDelphiPatchParams = class
@@ -137,8 +143,24 @@ begin
 end;
 
 function TDelphiReadTool.ExecuteWithParams(const Params: TDelphiReadParams): string;
+var
+  Hasta: Integer;
 begin
-  Result := ReadNumbered(Params.Path, Params.FromLine, Params.ToLine);
+  // tail, el final: solo (B de la 1.29.3); lo resuelve ReadNumbered, que sabe
+  // cuantas lineas tiene el fichero
+  if (Params.Tail > 0) and ((Params.FromLine > 0) or (Params.ToLine > 0) or (Params.Limit > 0)) then
+    Exit(MsgText(SR_READ_TAIL_SOLO));
+  // limit cuenta desde fromline (desde la 1 sin el): otra forma de decir toline
+  Hasta := Params.ToLine;
+  if Params.Limit > 0 then
+  begin
+    if Params.ToLine > 0 then
+      Exit(MsgText(SR_READ_LIMIT_Y_TOLINE));
+    // sin desbordar con un limit enorme: lo que pase de la ultima linea lo
+    // recorta ReadNumbered, con su nota (EDIT-064) si pasa del tope
+    Hasta := Max(1, Params.FromLine) + Min(Params.Limit, MaxInt - Max(1, Params.FromLine)) - 1;
+  end;
+  Result := ReadNumbered(Params.Path, Params.FromLine, Hasta, Params.Tail);
 end;
 
 { TDelphiPatchTool }

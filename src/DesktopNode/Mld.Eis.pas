@@ -29,6 +29,8 @@ type
     FPuntero: Pointer;
     FTeclado: Pointer;
     FBoton: Pointer;
+    FRueda: Pointer;
+    FConRueda: Boolean;
     FListo: Boolean;
     FRegion: TRegion;
     FEscala: Double;
@@ -69,12 +71,25 @@ type
       redimensiona. El destino se mira ANTES de pulsar, y el boton se suelta
       siempre. }
     function Arrastrar(AX1, AY1, AX2, AY2: Double; ABoton: Cardinal = 272): Boolean;
+    { Gira la rueda AClics muescas en un punto medido sobre la captura,
+      positivo hacia abajo: lleva el puntero alli antes, que la rueda va a lo
+      que hay debajo de el. Pide ConRueda ANTES de Abrir. }
+    function Rueda(AX, AY: Double; AClics: Integer): Boolean;
+    { Pedir al escritorio la capacidad de rueda al abrir: solo la orden de la
+      rueda lo hace, y los demas gestos piden lo mismo que antes de ella. }
+    property ConRueda: Boolean read FConRueda write FConRueda;
     { Teclas en codigos EVDEV (Escape 1, Tab 15, Enter 28, Alt izq 56).
       Ojo: NO son los keycodes de X11, que van 8 unidades por encima. }
     function Tecla(ACodigo: Cardinal; APulsada: Boolean): Boolean;
     { Una combinacion: pulsa en orden y suelta al reves, como una persona.
       Para cambiar de ventana: Combinacion([56, 15]) = Alt+Tab. }
     function Combinacion(const ACodigos: array of Cardinal): Boolean;
+    { Lo que da la tecla del codigo evdev ACodigo SOLA en el teclado de ESTE
+      escritorio, por su nombre XKB (j, Return, comma), y en ADistribucion la
+      distribucion de ese teclado; '' si el escritorio no entrego su mapa o no
+      la tiene. Pide el mapa la primera vez, como Escribir. Para que el eco de
+      un `key` diga que tecla fue (D22 de la 1.29.3: el 36 es la J). }
+    function NombreDeTecla(ACodigo: Cardinal; out ADistribucion: string): string;
     { Escribe un texto tecla a tecla. Solo letras, cifras y unos pocos signos:
       lo que hace falta para rellenar un campo. Un caracter que no sepa
       teclear lo dice, en vez de escribir algo distinto a lo pedido. }
@@ -104,7 +119,11 @@ const
   CAP_PUNTERO = 1;
   CAP_ABSOLUTO = 2;
   CAP_TECLADO = 4;
+  CAP_RUEDA = 16;
   CAP_BOTON = 32;
+  { ei_device_scroll_discrete habla en 120 por muesca, una vuelta de la rueda
+    (libei.h), como el WHEEL_DELTA de Windows }
+  MUESCA_EI = 120;
   { enum ei_event_type }
   EV_ASIENTO = 3;
   EV_DISPOSITIVO = 5;
@@ -129,16 +148,19 @@ type
   TEiDispRegion = function(AD: Pointer; AIdx: NativeUInt): Pointer; cdecl;
   TEiRegionVal = function(AR: Pointer): Cardinal; cdecl;
   TEiDispCapacidad = function(AD: Pointer; ACap: Integer): Boolean; cdecl;
-  { variadica en C; en x86-64 los seis primeros enteros van en registros,
-    asi que una firma fija equivalente sirve y evita depender de varargs. }
+  { variadica en C; en x86-64 los seis primeros enteros van en registros y el
+    septimo en la pila, donde va_arg lo lee como en una llamada variadica,
+    asi que una firma fija equivalente sirve y evita depender de varargs. El
+    septimo es el cero que acaba la lista cuando se pide tambien la rueda. }
   TEiAsientoLigar = procedure(AAs: Pointer;
-    A1, A2, A3, A4, AFin: NativeInt); cdecl;
+    A1, A2, A3, A4, A5, AFin: NativeInt); cdecl;
   TEiEmpezar = procedure(AD: Pointer; ASec: Cardinal); cdecl;
   TEiParar = procedure(AD: Pointer); cdecl;
   TEiMover = procedure(AD: Pointer; AX, AY: Double); cdecl;
   TEiBoton = procedure(AD: Pointer; ABoton: Cardinal; APulsado: Boolean); cdecl;
   TEiTecla = procedure(AD: Pointer; ATecla: Cardinal; APulsada: Boolean); cdecl;
   TEiCuadro = procedure(AD: Pointer; AUs: UInt64); cdecl;
+  TEiRueda = procedure(AD: Pointer; AX, AY: Int32); cdecl;
   TEiMapaDe = function(AD: Pointer): Pointer; cdecl;
   TEiMapaFd = function(AM: Pointer): Integer; cdecl;
   TEiMapaTam = function(AM: Pointer): NativeUInt; cdecl;
@@ -170,6 +192,8 @@ var
   EiMapaDe: TEiMapaDe;
   EiMapaFd: TEiMapaFd;
   EiMapaTam: TEiMapaTam;
+  { Opcional: sin ella, la rueda lo dice y lo demas sigue igual. }
+  EiRueda: TEiRueda;
 
 function Texto(A: MarshaledAString): string;
 begin
@@ -241,9 +265,16 @@ begin
     EV_ASIENTO:
       begin
         FAsiento := EiEventoAsiento(AEvento);
-        { Pedir las capacidades: sin esto el escritorio no crea dispositivos. }
-        EiAsientoLigar(FAsiento, CAP_PUNTERO, CAP_ABSOLUTO, CAP_TECLADO,
-          CAP_BOTON, 0);
+        { Pedir las capacidades: sin esto el escritorio no crea dispositivos.
+          La rueda, solo con la orden de la rueda (D19 de la 1.29.3): los
+          demas gestos piden lo mismo que antes y no dependen de lo que no se
+          ha medido en cada escritorio. }
+        if FConRueda then
+          EiAsientoLigar(FAsiento, CAP_PUNTERO, CAP_ABSOLUTO, CAP_TECLADO,
+            CAP_BOTON, CAP_RUEDA, 0)
+        else
+          EiAsientoLigar(FAsiento, CAP_PUNTERO, CAP_ABSOLUTO, CAP_TECLADO,
+            CAP_BOTON, 0, 0);
       end;
     EV_DISPOSITIVO:
       begin
@@ -267,6 +298,10 @@ begin
           FBoton := Disp;
         if Tec and (FTeclado = nil) then
           FTeclado := Disp;
+        { la rueda, mejor en el puntero absoluto, el que se mira al abrir }
+        if FConRueda and EiDispCapacidad(Disp, CAP_RUEDA) and
+           ((FRueda = nil) or (Disp = FPuntero)) then
+          FRueda := Disp;
       end;
     EV_REANUDADO:
       begin
@@ -457,6 +492,49 @@ begin
   end;
 end;
 
+function TManos.Rueda(AX, AY: Double; AClics: Integer): Boolean;
+var
+  Dir: Pointer;
+  Paso: Int32;
+begin
+  Result := False;
+  if not FListo then
+  begin
+    FError := MsgText(SF_NODE_CANAL_NO_ESTA_LISTO);
+    Exit;
+  end;
+  if FRueda = nil then
+  begin
+    FError := MsgText(SF_NODE_ESCRITORIO_NO_DIO_RUEDA);
+    Exit;
+  end;
+  if not Assigned(EiRueda) then
+  begin
+    if not FLib.SimboloOMotivo('ei_device_scroll_discrete', Dir, FError) then
+      Exit;
+    EiRueda := TEiRueda(Dir);
+  end;
+  if not Mover(AX, AY) then
+    Exit;
+  Sleep(120);
+  // positivo es bajar, como en libei; una muesca por evento, con su pausa
+  if AClics > 0 then
+    Paso := MUESCA_EI
+  else
+    Paso := -MUESCA_EI;
+  for var I := 1 to Abs(AClics) do
+  begin
+    EiEmpezar(FRueda, FSecuencia);
+    Inc(FSecuencia);
+    EiRueda(FRueda, 0, Paso);
+    EiCuadro(FRueda, Microsegundos);
+    EiParar(FRueda);
+    Bombear;
+    Sleep(40);
+  end;
+  Result := True;
+end;
+
 { Pide al escritorio su mapa de teclado, UNA vez. libei lo entrega como un
   descriptor a un texto XKB; se copia (acabado en #0) y lo lee Mld.Teclado. }
 procedure TManos.MirarMapa;
@@ -510,6 +588,24 @@ begin
       [FMapa.Distribucion, FMapa.Cuantas])
   else
     FMapaNota := FMapaNota + ' - ' + FMapa.Error;
+end;
+
+function TManos.NombreDeTecla(ACodigo: Cardinal; out ADistribucion: string): string;
+begin
+  Result := '';
+  ADistribucion := '';
+  // el nombre es para el eco: un fallo al leer el mapa no puede tapar que la tecla
+  // SE ENVIO (saldria NODE-046 y el servidor la daria por no pulsada)
+  try
+    MirarMapa;
+    if FMapa = nil then
+      Exit;
+    Result := FMapa.NombreDe(ACodigo);
+    ADistribucion := FMapa.Distribucion;
+  except
+    Result := '';
+    ADistribucion := '';
+  end;
 end;
 
 function TManos.Tecla(ACodigo: Cardinal; APulsada: Boolean): Boolean;

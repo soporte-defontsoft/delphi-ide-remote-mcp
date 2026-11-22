@@ -893,7 +893,10 @@ REGLAS = [
     # lookup del StyleBook del form, y la nota decia "the form has no StyleBook" de uno con
     # StyleBook = DM.StyleBook1 (medido)
     ('un StyleLookup de un form leido a mano', r"\bSameText\(\s*\w+\s*,\s*'StyleLookup'\s*\)",
-     [('Lsp.Styles.pas', 'LookupsDeForm')],
+     # PistaDeEstilo (D8 de la 1.29.3) no lee ningun form: compara el NOMBRE de la propiedad que pide el agente
+     # (set, insert, la linea del lint) para decir como seguir cuando no existe. Es el tema de la pista, no un
+     # juez que imitar: generalizarla a 'lo que publica un TStyledControl' la daria tambien de Text, falsa
+     [('Lsp.Styles.pas', 'LookupsDeForm'), ('Lsp.DesignerMeta.pas', 'PistaDeEstilo')],
      'LookupsDeForm (Lsp.Styles): los StyleLookup con valor de un form, y si toma sus estilos de un StyleBook '
      'que no se lee (el suyo, el de otro form, el de su ancestro); lo juzgan la nota DSGN-175 y el lint'),
     # ...y la CLAVE de una ruta real escrita a mano (V82 de la 1.23.1): los tres recorredores de
@@ -935,7 +938,7 @@ REGLAS = [
      r'\bSinMayusculas\(\s*\w*(?:Path|Ruta|Dir|Carpeta|Fichero|File|Full|Dproj)\w*(?:\.Trim)?\s*\)|'
      r'\b(?:MatchText|IndexText|AnsiSameText)\(\s*\w*(?:Path|Ruta|Dir|Carpeta|Fichero|Full)\w*\s*,',
      [('Lsp.Casa.pas', 'ClaveDeCarpeta'),         # nombra el mutex y la marca de los contenedores
-      ('Lsp.Casa.pas', 'CarpetaDeWorkspace'),     # el NOMBRE de un workspace (su seccion del ini)
+      ('Lsp.Casa.pas', 'NombreSinChoques'),       # un NOMBRE (workspace, perfil) en un fichero: era CarpetaDeWorkspace
       ('Lsp.DesignerMeta.pas', 'MetaTable'),      # nuestros ficheros de tablas, releidos por su nombre
       ('Lsp.DesignerMetaGen.pas', 'HuellaDeCarpetas')],  # una huella, no una comparacion
      'los jueces del disco (Lsp.Rutas): SameFileName la igualdad, RutaEnLista una lista, RutaDentroDe el '
@@ -1280,10 +1283,12 @@ REGLAS = [
       # de un form ancho que to-text convierte (A28 de la 1.23); no escribe nada.
       # Una casa: lint y to-binary la tenian cada uno (run_all de la 1.18.2 lo cazo)
       ('Lsp.DesignerBin.pas', 'TextoParaElParser'),
-      # el volcado de logcat a un out= del agente: texto del DISPOSITIVO, laxo, en
-      # UTF-8 con BOM, antes de colocarlo con ColocaContenido (la puerta del
-      # producto); lo componia a mano con TEncoding (punto 4 de la 1.18.2)
-      ('Mcp.Tools.Adb.pas', 'TDelphiAdbTool.ExecuteWithParams')],
+      # EL volcado de un texto a un out= del agente (el logcat de un dispositivo, el
+      # log de delphi_build out=): sin la casa, laxo, en UTF-8 con BOM, antes de
+      # colocarlo con ColocaContenido (la puerta del producto). Era la casa del
+      # logcat de Mcp.Tools.Adb (punto 4 de la 1.18.2); el out= de delphi_build
+      # iba a ser la segunda copia y esta regla la cazo (B de la 1.29.3)
+      ('Lsp.Puertas.pas', 'ColocaVolcado')],
      'quien codifica el texto de un fichero por su cuenta se salta la regla de ida y vuelta y la '
      'del primer caracter no ASCII (David, 9-oct-2026): se escribe por PatchSaveText o DoEdit'),
     ('la regla de ida y vuelta preguntada a mano',
@@ -3092,12 +3097,14 @@ check('mutante de los eventos: un /p:PreBuildEvent= escrito a mano se caza',
 # 1.27-, y uno que ParseaArgumentos leyera a mano). Si cambia uno sin
 # subirlo, un ayudante viejo y un servidor nuevo se creen iguales. Cambia: sube FR_PROTOCOLO_VERSION y
 # pon aqui el numero y la firma que dice el fallo
-FIRMA_DEL_PROTOCOLO = (15, 'cb17bd7fa44cf469')  # la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
+FIRMA_DEL_PROTOCOLO = (16, 'cb17bd7fa44cf469')  # la 6: --set (B2 de la 1.28); la 7: <pintada> en BOX= (B11); la 8: BYCODE= (C9);
 # la 9: los valores de los argumentos y las claves como constantes del .inc (C2-3 de la 1.28); la 10: --scale y SCALE= (C2
 # de la 1.29); la 11: el estilo none/windows y la fidelidad canvas como constantes (DH4 de la 1.29); la 12: los
 # separadores de NONVISUALS= como constantes (B-I18 de la 1.29); la 13: --bplsuffix, el sufijo medido (F1-2 de la 1.29);
 # la 14: los separadores de los demas valores como constantes (WHEN SEEN de F1 de la 1.29); la 15: --new, el
-# control que acaba de crear su constructor (A16 de la 1.29.1)
+# control que acaba de crear su constructor (A16 de la 1.29.1); la 16: --boxes CON --out, las cajas y la imagen del
+# mismo render (preview component=, D7 de la 1.29.3): mismas claves y argumentos, otra combinacion; un ayudante de la
+# 15 daria las cajas sin la imagen
 # (un campo nuevo en el VALOR de una clave no cambia la firma, que mira claves y argumentos: ese
 # numero se sube a mano, y el lector exige los campos de su version: BOX= de ocho no se lee)
 
@@ -3126,7 +3133,9 @@ check('mutante del protocolo: el numero solo no cambia la firma',
 # ...y el del conversor de estilos (forma 6 de la 1.26): sus claves, sus ordenes y sus codigos en
 # StyleConvertProtocolo.inc, que incluyen los dos lados. Cambia: sube SC_PROTOCOLO_VERSION y pon aqui la firma
 # la 2: SC_CLASE_SEP, el separador de SC_ERROR que Mcp.Tools.Styles leia a mano (DH6 de la 1.29)
-FIRMA_DEL_CONVERSOR = (2, '830667d8ff04f237')
+# la 3: SC_SHADOWED, los estilos que el indice de FMX no devuelve por su nombre (D9 de la 1.29.3)
+# la 4: SC_CAMPOS_SEP, y SC_SHADOWED sin los duplicados de primer nivel (revisor del paisaje de la 1.29.3)
+FIRMA_DEL_CONVERSOR = (4, 'e85d460769852955')
 
 
 def firma_del_conversor(inc):

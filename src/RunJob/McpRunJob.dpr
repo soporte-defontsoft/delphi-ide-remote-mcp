@@ -395,7 +395,7 @@ begin
   else if (Estado and $7F) = 0 then
     Codigo := (Estado shr 8) and $FF   // WEXITSTATUS
   else
-    Codigo := 128 + (Estado and $7F);  // muerto por senal, como el shell
+    Codigo := JOB_RC_SENAL_BASE + (Estado and $7F);  // muerto por senal, como el shell
   BorraPid(ASalida);
   Anade(ASalida, LineaRC(Codigo), False);
   _exit(0);

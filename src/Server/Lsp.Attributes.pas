@@ -142,9 +142,23 @@ type
     llamar ("152 is not of type 'string'": Hermes, 9 veces; C3 de
     cierre-final-1-29-1). UN lector: TMCPSchemaGenerator.PublicaComoNumero. }
   NumeroComoTextoAttribute = class(TCustomAttribute)
+  private
+    FConSigno: Boolean;
+  public
+    constructor Create; overload;
+    { ...con signo ([NumeroComoTexto(CON_SIGNO)]): un numero que va hacia los
+      dos lados, sin el minimum 0 de los demas (las muescas de la rueda de
+      delphi_desktop, D19 de la 1.29.3: un cliente que valida no mandaba -2) }
+    constructor Create(AConSigno: Boolean); overload;
+    property ConSigno: Boolean read FConSigno;
   end;
 
   NumeroComoTexto = NumeroComoTextoAttribute;
+
+const
+  CON_SIGNO = True; // [NumeroComoTexto(CON_SIGNO)]: que se lea lo que dice
+
+type
 
   { Marca un parametro que lleva CONTENIDO. LA REGLA, escrita una vez: lo que
     se escribe DENTRO de un fichero (old/new/content/code de las tools que
@@ -191,6 +205,18 @@ constructor JsonComoTextoAttribute.Create(const AItems: string);
 begin
   inherited Create;
   FItems := AItems;
+end;
+
+constructor NumeroComoTextoAttribute.Create;
+begin
+  inherited Create;
+  FConSigno := False;
+end;
+
+constructor NumeroComoTextoAttribute.Create(AConSigno: Boolean);
+begin
+  inherited Create;
+  FConSigno := AConSigno;
 end;
 
 constructor NombreSiComandoAttribute.Create(const AComandos: string);

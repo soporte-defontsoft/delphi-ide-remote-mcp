@@ -495,6 +495,15 @@ ADB = de_mentira('AdbFalso',
                  "    if TFile.Exists(TPath.Combine(Dev, TPath.GetFileName(A[2]))) then\n"
                  "      TFile.Delete(TPath.Combine(Dev, TPath.GetFileName(A[2])));\n"
                  "  end\n"
+                 # RF3 (B de la 1.29.3): el logcat, tres lineas, y el get-state que lo precede
+                 "  else if (Length(A) >= 1) and (A[0] = 'get-state') then\n"
+                 "    Writeln('device')\n"
+                 "  else if (Length(A) >= 1) and (A[0] = 'logcat') then\n"
+                 "  begin\n"
+                 "    Writeln('11-21 12:00:00.000 I/Falso( 1): LINEA-UNO');\n"
+                 "    Writeln('11-21 12:00:00.001 I/Falso( 1): LINEA-DOS');\n"
+                 "    Writeln('11-21 12:00:00.002 I/Falso( 1): LINEA-TRES C:\\Windows\\notepad.exe');\n"
+                 "  end\n"
                  "  else if (Length(A) >= 3) and (A[0] = 'shell') and (A[1] = 'wm') and (A[2] = 'size') then\n"
                  "    Writeln('Physical size: 1x1')\n"
                  "  else if (Length(A) >= 3) and (A[0] = 'shell') and (A[1] = 'wm') then\n"
@@ -600,6 +609,28 @@ DEV = os.path.join(os.path.dirname(ADB), 'Dev')
 quedan = os.listdir(DEV) if os.path.isdir(DEV) else ['(sin Dev)']
 check('RF2 una captura que falla en el dispositivo no deja alli su fichero (el rm, pase lo que pase)',
       mc.fallo(res.get('c', '')) and 'capture failed' in res.get('c', '') and not quedan, (quedan, res.get('c', '')[:300]))
+
+# RF3 (B de la 1.29.3) logcat con out=: EL volcado de un texto (Lsp.Puertas.ColocaVolcado, el de delphi_build out=
+# tambien) - el fichero en UTF-8 con BOM con lo del dispositivo, sus lineas como las cuenta delphi_read, su tamano y
+# ADB-009. Ninguna bateria recorria el camino bueno, solo sus negativas (test_deploy_adb)
+LOGF = os.path.join(RF, 'logcat.txt')
+otro = mc.Stdio(EXE, mc.entorno({'DELPHI_MCP_ROOTS': JAIL, 'APPDATA': APPD_RF, 'DELPHI_MCP_ADB_DEVICES': 'FALSO1'}),
+                nombre='rf3', t=120)
+try:
+    r = otro.call('delphi_adb', {'command': 'logcat', 'device': 'FALSO1', 'out': LOGF}, t=90)
+finally:
+    otro.cierra()
+b = open(LOGF, 'rb').read() if os.path.exists(LOGF) else b''
+d = mc.como_json(r)
+check('RF3 logcat out=: el fichero en UTF-8 con BOM con lo del dispositivo, lines=3, size y ADB-009',
+      b.startswith(b'\xef\xbb\xbf') and b'LINEA-UNO' in b and b'LINEA-TRES' in b and d.get('lines') == 3
+      and d.get('size') == len(b) and mc.es(d.get('note', ''), 'SN_ADB_LOGFILE'), (r[:400], b[:200]))
+# RF3b el volcado dice lo que diria la respuesta en linea (EL filtro de salida, Lsp.Puertas.ColocaVolcado): la ruta
+# que nombra el dispositivo, con su unidad virtual y ninguna letra real (medido en vivo el 21-nov-2026 con el log de
+# un build: D: donde la respuesta decia srvd:)
+tb = b.decode('utf-8-sig', 'replace')
+check('RF3b logcat out=: como la respuesta, ninguna letra real en el fichero (ROJO sin el arreglo)',
+      not mc.fuga_de_letra(tb) and 'Windows\\notepad.exe' in tb, (mc.fuga_de_letra(tb), tb[-120:]))
 
 # RA un search path con prefijo de dispositivo que no es una unidad ni un UNC (\\?\GLOBALROOT\Device\...): la puerta
 # del build le quitaba el prefijo y juzgaba lo que quedaba, una ruta RELATIVA que caia dentro del proyecto, mientras
