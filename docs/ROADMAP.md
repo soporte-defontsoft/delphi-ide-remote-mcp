@@ -1,6 +1,6 @@
 # Roadmap
 
-Status page as of 2026-11-14 (current release v1.29.2; 44 tools).
+Status page as of 2026-11-22 (current release v1.29.3; 44 tools).
 
 ## Delivered
 
@@ -84,7 +84,7 @@ Status page as of 2026-11-14 (current release v1.29.2; 44 tools).
 
 ## Next
 
-For the server, nothing: 1.29.1 closed the last list, each item done, measured, declared or declined. The project is in maintenance: what follows are patches, and a declared item reopens only with a case from the field - as 1.29.2 did with what an agent hit in its work (a compiler message dcc cut short, a boolean mode named the way it is asked, the unit of a name the compiler does not know).
+For the server, nothing: 1.29.1 closed the last list, each item done, measured, declared or declined. The project is in maintenance: what follows are patches, and a declared item reopens only with a case from the field - as 1.29.2 did with what an agent hit in its work (a compiler message dcc cut short, a boolean mode named the way it is asked, the unit of a name the compiler does not know), and 1.29.3 with what another week of its work showed (the wheel and the pointer on a target desktop, the end of a log, a whole build log in a file, a way on after every refusal that left none).
 
 ## Declared limits
 

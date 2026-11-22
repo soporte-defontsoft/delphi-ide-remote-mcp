@@ -8,6 +8,17 @@ the MCP `initialize` response (`serverInfo.version`).
 
 ## [Unreleased]
 
+## [1.29.3] - 2026-11-22
+
+A patch from the field: what an agent hit doing real work over a week, and what a review of the
+whole change found. On a target desktop the wheel turns (`scroll`) and the pointer moves without
+pressing (`hover`), and a desktop that changes size says so. `delphi_read` counts lines (`limit`,
+`tail`), `delphi_designer tree` takes `component=`, and `delphi_build out=` writes the whole log to
+a file. Answers that left an agent without a way on now give one: every unknown parameter at once,
+a path that does not exist, what a Linux key code is, a style FMX does not return by its own name,
+a crop that is not the component, a `set` that changes nothing. And a `remote-run` job belongs to
+the workspace that started it.
+
 ### Added
 
 - `delphi_desktop command=scroll` turns the mouse wheel over x,y: `clicks` notches, positive down and
